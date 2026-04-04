@@ -8768,17 +8768,20 @@ function doGenerateStudentsPDF(monthKey) {
 
     var dash = '<span style="color:#ccc">—</span>';
     rows += '<tr style="background:'+rowBg+'">';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(admFee>0?'#1d4ed8':'#aaa')+'">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(extraTotal>0?'#c2410c':'#aaa')+'">'+(extraTotal>0?fmtPKR(extraTotal):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(concession>0?'#7c3aed':'#aaa')+'">'+(concession>0?'−'+fmtPKR(concession):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
     rows += '</tr>';
   });
 
@@ -8786,6 +8789,9 @@ function doGenerateStudentsPDF(monthKey) {
   rows += '<tr style="background:#0f1a2e">';
   rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#e6c96e;font-size:12px">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#e6c96e">'+fmtPKR(grandRent)+'</td>';
+  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#60a5fa">'+fmtPKR(grandAdmFee)+'</td>';
+  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#fb923c">'+fmtPKR(grandExtra)+'</td>';
+  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(grandConc)+'</td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#4ade80">'+fmtPKR(grandPaid)+'</td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(grandPending)+'</td>';
   rows += '<td colspan="2" style="padding:8px 5px;text-align:center;font-size:10px;color:#8899bb">'+active+' active · '+left+' left</td>';
@@ -8804,7 +8810,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
   // 11 cols: # name father room cnic phone rent paid pend fst sst
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
-  html += 'col.c-no{width:3%}col.c-name{width:15%}col.c-father{width:12%}col.c-room{width:5%}col.c-cnic{width:12%}col.c-phone{width:9%}col.c-rent{width:8%}col.c-paid{width:10%}col.c-pend{width:10%}col.c-fst{width:9%}col.c-sst{width:7%}';
+  html += 'col.c-no{width:3%}col.c-name{width:12%}col.c-father{width:9%}col.c-room{width:4%}col.c-cnic{width:10%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:6%}col.c-extra{width:6%}col.c-conc{width:6%}col.c-paid{width:8%}col.c-pend{width:8%}col.c-fst{width:7%}col.c-sst{width:6%}';
   html += 'thead th{background:#0f1a2e;color:#e6c96e;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
   html += 'td{padding:5px 5px;border:1px solid #dde2ea;word-break:break-word;vertical-align:middle;font-size:10px}';
@@ -8839,10 +8845,13 @@ function doGenerateStudentsPDF(monthKey) {
 
   // Table
   html += '<table>';
-  html += '<colgroup><col class="c-no"><col class="c-name"><col class="c-father"><col class="c-room"><col class="c-cnic"><col class="c-phone"><col class="c-rent"><col class="c-paid"><col class="c-pend"><col class="c-fst"><col class="c-sst"></colgroup>';
+  html += '<colgroup><col class="c-no"><col class="c-name"><col class="c-father"><col class="c-room"><col class="c-cnic"><col class="c-phone"><col class="c-rent"><col class="c-adm"><col class="c-extra"><col class="c-conc"><col class="c-paid"><col class="c-pend"><col class="c-fst"><col class="c-sst"></colgroup>';
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
   html += '<th class="r">Rent/Mo</th>';
+  html += '<th class="r" style="color:#60a5fa">Adm.Fee</th>';
+  html += '<th class="r" style="color:#fb923c">Extra</th>';
+  html += '<th class="r" style="color:#a78bfa">Concession</th>';
   html += '<th class="r" style="color:#4ade80">Amount Paid</th>';
   html += '<th class="r" style="color:#f87171">Pending</th>';
   html += '<th class="c">Fee Status</th>';
