@@ -137,7 +137,8 @@ function formScrollNext(inp) {
 function autoCapName(inp) {
   const v   = inp.value;
   const pos = inp.selectionStart;
-  inp.value = v.replace(/\w/g, c => c.toUpperCase());
+  // Title-case: capitalize first letter of each word only, preserve rest
+  inp.value = v.replace(/\b([a-zA-Z])/g, c => c.toUpperCase());
   inp.setSelectionRange(pos, pos);
 }
 

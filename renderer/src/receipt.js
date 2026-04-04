@@ -202,31 +202,6 @@ function buildReceiptHTML(payId) {
   html += '<div style="font-size:9px;color:#888;font-family:monospace">This is a computer-generated receipt.</div>';
   html += '</div>';
 
-  // ── Phase 9: License Info (official software footer) ──────────────────────
-  // Pull cached license info; falls back gracefully if not available
-  var _licKey = '';
-  var _licExp = '';
-  var _licMid = '';
-  try {
-    var _cachedLic = window._damam_license_cache;
-    if (_cachedLic && _cachedLic.valid) {
-      _licKey = _cachedLic.key  ? _cachedLic.key.slice(0, 14) + '…' : '';  // truncated for privacy
-      _licExp = _cachedLic.expiry
-        ? new Date(_cachedLic.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'})
-        : '';
-      _licMid = _cachedLic.machineId ? _cachedLic.machineId.slice(0, 16) + '…' : '';
-    }
-  } catch(e) {}
-
-  if (_licKey || _licExp) {
-    html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:6px 0 4px;text-align:center">';
-    html += '<div style="font-size:8px;color:#aaa;font-family:monospace;letter-spacing:0.5px;margin-bottom:2px">SOFTWARE LICENSE INFO</div>';
-    if (_licKey) html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace">Key: ' + _licKey + '</div>';
-    if (_licExp) html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace">Valid Until: ' + _licExp + '</div>';
-    if (_licMid) html += '<div style="font-size:7px;color:#ccc;font-family:monospace">Machine: ' + _licMid + '</div>';
-    html += '</div>';
-  }
-
   // Developer credit
   html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
   html += '<div style="font-size:8px;color:#888;font-family:monospace;letter-spacing:0.5px">Software Developed by: MUSHTAQ AHMAD</div>';

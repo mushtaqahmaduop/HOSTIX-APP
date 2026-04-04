@@ -19,14 +19,13 @@ function getRoomOccupancy(room) { return DB.students.filter(t=>t.roomId===room.i
 // Revenue = Paid payments + partial Pending payments (where amount>0 & unpaid is explicitly set)
 // This is used by dashboard, reports, CSVs, PDFs, WhatsApp/email share — everywhere.
 function calcRevenue(datePrefix) {
+  // Use _payMatchesMonth to handle both YYYY-MM-DD date fields AND "April 2026" month labels
   const paid    = DB.payments
-    .filter(p => p.status==='Paid' && (p.date||'').startsWith(datePrefix))
+    .filter(p => p.status==='Paid' && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
-  // BUG FIX: Previously only checked p.date, so pending payments where date is
-  // empty but dueDate is set (auto-generated records) were silently excluded.
   const partial = DB.payments
     .filter(p => p.status==='Pending' && Number(p.amount||0)>0 && p.unpaid!=null
-      && ((p.date||'').startsWith(datePrefix) || (p.dueDate||'').startsWith(datePrefix)))
+      && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
   return paid + partial;
 }
@@ -334,9 +333,9 @@ function renderDashboard() {
   const moTransferDeduct = (DB.transfers||[]).filter(t=>t.date?.startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0);
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
   // Pending — only for the selected month
-  const pending = DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(mo)||(p.dueDate||'').startsWith(mo))).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-  const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(mo)||(p.dueDate||'').startsWith(mo))).length;
-  const paidCount = DB.payments.filter(p=>p.status==='Paid'&&((p.date||'').startsWith(mo)||(p.dueDate||'').startsWith(mo))).length;
+  const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
+  const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
   const moExp = DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
   const totalExpected = collected + pending;
@@ -376,7 +375,7 @@ function renderDashboard() {
       </div>`;
   });
 
-  const recentPay = [...DB.payments].filter(p=>(p.date||'').startsWith(mo)||(p.dueDate||'').startsWith(mo)).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  const recentPay = [...DB.payments].filter(p=>_payMatchesMonth(p,mo)).sort((a,b)=>new Date(b.date||b.dueDate)-new Date(a.date||a.dueDate)).slice(0,10);
 
   // Room type summary
   let roomTypeSummary = '';
@@ -625,7 +624,7 @@ function renderDashboard() {
         <span class="badge badge-gold" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
       </div>
       <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
-      ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(mo)||(p.dueDate||'').startsWith(mo)));return moPending.length===0?
+      ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
         '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🎉</div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
           const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
@@ -1093,9 +1092,9 @@ function showMonthDetailModal(monthKey, monthLabel) {
 }
 
 function renderMonthModal(monthKey, monthLabel) {
-  const pays = DB.payments.filter(p=>p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)||p.paidDate?.startsWith(monthKey));
-  const paidPays = DB.payments.filter(p=>p.status==='Paid'&&p.date?.startsWith(monthKey));
-  const pendPays = DB.payments.filter(p=>p.status==='Pending'&&(p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)));
+  const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
+  const paidPays = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,monthKey));
+  const pendPays = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
@@ -1103,11 +1102,11 @@ function renderMonthModal(monthKey, monthLabel) {
   const netProfit = rev - expTotal;
   // Active students (those registered and active with a room this month)
   // Show Active students + students who joined this month regardless of current status (historical view)
-  const activeStudents = DB.students.filter(s=>s.status==='Active'||(s.joinDate?.startsWith(monthKey)&&DB.payments.some(p=>p.studentId===s.id&&(p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)))));
+  const activeStudents = DB.students.filter(s=>s.status==='Active'||(s.joinDate?.startsWith(monthKey)&&DB.payments.some(p=>p.studentId===s.id&&_payMatchesMonth(p,monthKey))));
 
   const studentRows = activeStudents.map(s=>{
     const room = DB.rooms.find(r=>r.id===s.roomId);
-    const sPays = DB.payments.filter(p=>p.studentId===s.id&&(p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)));
+    const sPays = DB.payments.filter(p=>p.studentId===s.id&&_payMatchesMonth(p,monthKey));
     const sPaid = sPays.filter(p=>p.status==='Paid').reduce((t,p)=>t+Number(p.amount),0);
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
@@ -1339,7 +1338,7 @@ function addMonthExpenseFromModal(monthKey, monthLabel) {
 }
 
 function exportMonthCSV(monthKey, monthLabel) {
-  const pays = DB.payments.filter(p=>p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)||p.paidDate?.startsWith(monthKey));
+  const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
@@ -1359,11 +1358,11 @@ function exportMonthCSV(monthKey, monthLabel) {
 }
 
 function printMonthReport(monthKey, monthLabel) {
-  const pays = DB.payments.filter(p=>p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)||p.paidDate?.startsWith(monthKey));
+  const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
-  const pend = DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(monthKey)||(p.dueDate||'').startsWith(monthKey))).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const w = safeOpenWindow(900, 700); if (!w) return;
   w.document.write(`<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
@@ -3034,8 +3033,7 @@ function renderPayments() {
   let pays=DB.payments.filter(p=>{
     // Month filter — only show records for the selected calendar month unless showAll
     if(!payFilter.showAll) {
-      const matchDate = (p.date||'').startsWith(mo) || (p.dueDate||'').startsWith(mo) || (p.paidDate||'').startsWith(mo);
-      if(!matchDate) return false;
+      if(!_payMatchesMonth(p, mo)) return false;
     }
     if(payFilter.status!=='All' && p.status!==payFilter.status) return false;
     if(payFilter.method!=='All' && p.method!==payFilter.method) return false;
@@ -3072,14 +3070,19 @@ function renderPayments() {
   </div>
   <div class="table-wrap">
     <table style="border-collapse:collapse">
-      <thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Rent/Mo</th><th>Amount Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Info</th><th style="min-width:118px">Actions</th></tr></thead>
+      <thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Rent/Mo</th><th style="min-width:70px">Adm.Chr</th><th style="min-width:90px">Ext.Chr</th><th style="min-width:80px">Conc.Chr</th><th>Amount Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Info</th><th style="min-width:118px">Actions</th></tr></thead>
       <tbody>
-        ${pays.length===0?'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
-        pays.map(p=>'<tr style="border-bottom:none">'
-          +'<td class="fw-700" style="cursor:pointer;white-space:nowrap;border:none;padding:8px 10px" onclick="showViewStudentModal(\''+p.studentId+'\')" title="Click to view student details"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
+        ${pays.length===0?'<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
+        pays.map(p=>{
+          const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
+          return '<tr style="border-bottom:none">'
+          +'<td class="fw-700" style="cursor:pointer;white-space:nowrap;border:none;padding:8px 10px" onclick="showViewStudentModal(\''+p.studentId+'\'" title="Click to view student details"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
           +'<td style="white-space:nowrap;border:none;padding:8px 10px"><span class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
           +'<td class="text-muted" style="white-space:nowrap;border:none;padding:8px 10px">'+escHtml(p.month||'')+'</td>'
           +'<td class="text-muted fw-700" style="font-size:12px;border:none;padding:8px 10px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
+          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--blue)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--amber)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--teal)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
           +'<td class="text-green fw-700" style="border:none;padding:8px 10px">'+fmtPKR(p.amount)+'</td>'
           +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';border:none;padding:8px 10px">'+fmtPKR(p.unpaid||0)+'</td>'
           +'<td style="border:none;padding:8px 10px">'+pmBadge(p.method)+'</td>'
@@ -3092,7 +3095,7 @@ function renderPayments() {
           +'<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditPaymentModal(\''+p.id+'\')" title="Edit" style="font-size:13px">✏️</button>'
           +'<button class="btn btn-danger btn-icon btn-sm" onclick="deletePayment(\''+p.id+'\')" title="Delete" style="font-size:13px">🗑</button>'
           +'</div></td>'
-          +'</tr>').join('')}
+          +'</tr>';}).join('')}
       </tbody>
     </table>
   </div>`;
@@ -3106,7 +3109,7 @@ function generateMonthlyRents() {
   const active=DB.students.filter(t=>t.status==='Active');
   let added=0;
   active.forEach(t=>{
-    if(!DB.payments.some(p=>p.studentId===t.id&&p.month===mo)){
+    if(!DB.payments.some(p=>p.studentId===t.id&&_payMatchesMonth(p,thisMonth()))){
       const room=DB.rooms.find(r=>r.id===t.roomId);
       DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
       added++;
@@ -4313,10 +4316,10 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
 function renderReports() {
   const key=reportPeriod==='month'?thisMonth():thisYear();
-  const pays=DB.payments.filter(p=>(p.date||'').startsWith(key)||(p.dueDate||'').startsWith(key)||(p.paidDate||'').startsWith(key));
+  const pays=DB.payments.filter(p=>_payMatchesMonth(p,key));
   const exps=DB.expenses.filter(e=>e.date?.startsWith(key));
   const rev=calcRevenue(key);
-  const pending=DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(key)||(p.dueDate||'').startsWith(key))).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,key)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const totalExp=exps.reduce((s,e)=>s+Number(e.amount),0);
   const net=rev-totalExp;
   const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
@@ -4483,15 +4486,15 @@ function renderReports() {
 
   ${reportDetail==='financial' ? `
   <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">💰 Revenue — Financial Transactions</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-green">${DB.payments.filter(p=>p.status==='Paid'&&((p.date||'').startsWith(key)||(p.paidDate||'').startsWith(key))).length} paid</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('financial')" style="font-size:11px">⬇ Download PDF</button></div></div>
+    <div class="card-header"><div class="card-title">💰 Revenue — Financial Transactions</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-green">${DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).length} paid</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('financial')" style="font-size:11px">⬇ Download PDF</button></div></div>
     <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${DB.payments.filter(p=>(p.date||'').startsWith(key)||(p.dueDate||'').startsWith(key)||(p.paidDate||'').startsWith(key)).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>'<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'—')+'</td><td class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</td><td class="text-muted">'+escHtml(p.month||'—')+'</td><td class="text-green fw-700">'+fmtPKR(p.amount)+'</td><td style="color:'+((p.unpaid||0)>0?'var(--red)':'var(--text3)')+'">'+fmtPKR(p.unpaid||0)+'</td><td>'+pmBadge(p.method)+'</td><td>'+statusBadge(p.status)+'</td><td class="text-muted" style="font-size:12px">'+fmtDate(p.date)+'</td></tr>').join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">No transactions found</td></tr>'}
+    ${DB.payments.filter(p=>_payMatchesMonth(p,key)).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>'<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'—')+'</td><td class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</td><td class="text-muted">'+escHtml(p.month||'—')+'</td><td class="text-green fw-700">'+fmtPKR(p.amount)+'</td><td style="color:'+((p.unpaid||0)>0?'var(--red)':'var(--text3)')+'">'+fmtPKR(p.unpaid||0)+'</td><td>'+pmBadge(p.method)+'</td><td>'+statusBadge(p.status)+'</td><td class="text-muted" style="font-size:12px">'+fmtDate(p.date)+'</td></tr>').join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">No transactions found</td></tr>'}
     </tbody></table></div>
   </div>` : ''}
 
   ${reportDetail==='pending' ? `
   <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">⏳ Pending Payments — Outstanding Detail</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-gold">${DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(key)||(p.dueDate||'').startsWith(key))).length} unpaid this period</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('pending')" style="font-size:11px">⬇ Download PDF</button></div></div>
+    <div class="card-header"><div class="card-title">⏳ Pending Payments — Outstanding Detail</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-gold">${DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,key)).length} unpaid this period</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('pending')" style="font-size:11px">⬇ Download PDF</button></div></div>
     <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Method</th><th>Due Date</th><th>Action</th></tr></thead><tbody>
     ${DB.payments.filter(p=>p.status==='Pending').sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>'<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'—')+'</td><td class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</td><td class="text-muted">'+escHtml(p.month||'—')+'</td><td style="color:'+(Number(p.amount)>0?'var(--green)':'var(--text3)')+'">'+fmtPKR(p.amount||0)+'</td><td style="font-weight:700;color:var(--red)">'+fmtPKR(p.unpaid!=null?p.unpaid:p.amount)+'</td><td>'+pmBadge(p.method)+'</td><td class="text-muted" style="font-size:12px">'+(fmtDate(p.dueDate)||'—')+'</td><td><button class="btn btn-success btn-sm" style="font-size:11px" onclick="markPaymentPaid(\''+p.id+'\');reportDetail=\'pending\';renderPage(\'reports\')">✓ Collect</button></td></tr>').join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">🎉 No pending payments!</td></tr>'}
     </tbody></table></div>
@@ -4814,7 +4817,7 @@ function renderActivityLog() {
   const curName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : '';
   const moKey = thisMonth();
   const myPayments = DB.payments.filter(p => p.byWarden === curName);
-  const myPaymentsThisMo = myPayments.filter(p => (p.date||'').startsWith(moKey));
+  const myPaymentsThisMo = myPayments.filter(p => _payMatchesMonth(p, moKey));
   const myPayTotal = myPaymentsThisMo.reduce((s,p) => s + Number(p.amount||0), 0);
   const myStudents = DB.students.filter(s => {
     const logEntry = list.find(a => a.action === 'Student Added' && a.details && a.details.startsWith(s.name) && a.by === curName);
@@ -6075,11 +6078,7 @@ function shareAllStudentsPDFWhatsApp() {
     var _mkLabel = _mkDate.toLocaleString('default',{month:'long',year:'numeric'});
     var _mkLabel2 = _mkDate.toLocaleString('default',{month:'short',year:'numeric'});
     var mPays = DB.payments.filter(function(p){
-      if(p.studentId!==s.id) return false;
-      if((p.date||'').startsWith(mo)) return true;
-      if((p.paidDate||'').startsWith(mo)) return true;
-      if(p.month&&(p.month===_mkLabel||p.month===_mkLabel2||p.month.startsWith(mo))) return true;
-      return false;
+      return p.studentId===s.id && _payMatchesMonth(p, mo);
     });
     var paid    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(s,p){return s+Number(p.amount);},0);
     var pending = mPays.filter(function(p){return p.status==='Pending';}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount));},0);
@@ -6122,11 +6121,7 @@ function shareAllStudentsPDFGmail() {
     var _mkLabel = _mkDate.toLocaleString('default',{month:'long',year:'numeric'});
     var _mkLabel2 = _mkDate.toLocaleString('default',{month:'short',year:'numeric'});
     var mPays = DB.payments.filter(function(p){
-      if(p.studentId!==s.id) return false;
-      if((p.date||'').startsWith(mo)) return true;
-      if((p.paidDate||'').startsWith(mo)) return true;
-      if(p.month&&(p.month===_mkLabel||p.month===_mkLabel2||p.month.startsWith(mo))) return true;
-      return false;
+      return p.studentId===s.id && _payMatchesMonth(p, mo);
     });
     var paid    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(s,p){return s+Number(p.amount);},0);
     var pending = mPays.filter(function(p){return p.status==='Pending';}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount));},0);
@@ -6154,7 +6149,7 @@ function shareAllStudentsPDFGmail() {
 function downloadDetailPDF(type) {
   const key = reportPeriod==='month' ? thisMonth() : thisYear();
   const label = reportPeriod==='month' ? 'Monthly' : 'Annual';
-  const pays = DB.payments.filter(p=>p.date?.startsWith(key));
+  const pays = DB.payments.filter(p=>_payMatchesMonth(p,key));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(key));
   const rev = calcRevenue(key);
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
@@ -6188,7 +6183,7 @@ function downloadDetailPDF(type) {
 
 function downloadReportDetailPDF(detailId) {
   const mo = reportPeriod==='month' ? thisMonth() : thisYear();
-  const pays = DB.payments.filter(p=>p.date?.startsWith(mo));
+  const pays = DB.payments.filter(p=>_payMatchesMonth(p,mo));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(mo));
   const rev = calcRevenue(mo);
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
@@ -6262,12 +6257,12 @@ function downloadReportDetailPDF(detailId) {
 
 function printReport() {
   const mo=reportPeriod==='month'?thisMonth():thisYear();
-  const pays=DB.payments.filter(p=>p.date?.startsWith(mo));
+  const pays=DB.payments.filter(p=>_payMatchesMonth(p,mo));
   const exps=DB.expenses.filter(e=>e.date?.startsWith(mo));
   const rev=calcRevenue(mo);
   const expTotal=exps.reduce((s,e)=>s+Number(e.amount),0);
   const _printKey=reportPeriod==='month'?thisMonth():thisYear();
-  const pending=DB.payments.filter(p=>p.status==='Pending'&&((p.date||'').startsWith(_printKey)||(p.dueDate||'').startsWith(_printKey))).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const w=safeOpenWindow(1100, 800); if (!w) return;
   w.document.write(`<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
@@ -7091,8 +7086,8 @@ function renderSidebarCalendar() {
   let startDay = d.getDay() - 1; if(startDay < 0) startDay = 6;
 
   // Payment indicators
-  const hasPaid = DB.payments.some(p=>p.status==='Paid'&&(p.date?.startsWith(monthKey)||p.paidDate?.startsWith(monthKey)));
-  const hasPend = DB.payments.some(p=>p.status==='Pending'&&(p.date?.startsWith(monthKey)||p.dueDate?.startsWith(monthKey)));
+  const hasPaid = DB.payments.some(p=>p.status==='Paid'&&_payMatchesMonth(p,monthKey));
+  const hasPend = DB.payments.some(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey));
 
   // Build paid days set for dot indicators
   const paidDays = new Set();
@@ -7192,7 +7187,7 @@ function drawTrendChart() {
     var rev = isPast ? calcRevenue(k) : 0;
     var exp = isPast ? (DB.expenses||[]).filter(e=>(e.date||'').startsWith(k)).reduce((s,e)=>s+Number(e.amount||0),0) : 0;
     var trf = isPast ? (DB.transfers||[]).filter(t=>(t.date||'').startsWith(k)).reduce((s,t)=>s+Number(t.amount||0),0) : 0;
-    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&((p.date||'').startsWith(k)||(p.dueDate||'').startsWith(k))).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
+    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
     revD.push(isPast&&rev>0?rev:null);
     expD.push(isPast&&exp>0?exp:null);
@@ -7305,7 +7300,7 @@ function downloadDetailCSV(type) {
   if (type === 'financial') {
     filename = 'Revenue_'+key+'.csv';
     rows.push(['Student','Room','Month','Amount Paid','Method','Date']);
-    DB.payments.filter(p=>p.status==='Paid'&&(p.date||'').startsWith(key)).forEach(p=>{
+    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
     });
   } else if (type === 'pending') {
@@ -7339,7 +7334,7 @@ function downloadDetailCSV(type) {
   } else if (type === 'netprofit') {
     filename = 'AvailableFund_'+key+'.csv';
     rows.push(['Date','Type','Description','Amount']);
-    DB.payments.filter(p=>p.status==='Paid'&&(p.date||'').startsWith(key)).forEach(p=>{
+    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
       rows.push([p.date||'—','Income',p.studentName+' · '+p.month,p.amount]);
     });
     DB.expenses.filter(e=>(e.date||'').startsWith(key)).forEach(e=>{
@@ -8767,31 +8762,55 @@ function doGenerateStudentsPDF(monthKey) {
     grandPending += pendingAmt;
 
     var dash = '<span style="color:#ccc">—</span>';
+    // Build extra charges label: show each charge with description+amount
+    var extCell = (function(){
+      var allExt = [];
+      mPays.forEach(function(p){
+        (p.extraCharges||[]).forEach(function(c){
+          if(Number(c.amount)>0) allExt.push((c.label?c.label+': ':'')+fmtPKR(c.amount));
+        });
+      });
+      return allExt.length ? allExt.join('<br>') : dash;
+    })();
+    // Build concession label
+    var concCell = (function(){
+      if(!concession) return dash;
+      var descs = [];
+      mPays.forEach(function(p){
+        var pConc = Number(p.concession||p.discount||0);
+        if(pConc>0){
+          var desc = p.concessionDesc||p.discountDesc||'';
+          descs.push((desc?desc+': ':'')+fmtPKR(pConc));
+        }
+      });
+      return descs.length ? '−'+descs.join('<br>') : '−'+fmtPKR(concession);
+    })();
+
     rows += '<tr style="background:'+rowBg+'">';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(admFee>0?'#1d4ed8':'#aaa')+'">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(extraTotal>0?'#c2410c':'#aaa')+'">'+(extraTotal>0?fmtPKR(extraTotal):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:700;color:'+(concession>0?'#7c3aed':'#aaa')+'">'+(concession>0?'−'+fmtPKR(concession):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #dde2ea;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(admFee>0?'#1a3a7a':'#bbb')+'font-size:10px">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(extraTotal>0?'#7a4d00':'#bbb')+';font-size:10px">'+extCell+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(concession>0?'#0a5a40':'#bbb')+';font-size:10px">'+concCell+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
     rows += '</tr>';
   });
 
-  // Totals row
+  // Totals row — adm/ext/conc NOT grand-totalled (they are per-student breakdown only)
   rows += '<tr style="background:#0f1a2e">';
   rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#e6c96e;font-size:12px">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#e6c96e">'+fmtPKR(grandRent)+'</td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#60a5fa">'+fmtPKR(grandAdmFee)+'</td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#fb923c">'+fmtPKR(grandExtra)+'</td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(grandConc)+'</td>';
+  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
+  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
+  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#4ade80">'+fmtPKR(grandPaid)+'</td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(grandPending)+'</td>';
   rows += '<td colspan="2" style="padding:8px 5px;text-align:center;font-size:10px;color:#8899bb">'+active+' active · '+left+' left</td>';
@@ -8810,7 +8829,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
   // 11 cols: # name father room cnic phone rent paid pend fst sst
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
-  html += 'col.c-no{width:3%}col.c-name{width:12%}col.c-father{width:9%}col.c-room{width:4%}col.c-cnic{width:10%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:6%}col.c-extra{width:6%}col.c-conc{width:6%}col.c-paid{width:8%}col.c-pend{width:8%}col.c-fst{width:7%}col.c-sst{width:6%}';
+  html += 'col.c-no{width:3%}col.c-name{width:13%}col.c-father{width:10%}col.c-room{width:4%}col.c-cnic{width:11%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:7%}col.c-ext{width:8%}col.c-conc{width:8%}col.c-paid{width:8%}col.c-pend{width:7%}col.c-fst{width:7%}col.c-sst{width:6%}';
   html += 'thead th{background:#0f1a2e;color:#e6c96e;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
   html += 'td{padding:5px 5px;border:1px solid #dde2ea;word-break:break-word;vertical-align:middle;font-size:10px}';
@@ -8845,13 +8864,13 @@ function doGenerateStudentsPDF(monthKey) {
 
   // Table
   html += '<table>';
-  html += '<colgroup><col class="c-no"><col class="c-name"><col class="c-father"><col class="c-room"><col class="c-cnic"><col class="c-phone"><col class="c-rent"><col class="c-adm"><col class="c-extra"><col class="c-conc"><col class="c-paid"><col class="c-pend"><col class="c-fst"><col class="c-sst"></colgroup>';
+  html += '<colgroup><col class="c-no"><col class="c-name"><col class="c-father"><col class="c-room"><col class="c-cnic"><col class="c-phone"><col class="c-rent"><col class="c-adm"><col class="c-ext"><col class="c-conc"><col class="c-paid"><col class="c-pend"><col class="c-fst"><col class="c-sst"></colgroup>';
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
   html += '<th class="r">Rent/Mo</th>';
-  html += '<th class="r" style="color:#60a5fa">Adm.Fee</th>';
-  html += '<th class="r" style="color:#fb923c">Extra</th>';
-  html += '<th class="r" style="color:#a78bfa">Concession</th>';
+  html += '<th class="r" style="color:#7ab4ff">Adm.Chr</th>';
+  html += '<th class="r" style="color:#ffd27a">Ext.Chr</th>';
+  html += '<th class="r" style="color:#7aefcf">Conc.Chr</th>';
   html += '<th class="r" style="color:#4ade80">Amount Paid</th>';
   html += '<th class="r" style="color:#f87171">Pending</th>';
   html += '<th class="c">Fee Status</th>';
@@ -9291,7 +9310,7 @@ function archShowYearDetail(type) {
   var allPay=[],allExp=[],allTrf=[];
   for(var m=1;m<=12;m++){
     var mk=_archSelYear+'-'+String(m).padStart(2,'0');
-    allPay.push.apply(allPay,(DB.payments||[]).filter(function(p){return (p.date||'').startsWith(mk)||(p.dueDate||'').startsWith(mk);}));
+    allPay.push.apply(allPay,(DB.payments||[]).filter(function(p){return _archMatchMonth(p,mk);}));
     allExp.push.apply(allExp,(DB.expenses||[]).filter(function(e){return (e.date||'').startsWith(mk);}));
     allTrf.push.apply(allTrf,(DB.transfers||[]).filter(function(t){return (t.date||'').startsWith(mk);}));
   }
