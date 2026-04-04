@@ -148,6 +148,7 @@
 
   <!-- Header -->
   <div class="header">
+    <button onclick="window.history.back()" style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);color:#c8a84b;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">← Back</button>
     <div class="header-icon">⚙️</div>
     <div class="header-text">
       <h1>License Settings</h1>
@@ -266,21 +267,26 @@
       var wardenPwOk = false;
       try {
         var hostelId = sessionStorage.getItem('active_hostel') || 'hostel_1';
+        var curRole  = sessionStorage.getItem('h_role') || 'warden1';
         var wcfg = localStorage.getItem('warden_config_' + hostelId);
         if (wcfg) {
           var w = JSON.parse(wcfg);
-          // Warden 2 cannot perform license actions if canSettings is false
-          if (entered === (w.warden2 && w.warden2.pw) && w.warden2 && w.warden2.canSettings === false) {
-            msg.style.color = '#ff6b6b';
-            msg.textContent = '⛔ Warden 2 does not have permission for license actions.';
-            inp.value = ''; inp.focus(); return;
-          }
-          if (entered === (w.warden1 && w.warden1.pw) || entered === (w.warden2 && w.warden2.pw)) {
+          // Check current logged-in warden first
+          if (curRole === 'warden1' && entered === (w.warden1 && w.warden1.pw)) {
+            wardenPwOk = true; // Warden 1 always has permission
+          } else if (curRole === 'warden2' && entered === (w.warden2 && w.warden2.pw)) {
+            if (w.warden2 && w.warden2.canSettings === false) {
+              msg.style.color = '#ff6b6b';
+              msg.textContent = '⛔ Warden 2 does not have permission for license actions.';
+              inp.value = ''; inp.focus(); return;
+            }
             wardenPwOk = true;
+          } else if (entered === (w.warden1 && w.warden1.pw)) {
+            wardenPwOk = true; // Allow warden1 password always
           }
         } else {
           // Fallback: default passwords if config not yet saved
-          if (entered === 'warden1' || entered === 'warden2') wardenPwOk = true;
+          if (entered === 'warden1') wardenPwOk = true;
         }
       } catch(e) {
         msg.style.color = '#ff6b6b'; msg.textContent = '⚠️ Could not verify password. Try again.'; return;

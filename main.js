@@ -227,24 +227,10 @@ function deactivateLicense() {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-// ── License Settings window ────────────────────────────────────────────────────
+// ── License Settings — load in same window ────────────────────────────────────
 function openLicenseSettings() {
   if (!mainWindow) return;
-  const settingsWin = new BrowserWindow({
-    width: 540, height: 680,
-    title: 'License Settings — DAMAM Hostel',
-    resizable: false, minimizable: false, maximizable: false,
-    parent: mainWindow, modal: true, show: false,
-    webPreferences: {
-      nodeIntegration: false, contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      devTools: !IS_PROD
-    },
-    backgroundColor: '#060c18'
-  });
-  settingsWin.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
-  settingsWin.setMenu(null);
-  settingsWin.once('ready-to-show', () => { settingsWin.show(); settingsWin.focus(); });
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
