@@ -1,0 +1,85 @@
+{
+  "name": "damam-hostel",
+  "version": "3.0.0",
+  "description": "DAMAM Boys Hostel Management System",
+  "author": {
+    "name": "MUSHTAQ AHMAD",
+    "email": "mushtaqahmadicp@gmail.com"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start":           "electron . --dev",
+    "build":           "electron-builder --win --x64",
+    "build:portable":  "electron-builder --win portable --x64",
+    "build:installer": "electron-builder --win nsis --x64",
+    "test:license":    "node test-license.js"
+  },
+  "build": {
+    "appId": "com.damam.hostel",
+    "productName": "DAMAM Boys Hostel",
+    "copyright": "Copyright © 2025 MUSHTAQ AHMAD",
+
+    "asar": true,
+    "asarUnpack": [],
+
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+
+    "files": [
+      "renderer/**/*",
+      "main.js",
+      "preload.js",
+      "assets/**/*",
+      "package.json",
+      "!keygen.js",
+      "!keygen.html",
+      "!test-license.js",
+      "!**/*.md",
+      "!**/.git/**",
+      "!**/node_modules/.bin/**",
+      "!dist/**",
+      "!**/Thumbs.db",
+      "!**/*.map"
+    ],
+
+    "win": {
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "assets/logo.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "fileAssociations": [],
+      "verifyUpdateCodeSignature": false
+    },
+
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DAMAM Hostel",
+      "installerIcon": "assets/logo.ico",
+      "uninstallerIcon": "assets/logo.ico",
+      "installerHeader": "assets/logo.ico",
+      "license": null,
+      "deleteAppDataOnUninstall": false,
+      "displayLanguageSelector": false,
+      "include": null
+    },
+
+    "portable": {
+      "artifactName": "DAMAM-Hostel-Portable-${version}.exe"
+    },
+
+    "publish": null
+  },
+  "devDependencies": {
+    "electron": "^34.5.8",
+    "electron-builder": "^26.8.1"
+  }
+}

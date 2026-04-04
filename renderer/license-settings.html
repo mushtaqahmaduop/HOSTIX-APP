@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>License Settings — DAMAM Hostel</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data:;">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold:   #c8a84b; --gold2:  #e6c96e;
+      --red:    #e05252; --red2:   #ff6b6b;
+      --green:  #2ec98a; --blue:   #1e5fd4;
+      --orange: #e07b30;
+      --bg:     #060c18; --bg2:    #071428; --bg3:   #0d1f38;
+      --border: #1e3050; --border2:#1e4080;
+      --text:   #e8eef8; --text2:  #a0b4cc; --text3: #4d6a90;
+    }
+
+    body {
+      font-family: 'Outfit', 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 20px 36px; overflow-y: auto;
+    }
+
+    .header {
+      width: 100%; max-width: 480px;
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 22px;
+    }
+    .header-icon {
+      width: 42px; height: 42px; border-radius: 11px;
+      background: linear-gradient(135deg, rgba(200,168,75,0.2), rgba(200,168,75,0.06));
+      border: 1px solid rgba(200,168,75,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .header-text h1 { font-size: 18px; font-weight: 800; color: var(--gold2); }
+    .header-text p  { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: 0.3px; }
+
+    /* Cards */
+    .card {
+      width: 100%; max-width: 480px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 22px;
+      margin-bottom: 14px; position: relative;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; border-radius: 16px 16px 0 0;
+    }
+    .card.card-info::before   { background: linear-gradient(90deg, #1e5fd4, #c8a84b); }
+    .card.card-danger::before { background: linear-gradient(90deg, #e05252, #c8a84b); }
+    .card-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--text3); margin-bottom: 14px;
+    }
+
+    /* Status badge */
+    .status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+    }
+    .status-badge.active   { background: rgba(46,201,138,0.15); border: 1px solid rgba(46,201,138,0.4); color: var(--green); }
+    .status-badge.expired  { background: rgba(224,82,82,0.15);  border: 1px solid rgba(224,82,82,0.4);  color: var(--red2); }
+    .status-badge.inactive { background: rgba(160,180,204,0.1); border: 1px solid rgba(160,180,204,0.2); color: var(--text3); }
+
+    /* Info rows */
+    .info-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      padding: 9px 0; border-bottom: 1px solid rgba(30,48,80,0.6); gap: 12px;
+    }
+    .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .info-label { font-size: 11px; color: var(--text3); font-weight: 600; flex-shrink: 0; padding-top: 1px; }
+    .info-value { font-size: 12px; color: var(--text2); text-align: right; word-break: break-all; }
+    .info-value.mono  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gold2); letter-spacing: 1px; }
+    .info-value.green { color: var(--green); font-weight: 700; }
+    .info-value.red   { color: var(--red2);  font-weight: 700; }
+
+    /* Action buttons */
+    .action-btn {
+      width: 100%;
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: 11px; border: 1px solid;
+      background: transparent; font-family: inherit; font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: all 0.18s; text-align: left; margin-bottom: 10px;
+    }
+    .action-btn:last-child { margin-bottom: 0; }
+    .action-btn .btn-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    .action-btn .btn-text { flex: 1; }
+    .action-btn .btn-title { display: block; font-size: 13px; font-weight: 700; }
+    .action-btn .btn-desc  { display: block; font-size: 11px; font-weight: 400; margin-top: 2px; opacity: 0.75; }
+
+    .btn-deactivate { border-color: rgba(224,123,48,0.4); color: var(--orange); }
+    .btn-deactivate .btn-icon { background: rgba(224,123,48,0.12); }
+    .btn-deactivate:hover { background: rgba(224,123,48,0.08); border-color: rgba(224,123,48,0.7); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(224,123,48,0.15); }
+
+    .btn-reset { border-color: rgba(224,82,82,0.4); color: var(--red2); }
+    .btn-reset .btn-icon { background: rgba(224,82,82,0.12); }
+    .btn-reset:hover { background: rgba(224,82,82,0.08); border-color: rgba(224,82,82,0.7); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(224,82,82,0.15); }
+
+    .btn-uninstall { border-color: rgba(77,106,144,0.5); color: var(--text3); }
+    .btn-uninstall .btn-icon { background: rgba(77,106,144,0.12); }
+    .btn-uninstall:hover { background: rgba(77,106,144,0.08); border-color: rgba(77,106,144,0.8); transform: translateY(-1px); }
+
+    .action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* Fingerprint note */
+    .fp-note {
+      background: rgba(30,95,212,0.07); border: 1px solid rgba(30,95,212,0.2);
+      border-radius: 10px; padding: 11px 14px;
+      font-size: 11px; color: var(--text3); line-height: 1.65;
+    }
+    .fp-note strong { color: var(--text2); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 10px 18px;
+      font-size: 13px; font-weight: 600; color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s;
+      opacity: 0; z-index: 99; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* Skeleton loader */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, rgba(30,64,128,0.3) 50%, var(--bg3) 75%);
+      background-size: 200% 100%; animation: shimmer 1.2s infinite;
+      border-radius: 4px; height: 13px;
+    }
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">⚙️</div>
+    <div class="header-text">
+      <h1>License Settings</h1>
+      <p>Manage activation, deactivation &amp; reset</p>
+    </div>
+  </div>
+
+  <!-- License Status Card -->
+  <div class="card card-info" id="status-card">
+    <div class="card-title">🔐 License Status</div>
+
+    <div class="status-row">
+      <span class="info-label">Status</span>
+      <span class="status-badge inactive" id="status-badge">Loading…</span>
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Machine ID</span>
+      <span class="info-value mono" id="val-machine"><span class="skeleton" style="width:240px;display:inline-block"></span></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">License Key</span>
+      <span class="info-value mono" id="val-key">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Expires</span>
+      <span class="info-value" id="val-expiry">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Activated On</span>
+      <span class="info-value" id="val-activated">—</span>
+    </div>
+  </div>
+
+  <!-- Actions Card -->
+  <div class="card card-danger">
+    <div class="card-title">⚠️ License Actions</div>
+
+    <!-- Password Gate -->
+    <div style="background:rgba(224,82,82,0.06);border:1px solid rgba(224,82,82,0.22);border-radius:10px;padding:13px 15px;margin-bottom:14px">
+      <label style="font-size:11px;color:#a0b4cc;font-weight:700;display:block;margin-bottom:8px">
+        🔑 Enter Warden Password to Unlock Actions
+      </label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="position:relative;flex:1">
+          <input id="gate-pw" type="password" placeholder="Your current warden password…"
+            style="width:100%;box-sizing:border-box;padding:10px 36px 10px 12px;background:#0f1a2e;border:1px solid #1e3050;border-radius:8px;color:#e8eef8;font-size:13px;font-family:inherit;outline:none"
+            onfocus="this.style.borderColor='#c8a84b'" onblur="this.style.borderColor='#1e3050'"
+            onkeydown="if(event.key==='Enter')gateVerify()">
+          <span onclick="var i=document.getElementById('gate-pw');i.type=i.type==='password'?'text':'password'"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:#4d6a90;font-size:14px">👁</span>
+        </div>
+        <button onclick="gateVerify()"
+          style="padding:9px 16px;background:linear-gradient(135deg,#1e5fd4,#2a7af4);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">
+          Unlock
+        </button>
+      </div>
+      <div id="gate-msg" style="font-size:11px;margin-top:6px;min-height:14px"></div>
+    </div>
+
+    <!-- Action Buttons — locked until password verified -->
+    <div id="actions-wrap" style="opacity:0.3;pointer-events:none;transition:opacity 0.3s">
+
+      <!-- Deactivate -->
+      <button class="action-btn btn-deactivate" id="btn-deactivate" onclick="doDeactivate()">
+        <div class="btn-icon">🔓</div>
+        <div class="btn-text">
+          <span class="btn-title">Deactivate License</span>
+          <span class="btn-desc">Remove this license from the computer. You'll need a new key to continue.</span>
+        </div>
+      </button>
+
+      <!-- Full Reset -->
+      <button class="action-btn btn-reset" id="btn-reset" onclick="doReset()">
+        <div class="btn-icon">🔄</div>
+        <div class="btn-text">
+          <span class="btn-title">Full Reset</span>
+          <span class="btn-desc">Delete license file + clear all stored timestamps. Wipes activation state completely.</span>
+        </div>
+      </button>
+
+      <!-- Prepare Uninstall -->
+      <button class="action-btn btn-uninstall" onclick="doUninstall()">
+        <div class="btn-icon">🗑️</div>
+        <div class="btn-text">
+          <span class="btn-title">Prepare for Uninstall</span>
+          <span class="btn-desc">Clean up all license data before removing the app from Windows.</span>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Note -->
+  <div class="fp-note" style="width:100%;max-width:480px">
+    <strong>About the Machine Fingerprint:</strong> The hardware fingerprint is computed live from your
+    CPU, hostname, platform and Windows MachineGuid — it is never stored separately.
+    Deleting the license file removes all binding to this machine. The fingerprint changes if you
+    reinstall Windows or replace key hardware — contact support in that case.
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var _gateUnlocked = false;
+
+    // ── Password gate ─────────────────────────────────────────────────────────
+    function gateVerify() {
+      var inp  = document.getElementById('gate-pw');
+      var msg  = document.getElementById('gate-msg');
+      var wrap = document.getElementById('actions-wrap');
+      var entered = inp.value.trim();
+      if (!entered) { msg.style.color = '#ff6b6b'; msg.textContent = '⚠️ Please enter your password.'; return; }
+
+      // Read warden passwords from localStorage (same origin as main app)
+      var wardenPwOk = false;
+      try {
+        var hostelId = sessionStorage.getItem('active_hostel') || 'hostel_1';
+        var wcfg = localStorage.getItem('warden_config_' + hostelId);
+        if (wcfg) {
+          var w = JSON.parse(wcfg);
+          // Warden 2 cannot perform license actions if canSettings is false
+          if (entered === (w.warden2 && w.warden2.pw) && w.warden2 && w.warden2.canSettings === false) {
+            msg.style.color = '#ff6b6b';
+            msg.textContent = '⛔ Warden 2 does not have permission for license actions.';
+            inp.value = ''; inp.focus(); return;
+          }
+          if (entered === (w.warden1 && w.warden1.pw) || entered === (w.warden2 && w.warden2.pw)) {
+            wardenPwOk = true;
+          }
+        } else {
+          // Fallback: default passwords if config not yet saved
+          if (entered === 'warden1' || entered === 'warden2') wardenPwOk = true;
+        }
+      } catch(e) {
+        msg.style.color = '#ff6b6b'; msg.textContent = '⚠️ Could not verify password. Try again.'; return;
+      }
+
+      if (!wardenPwOk) {
+        msg.style.color = '#ff6b6b'; msg.textContent = '❌ Wrong password. Try again.';
+        inp.value = ''; inp.focus(); return;
+      }
+
+      _gateUnlocked = true;
+      wrap.style.opacity = '1';
+      wrap.style.pointerEvents = 'auto';
+      msg.style.color = '#2ec98a';
+      msg.textContent = '✅ Unlocked. Actions are now available.';
+      inp.value = ''; inp.disabled = true;
+      document.querySelector('[onclick="gateVerify()"]').disabled = true;
+    }
+
+    function gateCheck() {
+      if (!_gateUnlocked) { showToast('⚠️ Enter your warden password first to unlock actions.'); return false; }
+      return true;
+    }
+
+    // ── Load license info on open ─────────────────────────────────────────────
+    (async function init() {
+      if (!window.licenseAPI) {
+        document.getElementById('status-badge').textContent = '⚠️ API unavailable';
+        document.getElementById('status-badge').className = 'status-badge expired';
+        document.getElementById('val-machine').textContent = 'Reload the app and try again.';
+        return;
+      }
+
+      try {
+        const [machineId, license] = await Promise.all([
+          window.licenseAPI.getMachineId(),
+          window.licenseAPI.checkLicense()
+        ]);
+
+        // Machine ID: display as groups for readability
+        document.getElementById('val-machine').textContent =
+          machineId ? machineId.match(/.{8}/g).join('-') : 'Unknown';
+
+        const badge = document.getElementById('status-badge');
+        if (license.valid) {
+          badge.textContent = '✅ Active';
+          badge.className = 'status-badge active';
+        } else if (license.reason === 'expired') {
+          badge.textContent = '⏰ Expired';
+          badge.className = 'status-badge expired';
+        } else {
+          badge.textContent = '❌ Not Activated';
+          badge.className = 'status-badge inactive';
+          document.getElementById('btn-deactivate').disabled = true;
+          document.getElementById('btn-reset').disabled = true;
+        }
+
+        const keyEl = document.getElementById('val-key');
+        if (license.key) {
+          // Show partial key: first segment + masked middle + last segment
+          const parts = license.key.split('-');
+          if (parts.length === 4) {
+            keyEl.textContent = parts[0] + '-' + parts[1] + '-····-' + parts[3];
+          } else {
+            keyEl.textContent = license.key;
+          }
+        } else {
+          keyEl.textContent = 'No license found';
+          keyEl.style.color = 'var(--text3)';
+        }
+
+        const expiryEl = document.getElementById('val-expiry');
+        if (license.expiry) {
+          const expDate = new Date(license.expiry);
+          const now     = new Date();
+          const daysLeft = Math.ceil((expDate - now) / 86400000);
+          expiryEl.textContent = expDate.toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' })
+            + (daysLeft > 0 ? ' (' + daysLeft + ' days remaining)' : ' (expired)');
+          expiryEl.classList.add(daysLeft > 0 ? 'green' : 'red');
+        } else {
+          expiryEl.textContent = '—';
+        }
+
+        document.getElementById('val-activated').textContent =
+          license.activatedAt
+            ? new Date(license.activatedAt).toLocaleDateString('en-PK', { day:'numeric', month:'long', year:'numeric' })
+            : '—';
+
+      } catch (e) {
+        showToast('⚠️ Could not load license info: ' + e.message);
+      }
+    })();
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+    async function doDeactivate() {
+      if (!gateCheck()) return;
+      const btn = document.getElementById('btn-deactivate');
+      btn.disabled = true;
+      try {
+        const result = await window.licenseAPI.deactivateLicense();
+        if (result && result.cancelled) { btn.disabled = false; return; }
+        if (result && !result.success) {
+          showToast('❌ ' + (result.reason || result.message || 'Deactivation failed'));
+          btn.disabled = false;
+        }
+        // Main window will have navigated away; settings window auto-closes
+      } catch (e) { showToast('❌ Error: ' + e.message); btn.disabled = false; }
+    }
+
+    async function doReset() {
+      if (!gateCheck()) return;
+      const btn = document.getElementById('btn-reset');
+      btn.disabled = true;
+      try {
+        const result = await window.licenseAPI.resetLicense();
+        if (result && result.cancelled) { btn.disabled = false; return; }
+        if (result && !result.success) {
+          showToast('❌ ' + (result.reason || result.message || 'Reset failed'));
+          btn.disabled = false;
+        }
+      } catch (e) { showToast('❌ Error: ' + e.message); btn.disabled = false; }
+    }
+
+    async function doUninstall() {
+      if (!gateCheck()) return;
+      try { await window.licenseAPI.prepareUninstall(); }
+      catch (e) { showToast('❌ Error: ' + e.message); }
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    var _toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3500);
+    }
+  </script>
+</body>
+</html>
