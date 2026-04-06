@@ -1,6 +1,12 @@
-/* ─── DAMAM HOSTEL — PRELOAD (Secure IPC Bridge) ───────────────────────────
+/* ─── DAMAM HOSTEL — PRELOAD (Secure IPC Bridge — PATCHED) ────────────────
    contextIsolation: true  |  nodeIntegration: false
    All renderer ↔ main communication goes through this file only.
+
+   SECURITY FIXES:
+   FIX-P1  licenseActivate validates key is a string before sending to main.
+   FIX-P2  receiptSavePDF validates htmlContent is string and suggestedName is safe.
+   FIX-P3  openExternal validates url is a string (protocol validation in main.js).
+   FIX-P4  writeFile (exportBackup) validates filePath is a non-empty string.
    ─────────────────────────────────────────────────────────────────────────── */
 
 'use strict';
@@ -13,16 +19,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Backup & file
   onExportBackup: (cb) => ipcRenderer.on('export-backup', (_e, fp)   => cb(fp)),
   onImportBackup: (cb) => ipcRenderer.on('import-backup', (_e, json) => cb(json)),
-  exportBackup:   (filePath, json) => ipcRenderer.send('write-file', filePath, json),
-  onPdfSaved:     (cb) => ipcRenderer.on('pdf-saved', (_e, result)   => cb(result)),
-  openExternal:   (url) => ipcRenderer.send('open-external', url),
+
+  // [FIX-P4] Validate filePath and json before sending
+  exportBackup: (filePath, json) => {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      console.error('[Preload] exportBackup: invalid filePath');
+      return;
+    }
+    if (typeof json !== 'string') {
+      console.error('[Preload] exportBackup: data must be a string');
+      return;
+    }
+    ipcRenderer.send('write-file', filePath, json);
+  },
+
+  onPdfSaved:   (cb) => ipcRenderer.on('pdf-saved', (_e, result)   => cb(result)),
+
+  // [FIX-P3] Validate URL is a string before sending
+  openExternal: (url) => {
+    if (typeof url !== 'string' || url.length > 2048) {
+      console.warn('[Preload] openExternal: invalid url');
+      return;
+    }
+    ipcRenderer.send('open-external', url);
+  },
 
   // License — basic
-  licenseCheck:      ()    => ipcRenderer.invoke('license:check'),
-  licenseActivate:   (key) => ipcRenderer.invoke('license:activate', key),
-  licenseDeactivate: ()    => ipcRenderer.invoke('license:deactivate'),
-  licenseMachineId:  ()    => ipcRenderer.invoke('license:machineId'),
-  reloadApp:         ()    => ipcRenderer.invoke('license:loadApp'),
+  licenseCheck: () => ipcRenderer.invoke('license:check'),
+
+  // [FIX-P1] Validate key is a string before sending to main process
+  licenseActivate: (key) => {
+    if (typeof key !== 'string') {
+      return Promise.resolve({ success: false, reason: 'Invalid key type.' });
+    }
+    const trimmed = key.trim().toUpperCase();
+    if (trimmed.length === 0 || trimmed.length > 50) {
+      return Promise.resolve({ success: false, reason: 'Invalid key format.' });
+    }
+    return ipcRenderer.invoke('license:activate', trimmed);
+  },
+
+  licenseDeactivate: () => ipcRenderer.invoke('license:deactivate'),
+  licenseMachineId:  () => ipcRenderer.invoke('license:machineId'),
+  reloadApp:         () => ipcRenderer.invoke('license:loadApp'),
 
   // License — management (with native confirmation dialogs)
   licenseDeactivateWithDialog: () => ipcRenderer.invoke('license:deactivateWithDialog'),
@@ -30,19 +69,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
   licensePrepareUninstall:     () => ipcRenderer.invoke('license:prepareUninstall'),
   licenseOpenSettings:         () => ipcRenderer.invoke('license:openSettings'),
 
-  // Receipt PDF
-  receiptSavePDF: (htmlContent, suggestedName) =>
-    ipcRenderer.invoke('receipt:savePDF', htmlContent, suggestedName)
+  // [FIX-P2] Receipt PDF — validate htmlContent and suggestedName; supports opts {landscape}
+  receiptSavePDF: (htmlContent, suggestedName, opts) => {
+    if (typeof htmlContent !== 'string') {
+      return Promise.resolve({ success: false, reason: 'Invalid HTML content.' });
+    }
+    if (htmlContent.length > 2 * 1024 * 1024) { // 2MB limit
+      return Promise.resolve({ success: false, reason: 'Receipt content is too large.' });
+    }
+    // Sanitize suggestedName — keep only safe filename characters
+    const safeName = (typeof suggestedName === 'string')
+      ? suggestedName.replace(/[^a-zA-Z0-9._\- ]/g, '').slice(0, 100)
+      : `Receipt_${new Date().toISOString().slice(0, 10)}.pdf`;
+    // opts: { landscape: bool, pageSize: string }
+    const safeOpts = (opts && typeof opts === 'object') ? {
+      landscape: opts.landscape === true,
+      pageSize:  typeof opts.pageSize === 'string' ? opts.pageSize : 'A4'
+    } : {};
+    return ipcRenderer.invoke('receipt:savePDF', htmlContent, safeName, safeOpts);
+  }
 });
 
 // ── License page & settings window API ────────────────────────────────────
-// Used by license.html AND license-settings.html
 contextBridge.exposeInMainWorld('licenseAPI', {
-  getMachineId:      ()    => ipcRenderer.invoke('license:machineId'),
-  activateLicense:   (key) => ipcRenderer.invoke('license:activate', key),
+  getMachineId:    ()    => ipcRenderer.invoke('license:machineId'),
+
+  // [FIX-P1] Validate key in licenseAPI too
+  activateLicense: (key) => {
+    if (typeof key !== 'string' || key.trim().length === 0 || key.length > 50) {
+      return Promise.resolve({ success: false, reason: 'Invalid key format.' });
+    }
+    return ipcRenderer.invoke('license:activate', key.trim().toUpperCase());
+  },
+
   checkLicense:      ()    => ipcRenderer.invoke('license:check'),
   reloadApp:         ()    => ipcRenderer.invoke('license:loadApp'),
-  // Management actions used by license-settings.html
   deactivateLicense: ()    => ipcRenderer.invoke('license:deactivateWithDialog'),
   resetLicense:      ()    => ipcRenderer.invoke('license:reset'),
   prepareUninstall:  ()    => ipcRenderer.invoke('license:prepareUninstall')

@@ -265,7 +265,8 @@ function updateSidebar() {
   // BUG FIX: sync tagline to sidebar sub-label
   setEl('sb-location-sub', DB.settings.tagline || 'Boys Residence');
   setEl('sb-location', DB.settings.location);
-  setEl('sb-version', 'Management System ' + DB.settings.version);
+  // Show appName (HOSTIX / custom) as the system brand label
+  setEl('sb-version', (DB.settings.appName || 'HOSTIX') + ' · ' + DB.settings.version);
   // Update cancellation badge
   const cancelBadge = document.getElementById('cancel-badge');
   const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending').length;
@@ -293,8 +294,14 @@ function updateSidebar() {
         <div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.15)">
           <div style="font-size:9px;color:var(--gold2);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Developer</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.6);font-weight:600">${dev}</div>
-          <a href="tel:${devPhone}" style="display:block;font-size:10px;color:rgba(255,255,255,0.4);text-decoration:none;margin-top:2px">📱 ${devPhone}</a>
-          <a href="mailto:${devEmail}" style="display:block;font-size:10px;color:rgba(255,255,255,0.4);text-decoration:none;margin-top:1px;word-break:break-all">✉️ ${devEmail}</a>
+          <a href="#" onclick="openExternalLink('https://wa.me/92${devPhone.replace(/^0/,'')}');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:5px;padding:4px 6px;border-radius:6px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2)" onmouseover="this.style.background='rgba(37,211,102,0.18)'" onmouseout="this.style.background='rgba(37,211,102,0.08)'">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#25D366"/><path d="M23.5 8.5A10.4 10.4 0 0 0 16 5.5C10.2 5.5 5.5 10.2 5.5 16c0 1.85.48 3.66 1.4 5.26L5.5 26.5l5.36-1.4A10.44 10.44 0 0 0 16 26.5c5.8 0 10.5-4.7 10.5-10.5 0-2.8-1.09-5.43-3-7.5zm-7.5 16.1c-1.56 0-3.1-.42-4.44-1.2l-.32-.19-3.18.83.85-3.1-.21-.33A8.65 8.65 0 0 1 7.35 16c0-4.77 3.88-8.65 8.65-8.65 2.31 0 4.48.9 6.11 2.53A8.6 8.6 0 0 1 24.65 16c0 4.77-3.88 8.6-8.65 8.6zm4.74-6.48c-.26-.13-1.53-.75-1.77-.84-.23-.09-.4-.13-.57.13-.17.26-.65.84-.8 1.01-.15.17-.29.19-.55.06-.26-.13-1.1-.4-2.1-1.28-.77-.69-1.3-1.54-1.45-1.8-.15-.26-.02-.4.11-.53.12-.11.26-.29.39-.44.13-.14.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.37-.78-1.87-.2-.49-.42-.42-.57-.43h-.49c-.17 0-.44.06-.67.32-.23.26-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.57.13.17 1.75 2.67 4.24 3.74.59.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.2-.57.2-1.07.14-1.17-.07-.1-.24-.16-.5-.29z" fill="#fff"/></svg>
+            ${devPhone}
+          </a>
+          <a href="#" onclick="openExternalLink('mailto:${devEmail}');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:4px;padding:4px 6px;border-radius:6px;background:rgba(234,67,53,0.08);border:1px solid rgba(234,67,53,0.2);word-break:break-all" onmouseover="this.style.background='rgba(234,67,53,0.18)'" onmouseout="this.style.background='rgba(234,67,53,0.08)'">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none" style="flex-shrink:0"><rect width="32" height="32" rx="4" fill="#fff"/><path d="M5 10l11 8 11-8" stroke="#EA4335" stroke-width="2" fill="none"/><rect x="5" y="10" width="22" height="14" rx="1" stroke="#4285F4" stroke-width="1.5" fill="none"/><path d="M5 10l7 7M27 10l-7 7" stroke="#34A853" stroke-width="1.5"/></svg>
+            ${devEmail}
+          </a>
         </div>
       </div>`;
   }
@@ -1185,7 +1192,7 @@ function renderMonthModal(monthKey, monthLabel) {
   </div>
 
   <!-- TAB NAVIGATION -->
-  <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px;border:1px solid var(--border)">
+  <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px">
     <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--gold-dim);color:var(--gold2);border:1px solid rgba(200,168,75,0.3)">🧑‍🎓 Students (${activeStudents.length})</button>
     <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">💳 Fee Records (${pays.length})</button>
     <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">📉 Expenses (${exps.length})</button>
@@ -1835,7 +1842,9 @@ function renderRooms() {
       ${activeStudentNames.length?`<div class="room-students">${activeStudentNames.map(n=>`<div class="room-student-name">• ${escHtml(n)}</div>`).join('')}</div>`:''}
       <div style="margin-top:10px;display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showEditRoomModal('${r.id}')">Edit</button>
-        ${occ<cap?`<button class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showAddStudentModal('${r.id}')">+ Student</button>`:''}
+        ${occ<cap
+          ? `<button class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showAddStudentModal('${r.id}')">+ Student</button>`
+          : `<button class="btn btn-sm" style="flex:1;font-size:11px;background:#b8860b;color:#fff;border:1px solid #c8a84b" onclick="event.stopPropagation();showAddStudentModal('${r.id}')" title="Room is full — force add anyway">⚡ Force Add</button>`}
       </div>
     </div>`;
   }).join('');
@@ -2005,37 +2014,39 @@ function renderStudents() {
   <div class="table-wrap">
     <table style="font-size:12px;border-collapse:collapse">
       <thead><tr>
-        <th style="width:60px">ID</th>
-        <th style="min-width:140px">Student</th>
-        <th style="min-width:110px">Room</th>
-        <th style="min-width:90px">Phone</th>
-        <th style="min-width:80px">Rent/Mo</th>
-        <th style="min-width:70px">Join Date</th>
-        <th style="min-width:70px">Status</th>
-        <th style="min-width:130px">Actions</th>
+        <th style="width:60px;padding:8px 8px">ID</th>
+        <th style="min-width:140px;padding:8px 8px">Student</th>
+        <th style="min-width:110px;padding:8px 8px">Room</th>
+        <th style="min-width:120px;padding:8px 8px">Phone / Emergency</th>
+        <th style="min-width:120px;padding:8px 8px">CNIC</th>
+        <th style="min-width:120px;padding:8px 8px">Address</th>
+        <th style="min-width:100px;padding:8px 8px">Course</th>
+        <th style="min-width:80px;padding:8px 8px">Rent/Mo</th>
+        <th style="min-width:70px;padding:8px 8px">Status</th>
+        <th style="min-width:90px;padding:8px 8px">Actions</th>
       </tr></thead>
       <tbody>
-        ${students.length===0?`<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:30px">No students match filters</td></tr>`:
+        ${students.length===0?`<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No students match filters</td></tr>`:
         students.map(t=>{
           const room=DB.rooms.find(r=>r.id===t.roomId);
           const av=t.name?t.name[0].toUpperCase():'?';
           const colors=['#4a9cf0','#9b6df0','#2ec98a','#c8a84b','#f0a030','#e05252','#0fbcad'];
           const c=colors[t.name?.charCodeAt(0)%colors.length]||'#4a9cf0';
-          return `<tr style="cursor:pointer;border-bottom:none" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
-            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--gold2);text-align:center;border:none;padding:8px 4px">#${escHtml(t.id)}</td>
-            <td style="border:none;padding:8px 6px"><div class="td-name"><div class="avatar" style="background:${c}22;color:${c};width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
-            <td style="border:none;padding:8px 6px"><span class="text-gold fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
-            <td style="border:none;padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}</td>
-            <td style="border:none;padding:8px 6px" class="text-green fw-700">${fmtPKR(t.rent)}</td>
-            <td style="border:none;padding:8px 6px" class="text-muted" style="font-size:12px">${fmtDate(t.joinDate)}</td>
-            <td style="border:none;padding:8px 6px">${statusBadge(t.status||'Active')}</td>
-            <td style="border:none;padding:8px 4px">
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:12px">👁</button>
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showEditStudentModal('${t.id}')" title="Edit" style="padding:4px 7px;font-size:12px">✏️</button>
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showAddPaymentForStudent('${t.id}')" title="Add Payment" style="color:var(--green);padding:4px 7px;font-size:12px">💳</button>
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="color:var(--blue);padding:4px 7px;font-size:12px">🔀</button>
-                <button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete" style="padding:4px 7px;font-size:12px">🗑</button>
+          return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
+            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--gold2);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
+            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:${c}22;color:${c};width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
+            <td style="padding:8px 6px"><span class="text-gold fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
+            <td style="padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}${t.emergencyContact?'<div style="font-size:10px;color:var(--text3);margin-top:2px">🆘 '+escHtml(t.emergencyContact)+'</div>':''}</td>
+            <td style="padding:8px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${escHtml(t.cnic||'—')}</td>
+            <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.address||'—')}</td>
+            <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.occupation||t.course||'—')}</td>
+            <td style="padding:8px 6px" class="text-green fw-700">${fmtPKR(t.rent)}</td>
+            <td style="padding:8px 6px">${statusBadge(t.status||'Active')}</td>
+            <td style="padding:8px 4px">
+              <div style="display:flex;gap:3px;flex-wrap:wrap">
+                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:11px">👁</button>
+                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="color:var(--blue);padding:4px 7px;font-size:11px">🔀</button>
+                <button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete" style="padding:4px 7px;font-size:11px">🗑</button>
               </div>
             </td>
           </tr>`;
@@ -2388,7 +2399,7 @@ function showViewStudentModal(id) {
           +'<td style="padding:10px 14px">'+statusBadge(p.status)+'</td>'
           +'<td style="padding:10px 14px;font-size:12px;color:var(--text3)">'+(fmtDate(p.date)||'—')+'</td>'
           +'<td style="padding:10px 14px"><div style="display:flex;gap:4px">'
-          +(p.status!=='Paid'?`<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaid('${p.id}');showViewStudentModal('${id}')" title="Mark Paid" style="font-size:13px">✓</button>`:'')
+          +(p.status!=='Paid'?`<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaidFromStudentView('${p.id}','${id}')" title="Mark Paid" style="font-size:13px">✓</button>`:'')
           +`<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceiptFromStudentView('${p.id}','${id}')" title="Print Receipt" style="font-size:13px">🧾</button>`
           +`<button class="btn btn-secondary btn-icon btn-sm" onclick="editPaymentFromStudentView('${p.id}','${id}')" title="Edit Payment" style="font-size:13px">✏️</button>`
           +`<button class="btn btn-danger btn-icon btn-sm" onclick="deletePaymentFromStudentView('${p.id}','${id}')" title="Delete" style="font-size:13px">🗑</button>`
@@ -3069,31 +3080,31 @@ function renderPayments() {
     </div>
   </div>
   <div class="table-wrap">
-    <table style="border-collapse:collapse">
-      <thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Rent/Mo</th><th style="min-width:70px">Adm.Chr</th><th style="min-width:90px">Ext.Chr</th><th style="min-width:80px">Conc.Chr</th><th>Amount Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Info</th><th style="min-width:118px">Actions</th></tr></thead>
+    <table style="border-collapse:collapse;width:100%">
+      <thead><tr><th style="padding:8px 8px">Student</th><th style="padding:8px 8px">Room</th><th style="padding:8px 8px">Month</th><th style="padding:8px 8px">Rent/Mo</th><th style="padding:8px 6px;min-width:70px">Adm.Chr</th><th style="padding:8px 6px;min-width:90px">Ext.Chr</th><th style="padding:8px 6px;min-width:80px">Conc.Chr</th><th style="padding:8px 8px">Amount Paid</th><th style="padding:8px 8px">Unpaid</th><th style="padding:8px 8px">Method</th><th style="padding:8px 8px">Status</th><th style="padding:8px 8px">Info</th><th style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
       <tbody>
         ${pays.length===0?'<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
         pays.map(p=>{
           const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
-          return '<tr style="border-bottom:none">'
-          +'<td class="fw-700" style="cursor:pointer;white-space:nowrap;border:none;padding:8px 10px" onclick="showViewStudentModal(\''+p.studentId+'\'" title="Click to view student details"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
-          +'<td style="white-space:nowrap;border:none;padding:8px 10px"><span class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
-          +'<td class="text-muted" style="white-space:nowrap;border:none;padding:8px 10px">'+escHtml(p.month||'')+'</td>'
-          +'<td class="text-muted fw-700" style="font-size:12px;border:none;padding:8px 10px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
-          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--blue)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--amber)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="border:none;padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--teal)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td class="text-green fw-700" style="border:none;padding:8px 10px">'+fmtPKR(p.amount)+'</td>'
-          +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';border:none;padding:8px 10px">'+fmtPKR(p.unpaid||0)+'</td>'
-          +'<td style="border:none;padding:8px 10px">'+pmBadge(p.method)+'</td>'
-          +'<td style="border:none;padding:8px 10px">'+statusBadge(p.status)+'</td>'
-          +'<td style="font-size:10px;color:var(--text3);white-space:nowrap;border:none;padding:8px 10px"><div>'+(p.paidDate?'✅ '+fmtDate(p.paidDate):(p.dueDate?'⏰ '+fmtDate(p.dueDate):'—'))+'</div><div style="margin-top:2px">👤 '+(p.collectedBy||'—')+'</div></td>'
-          +'<td style="border:none;padding:8px 6px"><div style="display:flex;gap:3px;align-items:center;flex-wrap:nowrap">'
-          +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:13px">✓</button>':'')
-          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:13px">🧾</button>'
-          +'<button class="btn btn-sm btn-icon" onclick="sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:13px">📱</button>'
-          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditPaymentModal(\''+p.id+'\')" title="Edit" style="font-size:13px">✏️</button>'
-          +'<button class="btn btn-danger btn-icon btn-sm" onclick="deletePayment(\''+p.id+'\')" title="Delete" style="font-size:13px">🗑</button>'
+          return '<tr>'
+          +'<td class="fw-700" style="cursor:pointer;white-space:nowrap;padding:8px 8px" onclick="showViewStudentModal(\''+p.studentId+'\'" title="Click to view student details"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
+          +'<td style="white-space:nowrap;padding:8px 8px"><span class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
+          +'<td class="text-muted" style="white-space:nowrap;padding:8px 8px">'+escHtml(p.month||'')+'</td>'
+          +'<td class="text-muted fw-700" style="font-size:12px;padding:8px 8px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--blue)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--amber)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--teal)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td class="text-green fw-700" style="padding:8px 8px">'+fmtPKR(p.amount)+'</td>'
+          +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
+          +'<td style="padding:8px 8px">'+pmBadge(p.method)+'</td>'
+          +'<td style="padding:8px 8px">'+statusBadge(p.status)+'</td>'
+          +'<td style="font-size:10px;color:var(--text3);white-space:nowrap;padding:8px 8px"><div>'+(p.paidDate?'✅ '+fmtDate(p.paidDate):(p.dueDate?'⏰ '+fmtDate(p.dueDate):'—'))+'</div><div style="margin-top:2px">👤 '+(p.collectedBy||'—')+'</div></td>'
+          +'<td style="padding:6px 4px;min-width:130px"><div style="display:flex;gap:2px;align-items:center;flex-wrap:wrap">'
+          +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:11px;padding:3px 6px">✓ Paid</button>':'')
+          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:11px;padding:3px 6px">🧾</button>'
+          +'<button class="btn btn-sm btn-icon" onclick="sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:11px;padding:3px 6px">📱</button>'
+          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditPaymentModal(\''+p.id+'\')" title="Edit" style="font-size:11px;padding:3px 6px">✏️</button>'
+          +'<button class="btn btn-danger btn-icon btn-sm" onclick="deletePayment(\''+p.id+'\')" title="Delete" style="font-size:11px;padding:3px 6px">🗑</button>'
           +'</div></td>'
           +'</tr>';}).join('')}
       </tbody>
@@ -3129,7 +3140,7 @@ function markPaymentPaid(id) {
   p.paidDate = today();
   const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
   if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
-  // Log this installment in partialPayments history
+  // Log installment in partialPayments history
   if (!p.partialPayments) p.partialPayments = [];
   if (prevUnpaid > 0) {
     p.partialPayments.push({
@@ -3143,6 +3154,33 @@ function markPaymentPaid(id) {
   saveDB();
   renderPage(currentPage);
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
+}
+
+// FIX Issue 3: Called from student modal — refreshes the student modal directly
+// instead of calling renderPage (which fights with the modal re-open)
+function markPaymentPaidFromStudentView(payId, studentId) {
+  const p = DB.payments.find(x => x.id === payId); if (!p) return;
+  const prevUnpaid = Number(p.unpaid) || 0;
+  const prevPaid   = Number(p.amount) || 0;
+  p.amount   = prevPaid + prevUnpaid;
+  p.unpaid   = 0;
+  p.discount = p.discount || 0;
+  p.status   = 'Paid';
+  p.paidDate = today();
+  const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
+  if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
+  if (!p.partialPayments) p.partialPayments = [];
+  if (prevUnpaid > 0) {
+    p.partialPayments.push({
+      date: today(), amount: prevUnpaid,
+      method: p.method || 'Cash',
+      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
+      note: 'Pending cleared'
+    });
+  }
+  saveDB();
+  toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
+  showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
 }
 function deletePayment(id) {
   showConfirm('Delete payment record?','This cannot be undone.',()=>{
@@ -3845,16 +3883,16 @@ function renderExpenses() {
     <span class="text-muted" style="font-size:12px;margin-left:auto">${exps.length} records · <span class="text-red fw-700">${fmtPKR(total)}</span></span>
   </div>
   <div class="table-wrap">
-    <table>
-      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Actions</th></tr></thead>
+    <table style="border-collapse:collapse;width:100%">
+      <thead><tr><th style="padding:8px 10px">Date</th><th style="padding:8px 10px">Category</th><th style="padding:8px 10px">Description</th><th style="padding:8px 10px">Amount</th><th style="padding:8px 10px">Actions</th></tr></thead>
       <tbody>
         ${exps.length===0?`<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">No expenses found</td></tr>`:
         exps.map(e=>`<tr>
-          <td class="text-muted" style="font-size:12px">${fmtDate(e.date)}</td>
-          <td><span class="badge badge-amber">${escHtml(e.category)}</span></td>
-          <td>${escHtml(e.description||'—')}</td>
-          <td class="text-red fw-700">${fmtPKR(e.amount)}</td>
-          <td>
+          <td class="text-muted" style="font-size:12px;padding:8px 10px">${fmtDate(e.date)}</td>
+          <td style="padding:8px 10px"><span class="badge badge-amber">${escHtml(e.category)}</span></td>
+          <td style="padding:8px 10px">${escHtml(e.description||'—')}</td>
+          <td class="text-red fw-700" style="padding:8px 10px">${fmtPKR(e.amount)}</td>
+          <td style="padding:8px 8px">
             <div style="display:flex;gap:4px">
               <button class="btn btn-secondary btn-icon btn-sm" onclick="showEditExpenseModal('${e.id}')">✏️</button>
               <button class="btn btn-danger btn-icon btn-sm" onclick="deleteExpense('${e.id}')">🗑</button>
@@ -5117,6 +5155,11 @@ function renderSettings() {
         <div class="card">
           <div class="card-header"><div class="card-title">🏨 Hostel Information</div></div>
           <div class="form-grid">
+            <div class="field col-full" style="background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:10px;padding:12px 14px">
+              <label style="color:var(--gold2);font-weight:800">⚙️ System / App Name <span style="font-size:10px;font-weight:400;color:var(--text3)">(shown in title bar, reports footer &amp; receipts)</span></label>
+              <input class="form-control" id="cfg-appname" value="${escHtml(s.appName||'HOSTIX')}" oninput="liveUpdateSetting('appName',this.value)" placeholder="e.g. HOSTIX, MyHostel, Al-Noor HMS…" style="margin-top:6px;font-weight:700;font-size:15px">
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">This is your branding name — printed on every receipt and PDF report.</div>
+            </div>
             <div class="field"><label>Hostel Name</label><input class="form-control" id="cfg-name" value="${escHtml(s.hostelName)}" oninput="liveUpdateSetting('hostelName',this.value)"></div>
             <div class="field"><label>Tagline</label><input class="form-control" id="cfg-tag" value="${escHtml(s.tagline||'')}" oninput="liveUpdateSetting('tagline',this.value)"></div>
             <div class="field"><label>Location / City</label><input class="form-control" id="cfg-loc" value="${escHtml(s.location)}" oninput="liveUpdateSetting('location',this.value)"></div>
@@ -5297,11 +5340,7 @@ function renderSettings() {
                 <span style="margin-left:8px;color:var(--text3)">· Optional: Email, Occupation / Course, Emergency Contact, Notes, Amount Paid</span>
               </div>
             </div>
-            <div class="card" style="padding:16px;border-color:rgba(224,82,82,0.3)">
-              <div style="font-weight:700;margin-bottom:6px;color:var(--red)">Reset All Data</div>
-              <div style="font-size:13px;color:var(--text3);margin-bottom:12px">Clear all students, payments, and expenses. Rooms will be reset to default.</div>
-              <button class="btn btn-danger" onclick="resetAllData()">⚠️ Reset All Data</button>
-            </div>
+
             <div class="card" style="padding:16px;border-color:var(--border2)">
               <div style="font-weight:700;margin-bottom:6px">System Stats</div>
               <div style="font-size:13px;color:var(--text3)">
@@ -5493,6 +5532,12 @@ function _doLicenseUnlock() {
 function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   saveDB();
+  if(key==='appName') {
+    const sbVer = document.getElementById('sb-version');
+    if(sbVer) sbVer.textContent = (val||'HOSTIX') + ' · ' + (DB.settings.version||'v3.0');
+    // Update page title
+    document.title = (val||'HOSTIX') + ' | Hostel Management System';
+  }
   if(key==='hostelName') {
     // Update sidebar name
     const sbName = document.getElementById('sb-hostel-name');
@@ -6555,7 +6600,7 @@ function sendBackupToGmail() {
     `— ${hostel} Management System`
   );
   const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(gmail)}&su=${subject}&body=${body}`;
-  window.open(gmailUrl, '_blank');
+  openExternalLink(gmailUrl); // FIX: use openExternalLink so it opens in the system browser, not a new Electron window
   DB.settings.lastBackupDate = now.toISOString().slice(0,10);
   saveDB();
   updateBackupScheduleLabel();
@@ -6604,6 +6649,7 @@ function _initDBFields(d) {
   // roomTypes already initialized above (before generateRooms)
   if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
   // Core identity — previously missing from restoreBackup path
+  if (!d.settings.appName) d.settings.appName = 'HOSTIX'; // ← Customisable system name
   if (!d.settings.hostelName) d.settings.hostelName = 'DAMAM Boys Hostel';
   if (!d.settings.tagline) d.settings.tagline = 'Safe & Comfortable Living';
   if (!d.settings.location) d.settings.location = '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar';
@@ -7708,14 +7754,15 @@ renderSidebarCalendar();
 checkAutoMonthAdvance();
 checkAutoBackupSchedule(); // Fix #7: remind warden if scheduled backup is due
 
-// Fix #5: Ensure sb-contact-section exists in sidebar (injected if not in HTML)
+// Fix #5: Ensure sb-contact-section exists in sidebar (below Clear All in System section)
 (function _ensureContactSection() {
   if (document.getElementById('sb-contact-section')) return;
-  const sidebar = document.getElementById('sidebar');
-  if (!sidebar) return;
+  // Fallback: insert before closing of .sb-nav
+  const nav = document.querySelector('#sidebar .sb-nav');
+  if (!nav) return;
   const div = document.createElement('div');
   div.id = 'sb-contact-section';
-  sidebar.appendChild(div);
+  nav.appendChild(div);
 })();
 // Sync login screen hostel name from saved settings
 const loginNameEl = document.getElementById('login-hostel-name');
@@ -8691,13 +8738,12 @@ function downloadAllStudentsPDF() {
     +'</div>'
     +'</div>',
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>'
-    +'<button class="btn btn-secondary" style="color:#25D366;border-color:rgba(37,211,102,0.4)" onclick="closeModal();shareAllStudentsPDFWhatsApp()">📱 Share via WhatsApp</button>'
-    +'<button class="btn btn-secondary" style="color:#4a9cf0;border-color:rgba(74,156,240,0.4)" onclick="closeModal();shareAllStudentsPDFGmail()">📧 Share via Gmail</button>'
     +'<button class="btn btn-primary" onclick="doGenerateStudentsPDF(document.getElementById(\'pdf-month-sel\').value);closeModal()">📥 Generate PDF</button>'
   );
 }
 
 function doGenerateStudentsPDF(monthKey) {
+  var appName  = DB.settings.appName  || 'HOSTIX';
   var hostel   = DB.settings.hostelName || 'DAMAM Boys Hostel';
   var location = DB.settings.location  || '';
   var now      = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
@@ -8787,26 +8833,26 @@ function doGenerateStudentsPDF(monthKey) {
     })();
 
     rows += '<tr style="background:'+rowBg+'">';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(admFee>0?'#1a3a7a':'#bbb')+'font-size:10px">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(extraTotal>0?'#7a4d00':'#bbb')+';font-size:10px">'+extCell+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:'+(concession>0?'#0a5a40':'#bbb')+';font-size:10px">'+concCell+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
-    rows += '<td style="padding:6px 5px;border:none;border-bottom:1px solid #f0f0f0;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(admFee>0?'#1a3a7a':'#bbb')+';font-size:10px">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(extraTotal>0?'#7a4d00':'#bbb')+';font-size:10px">'+extCell+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(concession>0?'#0a5a40':'#bbb')+';font-size:10px">'+concCell+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
+    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
     rows += '</tr>';
   });
 
   // Totals row — adm/ext/conc NOT grand-totalled (they are per-student breakdown only)
   rows += '<tr style="background:#0f1a2e">';
-  rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#e6c96e;font-size:12px">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
+  rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#e6c96e;font-size:12px;border:1px solid #2a3d5a">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
   rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#e6c96e">'+fmtPKR(grandRent)+'</td>';
   rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
   rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
@@ -8824,7 +8870,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">';
   html += '<style>';
   html += '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}';
-  html += '@page{size:A4 landscape;margin:7mm 9mm}';
+  html += '@page{size:A4 landscape;margin:7mm 9mm}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
   html += 'body{font-family:\'Outfit\',Arial,sans-serif;background:#fff;color:#111;padding:14px 18px;font-size:10.5px}';
   html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
   // 11 cols: # name father room cnic phone rent paid pend fst sst
@@ -8832,7 +8878,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += 'col.c-no{width:3%}col.c-name{width:13%}col.c-father{width:10%}col.c-room{width:4%}col.c-cnic{width:11%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:7%}col.c-ext{width:8%}col.c-conc{width:8%}col.c-paid{width:8%}col.c-pend{width:7%}col.c-fst{width:7%}col.c-sst{width:6%}';
   html += 'thead th{background:#0f1a2e;color:#e6c96e;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
-  html += 'td{padding:5px 5px;border:1px solid #dde2ea;word-break:break-word;vertical-align:middle;font-size:10px}';
+  html += 'td{padding:5px 5px;border:1px solid #c8d0db !important;word-break:break-word;vertical-align:middle;font-size:10px}';
   html += 'tr:hover td{background:#f0f4ff!important}';
   html += '.sum{display:inline-flex;align-items:center;gap:5px;background:#f5f7ff;border:1px solid #dde2ea;border-radius:8px;padding:5px 10px;margin:2px}';
   html += '.sum .v{font-size:15px;font-weight:900}.sum .l{font-size:8px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}';
@@ -8854,9 +8900,10 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<div class="sum"><div class="v" style="color:#1a7a3a">'+active+'</div><div class="l">Active</div></div>';
   html += '<div class="sum"><div class="v" style="color:#555">'+left+'</div><div class="l">Left</div></div>';
   html += '<div class="sum" style="background:#e8f5e9"><div class="v" style="color:#1a5c3a">'+fmtPKR(grandRent)+'</div><div class="l">Rent<br>Expected</div></div>';
-  html += '<div class="sum" style="background:#e8f5e9"><div class="v" style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</div><div class="l">Total<br>Collected</div></div>';
-  html += '<div class="sum" style="background:'+(grandPending>0?'#fde8e8':'#edfaf3')+'">';
-  html += '<div class="v" style="color:'+(grandPending>0?'#8b1a1a':'#1a6b3a')+'">'+fmtPKR(grandPending)+'</div><div class="l">Pending<br>Unpaid</div></div>';
+  html += '<div class="sum" style="background:#e8f5e9"><div class="v" style="color:#1a6b3a">'+fmtPKR(calcRevenue(monthKey))+'</div><div class="l">Total<br>Collected</div></div>';
+  var _pdfPending=DB.payments.filter(function(p){return p.status==='Pending'&&_payMatchesMonth(p,monthKey);}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
+  html += '<div class="sum" style="background:'+(_pdfPending>0?'#fde8e8':'#edfaf3')+'">';
+  html += '<div class="v" style="color:'+(_pdfPending>0?'#8b1a1a':'#1a6b3a')+'">'+fmtPKR(_pdfPending)+'</div><div class="l">Pending<br>Unpaid</div></div>';
   html += '<div class="sum" style="background:#fff8e1;border-color:#e8a830"><div class="v" style="color:#854d0e">'+fmtPKR(grandExpenses)+'</div><div class="l">Expenses<br>'+monthLabel+'</div></div>';
   html += '<div class="sum" style="background:#eef2ff"><div class="v" style="color:#1a2c80">'+fmtPKR(grandTransfers)+'</div><div class="l">Transfer<br>to Owner</div></div>';
   html += '<div class="sum" style="background:'+(netFund>=0?'#edfaf3':'#fde8e8')+'"><div class="v" style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</div><div class="l">Net<br>Available</div></div>';
@@ -8922,14 +8969,31 @@ function doGenerateStudentsPDF(monthKey) {
   }
 
   html += '<div style="margin-top:12px;padding-top:6px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center">';
-  html += '<div style="font-size:9px;color:#aaa">Computer generated · '+escHtml(hostel)+' · '+monthLabel+'</div>';
+  html += '<div style="font-size:9px;color:#aaa">Generated by <strong>' + escHtml(appName) + '</strong> · '+escHtml(hostel)+' · '+monthLabel+'</div>';
   html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#854d0e">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
   html += '</div></body></html>';
 
-  var w = window.open('','_blank','width=1300,height=860');
-  if (!w) { toast('⚠️ Popup blocked — please allow popups for this page and try again.', 'error'); return; }
-  w.document.write(html);
-  w.document.close();
+  // FIX: Use Electron's printToPDF (landscape) if available — avoids the rotated/broken PDF issue.
+  // Falls back to a proper Blob-URL popup for non-Electron contexts.
+  if (window.electronAPI && window.electronAPI.receiptSavePDF) {
+    var suggestedName = escHtml(hostel).replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')
+      + '_Fee-Report_' + monthLabel.replace(/\s+/g,'-') + '.pdf';
+    window.electronAPI.receiptSavePDF(html, suggestedName, { landscape: true, pageSize: 'A4' })
+      .then(function(result) {
+        if (result.success) {
+          toast('✅ Fee report PDF saved: ' + result.filePath.split(/[\\\/]/).pop(), 'success');
+        } else if (result.reason !== 'cancelled') {
+          toast('❌ PDF failed: ' + (result.reason || 'Unknown error'), 'error');
+        }
+      }).catch(function() { toast('❌ PDF error. Please try again.', 'error'); });
+    return;
+  }
+  // Fallback: Blob-URL popup
+  var blob = new Blob([html], { type: 'text/html' });
+  var burl = URL.createObjectURL(blob);
+  var w = window.open(burl, '_blank', 'width=1300,height=860');
+  if (!w) { toast('⚠️ Popup blocked — allow popups and try again.', 'error'); URL.revokeObjectURL(burl); return; }
+  setTimeout(function(){ URL.revokeObjectURL(burl); }, 8000);
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────
@@ -9349,7 +9413,7 @@ function archShowYearDetail(type) {
 
 function archMkTbl(rows,headers,rowFn,summary) {
   if(!rows.length) return '<div class="arch-empty-state"><div class="arch-empty-icon">&#x1F4EB;</div>No records</div>';
-  return (summary?'<div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:6px 10px;background:var(--card);border-radius:6px;border:1px solid var(--border)">'+summary+'</div>':'')+
+  return (summary?'<div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:6px 10px;background:var(--card);border-radius:6px">'+summary+'</div>':'')+
     '<div class="arch-tbl-wrap"><table><thead><tr>'+headers.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead><tbody>'+
     rows.map(function(r){return '<tr>'+rowFn(r)+'</tr>';}).join('')+'</tbody></table></div>';
 }

@@ -236,9 +236,10 @@ input, select, textarea { font-family: var(--font); }
 /* ── TABLES ───────────────────────────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; }
-th { background: var(--bg3); color: var(--text3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 12px 16px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); }
-td { padding: 13px 16px; border-bottom: 1px solid rgba(30,48,80,0.5); color: var(--text); font-size: 13.5px; vertical-align: middle; }
+th { background: var(--bg3); color: var(--text3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 12px 16px; text-align: left; white-space: nowrap; border-bottom: 2px solid var(--border); }
+td { padding: 12px 16px; border-bottom: 1px solid rgba(30,48,80,0.35); color: var(--text); font-size: 13.5px; vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(200,168,75,0.04); }
 tr:hover td { background: rgba(255,255,255,0.02); }
 .td-name { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }

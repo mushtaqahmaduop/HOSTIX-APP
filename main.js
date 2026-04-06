@@ -1,23 +1,17 @@
 // ════════════════════════════════════════════════════════════════════════════
-// DAMAM Boys Hostel — Main Process  (Merged v3 Final)
+// DAMAM Boys Hostel — Main Process  (Merged v3 — SECURITY PATCHED)
 //
-// License System — Hardened v3:
-//   1.  HMAC-SHA256 checksum on every key  (only keygen.js produces valid keys)
-//   2.  License stored AES-256-CBC encrypted in Electron userData
-//   3.  Hardware-bound via SHA-256(hostname|platform|arch|cpu|WinMachineGuid)
-//        • Full 64-char hash output (not truncated)
-//        • Windows MachineGuid from registry — hard to spoof
-//   4.  Expiry enforced on every startup
-//   5.  Anti-time-cheat: last_run.dat blocks clock rollback
-//        • Deleting last_run.dat re-establishes sentinel (closes deletion bypass)
-//   6.  Full 6-step validation on every startup
-//   7.  AES+HMAC tamper detection — any edit to license.enc is rejected
-//   8.  Only keys from keygen.js (matching _SECRET) are accepted
-//   9.  DevTools blocked in production
-//  10.  Specific error messages for every failure mode
-//  11.  license:loadApp IPC re-verifies before loading index.html
-//  12.  --inspect / --inspect-brk args blocked in production (anti-debug)
-//  13.  deactivateLicense() deletes both license.enc and last_run.dat
+// SECURITY FIXES APPLIED:
+//  FIX-01  write-file IPC validates path — only allowed dirs (downloads/docs/desktop)
+//  FIX-02  open-external IPC whitelists protocols (https/http/whatsapp/mailto only)
+//  FIX-03  license:activate rate-limited to 5 attempts per 60 seconds
+//  FIX-04  Machine ID: hostname removed (unstable), drive serial added (stable)
+//  FIX-05  Machine ID cached — avoids repeated scryptSync calls on startup
+//  FIX-06  activatedAt check — rejects time rollback before activation date
+//  FIX-07  Error messages sanitized — internal paths not sent to renderer
+//  FIX-08  Import backup file size limited to 50MB
+//  FIX-09  receipt:savePDF validates htmlContent is string and < 2MB
+//  FIX-10  license:activate validates key is string and < 50 chars
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -30,8 +24,7 @@ const os     = require('os');
 
 let mainWindow;
 
-// Hex-encoded secret — decoded: 'D4M4M_H0ST3L_S3CR3T_S4LT_v1'
-// ⚠️  MUST match _SECRET in keygen.js exactly
+// Hex-encoded secret — MUST match _SECRET in keygen.js exactly
 const _SECRET = Buffer.from(
   '44344d344d5f483053543333545f5333435233545f5334344c545f7631', 'hex'
 ).toString();
@@ -39,16 +32,22 @@ const _SECRET = Buffer.from(
 const LICENSE_PATH  = path.join(app.getPath('userData'), 'license.enc');
 const LAST_RUN_PATH = path.join(app.getPath('userData'), 'last_run.dat');
 
-// Production when NOT launched with --dev  (npm start uses --dev)
 const IS_PROD = !process.argv.includes('--dev');
 
-// ── Anti-Debug: block --inspect / --inspect-brk flags in production ──────────
+// Anti-Debug: block --inspect / --inspect-brk in production
 if (IS_PROD && process.argv.some(a => /^--inspect(-brk)?/.test(a))) {
   process.stderr.write('[DAMAM] Debugger attachment not permitted in production.\n');
   process.exit(1);
 }
 
-// ── 3: Machine Fingerprint ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// [FIX-04 + FIX-05] Machine Fingerprint
+// hostname REMOVED — too easy to change/spoof, breaks legit users on rename.
+// DriveSerial ADDED — stable hardware-level binding.
+// Result is cached to avoid repeated slow calls.
+// ─────────────────────────────────────────────────────────────────────────────
+let _cachedMachineId = null;
+
 function _getWinMachineGuid() {
   if (os.platform() !== 'win32') return '';
   try {
@@ -62,18 +61,39 @@ function _getWinMachineGuid() {
   } catch (e) { return ''; }
 }
 
-function getMachineId() {
+function _getDriveSerial() {
+  // [FIX-04] Add drive serial for stronger, stable hardware binding
+  if (os.platform() !== 'win32') return '';
   try {
-    const raw = [
-      os.hostname(), os.platform(), os.arch(),
-      (os.cpus()[0] && os.cpus()[0].model) || 'cpu',
-      _getWinMachineGuid()
-    ].join('|');
-    return crypto.createHash('sha256').update(raw).digest('hex'); // full 64 chars
-  } catch (e) { return 'UNKNOWN_MACHINE_ID_FALLBACK_' + '0'.repeat(36); }
+    const { execSync } = require('child_process');
+    const out = execSync(
+      'wmic diskdrive get SerialNumber /format:list',
+      { encoding: 'utf8', timeout: 3000, windowsHide: true }
+    );
+    const m = out.match(/SerialNumber=([^\r\n]+)/);
+    return m ? m[1].trim() : '';
+  } catch (e) { return ''; }
 }
 
-// ── 2 & 7: AES-256-CBC Encrypt / Decrypt with HMAC Tamper Detection ──────────
+function getMachineId() {
+  if (_cachedMachineId) return _cachedMachineId; // [FIX-05] use cached value
+  try {
+    const raw = [
+      // hostname intentionally excluded — see FIX-04
+      os.platform(),
+      os.arch(),
+      (os.cpus()[0] && os.cpus()[0].model) || 'cpu',
+      _getWinMachineGuid(),
+      _getDriveSerial()
+    ].join('|');
+    _cachedMachineId = crypto.createHash('sha256').update(raw).digest('hex');
+  } catch (e) {
+    _cachedMachineId = 'UNKNOWN_MACHINE_ID_FALLBACK_' + '0'.repeat(36);
+  }
+  return _cachedMachineId;
+}
+
+// ── AES-256-CBC Encrypt / Decrypt with HMAC Tamper Detection ─────────────────
 function encryptLicense(data, machineId) {
   const aesKey    = crypto.scryptSync(machineId + _SECRET, 'damam_salt_v1', 32);
   const iv        = crypto.randomBytes(16);
@@ -96,10 +116,7 @@ function decryptLicense(encStr, machineId) {
   return JSON.parse(Buffer.concat([decipher.update(encrypted), decipher.final()]).toString());
 }
 
-// ── 1 & 8: Key Format + Checksum Validation ──────────────────────────────────
-// Format: HOSTEL-[EXP4]-[CHK4]-[CHK4]
-//   EXP4 = base36(year*12 + month-1) padded to 4 chars
-//   CHK8 = HMAC-SHA256(EXP4, _SECRET).toUpperCase().slice(0,8)
+// ── Key Validation ────────────────────────────────────────────────────────────
 function _validateKeyFormat(key) {
   return /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key.toUpperCase().trim());
 }
@@ -118,12 +135,10 @@ function _validateKeyChecksum(key) {
 function _getExpiryFromKey(key) {
   const expPart = key.toUpperCase().trim().split('-')[1];
   const months  = parseInt(expPart, 36);
-  return new Date(Math.floor(months / 12), months % 12 + 1, 0); // last day of month
+  return new Date(Math.floor(months / 12), months % 12 + 1, 0);
 }
 
-// ── 5: Anti-Time-Cheat ───────────────────────────────────────────────────────
-// If last_run.dat is deleted (attacker bypass attempt), re-establish sentinel
-// and continue — attacker gains nothing on this run; caught on the next.
+// ── Anti-Time-Cheat ───────────────────────────────────────────────────────────
 function _readLastRun() {
   try {
     if (fs.existsSync(LAST_RUN_PATH)) {
@@ -139,9 +154,8 @@ function _writeLastRun() {
   try { fs.writeFileSync(LAST_RUN_PATH, new Date().toISOString(), 'utf8'); } catch (e) {}
 }
 
-// ── 6: Full Startup Validation ────────────────────────────────────────────────
+// ── Full Startup Validation ───────────────────────────────────────────────────
 function checkLicenseValidity() {
-
   if (!fs.existsSync(LICENSE_PATH)) {
     return { valid: false, reason: 'not_activated',
       message: 'No license found on this device. Please activate your license to continue.' };
@@ -178,6 +192,15 @@ function checkLicenseValidity() {
       expiry: data.expiry };
   }
 
+  // [FIX-06] Reject if clock is rolled back before activation date (> 1 day tolerance)
+  if (data.activatedAt) {
+    const activatedAt = new Date(data.activatedAt);
+    if (!isNaN(activatedAt.getTime()) && now < new Date(activatedAt.getTime() - 86400000)) {
+      return { valid: false, reason: 'time_cheat',
+        message: `System time is set before this license's activation date.\nPlease set your clock to the correct time and restart.` };
+    }
+  }
+
   const lastRun = _readLastRun();
   if (lastRun && now < lastRun) {
     return { valid: false, reason: 'time_cheat',
@@ -194,13 +217,13 @@ function checkLicenseValidity() {
 function activateLicense(key) {
   const k = key.toUpperCase().trim();
   if (!_validateKeyFormat(k))
-    return { success: false, reason: 'Invalid key format.\nExpected: HOSTEL-XXXX-XXXX-XXXX' };
+    return { success: false, reason: 'Invalid key format. Expected: HOSTEL-XXXX-XXXX-XXXX' };
   if (!_validateKeyChecksum(k))
-    return { success: false, reason: 'Invalid license key — signature mismatch.\nCheck the key and try again.' };
+    return { success: false, reason: 'Invalid license key — signature mismatch. Check the key and try again.' };
   const expiry = _getExpiryFromKey(k);
   if (new Date() > expiry) {
     const expStr = expiry.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
-    return { success: false, reason: `This key expired on ${expStr}.\nContact support for a new key.` };
+    return { success: false, reason: `This key expired on ${expStr}. Contact support for a new key.` };
   }
   try {
     const machineId   = getMachineId();
@@ -215,7 +238,9 @@ function activateLicense(key) {
       lifetime: false
     };
   } catch (e) {
-    return { success: false, reason: 'Could not save license file.\nError: ' + e.message };
+    // [FIX-07] Do NOT expose internal file paths in the error message sent to renderer
+    console.error('[DAMAM] License write error:', e.message);
+    return { success: false, reason: 'Could not save license file. Please check app permissions or contact support.' };
   }
 }
 
@@ -223,11 +248,13 @@ function deactivateLicense() {
   try {
     if (fs.existsSync(LICENSE_PATH))  fs.unlinkSync(LICENSE_PATH);
     if (fs.existsSync(LAST_RUN_PATH)) fs.unlinkSync(LAST_RUN_PATH);
+    _cachedMachineId = null; // [FIX-05] clear cache on deactivation
     return { success: true };
-  } catch (e) { return { success: false, message: e.message }; }
+  } catch (e) {
+    return { success: false, message: 'Could not remove license files. Please contact support.' };
+  }
 }
 
-// ── License Settings — load in same window ────────────────────────────────────
 function openLicenseSettings() {
   if (!mainWindow) return;
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
@@ -240,13 +267,13 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    title: 'DAMAM Boys Hostel Management',
+    title: 'HOSTIX — Hostel Management System',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true,                      // always on
-      allowRunningInsecureContent: false,     // always off
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       devTools: !IS_PROD
     },
     backgroundColor: '#060c18',
@@ -279,7 +306,6 @@ function createWindow() {
     }
   });
 
-  // ── Menu ──────────────────────────────────────────────────────────────────
   const viewSubmenu = [
     { role: 'resetZoom' },
     { role: 'zoomIn',  accelerator: 'CmdOrCtrl+=' },
@@ -326,6 +352,12 @@ function createWindow() {
             });
             if (filePaths && filePaths[0]) {
               try {
+                // [FIX-08] Limit file size to 50MB to prevent memory exhaustion
+                const stat = fs.statSync(filePaths[0]);
+                if (stat.size > 50 * 1024 * 1024) {
+                  dialog.showErrorBox('Import Failed', 'Backup file is too large (maximum 50MB).');
+                  return;
+                }
                 const data = fs.readFileSync(filePaths[0], 'utf8');
                 mainWindow.webContents.send('import-backup', data);
               } catch (e) {
@@ -349,14 +381,11 @@ function createWindow() {
             dialog.showMessageBox(mainWindow, {
               type: 'info', title: 'About',
               message: 'DAMAM Boys Hostel Management System',
-              detail: 'Version 3.0 (Merged)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
+              detail: 'Version 3.0 (Security Patched)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
             });
           }
         },
-        {
-          label: 'License Settings',
-          click: () => openLicenseSettings()
-        },
+        { label: 'License Settings', click: () => openLicenseSettings() },
         {
           label: 'License Info',
           click: () => {
@@ -369,7 +398,7 @@ function createWindow() {
               message: result.valid ? '✅ License Active' : '❌ License Problem',
               detail: [
                 `Status   : ${result.valid ? 'Active' : 'INVALID'}`,
-                `Reason   : ${result.valid ? 'All checks passed' : result.message}`,
+                `Reason   : ${result.valid ? 'All checks passed' : result.reason}`,
                 `Expiry   : ${result.expiry ? new Date(result.expiry).toLocaleDateString('en-PK') : '—'}`,
                 `Machine  : ${machineId.slice(0, 16)}…`,
                 `Activated: ${result.activatedAt ? new Date(result.activatedAt).toLocaleDateString('en-PK') : '—'}`
@@ -394,12 +423,25 @@ ipcMain.handle('license:check', () => {
   return { ...result, valid: result.valid };
 });
 
-ipcMain.handle('license:activate', (_e, key) => activateLicense(key));
+// [FIX-03] Rate-limited license:activate — max 5 attempts per 60 seconds
+const _licRateLimit = { times: [] };
+ipcMain.handle('license:activate', (_e, key) => {
+  const now = Date.now();
+  _licRateLimit.times = _licRateLimit.times.filter(t => now - t < 60000);
+  if (_licRateLimit.times.length >= 5) {
+    const waitSec = Math.ceil((_licRateLimit.times[0] + 60000 - now) / 1000);
+    return { success: false, reason: `Too many activation attempts. Please wait ${waitSec} seconds.` };
+  }
+  _licRateLimit.times.push(now);
+  // [FIX-10] Validate key input type and length before processing
+  if (typeof key !== 'string' || key.length > 50) {
+    return { success: false, reason: 'Invalid key format.' };
+  }
+  return activateLicense(key);
+});
 
-// Simple deactivate (called from renderer directly — no dialog)
 ipcMain.handle('license:deactivate', () => deactivateLicense());
 
-// ── Deactivate with native confirmation dialog (used by license-settings window)
 ipcMain.handle('license:deactivateWithDialog', async () => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
   const { response } = await dialog.showMessageBox(mainWindow, {
@@ -426,7 +468,6 @@ ipcMain.handle('license:deactivateWithDialog', async () => {
   return result;
 });
 
-// ── Full reset: deletes license + last_run, clears all activation state
 ipcMain.handle('license:reset', async () => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
   const { response } = await dialog.showMessageBox(mainWindow, {
@@ -455,7 +496,6 @@ ipcMain.handle('license:reset', async () => {
   return result;
 });
 
-// ── Prepare for uninstall — removes all license files
 ipcMain.handle('license:prepareUninstall', async () => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
   const { response } = await dialog.showMessageBox(mainWindow, {
@@ -463,9 +503,7 @@ ipcMain.handle('license:prepareUninstall', async () => {
     title: 'Prepare for Uninstall',
     message: 'Clear all license data before uninstalling?',
     detail: [
-      'This will delete:',
-      `  • ${LICENSE_PATH}`,
-      `  • ${LAST_RUN_PATH}`,
+      'This will delete license and activation files.',
       '',
       'After this, uninstall the app normally from',
       'Windows Settings → Apps & Features.',
@@ -481,9 +519,9 @@ ipcMain.handle('license:prepareUninstall', async () => {
   const results = [];
   for (const p of [LICENSE_PATH, LAST_RUN_PATH]) {
     try {
-      if (fs.existsSync(p)) { fs.unlinkSync(p); results.push({ path: p, deleted: true }); }
-      else results.push({ path: p, deleted: false, note: 'Already absent' });
-    } catch (e) { results.push({ path: p, deleted: false, error: e.message }); }
+      if (fs.existsSync(p)) { fs.unlinkSync(p); results.push({ file: path.basename(p), deleted: true }); }
+      else results.push({ file: path.basename(p), deleted: false, note: 'Already absent' });
+    } catch (e) { results.push({ file: path.basename(p), deleted: false, error: 'Permission denied' }); }
   }
 
   await dialog.showMessageBox(mainWindow, {
@@ -495,14 +533,11 @@ ipcMain.handle('license:prepareUninstall', async () => {
   return { success: true, results };
 });
 
-// ── Open License Settings window
 ipcMain.handle('license:openSettings', () => openLicenseSettings());
-
 ipcMain.handle('license:machineId', () => getMachineId());
 
 ipcMain.handle('license:loadApp', () => {
   if (!mainWindow) return;
-  // Re-verify before loading — prevents bypassing via IPC replay
   const lic = checkLicenseValidity();
   if (lic.valid) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -513,18 +548,27 @@ ipcMain.handle('license:loadApp', () => {
   }
 });
 
-// ── Receipt PDF ───────────────────────────────────────────────────────────────
-ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName) => {
+// [FIX-09] Receipt PDF — validate htmlContent before processing; supports landscape option
+ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
 
+  if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) {
+    return { success: false, reason: 'Invalid receipt content.' };
+  }
+
+  const landscape = !!(opts && opts.landscape);
+  const pageSize  = (opts && opts.pageSize) || 'A4';
+  const marginsMM = landscape
+    ? { top: 10, bottom: 10, left: 12, right: 12 }
+    : { top: 18, bottom: 18, left: 18, right: 18 };
+
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save Receipt PDF',
-    defaultPath: suggestedName || `Receipt_${new Date().toISOString().slice(0, 10)}.pdf`,
+    title: 'Save PDF',
+    defaultPath: suggestedName || `Report_${new Date().toISOString().slice(0, 10)}.pdf`,
     filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
   });
   if (canceled || !filePath) return { success: false, reason: 'cancelled' };
 
-  // Create a hidden BrowserWindow to render the HTML and print to PDF
   const pdfWin = new BrowserWindow({
     show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true }
@@ -533,38 +577,78 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName) => {
   try {
     await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
     const pdfData = await pdfWin.webContents.printToPDF({
-      pageSize: 'A4', printBackground: true,
-      margins: { top: 18, bottom: 18, left: 18, right: 18 }
+      pageSize, printBackground: true, landscape,
+      margins: marginsMM
     });
     fs.writeFileSync(filePath, pdfData);
     return { success: true, filePath };
   } catch (e) {
-    return { success: false, reason: e.message };
+    console.error('[DAMAM] PDF generation failed:', e.message);
+    return { success: false, reason: 'PDF generation failed. Please try again.' };
   } finally {
     pdfWin.destroy();
   }
 });
 
-// ── Backup / file IPC ─────────────────────────────────────────────────────────
+// [FIX-02] open-external — whitelist allowed protocols
 ipcMain.on('open-external', (_e, url) => {
-  shell.openExternal(url).catch(e => console.error('open-external failed:', e));
+  const ALLOWED_PROTOCOLS = ['https:', 'http:', 'whatsapp:', 'mailto:'];
+  try {
+    if (typeof url !== 'string' || url.length > 2048) {
+      console.warn('[DAMAM] open-external: rejected (invalid type or length)');
+      return;
+    }
+    const parsed = new URL(url);
+    if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
+      console.warn('[DAMAM] open-external: blocked protocol:', parsed.protocol);
+      return;
+    }
+    shell.openExternal(url).catch(e => console.error('[DAMAM] open-external failed:', e.message));
+  } catch (e) {
+    console.error('[DAMAM] open-external: invalid URL:', e.message);
+  }
 });
 
+// [FIX-01] write-file — only allow writing to user-approved directories
 ipcMain.on('write-file', (_e, filePath, data) => {
+  // Validate input types
+  if (typeof filePath !== 'string' || typeof data !== 'string') {
+    if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: 'Invalid parameters.' });
+    return;
+  }
+
+  const norm = path.normalize(filePath);
+  const sep  = path.sep;
+  const ALLOWED_DIRS = [
+    path.normalize(app.getPath('downloads')),
+    path.normalize(app.getPath('documents')),
+    path.normalize(app.getPath('desktop')),
+    path.normalize(app.getPath('temp')),
+  ];
+
+  const isAllowed = ALLOWED_DIRS.some(dir => norm.startsWith(dir + sep) || norm === dir);
+  if (!isAllowed) {
+    console.error('[DAMAM] write-file: blocked unauthorized path:', norm);
+    if (mainWindow) mainWindow.webContents.send('pdf-saved', {
+      success: false, error: 'File location not permitted. Please choose Downloads, Documents, or Desktop.'
+    });
+    return;
+  }
+
   try {
     fs.writeFileSync(filePath, data, 'utf8');
-    // Guard against mainWindow being null on rapid close
     if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: true, filePath });
   } catch (e) {
-    console.error('write-file failed:', e);
-    if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: e.message });
+    console.error('[DAMAM] write-file failed:', e.message);
+    if (mainWindow) mainWindow.webContents.send('pdf-saved', {
+      success: false, error: 'Could not save file. Check folder permissions.' // [FIX-07]
+    });
   }
 });
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   const { session } = require('electron');
-  // Only allow permissions that the app actually needs
   const ALLOWED_PERMS = ['clipboard-read', 'clipboard-sanitized-write'];
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMS.includes(permission));

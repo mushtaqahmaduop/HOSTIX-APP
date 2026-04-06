@@ -1,13 +1,23 @@
-/* ─── DAMAM HOSTEL — RECEIPT SYSTEM (Phase 9) ───────────────────────────────
-   Enhancements over Phase 2:
-   • Native PDF export via Electron printToPDF (no popup window needed)
-   • License key + Machine ID in receipt footer (official copy)
-   • Improved 80mm thermal + A4 print layouts
-   • WhatsApp payment reminder (unchanged)
+/* ─── DAMAM HOSTEL — RECEIPT SYSTEM (PATCHED) ───────────────────────────────
+   FIXES:
+   FIX-R1  Receipt counter moved OUT of buildReceiptHTML().
+           Counter now only increments when receipt is FINALIZED (PDF save or print),
+           not every time the receipt modal is previewed. This prevents counter gaps.
+   FIX-R2  `var payId = payId` redeclaration fixed — use `resolvedPayId` instead.
+   FIX-R3  _returnStudentId now cleared when modal is closed via X (not just Back btn).
+   FIX-R4  buildReceiptHTML() accepts pre-assigned receiptNo as optional parameter
+           so the same number is reused across preview/print/PDF of the same receipt.
+   FIX-R5  receiptNo stored on the payment record (p.receiptNo) so reprinting
+           the same receipt always shows the same number.
+   FIX-R6  doPrintReceipt() uses Blob URL instead of deprecated document.write().
    ─────────────────────────────────────────────────────────────────────────── */
 
-// Tracks which student modal to return to after printing
+// [FIX-R3] Tracks which student modal to return to — cleared on ALL close paths
 var _returnStudentId = null;
+
+function _clearReturnStudentId() {
+  _returnStudentId = null;
+}
 
 // ── OPEN RECEIPT FROM STUDENT VIEW ───────────────────────────────────────────
 function printReceiptFromStudentView(payId, studentId) {
@@ -15,8 +25,32 @@ function printReceiptFromStudentView(payId, studentId) {
   printReceipt(payId);
 }
 
-// ── BUILD THE RECEIPT HTML STRING ─────────────────────────────────────────────
-// Returns a self-contained HTML string (no external resources).
+// ── [FIX-R1 + FIX-R5] Assign receipt number ──────────────────────────────────
+// Only called when receipt is FINALIZED (print or PDF save).
+// If payment already has a receiptNo, reuse it (reprinting same receipt).
+function _assignReceiptNo(payId) {
+  const p = DB.payments.find(function(x){ return x.id === payId; });
+  if (!p) return 'RCP-??????';
+
+  // [FIX-R5] Reuse existing receipt number on reprint
+  if (p.receiptNo) return p.receiptNo;
+
+  // Assign new sequential number
+  try {
+    if (typeof DB !== 'undefined' && DB.settings) {
+      DB.settings.receiptCounter = (DB.settings.receiptCounter || 0) + 1;
+      const rno = 'RCP-' + String(DB.settings.receiptCounter).padStart(6, '0');
+      p.receiptNo = rno; // [FIX-R5] persist on payment record
+      if (typeof saveDB === 'function') saveDB();
+      return rno;
+    }
+  } catch(e) {}
+  return 'RCP-' + payId.slice(-6).toUpperCase();
+}
+
+// ── [FIX-R1 + FIX-R4] BUILD THE RECEIPT HTML STRING ─────────────────────────
+// receiptNo is now passed in (or uses p.receiptNo if already assigned).
+// Does NOT increment the counter — that happens in _assignReceiptNo().
 function buildReceiptHTML(payId) {
   var p = DB.payments.find(function(x){ return x.id === payId; });
   if (!p) return null;
@@ -32,22 +66,11 @@ function buildReceiptHTML(payId) {
   var now2      = new Date().toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' });
   var nowTime   = new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit', hour12:true });
 
-  // Sequential receipt counter — stored in DB so numbers are never repeated.
-  // Falls back to payId-based number only if DB is unavailable (should not occur).
-  var receiptNo;
-  try {
-    if (typeof DB !== 'undefined' && DB.settings) {
-      DB.settings.receiptCounter = (DB.settings.receiptCounter || 0) + 1;
-      receiptNo = 'RCP-' + String(DB.settings.receiptCounter).padStart(6, '0');
-      if (typeof saveDB === 'function') saveDB();
-    } else {
-      receiptNo = 'RCP-' + payId.slice(-6).toUpperCase();
-    }
-  } catch(e) {
-    receiptNo = 'RCP-' + payId.slice(-6).toUpperCase();
-  }
+  // [FIX-R1] Use EXISTING receiptNo if already assigned, otherwise show placeholder.
+  // Counter is only assigned on finalize — NOT here.
+  var receiptNo = p.receiptNo || 'PREVIEW';
 
-  var studentId = (student && student.id) ? student.id.slice(-8).toUpperCase() : receiptNo;
+  var studentId  = (student && student.id) ? student.id.slice(-8).toUpperCase() : receiptNo;
   var wardenName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name)
     ? CUR_USER.name : 'Authorized Warden';
 
@@ -58,7 +81,7 @@ function buildReceiptHTML(payId) {
     return '<div style="display:flex;align-items:baseline;font-family:\'Courier New\',Courier,monospace;'
       + 'font-size:' + sz + ';font-weight:' + w + ';color:#000;margin:6px 0">'
       + '<span style="white-space:nowrap;color:#111;font-weight:' + (bold?'900':'800') + '">' + label + '</span>'
-      + '<span style="flex:1;overflow:hidden;letter-spacing:2px;margin:0 4px;color:#aaa">................................................................................................</span>'
+      + '<span style="flex:1;overflow:hidden;letter-spacing:2px;margin:0 4px;color:#aaa">................................................................................................................................................................</span>'
       + '<span style="white-space:nowrap;font-weight:900;color:#000">' + value + '</span>'
       + '</div>';
   }
@@ -72,17 +95,15 @@ function buildReceiptHTML(payId) {
   }
 
   // ── Receipt wrapper ────────────────────────────────────────────────────────
-  var html = '<div id="rc-print" style="background:#fafaf8;color:#111;font-family:\'Courier New\',Courier,monospace;'
+  var html = '<div id="rc-print" data-pay-id="' + escHtml(payId) + '" style="background:#fafaf8;color:#111;font-family:\'Courier New\',Courier,monospace;'
     + 'max-width:360px;margin:0 auto;border-radius:4px;overflow:hidden;'
     + 'box-shadow:0 4px 24px rgba(0,0,0,0.18);border:1px solid #e0e0e0">';
 
-  // Perforated top edge
   html += '<div style="height:12px;background:#fafaf8;border-bottom:2px dashed #bbb;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';
 
-  // ── Header ────────────────────────────────────────────────────────────────
   html += '<div style="padding:16px 22px 12px;text-align:center">';
   html += '<div style="font-size:8px;letter-spacing:4px;color:#555;font-weight:800;margin-bottom:8px">* * * PAYMENT RECEIPT * * *</div>';
   if (logoData) {
@@ -100,12 +121,11 @@ function buildReceiptHTML(payId) {
   html += '<span style="letter-spacing:1px">STU-' + studentId + '</span>';
   html += '<span>' + now2 + ' ' + nowTime + '</span>';
   html += '</div>';
-  html += '<div style="font-size:9.5px;color:#555;font-weight:700;margin-top:3px;text-align:right">Receipt #: ' + receiptNo + '</div>';
+  html += '<div style="font-size:9.5px;color:#555;font-weight:700;margin-top:3px;text-align:right">Receipt #: ' + escHtml(receiptNo) + '</div>';
   html += '</div>';
 
   html += sep('solid');
 
-  // ── Student Details ────────────────────────────────────────────────────────
   html += '<div style="padding:4px 22px 8px">';
   html += secLabel('Student Details');
   html += dotRow('Name',      escHtml(p.studentName || '—'));
@@ -117,7 +137,6 @@ function buildReceiptHTML(payId) {
 
   html += sep();
 
-  // ── Fee Breakdown ──────────────────────────────────────────────────────────
   var rcptAdmFee   = Number(p.admissionFee || p.fee || 0);
   var rcptExtra    = (p.extraCharges && p.extraCharges.length)
     ? p.extraCharges.reduce(function(s, c){ return s + Number(c.amount||0); }, 0) : 0;
@@ -156,7 +175,6 @@ function buildReceiptHTML(payId) {
   html += dotRow('Status', p.status === 'Paid' ? '✅ PAID' : '⏳ PENDING');
   html += '</div>';
 
-  // ── Payment History ────────────────────────────────────────────────────────
   var history   = (p.partialPayments && p.partialPayments.length) ? p.partialPayments : [];
   var initEntry = {
     date: p.date || p.dueDate || '',
@@ -185,7 +203,6 @@ function buildReceiptHTML(payId) {
 
   html += sep('dashed');
 
-  // ── Warden Signature ──────────────────────────────────────────────────────
   html += '<div style="padding:8px 22px 6px">';
   html += '<div style="display:flex;justify-content:space-between;font-family:monospace;font-size:10px;color:#333">';
   html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:4px;margin-top:28px;min-width:110px">Student Signature</div></div>';
@@ -196,25 +213,27 @@ function buildReceiptHTML(payId) {
 
   html += sep('dashed');
 
-  // ── Thank You footer ───────────────────────────────────────────────────────
   html += '<div style="padding:10px 22px 8px;text-align:center">';
   html += '<div style="font-size:12px;font-weight:900;letter-spacing:3px;margin-bottom:6px;color:#000">** THANK YOU **</div>';
   html += '<div style="font-size:9px;color:#888;font-family:monospace">This is a computer-generated receipt.</div>';
   html += '</div>';
 
-  // Developer credit
+  // ── Powered-by footer (uses client's hostel name + system name) ───────────
+  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTIX';
+  var hostelFtr = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) ? DB.settings.hostelName : '';
+  var phoneFtr  = (typeof DB !== 'undefined' && DB.settings && DB.settings.phone)      ? DB.settings.phone      : '';
   html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
-  html += '<div style="font-size:8px;color:#888;font-family:monospace;letter-spacing:0.5px">Software Developed by: MUSHTAQ AHMAD</div>';
-  html += '<div style="font-size:8px;color:#888;font-family:monospace;margin-top:2px">📱 03189981202 &nbsp;|&nbsp; ✉ mushtaqahmadicp@gmail.com</div>';
+  if (hostelFtr) html += '<div style="font-size:9px;color:#555;font-family:monospace;font-weight:700">' + escHtml(hostelFtr) + '</div>';
+  if (phoneFtr)  html += '<div style="font-size:8px;color:#888;font-family:monospace;margin-top:1px">📞 ' + escHtml(phoneFtr) + '</div>';
+  html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace;margin-top:3px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
   html += '</div>';
 
-  // Perforated bottom edge
   html += '<div style="height:12px;background:#fafaf8;border-top:2px dashed #bbb;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';
 
-  html += '</div>'; // end #rc-print
+  html += '</div>';
 
   return html;
 }
@@ -224,26 +243,39 @@ function printReceipt(payId) {
   var html = buildReceiptHTML(payId);
   if (!html) return;
 
-  var _rcptFooter = (_returnStudentId
-    ? '<button class="btn btn-secondary" onclick="var s=_returnStudentId;_returnStudentId=null;showViewStudentModal(s)">← Back to Student</button>'
-    : '<button class="btn btn-secondary" onclick="closeModal()">Close</button>')
-    + '<button class="btn btn-success" onclick="exportReceiptPDF(\'' + payId + '\')">'
-    +   '<span style="font-size:13px">📄</span> Save PDF</button>'
-    + '<button class="btn btn-primary" onclick="doPrintReceipt()">'
-    +   '<span class="micon" style="font-size:15px">print</span> Print</button>';
+  // [FIX-R3] Pass _clearReturnStudentId to close handlers
+  var backBtn = _returnStudentId
+    ? '<button class="btn btn-secondary" onclick="var s=_returnStudentId;_clearReturnStudentId();showViewStudentModal(s)">← Back to Student</button>'
+    : '<button class="btn btn-secondary" onclick="_clearReturnStudentId();closeModal()">Close</button>';
+
+  var _rcptFooter = backBtn
+    + '<button class="btn btn-success" onclick="exportReceiptPDF(\'' + payId + '\')"><span style="font-size:13px">📄</span> Save PDF</button>'
+    + '<button class="btn btn-primary" onclick="doPrintReceipt(\'' + payId + '\')"><span class="micon" style="font-size:15px">print</span> Print</button>';
 
   showModal('modal-md', '🧾 Receipt', html, _rcptFooter);
 }
 
-// ── PRINT RECEIPT (opens 80mm thermal print window) ───────────────────────────
-function doPrintReceipt() {
+// ── [FIX-R6] PRINT RECEIPT — uses Blob URL instead of document.write() ────────
+function doPrintReceipt(payId) {
+  // [FIX-R1] Assign receipt number on finalize (print)
+  if (payId) _assignReceiptNo(payId);
+
   var el = document.getElementById('rc-print');
   if (!el) return;
-  var w = safeOpenWindow(480, 900);
-  if (!w) return;
+
+  // Refresh the receipt HTML with the now-assigned receipt number
+  if (payId) {
+    var fresh = buildReceiptHTML(payId);
+    if (fresh) el.outerHTML = fresh;
+    el = document.getElementById('rc-print');
+    if (!el) return;
+  }
+
   var printDateTime = new Date().toLocaleString('en-PK',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   var wardenName = (typeof CUR_USER!=='undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Authorized Warden';
-  w.document.write('<!DOCTYPE html><html><head><title>Receipt</title>'
+
+  // [FIX-R6] Use Blob URL — no deprecated document.write()
+  var fullHtml = '<!DOCTYPE html><html><head><title>Receipt</title>'
     + '<style>'
     + '@page { size: 80mm auto; margin: 4mm; }'
     + '@media print { .no-print { display:none !important; } body { background:#fff !important; } }'
@@ -253,39 +285,58 @@ function doPrintReceipt() {
     + '.print-meta { max-width:340px; margin:6px auto 0; font-size:9px; color:#888; text-align:center; font-family:monospace; }'
     + '.print-btn  { display:block; margin:14px auto 0; padding:10px 36px; background:#111; color:#fff; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; font-family:sans-serif; }'
     + '</style>'
-    + '</head><body>');
-  w.document.write(el.outerHTML);
-  w.document.write('<div class="print-meta">Printed: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>');
-  w.document.write('<button class="print-btn no-print" onclick="window.print()">🖨️ Print Receipt</button>');
-  w.document.write('</body></html>');
-  w.document.close();
-  setTimeout(function(){ w.print(); }, 500);
+    + '</head><body>'
+    + el.outerHTML
+    + '<div class="print-meta">Printed: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>'
+    + '<button class="print-btn no-print" onclick="window.print()">🖨️ Print Receipt</button>'
+    + '<script>setTimeout(function(){ window.print(); }, 400);<\/script>'
+    + '</body></html>';
+
+  var blob = new Blob([fullHtml], { type: 'text/html' });
+  var url  = URL.createObjectURL(blob);
+  var w    = window.open(url, '_blank', 'width=480,height=900');
+  if (!w) {
+    if (typeof toast === 'function')
+      toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
+    URL.revokeObjectURL(url);
+    return;
+  }
+  // Revoke blob URL after window is done using it
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
 }
 
 // ── EXPORT RECEIPT AS PDF ─────────────────────────────────────────────────────
-// Phase 9: Uses Electron's native printToPDF via IPC when available.
-// Falls back to popup + browser print for dev mode.
+// [FIX-R2] Renamed payId parameter to resolvedPayId — no var redeclaration.
+// [FIX-R1] Counter assigned here (on finalize), not in buildReceiptHTML.
 async function exportReceiptPDF(payId) {
-  var payId = payId || (function(){
-    // Try to recover payId from current receipt if not passed
+  // [FIX-R2] Resolve payId without re-declaring the parameter
+  var resolvedPayId = payId;
+  if (!resolvedPayId) {
     var el = document.getElementById('rc-print');
-    if (!el) return null;
-    var rcpDiv = el.querySelector('[data-pay-id]');
-    return rcpDiv ? rcpDiv.dataset.payId : null;
-  })();
+    if (el && el.dataset.payId) resolvedPayId = el.dataset.payId;
+  }
+
+  if (!resolvedPayId) {
+    if (typeof toast === 'function') toast('❌ Cannot identify payment for this receipt.', 'error');
+    return;
+  }
+
+  // [FIX-R1] Assign receipt number now (on finalize PDF save)
+  _assignReceiptNo(resolvedPayId);
 
   // ── Electron native path ──────────────────────────────────────────────────
   if (window.electronAPI && window.electronAPI.receiptSavePDF) {
     var studentName = '';
     try {
-      if (payId) {
-        var p = DB.payments.find(function(x){ return x.id === payId; });
-        if (p) studentName = '_' + (p.studentName || '').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g,'');
-      }
+      var p = DB.payments.find(function(x){ return x.id === resolvedPayId; });
+      if (p) studentName = '_' + (p.studentName || '').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g,'');
     } catch(e) {}
 
-    // Build full-page A4 HTML wrapper around the receipt card
-    var receiptCard = buildReceiptHTML(payId) || document.getElementById('rc-print').outerHTML;
+    var receiptCard = buildReceiptHTML(resolvedPayId) || (function(){
+      var el = document.getElementById('rc-print');
+      return el ? el.outerHTML : '';
+    })();
+
     var fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       + '<style>'
       + '* { box-sizing:border-box; margin:0; padding:0; }'
@@ -301,12 +352,12 @@ async function exportReceiptPDF(payId) {
     try {
       var result = await window.electronAPI.receiptSavePDF(fullHtml, suggestedName);
       if (result.success) {
-        if (typeof toast === 'function') toast('✅ PDF saved: ' + result.filePath.split(/[\\/]/).pop(), 'success');
+        if (typeof toast === 'function') toast('✅ PDF saved: ' + result.filePath.split(/[\\\/]/).pop(), 'success');
       } else if (result.reason !== 'cancelled') {
-        if (typeof toast === 'function') toast('❌ PDF failed: ' + (result.reason || 'unknown error'), 'error');
+        if (typeof toast === 'function') toast('❌ PDF failed: ' + (result.reason || 'Unknown error'), 'error');
       }
     } catch(e) {
-      if (typeof toast === 'function') toast('❌ PDF error: ' + e.message, 'error');
+      if (typeof toast === 'function') toast('❌ PDF error. Please try again.', 'error');
     }
     return;
   }
@@ -314,11 +365,12 @@ async function exportReceiptPDF(payId) {
   // ── Fallback: popup + browser Print → Save as PDF ─────────────────────────
   var el = document.getElementById('rc-print');
   if (!el) return;
-  var w = safeOpenWindow(680, 900);
-  if (!w) return;
+
+  // [FIX-R6] Use Blob URL in fallback too
   var printDateTime = new Date().toLocaleString('en-PK',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   var wardenName = (typeof CUR_USER!=='undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Authorized Warden';
-  w.document.write('<!DOCTYPE html><html><head><title>Receipt PDF</title>'
+
+  var fbHtml = '<!DOCTYPE html><html><head><title>Receipt PDF</title>'
     + '<style>'
     + '@page { size: A4; margin: 18mm; }'
     + '@media print { .no-print { display:none !important; } body { background:#fff !important; } }'
@@ -328,24 +380,33 @@ async function exportReceiptPDF(payId) {
     + '.print-meta { max-width:360px; margin:8px auto 0; font-size:9px; color:#888; text-align:center; font-family:monospace; }'
     + '.save-btn   { display:block; margin:16px auto 0; padding:10px 40px; background:#1e5fd4; color:#fff; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }'
     + '</style>'
-    + '</head><body>');
-  w.document.write(el.outerHTML);
-  w.document.write('<div class="print-meta">Generated: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>');
-  w.document.write('<button class="save-btn no-print" onclick="window.print()">💾 Save as PDF (Print → Save as PDF)</button>');
-  w.document.write('</body></html>');
-  w.document.close();
-  setTimeout(function(){ w.print(); }, 500);
+    + '</head><body>'
+    + el.outerHTML
+    + '<div class="print-meta">Generated: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>'
+    + '<button class="save-btn no-print" onclick="window.print()">💾 Save as PDF (Print → Save as PDF)</button>'
+    + '<script>setTimeout(function(){ window.print(); }, 500);<\/script>'
+    + '</body></html>';
+
+  var blob2 = new Blob([fbHtml], { type: 'text/html' });
+  var url2  = URL.createObjectURL(blob2);
+  var w2    = window.open(url2, '_blank', 'width=680,height=900');
+  if (!w2) {
+    if (typeof toast === 'function') toast('⚠️ Popup blocked — allow popups and try again.', 'error');
+    URL.revokeObjectURL(url2);
+    return;
+  }
+  setTimeout(function(){ URL.revokeObjectURL(url2); }, 5000);
 }
 
 // ── WHATSAPP PAYMENT REMINDER ─────────────────────────────────────────────────
 function sendWA(payId) {
   var p = DB.payments.find(function(x){ return x.id === payId; });
   if (!p) return;
-  var student    = DB.students.find(function(s){ return s.id === p.studentId; });
-  var rawPhone   = student ? (student.phone || '') : '';
+  var student     = DB.students.find(function(s){ return s.id === p.studentId; });
+  var rawPhone    = student ? (student.phone || '') : '';
   var wardenPhone = (CUR_USER && CUR_USER.phone) ? CUR_USER.phone : '';
-  var defPhone   = wardenPhone || DB.settings.defaultWANumber || '';
-  var usePhone   = rawPhone || defPhone;
+  var defPhone    = wardenPhone || DB.settings.defaultWANumber || '';
+  var usePhone    = rawPhone || defPhone;
 
   if (!usePhone) {
     if(typeof toast === 'function')

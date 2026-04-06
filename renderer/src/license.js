@@ -1,7 +1,14 @@
-/* ─── DAMAM HOSTEL — LICENSE SYSTEM (renderer side — Phase 3) ───────────────
+/* ─── DAMAM HOSTEL — LICENSE SYSTEM (renderer side — PATCHED) ───────────────
    Communicates with main process via window.electronAPI (preload.js).
    Runs at startup: if license invalid → shows activation screen, blocks app.
    Also provides deactivateLicense() for the Settings page.
+
+   FIXES:
+   FIX-L1  maxlength corrected to 19 (HOSTEL-XXXX-XXXX-XXXX = 19 chars exactly).
+   FIX-L2  licDoActivate validates key length using 19 (was 21 in one version).
+   FIX-L3  Activate button double-click race condition fixed — disable on click.
+   FIX-L4  licFormatKey rewritten — handles partial input and paste correctly.
+   FIX-L5  Machine ID shown as truncated (first 16 chars + …) for privacy.
    ─────────────────────────────────────────────────────────────────────────── */
 
 // Phase 7 stubs
@@ -18,7 +25,7 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
   let status;
   try {
     status = await window.electronAPI.licenseCheck();
-    window._damam_license_cache = status; // ← Phase 9: cache for receipt footer
+    window._damam_license_cache = status;
   } catch(e) {
     status = { valid: false, reason: 'ipc_error' };
   }
@@ -33,8 +40,8 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
 // ── INJECT SMALL BADGE INTO LOGIN SCREEN (when valid) ────────────────────────
 function _injectLicenseBadge(status) {
   try {
-    var exp = new Date(status.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'});
-    var badge = document.createElement('div');
+    const exp   = new Date(status.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'});
+    const badge = document.createElement('div');
     badge.style.cssText = 'position:fixed;bottom:10px;right:12px;z-index:99990;'
       + 'font-size:9px;color:#2ec98a;font-family:monospace;opacity:0.6;pointer-events:none;';
     badge.textContent = '✅ Licensed · Exp: ' + exp;
@@ -44,26 +51,27 @@ function _injectLicenseBadge(status) {
 
 // ── ACTIVATION SCREEN ─────────────────────────────────────────────────────────
 function _showActivationScreen(reason, expiry) {
-  var msgs = {
+  const msgs = {
     not_activated: 'This software is not yet activated. Enter your license key to continue.',
     expired:       'Your license expired on ' + (expiry ? new Date(expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'}) : 'an unknown date') + '. Contact support for renewal.',
     wrong_machine: 'This license is bound to a different computer. Deactivate it there first or contact support.',
     tampered:      '⚠️ License file has been tampered with. The application cannot start.',
     corrupt:       '⚠️ License file is corrupted. Please re-activate or contact support.',
-    ipc_error:     '⚠️ Could not verify license. Please restart the application.'
+    ipc_error:     '⚠️ Could not verify license. Please restart the application.',
+    time_cheat:    '⚠️ System time manipulation detected. Set your clock to the correct time and restart.'
   };
-  var msg = msgs[reason] || 'License verification failed. Please contact support.';
-  var canActivate = ['not_activated','expired','corrupt'].includes(reason);
+  const msg        = msgs[reason] || 'License verification failed. Please contact support.';
+  const canActivate = ['not_activated','expired','corrupt'].includes(reason);
 
-  // Show machine ID
+  // [FIX-L5] Show truncated machine ID (first 16 chars only for privacy)
   if (window.electronAPI && window.electronAPI.licenseMachineId) {
     window.electronAPI.licenseMachineId().then(function(id) {
-      var el = document.getElementById('lic-machine-id');
-      if (el) el.textContent = id || '—';
+      const el = document.getElementById('lic-machine-id');
+      if (el) el.textContent = id ? (id.slice(0, 16) + '…' + id.slice(-8)) : '—';
     }).catch(function(){});
   }
 
-  var screen = document.getElementById('license-screen');
+  const screen = document.getElementById('license-screen');
   if (!screen) { console.error('[License] #license-screen missing from index.html'); return; }
 
   screen.innerHTML = '<div style="background:#071428;border:1px solid #1e3c6a;border-radius:22px;'
@@ -82,12 +90,14 @@ function _showActivationScreen(reason, expiry) {
     + (canActivate
       ? '<div style="margin-bottom:10px;text-align:left;">'
         + '<div style="font-size:11px;color:#4d6580;margin-bottom:6px;font-weight:700;">LICENSE KEY</div>'
+        // [FIX-L1] maxlength corrected to 19 (HOSTEL-XXXX-XXXX-XXXX is exactly 19 chars)
         + '<input id="lic-key-input" type="text" maxlength="19" placeholder="HOSTEL-XXXX-XXXX-XXXX"'
         + ' oninput="licFormatKey(this)"'
         + ' style="width:100%;box-sizing:border-box;padding:12px 16px;background:#0f1a2e;'
         + 'border:1px solid #1e3050;border-radius:10px;color:#e8eef8;font-size:15px;'
         + 'font-family:\'JetBrains Mono\',\'Courier New\',monospace;outline:none;letter-spacing:1px;text-transform:uppercase;"'
-        + ' onfocus="this.style.borderColor=\'#c8a84b\'" onblur="this.style.borderColor=\'#1e3050\'">'
+        + ' onfocus="this.style.borderColor=\'#c8a84b\'" onblur="this.style.borderColor=\'#1e3050\'"'
+        + ' onkeydown="if(event.key===\'Enter\')licDoActivate()">'
         + '</div>'
         + '<div id="lic-error" style="color:#e05252;font-size:12px;margin-bottom:8px;min-height:16px;display:none;"></div>'
         + '<div id="lic-success" style="color:#2ec98a;font-size:12px;margin-bottom:8px;min-height:16px;display:none;"></div>'
@@ -104,51 +114,79 @@ function _showActivationScreen(reason, expiry) {
 
   screen.style.display = 'flex';
 
-  // Block login screen behind this
-  var ls = document.getElementById('login-screen');
+  const ls = document.getElementById('login-screen');
   if (ls) ls.style.display = 'none';
-}
 
-// ── FORMAT KEY INPUT (auto-insert dashes) ─────────────────────────────────────
-function licFormatKey(inp) {
-  var v    = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  var body = v.startsWith('HOSTEL') ? v.slice(6) : v;
-  var parts = [];
-  for (var i = 0; i < body.length && i < 12; i += 4) parts.push(body.slice(i, i+4));
-  inp.value = 'HOSTEL' + (parts.length ? '-' + parts.join('-') : '');
-}
-
-// ── ACTIVATE BUTTON ───────────────────────────────────────────────────────────
-async function licDoActivate() {
-  var inp   = document.getElementById('lic-key-input');
-  var errEl = document.getElementById('lic-error');
-  var okEl  = document.getElementById('lic-success');
-  var btn   = document.getElementById('lic-activate-btn');
-  if (!inp) return;
-  var key = inp.value.trim();
-  errEl.style.display = 'none';
-  okEl.style.display  = 'none';
-  if (!key || key.length < 19) {
-    errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX).';
-    errEl.style.display = 'block'; return;
+  // Auto-focus the key input
+  if (canActivate) {
+    setTimeout(function () {
+      const inp = document.getElementById('lic-key-input');
+      if (inp) inp.focus();
+    }, 150);
   }
-  btn.disabled = true; btn.textContent = '⏳ Activating…';
+}
+
+// ── [FIX-L4] FORMAT KEY INPUT (auto-insert dashes, handles paste & backspace) ─
+function licFormatKey(inp) {
+  // Strip everything except alphanumeric, work on raw value
+  var raw   = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var body  = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
+
+  // Build formatted parts (max 12 body chars = 3 groups of 4)
+  var parts = [];
+  for (var i = 0; i < body.length && i < 12; i += 4) {
+    parts.push(body.slice(i, i + 4));
+  }
+
+  var formatted = 'HOSTEL' + (parts.length ? '-' + parts.join('-') : '');
+
+  // Only update if different to preserve cursor on non-modifying keys
+  if (inp.value !== formatted) {
+    inp.value = formatted;
+  }
+}
+
+// ── [FIX-L3] ACTIVATE BUTTON — disable on click, prevent double-submit ────────
+async function licDoActivate() {
+  const inp   = document.getElementById('lic-key-input');
+  const errEl = document.getElementById('lic-error');
+  const okEl  = document.getElementById('lic-success');
+  const btn   = document.getElementById('lic-activate-btn');
+  if (!inp) return;
+
+  // [FIX-L3] Prevent double-click activation
+  if (btn && btn.disabled) return;
+
+  const key = inp.value.trim();
+  if (errEl) errEl.style.display = 'none';
+  if (okEl)  okEl.style.display  = 'none';
+
+  // [FIX-L2] Correct length check: HOSTEL-XXXX-XXXX-XXXX = 19 characters
+  if (!key || key.length < 19) {
+    if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  // Basic format check before sending to main process
+  if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
+    if (errEl) { errEl.textContent = 'Key format is invalid. Expected: HOSTEL-XXXX-XXXX-XXXX'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Activating…'; }
   try {
-    var result = await window.electronAPI.licenseActivate(key);
+    const result = await window.electronAPI.licenseActivate(key);
     if (result.success) {
-      okEl.textContent = '✅ ' + result.message + ' Expires: ' + result.expiry;
-      okEl.style.display = 'block';
-      btn.textContent = '✅ Activated! Reloading…';
+      if (okEl) { okEl.textContent = '✅ ' + result.message + ' Expires: ' + result.expiry; okEl.style.display = 'block'; }
+      if (btn)  btn.textContent = '✅ Activated! Reloading…';
       setTimeout(function(){ location.reload(); }, 1800);
     } else {
-      errEl.textContent = '❌ ' + result.message;
-      errEl.style.display = 'block';
-      btn.disabled = false; btn.textContent = '🔑 Activate License';
+      if (errEl) { errEl.textContent = '❌ ' + result.reason; errEl.style.display = 'block'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔑 Activate License'; }
     }
   } catch(e) {
-    errEl.textContent = '❌ Error: ' + e.message;
-    errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = '🔑 Activate License';
+    if (errEl) { errEl.textContent = '❌ Error communicating with the app. Please restart.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🔑 Activate License'; }
   }
 }
 
@@ -159,7 +197,7 @@ async function deactivateLicense() {
   }
   if (!confirm('Deactivate this license?\nThe app will require re-activation on next launch.')) return;
   try {
-    var result = await window.electronAPI.licenseDeactivate();
+    const result = await window.electronAPI.licenseDeactivate();
     if (result.success) {
       if(typeof toast==='function') toast('License deactivated. Reloading…','info');
       setTimeout(function(){ location.reload(); }, 1500);
@@ -167,7 +205,7 @@ async function deactivateLicense() {
       if(typeof toast==='function') toast('Failed: '+(result.message||'unknown error'),'error');
     }
   } catch(e) {
-    if(typeof toast==='function') toast('Error: '+e.message,'error');
+    if(typeof toast==='function') toast('Error communicating with app. Please restart.','error');
   }
 }
 

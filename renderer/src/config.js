@@ -12,6 +12,7 @@ const LS_KEY = 'dbh2_v3_' + _ACTIVE_HOSTEL;
 // ── Default DB schema — used by loadDB() on first run ────────────────────────
 let DB = {
   settings: {
+    appName:         'HOSTIX',              // ← Customisable system/app name shown in UI & reports
     hostelName:      'DAMAM Boys Hostel',
     tagline:         'Safe & Comfortable Living',
     location:        '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar',
