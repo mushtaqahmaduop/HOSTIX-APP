@@ -12,7 +12,54 @@
 // ── COURSE AUTOCOMPLETE — defined in src/utils.js (do not redeclare here)
 function getTypeById(id) { return DB.settings.roomTypes.find(t=>t.id===id)||DB.settings.roomTypes[0]; }
 function getRoomType(room) { return getTypeById(room.typeId); }
+// getRoomOccupancy includes ALL active students (regular + force-added) — used for physical seat display
 function getRoomOccupancy(room) { return DB.students.filter(t=>t.roomId===room.id && t.status==='Active').length; }
+
+// ── SAFE WINDOW HELPER ───────────────────────────────────────────────────────
+// Opens a popup; shows a toast and returns null if blocked.
+function safeOpenWindow(w, h) {
+  const win = window.open('', '_blank', 'width='+w+',height='+h+',scrollbars=yes,resizable=yes');
+  if (!win) {
+    if (typeof toast === 'function') toast('⚠️ Popup blocked — please allow popups for this page.', 'error');
+    return null;
+  }
+  return win;
+}
+
+// ── ELECTRON PDF HELPER (Issue 1) ────────────────────────────────────────────
+// Unified PDF function: uses Electron native printToPDF when available (saves
+// to a file the user picks), falls back to popup + browser print dialog.
+// opts: { landscape: bool, pageSize: 'A4'|'Letter' }
+function _electronPDF(html, suggestedName, opts) {
+  // Open a print-ready popup window — works in both Electron and browser.
+  // User presses Ctrl+P (or the Print button) and selects "Save as PDF".
+  // This avoids the native OS Save dialog that blocks the Electron renderer.
+  opts = opts || {};
+  var isLandscape = !!(opts && opts.landscape);
+  var pageCSS = isLandscape
+    ? '@page { size: A4 landscape; margin: 10mm; }'
+    : '@page { size: A4; margin: 18mm; }';
+  // Inject print CSS + a visible Print/Save button into the HTML
+  var injected = html.replace('</head>',
+    '<style>' + pageCSS +
+    '@media print { .no-print { display:none!important; } body { background:#fff!important; } }' +
+    '.pdf-print-btn { display:block; margin:16px auto; padding:10px 40px; background:#1e5fd4; color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:sans-serif; letter-spacing:0.5px; }' +
+    '</style></head>');
+  // Insert a prominent Save PDF button before </body>
+  var btnHtml = '<div class="no-print" style="text-align:center;padding:16px 0 8px">'
+    + '<button class="pdf-print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>'
+    + '<div style="font-size:11px;color:#888;margin-top:6px;font-family:sans-serif">In the print dialog: set Destination → Save as PDF</div>'
+    + '</div>';
+  // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child
+  // window.open() window hangs the Electron renderer on Windows. User presses the button.
+  injected = injected.replace('</body>', btnHtml + '</body>');
+  var w = window.open('', '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
+  if (!w) { if (typeof toast === 'function') toast('⚠️ Allow popups for this app to open PDFs.', 'error'); return; }
+  w.document.open();
+  w.document.write(injected);
+  w.document.close();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 // Cancelling students do NOT count toward occupancy — their seat is immediately freed
 
 // ══ SINGLE SOURCE OF TRUTH FOR REVENUE ══════════════════════════════════════
@@ -41,15 +88,22 @@ function _payMatchesMonth(p, mk) {
   if ((p.date||'').startsWith(mk))     return true;
   if ((p.paidDate||'').startsWith(mk)) return true;
   if ((p.dueDate||'').startsWith(mk))  return true;
-  // Slow path: p.month is stored as "April 2026" or "Apr 2026" — parse it
-  if (p.month) {
+  // FIX-B3: Slow path — parse ANY date/month field that is not already YYYY-MM-DD.
+  // Fixes silent failure when dueDate/date/paidDate is stored as "April 2026" or
+  // "Apr 2026" instead of "2026-04-xx", causing payments to vanish from reports.
+  function _toYM(str) {
+    if (!str || typeof str !== 'string') return null;
+    if (/^\d{4}-\d{2}/.test(str)) return null; // fast-path already handled these
     try {
-      var d = new Date(p.month + ' 1');
-      if (!isNaN(d.getTime())) {
-        var pmk = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-        if (pmk === mk) return true;
-      }
-    } catch(e) {}
+      var d = new Date(str.trim() + ' 1');
+      if (!isNaN(d.getTime()))
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    } catch (e) {}
+    return null;
+  }
+  var fields = [p.month, p.dueDate, p.date, p.paidDate];
+  for (var i = 0; i < fields.length; i++) {
+    if (_toYM(fields[i]) === mk) return true;
   }
   return false;
 }
@@ -280,7 +334,7 @@ function updateSidebar() {
     const phone = DB.settings.phone || '';
     const email = DB.settings.email || '';
     const dev = 'Mushtaq Ahmad';
-    const devPhone = '03189981282';
+    const devPhone = '03189981202';
     const devEmail = 'mushhtaqahmadicp@gmail.com';
     contactEl.innerHTML = `
       <div style="margin:0 8px 10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px">
@@ -298,7 +352,7 @@ function updateSidebar() {
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#25D366"/><path d="M23.5 8.5A10.4 10.4 0 0 0 16 5.5C10.2 5.5 5.5 10.2 5.5 16c0 1.85.48 3.66 1.4 5.26L5.5 26.5l5.36-1.4A10.44 10.44 0 0 0 16 26.5c5.8 0 10.5-4.7 10.5-10.5 0-2.8-1.09-5.43-3-7.5zm-7.5 16.1c-1.56 0-3.1-.42-4.44-1.2l-.32-.19-3.18.83.85-3.1-.21-.33A8.65 8.65 0 0 1 7.35 16c0-4.77 3.88-8.65 8.65-8.65 2.31 0 4.48.9 6.11 2.53A8.6 8.6 0 0 1 24.65 16c0 4.77-3.88 8.6-8.65 8.6zm4.74-6.48c-.26-.13-1.53-.75-1.77-.84-.23-.09-.4-.13-.57.13-.17.26-.65.84-.8 1.01-.15.17-.29.19-.55.06-.26-.13-1.1-.4-2.1-1.28-.77-.69-1.3-1.54-1.45-1.8-.15-.26-.02-.4.11-.53.12-.11.26-.29.39-.44.13-.14.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.37-.78-1.87-.2-.49-.42-.42-.57-.43h-.49c-.17 0-.44.06-.67.32-.23.26-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.57.13.17 1.75 2.67 4.24 3.74.59.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.2-.57.2-1.07.14-1.17-.07-.1-.24-.16-.5-.29z" fill="#fff"/></svg>
             ${devPhone}
           </a>
-          <a href="#" onclick="openExternalLink('mailto:${devEmail}');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:4px;padding:4px 6px;border-radius:6px;background:rgba(234,67,53,0.08);border:1px solid rgba(234,67,53,0.2);word-break:break-all" onmouseover="this.style.background='rgba(234,67,53,0.18)'" onmouseout="this.style.background='rgba(234,67,53,0.08)'">
+          <a href="#" onclick="openExternalLink('https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(devEmail)}&su=Support+Request+—+DAMAM+Hostel+Management');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:4px;padding:4px 6px;border-radius:6px;background:rgba(234,67,53,0.08);border:1px solid rgba(234,67,53,0.2);word-break:break-all" onmouseover="this.style.background='rgba(234,67,53,0.18)'" onmouseout="this.style.background='rgba(234,67,53,0.08)'">
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none" style="flex-shrink:0"><rect width="32" height="32" rx="4" fill="#fff"/><path d="M5 10l11 8 11-8" stroke="#EA4335" stroke-width="2" fill="none"/><rect x="5" y="10" width="22" height="14" rx="1" stroke="#4285F4" stroke-width="1.5" fill="none"/><path d="M5 10l7 7M27 10l-7 7" stroke="#34A853" stroke-width="1.5"/></svg>
             ${devEmail}
           </a>
@@ -351,7 +405,8 @@ function renderDashboard() {
 
   // Seat calculations
   const totalSeats = DB.rooms.reduce((s,r)=>{ const t=DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); }, 0);
-  const filledSeats = DB.students.filter(t=>t.status==='Active').length;
+  const allActiveSeats = DB.students.filter(t=>t.status==='Active').length; // badge: counts ALL active including force-added
+  const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for available seat math only
   const availSeats = totalSeats - filledSeats;
   const seatPct = totalSeats>0 ? Math.round(filledSeats/totalSeats*100) : 0;
 
@@ -360,7 +415,7 @@ function renderDashboard() {
   DB.settings.roomTypes.forEach(type => {
     const tRooms = DB.rooms.filter(r=>r.typeId===type.id);
     const typeTotalSeats = tRooms.length * type.capacity;
-    const typeFilledSeats = DB.students.filter(t=>t.status==='Active'&&tRooms.some(r=>r.id===t.roomId)).length;
+    const typeFilledSeats = DB.students.filter(t=>t.status==='Active'&&!t.isForced&&tRooms.some(r=>r.id===t.roomId)).length;
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
     seatBreakdown += `
@@ -581,7 +636,7 @@ function renderDashboard() {
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Free</div>
         </div>
         <div onclick="showSeatDetailModal('occupied')" style="background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Filled seats">
-          <div style="font-size:20px;font-weight:900;color:var(--red)">${filledSeats}</div>
+          <div style="font-size:20px;font-weight:900;color:var(--red)">${allActiveSeats}</div>
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Filled</div>
         </div>
       </div>
@@ -769,9 +824,9 @@ function printSeatAvailability() {
   const location = DB.settings.location || '';
   const now2 = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
   const totalSeats = DB.rooms.reduce((s,r)=>{const t=DB.settings.roomTypes.find(x=>x.id===r.typeId);return s+(t?t.capacity:1);},0);
-  const filledSeats = DB.students.filter(t=>t.status==='Active').length;
+  const allActiveSeats2 = DB.students.filter(t=>t.status==='Active').length; // badge: ALL active
+  const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for free seat calc
   const freeSeats = totalSeats - filledSeats;
-
   const floors = [...new Set(DB.rooms.map(r=>r.floor||'Unknown'))].sort();
   let body = '';
 
@@ -871,18 +926,14 @@ function printSeatAvailability() {
   <div class="summary">
     <div class="sbox"><div class="v">${DB.rooms.length}</div><div class="l">Rooms</div></div>
     <div class="sbox"><div class="v" style="color:#111">${totalSeats}</div><div class="l">Total Seats</div></div>
-    <div class="sbox"><div class="v" style="color:#dc2626">${filledSeats}</div><div class="l">Occupied</div></div>
+    <div class="sbox"><div class="v" style="color:#dc2626">${allActiveSeats2}</div><div class="l">Occupied</div></div>
     <div class="sbox"><div class="v" style="color:#16a34a">${freeSeats}</div><div class="l">Available</div></div>
   </div>
   ${body}
   <div class="footer">${escHtml(hostel)} · Room Visit Sheet · ${now2}</div>
   </body></html>`;
 
-  const w = safeOpenWindow(860, 800);
-  if(!w) return;
-  w.document.write(html);
-  w.document.close();
-  setTimeout(()=>w.print(), 500);
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────
 function showSeatDetailModal(type) {
@@ -1371,8 +1422,7 @@ function printMonthReport(monthKey, monthLabel) {
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
-  const w = safeOpenWindow(900, 700); if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
+  const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
   <style>
     body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:13px}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #c8a84b}
@@ -1417,9 +1467,8 @@ function printMonthReport(monthKey, monthLabel) {
     </tbody></table>
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>
-  </body></html>`);
-  w.document.close();
-  setTimeout(()=>w.print(),400);
+  </body></html>`;
+  _electronPDF(_mRptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+monthLabel.replace(/\s+/g,'-')+'.pdf', {pageSize:'A4'});
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2043,7 +2092,7 @@ function renderStudents() {
             <td style="padding:8px 6px" class="text-green fw-700">${fmtPKR(t.rent)}</td>
             <td style="padding:8px 6px">${statusBadge(t.status||'Active')}</td>
             <td style="padding:8px 4px">
-              <div style="display:flex;gap:3px;flex-wrap:wrap">
+              <div style="display:flex;gap:3px;flex-wrap:nowrap;white-space:nowrap">
                 <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:11px">👁</button>
                 <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="color:var(--blue);padding:4px 7px;font-size:11px">🔀</button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete" style="padding:4px 7px;font-size:11px">🗑</button>
@@ -2236,6 +2285,7 @@ function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
         '⚠️ Room Is At Full Capacity',
         `Room #${selectedRoom.number} (${roomType.name}) already has ${currentOcc}/${roomType.capacity} students. Do you want to force-add ${name} anyway? Room capacity display will remain at ${roomType.capacity} but this room will show as over-capacity.`,
         () => {
+          t.isForced = true; // FIX: force-added students don't count against available seats
           DB.students.push(t);
           const room2 = DB.rooms.find(r=>r.id===roomId);
           logActivity('Student Force-Added', name + ' force-added to full Room #' + (room2?.number||'?') + ' ('+currentOcc+'/'+roomType.capacity+' cap)', 'Student');
@@ -2486,24 +2536,50 @@ function clearAddStudentPhoto() {
 }
 function openAddStudentCamera() {
   const box = document.getElementById('add-student-cam-box'); if(!box) return;
-  if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported','error'); return; }
+  if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported on this device','error'); return; }
   // Stop any existing stream first
   const existVid = document.getElementById('add-student-cam-video');
   if(existVid?.srcObject){ existVid.srcObject.getTracks().forEach(t=>t.stop()); existVid.srcObject=null; }
   box.style.display = 'block';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
-    .then(stream=>{
-      const vid = document.getElementById('add-student-cam-video');
-      if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
-      vid.srcObject = stream;
-      vid._stream = stream;
-      vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
-      if(vid.readyState >= 3) vid.play().catch(()=>{});
-    })
-    .catch(e=>{
-      box.style.display='none';
-      toast('Camera error: '+(e.message||'Permission denied. Check camera access in settings.'),'error');
-    });
+
+  // FIX BUG-3: Check permission state first for a clear error message
+  const _startCam = () => {
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
+      .then(stream=>{
+        const vid = document.getElementById('add-student-cam-video');
+        if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
+        vid.srcObject = stream;
+        vid._stream = stream;
+        vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
+        if(vid.readyState >= 3) vid.play().catch(()=>{});
+      })
+      .catch(e=>{
+        box.style.display='none';
+        var msg;
+        if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
+          msg='📷 Camera access denied. On Windows: Settings → Privacy & Security → Camera → enable this app. Then restart.';
+        else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
+          msg='📷 No camera found. Please connect a camera and try again.';
+        else if(e.name==='NotReadableError'||e.name==='TrackStartError')
+          msg='📷 Camera is in use by another app. Close other apps using the camera and retry.';
+        else
+          msg='📷 Camera error: '+(e.message||'Unknown error. Check camera connection.');
+        toast(msg,'error');
+      });
+  };
+
+  if(navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({name:'camera'}).then(function(ps){
+      if(ps.state==='denied'){
+        box.style.display='none';
+        toast('📷 Camera permission blocked. Go to Windows Settings → Privacy & Security → Camera and enable this app, then restart.','error');
+        return;
+      }
+      _startCam();
+    }).catch(_startCam); // permissions API not fully supported — just try
+  } else {
+    _startCam();
+  }
 }
 function captureAddStudentPhoto() {
   const vid = document.getElementById('add-student-cam-video');
@@ -2552,23 +2628,49 @@ function clearEditStudentPhoto() {
 }
 function openEditStudentCamera() {
   const box = document.getElementById('edit-student-cam-box'); if(!box) return;
-  if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported','error'); return; }
+  if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported on this device','error'); return; }
   const existVid = document.getElementById('edit-student-cam-video');
   if(existVid?.srcObject){ existVid.srcObject.getTracks().forEach(t=>t.stop()); existVid.srcObject=null; }
   box.style.display = 'block';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
-    .then(stream=>{
-      const vid = document.getElementById('edit-student-cam-video');
-      if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
-      vid.srcObject = stream;
-      vid._stream = stream;
-      vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
-      if(vid.readyState >= 3) vid.play().catch(()=>{});
-    })
-    .catch(e=>{
-      box.style.display='none';
-      toast('Camera error: '+(e.message||'Permission denied. Check camera access in settings.'),'error');
-    });
+
+  // FIX BUG-3: Check permission state first
+  const _startCam = () => {
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
+      .then(stream=>{
+        const vid = document.getElementById('edit-student-cam-video');
+        if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
+        vid.srcObject = stream;
+        vid._stream = stream;
+        vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
+        if(vid.readyState >= 3) vid.play().catch(()=>{});
+      })
+      .catch(e=>{
+        box.style.display='none';
+        var msg;
+        if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
+          msg='📷 Camera access denied. On Windows: Settings → Privacy & Security → Camera → enable this app. Then restart.';
+        else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
+          msg='📷 No camera found. Please connect a camera and try again.';
+        else if(e.name==='NotReadableError'||e.name==='TrackStartError')
+          msg='📷 Camera is in use by another app. Close other apps using the camera and retry.';
+        else
+          msg='📷 Camera error: '+(e.message||'Unknown error. Check camera connection.');
+        toast(msg,'error');
+      });
+  };
+
+  if(navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({name:'camera'}).then(function(ps){
+      if(ps.state==='denied'){
+        box.style.display='none';
+        toast('📷 Camera permission blocked. Go to Windows Settings → Privacy & Security → Camera and enable this app, then restart.','error');
+        return;
+      }
+      _startCam();
+    }).catch(_startCam);
+  } else {
+    _startCam();
+  }
 }
 function captureEditStudentPhoto() {
   const vid = document.getElementById('edit-student-cam-video');
@@ -2663,10 +2765,8 @@ function printStudentCard(id) {
   const rtype=room?DB.settings.roomTypes.find(x=>x.id===room.typeId):null;
   const payHistory=DB.payments.filter(p=>p.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totalPaid=payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  // FIX 3: use unpaid field for correct outstanding balance on partial payments
   const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const w=safeOpenWindow(1000,720); if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><title>Student Profile — ${t.name}</title>
+  const _cardHtml = `<!DOCTYPE html><html><head><title>Student Profile — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
@@ -2753,9 +2853,9 @@ function printStudentCard(id) {
     </tbody></table>`:'<p style="color:#94a3b8;text-align:center;padding:12px">No payment records</p>'}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · ${DB.settings.location||''}</div>
-  </body></html>`);
-  w.document.close();
-  setTimeout(()=>w.print(),400);
+  </body></html>`;
+  var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+  _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
@@ -2841,14 +2941,53 @@ function showEditStudentModal(id) {
 
 function submitEditStudent(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
-  t.name=document.getElementById('f-tname').value.trim()||t.name;
-  t.fatherName=document.getElementById('f-tfname').value.trim();
-  t.cnic=document.getElementById('f-tcnic').value.trim();
-  t.phone=document.getElementById('f-tphone').value.trim();
-  t.email=document.getElementById('f-temail').value.trim();
-  const _newRoomId = document.getElementById('f-troom').value;
-  // FIX 21: if room changed, update pending payment records so they reflect new room
-  if(_newRoomId && _newRoomId !== t.roomId) {
+  const _originalRoomId = t.roomId; // capture BEFORE any changes
+
+  // FIX-STUDENT-UPDATE: Collect all new values FIRST before mutating anything.
+  // Previously, data was mutated before the room capacity check, so a failed
+  // validation left t in a corrupted in-memory state that could be saved later.
+  const _newName   = document.getElementById('f-tname')?.value.trim()  || t.name;
+  const _newFather = document.getElementById('f-tfname')?.value.trim() || '';
+  const _newCnic   = document.getElementById('f-tcnic')?.value.trim()  || '';
+  const _newPhone  = document.getElementById('f-tphone')?.value.trim() || '';
+  const _newEmail  = document.getElementById('f-temail')?.value.trim() || '';
+  const _newOccup  = document.getElementById('f-toccup')?.value.trim() || t.occupation || '';
+  const _newRoomId = document.getElementById('f-troom')?.value || t.roomId;
+  const _newJoin   = document.getElementById('f-tjoin')?.value  || t.joinDate || '';
+  const _newStatus = document.getElementById('f-tstat')?.value  || t.status;
+  const _newEmerg  = document.getElementById('f-temerg')?.value.trim()   || '';
+  const _newAddr   = document.getElementById('f-taddress')?.value.trim() || '';
+  const _newNotes  = document.getElementById('f-tnotes')?.value.trim()   || '';
+  const _photoData = document.getElementById('edit-student-photo-data')?.value;
+
+  // Capacity guard — validate BEFORE touching any data
+  if (_newRoomId && _newRoomId !== _originalRoomId) {
+    const newRoom = DB.rooms.find(r => r.id === _newRoomId);
+    if (newRoom) {
+      const newRoomType = getRoomType(newRoom);
+      const othersInRoom = DB.students.filter(s => s.id !== id && s.roomId === _newRoomId && s.status === 'Active').length;
+      if (newRoomType && othersInRoom >= newRoomType.capacity) {
+        toast('That room is now full — please choose a different room.', 'error');
+        return; // exit BEFORE any mutation — data stays clean
+      }
+    }
+  }
+
+  // All checks passed — now apply changes
+  t.name            = _newName;
+  t.fatherName      = _newFather;
+  t.cnic            = _newCnic;
+  t.phone           = _newPhone;
+  t.email           = _newEmail;
+  t.occupation      = _newOccup;
+  t.joinDate        = _newJoin;
+  t.status          = _newStatus;
+  t.emergencyContact= _newEmerg;
+  t.address         = _newAddr;
+  t.notes           = _newNotes;
+
+  // FIX 21: if room changed, update pending payment records
+  if (_newRoomId && _newRoomId !== _originalRoomId) {
     const _newRoom = DB.rooms.find(r=>r.id===_newRoomId);
     DB.payments.forEach(p=>{
       if(p.studentId===t.id && p.status==='Pending') {
@@ -2857,25 +2996,10 @@ function submitEditStudent(id) {
       }
     });
   }
-  t.roomId=_newRoomId;
-  t.joinDate=document.getElementById('f-tjoin').value;
-  t.status=document.getElementById('f-tstat').value;
-  t.emergencyContact=document.getElementById('f-temerg').value.trim();
-  t.address=document.getElementById('f-taddress')?.value.trim()||'';
-  t.notes=document.getElementById('f-tnotes').value.trim();
-  const photoData = document.getElementById('edit-student-photo-data')?.value;
-  if(photoData !== undefined) { if(!t.docs) t.docs={}; t.docs.photo = photoData; }
-  // Capacity guard: if room changed, ensure the new room still has space
-  const newRoom = DB.rooms.find(r => r.id === t.roomId);
-  if (newRoom) {
-    const newRoomType = getRoomType(newRoom);
-    // Count occupants excluding this student (they may already be in this room)
-    const othersInRoom = DB.students.filter(s => s.id !== t.id && s.roomId === t.roomId && s.status === 'Active').length;
-    if (newRoomType && othersInRoom >= newRoomType.capacity) {
-      toast('That room is now full — please choose a different room.', 'error');
-      return;
-    }
-  }
+  t.roomId = _newRoomId;
+
+  if(_photoData !== undefined) { if(!t.docs) t.docs={}; t.docs.photo = _photoData; }
+
   saveDB(); closeModal(); renderPage('students'); toast('Student updated','success');
 }
 function confirmDeleteStudent(id) {
@@ -3081,9 +3205,9 @@ function renderPayments() {
   </div>
   <div class="table-wrap">
     <table style="border-collapse:collapse;width:100%">
-      <thead><tr><th style="padding:8px 8px">Student</th><th style="padding:8px 8px">Room</th><th style="padding:8px 8px">Month</th><th style="padding:8px 8px">Rent/Mo</th><th style="padding:8px 6px;min-width:70px">Adm.Chr</th><th style="padding:8px 6px;min-width:90px">Ext.Chr</th><th style="padding:8px 6px;min-width:80px">Conc.Chr</th><th style="padding:8px 8px">Amount Paid</th><th style="padding:8px 8px">Unpaid</th><th style="padding:8px 8px">Method</th><th style="padding:8px 8px">Status</th><th style="padding:8px 8px">Info</th><th style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
+      <thead><tr><th style="padding:8px 8px">Student</th><th style="padding:8px 8px">Room</th><th style="padding:8px 8px">Month</th><th style="padding:8px 8px">Rent/Mo</th><th style="padding:8px 6px;min-width:70px">Adm.Fee</th><th style="padding:8px 6px;min-width:90px">Extra Chrgs</th><th style="padding:8px 6px;min-width:80px">Concession</th><th style="padding:8px 8px">Amt Paid</th><th style="padding:8px 8px">Unpaid</th><th style="padding:8px 8px">Method</th><th style="padding:8px 8px">Status</th><th style="padding:8px 8px">Date</th><th style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
       <tbody>
-        ${pays.length===0?'<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
+        ${pays.length===0?'<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
         pays.map(p=>{
           const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
           return '<tr>'
@@ -3098,8 +3222,8 @@ function renderPayments() {
           +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
           +'<td style="padding:8px 8px">'+pmBadge(p.method)+'</td>'
           +'<td style="padding:8px 8px">'+statusBadge(p.status)+'</td>'
-          +'<td style="font-size:10px;color:var(--text3);white-space:nowrap;padding:8px 8px"><div>'+(p.paidDate?'✅ '+fmtDate(p.paidDate):(p.dueDate?'⏰ '+fmtDate(p.dueDate):'—'))+'</div><div style="margin-top:2px">👤 '+(p.collectedBy||'—')+'</div></td>'
-          +'<td style="padding:6px 4px;min-width:130px"><div style="display:flex;gap:2px;align-items:center;flex-wrap:wrap">'
+          +'<td style="padding:8px 8px;font-size:12px;color:var(--text3)">'+(fmtDate(p.date)||'—')+'</td>'
+          +'<td style="padding:6px 4px;white-space:nowrap"><div style="display:flex;gap:2px;align-items:center;flex-wrap:nowrap">'
           +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:11px;padding:3px 6px">✓ Paid</button>':'')
           +'<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:11px;padding:3px 6px">🧾</button>'
           +'<button class="btn btn-sm btn-icon" onclick="sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:11px;padding:3px 6px">📱</button>'
@@ -3328,24 +3452,25 @@ function getExtraChargesData() {
   const items = [];
   const rows = document.querySelectorAll('.extra-charge-row');
   rows.forEach(row=>{
-    const label = row.querySelector('.extra-charge-label-input')?.value?.trim();
-    const amt = parseFloat(row.querySelector('.extra-charge-amt-input')?.value)||0;
-    if(label && amt>0) items.push({label, amount:amt});
+    const desc = row.querySelector('.extra-charge-desc-input')?.value?.trim() || '';
+    const amt  = parseFloat(row.querySelector('.extra-charge-amt-input')?.value)||0;
+    if(amt>0) items.push({label: desc||'Extra Charge', description: desc, amount: amt});
   });
   return items;
 }
 
-function addExtraChargeRow(label='', amount='') {
+function addExtraChargeRow(descOrLabel='', amount='') {
   const list = document.getElementById('extra-charges-list');
   if(!list) return;
   const rowId = 'ecr_' + Date.now();
   const div = document.createElement('div');
   div.className = 'extra-charge-row';
   div.id = rowId;
+  div.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
   div.innerHTML = `
-    <input class="form-control extra-charge-label-input" type="text" placeholder="Charge name (e.g. Cooler Fee)" value="${escHtml(label)}" style="flex:1" oninput="recalcUnpaid()">
-    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" oninput="recalcUnpaid()">
-    <button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcUnpaid()" title="Remove">✕</button>
+    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" style="width:120px;flex-shrink:0" oninput="recalcUnpaid()">
+    <input class="form-control extra-charge-desc-input" type="text" placeholder="Description (e.g. Cooler Fee)" value="${escHtml(descOrLabel)}" style="flex:1" oninput="recalcUnpaid()">
+    <button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcUnpaid()" title="Remove" style="flex-shrink:0">✕</button>
   `;
   list.appendChild(div);
   recalcUnpaid();
@@ -3372,7 +3497,31 @@ function showAddPaymentForStudent(studentId) {
     <div class="form-grid">
       <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${t.rent||16000}" oninput="recalcUnpaidPS()"></div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-ps-unpaid" type="number" value="${t.rent||16000}" readonly style="color:var(--red);font-weight:700;background:var(--bg3)"></div>
+      <!-- Concession + Extra Charges -->
+      <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession / Discount (PKR)</label>
+            <input class="form-control" id="f-ps-concession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaidPS()">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession Description <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label>
+            <input class="form-control" id="f-ps-concession-desc" placeholder="e.g. Scholarship, Hardship…">
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+          <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">
+            <span>➕ Extra Charges</span>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 9px" onclick="addExtraChargeRow()">+ Add</button>
+          </label>
+          <div id="extra-charges-list"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <span style="color:var(--text3)">Total Extra:</span>
+            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">PKR 0</span>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-ps-unpaid" type="number" value="${t.rent||16000}" readonly style="color:var(--red);font-weight:700;background:var(--bg3)" title="Auto-calculated: Rent + Extra − Concession − Paid"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="f-ps-method">${pmOpts}</select></div>
       <div class="field"><label>Month</label><input class="form-control" id="f-ps-month" value="${thisMonthLabel()}"></div>
       <div class="field"><label>Status</label>
@@ -3417,8 +3566,14 @@ function showAddPaymentForStudent(studentId) {
 function recalcUnpaidPS() {
   const rent  = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
   const paid  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+  const conc  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+  var extra = 0;
+  document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
+  var etEl = document.getElementById('extra-charges-total');
+  if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
+  const unpaid = Math.max(0, rent + extra - conc - paid);
   const unpaidEl = document.getElementById('f-ps-unpaid');
-  if (unpaidEl) unpaidEl.value = Math.max(0, rent - paid);
+  if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
 function submitPaymentForStudent() {
   const studentId   = document.getElementById('f-ps-studentId')?.value || '';
@@ -3489,8 +3644,15 @@ function submitPaymentForStudent() {
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
   const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
-  const unpaid      = Math.max(0, monthlyRent - paidAmount);
+  const concessionPS = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+  const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
+  const extraChargesPS = getExtraChargesData();
+  const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
+  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS - concessionPS);
+  const unpaid      = Math.max(0, totalDuePS - paidAmount);
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
+  // FIX 8a: persist rent change on student record
+  if (monthlyRent > 0 && t.rent !== monthlyRent) { t.rent = monthlyRent; }
   const _newPayIdPS = 'p_' + uid();
   DB.payments.push({
     id: _newPayIdPS,
@@ -3501,7 +3663,9 @@ function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
-    extraCharges: [], extraTotal: 0,
+    extraCharges: extraChargesPS, extraTotal: extraTotalPS,
+    concession: concessionPS, concessionDesc: concessionDescPS,
+    discount: concessionPS,
     totalRent: monthlyRent,
     method: document.getElementById('f-ps-method')?.value || 'Cash',
     month: document.getElementById('f-ps-month')?.value || '',
@@ -3792,7 +3956,7 @@ function showEditPaymentModal(id) {
     const ecl = document.getElementById('extra-charges-list');
     if(ecl && p.extraCharges && p.extraCharges.length) {
       ecl.innerHTML = '';
-      p.extraCharges.forEach(c => addExtraChargeRow(c.label, c.amount));
+      p.extraCharges.forEach(c => addExtraChargeRow(c.description||c.desc||c.label||'', c.amount));
     }
     recalcUnpaid();
   }, 50);
@@ -3836,6 +4000,14 @@ function submitEditPayment(id) {
   p.dueDate        = document.getElementById('f-pdue')?.value    || p.dueDate;
   p.paidDate       = p.status==='Paid' ? p.date : '';
   p.notes          = document.getElementById('f-pnotes')?.value  || '';
+  // FIX 8a: If warden changed monthly rent, persist it on the student record
+  // so all future auto-generated payments use the new rent.
+  if (p.studentId) {
+    const _st = DB.students.find(s => s.id === p.studentId);
+    if (_st && monthlyRent > 0 && _st.rent !== monthlyRent) {
+      _st.rent = monthlyRent;
+    }
+  }
   logActivity('Payment Updated', `${p.studentName||''} — ${p.month||''}`, 'Finance');
   saveDB();
   toast('Payment updated','success');
@@ -3958,34 +4130,13 @@ function deleteExpense(id) {
 function showClearAllMenu() {
   showModal('modal-md','🗑️ Clear Data',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.35);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--text2)">
-      ⚠️ <strong style="color:var(--red)">Warning:</strong> These actions are <strong>permanent and cannot be undone</strong>. Export a backup first!
+      ⚠️ <strong style="color:var(--red)">Warning:</strong> This action is <strong>permanent and cannot be undone</strong>. Export a backup first!
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-weight:700;color:var(--text);font-size:14px">💳 Clear All Payments</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${DB.payments.length} payment records will be deleted</div>
-        </div>
-        <button class="btn btn-danger btn-sm" onclick="clearPayments(true)">Clear Payments</button>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-weight:700;color:var(--text);font-size:14px">💸 Clear All Expenses</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${DB.expenses.length} expense records will be deleted</div>
-        </div>
-        <button class="btn btn-danger btn-sm" onclick="clearExpenses(true)">Clear Expenses</button>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-weight:700;color:var(--text);font-size:14px">👥 Clear All Students</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${DB.students.length} students + their payments will be removed</div>
-        </div>
-        <button class="btn btn-danger btn-sm" onclick="clearStudents(true)">Clear Students</button>
-      </div>
       <div style="background:linear-gradient(135deg,rgba(224,82,82,0.12),rgba(224,82,82,0.06));border:1px solid rgba(224,82,82,0.4);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
         <div>
           <div style="font-weight:800;color:var(--red);font-size:14px">☢️ Clear Everything</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">Removes ALL students, payments, expenses & cancellations</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Removes ALL students, payments, expenses &amp; cancellations</div>
         </div>
         <button class="btn btn-danger btn-sm" style="background:var(--red);color:#fff" onclick="clearAllDataWithPassword()">🔒 CLEAR ALL</button>
       </div>
@@ -5167,8 +5318,14 @@ function renderSettings() {
             <div class="field"><label>Email Address</label><input class="form-control" id="cfg-email" type="email" value="${escHtml(s.email||'')}" oninput="liveUpdateSetting('email',this.value)" placeholder="hostel@email.com"></div>
             <div class="field"><label>System Version</label><input class="form-control" id="cfg-ver" value="${escHtml(s.version||'v2.0')}" oninput="liveUpdateSetting('version',this.value)"></div>
             <div class="field col-full">
-              <label>🔤 Hostel Name Font Style</label>
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;max-height:280px;overflow-y:auto;padding-right:2px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+                🔤 Hostel Name Font Style
+                <span style="flex:1"></span>
+                <span style="font-size:11px;color:var(--text3);font-weight:400;margin-right:6px">Show font picker</span>
+                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="DB.settings.showFontPicker=this.checked;saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none'" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
+              </label>
+              <div id="font-picker-grid-wrap" style="display:${s.showFontPicker!==false?'block':'none'}">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;margin-top:8px;max-height:280px;overflow-y:auto;padding-right:2px">
                 ${[
                   ['DM Serif Display','DM Serif'],
                   ['Playfair Display','Playfair'],
@@ -5199,6 +5356,7 @@ function renderSettings() {
                 <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Preview: </span>
                 <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--gold2)">${escHtml(s.hostelName||'DAMAM Boys Hostel')}</span>
               </div>
+              </div><!-- /font-picker-grid-wrap -->
             </div>
             <div class="field col-full">
               <label>Currency</label>
@@ -5491,44 +5649,20 @@ function renderLicenseSettingsPanel() {
     </div>
     <div style="margin-top:12px;background:rgba(30,64,128,0.1);border:1px solid rgba(30,64,128,0.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text3);line-height:1.6">
       To deactivate, reset, or prepare for uninstall, click <strong style="color:var(--text2)">Manage License</strong>
-      above. You will need your warden password to unlock those actions.
-      You can also reach this from <strong style="color:var(--text2)">Help → License Settings</strong> in the menu bar.
+      above. You can also reach this from <strong style="color:var(--text2)">Help → License Settings</strong> in the menu bar.
     </div>
   </div>`;
 }
 
 function openLicenseSettingsWindow() {
-  // Fix #3 — require warden password before opening license settings
-  showModal('modal-sm','🔐 License Settings — Verify Identity',`
-    <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Enter your warden password to access license management.</div>
-    <div class="field">
-      <label>Warden Password</label>
-      <input class="form-control" id="lic-pwd-input" type="password" placeholder="Enter password…" autocomplete="off"
-        onkeydown="if(event.key==='Enter') _doLicenseUnlock()">
-    </div>
-    <div id="lic-pwd-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">❌ Incorrect password.</div>
-  `,`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="_doLicenseUnlock()">🔓 Unlock</button>`);
-  setTimeout(()=>{ const i=document.getElementById('lic-pwd-input'); if(i) i.focus(); },120);
-}
-function _doLicenseUnlock() {
-  const pwd = document.getElementById('lic-pwd-input')?.value||'';
-  const errEl = document.getElementById('lic-pwd-err');
-  const user = CUR_USER || (DB.settings && DB.settings.wardens && DB.settings.wardens[0]);
-  const storedPwd = user?.password || user?.pass || '';
-  if (!pwd || (storedPwd && pwd !== storedPwd)) {
-    if(errEl) errEl.style.display='block';
-    const inp = document.getElementById('lic-pwd-input');
-    if(inp) { inp.value=''; inp.focus(); }
-    return;
-  }
-  closeModal();
+  // Password gate removed — warden already authenticated via app login
   if (window.electronAPI && window.electronAPI.licenseOpenSettings) {
     window.electronAPI.licenseOpenSettings();
   } else {
     toast('License settings window not available in dev/browser mode.', 'info');
   }
 }
+function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   saveDB();
@@ -6199,7 +6333,6 @@ function downloadDetailPDF(type) {
   const rev = calcRevenue(key);
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
   const net = rev - totalExp;
-  const w = safeOpenWindow(1000, 720); if (!w) return;
   const css = `<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:28px;font-size:12px}.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #c8a84b;margin-bottom:20px}.ht{font-size:20px;font-weight:800}.hs{font-size:11px;color:#666;margin-top:3px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f1f5f9;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f8fafc}.gr{color:#16a34a;font-weight:700}.re{color:#dc2626;font-weight:700}.go{color:#854d0e;font-weight:700}.kg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.kc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;text-align:center}.kl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px}.kv{font-size:20px;font-weight:900;color:#1e293b}.ft{margin-top:20px;padding-top:10px;border-top:1px solid #e2e8f0;text-align:center;font-size:10px;color:#94a3b8}@media print{body{padding:16px}}</style>`;
   let body = `<div class="hdr"><div><div class="ht">${DB.settings.hostelName}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
@@ -6222,8 +6355,8 @@ function downloadDetailPDF(type) {
     body+=`<table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>${DB.rooms.map(r=>{const t=getRoomType(r);const oc=getRoomOccupancy(r);const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name);return `<tr><td class="go">#${r.number}</td><td>${r.floor}</td><td>${t.name}</td><td>${t.capacity} beds</td><td class="${oc>0?'gr':''}">${oc}/${t.capacity}</td><td class="gr">PKR ${Number(r.rent||0).toLocaleString()}</td><td class="${oc>0?'gr':'go'}">${oc>0?'Occupied':'Vacant'}</td><td>${names.join(', ')||'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No rooms</td></tr>'}</tbody></table>`;
   }
   body += `<div class="ft">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>`;
-  w.document.write(`<!DOCTYPE html><html><head><title>${type} detail</title>${css}</head><body>${body}<script>window.onload=function(){window.print();}<\/script></body></html>`);
-  w.document.close();
+  _electronPDF(`<!DOCTYPE html><html><head><title>${type} detail</title>${css}</head><body>${body}</body></html>`,
+    (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+type+'_'+key+'.pdf', {pageSize:'A4'});
 }
 
 function downloadReportDetailPDF(detailId) {
@@ -6236,7 +6369,6 @@ function downloadReportDetailPDF(detailId) {
   const hostel = DB.settings.hostelName || 'DAMAM Hostel';
   const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expense Breakdown',payments:'Payment Transactions'};
   const title = titles[detailId] || 'Report';
-  const w = safeOpenWindow(1000, 720); if (!w) return;
   let tableHTML = '';
   if(detailId==='financial'||detailId==='payments') {
     const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
@@ -6295,9 +6427,9 @@ function downloadReportDetailPDF(detailId) {
       <tr style="background:#f8fafc;font-weight:700"><td colspan="5" style="text-align:right;padding:8px 12px">Grand Total</td><td class="red">${fmtPKR(trTotal2)}</td></tr>
       </tbody></table>`;
   }
-  w.document.write(`<!DOCTYPE html><html><head><title>${title} — ${hostel}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:3px solid #c8a84b;margin-bottom:24px}.title{font-size:22px;font-weight:800}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}.kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}.kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:6px}.kpi .val{font-size:20px;font-weight:900}.summary-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin-bottom:20px;font-size:15px}h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin:16px 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:8px 12px;border-bottom:1px solid #f1f5f9}.green{color:#16a34a;font-weight:700}.red{color:#dc2626;font-weight:700}.gold{color:#854d0e;font-weight:700}.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}@media print{body{padding:16px}}</style></head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px">${mo} · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${tableHTML}<div class="footer">Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`);
-  w.document.close();
-  setTimeout(()=>{ w.print(); }, 400);
+  _electronPDF(`<!DOCTYPE html><html><head><title>${title} — ${hostel}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:3px solid #c8a84b;margin-bottom:24px}.title{font-size:22px;font-weight:800}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}.kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}.kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:6px}.kpi .val{font-size:20px;font-weight:900}.summary-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin-bottom:20px;font-size:15px}h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin:16px 0 10px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:8px 12px;border-bottom:1px solid #f1f5f9}.green{color:#16a34a;font-weight:700}.red{color:#dc2626;font-weight:700}.gold{color:#854d0e;font-weight:700}.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}@media print{body{padding:16px}}</style></head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px">${mo} · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${tableHTML}<div class="footer">Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`,
+    hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + title.replace(/\s+/g,'-') + '_' + mo + '.pdf',
+    { pageSize: 'A4' });
 }
 
 function printReport() {
@@ -6309,8 +6441,7 @@ function printReport() {
   const _printKey=reportPeriod==='month'?thisMonth():thisYear();
   const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
-  const w=safeOpenWindow(1100, 800); if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
+  const _rptHtml = `<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
@@ -6367,9 +6498,8 @@ function printReport() {
     ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#854d0e">Total Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
-  </body></html>`);
-  w.document.close();
-  setTimeout(()=>w.print(),400);
+  </body></html>`;
+  _electronPDF(_rptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Report_'+(reportPeriod==='month'?thisMonth():thisYear())+'.pdf', {pageSize:'A4'});
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -6464,20 +6594,23 @@ function showBackupRestoreModal() {
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Last snapshot: ${ts}</div>
     </div>
 
-    <!-- Fix #7: Gmail Auto-Backup Section -->
-    <div style="background:var(--bg3);border:1px solid rgba(234,67,53,0.35);border-radius:10px;padding:16px;margin-bottom:14px">
+    <!-- FIX: Google Drive Backup Section (replaces Gmail) -->
+    <div style="background:var(--bg3);border:1px solid rgba(66,133,244,0.35);border-radius:10px;padding:16px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:30px;height:30px;background:rgba(234,67,53,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">📧</div>
+        <div style="width:30px;height:30px;background:rgba(66,133,244,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">☁️</div>
         <div>
-          <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#ea4335">Gmail Auto-Backup</div>
-          <div style="font-size:11px;color:var(--text3)">Send backup to Gmail automatically or manually</div>
+          <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4285f4">Google Drive Backup</div>
+          <div style="font-size:11px;color:var(--text3)">Save backup file directly to Google Drive</div>
         </div>
       </div>
-      <div class="field" style="margin-bottom:10px">
-        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Backup Gmail Address</label>
-        <input class="form-control" id="backup-gmail" type="email" placeholder="yourname@gmail.com"
-          value="${DB.settings.backupGmail||''}"
-          oninput="DB.settings.backupGmail=this.value.trim();saveDB()">
+      <!-- FIX-GDRIVE: Gmail account input field -->
+      <div class="field" style="margin-bottom:12px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Google Account (Gmail) for Drive Upload</label>
+        <input class="form-control" id="gdrive-email" type="email" placeholder="yourname@gmail.com"
+          value="${escHtml(DB.settings.driveEmail||'')}"
+          oninput="DB.settings.driveEmail=this.value.trim();saveDB()"
+          style="font-size:12px">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">Saved for reference — used to open the correct Drive account in your browser.</div>
       </div>
       <div class="field" style="margin-bottom:12px">
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Auto-Backup Schedule</label>
@@ -6492,12 +6625,12 @@ function showBackupRestoreModal() {
         <div id="schedule-next-lbl" style="font-size:11px;color:var(--text3);margin-top:5px">${getNextBackupLabel()}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="sendBackupToGmail()" style="background:linear-gradient(135deg,#ea4335,#c5221f);border:none;flex:1;display:flex;align-items:center;justify-content:center;gap:6px">
-          <span style="font-size:14px">📧</span> Send Backup to Gmail Now
+        <button class="btn btn-primary" onclick="sendBackupToDrive()" style="background:linear-gradient(135deg,#4285f4,#1a6ed8);border:none;flex:1;display:flex;align-items:center;justify-content:center;gap:6px">
+          <span style="font-size:14px">☁️</span> Backup Now to Google Drive
         </button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;padding:8px 10px;background:var(--bg4);border-radius:6px">
-        💡 This opens Gmail in your browser with the backup data. Copy the backup text into the email body and send. For fully automatic cloud backup, save the file to Google Drive or Dropbox.
+        💡 Clicking <strong>Backup Now</strong> downloads the JSON file and opens your Google Drive${DB.settings.driveEmail?` (<strong>${escHtml(DB.settings.driveEmail)}</strong>)`:''} in the browser. Upload the file there to save it in the cloud.
       </div>
     </div>
 
@@ -6545,27 +6678,6 @@ function exportBackup(mode) {
   }
 }
 
-function exportBackup(mode) {
-  const json = JSON.stringify(DB, null, 2);
-  const now = new Date();
-  const filename = 'DAMAM2_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
-  if(mode==='json') {
-    const blob = new Blob([json], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    // FIX #6: Defer revoke — synchronous revoke can cancel the download before it starts
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    toast('Backup downloaded: ' + filename, 'success');
-  } else {
-    navigator.clipboard.writeText(json).then(()=>{
-      toast('Data copied to clipboard!', 'success');
-    }).catch(()=>{
-      toast('Copy failed — try the Download button instead', 'error');
-    });
-  }
-}
-
 // ── Fix #7: Gmail Backup Helpers ─────────────────────────────────────────────
 function getNextBackupLabel() {
   const sched = DB.settings && DB.settings.backupSchedule;
@@ -6583,29 +6695,21 @@ function updateBackupScheduleLabel() {
   const el = document.getElementById('schedule-next-lbl');
   if(el) el.textContent = getNextBackupLabel();
 }
-function sendBackupToGmail() {
-  const gmail = (document.getElementById('backup-gmail')?.value || DB.settings.backupGmail || '').trim();
-  if(!gmail) { toast('Please enter a Gmail address first.', 'error'); document.getElementById('backup-gmail')?.focus(); return; }
-  // First download the backup file
+// FIX: Replace Gmail backup with direct Google Drive backup
+function sendBackupToDrive() {
+  // Step 1: Download the backup JSON file to PC
   exportBackup('json');
-  // Then open Gmail compose with pre-filled details
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'});
-  const hostel = (DB.settings && DB.settings.hostelName) || 'DAMAM Hostel';
-  const subject = encodeURIComponent(`${hostel} — Data Backup ${dateStr}`);
-  const body = encodeURIComponent(
-    `Dear Warden,\n\nPlease find the hostel data backup attached for ${dateStr}.\n\n` +
-    `Summary:\n• Students: ${DB.students.length}\n• Payments: ${DB.payments.length}\n• Rooms: ${DB.rooms.length}\n\n` +
-    `The backup JSON file has been downloaded to your device. Please attach it to this email before sending.\n\n` +
-    `— ${hostel} Management System`
-  );
-  const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(gmail)}&su=${subject}&body=${body}`;
-  openExternalLink(gmailUrl); // FIX: use openExternalLink so it opens in the system browser, not a new Electron window
-  DB.settings.lastBackupDate = now.toISOString().slice(0,10);
+  // Step 2: Open Google Drive upload page in system browser
+  var driveUrl = 'https://drive.google.com/drive/my-drive';
+  openExternalLink(driveUrl);
+  // Update last backup date
+  DB.settings.lastBackupDate = new Date().toISOString().slice(0,10);
   saveDB();
   updateBackupScheduleLabel();
-  toast('Backup downloaded + Gmail opened! Attach the file and send.', 'success');
+  toast('✅ Backup downloaded! Now upload it to Google Drive in your browser.', 'success');
 }
+// Keep old name as alias for any auto-backup calls
+function sendBackupToGmail() { sendBackupToDrive(); }
 // Auto-backup check on app start — runs after DB is loaded
 function checkAutoBackupSchedule() {
   const sched = DB.settings && DB.settings.backupSchedule;
@@ -6617,14 +6721,66 @@ function checkAutoBackupSchedule() {
     const daysSince = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
     if (daysSince < intervalDays) return; // not due yet
   }
-  // Due — show reminder toast
-  const gmail = DB.settings.backupGmail || '';
-  setTimeout(()=>{
-    toast(`⏰ Scheduled backup is due${gmail?' — open Backup & Restore to send to '+gmail:''}`, 'info');
+  // FIX-B2: Show a prominent sticky banner with a one-click "Backup Now" button
+  // instead of a silent toast the warden might miss or dismiss accidentally.
+  setTimeout(function() {
+    if (document.getElementById('backup-due-banner')) return; // no duplicates
+    var lastStr = last
+      ? 'Last backup: ' + new Date(last).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) + '.'
+      : 'No backup has been made yet.';
+    var banner = document.createElement('div');
+    banner.id = 'backup-due-banner';
+    banner.style.cssText = [
+      'position:fixed','top:0','left:0','right:0','z-index:99999',
+      'background:linear-gradient(90deg,#1e3c6a,#2a5298)',
+      'color:#e8eef8','font-size:13px','font-weight:600',
+      'padding:10px 20px','display:flex','align-items:center',
+      'gap:12px','box-shadow:0 3px 16px rgba(0,0,0,0.55)'
+    ].join(';');
+    banner.innerHTML =
+      '<span style="font-size:18px">⏰</span>' +
+      '<span style="flex:1">Scheduled backup is due. ' + lastStr + ' Back up now to avoid data loss.</span>' +
+      '<button onclick="sendBackupToDrive();document.getElementById("backup-due-banner").remove()" ' +
+        'style="background:#e6c96e;color:#071428;border:none;border-radius:7px;padding:6px 16px;' +
+        'font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">💾 Backup Now</button>' +
+      '<button onclick="document.getElementById("backup-due-banner").remove()" ' +
+        'style="background:rgba(255,255,255,0.1);color:#e8eef8;border:none;border-radius:7px;' +
+        'padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap">Dismiss</button>';
+    document.body.prepend(banner);
   }, 3000);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── MIDNIGHT AUTO-BACKUP SCHEDULER (BUG-5 FIX) ───────────────────────────────
+// Fires at 00:00 every night. If a backup schedule is set AND it is due,
+// runs sendBackupToDrive() automatically — no user action needed.
+(function _initMidnightBackup() {
+  function _msUntilMidnight() {
+    var n = new Date();
+    var m = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 15); // 00:00:15
+    return m - n;
+  }
+  function _midnightCheck() {
+    try {
+      var sched = DB && DB.settings && DB.settings.backupSchedule;
+      if (!sched || sched === 'off') return;
+      var intervalDays = {daily:1,'2days':2,'3days':3,weekly:7,monthly:30}[sched] || 0;
+      if (!intervalDays) return;
+      var last = DB.settings.lastBackupDate;
+      var daysSince = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : 999;
+      if (daysSince >= intervalDays) {
+        sendBackupToDrive();
+        if (typeof toast === 'function') toast('🌙 Midnight auto-backup completed to Google Drive.', 'success');
+      }
+    } catch(e) { console.warn('[AutoBackup] midnight check error:', e); }
+  }
+  // Schedule first tick at next midnight, then repeat every 24 h
+  setTimeout(function _firstMidnightTick() {
+    _midnightCheck();
+    setInterval(_midnightCheck, 24 * 60 * 60 * 1000);
+  }, _msUntilMidnight());
+})();
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _initDBFields(d) {
   // FIX #14: Canonical single source of truth for all DB field normalisation.
@@ -6659,6 +6815,7 @@ function _initDBFields(d) {
   // Appearance
   if (!d.settings.accentColor) d.settings.accentColor = '#e05252';
   if (!d.settings.hostelNameFont) d.settings.hostelNameFont = 'DM Serif Display';
+  if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
   if (!d.settings.currency) d.settings.currency = 'PKR';
   if (d.settings.autoMonthGenerate === undefined) d.settings.autoMonthGenerate = true;
@@ -8971,29 +9128,64 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<div style="margin-top:12px;padding-top:6px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center">';
   html += '<div style="font-size:9px;color:#aaa">Generated by <strong>' + escHtml(appName) + '</strong> · '+escHtml(hostel)+' · '+monthLabel+'</div>';
   html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#854d0e">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
-  html += '</div></body></html>';
+  html += '</div>';
 
-  // FIX: Use Electron's printToPDF (landscape) if available — avoids the rotated/broken PDF issue.
-  // Falls back to a proper Blob-URL popup for non-Electron contexts.
-  if (window.electronAPI && window.electronAPI.receiptSavePDF) {
-    var suggestedName = escHtml(hostel).replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')
-      + '_Fee-Report_' + monthLabel.replace(/\s+/g,'-') + '.pdf';
-    window.electronAPI.receiptSavePDF(html, suggestedName, { landscape: true, pageSize: 'A4' })
-      .then(function(result) {
-        if (result.success) {
-          toast('✅ Fee report PDF saved: ' + result.filePath.split(/[\\\/]/).pop(), 'success');
-        } else if (result.reason !== 'cancelled') {
-          toast('❌ PDF failed: ' + (result.reason || 'Unknown error'), 'error');
-        }
-      }).catch(function() { toast('❌ PDF error. Please try again.', 'error'); });
-    return;
-  }
-  // Fallback: Blob-URL popup
-  var blob = new Blob([html], { type: 'text/html' });
-  var burl = URL.createObjectURL(blob);
-  var w = window.open(burl, '_blank', 'width=1300,height=860');
-  if (!w) { toast('⚠️ Popup blocked — allow popups and try again.', 'error'); URL.revokeObjectURL(burl); return; }
-  setTimeout(function(){ URL.revokeObjectURL(burl); }, 8000);
+  // FIX-PDF-SHARE: Build share text for WhatsApp / Gmail
+  var _shareText = hostel + ' — Fee Report ' + monthLabel + '\n'
+    + 'Students: ' + total + ' · Active: ' + active + '\n'
+    + 'Collected: ' + fmtPKR(grandPaid) + '\n'
+    + 'Expenses: '  + fmtPKR(grandExpenses) + '\n'
+    + 'Pending: '   + fmtPKR(_pdfPending) + '\n'
+    + 'Net Available: ' + fmtPKR(netFund);
+  var _waPhone = (CUR_USER&&CUR_USER.phone) ? CUR_USER.phone.replace(/[^0-9]/g,'').replace(/^0/,'92') : '';
+  var _waLink  = 'whatsapp://send?' + (_waPhone?'phone='+_waPhone+'&':'') + 'text=' + encodeURIComponent(_shareText);
+  var _gmailLink = 'https://mail.google.com/mail/?view=cm&su=' + encodeURIComponent(hostel+' Fee Report '+monthLabel) + '&body=' + encodeURIComponent(_shareText);
+
+  // FIX-PRINT-HANG: Auto-print script removed — calling window.print() automatically
+  // in a child window.open() hangs the Electron renderer on Windows. User uses the button.
+  html += '</body></html>';
+
+  // ── IN-APP VIEWER (always — no window.open, no external save dialog) ─────────
+  // Removes old viewer if open, builds a full-screen overlay with toolbar,
+  // renders the report inside an <iframe> using srcdoc — works in Electron.
+  var _viewerId = '_inapp_report_viewer';
+  var _oldViewer = document.getElementById(_viewerId);
+  if (_oldViewer) _oldViewer.remove();
+
+  // Build suggestedName for Save PDF button (used by electronAPI if available)
+  var _suggestedName = (hostel).replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')
+    + '_Fee-Report_' + monthLabel.replace(/\s+/g,'-') + '.pdf';
+
+  // Print handler: prefer electronAPI native PDF, fall back to iframe print
+  var _printHandler = 'if(window.electronAPI&&window.electronAPI.receiptSavePDF){'
+    + 'var fr=document.getElementById(\'_rpt_frame\');'
+    + 'if(fr)window.electronAPI.receiptSavePDF(fr.srcdoc||\'\',"' + _suggestedName + '",{landscape:true,pageSize:\'A4\'});'
+    + '}else{'
+    + 'var fr2=document.getElementById(\'_rpt_frame\');if(fr2)fr2.contentWindow.print();'
+    + '}';
+
+  var _viewer = document.createElement('div');
+  _viewer.id = _viewerId;
+  _viewer.style.cssText = 'position:fixed;inset:0;z-index:99998;background:#1e293b;display:flex;flex-direction:column';
+  _viewer.innerHTML =
+    // ── toolbar ──
+    '<div style="background:#0f1a2e;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:2px solid #c8a84b">'
+    + '<span style="font-size:18px">📄</span>'
+    + '<span style="color:#e6c96e;font-weight:800;font-size:14px">Students Fee Report — '+escHtml(monthLabel)+'</span>'
+    + '<div style="flex:1"></div>'
+    + '<button onclick="'+_printHandler+'" style="background:#1e5fd4;color:#fff;border:none;padding:8px 18px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;margin-right:4px">🖨️ Print / Save PDF</button>'
+    + '<button onclick="openExternalLink(\''+_waLink+'\')" style="background:#25d366;color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;margin-right:4px">📲 WhatsApp</button>'
+    + '<button onclick="openExternalLink(\''+_gmailLink+'\')" style="background:#ea4335;color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;margin-right:8px">📧 Gmail</button>'
+    + '<button onclick="document.getElementById(\''+_viewerId+'\').remove()" style="background:rgba(255,255,255,0.1);color:#e8eef8;border:1px solid rgba(255,255,255,0.2);padding:8px 14px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer">✕ Close</button>'
+    + '</div>'
+    // ── iframe ──
+    + '<iframe id="_rpt_frame" style="flex:1;border:none;width:100%;background:#fff"></iframe>';
+
+  document.body.appendChild(_viewer);
+
+  // Use srcdoc — reliable in Electron same-renderer, no blob URL issues
+  var _frame = document.getElementById('_rpt_frame');
+  _frame.srcdoc = html;
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────
@@ -9184,10 +9376,7 @@ function downloadCancellationReport() {
 
   html += `</body></html>`;
 
-  const w = window.open('','_blank','width=900,height=700');
-  if(!w){ toast('Popup blocked — allow popups and try again','error'); return; }
-  w.document.write(html);
-  w.document.close();
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -9827,24 +10016,20 @@ function archPrintTab(tab){
   else if(tab==='transfers'){var tot3=a.trfList.reduce(function(s,t){return s+Number(t.amount||0);},0);body='<table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Received By</th><th>Amount</th></tr></thead><tbody>'+a.trfList.map(function(t){return '<tr><td>'+_archFmtD(t.date)+'</td><td>'+escHtml(t.description||t.note||'--')+'</td><td>'+escHtml(t.method||'--')+'</td><td>'+escHtml(t.receivedBy||'--')+'</td><td>'+_archFmt(t.amount)+'</td></tr>';}).join('')+'</tbody><tfoot><tr><td colspan="4">Total</td><td>'+_archFmt(tot3)+'</td></tr></tfoot></table>';}
   else if(tab==='students'){body='<table><thead><tr><th>#</th><th>Name</th><th>Father Name</th><th>Room</th><th>Phone</th><th>Rent</th></tr></thead><tbody>'+a.stuList.map(function(s,i){return '<tr><td>'+(i+1)+'</td><td>'+escHtml(s.name||'--')+'</td><td>'+escHtml(s.fatherName||'--')+'</td><td>#'+escHtml(String(s.roomNumber||'--'))+'</td><td>'+escHtml(s.phone||'--')+'</td><td>'+_archFmt(s.rent||0)+'</td></tr>';}).join('')+'</tbody></table>';}
   var w=window.open('','_blank','width=960,height=720'); if(!w){alert('Allow popups');return;}
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #c8a84b;padding-bottom:14px;margin-bottom:18px}.hn{font-size:18px;font-weight:900;color:#0f1a2e}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}tfoot td{background:#f1f5f9;font-weight:700}.np{margin-bottom:14px}.pb{padding:8px 20px;background:#0f1a2e;color:#e6c96e;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700}@media print{.np{display:none!important}}</style></head><body>');
-  w.document.write('<div class="np"><button class="pb" onclick="window.print()">Print / Save PDF</button></div>');
-  w.document.write('<div class="hdr"><div><div class="hn">'+escHtml(hostel)+'</div><div style="font-size:13px;font-weight:700;margin-top:6px">'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</div></div><div style="font-size:10px;color:#888">'+new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})+'</div></div>');
-  w.document.write(body);
-  w.document.write('</body></html>');
-  w.document.close(); setTimeout(function(){w.print();},400);
+  var _archHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #c8a84b;padding-bottom:14px;margin-bottom:18px}.hn{font-size:18px;font-weight:900;color:#0f1a2e}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}tfoot td{background:#f1f5f9;font-weight:700}</style></head><body>'
+    +'<div class="hdr"><div><div class="hn">'+escHtml(hostel)+'</div><div style="font-size:13px;font-weight:700;margin-top:6px">'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</div></div><div style="font-size:10px;color:#888">'+new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})+'</div></div>'
+    +body+'</body></html>';
+  _electronPDF(_archHtml, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+mN+'-'+yr+'_'+(tab||'report')+'.pdf', {pageSize:'A4'});
 }
 
 function archPrintYearDetail(){
   var c=document.getElementById('archYdContent'); if(!c) return;
   var hostel=(DB.settings&&DB.settings.hostelName)||'DAMAM Hostel';
   var w=window.open('','_blank','width=960,height=720'); if(!w){alert('Allow popups');return;}
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Annual Report '+_archSelYear+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}.np{margin-bottom:14px}.pb{padding:8px 20px;background:#0f1a2e;color:#e6c96e;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700}@media print{.np{display:none!important}}</style></head><body>');
-  w.document.write('<div class="np"><button class="pb" onclick="window.print()">Print / Save PDF</button></div>');
-  w.document.write('<h2 style="margin-bottom:16px;font-size:18px;font-weight:900;color:#0f1a2e">'+escHtml(hostel)+' — Annual Report '+_archSelYear+'</h2>');
-  w.document.write(c.innerHTML);
-  w.document.write('</body></html>');
-  w.document.close(); setTimeout(function(){w.print();},400);
+  var _annHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Annual Report '+_archSelYear+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}</style></head><body>'
+    +'<h2 style="margin-bottom:16px;font-size:18px;font-weight:900;color:#0f1a2e">'+escHtml(hostel)+' — Annual Report '+_archSelYear+'</h2>'
+    +c.innerHTML+'</body></html>';
+  _electronPDF(_annHtml, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Annual-Report_'+_archSelYear+'.pdf', {pageSize:'A4', landscape:true});
 }
 
 // Hook renderPage to call archAfterRender when archive page is shown

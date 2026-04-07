@@ -186,31 +186,10 @@
   <!-- Actions Card -->
   <div class="card card-danger">
     <div class="card-title">⚠️ License Actions</div>
+    <!-- FIX: Password gate removed per request — actions are available directly -->
 
-    <!-- Password Gate -->
-    <div style="background:rgba(224,82,82,0.06);border:1px solid rgba(224,82,82,0.22);border-radius:10px;padding:13px 15px;margin-bottom:14px">
-      <label style="font-size:11px;color:#a0b4cc;font-weight:700;display:block;margin-bottom:8px">
-        🔑 Enter Warden Password to Unlock Actions
-      </label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <div style="position:relative;flex:1">
-          <input id="gate-pw" type="password" placeholder="Your current warden password…"
-            style="width:100%;box-sizing:border-box;padding:10px 36px 10px 12px;background:#0f1a2e;border:1px solid #1e3050;border-radius:8px;color:#e8eef8;font-size:13px;font-family:inherit;outline:none"
-            onfocus="this.style.borderColor='#c8a84b'" onblur="this.style.borderColor='#1e3050'"
-            onkeydown="if(event.key==='Enter')gateVerify()">
-          <span onclick="var i=document.getElementById('gate-pw');i.type=i.type==='password'?'text':'password'"
-            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:#4d6a90;font-size:14px">👁</span>
-        </div>
-        <button onclick="gateVerify()"
-          style="padding:9px 16px;background:linear-gradient(135deg,#1e5fd4,#2a7af4);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">
-          Unlock
-        </button>
-      </div>
-      <div id="gate-msg" style="font-size:11px;margin-top:6px;min-height:14px"></div>
-    </div>
-
-    <!-- Action Buttons — locked until password verified -->
-    <div id="actions-wrap" style="opacity:0.3;pointer-events:none;transition:opacity 0.3s">
+    <!-- Action Buttons -->
+    <div id="actions-wrap">
 
       <!-- Deactivate -->
       <button class="action-btn btn-deactivate" id="btn-deactivate" onclick="doDeactivate()">
@@ -253,63 +232,10 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    var _gateUnlocked = false;
+    // FIX: Password gate removed — _gateUnlocked always true
+    var _gateUnlocked = true;
 
-    // ── Password gate ─────────────────────────────────────────────────────────
-    function gateVerify() {
-      var inp  = document.getElementById('gate-pw');
-      var msg  = document.getElementById('gate-msg');
-      var wrap = document.getElementById('actions-wrap');
-      var entered = inp.value.trim();
-      if (!entered) { msg.style.color = '#ff6b6b'; msg.textContent = '⚠️ Please enter your password.'; return; }
-
-      // Read warden passwords from localStorage (same origin as main app)
-      var wardenPwOk = false;
-      try {
-        var hostelId = sessionStorage.getItem('active_hostel') || 'hostel_1';
-        var curRole  = sessionStorage.getItem('h_role') || 'warden1';
-        var wcfg = localStorage.getItem('warden_config_' + hostelId);
-        if (wcfg) {
-          var w = JSON.parse(wcfg);
-          // Check current logged-in warden first
-          if (curRole === 'warden1' && entered === (w.warden1 && w.warden1.pw)) {
-            wardenPwOk = true; // Warden 1 always has permission
-          } else if (curRole === 'warden2' && entered === (w.warden2 && w.warden2.pw)) {
-            if (w.warden2 && w.warden2.canSettings === false) {
-              msg.style.color = '#ff6b6b';
-              msg.textContent = '⛔ Warden 2 does not have permission for license actions.';
-              inp.value = ''; inp.focus(); return;
-            }
-            wardenPwOk = true;
-          } else if (entered === (w.warden1 && w.warden1.pw)) {
-            wardenPwOk = true; // Allow warden1 password always
-          }
-        } else {
-          // Fallback: default passwords if config not yet saved
-          if (entered === 'warden1') wardenPwOk = true;
-        }
-      } catch(e) {
-        msg.style.color = '#ff6b6b'; msg.textContent = '⚠️ Could not verify password. Try again.'; return;
-      }
-
-      if (!wardenPwOk) {
-        msg.style.color = '#ff6b6b'; msg.textContent = '❌ Wrong password. Try again.';
-        inp.value = ''; inp.focus(); return;
-      }
-
-      _gateUnlocked = true;
-      wrap.style.opacity = '1';
-      wrap.style.pointerEvents = 'auto';
-      msg.style.color = '#2ec98a';
-      msg.textContent = '✅ Unlocked. Actions are now available.';
-      inp.value = ''; inp.disabled = true;
-      document.querySelector('[onclick="gateVerify()"]').disabled = true;
-    }
-
-    function gateCheck() {
-      if (!_gateUnlocked) { showToast('⚠️ Enter your warden password first to unlock actions.'); return false; }
-      return true;
-    }
+    function gateCheck() { return true; } // kept for safety — no-op
 
     // ── Load license info on open ─────────────────────────────────────────────
     (async function init() {

@@ -255,147 +255,118 @@ function printReceipt(payId) {
   showModal('modal-md', '🧾 Receipt', html, _rcptFooter);
 }
 
-// ── [FIX-R6] PRINT RECEIPT — uses Blob URL instead of document.write() ────────
+// ── PRINT RECEIPT — in-page overlay (FIX: no window.open — hangs Electron) ────
 function doPrintReceipt(payId) {
-  // [FIX-R1] Assign receipt number on finalize (print)
+  // Assign receipt number on finalize
   if (payId) _assignReceiptNo(payId);
 
-  var el = document.getElementById('rc-print');
-  if (!el) return;
-
-  // Refresh the receipt HTML with the now-assigned receipt number
+  // Refresh HTML with now-assigned receipt number
   if (payId) {
     var fresh = buildReceiptHTML(payId);
-    if (fresh) el.outerHTML = fresh;
-    el = document.getElementById('rc-print');
-    if (!el) return;
+    if (fresh) {
+      var elOld = document.getElementById('rc-print');
+      if (elOld) elOld.outerHTML = fresh;
+    }
   }
+  var el = document.getElementById('rc-print');
+  if (!el) { if (typeof toast==='function') toast('Receipt not ready','error'); return; }
 
   var printDateTime = new Date().toLocaleString('en-PK',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   var wardenName = (typeof CUR_USER!=='undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Authorized Warden';
 
-  // [FIX-R6] Use Blob URL — no deprecated document.write()
-  var fullHtml = '<!DOCTYPE html><html><head><title>Receipt</title>'
-    + '<style>'
-    + '@page { size: 80mm auto; margin: 4mm; }'
-    + '@media print { .no-print { display:none !important; } body { background:#fff !important; } }'
-    + '* { box-sizing:border-box; }'
-    + 'html,body { margin:0; padding:8px 0; font-family:monospace; background:#f5f5f0; color:#111; }'
-    + '#rc-print { max-width:340px; margin:0 auto; box-shadow:none !important; border:none !important; background:#fff !important; }'
-    + '.print-meta { max-width:340px; margin:6px auto 0; font-size:9px; color:#888; text-align:center; font-family:monospace; }'
-    + '.print-btn  { display:block; margin:14px auto 0; padding:10px 36px; background:#111; color:#fff; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; font-family:sans-serif; }'
-    + '</style>'
-    + '</head><body>'
-    + el.outerHTML
-    + '<div class="print-meta">Printed: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>'
-    + '<button class="print-btn no-print" onclick="window.print()">🖨️ Print Receipt</button>'
-    + '<script>setTimeout(function(){ window.print(); }, 400);<\/script>'
-    + '</body></html>';
+  // FIX-PRINT: Inject a print-only overlay into the CURRENT page.
+  // No window.open() — that hangs the Electron renderer on Windows.
+  // @media print CSS hides everything except the overlay, then we call window.print().
+  var oldO = document.getElementById('_rcp_print_overlay');
+  var oldS = document.getElementById('_rcp_print_style');
+  if (oldO) oldO.remove();
+  if (oldS) oldS.remove();
 
-  var blob = new Blob([fullHtml], { type: 'text/html' });
-  var url  = URL.createObjectURL(blob);
-  var w    = window.open(url, '_blank', 'width=480,height=900');
-  if (!w) {
-    if (typeof toast === 'function')
-      toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
-    URL.revokeObjectURL(url);
-    return;
-  }
-  // Revoke blob URL after window is done using it
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+  var overlay = document.createElement('div');
+  overlay.id = '_rcp_print_overlay';
+  overlay.style.display = 'none'; // hidden on screen; shown only via @media print
+  overlay.innerHTML = el.outerHTML
+    + '<div style="text-align:center;font-size:9px;color:#888;margin-top:8px;font-family:monospace">'
+    + 'Printed: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>';
+  document.body.appendChild(overlay);
+
+  var style = document.createElement('style');
+  style.id = '_rcp_print_style';
+  style.textContent = '@media print {'
+    + '  body > *:not(#_rcp_print_overlay) { display:none !important; }'
+    + '  #_rcp_print_overlay { display:block !important; padding:8px 0; background:#f5f5f0; }'
+    + '  @page { size: 80mm auto; margin: 4mm; }'
+    + '}';
+  document.head.appendChild(style);
+
+  window.print();
+
+  // Cleanup overlay after print dialog closes
+  setTimeout(function() {
+    var s = document.getElementById('_rcp_print_style');
+    var o = document.getElementById('_rcp_print_overlay');
+    if (s) s.remove();
+    if (o) o.remove();
+  }, 2000);
 }
 
 // ── EXPORT RECEIPT AS PDF ─────────────────────────────────────────────────────
-// [FIX-R2] Renamed payId parameter to resolvedPayId — no var redeclaration.
-// [FIX-R1] Counter assigned here (on finalize), not in buildReceiptHTML.
+// FIX: Uses in-page print overlay — NO window.open() which hangs Electron.
 async function exportReceiptPDF(payId) {
-  // [FIX-R2] Resolve payId without re-declaring the parameter
   var resolvedPayId = payId;
   if (!resolvedPayId) {
     var el = document.getElementById('rc-print');
     if (el && el.dataset.payId) resolvedPayId = el.dataset.payId;
   }
-
   if (!resolvedPayId) {
     if (typeof toast === 'function') toast('❌ Cannot identify payment for this receipt.', 'error');
     return;
   }
 
-  // [FIX-R1] Assign receipt number now (on finalize PDF save)
+  // Assign receipt number on finalize
   _assignReceiptNo(resolvedPayId);
 
-  // ── Electron native path ──────────────────────────────────────────────────
-  if (window.electronAPI && window.electronAPI.receiptSavePDF) {
-    var studentName = '';
-    try {
-      var p = DB.payments.find(function(x){ return x.id === resolvedPayId; });
-      if (p) studentName = '_' + (p.studentName || '').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g,'');
-    } catch(e) {}
+  var receiptCard = buildReceiptHTML(resolvedPayId) || (function(){
+    var elFb = document.getElementById('rc-print');
+    return elFb ? elFb.outerHTML : '';
+  })();
+  if (!receiptCard) { if (typeof toast==='function') toast('Receipt data not found','error'); return; }
 
-    var receiptCard = buildReceiptHTML(resolvedPayId) || (function(){
-      var el = document.getElementById('rc-print');
-      return el ? el.outerHTML : '';
-    })();
-
-    var fullHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-      + '<style>'
-      + '* { box-sizing:border-box; margin:0; padding:0; }'
-      + '@page { size: A4; margin: 18mm; }'
-      + 'body { background:#fff; padding:20px; font-family:monospace; }'
-      + '#rc-print { max-width:360px; margin:0 auto; border:1px solid #ccc; background:#fff; }'
-      + '</style></head><body>'
-      + receiptCard
-      + '</body></html>';
-
-    var suggestedName = 'Receipt' + studentName + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-
-    try {
-      var result = await window.electronAPI.receiptSavePDF(fullHtml, suggestedName);
-      if (result.success) {
-        if (typeof toast === 'function') toast('✅ PDF saved: ' + result.filePath.split(/[\\\/]/).pop(), 'success');
-      } else if (result.reason !== 'cancelled') {
-        if (typeof toast === 'function') toast('❌ PDF failed: ' + (result.reason || 'Unknown error'), 'error');
-      }
-    } catch(e) {
-      if (typeof toast === 'function') toast('❌ PDF error. Please try again.', 'error');
-    }
-    return;
-  }
-
-  // ── Fallback: popup + browser Print → Save as PDF ─────────────────────────
-  var el = document.getElementById('rc-print');
-  if (!el) return;
-
-  // [FIX-R6] Use Blob URL in fallback too
   var printDateTime = new Date().toLocaleString('en-PK',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   var wardenName = (typeof CUR_USER!=='undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Authorized Warden';
 
-  var fbHtml = '<!DOCTYPE html><html><head><title>Receipt PDF</title>'
-    + '<style>'
-    + '@page { size: A4; margin: 18mm; }'
-    + '@media print { .no-print { display:none !important; } body { background:#fff !important; } }'
-    + '* { box-sizing:border-box; }'
-    + 'html,body { margin:0; padding:20px; font-family:monospace; background:#eee; color:#111; }'
-    + '#rc-print { max-width:360px; margin:0 auto; box-shadow:none !important; border:1px solid #ccc !important; background:#fff !important; }'
-    + '.print-meta { max-width:360px; margin:8px auto 0; font-size:9px; color:#888; text-align:center; font-family:monospace; }'
-    + '.save-btn   { display:block; margin:16px auto 0; padding:10px 40px; background:#1e5fd4; color:#fff; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }'
-    + '</style>'
-    + '</head><body>'
-    + el.outerHTML
-    + '<div class="print-meta">Generated: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>'
-    + '<button class="save-btn no-print" onclick="window.print()">💾 Save as PDF (Print → Save as PDF)</button>'
-    + '<script>setTimeout(function(){ window.print(); }, 500);<\/script>'
-    + '</body></html>';
+  // FIX: In-page overlay — avoids window.open() hanging Electron
+  var oldO = document.getElementById('_rcp_print_overlay');
+  var oldS = document.getElementById('_rcp_print_style');
+  if (oldO) oldO.remove();
+  if (oldS) oldS.remove();
 
-  var blob2 = new Blob([fbHtml], { type: 'text/html' });
-  var url2  = URL.createObjectURL(blob2);
-  var w2    = window.open(url2, '_blank', 'width=680,height=900');
-  if (!w2) {
-    if (typeof toast === 'function') toast('⚠️ Popup blocked — allow popups and try again.', 'error');
-    URL.revokeObjectURL(url2);
-    return;
-  }
-  setTimeout(function(){ URL.revokeObjectURL(url2); }, 5000);
+  var overlay = document.createElement('div');
+  overlay.id = '_rcp_print_overlay';
+  overlay.style.display = 'none';
+  overlay.innerHTML = receiptCard
+    + '<div style="text-align:center;font-size:9px;color:#888;margin-top:8px;font-family:monospace">'
+    + 'Generated: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>';
+  document.body.appendChild(overlay);
+
+  var style = document.createElement('style');
+  style.id = '_rcp_print_style';
+  style.textContent = '@media print {'
+    + '  body > *:not(#_rcp_print_overlay) { display:none !important; }'
+    + '  #_rcp_print_overlay { display:block !important; padding:20px; background:#fff; }'
+    + '  @page { size: A4; margin: 18mm; }'
+    + '}';
+  document.head.appendChild(style);
+
+  if (typeof toast === 'function') toast('📄 Opening print dialog — choose "Save as PDF" as the destination.', 'info');
+  window.print();
+
+  setTimeout(function() {
+    var s = document.getElementById('_rcp_print_style');
+    var o = document.getElementById('_rcp_print_overlay');
+    if (s) s.remove();
+    if (o) o.remove();
+  }, 2000);
 }
 
 // ── WHATSAPP PAYMENT REMINDER ─────────────────────────────────────────────────

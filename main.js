@@ -255,9 +255,34 @@ function deactivateLicense() {
   }
 }
 
+// ROOT CAUSE FIX: open license settings in a separate child window so the
+// main app (and the user's logged-in session) is never replaced or interrupted.
+let _settingsWin = null;
 function openLicenseSettings() {
   if (!mainWindow) return;
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
+  // Reuse existing window if already open
+  if (_settingsWin && !_settingsWin.isDestroyed()) {
+    _settingsWin.focus();
+    return;
+  }
+  _settingsWin = new BrowserWindow({
+    width: 720, height: 700,
+    parent: mainWindow,
+    modal: false,
+    title: 'License Settings — DAMAM Hostel',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      devTools: !IS_PROD
+    },
+    backgroundColor: '#060c18',
+    show: false
+  });
+  _settingsWin.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
+  _settingsWin.setMenuBarVisibility(false);
+  _settingsWin.once('ready-to-show', () => _settingsWin.show());
+  _settingsWin.on('closed', () => { _settingsWin = null; });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -465,6 +490,8 @@ ipcMain.handle('license:deactivateWithDialog', async () => {
       query: { reason: 'not_activated', message: encodeURIComponent('License deactivated. Please enter a new license key.') }
     });
   }
+  // Close the settings child window (if open) after deactivation
+  if (_settingsWin && !_settingsWin.isDestroyed()) _settingsWin.close();
   return result;
 });
 
@@ -493,6 +520,8 @@ ipcMain.handle('license:reset', async () => {
       query: { reason: 'not_activated', message: encodeURIComponent('License has been fully reset. Please enter your license key.') }
     });
   }
+  // Close the settings child window (if open) after reset
+  if (_settingsWin && !_settingsWin.isDestroyed()) _settingsWin.close();
   return result;
 });
 
@@ -574,8 +603,13 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
     webPreferences: { nodeIntegration: false, contextIsolation: true }
   });
 
+  // FIX-PDF: Write HTML to a temp file instead of using data URI.
+  // encodeURIComponent() on large HTML bloats size past Chromium's URL limit,
+  // causing "PDF generation failed". loadFile() has no such limit.
+  const tmpFile = path.join(os.tmpdir(), 'damam_pdf_' + Date.now() + '.html');
   try {
-    await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+    fs.writeFileSync(tmpFile, htmlContent, 'utf8');
+    await pdfWin.loadFile(tmpFile);
     const pdfData = await pdfWin.webContents.printToPDF({
       pageSize, printBackground: true, landscape,
       margins: marginsMM
@@ -583,9 +617,19 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
     fs.writeFileSync(filePath, pdfData);
     return { success: true, filePath };
   } catch (e) {
-    console.error('[DAMAM] PDF generation failed:', e.message);
-    return { success: false, reason: 'PDF generation failed. Please try again.' };
+    console.error('[DAMAM] PDF generation failed:', e.message, e.code);
+    // FIX-B4: Surface actionable disk/permission errors instead of a generic message
+    let reason = 'PDF generation failed. Please try again.';
+    if (e.code === 'ENOSPC') {
+      reason = 'PDF failed: your disk is full. Free up space and try again.';
+    } else if (e.code === 'EACCES' || e.code === 'EPERM') {
+      reason = 'PDF failed: cannot write to temp folder. Check disk permissions.';
+    } else if (e.code === 'ENOENT') {
+      reason = 'PDF failed: temp folder not found. Restart the app and try again.';
+    }
+    return { success: false, reason };
   } finally {
+    try { fs.unlinkSync(tmpFile); } catch(_) {}  // clean up temp file
     pdfWin.destroy();
   }
 });
