@@ -1,4 +1,4 @@
-# DAMAM Boys Hostel — Management System (v3 Merged)
+# HOSTIX offline hostel management system
 
 Offline desktop app built with Electron.
 All data stored locally in browser `localStorage` — no internet required.
@@ -115,10 +115,10 @@ All data is stored in **localStorage** on this device.
 - `_checkDefaultPasswords` now correctly checks each warden against their own default
 - Cross-tab sync guard uses `Array.isArray()` — empty arrays no longer overwrite live data
 - `mainWindow` null-guard added to `write-file` IPC handler (crash fix on rapid close)
-- `allowRunningInsecureContent` is now unconditionally `false`
+- `allowRunningInsecureContent` is now unconditionally `false.`
 - Backup export now includes the archive collection
 
 ### New features
 - 7-day backup reminder toast
 - Receipt PDF uses native `printToPDF` (no popup window needed)
-- `npm run test:license` runs the full 25-test license suite
+- `npm run test: license` runs the full 25-test license suite
