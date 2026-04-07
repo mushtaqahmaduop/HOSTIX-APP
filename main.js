@@ -22,6 +22,17 @@ const fs     = require('fs');
 const crypto = require('crypto');
 const os     = require('os');
 
+// ── Auto Updater ──────────────────────────────────────────────────────────────
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.autoDownload    = true;   // download silently in background
+  autoUpdater.autoInstallOnAppQuit = true; // install when user quits
+  autoUpdater.logger = require('electron').app ? null : console; // silent in prod
+} catch (e) {
+  console.warn('[DAMAM] electron-updater not available:', e.message);
+}
+
 let mainWindow;
 
 // Hex-encoded secret — MUST match _SECRET in keygen.js exactly
@@ -412,6 +423,34 @@ function createWindow() {
         },
         { label: 'License Settings', click: () => openLicenseSettings() },
         {
+          label: 'Check for Updates',
+          click: async () => {
+            if (!mainWindow) return;
+            if (!autoUpdater || !IS_PROD) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'info', title: 'Updates',
+                message: 'Update checking is only available in production builds.'
+              });
+              return;
+            }
+            try {
+              const result = await autoUpdater.checkForUpdates();
+              if (!result || !result.updateInfo) {
+                dialog.showMessageBox(mainWindow, {
+                  type: 'info', title: 'Up to Date',
+                  message: '✅ You have the latest version of DAMAM Hostel.'
+                });
+              }
+            } catch (e) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'warning', title: 'Update Check Failed',
+                message: 'Could not check for updates.',
+                detail: 'Please check your internet connection and try again.'
+              });
+            }
+          }
+        },
+        {
           label: 'License Info',
           click: () => {
             if (!mainWindow) return;
@@ -690,9 +729,97 @@ ipcMain.on('write-file', (_e, filePath, data) => {
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// AUTO UPDATER
+// ════════════════════════════════════════════════════════════════════════════
+function setupAutoUpdater() {
+  if (!autoUpdater) return;
+
+  // Update available — ask user if they want to download
+  autoUpdater.on('update-available', (info) => {
+    if (!mainWindow) return;
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `DAMAM Hostel v${info.version} is available`,
+      detail: 'A new version is downloading in the background.\nThe app will update automatically when you close it.',
+      buttons: ['OK']
+    });
+  });
+
+  // No update — silent, no dialog needed
+  autoUpdater.on('update-not-available', () => {
+    console.log('[DAMAM] App is up to date.');
+  });
+
+  // Download progress — send to renderer for optional progress bar
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update-download-progress', {
+        percent:  Math.round(progress.percent),
+        bytesPerSecond: progress.bytesPerSecond,
+        transferred: progress.transferred,
+        total: progress.total
+      });
+    }
+  });
+
+  // Downloaded — prompt to restart now or later
+  autoUpdater.on('update-downloaded', (info) => {
+    if (!mainWindow) return;
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Ready',
+      message: `DAMAM Hostel v${info.version} is ready to install`,
+      detail: 'Restart now to apply the update, or it will install automatically when you next close the app.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      cancelId: 1
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  // Error — log only, no popup (avoid scaring users for network issues)
+  autoUpdater.on('error', (err) => {
+    console.error('[DAMAM] Auto-update error:', err.message);
+  });
+}
+
+// IPC: renderer can manually trigger update check (e.g. from Help menu)
+ipcMain.handle('update:check', async () => {
+  if (!autoUpdater) return { available: false, reason: 'updater_not_available' };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { available: !!result, version: result?.updateInfo?.version };
+  } catch (e) {
+    return { available: false, reason: e.message };
+  }
+});
+
+ipcMain.handle('update:install', () => {
+  if (autoUpdater) autoUpdater.quitAndInstall();
+});
+
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   const { session } = require('electron');
+session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+  callback({
+    responseHeaders: {
+      ...details.responseHeaders,
+      'Content-Security-Policy': [
+        "default-src 'self';" +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.sheetjs.com;" +
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com;" +
+        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;" +
+        "img-src 'self' data: blob: https:;" +
+        "connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.sheetjs.com;" +
+        "worker-src 'self' blob:;"
+      ]
+    }
+  });
+});
   const ALLOWED_PERMS = ['clipboard-read', 'clipboard-sanitized-write'];
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMS.includes(permission));
@@ -701,6 +828,17 @@ app.whenReady().then(() => {
     return ALLOWED_PERMS.includes(permission);
   });
   createWindow();
+
+  // ── Auto Update (runs silently after window is ready) ─────────────────────
+  if (IS_PROD && autoUpdater) {
+    // Wait 3 seconds after launch before checking — avoids slowing startup
+    setTimeout(() => {
+      setupAutoUpdater();
+      autoUpdater.checkForUpdates().catch(e =>
+        console.warn('[DAMAM] Update check failed:', e.message)
+      );
+    }, 3000);
+  }
 });
 
 app.on('window-all-closed', () => {

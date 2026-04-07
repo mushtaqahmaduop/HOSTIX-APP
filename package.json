@@ -8,25 +8,23 @@
   },
   "main": "main.js",
   "scripts": {
-    "start":           "electron . --dev",
-    "build":           "electron-builder --win --x64",
-    "build:portable":  "electron-builder --win portable --x64",
-    "build:installer": "electron-builder --win nsis --x64",
-    "test:license":    "node test-license.js"
+    "start": "electron . --dev",
+    "build": "electron-builder --win --x64 --ia32",
+    "build:portable": "electron-builder --win portable --x64 --ia32",
+    "build:installer": "electron-builder --win nsis --x64 --ia32",
+    "build:all": "electron-builder --win --x64 --ia32",
+    "test:license": "node test-license.js"
   },
   "build": {
     "appId": "com.damam.hostel",
     "productName": "DAMAM Boys Hostel",
     "copyright": "Copyright © 2025 MUSHTAQ AHMAD",
-
     "asar": true,
     "asarUnpack": [],
-
     "directories": {
       "output": "dist",
       "buildResources": "assets"
     },
-
     "files": [
       "renderer/**/*",
       "main.js",
@@ -43,18 +41,28 @@
       "!**/Thumbs.db",
       "!**/*.map"
     ],
-
     "win": {
       "target": [
-        { "target": "nsis",     "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
       ],
       "icon": "assets/logo.ico",
       "requestedExecutionLevel": "asInvoker",
       "fileAssociations": [],
       "verifyUpdateCodeSignature": false
     },
-
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -71,15 +79,21 @@
       "displayLanguageSelector": false,
       "include": null
     },
-
     "portable": {
-      "artifactName": "DAMAM-Hostel-Portable-${version}.exe"
+      "artifactName": "DAMAM-Hostel-Portable-${version}-${arch}.exe"
     },
-
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "mushtaqahmaduop",
+      "repo": "HOSTIX-APP",
+      "releaseType": "new release"
+    }
   },
   "devDependencies": {
-    "electron": "^34.5.8",
-    "electron-builder": "^26.8.1"
+    "electron": "^22.3.27",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
