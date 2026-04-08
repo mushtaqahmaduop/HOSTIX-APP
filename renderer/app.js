@@ -3385,10 +3385,14 @@ function selectStudentForPayment(studentId) {
   if (!t) return;
   const room = DB.rooms.find(r => r.id === t.roomId);
   const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
+  // BUG FIX: Derive the most current rent. t.rent is updated by settings changes.
+  // Additionally fall back to rtype.defaultRent so even edge-cases (e.g. _rentManuallySet
+  // blocked a settings propagation) still show the latest room-type fee in the modal.
+  const currentRent = t.rent || rtype?.defaultRent || 16000;
   document.getElementById('f-pstudent').value = studentId;
   document.getElementById('f-pstudent-search').value = t.name + ' — Room #' + (room?.number||'?');
   document.getElementById('student-search-results').style.display = 'none';
-  if (document.getElementById('f-pamt')) { document.getElementById('f-pamt').value = t.rent||16000; }
+  if (document.getElementById('f-pamt')) { document.getElementById('f-pamt').value = currentRent; }
   if (document.getElementById('f-pconcession') && t.concession) {
     document.getElementById('f-pconcession').value = t.concession;
     if(t.concessionDesc && document.getElementById('f-pconcession-desc'))
@@ -3401,7 +3405,7 @@ function selectStudentForPayment(studentId) {
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Student ID</span><div style="font-weight:700;color:var(--text);font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Room</span><div style="font-weight:700;color:var(--gold2)">#${room?.number||'?'} · ${rtype?.name||''} · ${room?.floor||''} Floor</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Phone</span><div style="font-weight:600">${escHtml(t.phone||'—')}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(t.rent)}</div></div>
+    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(currentRent)}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Address</span><div style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div></div>
   </div>`;
 }
@@ -3555,9 +3559,13 @@ function showAddPaymentForStudent(studentId) {
     const unpaidEl= document.getElementById('f-ps-unpaid');
     const statEl  = document.getElementById('f-ps-stat');
     const notesEl = document.getElementById('f-ps-notes');
-    if (rentEl)   rentEl.value   = existingPending.monthlyRent || existingPending.amount || t.rent;
+    // BUG FIX: Always use the student's CURRENT rent (t.rent) as the authoritative value.
+    // existingPending.monthlyRent may be stale if the warden updated fees in Settings after
+    // this pending record was created. t.rent is always kept in sync by updateRoomType/applyRent.
+    const currentRentPS = t.rent || existingPending.monthlyRent || existingPending.amount || 16000;
+    if (rentEl)   rentEl.value   = currentRentPS;
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
-    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : (t.rent - (existingPending.amount||0));
+    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : (currentRentPS - (existingPending.amount||0));
     if (statEl)   statEl.value   = existingPending.status;
     if (notesEl)  notesEl.value  = existingPending.notes || '';
     toast('Loaded existing pending payment data', 'info');
@@ -3731,7 +3739,7 @@ function showAddPaymentModal() {
           </div>
         </div>
       </div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="16000" readonly style="background:var(--bg3);font-weight:700;color:var(--red)" title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
+      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="0" readonly style="background:var(--bg3);font-weight:700;color:var(--red)" title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="f-pmethod">${pmOpts}</select></div>
       <div class="field"><label>Month</label><input class="form-control" id="f-pmonth" value="${thisMonthLabel()}"></div>
       <div class="field"><label>Status</label>
@@ -3888,7 +3896,10 @@ function showEditPaymentModal(id) {
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
   const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;
   const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${p.method===m?'selected':''}>${m}</option>`).join('');
-  const monthlyRent  = p.monthlyRent || p.totalRent || t?.rent || 0;
+  // BUG FIX: Use the student's CURRENT rent (t.rent) as the primary value.
+  // p.monthlyRent is the rent at the time the payment was recorded and may be stale
+  // if the warden has since updated fees in Settings. t.rent is always kept in sync.
+  const monthlyRent  = t?.rent || p.monthlyRent || p.totalRent || 0;
   const paidAmount   = p.amount || 0;
   const admissionFee = p.admissionFee || p.fee || 0;
   const concession   = p.concession || p.discount || 0;
@@ -9072,9 +9083,9 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
   html += '<th class="r">Rent/Mo</th>';
-  html += '<th class="r" style="color:#7ab4ff">Adm.Chr</th>';
-  html += '<th class="r" style="color:#ffd27a">Ext.Chr</th>';
-  html += '<th class="r" style="color:#7aefcf">Conc.Chr</th>';
+  html += '<th class="r" style="color:#7ab4ff">Adm.Fee</th>';
+  html += '<th class="r" style="color:#ffd27a">Extra Chrgs</th>';
+  html += '<th class="r" style="color:#7aefcf">Concession</th>';
   html += '<th class="r" style="color:#4ade80">Amount Paid</th>';
   html += '<th class="r" style="color:#f87171">Pending</th>';
   html += '<th class="c">Fee Status</th>';

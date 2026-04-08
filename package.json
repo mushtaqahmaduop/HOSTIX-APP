@@ -86,12 +86,12 @@
       "provider": "github",
       "owner": "mushtaqahmaduop",
       "repo": "HOSTIX-APP",
-      "releaseType": "new release"
+      "releaseType": "release"
     }
   },
   "devDependencies": {
     "electron": "^22.3.27",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "electron-updater": "^6.8.3"
