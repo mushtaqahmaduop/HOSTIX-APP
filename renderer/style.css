@@ -2,38 +2,39 @@
 /* Generated from single-file app */
 
 :root {
-    --bg: #060c18;
-    --bg2: #071428;
-    --bg3: #0a1628;
-    --bg4: #0d1e35;
-    --sidebar-bg: #040e1c;
-    --card: #0f1a2e;
-    --card2: #152035;
-    --border: #1e3050;
-    --border2: #253d65;
+    /* ── Dark mode (default) — clean charcoal, not navy ── */
+    --bg: #1a1c1e;
+    --bg2: #212426;
+    --bg3: #272a2d;
+    --bg4: #2e3235;
+    --sidebar-bg: #161819;
+    --card: #242729;
+    --card2: #2a2e31;
+    --border: #363b3f;
+    --border2: #444a50;
     --gold: #c8a84b;
     --gold2: #e6c96e;
     --gold3: #f5e0a0;
     --gold-dim: rgba(200, 168, 75, 0.13);
-    --royal: #1e5fd4;
-    --royal2: #3a7ff0;
-    --royal3: #7ab4ff;
-    --royal-dim: rgba(30, 95, 212, 0.15);
+    --royal: #3b82f6;
+    --royal2: #60a5fa;
+    --royal3: #93c5fd;
+    --royal-dim: rgba(59, 130, 246, 0.15);
     --teal: #0fbcad;
     --teal-dim: rgba(15, 188, 173, 0.12);
-    --red: #e05252;
-    --red-dim: rgba(224, 82, 82, 0.12);
-    --green: #2ec98a;
-    --green-dim: rgba(46, 201, 138, 0.12);
-    --amber: #f0a030;
-    --amber-dim: rgba(240, 160, 48, 0.12);
-    --blue: #4a9cf0;
-    --blue-dim: rgba(74, 156, 240, 0.12);
-    --purple: #9b6df0;
-    --purple-dim: rgba(155, 109, 240, 0.12);
-    --text: #e8eef8;
-    --text2: #8fa5c8;
-    --text3: #4d6a90;
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.12);
+    --green: #34d399;
+    --green-dim: rgba(52, 211, 153, 0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251, 191, 36, 0.12);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96, 165, 250, 0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167, 139, 250, 0.12);
+    --text: #f0f2f5;
+    --text2: #9ba8b5;
+    --text3: #5c6b7a;
     --font: 'Outfit', 'Segoe UI', Arial, sans-serif;
     --font-display: 'DM Serif Display', Georgia, serif;
     --font-mono: 'JetBrains Mono', 'Courier New', monospace;
@@ -47,6 +48,134 @@
     --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --font-icon: 'Material Symbols Rounded';
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT THEME — Palette: #f0f5f9 / #c9d6df / #52616b / #1e2022
+   ══════════════════════════════════════════════════════════════════════════ */
+body.light-theme {
+    --bg: #f0f5f9;
+    --bg2: #e8eef4;
+    --bg3: #dde5ec;
+    --bg4: #c9d6df;
+    --sidebar-bg: #e2eaf1;
+    --card: #ffffff;
+    --card2: #f5f8fb;
+    --border: #c9d6df;
+    --border2: #aebdca;
+    --gold: #b8922a;
+    --gold2: #a07820;
+    --gold3: #7a5c10;
+    --gold-dim: rgba(184, 146, 42, 0.12);
+    --royal: #2563eb;
+    --royal2: #1d4ed8;
+    --royal3: #1e40af;
+    --royal-dim: rgba(37, 99, 235, 0.1);
+    --teal: #0891b2;
+    --teal-dim: rgba(8, 145, 178, 0.1);
+    --red: #dc2626;
+    --red-dim: rgba(220, 38, 38, 0.08);
+    --green: #059669;
+    --green-dim: rgba(5, 150, 105, 0.08);
+    --amber: #d97706;
+    --amber-dim: rgba(217, 119, 6, 0.08);
+    --blue: #2563eb;
+    --blue-dim: rgba(37, 99, 235, 0.08);
+    --purple: #7c3aed;
+    --purple-dim: rgba(124, 58, 237, 0.08);
+    --text: #1e2022;
+    --text2: #52616b;
+    --text3: #8a9ba8;
+    --shadow: 0 2px 16px rgba(30, 32, 34, 0.08);
+    --shadow-gold: 0 4px 16px rgba(184, 146, 42, 0.15);
+    --shadow-royal: 0 4px 16px rgba(37, 99, 235, 0.15);
+}
+
+/* Light mode scrollbar */
+body.light-theme ::-webkit-scrollbar-track { background: var(--bg2); }
+body.light-theme ::-webkit-scrollbar-thumb { background: var(--border2); }
+
+/* Light mode — invert any rgba(255,255,255,0.xx) surface tints */
+body.light-theme .modal-overlay,
+body.light-theme .sidebar-overlay { background: rgba(30, 32, 34, 0.4); }
+
+/* Sidebar in light */
+body.light-theme .sidebar {
+    background: var(--sidebar-bg);
+    border-right-color: var(--border);
+    box-shadow: 2px 0 12px rgba(30, 32, 34, 0.06);
+}
+body.light-theme .nav-item:hover,
+body.light-theme .nav-item.active {
+    background: rgba(37, 99, 235, 0.08);
+}
+body.light-theme .nav-item.active { color: var(--royal); }
+
+/* Cards in light */
+body.light-theme .card,
+body.light-theme .stat-card,
+body.light-theme .dash-card {
+    box-shadow: 0 1px 4px rgba(30, 32, 34, 0.06), 0 0 0 1px var(--border);
+}
+
+/* Header in light */
+body.light-theme .header {
+    background: #ffffff;
+    border-bottom-color: var(--border);
+    box-shadow: 0 1px 6px rgba(30, 32, 34, 0.06);
+}
+
+/* Inputs in light */
+body.light-theme input,
+body.light-theme select,
+body.light-theme textarea {
+    background: #ffffff;
+    border-color: var(--border);
+    color: var(--text);
+}
+body.light-theme input:focus,
+body.light-theme select:focus,
+body.light-theme textarea:focus {
+    border-color: var(--royal);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Modal in light */
+body.light-theme .modal-box,
+body.light-theme .modal {
+    background: #ffffff;
+    border-color: var(--border);
+    box-shadow: 0 8px 40px rgba(30, 32, 34, 0.12);
+}
+
+/* Table in light */
+body.light-theme table thead th {
+    background: var(--bg3);
+    color: var(--text2);
+    border-bottom-color: var(--border);
+}
+body.light-theme table tbody tr:hover { background: rgba(37, 99, 235, 0.04); }
+body.light-theme table tbody td { border-bottom-color: var(--border); }
+
+/* Buttons in light — primary */
+body.light-theme .btn-primary {
+    background: var(--royal);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+body.light-theme .btn-primary:hover { background: var(--royal2); }
+
+/* Search bar in light */
+body.light-theme #hdr-search-wrap > div {
+    background: var(--bg2) !important;
+    border-color: var(--border) !important;
+}
+
+/* Badges / pills in light */
+body.light-theme .status-badge,
+body.light-theme .badge { filter: none; }
+
+/* Arch bar fill — light needs visible track */
+body.light-theme .arch-ov-bar { background: rgba(30, 32, 34, 0.08); }
+
 
 *,
 *::before,
