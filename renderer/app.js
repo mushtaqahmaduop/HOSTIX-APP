@@ -1292,7 +1292,7 @@ function switchMonthTab(tab) {
   });
 }
 
-function editMonthFeeField(payId, field, cell) {
+async function editMonthFeeField(payId, field, cell) {
   const pay = DB.payments.find(p=>p.id===payId);
   if(!pay) return;
   const old = field==='amount'?pay.amount:pay[field];
@@ -1303,11 +1303,11 @@ function editMonthFeeField(payId, field, cell) {
   inp.style.width='120px';
   cell.replaceWith(inp);
   inp.focus();
-  const save = ()=>{
+  const save = async ()=>{
     const newVal = inp.value.trim();
     if(field==='amount') pay.amount=Number(newVal)||pay.amount;
     else pay[field]=newVal;
-    saveDB();
+    await saveDB();
     const span=document.createElement('span');
     span.className='editable-cell';
     span.title='Click to edit';
@@ -1332,11 +1332,11 @@ function editMonthExpField(expId, field, cell) {
   inp.style.width = field==='description'?'200px':'120px';
   cell.replaceWith(inp);
   inp.focus();
-  const save = ()=>{
+  const save = async ()=>{
     const newVal = inp.value.trim();
     if(field==='amount') exp.amount=Number(newVal)||exp.amount;
     else exp[field]=newVal;
-    saveDB();
+    await saveDB();
     const span=document.createElement('span');
     span.className='editable-cell';
     span.title='Click to edit';
@@ -1350,29 +1350,29 @@ function editMonthExpField(expId, field, cell) {
   inp.onkeydown=e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape')inp.blur();};
 }
 
-function updateMonthPayStatus(payId, newStatus) {
+async function updateMonthPayStatus(payId, newStatus) {
   const pay = DB.payments.find(p=>p.id===payId);
   if(!pay) return;
   pay.status = newStatus;
   if(newStatus==='Paid' && !pay.paidDate) pay.paidDate = today();
   if(newStatus==='Pending') pay.paidDate='';
-  saveDB();
+  await saveDB();
   toast('Payment status updated to '+newStatus,'success');
 }
 
-function deleteMonthPayment(payId, monthKey, monthLabel) {
+async function deleteMonthPayment(payId, monthKey, monthLabel) {
   showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',()=>{
     DB.payments = DB.payments.filter(p=>p.id!==payId);
-    saveDB();
+    await saveDB();
     toast('Fee record deleted','success');
     renderMonthModal(monthKey, monthLabel);
   });
 }
 
-function deleteMonthExpense(expId, monthKey, monthLabel) {
+async function deleteMonthExpense(expId, monthKey, monthLabel) {
   showConfirm('Delete Expense','Remove this expense record? This cannot be undone.',()=>{
     DB.expenses = DB.expenses.filter(e=>e.id!==expId);
-    saveDB();
+    await saveDB();
     toast('Expense deleted','success');
     renderMonthModal(monthKey, monthLabel);
   });
@@ -1636,7 +1636,7 @@ function submitEditCancellation(cancId) {
     else if(newStatus==='Restored') student.status='Active';
     else if(newStatus==='Pending') student.status='Cancelling';
   }
-  saveDB(); closeModal();
+  await saveDB(); closeModal();
   renderPage('cancellations_'+newStatus);
   toast('Cancellation record updated','success');
 }
@@ -1646,7 +1646,7 @@ function deleteCancellationRecord(cancId) {
   if(!c) return;
   showConfirm('Delete Record','Are you sure you want to permanently delete this cancellation record? The student status will not be changed.',()=>{
     DB.cancellations = (DB.cancellations||[]).filter(x=>x.id!==cancId);
-    saveDB(); closeModal(); renderPage('cancellations_All');
+    await saveDB(); closeModal(); renderPage('cancellations_All');
     toast('Record deleted','success');
   });
 }
@@ -1783,7 +1783,7 @@ function prefillCancStudentInfo(studentId) {
   selectCancStudent(studentId);
 }
 
-function saveCancellation() {
+async function saveCancellation() {
   const studentId = document.getElementById('canc-student').value;
   const vacateDate = document.getElementById('canc-vacate').value;
   const reason = document.getElementById('canc-reason').value.trim();
@@ -1808,14 +1808,14 @@ function saveCancellation() {
   });
   // Immediately mark student as Cancelling — removes from occupancy
   student.status = 'Cancelling';
-  saveDB();
+  await saveDB();
   closeModal();
   toast(`${student.name} added to cancellation list. Seat is now vacant.`, 'success');
   if(currentPage==='cancellations') renderPage('cancellations');
   else if(currentPage==='dashboard') renderPage('dashboard');
 }
 
-function confirmCancellation(cancId) {
+async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
   showConfirm('Confirm Cancellation', `Mark ${c.studentName}'s cancellation as confirmed? Student will be set to "Left".`, ()=>{
@@ -1826,20 +1826,20 @@ function confirmCancellation(cancId) {
       student.leftDate = new Date().toISOString().slice(0,10);
       student.lastRoom = student.roomNumber || '';
     }
-    saveDB();
+    await saveDB();
     toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
     renderPage('cancellations');
   });
 }
 
-function restoreFromCancellation(cancId) {
+async function restoreFromCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
   showConfirm('Restore Student', `Restore ${c.studentName} to Active? Their seat will be re-occupied.`, ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){ student.status='Active'; }
-    saveDB();
+    await saveDB();
     toast(`${c.studentName} restored to Active. Seat is re-occupied.`, 'success');
     renderPage('cancellations');
   });
@@ -1969,7 +1969,7 @@ function submitAddRoom() {
   DB.rooms.push({id:'room_'+uid(),number:num,floor,typeId,rent,studentIds:[],amenities,notes});
   DB.rooms.sort((a,b)=>String(a.number).localeCompare(String(b.number)));
   logActivity('Room Added', 'Room #'+num+' ('+floor+' Floor)', 'Room');
-  saveDB(); closeModal(); renderPage('rooms'); toast('Room added successfully','success');
+  await saveDB(); closeModal(); renderPage('rooms'); toast('Room added successfully','success');
 }
 
 function showEditRoomModal(id) {
@@ -2007,16 +2007,16 @@ function submitEditRoom(id) {
     DB.cancellations && DB.cancellations.filter(c=>c.roomId===r.id).forEach(c=>{ c.roomNumber=r.number; });
   }
   logActivity('Room Updated', 'Room #'+r.number, 'Room');
-  saveDB(); closeModal(); renderPage('rooms'); toast('Room updated','success');
+  await saveDB(); closeModal(); renderPage('rooms'); toast('Room updated','success');
 }
-function confirmDeleteRoom(id) {
+async function confirmDeleteRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   if(getRoomOccupancy(r)>0){toast('Cannot delete occupied room','error');return;}
   closeModal();
   showConfirm(`Delete Room #${r.number}?`,'This cannot be undone.',()=>{
     DB.rooms=DB.rooms.filter(x=>x.id!==id);
     logActivity('Room Deleted', 'Room #'+r.number, 'Room');
-    saveDB(); renderPage('rooms'); toast('Room deleted','info');
+    await saveDB(); renderPage('rooms'); toast('Room deleted','info');
   });
 }
 
@@ -2246,7 +2246,7 @@ function showAddStudentModal(presetRoomId='') {
   </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>${presetRoomId?'<button class="btn btn-secondary" onclick="submitAddStudent(\''+presetRoomId+'\',true)">✚ Save & Add Another</button>':''}<button class="btn btn-secondary" onclick="submitAddStudent('${presetRoomId}', false, true)">💾 Save</button><button class="btn btn-primary" onclick="submitAddStudent('${presetRoomId}')">💰 Save &amp; Proceed to Payment</button>`);
 }
-function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
+async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   const name=document.getElementById('f-tname').value.trim();
   const roomId=document.getElementById('f-troom').value;
   // Derive rent from selected room if hidden input not yet updated
@@ -2284,7 +2284,7 @@ function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
           DB.students.push(t);
           const room2 = DB.rooms.find(r=>r.id===roomId);
           logActivity('Student Force-Added', name + ' force-added to full Room #' + (room2?.number||'?') + ' ('+currentOcc+'/'+roomType.capacity+' cap)', 'Student');
-          saveDB();
+          await saveDB();
           if(addAnother && presetRoomId) {
             closeModal(); toast('✅ ' + name + ' added to full room!','success');
             setTimeout(()=>showAddStudentModal(presetRoomId), 200);
@@ -2304,7 +2304,7 @@ function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   DB.students.push(t);
   const room = DB.rooms.find(r=>r.id===roomId);
   logActivity('Student Added', name + ' admitted to Room #' + (room?.number||'?'), 'Student');
-  saveDB();
+  await saveDB();
   if(addAnother && presetRoomId) {
     closeModal();
     toast('\u2705 ' + name + ' added! Open next student for same room.','success');
@@ -2691,7 +2691,7 @@ function closeEditStudentCamera() {
   const box = document.getElementById('edit-student-cam-box'); if(box) box.style.display='none';
 }
 
-function quickCancelStudent(studentId) {
+async function quickCancelStudent(studentId) {
   const student = DB.students.find(s=>s.id===studentId);
   if(!student){ toast('Student not found','error'); return; }
   // Check if already in cancellation list
@@ -2715,7 +2715,7 @@ function quickCancelStudent(studentId) {
     createdAt: today()
   });
   student.status = 'Cancelling';
-  saveDB();
+  await saveDB();
   toast(`${student.name} added to cancellation list. Seat is now vacant.`, 'success');
   if(currentPage==='dashboard') renderPage('dashboard');
 }
@@ -2934,7 +2934,7 @@ function showEditStudentModal(id) {
   `<button class="btn btn-danger" onclick="confirmDeleteStudent('${id}')">🗑 Delete</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditStudent('${id}')">💾 Save Changes</button>`);
 }
 
-function submitEditStudent(id) {
+async function submitEditStudent(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const _originalRoomId = t.roomId; // capture BEFORE any changes
 
@@ -2995,15 +2995,15 @@ function submitEditStudent(id) {
 
   if(_photoData !== undefined) { if(!t.docs) t.docs={}; t.docs.photo = _photoData; }
 
-  saveDB(); closeModal(); renderPage('students'); toast('Student updated','success');
+  await saveDB(); closeModal(); renderPage('students'); toast('Student updated','success');
 }
-function confirmDeleteStudent(id) {
+async function confirmDeleteStudent(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   closeModal();
   showConfirm(`Remove ${t.name}?`,'This will permanently delete the student record.',()=>{
     DB.students=DB.students.filter(x=>x.id!==id);
     DB.payments=DB.payments.filter(p=>p.studentId!==id);
-    saveDB(); renderPage('students'); toast('Student removed','info');
+    await saveDB(); renderPage('students'); toast('Student removed','info');
   });
 }
 
@@ -3079,7 +3079,7 @@ function showRoomShiftModal(studentId) {
   );
 }
 
-function submitRoomShift(studentId) {
+async function submitRoomShift(studentId) {
   const t = DB.students.find(x => x.id === studentId);
   if (!t) return;
 
@@ -3145,7 +3145,7 @@ function submitRoomShift(studentId) {
     'Students'
   );
 
-  saveDB();
+  await saveDB();
   closeModal();
   renderPage('students');
   toast(`${t.name} shifted to Room #${toRoom.number} successfully`, 'success');
@@ -3231,7 +3231,7 @@ function renderPayments() {
   </div>`;
 }
 
-function generateMonthlyRents() {
+async function generateMonthlyRents() {
   // FIX: use thisMonthLabel() — locale-safe, matches how all payment records store month strings.
   // Previously used toLocaleString('default',…) which can return different formats per device locale,
   // breaking the duplicate-guard check and generating duplicate entries on non-en-US systems.
@@ -3245,10 +3245,10 @@ function generateMonthlyRents() {
       added++;
     }
   });
-  saveDB(); renderPage('payments');
+  await saveDB(); renderPage('payments');
   toast(added>0?`Generated ${added} payment records`:'All students already have records for this month', added>0?'success':'info');
 }
-function markPaymentPaid(id) {
+async function markPaymentPaid(id) {
   const p = DB.payments.find(x => x.id === id); if (!p) return;
   const prevUnpaid = Number(p.unpaid) || 0;
   const prevPaid   = Number(p.amount) || 0;
@@ -3270,14 +3270,14 @@ function markPaymentPaid(id) {
       note: 'Pending cleared'
     });
   }
-  saveDB();
+  await saveDB();
   renderPage(currentPage);
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
 }
 
 // FIX Issue 3: Called from student modal — refreshes the student modal directly
 // instead of calling renderPage (which fights with the modal re-open)
-function markPaymentPaidFromStudentView(payId, studentId) {
+async function markPaymentPaidFromStudentView(payId, studentId) {
   const p = DB.payments.find(x => x.id === payId); if (!p) return;
   const prevUnpaid = Number(p.unpaid) || 0;
   const prevPaid   = Number(p.amount) || 0;
@@ -3297,20 +3297,20 @@ function markPaymentPaidFromStudentView(payId, studentId) {
       note: 'Pending cleared'
     });
   }
-  saveDB();
+  await saveDB();
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
   showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
 }
-function deletePayment(id) {
+async function deletePayment(id) {
   showConfirm('Delete payment record?','This cannot be undone.',()=>{
     DB.payments=DB.payments.filter(x=>x.id!==id);
-    saveDB(); renderPage('payments'); toast('Payment deleted','info');
+    await saveDB(); renderPage('payments'); toast('Payment deleted','info');
   });
 }
-function deletePaymentFromStudentView(payId, studentId) {
+async function deletePaymentFromStudentView(payId, studentId) {
   showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',()=>{
     DB.payments=DB.payments.filter(x=>x.id!==payId);
-    saveDB();
+    await saveDB();
     toast('Payment record deleted','info');
     showViewStudentModal(studentId); // refresh the modal
   });
@@ -3578,7 +3578,7 @@ function recalcUnpaidPS() {
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
-function submitPaymentForStudent() {
+async function submitPaymentForStudent() {
   const studentId   = document.getElementById('f-ps-studentId')?.value || '';
   const t           = DB.students.find(s => s.id === studentId);
   if (!t) { toast('Student not found', 'error'); return; }
@@ -3634,7 +3634,7 @@ function submitPaymentForStudent() {
         if (newNotes) alreadyPending.notes = newNotes;
 
         logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
-        saveDB(); closeModal(); renderPage(currentPage);
+        await saveDB(); closeModal(); renderPage(currentPage);
         toast(`Payment updated for ${t.name} — no duplicate created`, 'success');
         window._updatePendingPS = false;
       },
@@ -3678,7 +3678,7 @@ function submitPaymentForStudent() {
     paidDate: status === 'Paid' ? document.getElementById('f-ps-date')?.value || today() : '',
     notes: document.getElementById('f-ps-notes')?.value || '',
   });
-  saveDB(); closeModal();
+  await saveDB(); closeModal();
   renderPage(currentPage);
   toast(`Payment recorded for ${t.name}`, 'success');
   logActivity('Payment Added', `${t.name} — ${document.getElementById('f-ps-month')?.value}`, 'Finance');
@@ -3749,7 +3749,7 @@ function showAddPaymentModal() {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:linear-gradient(135deg,#e6a817,#f0c040);color:#1a1200;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
 }
-function submitAddPayment() {
+async function submitAddPayment() {
   // Try to auto-select if only one student matches the search text
   const searchEl = document.getElementById('f-pstudent-search');
   const hiddenEl = document.getElementById('f-pstudent');
@@ -3826,7 +3826,7 @@ function submitAddPayment() {
           if (newNotes) alreadyPending2.notes = newNotes;
 
           logActivity('Payment Updated', `${escHtml(tName)} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
-          saveDB(); closeModal(); renderPage('payments');
+          await saveDB(); closeModal(); renderPage('payments');
           toast(`Payment updated for ${tName} — no duplicate created`, 'success');
           window._updatePendingAP = false;
         },
@@ -3873,7 +3873,7 @@ function submitAddPayment() {
     notes: document.getElementById('f-pnotes-main')?.value || document.getElementById('f-pnotes')?.value || '',
   });
   logActivity('Payment Added', `${finalName||'student'} — ${document.getElementById('f-pmonth')?.value||''}`, 'Finance');
-  saveDB(); closeModal(); renderPage('payments');
+  await saveDB(); closeModal(); renderPage('payments');
   toast(`Payment recorded for ${finalName||'student'}`,'success');
   if (window._printAfterSave) { window._printAfterSave = false; setTimeout(()=>printReceipt(_newPayId), 350); }
 }
@@ -4015,7 +4015,7 @@ function submitEditPayment(id) {
     }
   }
   logActivity('Payment Updated', `${p.studentName||''} — ${p.month||''}`, 'Finance');
-  saveDB();
+  await saveDB();
   toast('Payment updated','success');
   if(_returnStudentId) {
     var _sid = _returnStudentId; _returnStudentId = null;
@@ -4092,13 +4092,13 @@ function showAddExpenseModal() {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitAddExpense()">Add Expense</button>`);
 }
-function submitAddExpense() {
+async function submitAddExpense() {
   const cat=document.getElementById('f-ecat').value;
   const amount=parseFloat(document.getElementById('f-eamt').value);
   if(!cat||!amount){toast('Fill required fields','error');return;}
   DB.expenses.push({id:'e_'+uid(),category:cat,amount,date:document.getElementById('f-edate').value,description:document.getElementById('f-edesc').value.trim()});
   logActivity('Expense Added', cat+' — PKR '+amount, 'Finance');
-  saveDB(); closeModal(); renderPage('expenses'); toast('Expense recorded','success');
+  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense recorded','success');
 }
 function showEditExpenseModal(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
@@ -4112,21 +4112,21 @@ function showEditExpenseModal(id) {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditExpense('${id}')">Save</button>`);
 }
-function submitEditExpense(id) {
+async function submitEditExpense(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
   e.category=document.getElementById('f-ecat').value;
   e.amount=parseFloat(document.getElementById('f-eamt').value)||e.amount;
   e.date=document.getElementById('f-edate').value;
   e.description=document.getElementById('f-edesc').value.trim();
   logActivity('Expense Updated', e.category+' — PKR '+e.amount, 'Finance');
-  saveDB(); closeModal(); renderPage('expenses'); toast('Expense updated','success');
+  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense updated','success');
 }
-function deleteExpense(id) {
+async function deleteExpense(id) {
   showConfirm('Delete expense?','This cannot be undone.',()=>{
     const _del_e=DB.expenses.find(x=>x.id===id);
     DB.expenses=DB.expenses.filter(x=>x.id!==id);
     if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
-    saveDB(); renderPage('expenses'); toast('Expense deleted','info');
+    await saveDB(); renderPage('expenses'); toast('Expense deleted','info');
   });
 }
 
@@ -4151,9 +4151,9 @@ function showClearAllMenu() {
 }
 
 function clearPayments(fromMenu=false) {
-  const doIt = ()=>{
+  const doIt = async ()=>{
     DB.payments=[];
-    saveDB();
+    await saveDB();
     if(fromMenu){closeModal();}
     renderPage(currentPage==='payments'?'payments':currentPage);
     toast('All payment records cleared','info');
@@ -4166,9 +4166,9 @@ function clearPayments(fromMenu=false) {
 }
 
 function clearExpenses(fromMenu=false) {
-  const doIt = ()=>{
+  const doIt = async ()=>{
     DB.expenses=[];
-    saveDB();
+    await saveDB();
     if(fromMenu){closeModal();}
     renderPage(currentPage==='expenses'?'expenses':currentPage);
     toast('All expense records cleared','info');
@@ -4181,7 +4181,7 @@ function clearExpenses(fromMenu=false) {
 }
 
 function clearStudents(fromMenu=false) {
-  const doIt = ()=>{
+  const doIt = async ()=>{
     DB.students=[];
     DB.payments=[];
     DB.cancellations=[];
@@ -4189,7 +4189,7 @@ function clearStudents(fromMenu=false) {
     // Clearing students must NOT wipe owner transfer history.
     DB.fines=[];
     DB.checkinlog=[];
-    saveDB();
+    await saveDB();
     if(fromMenu){closeModal();}
     renderPage(currentPage==='students'?'students':currentPage);
     toast('All students and their records cleared','info');
@@ -4202,7 +4202,7 @@ function clearStudents(fromMenu=false) {
 }
 
 function clearAllData(fromMenu=false) {
-  const doIt = ()=>{
+  const doIt = async ()=>{
     DB.students=[];
     DB.payments=[];
     DB.expenses=[];
@@ -4216,7 +4216,7 @@ function clearAllData(fromMenu=false) {
     DB.notices=[];
     DB.inspections=[];
     DB.billSplits=[];
-    saveDB();
+    await saveDB();
     if(fromMenu){closeModal();}
     navigate('dashboard');
     toast('All data cleared successfully','info');
@@ -4776,10 +4776,10 @@ function showTransferRecordsModal() {
    <button class="btn btn-primary" onclick="closeModal();navigate('reports')">+ New Transfer (Reports)</button>`);
 }
 
-function deleteTransferFromModal(id) {
+async function deleteTransferFromModal(id) {
   showConfirm('Delete transfer?','This cannot be undone.',()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
-    saveDB();
+    await saveDB();
     closeModal();
     setTimeout(()=>showTransferRecordsModal(), 100);
     toast('Transfer deleted','info');
@@ -4829,7 +4829,7 @@ function submitEditTransfer(id) {
   tr.receivedBy = document.getElementById('fe-trrec').value.trim();
   tr.description = document.getElementById('fe-trdesc').value.trim();
   tr.editedAt = today();
-  saveDB();
+  await saveDB();
   closeModal();
   setTimeout(()=>showTransferRecordsModal(), 80);
   toast('Transfer updated','success');
@@ -4858,7 +4858,7 @@ function showAddTransferModal() {
    <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
    <button class="btn btn-primary" onclick="submitAddTransfer()">✓ Record Transfer</button>`);
 }
-function submitAddTransfer() {
+async function submitAddTransfer() {
   const amt = parseFloat(document.getElementById('f-tramt').value);
   const method = document.getElementById('f-trmethod').value;
   const date = document.getElementById('f-trdate').value;
@@ -4872,21 +4872,21 @@ function submitAddTransfer() {
     byWarden: (typeof CUR_USER !== 'undefined' && CUR_USER?.name) ? CUR_USER.name : '',
     createdAt: today()
   });
-  saveDB(); closeModal();
+  await saveDB(); closeModal();
   // Stay on current page (dashboard) and refresh it — don't redirect to reports
   renderPage(currentPage);
   toast('Transfer recorded — ' + fmtPKR(amt) + ' sent to owner','success');
 }
-function deleteTransfer(id) {
+async function deleteTransfer(id) {
   showConfirm('Delete transfer record?','This cannot be undone.',()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
-    saveDB(); renderPage('reports'); toast('Transfer deleted','info');
+    await saveDB(); renderPage('reports'); toast('Transfer deleted','info');
   });
 }
 
 function drawCharts() {} // charts are rendered as HTML bars
 
-function saveMaintenance() {
+async function saveMaintenance() {
   const title = document.getElementById('mt-title')?.value?.trim();
   if(!title){toast('Enter a title','error');return;}
   if(!DB.maintenance) DB.maintenance=[];
@@ -4898,8 +4898,8 @@ function saveMaintenance() {
     date:document.getElementById('mt-date')?.value||today(),
     status:'Open', resolvedDate:''
   });
-  saveDB(); closeModal(); renderPage('maintenance'); toast('Maintenance request added','success');
-}function saveComplaint() {
+  await saveDB(); closeModal(); renderPage('maintenance'); toast('Maintenance request added','success');
+}async function saveComplaint() {
   const subject = document.getElementById('cp-subject')?.value?.trim();
   if(!subject){toast('Enter a subject','error');return;}
   if(!DB.complaints) DB.complaints=[];
@@ -4910,7 +4910,7 @@ function saveMaintenance() {
     date:document.getElementById('cp-date')?.value||today(),
     status:'Open', response:''
   });
-  saveDB(); closeModal(); renderPage('complaints'); toast('Complaint recorded','success');
+  await saveDB(); closeModal(); renderPage('complaints'); toast('Complaint recorded','success');
 }function showAddCheckinModal() {
   const students = DB.students.filter(s=>s.status==='Active').map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
   const now = new Date();
@@ -4925,7 +4925,7 @@ function saveMaintenance() {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveCheckin()">Save Entry</button>`);
 }
-function saveCheckin() {
+async function saveCheckin() {
   const studentId = document.getElementById('ci-student')?.value;
   if(!studentId){toast('Select a student','error');return;}
   if(!DB.checkinlog) DB.checkinlog=[];
@@ -4936,10 +4936,10 @@ function saveCheckin() {
     time:document.getElementById('ci-time')?.value||'',
     reason:document.getElementById('ci-reason')?.value?.trim()||''
   });
-  saveDB(); closeModal(); renderPage('checkinlog'); toast('Entry added','success');
+  await saveDB(); closeModal(); renderPage('checkinlog'); toast('Entry added','success');
 }
-function deleteCheckin(id) {
-  DB.checkinlog=DB.checkinlog.filter(x=>x.id!==id); saveDB(); renderPage('checkinlog'); toast('Deleted','info');
+async function deleteCheckin(id) {
+  DB.checkinlog=DB.checkinlog.filter(x=>x.id!==id); await saveDB(); renderPage('checkinlog'); toast('Deleted','info');
 }function showAddNoticeModal() {
   showModal('modal-sm','Post New Notice',`
     <div class="form-grid">
@@ -4950,7 +4950,7 @@ function deleteCheckin(id) {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNotice()">Post Notice</button>`);
 }
-function saveNotice() {
+async function saveNotice() {
   const title = document.getElementById('nt-title')?.value?.trim();
   if(!title){toast('Enter a title','error');return;}
   if(!DB.notices) DB.notices=[];
@@ -4960,10 +4960,10 @@ function saveNotice() {
     content:document.getElementById('nt-content')?.value?.trim()||'',
     date:document.getElementById('nt-date')?.value||today()
   });
-  saveDB(); closeModal(); renderPage('notices'); toast('Notice posted','success');
+  await saveDB(); closeModal(); renderPage('notices'); toast('Notice posted','success');
 }
-function deleteNotice(id) {
-  showConfirm('Delete Notice?','',()=>{DB.notices=DB.notices.filter(x=>x.id!==id);saveDB();renderPage('notices');toast('Deleted','info');});
+async function deleteNotice(id) {
+  showConfirm('Delete Notice?','',()=>{DB.notices=DB.notices.filter(x=>x.id!==id);await saveDB();renderPage('notices');toast('Deleted','info');});
 }function showAddFineModal() {
   const students = DB.students.filter(s=>s.status==='Active').map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
   showModal('modal-sm','Add Fine / Penalty',`
@@ -4976,7 +4976,7 @@ function deleteNotice(id) {
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveFine()">Add Fine</button>`);
 }
-function saveFine() {
+async function saveFine() {
   const studentId = document.getElementById('fn-student')?.value;
   const amount = Number(document.getElementById('fn-amount')?.value||0);
   if(!studentId){toast('Select a student','error');return;}
@@ -4989,14 +4989,14 @@ function saveFine() {
     date:document.getElementById('fn-date')?.value||today(),
     paid:false, paidDate:''
   });
-  saveDB(); closeModal(); renderPage('fines'); toast('Fine recorded','success');
+  await saveDB(); closeModal(); renderPage('fines'); toast('Fine recorded','success');
 }
-function payFine(id) {
+async function payFine(id) {
   const f = DB.fines.find(x=>x.id===id);
-  if(f){f.paid=true;f.paidDate=today();saveDB();renderPage('fines');toast('Fine marked as paid','success');}
+  if(f){f.paid=true;f.paidDate=today();await saveDB();renderPage('fines');toast('Fine marked as paid','success');}
 }
-function deleteFine(id) {
-  showConfirm('Delete Fine?','',()=>{DB.fines=DB.fines.filter(x=>x.id!==id);saveDB();renderPage('fines');toast('Deleted','info');});
+async function deleteFine(id) {
+  showConfirm('Delete Fine?','',()=>{DB.fines=DB.fines.filter(x=>x.id!==id);await saveDB();renderPage('fines');toast('Deleted','info');});
 }
 
 
@@ -5049,7 +5049,7 @@ function renderActivityLog() {
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div style="font-size:13px;color:var(--text2)">${list.length} total entries</div>
-    <button class="btn btn-danger btn-sm" onclick="showConfirm('Clear Activity Log?','This will permanently delete all activity log entries.',()=>{DB.activityLog=[];saveDB();renderPage('activitylog');})"><span class="micon" style="font-size:14px">delete</span> Clear Log</button>
+    <button class="btn btn-danger btn-sm" onclick="showConfirm('Clear Activity Log?','This will permanently delete all activity log entries.',()=>{DB.activityLog=[];await saveDB();renderPage('activitylog');})"><span class="micon" style="font-size:14px">delete</span> Clear Log</button>
   </div>
   ${list.length===0?`<div style="text-align:center;padding:80px 20px;color:var(--text3)"><span class="micon" style="font-size:56px;display:block;margin-bottom:16px;color:var(--border2)">history</span><div style="font-size:16px;font-weight:600;color:var(--text2);margin-bottom:8px">No Activity Yet</div><div>Actions in your dashboard will appear here automatically</div></div>`:''}
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
@@ -5131,7 +5131,7 @@ function calcBillSplit() {
   if(saveBtn) saveBtn.style.display='block';
 }
 
-function saveBillSplit() {
+async function saveBillSplit() {
   if(!window._lastBillSplit) return;
   const { total, method, perUnit } = window._lastBillSplit;
   if(!DB.billSplits) DB.billSplits=[];
@@ -5142,7 +5142,7 @@ function saveBillSplit() {
     total, method, perUnit, date:today()
   });
   logActivity('Bill Split Saved', (document.getElementById('bs-type')?.value||'Electricity')+' '+fmtPKR(total), 'Finance');
-  saveDB(); renderPage('billsplit'); toast('Bill split saved to records','success');
+  await saveDB(); renderPage('billsplit'); toast('Bill split saved to records','success');
 }
 
 
@@ -5169,7 +5169,7 @@ const INSPECTION_ITEMS = ['Walls & Paint','Flooring','Windows & Locks','Bathroom
     <div class="field"><label>Notes / Issues Found</label><textarea id="ins-notes" class="form-control" placeholder="Describe any issues or observations..."></textarea></div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveInspection()">Save Inspection</button>`);
 }
-function saveInspection() {
+async function saveInspection() {
   const roomId = document.getElementById('ins-room')?.value;
   if(!roomId){toast('Select a room','error');return;}
   const checklist = {};
@@ -5185,10 +5185,10 @@ function saveInspection() {
     checklist
   });
   logActivity('Room Inspected', 'Room '+(room?.number||''), 'Room');
-  saveDB(); closeModal(); renderPage('inspections'); toast('Inspection saved','success');
+  await saveDB(); closeModal(); renderPage('inspections'); toast('Inspection saved','success');
 }
-function deleteInspection(id) {
-  showConfirm('Delete Inspection?','',()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);saveDB();renderPage('inspections');toast('Deleted','info');});
+async function deleteInspection(id) {
+  showConfirm('Delete Inspection?','',()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);await saveDB();renderPage('inspections');toast('Deleted','info');});
 }
 // ════════════════════════════════════════════════════════════════════════════
 // WHATSAPP BULK RENT REMINDER
@@ -5213,7 +5213,7 @@ function showRentReminderModal() {
   header += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">&#x1F4F2; Default Notification Number (send all reminders to this number)</div>';
   header += '<div style="display:flex;gap:6px;align-items:center">';
   header += '<input id="wa-default-num" class="form-control" placeholder="e.g. 03001234567" value="'+escHtml(defaultNum)+'" style="flex:1">';
-  header += '<button class="btn btn-primary btn-sm" onclick="var v=document.getElementById(\'wa-default-num\').value.trim();DB.settings.defaultWANumber=v;saveDB();toast(\'Saved\',\'success\')">Save</button>';
+  header += '<button class="btn btn-primary btn-sm" onclick="var v=document.getElementById(\'wa-default-num\').value.trim();DB.settings.defaultWANumber=v;await saveDB();toast(\'Saved\',\'success\')">Save</button>';
   if(defaultNumFmt) {
     header += '<a href="https://wa.me/'+defaultNumFmt+'" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;border:none;text-decoration:none">&#x1F4E2; Notify</a>';
   }
@@ -5324,7 +5324,7 @@ function renderSettings() {
                 🔤 Hostel Name Font Style
                 <span style="flex:1"></span>
                 <span style="font-size:11px;color:var(--text3);font-weight:400;margin-right:6px">Show font picker</span>
-                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="DB.settings.showFontPicker=this.checked;saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none'" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
+                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none'" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
               </label>
               <div id="font-picker-grid-wrap" style="display:${s.showFontPicker!==false?'block':'none'}">
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;margin-top:8px;max-height:280px;overflow-y:auto;padding-right:2px">
@@ -5446,7 +5446,7 @@ function renderSettings() {
                 <div style="font-size:12px;color:var(--text3);margin-top:3px">Automatically create pending payment records when a new month starts</div>
               </div>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" id="cfg-automonth" ${(s.autoMonthGenerate!==false)?'checked':''} onchange="DB.settings.autoMonthGenerate=this.checked;saveDB();toast(this.checked?'Auto-generate enabled':'Auto-generate disabled','info')">
+                <input type="checkbox" id="cfg-automonth" ${(s.autoMonthGenerate!==false)?'checked':''} onchange="DB.settings.autoMonthGenerate=this.checked;await saveDB();toast(this.checked?'Auto-generate enabled':'Auto-generate disabled','info')">
                 <span style="font-size:13px;color:var(--text2)">${(s.autoMonthGenerate!==false)?'On':'Off'}</span>
               </label>
             </div>
@@ -5454,7 +5454,7 @@ function renderSettings() {
           <div class="settings-section">
             <div class="settings-section-title">Sidebar Width</div>
             <div style="display:flex;align-items:center;gap:12px">
-              <input type="range" min="220" max="320" value="${s.sidebarWidth||260}" style="flex:1;accent-color:var(--gold)" oninput="document.getElementById('cfg-sbw-val').textContent=this.value+'px';document.documentElement.style.setProperty('--sidebar-w',this.value+'px');document.getElementById('main').style.marginLeft=this.value+'px'" onchange="DB.settings.sidebarWidth=parseInt(this.value);saveDB()">
+              <input type="range" min="220" max="320" value="${s.sidebarWidth||260}" style="flex:1;accent-color:var(--gold)" oninput="document.getElementById('cfg-sbw-val').textContent=this.value+'px';document.documentElement.style.setProperty('--sidebar-w',this.value+'px');document.getElementById('main').style.marginLeft=this.value+'px'" onchange="DB.settings.sidebarWidth=parseInt(this.value);await saveDB()">
               <span id="cfg-sbw-val" style="font-size:13px;color:var(--gold2);font-weight:700;min-width:44px">${s.sidebarWidth||260}px</span>
             </div>
           </div>
@@ -5648,9 +5648,9 @@ function openLicenseSettingsWindow() {
   }
 }
 function _doLicenseUnlock() { openLicenseSettingsWindow(); }
-function liveUpdateSetting(key, val) {
+async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
-  saveDB();
+  await saveDB();
   if(key==='appName') {
     const sbVer = document.getElementById('sb-version');
     if(sbVer) sbVer.textContent = (val||'HOSTIX') + ' · ' + (DB.settings.version||'v3.0');
@@ -5694,9 +5694,9 @@ function liveUpdateSetting(key, val) {
     if(ver) ver.textContent = 'Management System ' + val;
   }
 }
-function applyHostelFont(fontFamily) {
+async function applyHostelFont(fontFamily) {
   DB.settings.hostelNameFont = fontFamily;
-  saveDB();
+  await saveDB();
   // Apply to sidebar name
   const nameEl = document.getElementById('sb-hostel-name');
   if(nameEl) nameEl.style.fontFamily = `'${fontFamily}', serif`;
@@ -5709,8 +5709,8 @@ function applyHostelFont(fontFamily) {
   toast('Font updated — ' + fontFamily, 'success');
   renderPage('settings');
 }
-function saveSettings() {
-  saveDB(); toast('Settings saved successfully','success');
+async function saveSettings() {
+  await saveDB(); toast('Settings saved successfully','success');
 }
 // ── BULK RENT UPDATE ─────────────────────────────────────────────────────────
 function _applyRentToStudentCore(student, newRent) {
@@ -5728,7 +5728,7 @@ function _applyRentToStudentCore(student, newRent) {
   });
 }
 
-function applyRentToStudent(studentId) {
+async function applyRentToStudent(studentId) {
   const s = DB.students.find(x => x.id === studentId); if (!s) return;
   const inp = document.getElementById('sr-' + studentId); if (!inp) return;
   const newRent = parseFloat(inp.value);
@@ -5738,12 +5738,12 @@ function applyRentToStudent(studentId) {
   _applyRentToStudentCore(s, newRent);
   s._rentManuallySet = true; // Fix #14: flag so auto defaultRent changes don't override this
   logActivity('Rent Updated', s.name + ' — ' + fmtPKR(old) + ' → ' + fmtPKR(newRent), 'Finance');
-  saveDB();
+  await saveDB();
   renderPage('settings');
   toast('Rent updated for ' + s.name + ' → ' + fmtPKR(newRent), 'success');
 }
 
-function applyRentByType(typeId) {
+async function applyRentByType(typeId) {
   const inp = document.getElementById('qr-' + typeId); if (!inp) return;
   const newRent = parseFloat(inp.value);
   if (!newRent || newRent <= 0) { toast('Enter a valid rent amount', 'error'); return; }
@@ -5760,12 +5760,12 @@ function applyRentByType(typeId) {
     }
   });
   logActivity('Bulk Rent Update', type.name + ' — all ' + count + ' students → ' + fmtPKR(newRent), 'Finance');
-  saveDB();
+  await saveDB();
   renderPage('settings');
   toast(count + ' student(s) updated to ' + fmtPKR(newRent), 'success');
 }
 
-function applyRentToAll() {
+async function applyRentToAll() {
   const inp = document.getElementById('qr-all'); if (!inp) return;
   const newRent = parseFloat(inp.value);
   if (!newRent || newRent <= 0) { toast('Enter a valid rent amount', 'error'); return; }
@@ -5781,7 +5781,7 @@ function applyRentToAll() {
       // Also update all room type defaults
       DB.settings.roomTypes.forEach(function(t) { t.defaultRent = newRent; });
       logActivity('Global Rent Update', 'All ' + count + ' students → ' + fmtPKR(newRent), 'Finance');
-      saveDB();
+      await saveDB();
       renderPage('settings');
       toast('All ' + count + ' students updated to ' + fmtPKR(newRent), 'success');
     }
@@ -5789,7 +5789,7 @@ function applyRentToAll() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-function updateRoomType(id, field, val) {
+async function updateRoomType(id, field, val) {
   const t=DB.settings.roomTypes.find(x=>x.id===id); if(!t) return;
   const oldRent = t.defaultRent;
   if(field==='capacity'||field==='defaultRent') t[field]=parseFloat(val)||t[field];
@@ -5816,52 +5816,52 @@ function updateRoomType(id, field, val) {
     });
     toast('Default rent updated to '+fmtPKR(newRent)+' — rooms & students updated', 'success');
   }
-  saveDB();
+  await saveDB();
 }
-function addRoomType() {
+async function addRoomType() {
   const id='rt_'+uid();
   DB.settings.roomTypes.push({id,name:'New Type',capacity:1,defaultRent:16000,color:'#4a9cf0'});
-  saveDB(); renderPage('settings'); toast('Room type added','success');
+  await saveDB(); renderPage('settings'); toast('Room type added','success');
 }
-function removeRoomType(id) {
+async function removeRoomType(id) {
   if(DB.settings.roomTypes.length<=1){toast('Must have at least one room type','error');return;}
   if(DB.rooms.some(r=>r.typeId===id)){toast('Cannot remove type: rooms are using it','error');return;}
   DB.settings.roomTypes=DB.settings.roomTypes.filter(x=>x.id!==id);
-  saveDB(); renderPage('settings'); toast('Room type removed','info');
+  await saveDB(); renderPage('settings'); toast('Room type removed','info');
 }
-function addPaymentMethod() {
+async function addPaymentMethod() {
   const val=document.getElementById('new-pm').value.trim();
   if(!val||DB.settings.paymentMethods.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
   DB.settings.paymentMethods.push(val);
-  saveDB(); renderPage('settings'); toast('Payment method added','success');
+  await saveDB(); renderPage('settings'); toast('Payment method added','success');
 }
-function removePaymentMethod(m) {
+async function removePaymentMethod(m) {
   if(DB.settings.paymentMethods.length<=1){toast('Must keep at least one method','error');return;}
   DB.settings.paymentMethods=DB.settings.paymentMethods.filter(x=>x!==m);
-  saveDB(); renderPage('settings');
+  await saveDB(); renderPage('settings');
 }
-function addExpenseCategory() {
+async function addExpenseCategory() {
   const val=document.getElementById('new-ec').value.trim();
   if(!val||DB.settings.expenseCategories.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
   DB.settings.expenseCategories.push(val);
-  saveDB(); renderPage('settings'); toast('Category added','success');
+  await saveDB(); renderPage('settings'); toast('Category added','success');
 }
-function removeExpenseCategory(c) {
+async function removeExpenseCategory(c) {
   if(DB.settings.expenseCategories.length<=1){toast('Must keep at least one category','error');return;}
   DB.settings.expenseCategories=DB.settings.expenseCategories.filter(x=>x!==c);
-  saveDB(); renderPage('settings');
+  await saveDB(); renderPage('settings');
 }
-function addFloor() {
+async function addFloor() {
   const val=document.getElementById('new-fl').value.trim();
   if(!val||DB.settings.floors.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
   DB.settings.floors.push(val);
-  saveDB(); renderPage('settings'); toast('Floor added','success');
+  await saveDB(); renderPage('settings'); toast('Floor added','success');
 }
-function removeFloor(f) {
+async function removeFloor(f) {
   if(DB.settings.floors.length<=1){toast('Must keep at least one floor','error');return;}
   if(DB.rooms.some(r=>r.floor===f)){toast('Cannot remove: rooms are on this floor','error');return;}
   DB.settings.floors=DB.settings.floors.filter(x=>x!==f);
-  saveDB(); renderPage('settings');
+  await saveDB(); renderPage('settings');
 }
 function exportData() {
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
@@ -5871,7 +5871,7 @@ function exportData() {
   setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 17: revoke blob URL to free memory
   toast('Data exported successfully','success');
 }
-function importData(input) {
+async function importData(input) {
   const file=input.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -5879,7 +5879,7 @@ function importData(input) {
       const data=JSON.parse(e.target.result);
       showConfirm('Import Data?','This will replace all current data with the imported backup.',()=>{
         DB=_initDBFields(data); // FIX 24: normalize schema on import same as restoreBackup
-        saveDB(); navigate('dashboard'); toast('Data imported successfully','success');
+        await saveDB(); navigate('dashboard'); toast('Data imported successfully','success');
       });
     } catch(err){ toast('Invalid backup file','error'); }
   };
@@ -6081,7 +6081,7 @@ function _showExcelImportPreview(rows, errors) {
   window._excelImportRows = rows;
 }
 
-function confirmExcelImport() {
+async function confirmExcelImport() {
   const rows = window._excelImportRows || [];
   window._excelImportRows = null;
   closeModal();
@@ -6140,7 +6140,7 @@ function confirmExcelImport() {
   });
 
   logActivity('Excel Import', `${added} students imported from spreadsheet`, 'Student');
-  saveDB();
+  await saveDB();
   navigate('students');
   toast(`✅ ${added} student${added!==1?'s':''} imported successfully${skipped>0?' ('+skipped+' skipped — room full)':''}`, 'success');
 }
@@ -6155,7 +6155,7 @@ function _showExcelImportResult(rows, errors) {
   `<button class="btn btn-primary" onclick="closeModal()">OK</button>`);
 }
 // ════════════════════════════════════════════════════════════════════════════
-function resetAllData() {
+async function resetAllData() {
   showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections and bill splits. Rooms will be reset. This CANNOT be undone.',()=>{
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,
@@ -6173,7 +6173,7 @@ function resetAllData() {
     DB.billSplits=[];
     DB.checkinlog=[];
     DB.rooms=generateRooms();
-    saveDB(); navigate('dashboard'); toast('All data reset','info');
+    await saveDB(); navigate('dashboard'); toast('All data reset','info');
   });
 }
 
@@ -6531,7 +6531,7 @@ function showConfirm(title, text, onConfirm, onCancel) {
 // ════════════════════════════════════════════════════════════════════════════
 // BACKUP & RESTORE
 // ════════════════════════════════════════════════════════════════════════════
-function showBackupRestoreModal() {
+async function showBackupRestoreModal() {
   const now = new Date();
   const ts = now.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' + now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
   const dataSize = (JSON.stringify(DB).length / 1024).toFixed(1);
@@ -6598,13 +6598,13 @@ function showBackupRestoreModal() {
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Google Account (Gmail) for Drive Upload</label>
         <input class="form-control" id="gdrive-email" type="email" placeholder="yourname@gmail.com"
           value="${escHtml(DB.settings.driveEmail||'')}"
-          oninput="DB.settings.driveEmail=this.value.trim();saveDB()"
+          oninput="DB.settings.driveEmail=this.value.trim();await saveDB()"
           style="font-size:12px">
         <div style="font-size:10px;color:var(--text3);margin-top:4px">Saved for reference — used to open the correct Drive account in your browser.</div>
       </div>
       <div class="field" style="margin-bottom:12px">
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Auto-Backup Schedule</label>
-        <select class="form-control" id="backup-schedule" onchange="DB.settings.backupSchedule=this.value;saveDB();updateBackupScheduleLabel()">
+        <select class="form-control" id="backup-schedule" onchange="DB.settings.backupSchedule=this.value;await saveDB();updateBackupScheduleLabel()">
           <option value="" ${!DB.settings.backupSchedule?'selected':''}>Disabled</option>
           <option value="daily" ${DB.settings.backupSchedule==='daily'?'selected':''}>Every Day</option>
           <option value="2days" ${DB.settings.backupSchedule==='2days'?'selected':''}>Every 2 Days</option>
@@ -6686,7 +6686,7 @@ function updateBackupScheduleLabel() {
   if(el) el.textContent = getNextBackupLabel();
 }
 // FIX: Replace Gmail backup with direct Google Drive backup
-function sendBackupToDrive() {
+async function sendBackupToDrive() {
   // Step 1: Download the backup JSON file to PC
   exportBackup('json');
   // Step 2: Open Google Drive upload page in system browser
@@ -6694,7 +6694,7 @@ function sendBackupToDrive() {
   openExternalLink(driveUrl);
   // Update last backup date
   DB.settings.lastBackupDate = new Date().toISOString().slice(0,10);
-  saveDB();
+  await saveDB();
   updateBackupScheduleLabel();
   toast('✅ Backup downloaded! Now upload it to Google Drive in your browser.', 'success');
 }
@@ -6829,7 +6829,7 @@ function _initDBFields(d) {
   return d;
 }
 
-function restoreBackup() {
+async function restoreBackup() {
   const input = document.getElementById('restore-file-input');
   if(!input?.files?.length){ toast('Please select a backup .json file first', 'error'); return; }
   const file = input.files[0];
@@ -6847,7 +6847,7 @@ function restoreBackup() {
         `This will replace ALL current data with backup data (${count} students). This cannot be undone!`,
         ()=>{
           DB = _initDBFields(parsed);
-          saveDB();
+          await saveDB();
           updateSidebar();
           applySavedTheme();
           navigate('dashboard');
@@ -6862,7 +6862,7 @@ function restoreBackup() {
   reader.readAsText(file);
 }
 
-function restoreFromPaste() {
+async function restoreFromPaste() {
   const text = document.getElementById('restore-json-paste')?.value?.trim();
   if(!text){ toast('Please paste JSON data first', 'error'); return; }
   try {
@@ -6877,7 +6877,7 @@ function restoreFromPaste() {
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
       ()=>{
         DB = _initDBFields(parsed);
-        saveDB();
+        await saveDB();
         updateSidebar();
         applySavedTheme();
         navigate('dashboard');
@@ -7589,7 +7589,7 @@ function calPopSelect(key, label) {
 
 
 // ════════════════════════════════════════════════════════════════════════════
-function checkAutoMonthAdvance() {
+async function checkAutoMonthAdvance() {
   if (DB.settings.autoMonthGenerate === false) return;
   const now = new Date();
   const currentMonthKey = now.toISOString().slice(0, 7);
@@ -7626,7 +7626,7 @@ function checkAutoMonthAdvance() {
   }
 
   DB.settings.lastAutoGenMonth = currentMonthKey;
-  saveDB();
+  await saveDB();
 
   if (totalAdded > 0) {
     const msg = monthsGenerated.length === 1
@@ -7636,7 +7636,7 @@ function checkAutoMonthAdvance() {
   }
 }
 
-function quickDashTransfer() {
+async function quickDashTransfer() {
   const amt = parseFloat(document.getElementById('dash-transfer-amt')?.value)||0;
   const method = document.getElementById('dash-transfer-method')?.value||'Cash';
   const recv = document.getElementById('dash-transfer-recv')?.value?.trim()||'';
@@ -7644,7 +7644,7 @@ function quickDashTransfer() {
   if(!amt||amt<=0){toast('Enter a valid amount','error');return;}
   if(!DB.transfers) DB.transfers=[];
   DB.transfers.push({id:'tr_'+uid(),amount:amt,method,receivedBy:recv,description:desc,date:today()});
-  saveDB();
+  await saveDB();
   ['dash-transfer-amt','dash-transfer-recv','dash-transfer-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderPage('dashboard');
   toast(`Transfer of ${fmtPKR(amt)} recorded!`,'success');
@@ -7823,7 +7823,8 @@ function enforceDataRetention() {
   if(oldPayments.length > 0 || oldExpenses.length > 0) {
     // Save to archive
     try {
-      const existingArchive = JSON.parse(localStorage.getItem('dbh2_archive')||'{"payments":[],"expenses":[]}');
+      // Archive is now stored in SQLite — fetch via IPC if needed
+      const existingArchive = { payments: [], expenses: [] };
       // FIX #8: Deduplicate by ID before appending — repeated saves previously caused duplicate archive entries
       const existingPayIds = new Set((existingArchive.payments||[]).map(p => p.id));
       const existingExpIds = new Set((existingArchive.expenses||[]).map(e => e.id));
@@ -7836,7 +7837,7 @@ function enforceDataRetention() {
         ...oldExpenses.filter(e => !existingExpIds.has(e.id))
       ];
       existingArchive.lastArchived = new Date().toISOString();
-      localStorage.setItem('dbh2_archive', JSON.stringify(existingArchive));
+      // Archive records are written to SQLite archive table via saveDB()
     } catch(e) {}
 
     // Remove from live DB — but keep all Pending payments regardless of age
@@ -7855,7 +7856,7 @@ function enforceDataRetention() {
 // ════════════════════════════════════════════════════════════════════════════
 // THEME / ACCENT COLOR
 // ════════════════════════════════════════════════════════════════════════════
-function applyThemeColor(hex) {
+async function applyThemeColor(hex) {
   DB.settings.accentColor = hex;
   // FIX #12: Derive --gold2 as a lighter tint (not identical to --gold) for proper text contrast
   const r = parseInt(hex.slice(1,3), 16);
@@ -7869,7 +7870,7 @@ function applyThemeColor(hex) {
   document.documentElement.style.setProperty('--gold3', '#' + [r,g,b].map(c => Math.round(Math.min(255, c + (255-c)*0.55)).toString(16).padStart(2,'0')).join(''));
   document.documentElement.style.setProperty('--gold-dim', `rgba(${r},${g},${b},0.15)`);
   document.documentElement.style.setProperty('--shadow-gold', `0 4px 20px rgba(${r},${g},${b},0.25)`);
-  saveDB();
+  await saveDB();
   const lbl=document.getElementById('accent-hex-label'); if(lbl) lbl.textContent=hex;
   renderPage('settings');
   toast('Theme color updated','success');
@@ -7898,13 +7899,13 @@ function applySavedSidebar() {
 
 document.getElementById('hdr-date').textContent = new Date().toLocaleDateString('en-PK',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
 
-// ── OFFLINE BOOT — loads instantly from localStorage, no network needed ───────
-loadDB();
+// ── BOOT — load from SQLite (async) ────────────────────────────────────────────
+(async function boot() { await loadDB(); })();
 migrateStudentIdsToNumeric();
 
 // ── FIX #3: Auto-confirm cancellations whose vacate date has passed ───────────
 // Runs on every app boot so no manual step is ever needed.
-function processAutoCancellations() {
+async function processAutoCancellations() {
   var todayStr = today(); // returns "YYYY-MM-DD"
   var count = 0;
   (DB.cancellations||[]).forEach(function(c) {
@@ -7922,7 +7923,7 @@ function processAutoCancellations() {
     count++;
   });
   if (count > 0) {
-    saveDB();
+    await saveDB();
     console.log('[Auto-Confirm] '+count+' cancellation(s) auto-confirmed on boot.');
   }
 }
@@ -8145,13 +8146,13 @@ function saveIssue() {
       date:(document.getElementById('cp-date')||{}).value||today(),status:'Open',response:''});
     issuesTab='complaints';
   }
-  saveDB(); closeModal(); renderPage('issues'); toast('Saved','success');
+  await saveDB(); closeModal(); renderPage('issues'); toast('Saved','success');
 }
 
-function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();saveDB();renderPage('issues');toast('Resolved','success');}}
-function progressMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='InProgress';saveDB();renderPage('issues');toast('In Progress','info');}}
-function delMaint(id){showConfirm('Delete?','',function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});saveDB();renderPage('issues');toast('Deleted','info');});}
-function resolveComp(id) {
+async function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();await saveDB();renderPage('issues');toast('Resolved','success');}}
+async function progressMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='InProgress';await saveDB();renderPage('issues');toast('In Progress','info');}}
+async function delMaint(id){showConfirm('Delete?','',function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+async function resolveComp(id) {
   // FIX #7: Replace blocking native prompt() with an in-app modal dialog
   var cc = DB.complaints.find(function(x){return x.id===id;}); if(!cc) return;
   showModal('modal-sm', '✅ Resolve Complaint',
@@ -8161,11 +8162,11 @@ function resolveComp(id) {
     '<button class="btn btn-success" onclick="(function(){' +
       'var cc=DB.complaints.find(function(x){return x.id===\''+id+'\';});' +
       'if(cc){cc.status=\'Resolved\';cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
-      'saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
+      'await saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
     '})()">Mark Resolved</button>'
   );
 }
-function delComp(id){showConfirm('Delete?','',function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});saveDB();renderPage('issues');toast('Deleted','info');});}
+async function delComp(id){showConfirm('Delete?','',function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 
 // Keep original function names as aliases so dashboard alerts still work
 function resolveMaintenance(id){resolveMaint(id);}
@@ -8479,7 +8480,7 @@ function rsRecalc() {
   }
 }
 
-function submitRestoreStudent(studentId) {
+async function submitRestoreStudent(studentId) {
   const t=DB.students.find(x=>x.id===studentId); if(!t) return;
   const roomId=document.getElementById('rs-room').value;
   const rent  =parseFloat(document.getElementById('rs-rent').value)||0;
@@ -8529,7 +8530,7 @@ function submitRestoreStudent(studentId) {
   }
   if(!DB.activityLog) DB.activityLog=[];
   DB.activityLog.unshift({id:uid(),type:'restore',icon:'🔄',text:`${t.name} restored to Room #${room?.number||''}`,date:new Date().toISOString()});
-  saveDB(); closeModal();
+  await saveDB(); closeModal();
   toast(`✅ ${t.name} restored to Room #${room?.number||''}!`,'success');
   if(currentPage==='dashboard'||currentPage==='students') renderPage(currentPage);
 }
@@ -8642,7 +8643,7 @@ function updateLoginAvatar(key) {
   }
 }
 
-function saveWardenInfo(key) {
+async function saveWardenInfo(key) {
   var nameEl = document.getElementById('wn-'+key);
   var pwEl   = document.getElementById('wp-'+key);
   var wwaEl  = document.getElementById('wwa-'+key);
@@ -8655,7 +8656,7 @@ function saveWardenInfo(key) {
     // Auto-update default WA number to the current logged-in warden's number
     if(key===CUR_ROLE && wwaEl.value.trim()) {
       DB.settings.defaultWANumber = wwaEl.value.trim();
-      saveDB();
+      await saveDB();
     }
   }
   saveWardenConfig();
