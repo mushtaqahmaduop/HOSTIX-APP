@@ -4,8 +4,8 @@
    Also provides deactivateLicense() for the Settings page.
 
    FIXES:
-   FIX-L1  maxlength corrected to 19 (HOSTEL-XXXX-XXXX-XXXX = 19 chars exactly).
-   FIX-L2  licDoActivate validates key length using 19 (was 21 in one version).
+   FIX-L1  maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars).
+   FIX-L2  licDoActivate validates key length using 21.
    FIX-L3  Activate button double-click race condition fixed — disable on click.
    FIX-L4  licFormatKey rewritten — handles partial input and paste correctly.
    FIX-L5  Machine ID shown as truncated (first 16 chars + …) for privacy.
@@ -90,8 +90,8 @@ function _showActivationScreen(reason, expiry) {
     + (canActivate
       ? '<div style="margin-bottom:10px;text-align:left;">'
         + '<div style="font-size:11px;color:#4d6580;margin-bottom:6px;font-weight:700;">LICENSE KEY</div>'
-        // [FIX-L1] maxlength corrected to 19 (HOSTEL-XXXX-XXXX-XXXX is exactly 19 chars)
-        + '<input id="lic-key-input" type="text" maxlength="19" placeholder="HOSTEL-XXXX-XXXX-XXXX"'
+        // [FIX-L1] maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars)
+        + '<input id="lic-key-input" type="text" maxlength="21" placeholder="HOSTEL-XXXX-XXXX-XXXX"'
         + ' oninput="licFormatKey(this)"'
         + ' style="width:100%;box-sizing:border-box;padding:12px 16px;background:#0f1a2e;'
         + 'border:1px solid #1e3050;border-radius:10px;color:#e8eef8;font-size:15px;'
@@ -127,12 +127,15 @@ function _showActivationScreen(reason, expiry) {
 }
 
 // ── [FIX-L4] FORMAT KEY INPUT (auto-insert dashes, handles paste & backspace) ─
+// [FIX-L7] Handles paste of already-formatted keys (e.g. HOSTEL-ABCD-EFGH-IJKL)
 function licFormatKey(inp) {
-  // Strip everything except alphanumeric, work on raw value
-  var raw   = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Strip everything except alphanumeric — handles pasted keys with dashes/spaces
+  var raw   = inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Ensure HOSTEL prefix
   var body  = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
 
   // Build formatted parts (max 12 body chars = 3 groups of 4)
+  // This correctly reformats both partial input and fully-pasted keys
   var parts = [];
   for (var i = 0; i < body.length && i < 12; i += 4) {
     parts.push(body.slice(i, i + 4));
@@ -161,8 +164,8 @@ async function licDoActivate() {
   if (errEl) errEl.style.display = 'none';
   if (okEl)  okEl.style.display  = 'none';
 
-  // [FIX-L2] Correct length check: HOSTEL-XXXX-XXXX-XXXX = 19 characters
-  if (!key || key.length < 19) {
+  // [FIX-L2] Correct length check: HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 characters
+  if (!key || key.length < 21) {
     if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
     return;
   }

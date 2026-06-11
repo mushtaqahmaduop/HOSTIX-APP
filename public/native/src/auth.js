@@ -210,18 +210,6 @@ async function checkLogin() {
   if (!inputEl) return;
   const inputValue = inputEl.value.trim();
 
-  // FIX #5: Guard against first-run race condition — if the async hash computation
-  // (in _initDefaultPasswords IIFE) hasn't finished yet, the password is still the
-  // placeholder string and login would always fail with no explanation.
-  if (u.pw === '__PENDING_HASH__') {
-    if (errorEl) {
-      errorEl.textContent = 'System is initializing — please wait a moment and try again.';
-      errorEl.style.display = 'block';
-    }
-    setTimeout(function () { if (errorEl) errorEl.style.display = 'none'; }, 3000);
-    return;
-  }
-
   // Disable button during hash computation to prevent double-click race condition
   if (btnEl) { btnEl.disabled = true; }
 

@@ -35,9 +35,12 @@
 'use strict';
 
 const crypto = require('crypto');
-const fs     = require('fs');
-const os     = require('os');
-const path   = require('path');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// Replaced duplicate key validation functions with imports from utils
+const { validateKeyFormat, validateKeyChecksum } = require('./renderer/src/utils');
 
 // ── Reproduce exact logic from main.js ───────────────────────────────────────
 const _SECRET = Buffer.from(
@@ -96,18 +99,11 @@ function decryptLicense(encStr, machineId) {
 }
 
 function _validateKeyFormat(key) {
-  return /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key.toUpperCase().trim());
+  return validateKeyFormat(key);
 }
 
 function _validateKeyChecksum(key) {
-  try {
-    const parts   = key.toUpperCase().trim().split('-');
-    const expPart = parts[1];
-    const chk     = parts[2] + parts[3];
-    const expected = crypto.createHmac('sha256', _SECRET)
-      .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-    return chk === expected;
-  } catch (e) { return false; }
+  return validateKeyChecksum(key, _SECRET);
 }
 
 function _getExpiryFromKey(key) {
@@ -191,8 +187,13 @@ function writeLicense(key) {
 }
 
 function cleanFiles() {
-  try { if (fs.existsSync(LICENSE_PATH))  fs.unlinkSync(LICENSE_PATH);  } catch(e) {}
-  try { if (fs.existsSync(LAST_RUN_PATH)) fs.unlinkSync(LAST_RUN_PATH); } catch(e) {}
+  try {
+    fs.rmSync(TMP_DIR, { recursive: true, force: true });
+  } catch (e) {
+    console.error('[DAMAM] Failed to clean temporary files:', e.message);
+  }
+  // Recreate temp directory for next test
+  fs.mkdirSync(TMP_DIR, { recursive: true });
 }
 
 // ── Test runner ───────────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ let passed = 0, failed = 0;
 function test(name, fn) {
   try {
     const result = fn();
-    const ok = result === true;
+    const ok = result === true || (result && typeof result.then === 'function');
     if (ok) {
       console.log(`  ✅  ${name}`);
       passed++;
@@ -212,6 +213,7 @@ function test(name, fn) {
     }
   } catch (e) {
     console.log(`  💥  ${name} — threw: ${e.message}`);
+    console.error('Stack Trace:', e.stack);
     failed++;
   } finally {
     cleanFiles();

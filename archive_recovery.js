@@ -9,29 +9,6 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 
-// ── THEME SYSTEM ─────────────────────────────────────────────────────────────
-function toggleTheme() {
-  const isLight = document.body.classList.toggle('light-theme');
-  localStorage.setItem('theme', isLight ? 'light' : 'dark');
-  updateThemeUI(isLight);
-  // Re-draw charts if needed for contrast
-  if (typeof drawTrendChart === 'function') drawTrendChart();
-}
-function updateThemeUI(isLight) {
-  const icon = document.getElementById('theme-icon');
-  if (icon) icon.textContent = isLight ? '☀️' : '🌙';
-  const toggle = document.getElementById('theme-toggle');
-  if (toggle) toggle.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
-}
-// Apply theme immediately
-(function initTheme() {
-  const saved = localStorage.getItem('theme');
-  if (saved === 'light') {
-    document.body.classList.add('light-theme');
-    setTimeout(() => updateThemeUI(true), 100);
-  }
-})();
-
 // ── COURSE AUTOCOMPLETE — defined in src/utils.js (do not redeclare here)
 function getTypeById(id) { return DB.settings.roomTypes.find(t=>t.id===id)||DB.settings.roomTypes[0]; }
 function getRoomType(room) { return getTypeById(room.typeId); }
@@ -351,7 +328,37 @@ function updateSidebar() {
   const issuesBadge = document.getElementById('issues-badge');
   const openIssues = (DB.maintenance||[]).filter(m=>m.status==='Open').length + (DB.complaints||[]).filter(c=>c.status==='Open').length;
   if(issuesBadge) { issuesBadge.textContent = openIssues; issuesBadge.style.display = openIssues>0?'flex':'none'; }
-
+  // Fix #5: Render Contact & Support section at bottom of sidebar
+  const contactEl = document.getElementById('sb-contact-section');
+  if(contactEl) {
+    const phone = DB.settings.phone || '';
+    const email = DB.settings.email || '';
+    const dev = 'Mushtaq Ahmad';
+    const devPhone = '03189981202';
+    const devEmail = 'mushhtaqahmadicp@gmail.com';
+    contactEl.innerHTML = `
+      <div style="margin:0 8px 10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px">
+        <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.3);margin-bottom:8px;padding:0 8px">📞 Contact & Support</div>
+        ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;text-decoration:none;transition:background 0.15s;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background=''">
+          <span style="font-size:13px">📱</span><span style="font-size:11px;color:rgba(255,255,255,0.55)">${phone}</span>
+        </a>`:''}
+        ${email?`<a href="mailto:${email}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;text-decoration:none;transition:background 0.15s;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background=''">
+          <span style="font-size:13px">✉️</span><span style="font-size:11px;color:rgba(255,255,255,0.55)">${email}</span>
+        </a>`:''}
+        <div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.15)">
+          <div style="font-size:9px;color:var(--gold2);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Developer</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);font-weight:600">${dev}</div>
+          <a href="#" onclick="openExternalLink('https://wa.me/92${devPhone.replace(/^0/,'')}');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:5px;padding:4px 6px;border-radius:6px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2)" onmouseover="this.style.background='rgba(37,211,102,0.18)'" onmouseout="this.style.background='rgba(37,211,102,0.08)'">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#25D366"/><path d="M23.5 8.5A10.4 10.4 0 0 0 16 5.5C10.2 5.5 5.5 10.2 5.5 16c0 1.85.48 3.66 1.4 5.26L5.5 26.5l5.36-1.4A10.44 10.44 0 0 0 16 26.5c5.8 0 10.5-4.7 10.5-10.5 0-2.8-1.09-5.43-3-7.5zm-7.5 16.1c-1.56 0-3.1-.42-4.44-1.2l-.32-.19-3.18.83.85-3.1-.21-.33A8.65 8.65 0 0 1 7.35 16c0-4.77 3.88-8.65 8.65-8.65 2.31 0 4.48.9 6.11 2.53A8.6 8.6 0 0 1 24.65 16c0 4.77-3.88 8.6-8.65 8.6zm4.74-6.48c-.26-.13-1.53-.75-1.77-.84-.23-.09-.4-.13-.57.13-.17.26-.65.84-.8 1.01-.15.17-.29.19-.55.06-.26-.13-1.1-.4-2.1-1.28-.77-.69-1.3-1.54-1.45-1.8-.15-.26-.02-.4.11-.53.12-.11.26-.29.39-.44.13-.14.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.37-.78-1.87-.2-.49-.42-.42-.57-.43h-.49c-.17 0-.44.06-.67.32-.23.26-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.57.13.17 1.75 2.67 4.24 3.74.59.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.2-.57.2-1.07.14-1.17-.07-.1-.24-.16-.5-.29z" fill="#fff"/></svg>
+            ${devPhone}
+          </a>
+          <a href="#" onclick="openExternalLink('https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(devEmail)}&su=Support+Request+—+DAMAM+Hostel+Management');return false;" style="display:flex;align-items:center;gap:6px;font-size:10px;color:rgba(255,255,255,0.55);text-decoration:none;margin-top:4px;padding:4px 6px;border-radius:6px;background:rgba(234,67,53,0.08);border:1px solid rgba(234,67,53,0.2);word-break:break-all" onmouseover="this.style.background='rgba(234,67,53,0.18)'" onmouseout="this.style.background='rgba(234,67,53,0.08)'">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none" style="flex-shrink:0"><rect width="32" height="32" rx="4" fill="#fff"/><path d="M5 10l11 8 11-8" stroke="#EA4335" stroke-width="2" fill="none"/><rect x="5" y="10" width="22" height="14" rx="1" stroke="#4285F4" stroke-width="1.5" fill="none"/><path d="M5 10l7 7M27 10l-7 7" stroke="#34A853" stroke-width="1.5"/></svg>
+            ${devEmail}
+          </a>
+        </div>
+      </div>`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1942,7 +1949,8 @@ function showAddRoomModal(presetId='') {
         <div style="font-size:10px;color:var(--text3);margin-top:3px">First letter AUTO-capitals · numbers · suffix in small (a, b…)</div>
       </div>
       <div class="field"><label>Floor *</label><select class="form-control" id="f-rfloor">${floorOpts}</select></div>
-      <div class="field"><label>Room Type *</label><select class="form-control" id="f-rtype">${typeOpts}</select></div>
+      <div class="field"><label>Room Type *</label><select class="form-control" id="f-rtype" onchange="document.getElementById('f-rrent').value=DB.settings.roomTypes.find(t=>t.id===this.value)?.defaultRent||0">${typeOpts}</select></div>
+      <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-rrent" type="number" placeholder="e.g. 16000"></div>
 
       <div class="field col-full"><label>Amenities (comma separated)</label><input class="form-control" id="f-ramen" value="Fan, Bed, Wardrobe, Attached Bath"></div>
       <div class="field col-full"><label>Notes</label><textarea class="form-control" id="f-rnotes"></textarea></div>
@@ -1959,10 +1967,8 @@ function submitAddRoom() {
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
   const typeId=document.getElementById('f-rtype').value;
-  // Rent auto-derived from Room Type — no manual override to avoid conflicts with Settings rent update
-  const _roomTypeObj = DB.settings.roomTypes.find(t=>t.id===typeId);
-  const rent = _roomTypeObj?.defaultRent || 0;
-  if(!num||!floor||!typeId){toast('Fill all required fields','error');return;}
+  const rent=parseFloat(document.getElementById('f-rrent').value);
+  if(!num||!floor||!typeId||!rent){toast('Fill all required fields','error');return;}
   if(DB.rooms.find(r=>String(r.number).toUpperCase()===num)){toast('Room name already exists','error');return;}
   const amenities=document.getElementById('f-ramen').value.split(',').map(s=>s.trim()).filter(Boolean);
   const notes=document.getElementById('f-rnotes').value;
@@ -1984,6 +1990,7 @@ function showEditRoomModal(id) {
           style="font-weight:700;letter-spacing:1px"></div>
       <div class="field"><label>Floor</label><select class="form-control" id="f-rfloor">${floorOpts}</select></div>
       <div class="field"><label>Room Type</label><select class="form-control" id="f-rtype">${typeOpts}</select></div>
+      <div class="field"><label>Monthly Rent (PKR)</label><input class="form-control" id="f-rrent" type="number" value="${r.rent}"></div>
       <div class="field col-full"><label>Amenities (comma separated)</label><input class="form-control" id="f-ramen" value="${escHtml((r.amenities||[]).join(', '))}"></div>
       <div class="field col-full"><label>Notes</label><textarea class="form-control" id="f-rnotes">${escHtml(r.notes||'')}</textarea></div>
     </div>`,
@@ -1994,9 +2001,7 @@ function submitEditRoom(id) {
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;
   r.floor=document.getElementById('f-rfloor').value;
   r.typeId=document.getElementById('f-rtype').value;
-  // Sync rent from room type — keeps rent consistent with Settings
-  const _editedType = DB.settings.roomTypes.find(t=>t.id===r.typeId);
-  if (_editedType) r.rent = _editedType.defaultRent;
+  r.rent=parseFloat(document.getElementById('f-rrent').value)||r.rent;
   r.number=newNum;
   const oldNumber = r.number;
   r.amenities=document.getElementById('f-ramen').value.split(',').map(s=>s.trim()).filter(Boolean);
@@ -2567,7 +2572,7 @@ function openAddStudentCamera() {
     navigator.permissions.query({name:'camera'}).then(function(ps){
       if(ps.state==='denied'){
         box.style.display='none';
-        _showCameraPermBanner();
+        toast('📷 Camera permission blocked. Go to Windows Settings → Privacy & Security → Camera and enable this app, then restart.','error');
         return;
       }
       _startCam();
@@ -2658,7 +2663,7 @@ function openEditStudentCamera() {
     navigator.permissions.query({name:'camera'}).then(function(ps){
       if(ps.state==='denied'){
         box.style.display='none';
-        _showCameraPermBanner();
+        toast('📷 Camera permission blocked. Go to Windows Settings → Privacy & Security → Camera and enable this app, then restart.','error');
         return;
       }
       _startCam();
@@ -3380,14 +3385,10 @@ function selectStudentForPayment(studentId) {
   if (!t) return;
   const room = DB.rooms.find(r => r.id === t.roomId);
   const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
-  // BUG FIX: Derive the most current rent. t.rent is updated by settings changes.
-  // Additionally fall back to rtype.defaultRent so even edge-cases (e.g. _rentManuallySet
-  // blocked a settings propagation) still show the latest room-type fee in the modal.
-  const currentRent = t.rent || rtype?.defaultRent || 16000;
   document.getElementById('f-pstudent').value = studentId;
   document.getElementById('f-pstudent-search').value = t.name + ' — Room #' + (room?.number||'?');
   document.getElementById('student-search-results').style.display = 'none';
-  if (document.getElementById('f-pamt')) { document.getElementById('f-pamt').value = currentRent; }
+  if (document.getElementById('f-pamt')) { document.getElementById('f-pamt').value = t.rent||16000; }
   if (document.getElementById('f-pconcession') && t.concession) {
     document.getElementById('f-pconcession').value = t.concession;
     if(t.concessionDesc && document.getElementById('f-pconcession-desc'))
@@ -3400,7 +3401,7 @@ function selectStudentForPayment(studentId) {
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Student ID</span><div style="font-weight:700;color:var(--text);font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Room</span><div style="font-weight:700;color:var(--gold2)">#${room?.number||'?'} · ${rtype?.name||''} · ${room?.floor||''} Floor</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Phone</span><div style="font-weight:600">${escHtml(t.phone||'—')}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(currentRent)}</div></div>
+    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(t.rent)}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Address</span><div style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div></div>
   </div>`;
 }
@@ -3554,13 +3555,9 @@ function showAddPaymentForStudent(studentId) {
     const unpaidEl= document.getElementById('f-ps-unpaid');
     const statEl  = document.getElementById('f-ps-stat');
     const notesEl = document.getElementById('f-ps-notes');
-    // BUG FIX: Always use the student's CURRENT rent (t.rent) as the authoritative value.
-    // existingPending.monthlyRent may be stale if the warden updated fees in Settings after
-    // this pending record was created. t.rent is always kept in sync by updateRoomType/applyRent.
-    const currentRentPS = t.rent || existingPending.monthlyRent || existingPending.amount || 16000;
-    if (rentEl)   rentEl.value   = currentRentPS;
+    if (rentEl)   rentEl.value   = existingPending.monthlyRent || existingPending.amount || t.rent;
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
-    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : (currentRentPS - (existingPending.amount||0));
+    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : (t.rent - (existingPending.amount||0));
     if (statEl)   statEl.value   = existingPending.status;
     if (notesEl)  notesEl.value  = existingPending.notes || '';
     toast('Loaded existing pending payment data', 'info');
@@ -3734,7 +3731,7 @@ function showAddPaymentModal() {
           </div>
         </div>
       </div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="0" readonly style="background:var(--bg3);font-weight:700;color:var(--red)" title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
+      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="16000" readonly style="background:var(--bg3);font-weight:700;color:var(--red)" title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="f-pmethod">${pmOpts}</select></div>
       <div class="field"><label>Month</label><input class="form-control" id="f-pmonth" value="${thisMonthLabel()}"></div>
       <div class="field"><label>Status</label>
@@ -3891,10 +3888,7 @@ function showEditPaymentModal(id) {
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
   const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;
   const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${p.method===m?'selected':''}>${m}</option>`).join('');
-  // BUG FIX: Use the student's CURRENT rent (t.rent) as the primary value.
-  // p.monthlyRent is the rent at the time the payment was recorded and may be stale
-  // if the warden has since updated fees in Settings. t.rent is always kept in sync.
-  const monthlyRent  = t?.rent || p.monthlyRent || p.totalRent || 0;
+  const monthlyRent  = p.monthlyRent || p.totalRent || t?.rent || 0;
   const paidAmount   = p.amount || 0;
   const admissionFee = p.admissionFee || p.fee || 0;
   const concession   = p.concession || p.discount || 0;
@@ -5278,7 +5272,11 @@ function renderSettings() {
     {id:'floors', icon:'🏗️', label:'Floors'},
     {id:'theme', icon:'🎨', label:'Theme & Display'},
     {id:'data', icon:'💾', label:'Data Management'},
+    {id:'rentupdate', icon:'💰', label:'Rent Update'},
+    {id:'archive', icon:'📁', label:'Annual Archive'},
+    {id:'splash',  icon:'✨', label:'Splash Screen'},
     {id:'license', icon:'🔐', label:'License'}
+  
   ];
 
   const pmList = (s.paymentMethods||[]).map(m=>`<div class="tag-item" id="pm-${escHtml(m)}">${escHtml(m)}<button class="tag-remove" onclick="removePaymentMethod('${escHtml(m)}')">×</button></div>`).join('');
@@ -5580,7 +5578,24 @@ function renderSettings() {
 
     </div>
   </div>
+      <!-- ANNUAL ARCHIVE PANEL -->
+      <div class="settings-panel ${settingsTab==='archive'?'active':''}" style="text-align:center;padding:60px 20px;">
+        <div style="font-size:48px;margin-bottom:16px">📁</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Annual Archive</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:20px">View full year financial breakdown, monthly trends and reports</div>
+        <button class="btn btn-primary" onclick="navigate('archive')">Open Annual Archive →</button>
+      </div>
 
+      <!-- SPLASH SCREEN -->
+      <div class="settings-panel ${settingsTab==='splash'?'active':''}">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">✨ Splash Screen</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Customize the welcome screen shown after login</div>
+          </div>
+          ${renderSplashSettings()}
+        </div>
+      </div>
 
       <!-- LICENSE -->
       <div class="settings-panel ${settingsTab==='license'?'active':''}">
@@ -5972,9 +5987,8 @@ function importFromExcel(input) {
         if (!roomNo) { errors.push(`Row ${lineNo}: Room Number is required for ${name}`); return; }
         if (!rent)   { errors.push(`Row ${lineNo}: Monthly Rent is required for ${name}`); return; }
 
-        // Find matching room by number — normalize both sides (strip spaces, lowercase)
-        const _normRm = s => String(s).replace(/\s+/g,'').toLowerCase();
-        const room = DB.rooms.find(r => _normRm(r.number) === _normRm(roomNo));
+        // Find matching room by number
+        const room = DB.rooms.find(r => String(r.number) === String(roomNo).trim());
         if (!room) { errors.push(`Row ${lineNo}: Room #${roomNo} does not exist in app — skipping ${name}`); return; }
 
         // Check room capacity
@@ -6075,15 +6089,11 @@ function _showExcelImportPreview(rows, errors) {
       ${rows.length>20?`<div style="padding:10px;text-align:center;font-size:12px;color:var(--text3)">… and ${rows.length-20} more rows (all will be imported)</div>`:''}
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" style="background:linear-gradient(135deg,#0d2d1a,#0a2015);border-color:rgba(46,201,138,0.5);color:var(--green)" onclick="confirmExcelImport()">✅ Import ${rows.length} Students</button>`
+   <button class="btn btn-primary" style="background:linear-gradient(135deg,#0d2d1a,#0a2015);border-color:rgba(46,201,138,0.5);color:var(--green)" onclick="confirmExcelImport(${JSON.stringify(rows).replace(/</g,'\\u003c').replace(/>/g,'\\u003e')})">✅ Import ${rows.length} Students</button>`
   );
-  // Store rows in a safe global — avoids JSON-in-onclick breakage on apostrophes/special chars
-  window._excelImportRows = rows;
 }
 
-function confirmExcelImport() {
-  const rows = window._excelImportRows || [];
-  window._excelImportRows = null;
+function confirmExcelImport(rows) {
   closeModal();
   let added = 0, skipped = 0;
   rows.forEach(r => {
@@ -6720,22 +6730,20 @@ function checkAutoBackupSchedule() {
       : 'No backup has been made yet.';
     var banner = document.createElement('div');
     banner.id = 'backup-due-banner';
-    // FIX B5: moved to bottom so it does not cover the app header/sidebar
     banner.style.cssText = [
-      'position:fixed','bottom:0','left:0','right:0','z-index:99999',
+      'position:fixed','top:0','left:0','right:0','z-index:99999',
       'background:linear-gradient(90deg,#1e3c6a,#2a5298)',
       'color:#e8eef8','font-size:13px','font-weight:600',
       'padding:10px 20px','display:flex','align-items:center',
-      'gap:12px','box-shadow:0 -3px 16px rgba(0,0,0,0.55)'
+      'gap:12px','box-shadow:0 3px 16px rgba(0,0,0,0.55)'
     ].join(';');
-    // FIX B5: use this.parentElement.remove() — avoids broken inner-quote bug
     banner.innerHTML =
       '<span style="font-size:18px">⏰</span>' +
       '<span style="flex:1">Scheduled backup is due. ' + lastStr + ' Back up now to avoid data loss.</span>' +
-      '<button onclick="sendBackupToDrive();this.parentElement.remove();" ' +
+      '<button onclick="sendBackupToDrive();document.getElementById("backup-due-banner").remove()" ' +
         'style="background:#e6c96e;color:#071428;border:none;border-radius:7px;padding:6px 16px;' +
         'font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">💾 Backup Now</button>' +
-      '<button onclick="this.parentElement.remove();" ' +
+      '<button onclick="document.getElementById("backup-due-banner").remove()" ' +
         'style="background:rgba(255,255,255,0.1);color:#e8eef8;border:none;border-radius:7px;' +
         'padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap">Dismiss</button>';
     document.body.prepend(banner);
@@ -6823,9 +6831,6 @@ function _initDBFields(d) {
   if (!d.settings.paymentMethods) d.settings.paymentMethods = ['Cash','JazzCash','EasyPaisa','Bank Transfer','Cheque'];
   if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Other'];
   if (!d.settings.floors) d.settings.floors = ['Ground','1st','2nd','3rd'];
-  // FIX #6: Use == null to guard receiptCounter — !0 is truthy so a simple falsy
-  // check would reset a valid counter of 0 back to 0, potentially duplicating receipt numbers.
-  if (d.settings.receiptCounter == null) d.settings.receiptCounter = 0;
   return d;
 }
 
@@ -7149,37 +7154,6 @@ if (typeof capFirstChar === 'undefined') {
 // ════════════════════════════════════════════════════════════════════════════
 // TOAST
 // ════════════════════════════════════════════════════════════════════════════
-// ── Camera Permission Banner ──────────────────────────────────────────────────
-// Shows a persistent, dismissible sticky banner when camera access is blocked.
-// Uses a flag so it never appears twice at the same time.
-var _camPermBannerActive = false;
-function _showCameraPermBanner() {
-  if (_camPermBannerActive || document.getElementById('cam-perm-banner')) return;
-  _camPermBannerActive = true;
-  var b = document.createElement('div');
-  b.id = 'cam-perm-banner';
-  b.style.cssText = [
-    'position:fixed','top:0','right:0','z-index:99998',
-    'background:linear-gradient(135deg,#2a0a0a,#3d0f0f)',
-    'border:1.5px solid rgba(224,82,82,0.6)',
-    'border-top:none','border-right:none',
-    'border-radius:0 0 0 12px',
-    'color:#f0c0c0','font-size:12.5px','font-weight:500',
-    'padding:10px 14px 10px 16px',
-    'display:flex','align-items:flex-start','gap:10px',
-    'max-width:340px','line-height:1.5',
-    'box-shadow:-4px 4px 20px rgba(0,0,0,0.5)'
-  ].join(';');
-  b.innerHTML =
-    '<span style="font-size:18px;flex-shrink:0;margin-top:1px">📷</span>' +
-    '<span style="flex:1"><strong style="color:#e05252;display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
-    'Go to <strong style="color:#f0c0c0">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
-    '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
-      'style="background:none;border:none;color:#e05252;font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
-      'title="Dismiss">✕</button>';
-  document.body.appendChild(b);
-}
-
 function toast(msg, type='info') {
   const icons={success:'✓',error:'✕',info:'ℹ'};
   const t=document.createElement('div');
@@ -7937,7 +7911,16 @@ renderSidebarCalendar();
 checkAutoMonthAdvance();
 checkAutoBackupSchedule(); // Fix #7: remind warden if scheduled backup is due
 
-
+// Fix #5: Ensure sb-contact-section exists in sidebar (below Clear All in System section)
+(function _ensureContactSection() {
+  if (document.getElementById('sb-contact-section')) return;
+  // Fallback: insert before closing of .sb-nav
+  const nav = document.querySelector('#sidebar .sb-nav');
+  if (!nav) return;
+  const div = document.createElement('div');
+  div.id = 'sb-contact-section';
+  nav.appendChild(div);
+})();
 // Sync login screen hostel name from saved settings
 const loginNameEl = document.getElementById('login-hostel-name');
 if (loginNameEl && DB.settings && DB.settings.hostelName) {
@@ -7945,7 +7928,206 @@ if (loginNameEl && DB.settings && DB.settings.hostelName) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// SPLASH SCREEN ENGINE
+// ══════════════════════════════════════════════════════════════════════════
+var _splashTimer = null;
+var _splashAnimFrame = null;
 
+function getSplashConfig() {
+  var def = {
+    enabled: true,
+    duration: 1.5,
+    message: 'Have a productive day managing the hostel. All the best!',
+    bg: 'dark-blue',
+    customBg: '',
+    showParticles: true
+  };
+  return Object.assign({}, def, DB.settings.splashScreen || {});
+}
+
+var SPLASH_THEMES = {
+  'dark-blue':  { bg: 'linear-gradient(135deg,#060c18 0%,#0a1628 50%,#071020 100%)', label: '🌙 Dark Blue' },
+  'midnight':   { bg: 'linear-gradient(135deg,#0d0d1a 0%,#1a0a2e 50%,#0d0d1a 100%)', label: '🔮 Midnight Purple' },
+  'deep-green': { bg: 'linear-gradient(135deg,#030f07 0%,#051a0d 50%,#030f07 100%)', label: '🌿 Deep Green' },
+  'charcoal':   { bg: 'linear-gradient(135deg,#111 0%,#1c1c1c 50%,#111 100%)',         label: '⬛ Charcoal' },
+  'navy-gold':  { bg: 'linear-gradient(135deg,#03080f 0%,#0a1a2e 40%,#1a1000 100%)',  label: '⭐ Navy & Gold' },
+  'crimson':    { bg: 'linear-gradient(135deg,#0f0305 0%,#1a0508 50%,#0f0305 100%)',  label: '🔴 Deep Crimson' },
+  'custom':     { bg: '', label: '🎨 Custom Color' }
+};
+
+function showSplashScreen() {
+  var cfg = getSplashConfig();
+  if (!cfg.enabled) return;
+  var el = document.getElementById('splash-screen');
+  if (!el) return;
+
+  // Apply background theme
+  var theme = SPLASH_THEMES[cfg.bg] || SPLASH_THEMES['dark-blue'];
+  var bgVal = (cfg.bg === 'custom' && cfg.customBg) ? cfg.customBg : theme.bg;
+  el.style.background = bgVal;
+
+  // Populate content
+  var hostelName = (DB.settings && DB.settings.hostelName) || 'DAMAM Boys Hostel';
+  var wardenName = (CUR_USER && CUR_USER.name) || 'Warden';
+  var logo = localStorage.getItem('hostel_logo_' + _ACTIVE_HOSTEL);
+
+  var nameEl = document.getElementById('splash-hostel-name');
+  if (nameEl) nameEl.textContent = hostelName;
+  var greetingEl = document.getElementById('splash-warden-name');
+  if (greetingEl) greetingEl.textContent = wardenName;
+  var msgEl = document.getElementById('splash-message');
+  if (msgEl) msgEl.textContent = cfg.message || '';
+
+  var logoImg   = document.getElementById('splash-logo-img');
+  var logoEmoji = document.getElementById('splash-logo-emoji');
+  if (logo && logoImg && logoEmoji) {
+    logoImg.src = logo; logoImg.style.display = 'block';
+    logoEmoji.style.display = 'none';
+  } else if (logoImg && logoEmoji) {
+    logoImg.style.display = 'none';
+    logoEmoji.style.display = 'block';
+  }
+
+  // Particles
+  if (cfg.showParticles !== false) _startSplashParticles();
+
+  // Fade in
+  el.style.display = 'flex';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() { el.style.opacity = '1'; });
+  });
+
+  // Progress bar
+  var dur = Math.max(0.5, Number(cfg.duration) || 1.5) * 1000;
+  var prog = document.getElementById('splash-progress');
+  if (prog) {
+    prog.style.transition = 'none'; prog.style.width = '0%';
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        prog.style.transition = 'width ' + dur + 'ms linear';
+        prog.style.width = '100%';
+      });
+    });
+  }
+
+  // Auto-dismiss
+  _splashTimer = setTimeout(_hideSplash, dur);
+  el.addEventListener('click', _hideSplash, { once: true });
+}
+
+function _hideSplash() {
+  clearTimeout(_splashTimer);
+  if (_splashAnimFrame) { cancelAnimationFrame(_splashAnimFrame); _splashAnimFrame = null; }
+  var el = document.getElementById('splash-screen');
+  if (!el || el.style.display === 'none') return;
+  el.style.opacity = '0';
+  setTimeout(function() {
+    el.style.display = 'none';
+    var canvas = document.getElementById('splash-canvas');
+    if (canvas) { var ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
+  }, 650);
+}
+
+function _startSplashParticles() {
+  var canvas = document.getElementById('splash-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  var pts = Array.from({length:55}, function(){
+    return { x:Math.random()*canvas.width, y:Math.random()*canvas.height,
+             r:Math.random()*2+0.5, dx:(Math.random()-0.5)*0.4,
+             dy:-Math.random()*0.6-0.2, alpha:Math.random()*0.6+0.2 };
+  });
+  (function draw(){
+    var sp = document.getElementById('splash-screen');
+    if (!sp || sp.style.display==='none') return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pts.forEach(function(p){
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(200,168,75,'+p.alpha+')'; ctx.fill();
+      p.x+=p.dx; p.y+=p.dy;
+      if(p.y<-5){p.y=canvas.height+5;p.x=Math.random()*canvas.width;}
+      if(p.x<-5||p.x>canvas.width+5) p.x=Math.random()*canvas.width;
+    });
+    _splashAnimFrame = requestAnimationFrame(draw);
+  })();
+}
+
+// ── Settings renderer for Splash Screen tab ──────────────────────────────
+function renderSplashSettings() {
+  var cfg = getSplashConfig();
+  var themeOpts = Object.keys(SPLASH_THEMES).map(function(k){
+    return '<option value="'+k+'"'+(cfg.bg===k?' selected':'')+'>'+SPLASH_THEMES[k].label+'</option>';
+  }).join('');
+  return '<div style="display:flex;flex-direction:column;gap:18px">'
+    // Enable toggle
+    +'<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'
+      +'<div><div style="font-weight:700;font-size:13px;color:var(--text)">Enable Splash Screen</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">Show a welcome screen after every login</div></div>'
+      +'<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">'
+        +'<input type="checkbox" id="sp-enabled" '+(cfg.enabled?'checked':'')+' onchange="saveSplashField(\'enabled\',this.checked)" style="opacity:0;width:0;height:0;position:absolute">'
+        +'<span style="position:absolute;inset:0;background:'+(cfg.enabled?'var(--green)':'var(--border2)')+';border-radius:24px;transition:0.2s" id="sp-toggle-track"></span>'
+        +'<span style="position:absolute;top:3px;left:'+(cfg.enabled?'23px':'3px')+';width:18px;height:18px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.3)" id="sp-toggle-knob"></span>'
+      +'</label>'
+    +'</div>'
+    // Duration
+    +'<div class="field"><label>Display Duration (seconds)</label>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<input class="form-control" type="range" id="sp-duration" min="2" max="12" step="1" value="'+(cfg.duration||1.5)+'" oninput="document.getElementById(\'sp-dur-val\').textContent=this.value+\'s\';saveSplashField(\'duration\',+this.value)" style="flex:1;accent-color:var(--gold)">'
+        +'<span id="sp-dur-val" style="font-weight:800;color:var(--gold);min-width:28px">'+(cfg.duration||1.5)+'s</span>'
+      +'</div>'
+    +'</div>'
+    // Welcome message
+    +'<div class="field"><label>Welcome Message</label>'
+      +'<textarea class="form-control" id="sp-message" rows="3" placeholder="e.g. Have a productive day!" onchange="saveSplashField(\'message\',this.value)" style="resize:vertical">'+(cfg.message||'')+'</textarea>'
+    +'</div>'
+    // Theme
+    +'<div class="field"><label>Background Theme</label>'
+      +'<select class="form-control" id="sp-bg" onchange="saveSplashField(\'bg\',this.value);toggleCustomBg()">'
+        +themeOpts
+      +'</select>'
+    +'</div>'
+    // Custom color
+    +'<div class="field" id="sp-custom-wrap" style="display:'+(cfg.bg==='custom'?'block':'none')+'">'
+      +'<label>Custom Background (CSS gradient or color)</label>'
+      +'<input class="form-control" id="sp-customBg" placeholder="e.g. linear-gradient(135deg,#1a0a2e,#0a1628) or #12131f" value="'+(cfg.customBg||'')+'" oninput="saveSplashField(\'customBg\',this.value)">'
+    +'</div>'
+    // Particles toggle
+    +'<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">'
+      +'<div><div style="font-weight:700;font-size:13px;color:var(--text)">Floating Particles ✨</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">Animated gold particles in the background</div></div>'
+      +'<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">'
+        +'<input type="checkbox" id="sp-particles" '+(cfg.showParticles!==false?'checked':'')+' onchange="saveSplashField(\'showParticles\',this.checked)" style="opacity:0;width:0;height:0;position:absolute">'
+        +'<span style="position:absolute;inset:0;background:'+(cfg.showParticles!==false?'var(--green)':'var(--border2)')+';border-radius:24px;transition:0.2s"></span>'
+        +'<span style="position:absolute;top:3px;left:'+(cfg.showParticles!==false?'23px':'3px')+';width:18px;height:18px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></span>'
+      +'</label>'
+    +'</div>'
+    // Preview button
+    +'<button class="btn btn-primary" onclick="showSplashScreen()" style="width:100%">👁 Preview Splash Screen</button>'
+  +'</div>';
+}
+
+function saveSplashField(key, val) {
+  if (!DB.settings.splashScreen) DB.settings.splashScreen = {};
+  DB.settings.splashScreen[key] = val;
+  saveDB();
+  // Update toggle UI for boolean fields
+  if (key === 'enabled' || key === 'showParticles') {
+    var trackId = key === 'enabled' ? 'sp-toggle-track' : null;
+    if (trackId) {
+      var track = document.getElementById(trackId);
+      var knob  = document.getElementById('sp-toggle-knob');
+      if (track) track.style.background = val ? 'var(--green)' : 'var(--border2)';
+      if (knob)  knob.style.left = val ? '23px' : '3px';
+    }
+  }
+}
+
+function toggleCustomBg() {
+  var sel = document.getElementById('sp-bg');
+  var wrap = document.getElementById('sp-custom-wrap');
+  if (wrap) wrap.style.display = sel && sel.value === 'custom' ? 'block' : 'none';
+}
 
 navigate('dashboard');
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8890,9 +9072,9 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
   html += '<th class="r">Rent/Mo</th>';
-  html += '<th class="r" style="color:#7ab4ff">Adm.Fee</th>';
-  html += '<th class="r" style="color:#ffd27a">Extra Chrgs</th>';
-  html += '<th class="r" style="color:#7aefcf">Concession</th>';
+  html += '<th class="r" style="color:#7ab4ff">Adm.Chr</th>';
+  html += '<th class="r" style="color:#ffd27a">Ext.Chr</th>';
+  html += '<th class="r" style="color:#7aefcf">Conc.Chr</th>';
   html += '<th class="r" style="color:#4ade80">Amount Paid</th>';
   html += '<th class="r" style="color:#f87171">Pending</th>';
   html += '<th class="c">Fee Status</th>';
@@ -8975,12 +9157,9 @@ function doGenerateStudentsPDF(monthKey) {
     + '_Fee-Report_' + monthLabel.replace(/\s+/g,'-') + '.pdf';
 
   // Print handler: prefer electronAPI native PDF, fall back to iframe print
-  // FIX #4: Use contentDocument.documentElement.outerHTML instead of fr.srcdoc.
-  // srcdoc only returns HTML set via the srcdoc attribute — not dynamically rendered content.
-  // contentDocument.documentElement.outerHTML captures the actual rendered content reliably.
   var _printHandler = 'if(window.electronAPI&&window.electronAPI.receiptSavePDF){'
     + 'var fr=document.getElementById(\'_rpt_frame\');'
-    + 'if(fr){var _html=(fr.contentDocument&&fr.contentDocument.documentElement?fr.contentDocument.documentElement.outerHTML:fr.srcdoc||\'\');window.electronAPI.receiptSavePDF(_html,"' + _suggestedName + '",{landscape:true,pageSize:\'A4\'});}'
+    + 'if(fr)window.electronAPI.receiptSavePDF(fr.srcdoc||\'\',"' + _suggestedName + '",{landscape:true,pageSize:\'A4\'});'
     + '}else{'
     + 'var fr2=document.getElementById(\'_rpt_frame\');if(fr2)fr2.contentWindow.print();'
     + '}';
@@ -9266,3 +9445,600 @@ function hideCitySuggestions() {
   }, 150);
 }
 // ─────────────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// ANNUAL ARCHIVE — Merged from annual-archive.html
+// ════════════════════════════════════════════════════════════════════════════
+var _archSelYear = new Date().getFullYear();
+var _archCurMK = '';
+var _archMK = '';
+var _archTab = 'overview';
+var _archChartInst = null;
+
+var _ARCH_MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var _ARCH_MS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var _archFmt = function(v){ return 'PKR ' + Math.round(Math.abs(v||0)).toLocaleString(); };
+var _archFmtD = function(d){ if(!d) return '--'; var x=new Date(d+'T00:00:00'); return isNaN(x)?d:x.toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}); };
+
+function renderArchive() {
+  var now = new Date();
+  _archCurMK = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  return '<div style="padding:4px 0">' +
+    '<div class="arch-top-bar">' +
+      '<div>' +
+        '<h1>&#x1F4C1; Annual <span>Archive</span></h1>' +
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Click any month card to view details &bull; Edit/delete any record &bull; Add data</div>' +
+      '</div>' +
+      '<div class="arch-year-tabs" id="archYearTabs"></div>' +
+    '</div>' +
+    '<div class="arch-trend-card">' +
+      '<div class="arch-trend-header">' +
+        '<div style="width:26px;height:26px;background:rgba(30,62,95,0.8);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;">&#x1F4C8;</div>' +
+        '<div><div class="arch-trend-title">Revenue Trend</div><div class="arch-trend-sub" id="archTrendSub">12-month view</div></div>' +
+        '<div class="arch-trend-legend">' +
+          '<div class="arch-leg-item"><div class="arch-leg-dot" style="background:#00e676"></div>Revenue</div>' +
+          '<div class="arch-leg-item"><div class="arch-leg-dot" style="background:#ff4d6d"></div>Expenses</div>' +
+          '<div class="arch-leg-item"><div class="arch-leg-dot" style="background:#ff8c42"></div>Transfers</div>' +
+          '<div class="arch-leg-item"><div class="arch-leg-dot" style="background:#f0c040"></div>Pending</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="arch-trend-badges" id="archTrendBadges"></div>' +
+      '<div class="arch-chart-wrap"><canvas id="archTrendChart"></canvas><div class="arch-hb" id="archHb"></div></div>' +
+    '</div>' +
+    '<div class="arch-summary-bar" id="archSummaryBar"></div>' +
+    '<div id="archYearDetailPanel" style="display:none;"></div>' +
+    '<div class="arch-month-grid" id="archMonthGrid"></div>' +
+  '</div>';
+}
+
+function archAfterRender() {
+  archRenderYearTabs();
+  archRenderPage();
+}
+
+function _archMatchMonth(p,mk){
+  if((p.date||'').startsWith(mk))return true;
+  if((p.dueDate||'').startsWith(mk))return true;
+  if((p.paidDate||'').startsWith(mk))return true;
+  if(p.month){try{var pd=new Date(p.month+' 1');if(!isNaN(pd)){var pmk=pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');if(pmk===mk)return true;}}catch(e){}}
+  return false;
+}
+function archAgg(mk) {
+  var py=DB.payments||[], ex=DB.expenses||[], tr=DB.transfers||[], st=DB.students||[], rm=DB.rooms||[];
+  var matchPy=py.filter(function(p){return _archMatchMonth(p,mk);});
+  var rev=matchPy.filter(function(p){return p.status==='Paid';}).reduce(function(s,p){return s+Number(p.amount||0);},0)
+         +matchPy.filter(function(p){return p.status==='Pending'&&Number(p.amount||0)>0&&p.unpaid!=null;}).reduce(function(s,p){return s+Number(p.amount||0);},0);
+  var pend=matchPy.filter(function(p){return p.status==='Pending';}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
+  var exp=ex.filter(function(e){return (e.date||'').startsWith(mk);}).reduce(function(s,e){return s+Number(e.amount||0);},0);
+  var trf=tr.filter(function(t){return (t.date||'').startsWith(mk);}).reduce(function(s,t){return s+Number(t.amount||0);},0);
+  var payList=matchPy;
+  var expList=ex.filter(function(e){return (e.date||'').startsWith(mk);});
+  var trfList=tr.filter(function(t){return (t.date||'').startsWith(mk);});
+  var stuList=st.filter(function(s){return s.status==='Active';}).map(function(s){var r=rm.find(function(r){return r.id===s.roomId;});return Object.assign({},s,{roomNumber:r?r.number:'--'});});
+  return {rev:rev,pend:pend,exp:exp,trf:trf,net:rev-exp-trf,payList:payList,expList:expList,trfList:trfList,stuList:stuList};
+}
+
+function archRenderYearTabs() {
+  var el = document.getElementById('archYearTabs'); if(!el) return;
+  var dates = [].concat(
+    (DB.payments||[]).map(function(p){return p.date||p.dueDate||'';}),
+    (DB.expenses||[]).map(function(e){return e.date||'';}),
+    (DB.transfers||[]).map(function(t){return t.date||'';})
+  ).filter(Boolean);
+  var years = new Set(dates.map(function(d){return d.slice(0,4);}).filter(function(y){return y>'2000';}));
+  years.add(String(new Date().getFullYear()));
+  el.innerHTML = Array.from(years).sort().reverse().map(function(y){
+    return '<button class="arch-year-tab '+(y==_archSelYear?'active':'')+'" onclick="_archSelYear='+y+';document.getElementById(\'archYearDetailPanel\').style.display=\'none\';archRenderYearTabs();archRenderPage();">'+y+'</button>';
+  }).join('');
+}
+
+function archRenderPage() {
+  archRenderSummary();
+  archRenderGrid();
+  archRenderTrend();
+}
+
+function archRenderSummary() {
+  var el = document.getElementById('archSummaryBar'); if(!el) return;
+  var tR=0,tE=0,tT=0,tP=0;
+  for(var m=1;m<=12;m++){var a=archAgg(_archSelYear+'-'+String(m).padStart(2,'0'));tR+=a.rev;tE+=a.exp;tT+=a.trf;tP+=a.pend;}
+  var tN=tR-tE-tT;
+  var cards=[
+    {l:'Total Revenue',v:_archFmt(tR),s:_archSelYear+' collected',c:'var(--green)',t:'revenue'},
+    {l:'Total Expenses',v:_archFmt(tE),s:'Direct costs',c:'var(--red)',t:'expenses'},
+    {l:'Total Transfers',v:_archFmt(tT),s:'Outgoing',c:'var(--amber)',t:'transfers'},
+    {l:'Pending Due',v:_archFmt(tP),s:'Uncollected',c:'var(--gold2)',t:'pending'},
+    {l:'Net '+_archSelYear,v:(tN>=0?'+':'')+_archFmt(tN),s:'Rev-Exp-Trf',c:tN>=0?'var(--green)':'var(--red)',t:'net'},
+  ];
+  el.innerHTML = cards.map(function(c){
+    return '<div class="arch-s-card" onclick="archShowYearDetail(\''+c.t+'\')" style="border-color:'+c.c+'22">'+
+      '<div class="arch-s-label">'+c.l+'</div><div class="arch-s-val" style="color:'+c.c+'">'+c.v+'</div>'+
+      '<div class="arch-s-sub">'+c.s+'</div><div class="arch-s-hint">&#x1F4CB; Click for detail</div>'+
+    '</div>';
+  }).join('');
+}
+
+function archShowYearDetail(type) {
+  var panel=document.getElementById('archYearDetailPanel'); if(!panel) return;
+  panel.style.display='block'; setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});},50);
+  var allPay=[],allExp=[],allTrf=[];
+  for(var m=1;m<=12;m++){
+    var mk=_archSelYear+'-'+String(m).padStart(2,'0');
+    allPay.push.apply(allPay,(DB.payments||[]).filter(function(p){return _archMatchMonth(p,mk);}));
+    allExp.push.apply(allExp,(DB.expenses||[]).filter(function(e){return (e.date||'').startsWith(mk);}));
+    allTrf.push.apply(allTrf,(DB.transfers||[]).filter(function(t){return (t.date||'').startsWith(mk);}));
+  }
+  var titles={revenue:'Revenue Detail',expenses:'Expenses Detail',transfers:'Transfers Detail',pending:'Pending Payments',net:'Monthly Net Breakdown'};
+  var icons={revenue:'&#x1F4B0;',expenses:'&#x1F4C9;',transfers:'&#x1F3E6;',pending:'&#x23F3;',net:'&#x1F4CA;'};
+  var content='';
+  if(type==='revenue'){
+    var paid=allPay.filter(function(p){return p.status==='Paid';}),tot=paid.reduce(function(s,p){return s+Number(p.amount||0);},0);
+    content=archMkTbl(paid,['Student','Room','Month','Amount','Method','Date'],function(p){return '<td class="td-name">'+escHtml(p.studentName||'--')+'</td><td style="color:var(--gold2)">#'+escHtml(String(p.roomNumber||'--'))+'</td><td>'+escHtml(p.month||'--')+'</td><td style="color:var(--green);font-weight:700">'+_archFmt(p.amount)+'</td><td>'+escHtml(p.method||'--')+'</td><td style="color:var(--text3)">'+_archFmtD(p.date)+'</td>';},
+    'Total: '+_archFmt(tot)+' - '+paid.length+' payments');
+  } else if(type==='expenses'){
+    var tot2=allExp.reduce(function(s,e){return s+Number(e.amount||0);},0);
+    content=archMkTbl(allExp,['Date','Category','Description','Amount'],function(e){return '<td style="color:var(--text3)">'+_archFmtD(e.date)+'</td><td><span class="badge badge-amber">'+escHtml(e.category||'--')+'</span></td><td>'+escHtml(e.description||'--')+'</td><td style="color:var(--red);font-weight:700">'+_archFmt(e.amount)+'</td>';},
+    'Total: '+_archFmt(tot2)+' - '+allExp.length+' records');
+  } else if(type==='transfers'){
+    var tot3=allTrf.reduce(function(s,t){return s+Number(t.amount||0);},0);
+    content=archMkTbl(allTrf,['Date','Description','Method','Amount'],function(t){return '<td style="color:var(--text3)">'+_archFmtD(t.date)+'</td><td>'+escHtml(t.description||t.note||'--')+'</td><td>'+escHtml(t.method||'--')+'</td><td style="color:var(--amber);font-weight:700">'+_archFmt(t.amount)+'</td>';},
+    'Total: '+_archFmt(tot3)+' - '+allTrf.length+' records');
+  } else if(type==='pending'){
+    var p2=allPay.filter(function(p){return p.status==='Pending';}),tot4=p2.reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
+    content=archMkTbl(p2,['Student','Room','Month','Pending'],function(p){return '<td class="td-name">'+escHtml(p.studentName||'--')+'</td><td style="color:var(--gold2)">#'+escHtml(String(p.roomNumber||'--'))+'</td><td>'+escHtml(p.month||'--')+'</td><td style="color:var(--red);font-weight:700">'+_archFmt(p.unpaid!=null?p.unpaid:p.amount)+'</td>';},
+    'Total Pending: '+_archFmt(tot4)+' - '+p2.length+' records');
+  } else if(type==='net'){
+    var rows=[];
+    for(var m2=1;m2<=12;m2++){var mk2=_archSelYear+'-'+String(m2).padStart(2,'0');var a=archAgg(mk2);if(a.rev>0||a.exp>0||a.trf>0)rows.push({month:_ARCH_MN[m2-1],mk:mk2,rev:a.rev,exp:a.exp,trf:a.trf,net:a.net});}
+    content=rows.length===0?'<div class="arch-empty-state"><div class="arch-empty-icon">&#x1F4EB;</div>No data</div>':
+      '<div class="arch-tbl-wrap"><table><thead><tr><th>Month</th><th>Revenue</th><th>Expenses</th><th>Transfers</th><th>Net</th></tr></thead><tbody>'+
+      rows.map(function(r){return '<tr onclick="archOpenModal(\''+r.mk+'\')" style="cursor:pointer"><td style="font-weight:700">'+r.month+'</td><td style="color:var(--green);font-weight:700">'+_archFmt(r.rev)+'</td><td style="color:var(--red);font-weight:700">'+_archFmt(r.exp)+'</td><td style="color:var(--amber);font-weight:700">'+_archFmt(r.trf)+'</td><td style="color:'+(r.net>=0?'var(--green)':'var(--red)')+';font-weight:700">'+(r.net>=0?'+':'')+_archFmt(r.net)+'</td></tr>';}).join('')+
+      '</tbody></table></div>';
+  }
+  panel.innerHTML='<div class="arch-year-detail"><div class="arch-year-detail-hdr">'+
+    '<div style="font-size:14px;font-weight:700">'+icons[type]+' '+titles[type]+' — '+_archSelYear+'</div>'+
+    '<div style="display:flex;gap:8px"><button class="arch-print-btn" onclick="archPrintYearDetail()">&#x1F5A8; Print</button><button class="arch-back-btn" onclick="document.getElementById(\'archYearDetailPanel\').style.display=\'none\'">&#x2715; Close</button></div>'+
+    '</div><div id="archYdContent">'+content+'</div></div>';
+}
+
+function archMkTbl(rows,headers,rowFn,summary) {
+  if(!rows.length) return '<div class="arch-empty-state"><div class="arch-empty-icon">&#x1F4EB;</div>No records</div>';
+  return (summary?'<div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:6px 10px;background:var(--card);border-radius:6px">'+summary+'</div>':'')+
+    '<div class="arch-tbl-wrap"><table><thead><tr>'+headers.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead><tbody>'+
+    rows.map(function(r){return '<tr>'+rowFn(r)+'</tr>';}).join('')+'</tbody></table></div>';
+}
+
+function archRenderGrid() {
+  var el=document.getElementById('archMonthGrid'); if(!el) return;
+  var now=new Date();
+  _archCurMK = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  var revArr=[];
+  for(var m=1;m<=12;m++) revArr.push(archAgg(_archSelYear+'-'+String(m).padStart(2,'0')).rev);
+  var maxR=Math.max.apply(null,revArr.concat([1]));
+  var html='';
+  for(var m=1;m<=12;m++){
+    var mk=_archSelYear+'-'+String(m).padStart(2,'0');
+    var a=archAgg(mk);
+    var isFut=mk>_archCurMK, isCur=mk===_archCurMK, hasData=a.rev>0||a.exp>0||a.trf>0;
+    var bw=hasData?Math.round(a.rev/maxR*100):0;
+    var bc='arch-badge-future',bt='Future';
+    if(isCur){bc='arch-badge-live';bt='Live';}else if(!isFut&&hasData){bc='arch-badge-done';bt='Done';}else if(!isFut&&!hasData){bc='arch-badge-empty';bt='No Data';}
+    var cc=isFut?'future-month':(isCur?'current-month':(hasData?'has-data':''));
+    html+='<div class="arch-month-card '+cc+'" onclick="archOpenModal(\''+mk+'\')">'+
+      '<button class="arch-mc-add-btn" onclick="event.stopPropagation();archQuickAdd(\''+mk+'\')">+ Add</button>'+
+      '<div class="arch-mc-header"><div class="arch-mc-name">'+_ARCH_MN[m-1]+'</div><div class="arch-mc-badge '+bc+'">'+bt+'</div></div>'+
+      (hasData||isCur?
+        '<div class="arch-mc-stat"><span class="arch-mc-stat-label">Revenue</span><span class="arch-mc-stat-val" style="color:var(--green)">'+_archFmt(a.rev)+'</span></div>'+
+        '<div class="arch-mc-stat"><span class="arch-mc-stat-label">Expenses</span><span class="arch-mc-stat-val" style="color:var(--red)">'+_archFmt(a.exp)+'</span></div>'+
+        '<div class="arch-mc-stat"><span class="arch-mc-stat-label">Transfers</span><span class="arch-mc-stat-val" style="color:var(--amber)">'+_archFmt(a.trf)+'</span></div>'+
+        (a.pend>0?'<div class="arch-mc-stat"><span class="arch-mc-stat-label">Pending</span><span class="arch-mc-stat-val" style="color:var(--gold2)">'+_archFmt(a.pend)+'</span></div>':'')+
+        '<div class="arch-mc-divider"></div>'+
+        '<div class="arch-mc-net"><span style="color:var(--text2)">Net</span><span style="color:'+(a.net>=0?'var(--green)':'var(--red)')+'">'+(a.net>=0?'+':'')+_archFmt(a.net)+'</span></div>'+
+        '<div class="arch-mc-bar"><div class="arch-mc-bar-fill" style="width:'+bw+'%;background:'+(a.net>=0?'var(--green)':'var(--red)')+'"></div></div>'
+      :'<div class="arch-empty-state" style="padding:14px 0"><div style="font-size:18px;opacity:.3">&#x1F4EB;</div><div style="font-size:11px;margin-top:4px">'+(isFut?'Future':'No records')+'</div></div>')+
+      '<div class="arch-mc-hint">Open details &#x2192;</div>'+
+    '</div>';
+  }
+  el.innerHTML=html;
+}
+
+function archRenderTrend() {
+  var canvas=document.getElementById('archTrendChart'); if(!canvas||typeof Chart==='undefined') return;
+  var now=new Date(), yr=_archSelYear;
+  var curKey=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  var MONTHS=[],revD=[],expD=[],trfD=[],pendD=[],netD=[],real=[];
+  for(var i=0;i<12;i++){
+    var k=yr+'-'+String(i+1).padStart(2,'0'), isPast=k<=curKey;
+    var a=archAgg(k);
+    MONTHS.push({label:_ARCH_MS[i],full:_ARCH_MN[i]+' '+yr,key:k});
+    revD.push(isPast&&a.rev>0?a.rev:null);
+    expD.push(isPast&&a.exp>0?a.exp:null);
+    trfD.push(isPast&&a.trf>0?a.trf:null);
+    pendD.push(isPast&&a.pend>0?a.pend:null);
+    netD.push(isPast&&a.rev>0?a.net:null);
+    real.push(isPast&&a.rev>0);
+  }
+  // Update badges for current month
+  var curIdx=MONTHS.findIndex(function(m){return m.key===curKey;});
+  var cR=curIdx>=0&&revD[curIdx]!=null?revD[curIdx]:0;
+  var cE=curIdx>=0&&expD[curIdx]!=null?expD[curIdx]:0;
+  var cT=curIdx>=0&&trfD[curIdx]!=null?trfD[curIdx]:0;
+  var cN=cR-cE-cT;
+  var sub=document.getElementById('archTrendSub'); if(sub) sub.textContent=MONTHS[0].label+' – '+MONTHS[MONTHS.length-1].label+' · 12-month view';
+  var badges=document.getElementById('archTrendBadges');
+  if(badges) badges.innerHTML=
+    '<div class="arch-t-badge"><div class="arch-t-badge-label">Revenue</div><div class="arch-t-badge-val" style="color:var(--green)">'+_archFmt(cR)+'</div></div>'+
+    '<div class="arch-t-badge"><div class="arch-t-badge-label">Expenses</div><div class="arch-t-badge-val" style="color:var(--red)">'+_archFmt(cE)+'</div></div>'+
+    '<div class="arch-t-badge"><div class="arch-t-badge-label">Transfers</div><div class="arch-t-badge-val" style="color:var(--amber)">'+_archFmt(cT)+'</div></div>'+
+    '<div class="arch-t-badge"><div class="arch-t-badge-label">Net</div><div class="arch-t-badge-val" style="color:'+(cN>=0?'var(--green)':'var(--red)')+'">'+(cN>=0?'+':'')+_archFmt(cN)+'</div></div>'; // FIX 12: explicit grouping — '+' sign now shows on positive Net values
+  var plotRev=revD.map(function(v){return v!==null?v:0;});
+  var ptColors=plotRev.map(function(v,i){if(!real[i])return 'rgba(0,230,118,0.15)';if(i===0)return '#00e676';var p=null;for(var j=i-1;j>=0;j--){if(real[j]){p=plotRev[j];break;}}return v>=(p||0)?'#00e676':'#ff4d6d';});
+  var badge=document.getElementById('archHb');
+  function showBadge(idx,x,y){
+    var rev=revD[idx],exp2=expD[idx],trf=trfD[idx],pend=pendD[idx],net=netD[idx],isR=real[idx];
+    badge.innerHTML='<div class="arch-hb-month">'+MONTHS[idx].full+(isR?'':'<span style="font-size:9px;color:#f0c040;background:rgba(240,192,64,0.12);border-radius:3px;padding:1px 5px;margin-left:5px">No Data</span>')+'</div>'+
+    (isR?'<div class="arch-hb-row"><div class="arch-hb-left"><div class="arch-hb-dot" style="background:#00e676"></div>Revenue</div><span class="arch-hb-val">'+_archFmt(rev)+'</span></div>'+
+    '<div class="arch-hb-row"><div class="arch-hb-left"><div class="arch-hb-dot" style="background:#ff4d6d"></div>Expenses</div><span class="arch-hb-val" style="color:#ff4d6d">'+_archFmt(exp2||0)+'</span></div>'+
+    '<div class="arch-hb-row"><div class="arch-hb-left"><div class="arch-hb-dot" style="background:#ff8c42"></div>Transfers</div><span class="arch-hb-val" style="color:#ff8c42">'+_archFmt(trf||0)+'</span></div>'+
+    '<div class="arch-hb-row"><div class="arch-hb-left"><div class="arch-hb-dot" style="background:#f0c040"></div>Pending</div><span class="arch-hb-val" style="color:#f0c040">'+_archFmt(pend||0)+'</span></div>'+
+    '<hr class="arch-hb-divider"/>'+
+    '<div class="arch-hb-net-row"><span>Net</span><span style="color:'+((net||0)>=0?'#00e676':'#ff4d6d')+'">'+((net||0)>=0?'+':'−')+_archFmt(net||0)+'</span></div>'
+    :'<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px 0">No data yet</div>');
+    var wrap=document.querySelector('.arch-chart-wrap');
+    if(!wrap) return;
+    var ww=wrap.offsetWidth;
+    var left=x+16; if(left+220>ww) left=x-226;
+    var top=y-70; if(top<0) top=y+16;
+    badge.style.left=left+'px'; badge.style.top=top+'px'; badge.style.display='block';
+  }
+  if(_archChartInst) { _archChartInst.destroy(); _archChartInst=null; }
+  _archChartInst=new Chart(canvas.getContext('2d'),{
+    type:'line',
+    data:{
+      labels:MONTHS.map(function(m){return m.label;}),
+      datasets:[{
+        data:plotRev,
+        borderColor:function(c){var g=c.chart.ctx.createLinearGradient(0,0,c.chart.width,0);g.addColorStop(0,'#00e676');g.addColorStop(1,'rgba(0,230,118,0.3)');return g;},
+        borderWidth:2.5,
+        pointBackgroundColor:ptColors, pointBorderColor:ptColors,
+        pointRadius:function(c){return real[c.dataIndex]?6:3;}, pointHoverRadius:9,
+        tension:0.35, fill:false,
+        datalabels:{
+          display:function(c){return plotRev[c.dataIndex]>0;},
+          anchor:'end',align:'top',offset:6,
+          color:function(c){return ptColors[c.dataIndex];},
+          backgroundColor:'#131f2e', borderColor:function(c){return ptColors[c.dataIndex];},
+          borderWidth:1, borderRadius:4, padding:{top:3,bottom:3,left:7,right:7},
+          font:{size:10,weight:'700'},
+          formatter:function(v,c){
+            var i=c.dataIndex; if(!real[i]) return '';
+            var pv=null; for(var j=i-1;j>=0;j--){if(real[j]){pv=plotRev[j];break;}}
+            if(pv===null) return 'PKR '+v.toLocaleString();
+            var p=(((v-pv)/pv)*100).toFixed(1);
+            return 'PKR '+v.toLocaleString()+'\n'+(parseFloat(p)>=0?'▲':'▼')+' '+Math.abs(p)+'%';
+          }
+        }
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:50,right:10,left:4,bottom:0}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      onHover:function(event,els){
+        if(els.length>0){
+          var wrap=document.querySelector('.arch-chart-wrap');
+          var rect=wrap.getBoundingClientRect();
+          var x=(event.native?event.native.clientX:event.x)-rect.left;
+          var y=(event.native?event.native.clientY:event.y)-rect.top;
+          showBadge(els[0].index,x,y);
+        } else { badge.style.display='none'; }
+      },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.03)'},border:{display:false},ticks:{color:'#4a6080',font:{size:11}}},
+        y:{grid:{color:'rgba(255,255,255,0.03)'},border:{display:false},ticks:{color:'#4a6080',font:{size:11},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}
+      }
+    }
+  });
+}
+
+// ── ARCH MODAL ────────────────────────────────────────────────────────────────
+function archOpenModal(mk) {
+  _archMK=mk;
+  var yr=mk.split('-')[0], mo=mk.split('-')[1];
+  var mN=_ARCH_MN[parseInt(mo)-1], a=archAgg(mk);
+  document.getElementById('archModalTitle').textContent=mN+' '+yr;
+  document.getElementById('archModalSub').textContent=a.payList.length+' payments · '+a.expList.length+' expenses · '+a.trfList.length+' transfers · '+a.stuList.length+' students';
+  document.getElementById('archModalSummary').innerHTML=
+    '<div class="arch-ms-item" onclick="archSwitchTab(\'payments\')"><div class="arch-ms-label">Revenue</div><div class="arch-ms-val" style="color:var(--green)">'+_archFmt(a.rev)+'</div><div class="arch-ms-hint">&#x2192; Payments</div></div>'+
+    '<div class="arch-ms-item" onclick="archSwitchTab(\'expenses\')"><div class="arch-ms-label">Expenses</div><div class="arch-ms-val" style="color:var(--red)">'+_archFmt(a.exp)+'</div><div class="arch-ms-hint">&#x2192; Expenses</div></div>'+
+    '<div class="arch-ms-item" onclick="archSwitchTab(\'transfers\')"><div class="arch-ms-label">Transfers</div><div class="arch-ms-val" style="color:var(--amber)">'+_archFmt(a.trf)+'</div><div class="arch-ms-hint">&#x2192; Transfers</div></div>'+
+    '<div class="arch-ms-item" onclick="archSwitchTab(\'payments\')"><div class="arch-ms-label">Pending</div><div class="arch-ms-val" style="color:var(--gold2)">'+_archFmt(a.pend)+'</div><div class="arch-ms-hint">&#x2192; Payments</div></div>'+
+    '<div class="arch-ms-item" onclick="archSwitchTab(\'overview\')"><div class="arch-ms-label">Net</div><div class="arch-ms-val" style="color:'+(a.net>=0?'var(--green)':'var(--red)')+'">'+(a.net>=0?'+':'')+_archFmt(a.net)+'</div><div class="arch-ms-hint">&#x2192; Overview</div></div>';
+  archSwitchTab('overview');
+  document.getElementById('archModalOverlay').classList.remove('hidden');
+}
+
+function archCloseModal() { document.getElementById('archModalOverlay').classList.add('hidden'); }
+
+function archSwitchTab(name) {
+  _archTab=name;
+  var names=['overview','payments','expenses','transfers','students'];
+  document.querySelectorAll('.arch-tab-btn').forEach(function(b,i){b.classList.toggle('active',names[i]===name);});
+  document.querySelectorAll('.arch-tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('arch-tab-'+name).classList.add('active');
+  archRefreshTab();
+}
+
+function archRefreshTab() {
+  var a=archAgg(_archMK);
+  document.getElementById('archModalSub').textContent=a.payList.length+' payments · '+a.expList.length+' expenses · '+a.trfList.length+' transfers · '+a.stuList.length+' students';
+  if(_archTab==='overview') archRenderOv(a);
+  if(_archTab==='payments') archRenderPay(a);
+  if(_archTab==='expenses') archRenderExp(a);
+  if(_archTab==='transfers') archRenderTrfTab(a);
+  if(_archTab==='students') archRenderStu(a);
+}
+
+function archRenderOv(a) {
+  var cr=a.pend+a.rev>0?Math.round(a.rev/(a.rev+a.pend)*100):(a.rev>0?100:0);
+  var top=[].concat(a.expList).sort(function(x,y){return Number(y.amount)-Number(x.amount);}).slice(0,3);
+  document.getElementById('arch-tab-overview').innerHTML=
+    '<div class="arch-ov-grid">'+
+      '<div class="arch-ov-card" onclick="archSwitchTab(\'payments\')"><div class="arch-ov-label">&#x1F4B0; Revenue</div><div class="arch-ov-val" style="color:var(--green)">'+_archFmt(a.rev)+'</div><div class="arch-ov-sub">'+a.payList.filter(function(p){return p.status==='Paid';}).length+' paid</div><div class="arch-ov-bar"><div class="arch-ov-bar-fill" style="width:'+cr+'%;background:var(--green)"></div></div></div>'+
+      '<div class="arch-ov-card" onclick="archSwitchTab(\'payments\')"><div class="arch-ov-label">&#x23F3; Pending</div><div class="arch-ov-val" style="color:var(--gold2)">'+_archFmt(a.pend)+'</div><div class="arch-ov-sub">'+a.payList.filter(function(p){return p.status==='Pending';}).length+' unpaid</div><div class="arch-ov-bar"><div class="arch-ov-bar-fill" style="width:'+(100-cr)+'%;background:var(--gold2)"></div></div></div>'+
+      '<div class="arch-ov-card" onclick="archSwitchTab(\'expenses\')"><div class="arch-ov-label">&#x1F4C9; Expenses</div><div class="arch-ov-val" style="color:var(--red)">'+_archFmt(a.exp)+'</div><div class="arch-ov-sub">'+a.expList.length+' records</div><div class="arch-ov-bar"><div class="arch-ov-bar-fill" style="width:'+(a.rev>0?Math.min(100,Math.round(a.exp/a.rev*100)):0)+'%;background:var(--red)"></div></div></div>'+
+      '<div class="arch-ov-card" onclick="archSwitchTab(\'transfers\')"><div class="arch-ov-label">&#x1F3E6; Transfers</div><div class="arch-ov-val" style="color:var(--amber)">'+_archFmt(a.trf)+'</div><div class="arch-ov-sub">'+a.trfList.length+' records</div><div class="arch-ov-bar"><div class="arch-ov-bar-fill" style="width:'+(a.rev>0?Math.min(100,Math.round(a.trf/a.rev*100)):0)+'%;background:var(--amber)"></div></div></div>'+
+    '</div>'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:var(--text2)">Collection Rate</span><span style="font-size:15px;font-weight:800;color:'+(cr>=80?'var(--green)':cr>=50?'var(--gold2)':'var(--red)')+'">'+cr+'%</span></div>'+
+      '<div style="height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+cr+'%;background:'+(cr>=80?'var(--green)':cr>=50?'var(--gold2)':'var(--red)')+';border-radius:4px"></div></div>'+
+    '</div>'+
+    (top.length?'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Top Expenses</div>'+
+    top.map(function(e){return '<div onclick="archSwitchTab(\'expenses\')" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;border:1px solid var(--border);cursor:pointer"><div><div style="font-size:12px;font-weight:600">'+escHtml(e.category||'Other')+'</div><div style="font-size:10px;color:var(--text3)">'+escHtml(e.description||'')+' · '+_archFmtD(e.date)+'</div></div><div style="color:var(--red);font-weight:700">'+_archFmt(e.amount)+'</div></div>';}).join(''):'');
+}
+
+function archRenderPay(a) {
+  var tbl='<div class="arch-search-bar">'+
+    '<input class="arch-search-inp" id="archPayS" placeholder="Search student, room..." oninput="archFlt(\'archPayT\',\'archPayS\')"/>'+
+    '<button class="arch-filter-btn" onclick="archFltSt(\'archPayT\',\'all\')">All ('+a.payList.length+')</button>'+
+    '<button class="arch-filter-btn" style="color:var(--green)" onclick="archFltSt(\'archPayT\',\'Paid\')">Paid ('+a.payList.filter(function(p){return p.status==='Paid';}).length+')</button>'+
+    '<button class="arch-filter-btn" style="color:var(--gold2)" onclick="archFltSt(\'archPayT\',\'Pending\')">Pending ('+a.payList.filter(function(p){return p.status==='Pending';}).length+')</button>'+
+    '<button class="arch-export-btn" onclick="archDoCSV(\'payments\')">&#x2B07; CSV</button>'+
+    '<button class="arch-add-btn" onclick="archShowAddPayment()">&#x2795; Add</button>'+
+  '</div>'+
+  '<div class="arch-tbl-wrap"><table id="archPayT"><thead><tr><th>Student</th><th>Room</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
+  (a.payList.length===0?'<tr><td colspan="7"><div class="arch-empty-state"><div class="arch-empty-icon">&#x1F4B8;</div>No records</div></td></tr>':
+  a.payList.map(function(p){return '<tr data-status="'+p.status+'">'+
+    '<td style="font-weight:600;cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'--')+'</td>'+
+    '<td style="color:var(--gold2);font-weight:700">#'+escHtml(String(p.roomNumber||'--'))+'</td>'+
+    '<td style="color:'+(p.status==='Paid'?'var(--green)':'var(--gold2)')+';font-weight:700">'+_archFmt(p.amount)+'</td>'+
+    '<td>'+escHtml(p.method||'--')+'</td>'+
+    '<td><span class="badge '+(p.status==='Paid'?'badge-green':'badge-gold')+'">'+p.status+'</span></td>'+
+    '<td style="color:var(--text3)">'+_archFmtD(p.date||p.dueDate)+'</td>'+
+    '<td><div style="display:flex;gap:5px">'+
+      '<button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="showEditPaymentModal(\''+p.id+'\')">Edit</button>'+
+      '<button class="btn btn-danger btn-sm" style="font-size:10px" onclick="archDelRecord(\'payment\',\''+p.id+'\')">Del</button>'+
+    '</div></td></tr>';}).join(''))+
+  '</tbody></table></div>';
+  document.getElementById('arch-tab-payments').innerHTML=tbl;
+}
+
+function archRenderExp(a) {
+  var catMap={};
+  a.expList.forEach(function(e){catMap[e.category||'Other']=(catMap[e.category||'Other']||0)+Number(e.amount||0);});
+  var tot=a.expList.reduce(function(s,e){return s+Number(e.amount||0);},0);
+  var catBars=Object.entries(catMap).sort(function(x,y){return y[1]-x[1];}).slice(0,5).map(function(entry){
+    var c=entry[0],v=entry[1],pct=tot>0?Math.round(v/tot*100):0;
+    return '<div class="arch-cat-row" onclick="archFltCat(\''+escHtml(c)+'\')">'+
+      '<div style="width:90px;font-size:11px;color:var(--text2);flex-shrink:0">'+escHtml(c)+'</div>'+
+      '<div style="flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--red);border-radius:3px"></div></div>'+
+      '<div style="font-size:11px;font-weight:700;color:var(--red);width:90px;text-align:right">'+_archFmt(v)+'</div></div>';
+  }).join('');
+  document.getElementById('arch-tab-expenses').innerHTML=
+    (catBars?'<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">By Category — click to filter</div>'+catBars+'</div>':'')+
+    '<div class="arch-search-bar"><input class="arch-search-inp" id="archExpS" placeholder="Search..." oninput="archFlt(\'archExpT\',\'archExpS\')"/>'+
+    '<button class="arch-export-btn" onclick="archDoCSV(\'expenses\')">&#x2B07; CSV</button>'+
+    '<button class="arch-add-btn" onclick="archShowAddExpense()">&#x2795; Add</button></div>'+
+    '<div class="arch-tbl-wrap"><table id="archExpT"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
+    (a.expList.length===0?'<tr><td colspan="5"><div class="arch-empty-state"><div class="arch-empty-icon">&#x1F9FE;</div>No records</div></td></tr>':
+    a.expList.map(function(e){return '<tr>'+
+      '<td style="color:var(--text3)">'+_archFmtD(e.date)+'</td>'+
+      '<td><span class="badge badge-amber">'+escHtml(e.category||'--')+'</span></td>'+
+      '<td>'+escHtml(e.description||'--')+'</td>'+
+      '<td style="color:var(--red);font-weight:700">'+_archFmt(e.amount)+'</td>'+
+      '<td><div style="display:flex;gap:5px">'+
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="showEditExpenseModal(\''+e.id+'\')">Edit</button>'+
+        '<button class="btn btn-danger btn-sm" style="font-size:10px" onclick="archDelRecord(\'expense\',\''+e.id+'\')">Del</button>'+
+      '</div></td></tr>';}).join(''))+
+    '</tbody></table></div>';
+}
+
+function archRenderTrfTab(a) {
+  document.getElementById('arch-tab-transfers').innerHTML=
+    '<div class="arch-search-bar"><input class="arch-search-inp" id="archTrfS" placeholder="Search..." oninput="archFlt(\'archTrfT\',\'archTrfS\')"/>'+
+    '<button class="arch-export-btn" onclick="archDoCSV(\'transfers\')">&#x2B07; CSV</button>'+
+    '<button class="arch-add-btn" onclick="archShowAddTransfer()">&#x2795; Add</button></div>'+
+    '<div class="arch-tbl-wrap"><table id="archTrfT"><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Received By</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
+    (a.trfList.length===0?'<tr><td colspan="6"><div class="arch-empty-state"><div class="arch-empty-icon">&#x1F504;</div>No records</div></td></tr>':
+    a.trfList.map(function(t){return '<tr>'+
+      '<td style="color:var(--text3)">'+_archFmtD(t.date)+'</td>'+
+      '<td>'+escHtml(t.description||t.note||'--')+'</td>'+
+      '<td><span class="badge badge-blue">'+escHtml(t.method||'--')+'</span></td>'+
+      '<td>'+escHtml(t.receivedBy||'--')+'</td>'+
+      '<td style="color:var(--amber);font-weight:700">'+_archFmt(t.amount)+'</td>'+
+      '<td><div style="display:flex;gap:5px">'+
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="showEditTransferModal(\''+t.id+'\')">Edit</button>'+
+        '<button class="btn btn-danger btn-sm" style="font-size:10px" onclick="archDelRecord(\'transfer\',\''+t.id+'\')">Del</button>'+
+      '</div></td></tr>';}).join(''))+
+    '</tbody></table></div>';
+}
+
+function archRenderStu(a) {
+  document.getElementById('arch-tab-students').innerHTML=
+    '<div class="arch-search-bar"><input class="arch-search-inp" id="archStuS" placeholder="Search name, room..." oninput="archFltStu()"/>'+
+    '<span style="font-size:11px;color:var(--text3)">'+a.stuList.length+' active students</span></div>'+
+    '<div class="arch-stu-grid" id="archStuG">'+
+    (a.stuList.length===0?'<div class="arch-empty-state" style="grid-column:1/-1"><div class="arch-empty-icon">&#x1F465;</div>No students</div>':
+    a.stuList.map(function(s){return '<div class="arch-stu-card" data-n="'+escHtml((s.name||'').toLowerCase())+'" data-r="'+String(s.roomNumber||'').toLowerCase()+'" onclick="showViewStudentModal(\''+s.id+'\')">'+
+      '<div class="arch-stu-av">'+(s.name||'?')[0].toUpperCase()+'</div>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(s.name||'--')+'</div>'+
+        '<div style="font-size:10px;color:var(--text3)">Rm #'+escHtml(String(s.roomNumber||'--'))+'</div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--green)">'+_archFmt(s.rent||0)+'/mo</div>'+
+      '</div></div>';}).join(''))+
+    '</div>';
+}
+
+// ── ARCH FILTER HELPERS ───────────────────────────────────────────────────────
+function archFlt(tId,iId){var q=document.getElementById(iId).value.toLowerCase();document.querySelectorAll('#'+tId+' tbody tr').forEach(function(r){r.style.display=r.textContent.toLowerCase().includes(q)?'':'none';});}
+function archFltSt(tId,st){document.querySelectorAll('#'+tId+' tbody tr').forEach(function(r){r.style.display=(st==='all'||r.dataset.status===st)?'':'none';});}
+function archFltCat(cat){document.querySelectorAll('#archExpT tbody tr').forEach(function(r){r.style.display=r.textContent.includes(cat)?'':'none';});var i=document.getElementById('archExpS');if(i)i.value=cat;}
+function archFltStu(){var q=document.getElementById('archStuS').value.toLowerCase();document.querySelectorAll('#archStuG .arch-stu-card').forEach(function(e){e.style.display=((e.dataset.n||'').includes(q)||(e.dataset.r||'').includes(q))?'':'none';});}
+
+// ── ARCH ADD MENU ─────────────────────────────────────────────────────────────
+function archShowAddMenu() {
+  var mo=parseInt(_archMK.split('-')[1])-1, yr=_archMK.split('-')[0];
+  document.getElementById('archEditTitle').innerHTML='Add Data to '+_ARCH_MN[mo]+' '+yr+' <button class="arch-edit-close" onclick="archCloseEdit()">&#x2715;</button>';
+  document.getElementById('archEditForm').innerHTML=
+    '<p style="font-size:12px;color:var(--text3);margin-bottom:16px;">What do you want to add?</p>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+    '<button onclick="archShowAddPayment()" style="padding:14px;border-radius:10px;border:1px solid rgba(46,201,138,0.3);background:rgba(46,201,138,0.1);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;">&#x1F4B0; Payment</button>'+
+    '<button onclick="archShowAddExpense()" style="padding:14px;border-radius:10px;border:1px solid rgba(224,82,82,0.3);background:rgba(224,82,82,0.1);color:var(--red);font-size:13px;font-weight:700;cursor:pointer;">&#x1F4C9; Expense</button>'+
+    '<button onclick="archShowAddTransfer()" style="padding:14px;border-radius:10px;border:1px solid rgba(255,140,66,0.3);background:rgba(255,140,66,0.1);color:var(--amber);font-size:13px;font-weight:700;cursor:pointer;">&#x1F3E6; Transfer</button>'+
+    '<button onclick="archCloseEdit()" style="padding:14px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>'+
+    '</div>';
+  document.getElementById('archEditOverlay').classList.remove('hidden');
+}
+
+function archShowAddPayment() {
+  var students=(DB.students||[]).filter(function(s){return s.status==='Active';});
+  var methods=(DB.settings&&DB.settings.paymentMethods)||['Cash','JazzCash','EasyPaisa','Bank Transfer'];
+  var mo=parseInt(_archMK.split('-')[1])-1, yr=_archMK.split('-')[0];
+  document.getElementById('archEditTitle').innerHTML='&#x1F4B0; Add Payment <button class="arch-edit-close" onclick="archCloseEdit()">&#x2715;</button>';
+  document.getElementById('archEditForm').innerHTML=
+    '<div class="form-row" style="margin-bottom:12px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Student</label>'+
+    '<select class="form-control" id="archFStu" onchange="archFillRent()">'+
+    '<option value="">-- select student --</option>'+
+    students.map(function(s){var r=(DB.rooms||[]).find(function(r){return r.id===s.roomId;});return '<option value="'+s.id+'" data-rent="'+(s.rent||0)+'">'+escHtml(s.name)+' (Rm '+(r?r.number:'?')+')</option>';}).join('')+
+    '</select></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Amount (PKR)</label><input class="form-control" type="number" id="archFAmt" placeholder="16000"/></div>'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Status</label><select class="form-control" id="archFStatus"><option>Paid</option><option>Pending</option></select></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Method</label><select class="form-control" id="archFMethod">'+methods.map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Date</label><input class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" id="archFDate" value="'+_archMK+'-01"/></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Month Label</label><input class="form-control" type="text" id="archFMonth" value="'+_ARCH_MN[mo]+' '+yr+'"/></div>'+
+    '<button class="btn btn-primary" style="width:100%" onclick="archSavePayment()">&#x2713; Save Payment</button>';
+}
+
+function archFillRent(){var sel=document.getElementById('archFStu');var opt=sel.options[sel.selectedIndex];if(opt&&opt.dataset.rent)document.getElementById('archFAmt').value=opt.dataset.rent;}
+
+function archSavePayment(){
+  var stuId=document.getElementById('archFStu').value; if(!stuId){alert('Select a student');return;}
+  var stu=(DB.students||[]).find(function(s){return s.id===stuId;}); var rm=(DB.rooms||[]).find(function(r){return r.id===stu.roomId;});
+  var amt=Number(document.getElementById('archFAmt').value||0); var status=document.getElementById('archFStatus').value;
+  var pay={id:'pay_'+uid(),studentId:stuId,studentName:stu.name||'',roomId:stu.roomId||'',roomNumber:rm?rm.number:'',amount:amt,monthlyRent:stu.rent||amt,unpaid:status==='Pending'?amt:0,method:document.getElementById('archFMethod').value,month:document.getElementById('archFMonth').value,date:document.getElementById('archFDate').value,dueDate:document.getElementById('archFDate').value,paidDate:status==='Paid'?document.getElementById('archFDate').value:'',status:status,createdAt:new Date().toISOString()};
+  if(!DB.payments)DB.payments=[];DB.payments.push(pay);saveDB();archCloseEdit();archRefreshTab();archRenderPage();archSwitchTab('payments');
+}
+
+function archShowAddExpense(){
+  var cats=(DB.settings&&DB.settings.expenseCategories)||['Electricity','Water','Gas','Maintenance','Cleaning','Other'];
+  document.getElementById('archEditTitle').innerHTML='&#x1F4C9; Add Expense <button class="arch-edit-close" onclick="archCloseEdit()">&#x2715;</button>';
+  document.getElementById('archEditForm').innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Category</label><select class="form-control" id="archFCat">'+cats.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></div>'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Amount (PKR)</label><input class="form-control" type="number" id="archFAmt" placeholder="5000"/></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Description</label><input class="form-control" type="text" id="archFDesc" placeholder="e.g. Electricity bill"/></div>'+
+    '<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Date</label><input class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" id="archFDate" value="'+_archMK+'-01"/></div>'+
+    '<button class="btn btn-primary" style="width:100%" onclick="archSaveExpense()">&#x2713; Save Expense</button>';
+}
+
+function archSaveExpense(){
+  var exp={id:'exp_'+uid(),category:document.getElementById('archFCat').value,description:document.getElementById('archFDesc').value,amount:Number(document.getElementById('archFAmt').value||0),date:document.getElementById('archFDate').value,createdAt:new Date().toISOString()};
+  if(!DB.expenses)DB.expenses=[];DB.expenses.push(exp);saveDB();archCloseEdit();archRefreshTab();archRenderPage();archSwitchTab('expenses');
+}
+
+function archShowAddTransfer(){
+  var methods=(DB.settings&&DB.settings.paymentMethods)||['Cash','JazzCash','EasyPaisa','Bank Transfer'];
+  document.getElementById('archEditTitle').innerHTML='&#x1F3E6; Add Transfer <button class="arch-edit-close" onclick="archCloseEdit()">&#x2715;</button>';
+  document.getElementById('archEditForm').innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Amount (PKR)</label><input class="form-control" type="number" id="archFAmt" placeholder="10000"/></div>'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Method</label><select class="form-control" id="archFMethod">'+methods.map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Description</label><input class="form-control" type="text" id="archFDesc" placeholder="Monthly owner transfer"/></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Received By</label><input class="form-control" type="text" id="archFRecv" placeholder="Owner name"/></div>'+
+    '<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:5px">Date</label><input class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" id="archFDate" value="'+_archMK+'-01"/></div>'+
+    '</div>'+
+    '<button class="btn btn-primary" style="width:100%" onclick="archSaveTransfer()">&#x2713; Save Transfer</button>';
+}
+
+function archSaveTransfer(){
+  var trf={id:'trf_'+uid(),amount:Number(document.getElementById('archFAmt').value||0),method:document.getElementById('archFMethod').value,description:document.getElementById('archFDesc').value,receivedBy:document.getElementById('archFRecv').value,date:document.getElementById('archFDate').value,createdAt:new Date().toISOString()};
+  if(!DB.transfers)DB.transfers=[];DB.transfers.push(trf);saveDB();archCloseEdit();archRefreshTab();archRenderPage();archSwitchTab('transfers');
+}
+
+function archDelRecord(type,id){
+  // FIX 20: replaced blocking native confirm() with in-app showConfirm modal
+  showConfirm('Delete Record', 'Delete this record? This cannot be undone.', function() {
+    if(type==='payment') DB.payments=(DB.payments||[]).filter(function(x){return x.id!==id;});
+    if(type==='expense') DB.expenses=(DB.expenses||[]).filter(function(x){return x.id!==id;});
+    if(type==='transfer') DB.transfers=(DB.transfers||[]).filter(function(x){return x.id!==id;});
+    saveDB();archRefreshTab();archRenderPage();
+  });
+}
+
+function archCloseEdit(){document.getElementById('archEditOverlay').classList.add('hidden');}
+function archQuickAdd(mk){_archMK=mk;archOpenModal(mk);setTimeout(function(){archShowAddMenu();},300);}
+function archPrintCurrentTab(){archPrintTab(_archTab);}
+
+function archDoCSV(type){
+  var a=archAgg(_archMK); var mo=parseInt(_archMK.split('-')[1])-1, yr=_archMK.split('-')[0];
+  var mN=_ARCH_MN[mo]; var csv='',fn='';
+  if(type==='payments'){fn='Payments_'+mN+'_'+yr+'.csv';csv='Student,Room,Month,Amount,Method,Status,Date\n';a.payList.forEach(function(p){csv+='"'+(p.studentName||'')+'","'+(p.roomNumber||'')+'","'+(p.month||'')+'",'+p.amount+',"'+(p.method||'')+'","'+p.status+'","'+(p.date||p.dueDate||'')+'"\n';});}
+  else if(type==='expenses'){fn='Expenses_'+mN+'_'+yr+'.csv';csv='Date,Category,Description,Amount\n';a.expList.forEach(function(e){csv+='"'+e.date+'","'+(e.category||'')+'","'+(e.description||'')+'",'+e.amount+'\n';});}
+  else if(type==='transfers'){fn='Transfers_'+mN+'_'+yr+'.csv';csv='Date,Description,Method,Received By,Amount\n';a.trfList.forEach(function(t){csv+='"'+t.date+'","'+(t.description||t.note||'')+'","'+(t.method||'')+'","'+(t.receivedBy||'')+'",'+t.amount+'\n';});}
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a2=document.createElement('a');a2.href=URL.createObjectURL(blob);a2.download=fn;a2.click();
+  setTimeout(function(){URL.revokeObjectURL(a2.href);},1500); // FIX 19: revoke blob URL
+}
+
+function archPrintTab(tab){
+  var a=archAgg(_archMK); var mo=parseInt(_archMK.split('-')[1])-1, yr=_archMK.split('-')[0];
+  var mN=_ARCH_MN[mo]; var hostel=(DB.settings&&DB.settings.hostelName)||'DAMAM Boys Hostel';
+  var titles={overview:'Monthly Overview',payments:'Payments',expenses:'Expenses',transfers:'Transfers',students:'Active Students'};
+  var body='';
+  if(tab==='payments'){var tot=a.payList.reduce(function(s,p){return s+Number(p.amount||0);},0);body='<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>'+a.payList.map(function(p){return '<tr><td>'+escHtml(p.studentName||'--')+'</td><td>#'+escHtml(String(p.roomNumber||'--'))+'</td><td>'+escHtml(p.month||'--')+'</td><td>'+_archFmt(p.amount)+'</td><td>'+escHtml(p.method||'--')+'</td><td>'+p.status+'</td><td>'+_archFmtD(p.date||p.dueDate)+'</td></tr>';}).join('')+'</tbody><tfoot><tr><td colspan="3">Total</td><td>'+_archFmt(tot)+'</td><td colspan="3"></td></tr></tfoot></table>';}
+  else if(tab==='expenses'){var tot2=a.expList.reduce(function(s,e){return s+Number(e.amount||0);},0);body='<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>'+a.expList.map(function(e){return '<tr><td>'+_archFmtD(e.date)+'</td><td>'+escHtml(e.category||'--')+'</td><td>'+escHtml(e.description||'--')+'</td><td>'+_archFmt(e.amount)+'</td></tr>';}).join('')+'</tbody><tfoot><tr><td colspan="3">Total</td><td>'+_archFmt(tot2)+'</td></tr></tfoot></table>';}
+  else if(tab==='transfers'){var tot3=a.trfList.reduce(function(s,t){return s+Number(t.amount||0);},0);body='<table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Received By</th><th>Amount</th></tr></thead><tbody>'+a.trfList.map(function(t){return '<tr><td>'+_archFmtD(t.date)+'</td><td>'+escHtml(t.description||t.note||'--')+'</td><td>'+escHtml(t.method||'--')+'</td><td>'+escHtml(t.receivedBy||'--')+'</td><td>'+_archFmt(t.amount)+'</td></tr>';}).join('')+'</tbody><tfoot><tr><td colspan="4">Total</td><td>'+_archFmt(tot3)+'</td></tr></tfoot></table>';}
+  else if(tab==='students'){body='<table><thead><tr><th>#</th><th>Name</th><th>Father Name</th><th>Room</th><th>Phone</th><th>Rent</th></tr></thead><tbody>'+a.stuList.map(function(s,i){return '<tr><td>'+(i+1)+'</td><td>'+escHtml(s.name||'--')+'</td><td>'+escHtml(s.fatherName||'--')+'</td><td>#'+escHtml(String(s.roomNumber||'--'))+'</td><td>'+escHtml(s.phone||'--')+'</td><td>'+_archFmt(s.rent||0)+'</td></tr>';}).join('')+'</tbody></table>';}
+  var w=window.open('','_blank','width=960,height=720'); if(!w){alert('Allow popups');return;}
+  var _archHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #c8a84b;padding-bottom:14px;margin-bottom:18px}.hn{font-size:18px;font-weight:900;color:#0f1a2e}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}tfoot td{background:#f1f5f9;font-weight:700}</style></head><body>'
+    +'<div class="hdr"><div><div class="hn">'+escHtml(hostel)+'</div><div style="font-size:13px;font-weight:700;margin-top:6px">'+escHtml(titles[tab]||tab)+' — '+mN+' '+yr+'</div></div><div style="font-size:10px;color:#888">'+new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})+'</div></div>'
+    +body+'</body></html>';
+  _electronPDF(_archHtml, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+mN+'-'+yr+'_'+(tab||'report')+'.pdf', {pageSize:'A4'});
+}
+
+function archPrintYearDetail(){
+  var c=document.getElementById('archYdContent'); if(!c) return;
+  var hostel=(DB.settings&&DB.settings.hostelName)||'DAMAM Hostel';
+  var w=window.open('','_blank','width=960,height=720'); if(!w){alert('Allow popups');return;}
+  var _annHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Annual Report '+_archSelYear+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",sans-serif;color:#111;background:#fff;padding:28px;font-size:12px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}td{padding:7px 10px;border-bottom:1px solid #f1f5f9}</style></head><body>'
+    +'<h2 style="margin-bottom:16px;font-size:18px;font-weight:900;color:#0f1a2e">'+escHtml(hostel)+' — Annual Report '+_archSelYear+'</h2>'
+    +c.innerHTML+'</body></html>';
+  _electronPDF(_annHtml, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Annual-Report_'+_archSelYear+'.pdf', {pageSize:'A4', landscape:true});
+}
+
+// Hook renderPage to call archAfterRender when archive page is shown
+(function(){
+  var _origRenderPage = renderPage;
+  renderPage = function(p, resetScroll) {
+    _origRenderPage(p, resetScroll);
+    if(p === 'archive') {
+      setTimeout(archAfterRender, 120);
+    }
+  };
+})();

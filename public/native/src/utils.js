@@ -5,8 +5,6 @@
 
 'use strict';
 
-const crypto = typeof require !== 'undefined' ? require('crypto') : null;
-
 // ── Electron external link helper ─────────────────────────────────────────────
 function openExternalLink(url) {
   try {
@@ -272,27 +270,4 @@ function courseKeyNav(e) {
     el.style.background = i === cur ? 'var(--bg3)' : '';
   });
   if (items[cur]) items[cur].scrollIntoView({ block: 'nearest' });
-}
-
-// Centralized utility functions for key validation
-function validateKeyFormat(key) {
-  return /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key.toUpperCase().trim());
-}
-
-function validateKeyChecksum(key, secret) {
-  try {
-    const parts = key.toUpperCase().trim().split('-');
-    const expPart = parts[1];
-    const chk = parts[2] + parts[3];
-    const expected = crypto.createHmac('sha256', secret)
-      .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-    return chk === expected;
-  } catch (e) {
-    console.error('[DAMAM] Key checksum validation failed:', e.message);
-    return false;
-  }
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { validateKeyFormat, validateKeyChecksum };
 }

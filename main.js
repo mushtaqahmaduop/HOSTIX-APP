@@ -16,11 +16,12 @@
 
 'use strict';
 
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
-const path   = require('path');
-const fs     = require('fs');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const fsPromises = require('fs').promises;
 const crypto = require('crypto');
-const os     = require('os');
+const os = require('os');
 
 // ── Auto Updater ──────────────────────────────────────────────────────────────
 let autoUpdater = null;
@@ -31,6 +32,7 @@ try {
   autoUpdater.logger = require('electron').app ? null : console; // silent in prod
 } catch (e) {
   console.warn('[DAMAM] electron-updater not available:', e.message);
+  console.error('Stack Trace:', e.stack);
 }
 
 let mainWindow;
@@ -73,17 +75,34 @@ function _getWinMachineGuid() {
 }
 
 function _getDriveSerial() {
-  // [FIX-04] Add drive serial for stronger, stable hardware binding
-  if (os.platform() !== 'win32') return '';
   try {
     const { execSync } = require('child_process');
-    const out = execSync(
-      'wmic diskdrive get SerialNumber /format:list',
-      { encoding: 'utf8', timeout: 3000, windowsHide: true }
-    );
-    const m = out.match(/SerialNumber=([^\r\n]+)/);
+    const out = execSync('wmic logicaldisk where "DeviceID=\'C:\'" get VolumeSerialNumber /value', { encoding: 'utf8', timeout: 2000, windowsHide: true });
+    const m = out.match(/VolumeSerialNumber=(\w+)/);
     return m ? m[1].trim() : '';
   } catch (e) { return ''; }
+}
+
+async function _writeLastRun() {
+  try {
+    await fsPromises.writeFile(LAST_RUN_PATH, new Date().toISOString(), 'utf8');
+  } catch (e) {
+    console.error('[DAMAM] Failed to write last run date:', e.message);
+  }
+}
+
+async function _readLastRun() {
+  try {
+    if (await fsPromises.access(LAST_RUN_PATH)) {
+      const data = await fsPromises.readFile(LAST_RUN_PATH, 'utf8');
+      const d = new Date(data.trim());
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (await fsPromises.access(LICENSE_PATH)) await _writeLastRun();
+  } catch (e) {
+    console.error('[DAMAM] Error reading last run date:', e.message);
+  }
+  return null;
 }
 
 function getMachineId() {
@@ -128,19 +147,14 @@ function decryptLicense(encStr, machineId) {
 }
 
 // ── Key Validation ────────────────────────────────────────────────────────────
+const { validateKeyFormat, validateKeyChecksum } = require('./renderer/src/utils');
+
 function _validateKeyFormat(key) {
-  return /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key.toUpperCase().trim());
+  return validateKeyFormat(key);
 }
 
 function _validateKeyChecksum(key) {
-  try {
-    const parts    = key.toUpperCase().trim().split('-');
-    const expPart  = parts[1];
-    const chk      = parts[2] + parts[3];
-    const expected = crypto.createHmac('sha256', _SECRET)
-      .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-    return chk === expected;
-  } catch (e) { return false; }
+  return validateKeyChecksum(key, _SECRET);
 }
 
 function _getExpiryFromKey(key) {
@@ -161,8 +175,12 @@ function _readLastRun() {
   return null;
 }
 
-function _writeLastRun() {
-  try { fs.writeFileSync(LAST_RUN_PATH, new Date().toISOString(), 'utf8'); } catch (e) {}
+async function _writeLastRun() {
+  try {
+    await fsPromises.writeFile(LAST_RUN_PATH, new Date().toISOString(), 'utf8');
+  } catch (e) {
+    console.error('[DAMAM] Failed to write last run date:', e.message);
+  }
 }
 
 // ── Full Startup Validation ───────────────────────────────────────────────────

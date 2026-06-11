@@ -49,6 +49,5 @@ let DB = {
   fines:         [],
   activityLog:   [],
   inspections:   [],
-  billSplits:    [],
-  transfers:     []
+  billSplits:    []
 };
