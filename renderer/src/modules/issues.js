@@ -110,7 +110,7 @@ function showAddIssueModal() {
   );
 }
 
-function saveIssue() {
+async function saveIssue() {
   var isComp = document.getElementById('if-comp') && document.getElementById('if-comp').style.display!=='none';
   if(!isComp) {
     var title = (document.getElementById('mt-title')||{}).value||''; title=title.trim();
@@ -137,7 +137,7 @@ function saveIssue() {
 
 async function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();await saveDB();renderPage('issues');toast('Resolved','success');}}
 async function progressMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='InProgress';await saveDB();renderPage('issues');toast('In Progress','info');}}
-async function delMaint(id){showConfirm('Delete?','',function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+async function delMaint(id){showConfirm('Delete?','',async function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 async function resolveComp(id) {
   // FIX #7: Replace blocking native prompt() with an in-app modal dialog
   var cc = DB.complaints.find(function(x){return x.id===id;}); if(!cc) return;
@@ -145,14 +145,14 @@ async function resolveComp(id) {
     '<div class="field"><label>Optional Response</label>' +
     '<textarea id="comp-resolve-text" class="form-control" rows="3" placeholder="Enter a response or leave blank…"></textarea></div>',
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-    '<button class="btn btn-success" onclick="(function(){' +
+    '<button class="btn btn-success" onclick="(async function(){' +
       'var cc=DB.complaints.find(function(x){return x.id===\''+id+'\';});' +
       'if(cc){cc.status=\'Resolved\';cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
       'await saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
     '})()">Mark Resolved</button>'
   );
 }
-async function delComp(id){showConfirm('Delete?','',function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+async function delComp(id){showConfirm('Delete?','',async function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 
 // Keep original function names as aliases so dashboard alerts still work
 function resolveMaintenance(id){resolveMaint(id);}
