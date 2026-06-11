@@ -92,44 +92,39 @@ async function processAutoCancellations() {
     console.log('[Auto-Confirm] '+count+' cancellation(s) auto-confirmed on boot.');
   }
 }
-processAutoCancellations();
-// ─────────────────────────────────────────────────────────────────────────────
-
-updateSidebar();
-loadSavedLogo();
+// ── Pre-boot: theme/logo/sidebar don't need DB — run immediately ─────────────
 applySavedTheme();
 applySavedSidebar();
-renderSidebarCalendar();
-checkAutoMonthAdvance();
-checkAutoBackupSchedule(); // Fix #7: remind warden if scheduled backup is due
-
-
-// Sync login screen hostel name from saved settings
-const loginNameEl = document.getElementById('login-hostel-name');
-if (loginNameEl && DB.settings && DB.settings.hostelName) {
-  loginNameEl.textContent = DB.settings.hostelName;
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-
-
-navigate('dashboard');
+loadSavedLogo();
+updateSidebar(); // shows zeros/defaults until boot() completes
 // ─────────────────────────────────────────────────────────────────────────────
 
 
 // ── BOOT — async startup ─────────────────────────────────────────────────────
 (async function boot() {
   await loadDB();
-  // FIXED: run migration after DB is loaded (was running synchronously before)
-  migrateStudentIdsToNumeric();
-  processAutoCancellations();
-  applySavedTheme();
-  applySavedSidebar();
-  loadSavedLogo();
-  document.getElementById('hdr-date').textContent =
-    new Date().toLocaleDateString('en-PK', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
-  checkAutoMonthAdvance();
-  checkAutoBackupSchedule();
+  // After DB loads: migrate IDs, run auto-cancellations, refresh all UI
+  if (typeof migrateStudentIdsToNumeric === 'function') migrateStudentIdsToNumeric();
+  await processAutoCancellations();
+  // Sync login screen hostel name now that DB is loaded
+  const loginNameEl = document.getElementById('login-hostel-name');
+  if (loginNameEl && DB.settings && DB.settings.hostelName) {
+    loginNameEl.textContent = DB.settings.hostelName;
+  }
+  // Update header date
+  const hdrDate = document.getElementById('hdr-date');
+  if (hdrDate) {
+    hdrDate.textContent =
+      new Date().toLocaleDateString('en-PK', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+  }
+  // Refresh sidebar counts and calendar now that data is loaded
+  if (typeof updateSidebar         === 'function') updateSidebar();
+  if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+  // Run scheduled checks
+  if (typeof checkAutoMonthAdvance    === 'function') checkAutoMonthAdvance();
+  if (typeof checkAutoBackupSchedule  === 'function') checkAutoBackupSchedule();
+  // Navigate to dashboard last (after all data is ready)
+  if (typeof navigate === 'function') navigate('dashboard');
 })();
 
 
@@ -248,20 +243,49 @@ function toggleSettingsDropdown() {
   if (ch) ch.style.transform = open ? '' : 'rotate(180deg)';
 }
 
-// ── FORMER STUDENTS — search & restore ───────────────────────────────────────
+// ── FORMER STUDENTS — search & restore ─────────────────────────────────────
+// NOTE: showFormerStudentsModal() is defined in src/modules/students.js
 
-// ── SETTINGS DROPDOWN ────────────────────────────────────────────────────────
-function toggleSettingsDropdown() {
-  const dd = document.getElementById('settings-dropdown');
-  const ch = document.getElementById('settings-chevron');
-  if (!dd) return;
-  const open = dd.style.display === 'block';
-  dd.style.display = open ? 'none' : 'block';
-  if (ch) ch.style.transform = open ? '' : 'rotate(180deg)';
+
+// ── CLEAR ALL DATA ───────────────────────────────────────────────────────────
+function showClearAllMenu() {
+  if (typeof showConfirm !== 'function') return;
+  showConfirm(
+    '⚠️ Clear ALL data?',
+    'This will permanently delete ALL students, payments, rooms, expenses and every other record. This CANNOT be undone. Export a backup first!',
+    async function() {
+      // Second confirmation for a destructive action
+      showConfirm(
+        '🚨 Are you absolutely sure?',
+        'Type "DELETE" in your mind — all data will be wiped. The app settings (hostel name, room types, wardens) will be preserved.',
+        async function() {
+          try {
+            const tableMap = {
+              rooms: [], students: [], payments: [], expenses: [],
+              cancellations: [], maintenance: [], complaints: [],
+              checkinlog: [], notices: [], fines: [],
+              activityLog: [], inspections: [], billSplits: [], transfers: []
+            };
+            Object.assign(DB, tableMap);
+            await saveDB();
+            if (typeof logActivity === 'function')
+              logActivity('SYSTEM', 'All data cleared by warden', 'danger');
+            if (typeof updateSidebar   === 'function') updateSidebar();
+            if (typeof navigate        === 'function') navigate('dashboard');
+            if (typeof toast           === 'function') toast('🗑️ All data cleared.', 'success');
+          } catch (e) {
+            if (typeof toast === 'function') toast('❌ Clear failed: ' + e.message, 'error');
+          }
+        },
+        'Delete Everything',
+        'Cancel'
+      );
+    },
+    'Yes, Clear All',
+    'Cancel'
+  );
 }
-
-// ── FORMER STUDENTS — search & restore ───────────────────────────────────────
-function showFormerStudentsModal() {
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── INPUT AUTO-FORMAT ────────────────────────────────────────────────────────
 function fmtPhone(inp) {
