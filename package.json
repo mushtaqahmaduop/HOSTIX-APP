@@ -1,6 +1,6 @@
 {
   "name": "damam-hostel",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "DAMAM Boys Hostel Management System",
   "author": {
     "name": "MUSHTAQ AHMAD",
@@ -13,14 +13,18 @@
     "build:portable": "electron-builder --win portable --x64 --ia32",
     "build:installer": "electron-builder --win nsis --x64 --ia32",
     "build:all": "electron-builder --win --x64 --ia32",
-    "test:license": "node test-license.js"
+    "test:license": "node test-license.js",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "build": {
     "appId": "com.damam.hostel",
     "productName": "DAMAM Boys Hostel",
-    "copyright": "Copyright © 2025 MUSHTAQ AHMAD",
+    "copyright": "Copyright \u00a9 2025 MUSHTAQ AHMAD",
     "asar": true,
-    "asarUnpack": [],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*"
+    ],
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -91,9 +95,11 @@
   },
   "devDependencies": {
     "electron": "^22.3.27",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "better-sqlite3": "^9.4.3"
   }
 }

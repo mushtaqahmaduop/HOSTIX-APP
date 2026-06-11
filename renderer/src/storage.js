@@ -1,102 +1,171 @@
-/* ─── DAMAM HOSTEL — STORAGE / DATABASE (PATCHED) ───────────────────────────
+/* ─── HOSTIX — STORAGE / DATABASE (v4.0 — SQLite via better-sqlite3) ─────────
    Loaded after config.js, utils.js, auth.js.
-   Contains: loadDB, saveDB, logActivity, backup/restore, cross-tab sync.
+   Contains: loadDB, saveDB, logActivity, backup/restore.
 
-   BUG FIXES:
-   FIX-S1  saveDB() now returns true/false so callers can detect save failure.
-   FIX-S2  Atomic write pattern: writes to _pending key first, then promotes.
-           Reduces risk of corrupt main key if power loss during write.
-   FIX-S3  Import backup validates record limits + rejects suspicious payloads.
-   FIX-S4  DB size warning before localStorage approaches 5MB limit.
-   FIX-S5  Cross-tab sync guard checks Array.isArray() — preserved from v3.
-   FIX-S6  Activity log warns before clearing — user must confirm.
-   FIX-S7  loadDB checks _pending key and recovers from partial write corruption.
+   v4.0 CHANGES:
+   - localStorage → SQLite via Electron IPC (window.electronAPI.db*)
+   - One-time migration from localStorage on first run (shows toast)
+   - localStorage fallback preserved for browser dev mode
+   - Cross-tab sync listener removed (SQLite is file-based, single process)
+   - _checkStorageUsage() removed (no 5MB limit with SQLite)
+   - backup/restore now use db:exportFull / db:importFull IPC channels
+   - saveDB() is now async — all 92 call sites in app.js use await saveDB()
    ─────────────────────────────────────────────────────────────────────────── */
 
 'use strict';
 
-const _LS_PENDING_KEY = LS_KEY + '_pending'; // [FIX-S2] atomic write temp key
+const _LS_PENDING_KEY = LS_KEY + '_pending';
 
-// ── [FIX-S7] Load DB — with pending-key recovery ─────────────────────────────
-function loadDB() {
-  try {
-    // [FIX-S7] Check if a pending write was interrupted — if so, attempt recovery
-    const pending = localStorage.getItem(_LS_PENDING_KEY);
-    if (pending) {
-      try {
-        const parsedPending = JSON.parse(pending);
-        if (parsedPending && Array.isArray(parsedPending.students) && Array.isArray(parsedPending.rooms)) {
-          // Pending write looks valid — promote it and clean up
-          localStorage.setItem(LS_KEY, pending);
+// ── Table name map: DB key → SQLite table name ────────────────────────────────
+const _TABLE_MAP = {
+  rooms:         'rooms',
+  students:      'students',
+  payments:      'payments',
+  expenses:      'expenses',
+  cancellations: 'cancellations',
+  maintenance:   'maintenance',
+  complaints:    'complaints',
+  checkinlog:    'checkinlog',
+  notices:       'notices',
+  fines:         'fines',
+  activityLog:   'activitylog',
+  inspections:   'inspections',
+  billSplits:    'billsplits',
+  transfers:     'transfers'
+};
+
+// ── Load DB ───────────────────────────────────────────────────────────────────
+async function loadDB() {
+  if (window.electronAPI && window.electronAPI.dbAll) {
+    // Check if SQLite already has data
+    const existingStudents = await window.electronAPI.dbAll('students');
+
+    if (existingStudents.length === 0) {
+      // SQLite empty — attempt one-time migration from localStorage
+      const lsRaw = localStorage.getItem(LS_KEY);
+      if (lsRaw) {
+        console.info('[HOSTIX] Migrating localStorage → SQLite...');
+        try {
+          const lsData = JSON.parse(lsRaw);
+          for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+            const records = lsData[dbKey] || [];
+            await window.electronAPI.dbBulkReplace(table, records);
+          }
+          if (lsData.settings) {
+            await window.electronAPI.dbSetSetting('hostelSettings', lsData.settings);
+          }
+          // Migrate archive
+          const archiveRaw = localStorage.getItem('dbh2_archive');
+          if (archiveRaw) {
+            try {
+              const archive = JSON.parse(archiveRaw);
+              const payments = (archive.payments || []).concat(archive.expenses || []);
+              for (const r of payments) {
+                if (r && r.id) await window.electronAPI.dbUpsert('archive', r.id, r);
+              }
+            } catch (_) {}
+          }
+          // Clear old localStorage data
+          localStorage.removeItem(LS_KEY);
           localStorage.removeItem(_LS_PENDING_KEY);
-          console.info('[DAMAM] Recovered DB from interrupted write (pending key).');
-        } else {
-          localStorage.removeItem(_LS_PENDING_KEY); // pending was corrupt — discard
+          localStorage.removeItem('dbh2_archive');
+          console.info('[HOSTIX] Migration complete.');
+          setTimeout(function () {
+            if (typeof toast === 'function')
+              toast('✅ Data migrated to SQLite — faster and safer!', 'success', 4000);
+          }, 1500);
+        } catch (e) {
+          console.error('[HOSTIX] Migration failed:', e);
+          setTimeout(function () {
+            if (typeof toast === 'function')
+              toast('⚠️ Migration failed — existing data preserved in localStorage.', 'error');
+          }, 1500);
         }
-      } catch (pe) {
-        localStorage.removeItem(_LS_PENDING_KEY); // unparseable pending — discard
       }
     }
 
-    const s = localStorage.getItem(LS_KEY);
-    if (s) {
-      const parsed = JSON.parse(s);
-      DB = parsed;
+    // Load from SQLite into memory DB object
+    const settingsRow = await window.electronAPI.dbGetSetting('hostelSettings');
+    if (settingsRow) DB.settings = settingsRow;
+
+    for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+      DB[dbKey] = await window.electronAPI.dbAll(table);
     }
-  } catch (e) {
-    console.error('[DAMAM] localStorage data corrupted:', e);
-    setTimeout(function () {
-      if (typeof toast === 'function')
-        toast('⚠️ Saved data appears corrupted. Please restore from a backup file.', 'error');
-    }, 1200);
+
+  } else {
+    // Fallback: no Electron API (browser dev mode)
+    _loadFromLocalStorage();
   }
+
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
   _checkBackupReminder();
-  _checkStorageUsage(); // [FIX-S4] warn if approaching limit
 }
 
-// ── [FIX-S1 + FIX-S2] Save DB — atomic write + return boolean ─────────────────
-function saveDB() {
+function _loadFromLocalStorage() {
+  try {
+    const pending = localStorage.getItem(_LS_PENDING_KEY);
+    if (pending) {
+      try {
+        const p = JSON.parse(pending);
+        if (p && Array.isArray(p.students) && Array.isArray(p.rooms)) {
+          localStorage.setItem(LS_KEY, pending);
+          localStorage.removeItem(_LS_PENDING_KEY);
+        } else {
+          localStorage.removeItem(_LS_PENDING_KEY);
+        }
+      } catch { localStorage.removeItem(_LS_PENDING_KEY); }
+    }
+    const s = localStorage.getItem(LS_KEY);
+    if (s) DB = JSON.parse(s);
+  } catch (e) {
+    console.error('[HOSTIX] localStorage fallback load failed:', e);
+  }
+}
+
+// ── Save DB ───────────────────────────────────────────────────────────────────
+async function saveDB() {
   if (typeof enforceDataRetention === 'function') enforceDataRetention();
+
+  if (window.electronAPI && window.electronAPI.dbBulkReplace) {
+    try {
+      for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+        await window.electronAPI.dbBulkReplace(table, DB[dbKey] || []);
+      }
+      await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
+
+      if (typeof updateSidebar         === 'function') updateSidebar();
+      if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+      return true;
+    } catch (e) {
+      console.error('[HOSTIX] SQLite saveDB failed:', e);
+      setTimeout(function () {
+        if (typeof toast === 'function')
+          toast('⚠️ Save failed! Export a backup immediately.', 'error');
+      }, 50);
+      return false;
+    }
+  } else {
+    return _saveToLocalStorage();
+  }
+}
+
+function _saveToLocalStorage() {
   try {
     const serialized = JSON.stringify(DB);
-
-    // [FIX-S2] Atomic write: write to pending key first, then promote to real key
-    // If power is lost between the two setItem calls, loadDB() will recover from pending.
-    localStorage.setItem(_LS_PENDING_KEY, serialized); // step 1: write to temp
-    localStorage.setItem(LS_KEY, serialized);           // step 2: promote to main
-    localStorage.removeItem(_LS_PENDING_KEY);           // step 3: clean temp
-
+    localStorage.setItem(_LS_PENDING_KEY, serialized);
+    localStorage.setItem(LS_KEY, serialized);
+    localStorage.removeItem(_LS_PENDING_KEY);
     if (typeof updateSidebar         === 'function') updateSidebar();
     if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
-    return true; // [FIX-S1] indicate success
+    return true;
   } catch (e) {
-    console.error('[DAMAM] localStorage save failed:', e);
+    console.error('[HOSTIX] localStorage save failed:', e);
     setTimeout(function () {
       if (typeof toast === 'function')
         toast('⚠️ Storage full — data may NOT have saved! Export a backup immediately.', 'error');
     }, 50);
-    return false; // [FIX-S1] indicate failure — callers can react
+    return false;
   }
-}
-
-// ── [FIX-S4] Storage usage warning ───────────────────────────────────────────
-function _checkStorageUsage() {
-  try {
-    let total = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      total += (localStorage.getItem(key) || '').length;
-    }
-    const totalKB = Math.round(total / 1024);
-    const LIMIT_KB = 4500; // warn at 4.5MB (localStorage limit is ~5MB)
-    if (totalKB > LIMIT_KB) {
-      setTimeout(function () {
-        if (typeof toast === 'function')
-          toast(`⚠️ Storage is ${totalKB}KB / ~5120KB (${Math.round(totalKB/51.2)}% full). Export a backup and archive old data soon.`, 'error', 8000);
-      }, 3000);
-    }
-  } catch (e) {}
 }
 
 // ── Activity log ──────────────────────────────────────────────────────────────
@@ -111,11 +180,10 @@ function logActivity(action, details, category) {
     date: _logNow.toISOString().split('T')[0],
     time: _logNow.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })
   });
-  // [FIX-S6] Warn when log is nearing the 200-entry cap
   if (DB.activityLog.length >= 180 && DB.activityLog.length < 200) {
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Consider exporting it before it auto-trims.', 'warning', 5000);
+        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Export before it auto-trims.', 'warning', 5000);
     }, 500);
   }
   if (DB.activityLog.length > 200) DB.activityLog = DB.activityLog.slice(0, 200);
@@ -127,12 +195,11 @@ function _checkBackupReminder() {
     const last = DB.settings && DB.settings.lastBackupReminder
       ? new Date(DB.settings.lastBackupReminder)
       : null;
-    const now = new Date();
-    const daysSince = last ? (now - last) / 86400000 : 999;
+    const daysSince = last ? (new Date() - last) / 86400000 : 999;
     if (daysSince < 7) return;
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('💾 It\'s been over a week since your last backup. Export one now from Backup & Restore.', 'warning', 7000);
+        toast('💾 Over a week since last backup. Export one from Backup & Restore.', 'warning', 7000);
     }, 4000);
   } catch (e) {}
 }
@@ -142,50 +209,22 @@ function markBackupDone() {
   saveDB();
 }
 
-// ── [FIX-S5] Cross-tab sync ───────────────────────────────────────────────────
-window.addEventListener('storage', function (e) {
-  if (e.key === LS_KEY && e.newValue) {
-    try {
-      const incoming = JSON.parse(e.newValue);
-      if (
-        incoming &&
-        Array.isArray(incoming.students) &&
-        Array.isArray(incoming.rooms) &&
-        incoming.settings
-      ) {
-        DB = typeof _initDBFields === 'function' ? _initDBFields(incoming) : incoming;
-        if (typeof renderPage    === 'function') renderPage(currentPage);
-        if (typeof updateSidebar === 'function') updateSidebar();
-      }
-    } catch (err) {}
-  }
-});
-
-window.addEventListener('message', function (e) {
-  if (e.data && e.data.type === 'damam_db_updated') {
-    loadDB();
-    if (typeof renderPage    === 'function') renderPage(currentPage);
-    if (typeof updateSidebar === 'function') updateSidebar();
-  }
-});
-
 // ── Electron menu backup handlers ─────────────────────────────────────────────
 if (window.electronAPI) {
 
-  window.electronAPI.onExportBackup(function (filePath) {
-    try {
-      const archive    = localStorage.getItem('dbh2_archive') || '{}';
-      const exportData = {
-        db:         JSON.parse(localStorage.getItem(LS_KEY) || '{}'),
-        archive:    JSON.parse(archive),
-        exportedAt: new Date().toISOString(),
-        version:    '3.0'
-      };
-      window.electronAPI.exportBackup(filePath, JSON.stringify(exportData, null, 2));
-      markBackupDone();
-    } catch (e) {
-      console.error('[DAMAM] Export failed:', e);
+  window.electronAPI.onExportBackup(async function (filePath) {
+    const result = await window.electronAPI.dbExportFull();
+    if (!result.ok) {
+      if (typeof toast === 'function') toast('❌ Backup export failed: ' + result.error, 'error');
+      return;
     }
+    const exportData = {
+      db:         result.data,
+      exportedAt: new Date().toISOString(),
+      version:    '4.0'
+    };
+    window.electronAPI.exportBackup(filePath, JSON.stringify(exportData, null, 2));
+    markBackupDone();
   });
 
   if (window.electronAPI.onPdfSaved) {
@@ -198,48 +237,43 @@ if (window.electronAPI) {
     });
   }
 
-  // [FIX-S3] Import Backup — validate structure and limits before accepting
-  window.electronAPI.onImportBackup(function (jsonString) {
+  window.electronAPI.onImportBackup(async function (jsonString) {
     try {
-      // [FIX-S3] Reject suspiciously large payloads before parsing
       if (typeof jsonString !== 'string' || jsonString.length > 50 * 1024 * 1024) {
         if (typeof toast === 'function') toast('❌ Backup file is too large or invalid', 'error');
         return;
       }
-
       const data   = JSON.parse(jsonString);
       const dbData = data.db || data;
 
-      // [FIX-S3] Validate core arrays exist
       if (!Array.isArray(dbData.rooms) && !Array.isArray(dbData.students)) {
         if (typeof toast === 'function') toast('❌ Invalid backup file — missing required data', 'error');
         return;
       }
 
-      // [FIX-S3] Sanity-check record counts to catch corrupted/malicious imports
-      const MAX_STUDENTS = 10000;
-      const MAX_PAYMENTS = 100000;
+      const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
       if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains suspiciously many student records — import rejected', 'error');
+        if (typeof toast === 'function') toast('❌ Backup contains too many student records', 'error');
         return;
       }
       if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains suspiciously many payment records — import rejected', 'error');
+        if (typeof toast === 'function') toast('❌ Backup contains too many payment records', 'error');
         return;
       }
 
-      localStorage.setItem(LS_KEY, JSON.stringify(dbData));
-      if (data.archive) localStorage.setItem('dbh2_archive', JSON.stringify(data.archive));
-      loadDB();
+      const result = await window.electronAPI.dbImportFull(dbData);
+      if (!result.ok) {
+        if (typeof toast === 'function') toast('❌ Import failed: ' + result.error, 'error');
+        return;
+      }
+      await loadDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
       if (typeof toast         === 'function') toast('✅ Backup imported successfully!', 'success');
-
-      // Mark backup done since we just restored one
       markBackupDone();
     } catch (e) {
-      console.error('[DAMAM] Import failed:', e);
-      if (typeof toast === 'function') toast('❌ Import failed: file is corrupt or invalid JSON', 'error');
+      console.error('[HOSTIX] Import failed:', e);
+      if (typeof toast === 'function') toast('❌ Import failed: ' + e.message, 'error');
     }
   });
 }

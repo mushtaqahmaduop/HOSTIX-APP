@@ -22,6 +22,55 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const os = require('os');
+// ── SQLite Database ───────────────────────────────────────────────────────────
+const Database = require('better-sqlite3');
+let db = null;
+
+function initDatabase() {
+  const dbPath = path.join(app.getPath('userData'), 'hostix.db');
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS rooms (
+      id   TEXT PRIMARY KEY,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS students (
+      id     TEXT PRIMARY KEY,
+      data   TEXT NOT NULL,
+      status TEXT GENERATED ALWAYS AS (json_extract(data, '$.status')) VIRTUAL,
+      roomId TEXT GENERATED ALWAYS AS (json_extract(data, '$.roomId')) VIRTUAL
+    );
+    CREATE TABLE IF NOT EXISTS payments (
+      id        TEXT PRIMARY KEY,
+      data      TEXT NOT NULL,
+      studentId TEXT GENERATED ALWAYS AS (json_extract(data, '$.studentId')) VIRTUAL,
+      status    TEXT GENERATED ALWAYS AS (json_extract(data, '$.status'))    VIRTUAL
+    );
+    CREATE TABLE IF NOT EXISTS expenses      (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS cancellations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS maintenance   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS complaints    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS checkinlog    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS notices       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS fines         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS activitylog   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS inspections   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS billsplits    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS transfers     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS archive       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+  `);
+
+  console.log('[HOSTIX] SQLite DB initialized at:', dbPath);
+  return db;
+}
+
 
 // ── Auto Updater ──────────────────────────────────────────────────────────────
 let autoUpdater = null;
@@ -305,7 +354,7 @@ function openLicenseSettings() {
       preload: path.join(__dirname, 'preload.js'),
       devTools: !IS_PROD
     },
-    backgroundColor: '#060c18',
+    backgroundColor: '#1a1c1e',
     show: false
   });
   _settingsWin.loadFile(path.join(__dirname, 'renderer', 'license-settings.html'));
@@ -330,7 +379,7 @@ function createWindow() {
       allowRunningInsecureContent: false,
       devTools: !IS_PROD
     },
-    backgroundColor: '#060c18',
+    backgroundColor: '#1a1c1e',
     show: false
   });
 
@@ -819,6 +868,112 @@ ipcMain.handle('update:install', () => {
   if (autoUpdater) autoUpdater.quitAndInstall();
 });
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// DB IPC HANDLERS (better-sqlite3)
+// ════════════════════════════════════════════════════════════════════════════
+
+ipcMain.handle('db:all', (_e, table, where) => {
+  try {
+    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    if (where) {
+      const [col, val] = where;
+      return db.prepare(`SELECT data FROM ${table} WHERE ${col} = ?`).all(val)
+        .map(r => JSON.parse(r.data));
+    }
+    return db.prepare(`SELECT data FROM ${table}`).all()
+      .map(r => JSON.parse(r.data));
+  } catch (e) { console.error('[DB] all:', e.message); return []; }
+});
+
+ipcMain.handle('db:upsert', (_e, table, id, record) => {
+  try {
+    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`)
+      .run(id, JSON.stringify(record));
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('db:delete', (_e, table, id) => {
+  try {
+    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('db:bulkReplace', (_e, table, records) => {
+  try {
+    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    const insert = db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`);
+    const transaction = db.transaction((rows) => {
+      db.prepare(`DELETE FROM ${table}`).run();
+      for (const r of rows) insert.run(r.id, JSON.stringify(r));
+    });
+    transaction(records);
+    return { ok: true };
+  } catch (e) { console.error('[DB] bulkReplace:', e.message); return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('db:getSetting', (_e, key) => {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? JSON.parse(row.value) : null;
+  } catch (e) { return null; }
+});
+
+ipcMain.handle('db:setSetting', (_e, key, value) => {
+  try {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run(key, JSON.stringify(value));
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('db:exportFull', () => {
+  try {
+    const tables = ['rooms','students','payments','expenses','cancellations',
+      'maintenance','complaints','checkinlog','notices','fines',
+      'activitylog','inspections','billsplits','transfers','archive'];
+    const result = {};
+    for (const t of tables) {
+      result[t] = db.prepare(`SELECT data FROM ${t}`).all().map(r => JSON.parse(r.data));
+    }
+    const settings = {};
+    db.prepare('SELECT key, value FROM settings').all()
+      .forEach(r => { settings[r.key] = JSON.parse(r.value); });
+    result.settings = settings;
+    return { ok: true, data: result };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('db:importFull', (_e, data) => {
+  try {
+    const transaction = db.transaction(() => {
+      const tables = ['rooms','students','payments','expenses','cancellations',
+        'maintenance','complaints','checkinlog','notices','fines',
+        'activitylog','inspections','billsplits','transfers','archive'];
+      for (const t of tables) {
+        db.prepare(`DELETE FROM ${t}`).run();
+        if (Array.isArray(data[t])) {
+          const ins = db.prepare(`INSERT OR REPLACE INTO ${t} (id, data) VALUES (?, ?)`);
+          for (const r of data[t]) ins.run(r.id, JSON.stringify(r));
+        }
+      }
+      if (data.settings) {
+        db.prepare('DELETE FROM settings').run();
+        const ins = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+        // data.settings may be a flat object (hostelSettings key) or the settings obj directly
+        const settingsObj = data.settings.hostelSettings || data.settings;
+        ins.run('hostelSettings', JSON.stringify(settingsObj));
+      }
+    });
+    transaction();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   const { session } = require('electron');
@@ -845,6 +1000,7 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
     return ALLOWED_PERMS.includes(permission);
   });
+  initDatabase();
   createWindow();
 
   // ── Auto Update (runs silently after window is ready) ─────────────────────

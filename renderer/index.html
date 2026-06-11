@@ -342,12 +342,38 @@
      5. license.js  — license check stubs (Phase 3 will activate these)
      6. app.js      — all remaining app + UI logic
      ═══════════════════════════════════════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCRIPT LOAD ORDER — mandatory, do not reorder
+       1. config.js       — LS_KEY, DB schema, _ACTIVE_HOSTEL
+       2. utils.js        — pure helpers: uid, escHtml, fmtDate, fmtPKR…
+       3. auth.js         — warden login, session, role management
+       4. storage.js      — loadDB/saveDB (async, SQLite-first)
+       5. license.js      — license check stubs
+       6. receipt.js      — PDF receipt builder
+       7-19. modules/     — feature modules (depend on 1-6 globals)
+       20. app.js         — boot, keyboard shortcuts, misc
+       ═══════════════════════════════════════════════════════════════════════ -->
   <script src="src/config.js"></script>
   <script src="src/utils.js"></script>
   <script src="src/auth.js"></script>
   <script src="src/storage.js"></script>
   <script src="src/license.js"></script>
   <script src="src/receipt.js"></script>
+  <!-- Feature modules -->
+  <script src="src/modules/theme.js"></script>
+  <script src="src/modules/nav.js"></script>
+  <script src="src/modules/dashboard.js"></script>
+  <script src="src/modules/cancellations.js"></script>
+  <script src="src/modules/rooms.js"></script>
+  <script src="src/modules/students.js"></script>
+  <script src="src/modules/payments.js"></script>
+  <script src="src/modules/expenses.js"></script>
+  <script src="src/modules/reports.js"></script>
+  <script src="src/modules/settings.js"></script>
+  <script src="src/modules/modals.js"></script>
+  <script src="src/modules/sidebar_calendar.js"></script>
+  <script src="src/modules/issues.js"></script>
+  <!-- Boot & misc -->
   <script src="app.js" defer></script>
 </body>
 </html>

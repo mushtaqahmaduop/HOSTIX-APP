@@ -69,6 +69,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   licensePrepareUninstall:     () => ipcRenderer.invoke('license:prepareUninstall'),
   licenseOpenSettings:         () => ipcRenderer.invoke('license:openSettings'),
 
+
+  // ── SQLite DB API ─────────────────────────────────────────────────────────
+  dbAll:         (table, where)      => ipcRenderer.invoke('db:all',         table, where),
+  dbUpsert:      (table, id, record) => ipcRenderer.invoke('db:upsert',      table, id, record),
+  dbDelete:      (table, id)         => ipcRenderer.invoke('db:delete',      table, id),
+  dbBulkReplace: (table, records)    => ipcRenderer.invoke('db:bulkReplace', table, records),
+  dbGetSetting:  (key)               => ipcRenderer.invoke('db:getSetting',  key),
+  dbSetSetting:  (key, value)        => ipcRenderer.invoke('db:setSetting',  key, value),
+  dbExportFull:  ()                  => ipcRenderer.invoke('db:exportFull'),
+  dbImportFull:  (data)              => ipcRenderer.invoke('db:importFull',  data),
   // [FIX-P2] Receipt PDF — validate htmlContent and suggestedName; supports opts {landscape}
   receiptSavePDF: (htmlContent, suggestedName, opts) => {
     if (typeof htmlContent !== 'string') {

@@ -1,7 +1,6 @@
-# HOSTIX offline hostel management system
+# HOSTIX — Offline Hostel Management System
 
-Offline desktop app built with Electron.
-All data stored locally in browser `localStorage` — no internet required.
+Desktop app built with Electron. All data stored locally in `localStorage` — no internet required.
 
 ---
 
@@ -33,11 +32,11 @@ npm run test:license
 ## Folder Structure
 
 ```
-damam-hostel/
-├── main.js             ← Electron main process — license engine, IPC, menus
+HOSTIX-APP/
+├── main.js             ← Electron main process — license engine, IPC, auto-updater
 ├── preload.js          ← Secure IPC bridge (contextIsolation: true)
 ├── package.json        ← Scripts & electron-builder config
-├── test-license.js     ← License system test suite (node test-license.js)
+├── test-license.js     ← License system test suite
 ├── .gitignore
 │
 ├── renderer/
@@ -45,7 +44,7 @@ damam-hostel/
 │   ├── style.css       ← All CSS
 │   ├── license.html    ← Activation screen (shown when no valid license)
 │   ├── app.js          ← Main application logic
-│   └── src/            ← Modular support files (load order is strict)
+│   └── src/            ← Modular support files (strict load order)
 │       ├── config.js       1. LS_KEY, active hostel, default DB schema
 │       ├── utils.js        2. Pure helpers: escHtml, uid, fmtDate, fmtPKR …
 │       ├── auth.js         3. Warden login, role management, session
@@ -58,36 +57,36 @@ damam-hostel/
     └── icon.ico        ← Windows taskbar icon
 ```
 
-> **Script load order is mandatory.** index.html loads scripts in the order
+> **Script load order is mandatory.** `index.html` loads scripts in the order
 > shown above. Never reorder them — each file depends on the ones before it.
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action             |
-| -------------- | ------------------ |
-| `Ctrl+S`       | Export backup      |
-| `Ctrl+O`       | Import backup      |
-| `F11`          | Toggle full screen |
-| `F12`          | Dev tools (dev only) |
-| `Escape`       | Close modal        |
-| `Enter`        | Save form          |
+| Shortcut   | Action               |
+| ---------- | -------------------- |
+| `Ctrl+S`   | Export backup        |
+| `Ctrl+O`   | Import backup        |
+| `F11`      | Toggle full screen   |
+| `F12`      | Dev tools (dev only) |
+| `Escape`   | Close modal          |
+| `Enter`    | Save form            |
 
 ---
 
 ## License System (v3)
 
-| Feature | Detail |
-|---|---|
-| Storage | AES-256-CBC encrypted `license.enc` in Electron userData |
-| Key derivation | `scrypt(machineId + secret, salt, 32)` |
-| Machine binding | SHA-256(hostname \| platform \| arch \| cpu \| WinMachineGuid) → 64 chars |
-| Key format | `HOSTEL-XXXX-XXXX-XXXX` (HMAC-SHA256 checksum) |
-| Anti-time-cheat | `last_run.dat` blocks clock rollback |
-| Production hardening | DevTools blocked, `--inspect` flag rejected |
+| Feature         | Detail                                                                 |
+| --------------- | ---------------------------------------------------------------------- |
+| Storage         | AES-256-CBC encrypted `license.enc` in Electron userData              |
+| Key derivation  | `scrypt(machineId + secret, salt, 32)`                                 |
+| Machine binding | SHA-256(platform \| arch \| cpu \| WinMachineGuid \| DriveSerial) |
+| Key format      | `HOSTEL-XXXX-XXXX-XXXX` (HMAC-SHA256 checksum)                        |
+| Anti-time-cheat | `last_run.dat` blocks clock rollback                                   |
+| Hardening       | DevTools blocked, `--inspect` flag rejected in production              |
 
-Keys are generated with `keygen.js` (not included in builds — excluded by `package.json`).
+Keys are generated with `keygen.js` (excluded from builds via `package.json`).
 
 ---
 
@@ -96,29 +95,29 @@ Keys are generated with `keygen.js` (not included in builds — excluded by `pac
 All data is stored in **localStorage** on this device.
 
 - **Backup & Restore** in the sidebar → export a `.json` backup file
-- **File → Export Backup** (Ctrl+S) → quick export
-- A reminder toast appears automatically if no backup has been made in 7 days
-- Store backups on a USB drive or Google Drive
+- **Ctrl+S** → quick export
+- Auto-backup reminder toast fires if no backup in 7 days
+- Midnight auto-backup scheduler runs in background
 
 ---
 
-## What Changed in v3 (Merged)
+## What Changed in v3
 
-### Security upgrades
-- License file now AES-256-CBC encrypted (was plain JSON + HMAC)
-- Machine fingerprint uses full 64-char SHA-256 + Windows MachineGuid
-- Key derivation uses `scrypt` (memory-hard, not plain HMAC)
-- `--inspect` / `--inspect-brk` blocked in production (anti-debug)
-- `keygen.html` and `keygen.js` excluded from all builds
+### Security
+- License file AES-256-CBC encrypted (was plain JSON + HMAC)
+- Machine fingerprint: full SHA-256 + WinMachineGuid + DriveSerial
+- Key derivation uses `scrypt` (memory-hard)
+- `--inspect` / `--inspect-brk` blocked in production
+- `keygen.js` / `keygen.html` excluded from all builds
 
-### Bug fixes
-- `_checkDefaultPasswords` now correctly checks each warden against their own default
+### Bug Fixes
 - Cross-tab sync guard uses `Array.isArray()` — empty arrays no longer overwrite live data
-- `mainWindow` null-guard added to `write-file` IPC handler (crash fix on rapid close)
-- `allowRunningInsecureContent` is now unconditionally `false.`
-- Backup export now includes the archive collection
+- `mainWindow` null-guard in `write-file` IPC handler (crash fix)
+- `allowRunningInsecureContent` unconditionally `false`
+- Backup export includes archive collection
 
-### New features
+### New Features
 - 7-day backup reminder toast
-- Receipt PDF uses native `printToPDF` (no popup window needed)
-- `npm run test: license` runs the full 25-test license suite
+- Midnight auto-backup scheduler
+- Receipt PDF via native `printToPDF`
+- 25-test license suite (`npm run test:license`)
