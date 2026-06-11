@@ -112,13 +112,13 @@ async function showBackupRestoreModal() {
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Google Account (Gmail) for Drive Upload</label>
         <input class="form-control" id="gdrive-email" type="email" placeholder="yourname@gmail.com"
           value="${escHtml(DB.settings.driveEmail||'')}"
-          oninput="DB.settings.driveEmail=this.value.trim();await saveDB()"
+          oninput="(async()=>{DB.settings.driveEmail=this.value.trim();await saveDB();})()"
           style="font-size:12px">
         <div style="font-size:10px;color:var(--text3);margin-top:4px">Saved for reference — used to open the correct Drive account in your browser.</div>
       </div>
       <div class="field" style="margin-bottom:12px">
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Auto-Backup Schedule</label>
-        <select class="form-control" id="backup-schedule" onchange="DB.settings.backupSchedule=this.value;await saveDB();updateBackupScheduleLabel()">
+        <select class="form-control" id="backup-schedule" onchange="(async function(){DB.settings.backupSchedule=this.value;await saveDB();updateBackupScheduleLabel();}).call(this)">
           <option value="" ${!DB.settings.backupSchedule?'selected':''}>Disabled</option>
           <option value="daily" ${DB.settings.backupSchedule==='daily'?'selected':''}>Every Day</option>
           <option value="2days" ${DB.settings.backupSchedule==='2days'?'selected':''}>Every 2 Days</option>
