@@ -1001,4 +1001,4 @@ function downloadDetailCSV(type) {
   setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 18: revoke blob URL to free memory
   toast('Downloaded: '+filename,'success');
 }
-let calPopoverOpen = false;
+// calPopoverOpen declared in dashboard.js (shared)
