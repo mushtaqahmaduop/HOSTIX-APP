@@ -178,7 +178,7 @@ async function confirmDeleteRoom(id) {
     DB.rooms=DB.rooms.filter(x=>x.id!==id);
     logActivity('Room Deleted', 'Room #'+r.number, 'Room');
     await saveDB(); renderPage('rooms'); toast('Room deleted','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
