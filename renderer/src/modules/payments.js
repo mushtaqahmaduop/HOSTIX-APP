@@ -153,13 +153,13 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
   showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
 }
 async function deletePayment(id) {
-  showConfirm('Delete payment record?','This cannot be undone.',()=>{
+  showConfirm('Delete payment record?','This cannot be undone.',async ()=>{
     DB.payments=DB.payments.filter(x=>x.id!==id);
     await saveDB(); renderPage('payments'); toast('Payment deleted','info');
   });
 }
 async function deletePaymentFromStudentView(payId, studentId) {
-  showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',()=>{
+  showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',async ()=>{
     DB.payments=DB.payments.filter(x=>x.id!==payId);
     await saveDB();
     toast('Payment record deleted','info');
@@ -818,7 +818,7 @@ function showEditPaymentModal(id) {
     recalcUnpaid();
   }, 50);
 }
-function submitEditPayment(id) {
+async function submitEditPayment(id) {
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
   const paidAmount   = parseFloat(document.getElementById('f-ppaid')?.value)||0;
