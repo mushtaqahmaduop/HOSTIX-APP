@@ -1082,7 +1082,7 @@ async function updateMonthPayStatus(payId, newStatus) {
 }
 
 async function deleteMonthPayment(payId, monthKey, monthLabel) {
-  showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',()=>{
+  showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',async ()=>{
     DB.payments = DB.payments.filter(p=>p.id!==payId);
     await saveDB();
     toast('Fee record deleted','success');
@@ -1091,7 +1091,7 @@ async function deleteMonthPayment(payId, monthKey, monthLabel) {
 }
 
 async function deleteMonthExpense(expId, monthKey, monthLabel) {
-  showConfirm('Delete Expense','Remove this expense record? This cannot be undone.',()=>{
+  showConfirm('Delete Expense','Remove this expense record? This cannot be undone.',async ()=>{
     DB.expenses = DB.expenses.filter(e=>e.id!==expId);
     await saveDB();
     toast('Expense deleted','success');
