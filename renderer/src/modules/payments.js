@@ -463,7 +463,7 @@ async function submitPaymentForStudent() {
       + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
       + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
       + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
-      function() {
+      async function() {
         // ── UPDATE existing pending record in-place ──────────────────
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
         const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
@@ -649,7 +649,7 @@ async function submitAddPayment() {
         + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
         + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
-        function() {
+        async function() {
           // ── UPDATE existing pending record in-place ──────────────────
           const newMonthlyRent = parseFloat(document.getElementById('f-pamt')?.value)  || alreadyPending2.monthlyRent || 0;
           const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
