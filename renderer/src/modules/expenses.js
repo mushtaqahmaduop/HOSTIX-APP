@@ -103,7 +103,7 @@ async function deleteExpense(id) {
     DB.expenses=DB.expenses.filter(x=>x.id!==id);
     if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
     await saveDB(); renderPage('expenses'); toast('Expense deleted','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
