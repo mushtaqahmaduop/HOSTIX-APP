@@ -988,7 +988,7 @@ async function confirmDeleteStudent(id) {
     DB.students=DB.students.filter(x=>x.id!==id);
     DB.payments=DB.payments.filter(p=>p.studentId!==id);
     await saveDB(); renderPage('students'); toast('Student removed','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1445,9 +1445,6 @@ async function submitRestoreStudent(studentId) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-function showUserMgmt() {
-  var rows = '';
-
 function downloadAllStudentsPDF() {
   // Build last 24 month options
   var monthOpts = '';
@@ -1732,6 +1729,7 @@ function doGenerateStudentsPDF(monthKey) {
 
   // ── IN-APP VIEWER (always — no window.open, no external save dialog) ─────────
   // Removes old viewer if open, builds a full-screen overlay with toolbar,
+}
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────
 function filterRoomSearch(q) {
