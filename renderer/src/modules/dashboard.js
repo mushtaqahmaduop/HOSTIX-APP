@@ -77,6 +77,7 @@ function generateRooms(roomTypes) {
     });
   });
   return rooms;
+}
 
 function renderDashboard() {
   // Alert system
@@ -1449,7 +1450,8 @@ async function quickDashTransfer() {
 
 // Alias the old name for backward compat
 
-// ── DASHBOARD GLOBAL SEARCHfunction dashGlobalSearch(query) {
+// ── DASHBOARD GLOBAL SEARCH
+function dashGlobalSearch(query) {
   var clearBtn = document.getElementById('dash-search-clear');
   var resultsBox = document.getElementById('dash-search-results');
   if (!resultsBox) return;
