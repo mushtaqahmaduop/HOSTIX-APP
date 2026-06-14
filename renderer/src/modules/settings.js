@@ -1328,9 +1328,7 @@ function loadSavedLogo() {
 // ════════════════════════════════════════════════════════════════════════════
 // SIDEBAR CALENDAR (professional compact inline calendar)
 // ════════════════════════════════════════════════════════════════════════════
-let _sbCalYear = new Date().getFullYear();
-let _sbCalMonth = new Date().getMonth(); // 0-indexed
-let _sbCalOpen = false;
+// _sbCalOpen/_sbCalYear/_sbCalMonth defined in sidebar_calendar.js
 
 
 function enforceDataRetention() {
