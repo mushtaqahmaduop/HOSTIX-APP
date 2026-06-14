@@ -359,7 +359,7 @@ async function restoreBackup() {
       const count = parsed.students.length;
       showConfirm('Restore Backup?',
         `This will replace ALL current data with backup data (${count} students). This cannot be undone!`,
-        ()=>{
+        async ()=>{
           DB = _initDBFields(parsed);
           await saveDB();
           updateSidebar();
@@ -389,7 +389,7 @@ async function restoreFromPaste() {
     const count = parsed.students.length;
     showConfirm('Restore from Pasted Data?',
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
-      ()=>{
+      async ()=>{
         DB = _initDBFields(parsed);
         await saveDB();
         updateSidebar();
@@ -536,8 +536,6 @@ function pmBadge(m) {
 
 let _cdpTarget = null, _cdpY = new Date().getFullYear(), _cdpM = new Date().getMonth(), _cdpSelected = null;
 const _MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-function showCustomDatePicker(input, event) {
 
 function showCustomDatePicker(input, event) {
   if (event) event.stopPropagation();
@@ -863,4 +861,3 @@ async function saveWardenInfo(key) {
 // ══════════════════════════════════════════════════════════════════
 // ALL STUDENTS PDF DOWNLOAD
 // ══════════════════════════════════════════════════════════════════
-function downloadAllStudentsPDF() {
