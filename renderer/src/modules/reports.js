@@ -523,7 +523,7 @@ async function deleteTransferFromModal(id) {
     closeModal();
     setTimeout(()=>showTransferRecordsModal(), 100);
     toast('Transfer deleted','info');
-  });
+  }));
 }
 
 function showEditTransferModal(id) {
@@ -621,7 +621,7 @@ async function deleteTransfer(id) {
   showConfirm('Delete transfer record?','This cannot be undone.',(async ()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
     await saveDB(); renderPage('reports'); toast('Transfer deleted','info');
-  });
+  }));
 }
 
 
