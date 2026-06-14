@@ -31,7 +31,17 @@ async function saveMaintenance() {
   const subject = document.getElementById('cp-subject')?.value?.trim();
   if(!subject){toast('Enter a subject','error');return;}
   if(!DB.complaints) DB.complaints=[];
-
+  logActivity('Complaint Added', subject, 'Complaint');
+  DB.complaints.push({
+    id:'cp_'+uid(), subject,
+    studentId: document.getElementById('cp-student')?.value||'',
+    category: document.getElementById('cp-category')?.value||'General',
+    description: document.getElementById('cp-desc')?.value?.trim()||'',
+    date: document.getElementById('cp-date')?.value||today(),
+    status:'Open', resolvedDate:''
+  });
+  await saveDB(); closeModal(); renderPage('complaints'); toast('Complaint added','success');
+}
 async function saveCheckin() {
   const studentId = document.getElementById('ci-student')?.value;
   if(!studentId){toast('Select a student','error');return;}
@@ -375,9 +385,6 @@ function showRentReminderModal() {
 
 // ════════════════════════════════════════════════════════════════════════════
 let settingsTab = 'hostel';
-function renderSettings() {
-  const s = DB.settings;
-
 function renderSettings() {
   const s = DB.settings;
   const tabs = [
