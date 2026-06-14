@@ -188,7 +188,7 @@ async function deleteCancellationRecord(cancId) {
     DB.cancellations = (DB.cancellations||[]).filter(x=>x.id!==cancId);
     await saveDB(); closeModal(); renderPage('cancellations_All');
     toast('Record deleted','success');
-  });
+  }));
 }
 
 function showAddCancellationModal() {
@@ -369,7 +369,7 @@ async function confirmCancellation(cancId) {
     await saveDB();
     toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
     renderPage('cancellations');
-  });
+  }));
 }
 
 async function restoreFromCancellation(cancId) {
@@ -382,7 +382,7 @@ async function restoreFromCancellation(cancId) {
     await saveDB();
     toast(`${c.studentName} restored to Active. Seat is re-occupied.`, 'success');
     renderPage('cancellations');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
