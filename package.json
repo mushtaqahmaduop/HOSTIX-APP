@@ -54,13 +54,27 @@
       {
         "from": "node_modules/better-sqlite3/build/Release",
         "to": "app/node_modules/better-sqlite3/build/Release",
-        "filter": ["**/*.node"]
+        "filter": [
+          "**/*.node"
+        ]
       }
     ],
     "win": {
       "target": [
-        { "target": "nsis",     "arch": ["x64", "ia32"] },
-        { "target": "portable", "arch": ["x64", "ia32"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
       ],
       "icon": "assets/logo.ico",
       "requestedExecutionLevel": "asInvoker",
@@ -98,12 +112,13 @@
     }
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "electron": "^22.3.27",
     "electron-builder": "^26.8.1",
     "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
-    "better-sqlite3": "^9.4.3"
+    "better-sqlite3": "^9.4.3",
+    "electron-updater": "^6.8.3"
   }
 }
