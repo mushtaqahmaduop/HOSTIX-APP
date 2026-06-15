@@ -3511,3 +3511,817 @@ body.light-theme .modal {
     .card { border: 1px solid #ddd !important; box-shadow: none !important; }
 }
 
+
+/* ╔═══════════════════════════════════════════════════════════════════════════╗
+   ║  HOSTIX — STITCH DESIGN SYSTEM UPGRADE                                   ║
+   ║  Material 3 · Chromium Glass · Premium 2026 SaaS                         ║
+   ║  Generated from Stitch prototypes — DO NOT remove existing classes        ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝ */
+
+/* ── STITCH MATERIAL 3 TOKEN OVERLAY ───────────────────────────────────────
+   Maps Stitch Tailwind tokens → existing CSS var system.
+   Overrides only what needs upgrading; preserves all JS-bound classes.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+    /* Surface hierarchy (Stitch: surface-container-lowest → highest) */
+    --s-lowest:     #0e0e0e;
+    --s-low:        #1c1b1b;
+    --s-mid:        #201f1f;
+    --s-high:       #2a2a2a;
+    --s-highest:    #353534;
+    --s-bright:     #393939;
+
+    /* Stitch primary — warm peach/amber (matches existing --gold) */
+    --s-primary:    #ffb780;
+    --s-primary-c:  #d08a52;   /* primary-container */
+    --s-on-primary: #4e2600;
+
+    /* Stitch secondary — teal */
+    --s-secondary:  #44e2cd;
+    --s-on-sec:     #003731;
+
+    /* Stitch tertiary — emerald */
+    --s-tertiary:   #45dfa4;
+    --s-on-tert:    #003825;
+
+    /* On-surface text */
+    --s-on-surface:    #e5e2e1;
+    --s-on-surface-v:  #d7c3b5;   /* on-surface-variant (warm muted) */
+
+    /* Outline */
+    --s-outline:    #a08d81;
+    --s-outline-v:  #52443a;
+
+    /* Stitch spacing constants */
+    --s-sidebar-w:  260px;
+    --s-header-h:   64px;
+    --s-gutter:     20px;
+
+    /* Refined shadows for Material 3 elevation */
+    --s-elev-1: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+    --s-elev-2: 0 1px 2px rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
+    --s-elev-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
+
+    /* Card hairline (from Stitch) */
+    --s-hairline: 1px solid rgba(255,255,255,0.07);
+
+    /* Stitch border-radius tokens */
+    --s-r-sm:   4px;
+    --s-r-md:   8px;
+    --s-r-lg:   12px;
+    --s-r-xl:   16px;
+    --s-r-2xl:  20px;
+}
+
+/* Light theme Stitch overrides */
+body.light-theme {
+    --s-lowest:    #ffffff;
+    --s-low:       #f8f7f6;
+    --s-mid:       #f3f3f3;
+    --s-high:      #ebe9e8;
+    --s-highest:   #e5e2e1;
+    --s-bright:    #ffffff;
+    --s-primary:   #d08a52;
+    --s-primary-c: #ffdcc4;
+    --s-on-primary: #ffffff;
+    --s-secondary: #03c6b2;
+    --s-tertiary:  #62259b;
+    --s-on-surface: #1c1b1b;
+    --s-on-surface-v: #52443a;
+    --s-outline:   #85736b;
+    --s-outline-v: #d7c3b5;
+    --s-hairline:  1px solid var(--s-outline-v);
+}
+
+/* ── GLOBAL ATMOSPHERE (Stitch ambient background blobs) ──────────────────── */
+body::before {
+    content: '';
+    position: fixed;
+    top: -10%; right: -10%;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(208,138,82,0.04) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+body::after {
+    content: '';
+    position: fixed;
+    bottom: -10%; left: -10%;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(68,226,205,0.03) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(100px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+body.light-theme::before,
+body.light-theme::after { display: none; }
+
+/* ── SIDEBAR — Stitch premium rebuild ──────────────────────────────────────── */
+#sidebar {
+    background: var(--s-mid) !important;
+    border-right: var(--s-hairline) !important;
+    box-shadow: 1px 0 0 var(--s-outline-v) !important;
+}
+
+body.light-theme #sidebar {
+    background: #ffffff !important;
+    box-shadow: 1px 0 0 var(--s-outline-v), 4px 0 20px rgba(208,138,82,0.04) !important;
+}
+
+/* Sidebar logo area — Stitch header style */
+.sb-logo {
+    background: linear-gradient(160deg, rgba(208,138,82,0.08) 0%, transparent 70%) !important;
+}
+
+/* Nav items — Stitch border-l-4 active style */
+.nav-item {
+    border-radius: var(--s-r-md) !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    margin-bottom: 2px !important;
+    padding: 9px 12px !important;
+    border: 1px solid transparent !important;
+    transition: all 0.2s ease !important;
+}
+
+.nav-item:hover {
+    background: rgba(208,138,82,0.06) !important;
+    color: var(--s-primary) !important;
+    border-color: transparent !important;
+    transform: translateX(2px) !important;
+}
+
+.nav-item.active {
+    background: rgba(208,138,82,0.1) !important;
+    color: var(--s-primary) !important;
+    border-color: transparent !important;
+    font-weight: 600 !important;
+}
+
+/* Stitch: active has left border only */
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 15%; bottom: 15%;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--s-primary) !important;
+    box-shadow: 0 0 8px rgba(255,183,128,0.5) !important;
+}
+
+.nav-item.active .nav-icon,
+.nav-item.active { color: var(--s-primary) !important; }
+
+body.light-theme .nav-item:hover  { background: rgba(208,138,82,0.06) !important; }
+body.light-theme .nav-item.active { background: rgba(208,138,82,0.08) !important; }
+
+/* ── HEADER — Stitch glass header ────────────────────────────────────────── */
+#header {
+    background: rgba(19,19,19,0.85) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border-bottom: var(--s-hairline) !important;
+    box-shadow: 0 1px 0 rgba(208,138,82,0.12) !important;
+    height: var(--s-header-h) !important;
+}
+
+body.light-theme #header {
+    background: rgba(255,255,255,0.9) !important;
+    border-bottom: 1px solid var(--s-outline-v) !important;
+    box-shadow: 0 1px 0 var(--s-outline-v) !important;
+}
+
+/* ── CONTENT AREA ─────────────────────────────────────────────────────────── */
+#content {
+    background: var(--bg);
+    position: relative;
+    z-index: 1;
+}
+
+/* ── STAT CARDS — Stitch surface-container-low style ─────────────────────── */
+.stat-card {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+    padding: 16px !important;
+    transition: background 0.2s ease, transform 0.2s ease !important;
+}
+
+.stat-card:hover {
+    background: var(--s-mid) !important;
+    border-color: rgba(208,138,82,0.2) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: var(--s-elev-3), 0 0 20px rgba(208,138,82,0.1) !important;
+}
+
+body.light-theme .stat-card {
+    background: #ffffff !important;
+    border: 1px solid var(--s-outline-v) !important;
+    box-shadow: var(--s-elev-1) !important;
+}
+
+body.light-theme .stat-card:hover {
+    box-shadow: var(--s-elev-3), 0 0 16px rgba(208,138,82,0.08) !important;
+}
+
+/* Stitch stat icon chip */
+.stat-icon {
+    width: 36px; height: 36px;
+    border-radius: var(--s-r-md) !important;
+    font-size: 18px !important;
+}
+
+/* Stitch progress bar under stat value */
+.stat-card .stat-bar {
+    margin-top: 12px;
+    height: 2px;
+    background: var(--s-highest);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.stat-card .stat-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+}
+
+/* Stat value — Stitch display sizing */
+.stat-value {
+    font-size: 24px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px !important;
+}
+
+.stat-label {
+    font-size: 11px !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ── CARDS — Stitch glass card ────────────────────────────────────────────── */
+.card {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+    transition: background 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.card:hover {
+    background: var(--s-mid) !important;
+    box-shadow: var(--s-elev-2) !important;
+}
+
+body.light-theme .card {
+    background: #ffffff !important;
+    border: 1px solid var(--s-outline-v) !important;
+    box-shadow: var(--s-elev-1) !important;
+}
+
+.card-title {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.2px !important;
+}
+
+/* ── TABLES — Stitch enterprise table ─────────────────────────────────────── */
+.table-wrap {
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+    overflow: hidden !important;
+}
+
+th {
+    background: var(--s-mid) !important;
+    color: var(--s-on-surface-v) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.08em !important;
+    padding: 12px 16px !important;
+    border-bottom: var(--s-hairline) !important;
+}
+
+td {
+    padding: 13px 16px !important;
+    border-bottom: var(--s-hairline) !important;
+    color: var(--s-on-surface) !important;
+}
+
+tbody tr:hover td {
+    background: rgba(208,138,82,0.04) !important;
+}
+
+body.light-theme th {
+    background: var(--s-mid) !important;
+    color: var(--s-on-surface-v) !important;
+    border-bottom: 1px solid var(--s-outline-v) !important;
+}
+
+body.light-theme td {
+    border-bottom: 1px solid var(--s-outline-v) !important;
+}
+
+/* ── BUTTONS — Stitch premium ─────────────────────────────────────────────── */
+.btn {
+    border-radius: var(--s-r-md) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding: 9px 18px !important;
+    letter-spacing: 0.01em !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn:active { transform: scale(0.96) !important; }
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--s-primary-c) 0%, #c07840 100%) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 12px rgba(208,138,82,0.35) !important;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--s-primary) 0%, var(--s-primary-c) 100%) !important;
+    box-shadow: 0 4px 20px rgba(208,138,82,0.45) !important;
+    transform: translateY(-1px) !important;
+}
+
+body.light-theme .btn-primary {
+    box-shadow: 0 2px 8px rgba(208,138,82,0.25) !important;
+}
+
+/* ── ROOM CARDS — Stitch style ────────────────────────────────────────────── */
+.room-card {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+    transition: background 0.15s ease, transform 0.2s ease !important;
+}
+
+.room-card:hover {
+    background: var(--s-mid) !important;
+    border-color: rgba(208,138,82,0.2) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: var(--s-elev-3) !important;
+}
+
+.room-card.occupied { border-color: rgba(69,223,164,0.2) !important; }
+.room-card.vacant   { border-color: rgba(255,183,128,0.15) !important; }
+
+body.light-theme .room-card {
+    background: #fff !important;
+    border: 1px solid var(--s-outline-v) !important;
+}
+
+/* ── BADGES — Stitch refined ────────────────────────────────────────────── */
+.badge {
+    border-radius: 100px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    padding: 3px 10px !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* ── MODALS — Stitch sheet ────────────────────────────────────────────────── */
+.modal {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-2xl) !important;
+    box-shadow:
+        0 32px 80px rgba(0,0,0,0.65),
+        0 0 0 1px rgba(255,255,255,0.04),
+        inset 0 1px 0 rgba(255,255,255,0.03) !important;
+}
+
+.modal-header {
+    background: linear-gradient(180deg, rgba(208,138,82,0.04) 0%, transparent 100%) !important;
+    border-bottom: var(--s-hairline) !important;
+}
+
+.modal-title {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.2px !important;
+}
+
+body.light-theme .modal {
+    background: #ffffff !important;
+    border: 1px solid var(--s-outline-v) !important;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 0 0 1px var(--s-outline-v) !important;
+}
+
+/* ── FORMS — Stitch inputs ────────────────────────────────────────────────── */
+.form-control {
+    background: var(--s-mid) !important;
+    border: 1px solid var(--s-outline-v) !important;
+    border-radius: var(--s-r-md) !important;
+    color: var(--s-on-surface) !important;
+    font-size: 13.5px !important;
+    padding: 10px 14px !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.form-control:focus {
+    border-color: var(--s-primary-c) !important;
+    box-shadow: 0 0 0 3px rgba(208,138,82,0.15) !important;
+    background: var(--s-high) !important;
+    outline: none !important;
+}
+
+body.light-theme .form-control {
+    background: #ffffff !important;
+    border-color: var(--s-outline-v) !important;
+}
+
+body.light-theme .form-control:focus {
+    background: #ffffff !important;
+    border-color: var(--s-primary-c) !important;
+}
+
+/* ── FILTER BAR — Stitch ─────────────────────────────────────────────────── */
+.filter-bar {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+}
+
+.ftab {
+    border-radius: var(--s-r-md) !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+}
+
+.ftab.active {
+    background: rgba(208,138,82,0.12) !important;
+    color: var(--s-primary) !important;
+    border-color: rgba(208,138,82,0.25) !important;
+}
+
+/* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
+.toast {
+    background: var(--s-high) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-lg) !important;
+    box-shadow: var(--s-elev-3), 0 0 20px rgba(0,0,0,0.3) !important;
+}
+
+/* ── AVATAR — Stitch rounded ─────────────────────────────────────────────── */
+.avatar {
+    border-radius: var(--s-r-md) !important;
+}
+
+/* ── PAGE HEADER — Stitch "Command Center" style ─────────────────────────── */
+.hdr-left .page-title {
+    font-family: 'Outfit', var(--font-display) !important;
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.3px !important;
+    color: var(--s-on-surface) !important;
+}
+
+.hdr-left .page-sub {
+    font-size: 11px !important;
+    color: var(--s-on-surface-v) !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    margin-top: 1px !important;
+}
+
+/* ── STITCH QUICK ACTIONS GRID ───────────────────────────────────────────── */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    background: var(--s-mid);
+    border: var(--s-hairline);
+    border-radius: var(--s-r-xl);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+}
+
+.quick-action-btn:hover {
+    border-color: rgba(208,138,82,0.3);
+    background: rgba(208,138,82,0.06);
+    color: var(--s-primary);
+    transform: translateY(-1px);
+}
+
+.quick-action-btn .micon,
+.quick-action-btn .qa-icon {
+    font-size: 28px;
+    color: var(--s-primary);
+    transition: transform 0.2s ease;
+}
+
+.quick-action-btn:hover .micon,
+.quick-action-btn:hover .qa-icon {
+    transform: scale(1.1);
+}
+
+/* ── STITCH KPI PROGRESS BAR ─────────────────────────────────────────────── */
+.kpi-bar {
+    margin-top: 12px;
+    height: 2px;
+    background: var(--s-highest);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.kpi-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── STITCH ACTIVITY FEED ────────────────────────────────────────────────── */
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: var(--s-hairline);
+    transition: background 0.15s ease;
+    cursor: default;
+}
+
+.activity-item:last-child { border-bottom: none; }
+.activity-item:hover { background: rgba(208,138,82,0.03); }
+
+.activity-icon {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+}
+
+/* ── STITCH STATUS BADGE DOTS ────────────────────────────────────────────── */
+.status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.status-dot.active   { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.status-dot.pending  { background: var(--amber); animation: pulseDot 2s infinite; }
+.status-dot.inactive { background: var(--text3); }
+.status-dot.danger   { background: var(--red); animation: pulseDot 1.5s infinite; }
+
+/* ── STITCH OCCUPANCY MAP GRID ───────────────────────────────────────────── */
+.occ-map-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+}
+
+.occ-room-cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    position: relative;
+}
+
+.occ-room-cell:hover { transform: scale(1.15); }
+.occ-room-cell.occupied   { background: var(--s-primary); }
+.occ-room-cell.vacant     { background: rgba(255,255,255,0.08); }
+.occ-room-cell.maintenance { background: var(--red); animation: pulseDot 2s infinite; }
+
+/* ── STITCH REVENUE CHART BARS ───────────────────────────────────────────── */
+.rev-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+}
+
+.rev-bar {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    background: var(--s-highest);
+    transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
+    cursor: pointer;
+}
+
+.rev-bar:hover { filter: brightness(1.3); }
+.rev-bar.current { background: var(--s-primary); }
+.rev-bar.projected { background: rgba(255,183,128,0.35); }
+
+/* ── SHIMMER CARD HOVER (Stitch shimmer-sweep) ────────────────────────────── */
+.shimmer-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.shimmer-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        45deg,
+        transparent 40%,
+        rgba(255,183,128,0.04) 50%,
+        transparent 60%
+    );
+    transform: translateX(-100%);
+    transition: none;
+    pointer-events: none;
+}
+
+.shimmer-card:hover::after {
+    animation: shimmerSweep 0.6s ease-out forwards;
+}
+
+/* ── STITCH SECTION LABEL ("Command Center") ─────────────────────────────── */
+.stitch-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--s-primary);
+    margin-bottom: 4px;
+}
+
+/* ── CHECK-IN BUTTON (Stitch header CTA) ─────────────────────────────────── */
+.btn-checkin {
+    padding: 7px 16px;
+    border: 1.5px solid var(--s-primary);
+    color: var(--s-primary);
+    background: transparent;
+    border-radius: var(--s-r-md);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-checkin:hover {
+    background: rgba(255,183,128,0.08);
+    box-shadow: 0 0 16px rgba(255,183,128,0.2);
+    transform: translateY(-1px);
+}
+
+/* ── STITCH SIDEBAR SECTION LABEL ────────────────────────────────────────── */
+.sb-section {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.1em !important;
+    color: var(--s-on-surface-v) !important;
+    opacity: 0.6 !important;
+    padding: 10px 12px 4px !important;
+    text-transform: uppercase !important;
+}
+
+/* ── STITCH SIDEBAR WARDEN FOOTER ────────────────────────────────────────── */
+.sb-warden-chip {
+    margin: 8px !important;
+    background: var(--s-high) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-lg) !important;
+}
+
+body.light-theme .sb-warden-chip {
+    background: var(--s-mid) !important;
+    border-color: var(--s-outline-v) !important;
+}
+
+/* ── STITCH TABLE HEADER STYLE ───────────────────────────────────────────── */
+.table-section-header {
+    padding: 14px 16px;
+    border-bottom: var(--s-hairline);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--s-low);
+}
+
+.table-section-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    color: var(--s-on-surface);
+}
+
+/* ── NOTIFICATION DOT (header bell) ─────────────────────────────────────── */
+.hdr-notif-dot {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 7px; height: 7px;
+    background: var(--s-primary);
+    border-radius: 50%;
+    border: 1.5px solid var(--bg);
+}
+
+/* ── STITCH LIGHT THEME SURFACE REFINEMENTS ──────────────────────────────── */
+body.light-theme #content { background: var(--s-mid) !important; }
+body.light-theme .filter-bar { background: #ffffff !important; border-color: var(--s-outline-v) !important; }
+body.light-theme .modal-header { background: linear-gradient(180deg, rgba(208,138,82,0.03) 0%, transparent 100%) !important; }
+body.light-theme th { background: var(--s-mid) !important; }
+body.light-theme tbody tr:hover td { background: rgba(208,138,82,0.04) !important; }
+
+/* ── FOCUS RING — Stitch system ──────────────────────────────────────────── */
+:focus-visible {
+    outline: 2px solid rgba(255,183,128,0.6) !important;
+    outline-offset: 2px !important;
+}
+
+/* ── SCROLLBAR — Stitch dark refined ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--s-lowest); }
+::-webkit-scrollbar-thumb { background: var(--s-outline-v); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--s-outline); }
+
+body.light-theme ::-webkit-scrollbar-track { background: var(--s-low); }
+body.light-theme ::-webkit-scrollbar-thumb { background: var(--s-outline-v); }
+
+/* ── SETTINGS TABS — Stitch alignment ────────────────────────────────────── */
+.settings-tab.active {
+    background: rgba(208,138,82,0.1) !important;
+    color: var(--s-primary) !important;
+    border-left: 2px solid var(--s-primary) !important;
+}
+
+/* ── EMPTY STATE ICON — Stitch rounded ──────────────────────────────────────*/
+.empty-state-icon {
+    border-radius: var(--s-r-2xl) !important;
+    background: var(--s-mid) !important;
+    border: var(--s-hairline) !important;
+}
+
+/* ── PROGRESS BAR — Stitch thin ─────────────────────────────────────────── */
+.progress-track {
+    height: 4px !important;
+    background: var(--s-highest) !important;
+    border-radius: 2px !important;
+}
+
+.progress-fill {
+    border-radius: 2px !important;
+}
+
+/* ── FONT UPGRADE — Pull in Outfit for headings via @font-face fallback ──── */
+h1, h2, h3,
+.card-title, .hdr-left .page-title,
+.modal-title, .stat-value, .sb-stat .v {
+    font-family: 'Outfit', var(--font-display) !important;
+}
+
+/* ── SIDEBAR CALENDAR — Stitch surface tokens ────────────────────────────── */
+.sb-cal-month {
+    background: var(--s-high) !important;
+    border: var(--s-hairline) !important;
+}
+
+.sb-cal-month.current {
+    background: rgba(208,138,82,0.1) !important;
+    border-color: rgba(208,138,82,0.3) !important;
+}
+
+/* ── DASH CARD (legacy) — apply Stitch surface ────────────────────────────── */
+.dash-card {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-xl) !important;
+}
+
+/* ── ARCH CARDS — adopt surface tokens ──────────────────────────────────── */
+.arch-month-card, .arch-s-card, .arch-ov-card, .arch-stu-card {
+    background: var(--s-low) !important;
+    border: var(--s-hairline) !important;
+}
+
+.arch-month-card:hover, .arch-s-card:hover, .arch-ov-card:hover {
+    background: var(--s-mid) !important;
+}
+
+/* ── ROOM TYPE ROW — Stitch ──────────────────────────────────────────────── */
+.room-type-row {
+    background: var(--s-mid) !important;
+    border: var(--s-hairline) !important;
+    border-radius: var(--s-r-md) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STITCH UPGRADE v1 — END
+   ═══════════════════════════════════════════════════════════════════════════ */
