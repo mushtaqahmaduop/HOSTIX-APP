@@ -192,12 +192,16 @@ function selectWarden(key) {
   ['warden1', 'warden2'].forEach(function (x) {
     const el = document.getElementById('rb-' + x);
     if (!el) return;
-    el.style.border     = x === key ? '2px solid #c8a84b' : '2px solid #1e3050';
-    el.style.background = x === key ? 'rgba(200,168,75,0.12)' : 'transparent';
+    // Use premium CSS class instead of inline styles
+    el.classList.toggle('selected', x === key);
+    el.setAttribute('aria-pressed', x === key ? 'true' : 'false');
+    // Clear any legacy inline styles
+    el.style.border = '';
+    el.style.background = '';
   });
   const w = WARDENS[key];
   const h = document.getElementById('login-hint');
-  if (h) h.textContent = 'Logging in as: ' + w.name;
+  if (h) h.textContent = 'Signing in as ' + w.name;
 }
 
 // ── [FIX-A3] Login handler — async, uses hashed comparison ───────────────────
@@ -239,21 +243,36 @@ async function checkLogin() {
     }
 
     if (passwordMatches) {
-      // [FIX-A4] Migrate legacy plaintext password to hash on successful login
       await _migratePasswordIfNeeded(CUR_ROLE, inputValue);
-
       CUR_USER = u;
-      document.getElementById('login-screen').style.display = 'none';
-      sessionStorage.setItem('h_auth', '1');
-      sessionStorage.setItem('h_role', CUR_ROLE);
-      updateRoleBadge();
-      _checkDefaultPasswords();
-      if (typeof showSplashScreen === 'function') showSplashScreen();
+
+      // ── Premium success animation
+      if (btnEl) {
+        btnEl.classList.add('success');
+        btnEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Welcome!';
+      }
+      const screen = document.getElementById('login-screen');
+      if (screen) screen.classList.add('logging-in');
+
+      setTimeout(function () {
+        if (screen) screen.style.display = 'none';
+        sessionStorage.setItem('h_auth', '1');
+        sessionStorage.setItem('h_role', CUR_ROLE);
+        updateRoleBadge();
+        _checkDefaultPasswords();
+        if (typeof showSplashScreen === 'function') showSplashScreen();
+      }, 420);
+
     } else {
-      if (errorEl) errorEl.style.display = 'block';
+      // ── Premium error animation
+      if (errorEl) { errorEl.style.display = 'flex'; errorEl.style.alignItems = 'center'; errorEl.style.gap = '6px'; }
+      if (btnEl) {
+        btnEl.classList.add('error-shake');
+        setTimeout(function () { if (btnEl) btnEl.classList.remove('error-shake'); }, 500);
+      }
       inputEl.value = '';
       inputEl.focus();
-      setTimeout(function () { if (errorEl) errorEl.style.display = 'none'; }, 2000);
+      setTimeout(function () { if (errorEl) errorEl.style.display = 'none'; }, 2500);
     }
   } catch (e) {
     console.error('[Auth] Login error:', e.message);

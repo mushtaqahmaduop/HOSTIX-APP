@@ -694,17 +694,34 @@ function _showCameraPermBanner() {
   document.body.appendChild(b);
 }
 
-function toast(msg, type='info') {
-  const icons={success:'✓',error:'✕',info:'ℹ'};
-  const t=document.createElement('div');
-  t.className=`toast ${type}`;
-  t.innerHTML=`<span>${icons[type]||'•'}</span><span>${escHtml(msg)}</span>`;
-  document.getElementById('toast-container').appendChild(t);
-  // BUG FIX 1: transition must be set BEFORE changing opacity, otherwise the
-  //   browser applies the new opacity instantly with no animation.
-  // BUG FIX 2: 800ms is too short for error messages; use type-aware timing.
-  const delay = type==='error' ? 4000 : 2500;
-  setTimeout(()=>{ t.style.transition='opacity 0.3s'; t.style.opacity='0'; setTimeout(()=>t.remove(),300); }, delay);
+function toast(msg, type='info', title='') {
+  // Premium toast with icon, title, body, and progress bar
+  const svgIcons = {
+    success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  };
+  const defaultTitles = { success: 'Success', error: 'Error', info: 'Info' };
+  const delay = type === 'error' ? 4500 : 3000;
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.style.cssText = 'position:relative;overflow:hidden;';
+  t.innerHTML = `
+    <div class="toast-icon">${svgIcons[type] || svgIcons.info}</div>
+    <div class="toast-body">
+      <div class="toast-title">${escHtml(title || defaultTitles[type] || 'Info')}</div>
+      <div class="toast-msg">${escHtml(msg)}</div>
+    </div>
+    <div class="toast-progress" style="--duration:${delay}ms"></div>
+  `;
+  const container = document.getElementById('toast-container');
+  if (container) container.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.3s, transform 0.3s';
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, delay);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
