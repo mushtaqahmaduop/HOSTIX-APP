@@ -157,7 +157,7 @@ function showEditCancellationModal(cancId) {
    <button class="btn btn-primary" onclick="submitEditCancellation('${cancId}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
 }
 
-function submitEditCancellation(cancId) {
+async function submitEditCancellation(cancId) {
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
   const newStatus = document.getElementById('f-cstatus').value;
@@ -181,14 +181,14 @@ function submitEditCancellation(cancId) {
   toast('Cancellation record updated','success');
 }
 
-function deleteCancellationRecord(cancId) {
+async function deleteCancellationRecord(cancId) {
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Delete Record','Are you sure you want to permanently delete this cancellation record? The student status will not be changed.',()=>{
+  showConfirm('Delete Record','Are you sure you want to permanently delete this cancellation record? The student status will not be changed.',(async ()=>{
     DB.cancellations = (DB.cancellations||[]).filter(x=>x.id!==cancId);
     await saveDB(); closeModal(); renderPage('cancellations_All');
     toast('Record deleted','success');
-  });
+  }));
 }
 
 function showAddCancellationModal() {
@@ -358,7 +358,7 @@ async function saveCancellation() {
 async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Confirm Cancellation', `Mark ${c.studentName}'s cancellation as confirmed? Student will be set to "Left".`, ()=>{
+  showConfirm('Confirm Cancellation', `Mark ${c.studentName}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
     c.status = 'Confirmed';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){
@@ -369,20 +369,20 @@ async function confirmCancellation(cancId) {
     await saveDB();
     toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
     renderPage('cancellations');
-  });
+  }));
 }
 
 async function restoreFromCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Restore Student', `Restore ${c.studentName} to Active? Their seat will be re-occupied.`, ()=>{
+  showConfirm('Restore Student', `Restore ${c.studentName} to Active? Their seat will be re-occupied.`, (async ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){ student.status='Active'; }
     await saveDB();
     toast(`${c.studentName} restored to Active. Seat is re-occupied.`, 'success');
     renderPage('cancellations');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

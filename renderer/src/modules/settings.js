@@ -31,7 +31,17 @@ async function saveMaintenance() {
   const subject = document.getElementById('cp-subject')?.value?.trim();
   if(!subject){toast('Enter a subject','error');return;}
   if(!DB.complaints) DB.complaints=[];
-
+  logActivity('Complaint Added', subject, 'Complaint');
+  DB.complaints.push({
+    id:'cp_'+uid(), subject,
+    studentId: document.getElementById('cp-student')?.value||'',
+    category: document.getElementById('cp-category')?.value||'General',
+    description: document.getElementById('cp-desc')?.value?.trim()||'',
+    date: document.getElementById('cp-date')?.value||today(),
+    status:'Open', resolvedDate:''
+  });
+  await saveDB(); closeModal(); renderPage('complaints'); toast('Complaint added','success');
+}
 async function saveCheckin() {
   const studentId = document.getElementById('ci-student')?.value;
   if(!studentId){toast('Select a student','error');return;}
@@ -70,7 +80,7 @@ async function saveNotice() {
   await saveDB(); closeModal(); renderPage('notices'); toast('Notice posted','success');
 }
 async function deleteNotice(id) {
-  showConfirm('Delete Notice?','',()=>{DB.notices=DB.notices.filter(x=>x.id!==id);await saveDB();renderPage('notices');toast('Deleted','info');});
+  showConfirm('Delete Notice?','',async ()=>{DB.notices=DB.notices.filter(x=>x.id!==id);await saveDB();renderPage('notices');toast('Deleted','info');});
 }function showAddFineModal() {
   const students = DB.students.filter(s=>s.status==='Active').map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
   showModal('modal-sm','Add Fine / Penalty',`
@@ -103,7 +113,7 @@ async function payFine(id) {
   if(f){f.paid=true;f.paidDate=today();await saveDB();renderPage('fines');toast('Fine marked as paid','success');}
 }
 async function deleteFine(id) {
-  showConfirm('Delete Fine?','',()=>{DB.fines=DB.fines.filter(x=>x.id!==id);await saveDB();renderPage('fines');toast('Deleted','info');});
+  showConfirm('Delete Fine?','',async ()=>{DB.fines=DB.fines.filter(x=>x.id!==id);await saveDB();renderPage('fines');toast('Deleted','info');});
 }
 
 
@@ -156,7 +166,7 @@ function renderActivityLog() {
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div style="font-size:13px;color:var(--text2)">${list.length} total entries</div>
-    <button class="btn btn-danger btn-sm" onclick="showConfirm('Clear Activity Log?','This will permanently delete all activity log entries.',()=>{DB.activityLog=[];await saveDB();renderPage('activitylog');})"><span class="micon" style="font-size:14px">delete</span> Clear Log</button>
+    <button class="btn btn-danger btn-sm" onclick="showConfirm('Clear Activity Log?','This will permanently delete all activity log entries.',async ()=>{DB.activityLog=[];await saveDB();renderPage('activitylog');})"><span class="micon" style="font-size:14px">delete</span> Clear Log</button>
   </div>
   ${list.length===0?`<div style="text-align:center;padding:80px 20px;color:var(--text3)"><span class="micon" style="font-size:56px;display:block;margin-bottom:16px;color:var(--border2)">history</span><div style="font-size:16px;font-weight:600;color:var(--text2);margin-bottom:8px">No Activity Yet</div><div>Actions in your dashboard will appear here automatically</div></div>`:''}
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
@@ -295,7 +305,7 @@ async function saveInspection() {
   await saveDB(); closeModal(); renderPage('inspections'); toast('Inspection saved','success');
 }
 async function deleteInspection(id) {
-  showConfirm('Delete Inspection?','',()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);await saveDB();renderPage('inspections');toast('Deleted','info');});
+  showConfirm('Delete Inspection?','',async ()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);await saveDB();renderPage('inspections');toast('Deleted','info');});
 }
 // ════════════════════════════════════════════════════════════════════════════
 // WHATSAPP BULK RENT REMINDER
@@ -320,7 +330,7 @@ function showRentReminderModal() {
   header += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">&#x1F4F2; Default Notification Number (send all reminders to this number)</div>';
   header += '<div style="display:flex;gap:6px;align-items:center">';
   header += '<input id="wa-default-num" class="form-control" placeholder="e.g. 03001234567" value="'+escHtml(defaultNum)+'" style="flex:1">';
-  header += '<button class="btn btn-primary btn-sm" onclick="var v=document.getElementById(\'wa-default-num\').value.trim();DB.settings.defaultWANumber=v;await saveDB();toast(\'Saved\',\'success\')">Save</button>';
+  header += '<button class="btn btn-primary btn-sm" onclick="(async()=>{var v=document.getElementById(\'wa-default-num\').value.trim();DB.settings.defaultWANumber=v;await saveDB();toast(\'Saved\',\'success\');})()">Save</button>';
   if(defaultNumFmt) {
     header += '<a href="https://wa.me/'+defaultNumFmt+'" target="_blank" class="btn btn-sm" style="background:#25d366;color:#fff;border:none;text-decoration:none">&#x1F4E2; Notify</a>';
   }
@@ -377,9 +387,6 @@ function showRentReminderModal() {
 let settingsTab = 'hostel';
 function renderSettings() {
   const s = DB.settings;
-
-function renderSettings() {
-  const s = DB.settings;
   const tabs = [
     {id:'hostel', icon:'🏨', label:'Hostel Info'},
     {id:'rooms', icon:'🏠', label:'Room Types'},
@@ -434,7 +441,7 @@ function renderSettings() {
                 🔤 Hostel Name Font Style
                 <span style="flex:1"></span>
                 <span style="font-size:11px;color:var(--text3);font-weight:400;margin-right:6px">Show font picker</span>
-                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none'" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
+                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="(async function(){DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none';}).call(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
               </label>
               <div id="font-picker-grid-wrap" style="display:${s.showFontPicker!==false?'block':'none'}">
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;margin-top:8px;max-height:280px;overflow-y:auto;padding-right:2px">
@@ -556,7 +563,7 @@ function renderSettings() {
                 <div style="font-size:12px;color:var(--text3);margin-top:3px">Automatically create pending payment records when a new month starts</div>
               </div>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" id="cfg-automonth" ${(s.autoMonthGenerate!==false)?'checked':''} onchange="DB.settings.autoMonthGenerate=this.checked;await saveDB();toast(this.checked?'Auto-generate enabled':'Auto-generate disabled','info')">
+                <input type="checkbox" id="cfg-automonth" ${(s.autoMonthGenerate!==false)?'checked':''} onchange="(async function(){DB.settings.autoMonthGenerate=this.checked;await saveDB();toast(this.checked?'Auto-generate enabled':'Auto-generate disabled','info');}).call(this)">
                 <span style="font-size:13px;color:var(--text2)">${(s.autoMonthGenerate!==false)?'On':'Off'}</span>
               </label>
             </div>
@@ -564,7 +571,7 @@ function renderSettings() {
           <div class="settings-section">
             <div class="settings-section-title">Sidebar Width</div>
             <div style="display:flex;align-items:center;gap:12px">
-              <input type="range" min="220" max="320" value="${s.sidebarWidth||260}" style="flex:1;accent-color:var(--gold)" oninput="document.getElementById('cfg-sbw-val').textContent=this.value+'px';document.documentElement.style.setProperty('--sidebar-w',this.value+'px');document.getElementById('main').style.marginLeft=this.value+'px'" onchange="DB.settings.sidebarWidth=parseInt(this.value);await saveDB()">
+              <input type="range" min="220" max="320" value="${s.sidebarWidth||260}" style="flex:1;accent-color:var(--gold)" oninput="document.getElementById('cfg-sbw-val').textContent=this.value+'px';document.documentElement.style.setProperty('--sidebar-w',this.value+'px');document.getElementById('main').style.marginLeft=this.value+'px'" onchange="(async function(){DB.settings.sidebarWidth=parseInt(this.value);await saveDB();}).call(this)">
               <span id="cfg-sbw-val" style="font-size:13px;color:var(--gold2);font-weight:700;min-width:44px">${s.sidebarWidth||260}px</span>
             </div>
           </div>
@@ -882,7 +889,7 @@ async function applyRentToAll() {
   showConfirm(
     'Update ALL students rent?',
     'This will set ' + fmtPKR(newRent) + ' as the new monthly rent for every active student and update all pending payments.',
-    function() {
+    async function() {
       let count = 0;
       DB.students.filter(s => s.status === 'Active').forEach(function(s) {
         _applyRentToStudentCore(s, newRent);
@@ -987,7 +994,7 @@ async function importData(input) {
   reader.onload=e=>{
     try {
       const data=JSON.parse(e.target.result);
-      showConfirm('Import Data?','This will replace all current data with the imported backup.',()=>{
+      showConfirm('Import Data?','This will replace all current data with the imported backup.',async ()=>{
         DB=_initDBFields(data); // FIX 24: normalize schema on import same as restoreBackup
         await saveDB(); navigate('dashboard'); toast('Data imported successfully','success');
       });
@@ -1266,7 +1273,7 @@ function _showExcelImportResult(rows, errors) {
 }
 // ════════════════════════════════════════════════════════════════════════════
 async function resetAllData() {
-  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections and bill splits. Rooms will be reset. This CANNOT be undone.',()=>{
+  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections and bill splits. Rooms will be reset. This CANNOT be undone.',async ()=>{
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,
     // billSplits, cancellations, checkinlog as orphaned ghost records.
@@ -1328,9 +1335,7 @@ function loadSavedLogo() {
 // ════════════════════════════════════════════════════════════════════════════
 // SIDEBAR CALENDAR (professional compact inline calendar)
 // ════════════════════════════════════════════════════════════════════════════
-let _sbCalYear = new Date().getFullYear();
-let _sbCalMonth = new Date().getMonth(); // 0-indexed
-let _sbCalOpen = false;
+// _sbCalOpen/_sbCalYear/_sbCalMonth defined in sidebar_calendar.js
 
 
 function enforceDataRetention() {

@@ -98,12 +98,12 @@ async function submitEditExpense(id) {
   await saveDB(); closeModal(); renderPage('expenses'); toast('Expense updated','success');
 }
 async function deleteExpense(id) {
-  showConfirm('Delete expense?','This cannot be undone.',()=>{
+  showConfirm('Delete expense?','This cannot be undone.',(async ()=>{
     const _del_e=DB.expenses.find(x=>x.id===id);
     DB.expenses=DB.expenses.filter(x=>x.id!==id);
     if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
     await saveDB(); renderPage('expenses'); toast('Expense deleted','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,7 @@ function showClearAllMenu() {
   `,`<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
 }
 
-function clearPayments(fromMenu=false) {
+async function clearPayments(fromMenu=false) {
   const doIt = async ()=>{
     DB.payments=[];
     await saveDB();
@@ -141,7 +141,7 @@ function clearPayments(fromMenu=false) {
   }
 }
 
-function clearExpenses(fromMenu=false) {
+async function clearExpenses(fromMenu=false) {
   const doIt = async ()=>{
     DB.expenses=[];
     await saveDB();
@@ -156,7 +156,7 @@ function clearExpenses(fromMenu=false) {
   }
 }
 
-function clearStudents(fromMenu=false) {
+async function clearStudents(fromMenu=false) {
   const doIt = async ()=>{
     DB.students=[];
     DB.payments=[];
@@ -177,7 +177,7 @@ function clearStudents(fromMenu=false) {
   }
 }
 
-function clearAllData(fromMenu=false) {
+async function clearAllData(fromMenu=false) {
   const doIt = async ()=>{
     DB.students=[];
     DB.payments=[];

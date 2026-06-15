@@ -77,6 +77,7 @@ function generateRooms(roomTypes) {
     });
   });
   return rooms;
+}
 
 function renderDashboard() {
   // Alert system
@@ -176,7 +177,7 @@ function renderDashboard() {
 
   return `
   ${pendingCancels.length>0?`
-  <div style="background:linear-gradient(135deg,rgba(224,82,82,0.12),rgba(224,82,82,0.06));border:1px solid rgba(224,82,82,0.35);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="navigate('cancellations')">
+  <div style="background:var(--red-dim);border:1px solid rgba(248,113,113,0.3);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="navigate('cancellations')">
     <div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px">🚨</span>
       <div><div style="font-size:13px;font-weight:700;color:var(--red)">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
       <div style="font-size:11px;color:var(--text3)">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div></div>
@@ -187,109 +188,101 @@ function renderDashboard() {
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
-    <div onclick="navigate('payments')" style="background:linear-gradient(145deg,#011828,#010f18);border:1px solid rgba(2,37,71,0.7);border-radius:var(--radius);padding:18px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(11,19,43,0.6)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#022547,transparent)"></div>
+    <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(99,102,241,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div style="width:36px;height:36px;border-radius:9px;background:rgba(2,37,71,0.25);display:flex;align-items:center;justify-content:center;font-size:16px">💰</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#3a8fd4">Total Revenue</div>
-        <span style="margin-left:auto;font-size:10px;font-weight:600;color:#3a8fd4;background:rgba(2,37,71,0.2);padding:1px 6px;border-radius:20px;border:1px solid rgba(2,37,71,0.55)">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
+        <div class="stat-icon"><span style="font-size:16px">💰</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
+        <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div style="font-size:32px;font-weight:800;color:var(--text);line-height:1;margin-bottom:7px;letter-spacing:-0.5px">${fmtPKR(collected)}</div>
-      <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:#022547;border-radius:2px"></div></div>
-      <div style="font-size:11px;color:var(--text3)">of ${fmtPKR(totalExpected)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtPKR(collected)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
+      <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtPKR(totalExpected)}</div>
     </div>
-    <div onclick="navigate('reports')" style="background:linear-gradient(145deg,#041e26,#021318);border:1px solid rgba(35,181,211,0.35);border-radius:var(--radius);padding:18px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(35,181,211,0.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#23B5D3,transparent)"></div>
+    <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(45,212,191,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div style="width:36px;height:36px;border-radius:9px;background:rgba(35,181,211,0.15);display:flex;align-items:center;justify-content:center;font-size:16px">📊</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#23B5D3">Available Fund</div>
-        <span style="margin-left:auto;font-size:10px;font-weight:600;color:#23B5D3;background:rgba(35,181,211,0.1);padding:1px 6px;border-radius:20px;border:1px solid rgba(35,181,211,0.28)">${netProfit>=0?'Profit':'Loss'}</span>
+        <div class="stat-icon"><span style="font-size:16px">📊</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
+        <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div style="font-size:32px;font-weight:800;color:${netProfit>=0?'#23B5D3':'#D90429'};line-height:1;margin-bottom:7px;letter-spacing:-0.5px">${fmtPKR(netProfit)}</div>
-      <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'#23B5D3':'rgba(217,4,41,0.7)'};border-radius:2px"></div></div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:${netProfit>=0?'var(--teal)':'var(--red)'}"><span class="pkr">PKR</span>${fmtPKR(netProfit)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (owner)`:''} − ${fmtPKR(moExp)}</div>
     </div>
-    <div onclick="navigate('expenses')" style="background:linear-gradient(145deg,#200108,#140105);border:1px solid rgba(171,44,32,0.5);border-radius:var(--radius);padding:18px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(217,4,41,0.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#ab2c20,transparent)"></div>
+    <div onclick="navigate('expenses')" class="stat-card red" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(248,113,113,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div style="width:36px;height:36px;border-radius:9px;background:rgba(171,44,32,0.15);display:flex;align-items:center;justify-content:center;font-size:16px">📉</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#ab2c20">Expenses</div>
-        <span style="margin-left:auto;font-size:10px;font-weight:600;color:#ab2c20;background:rgba(171,44,32,0.1);padding:1px 6px;border-radius:20px;border:1px solid rgba(171,44,32,0.4)">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
+        <div class="stat-icon"><span style="font-size:16px">📉</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
+        <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div style="font-size:32px;font-weight:800;color:#ab2c20;line-height:1;margin-bottom:7px;letter-spacing:-0.5px">${fmtPKR(moExp)}</div>
-      <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:#ab2c20;border-radius:2px"></div></div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--red)"><span class="pkr">PKR</span>${fmtPKR(moExp)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
-    <!-- Transfer to Owner Card — also counted as expense in net calculation -->
-    <div onclick="showAddTransferModal()" style="background:linear-gradient(145deg,#1a1a1a,#111111);border:1px solid rgba(191,192,192,0.28);border-radius:var(--radius);padding:18px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(191,192,192,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#BFC0C0,transparent)"></div>
-      ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:#BFC0C0"></div>':''}
+    <!-- Transfer to Owner Card -->
+    <div onclick="showAddTransferModal()" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>':''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div style="width:36px;height:36px;border-radius:9px;background:rgba(191,192,192,0.1);display:flex;align-items:center;justify-content:center;font-size:16px">🏦</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#BFC0C0">To Owner</div>
-        <span style="margin-left:auto;font-size:10px;font-weight:600;color:#BFC0C0;background:rgba(191,192,192,0.07);padding:1px 6px;border-radius:20px;border:1px solid rgba(191,192,192,0.2)">${moTransfers.length} records</span>
+        <div class="stat-icon" style="background:var(--bg4)"><span style="font-size:16px">🏦</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">To Owner</div>
+        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div style="font-size:32px;font-weight:800;color:var(--text);line-height:1;margin-bottom:7px;letter-spacing:-0.5px">${fmtPKR(moTransferTotal)}</div>
-      <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:#BFC0C0;border-radius:2px"></div></div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtPKR(moTransferTotal)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
-    <div onclick="navigate('payments')" style="background:linear-gradient(145deg,#1f1000,#130a00);border:1px solid rgba(251,133,0,0.3);border-radius:var(--radius);padding:18px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(251,133,0,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#FB8500,transparent)"></div>
+    <div onclick="navigate('payments')" class="stat-card gold" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(251,191,36,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div style="width:36px;height:36px;border-radius:9px;background:rgba(251,133,0,0.15);display:flex;align-items:center;justify-content:center;font-size:16px">⏳</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#FB8500">Pending</div>
-        <span style="margin-left:auto;font-size:10px;font-weight:600;color:#FB8500;background:rgba(251,133,0,0.1);padding:1px 6px;border-radius:20px;border:1px solid rgba(251,133,0,0.25)">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
+        <div class="stat-icon"><span style="font-size:16px">⏳</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
+        <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div style="font-size:32px;font-weight:800;color:var(--text);line-height:1;margin-bottom:7px;letter-spacing:-0.5px">${fmtPKR(pending)}</div>
-      <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:#FB8500;border-radius:2px"></div></div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--amber)"><span class="pkr">PKR</span>${fmtPKR(pending)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
   </div>`;})()}
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-    <div onclick="showOccupiedRoomsModal()" style="background:linear-gradient(135deg,#041a10,#021009);border:1px solid rgba(68,212,144,0.45);border-radius:10px;padding:14px 16px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(75,125,100,0.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#44d490,transparent)"></div>
-      <div style="width:40px;height:40px;border-radius:10px;background:rgba(68,212,144,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏠</div>
+    <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(52,211,153,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🏠</span></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#44d490;margin-bottom:3px">Occupied Rooms</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px">Occupied Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span style="font-size:28px;font-weight:900;color:#44d490;line-height:1;letter-spacing:-0.5px">${occ}</span>
+          <span class="stat-value" style="font-size:28px;color:var(--green)">${occ}</span>
           <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
-          ${seatsRemainingInOccupiedRooms>0?`<span style="background:rgba(68,212,144,0.2);border:1px solid rgba(68,212,144,0.4);border-radius:20px;padding:2px 7px;font-size:9px;font-weight:800;color:#44d490">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+          ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-green" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
         </div>
-        <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:linear-gradient(90deg,#44d490,#6aedaa);border-radius:2px"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--green);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="showVacantRoomsModal()" style="background:linear-gradient(135deg,#041a10,#021009);border:1px solid rgba(68,212,144,0.35);border-radius:10px;padding:14px 16px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(15,188,173,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),transparent)"></div>
-      <div style="width:40px;height:40px;border-radius:10px;background:rgba(15,188,173,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔑</div>
+    <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(45,212,191,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🔑</span></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#44d490;margin-bottom:3px">Vacant Rooms</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:3px">Vacant Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span style="font-size:28px;font-weight:900;color:#44d490;line-height:1;letter-spacing:-0.5px">${vac}</span>
+          <span class="stat-value" style="font-size:28px;color:var(--teal)">${vac}</span>
           <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
         </div>
-        <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:linear-gradient(90deg,#44d490,#6aedaa);border-radius:2px"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--teal);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="navigate('students')" style="background:linear-gradient(135deg,#041a10,#021009);border:1px solid rgba(68,212,144,0.35);border-radius:10px;padding:14px 16px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(144,224,239,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#90E0EF,transparent)"></div>
-      <div style="width:40px;height:40px;border-radius:10px;background:rgba(144,224,239,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🧑‍🎓</div>
+    <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(192,132,252,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🧑‍🎓</span></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#44d490;margin-bottom:3px">Active Students</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:3px">Active Students</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span style="font-size:28px;font-weight:900;color:#44d490;line-height:1;letter-spacing:-0.5px">${activeStudents}</span>
+          <span class="stat-value" style="font-size:28px;color:var(--purple)">${activeStudents}</span>
           <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
         </div>
-        <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:linear-gradient(90deg,#44d490,#6aedaa);border-radius:2px"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--purple);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
   </div>
   <!-- ══ TREND + SEAT AVAILABILITY ROW ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-  <div style="background:linear-gradient(180deg,#071220 0%,#040c16 100%);border:1px solid rgba(46,201,138,0.2);border-radius:var(--radius);padding:10px 14px 6px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#2ec98a,#0fbcad,transparent)"></div>
+  <div class="card" style="padding:10px 14px 6px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--teal),transparent)"></div>
     <!-- Header: title row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
@@ -306,22 +299,22 @@ function renderDashboard() {
     </div>
     <!-- KPI chips row -->
     <div style="display:flex;gap:6px;margin-bottom:6px">
-      <div style="flex:1;background:rgba(46,201,138,0.08);border:1px solid rgba(46,201,138,0.18);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+      <div style="flex:1;background:var(--green-dim);border:1px solid rgba(52,211,153,0.2);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
         <span style="font-size:9px;color:rgba(46,201,138,0.7);font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Revenue</span>
         <span style="font-size:15px;font-weight:900;color:#2ec98a;letter-spacing:-0.5px">${fmtPKR(collected)}</span>
       </div>
-      <div style="flex:1;background:rgba(224,82,82,0.08);border:1px solid rgba(224,82,82,0.15);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+      <div style="flex:1;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
         <span style="font-size:9px;color:rgba(224,82,82,0.7);font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Expenses</span>
         <span style="font-size:15px;font-weight:900;color:#e05252;letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
       </div>
-      <div style="flex:1;background:${netProfit>=0?'rgba(46,201,138,0.08)':'rgba(224,82,82,0.08)'};border:1px solid ${netProfit>=0?'rgba(46,201,138,0.15)':'rgba(224,82,82,0.15)'};border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+      <div style="flex:1;background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)'};border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
         <span style="font-size:9px;color:${netProfit>=0?'rgba(46,201,138,0.7)':'rgba(224,82,82,0.7)'};font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Net</span>
         <span style="font-size:13px;font-weight:900;color:${netProfit>=0?'#2ec98a':'#e05252'};letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
       </div>
     </div>
     <!-- Chart.js canvas -->
     <div id="trend-chart-wrap" style="position:relative;height:160px;">
-      <div id="trend-hb" style="position:fixed;background:#0f1c2e;border:1px solid #2a3d52;border-radius:10px;padding:12px 14px;font-size:12px;pointer-events:none;display:none;z-index:9999;min-width:210px;box-shadow:0 8px 24px rgba(0,0,0,.6);"></div>
+      <div id="trend-hb" style="position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;pointer-events:none;display:none;z-index:9999;min-width:210px;box-shadow:var(--shadow);"></div>
       <canvas id="trend-canvas" style="display:block"></canvas>
     </div>
   </div>
@@ -1082,7 +1075,7 @@ async function updateMonthPayStatus(payId, newStatus) {
 }
 
 async function deleteMonthPayment(payId, monthKey, monthLabel) {
-  showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',()=>{
+  showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',async ()=>{
     DB.payments = DB.payments.filter(p=>p.id!==payId);
     await saveDB();
     toast('Fee record deleted','success');
@@ -1091,7 +1084,7 @@ async function deleteMonthPayment(payId, monthKey, monthLabel) {
 }
 
 async function deleteMonthExpense(expId, monthKey, monthLabel) {
-  showConfirm('Delete Expense','Remove this expense record? This cannot be undone.',()=>{
+  showConfirm('Delete Expense','Remove this expense record? This cannot be undone.',async ()=>{
     DB.expenses = DB.expenses.filter(e=>e.id!==expId);
     await saveDB();
     toast('Expense deleted','success');
@@ -1449,7 +1442,8 @@ async function quickDashTransfer() {
 
 // Alias the old name for backward compat
 
-// ── DASHBOARD GLOBAL SEARCHfunction dashGlobalSearch(query) {
+// ── DASHBOARD GLOBAL SEARCH
+function dashGlobalSearch(query) {
   var clearBtn = document.getElementById('dash-search-clear');
   var resultsBox = document.getElementById('dash-search-results');
   if (!resultsBox) return;

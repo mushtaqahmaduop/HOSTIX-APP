@@ -4,6 +4,11 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+// ── State ─────────────────────────────────────────────────────────────────────
+var _sbCalOpen = false;
+var _sbCalMonth = new Date().getMonth();
+var _sbCalYear  = new Date().getFullYear();
+
 function toggleSbCal() {
   _sbCalOpen = !_sbCalOpen;
   const body = document.getElementById('sb-cal-body');

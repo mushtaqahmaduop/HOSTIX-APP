@@ -116,7 +116,7 @@ function showAddRoomModal(presetId='') {
     if(ni&&pr){ ni.addEventListener('input',()=>{ pr.textContent=ni.value||'Preview'; }); }
   },100);
 }
-function submitAddRoom() {
+async function submitAddRoom() {
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
   const typeId=document.getElementById('f-rtype').value;
@@ -150,7 +150,7 @@ function showEditRoomModal(id) {
     </div>`,
   `<button class="btn btn-danger" onclick="confirmDeleteRoom('${id}')">Delete Room</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditRoom('${id}')">Save Changes</button>`);
 }
-function submitEditRoom(id) {
+async function submitEditRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;
   r.floor=document.getElementById('f-rfloor').value;
@@ -174,11 +174,11 @@ async function confirmDeleteRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   if(getRoomOccupancy(r)>0){toast('Cannot delete occupied room','error');return;}
   closeModal();
-  showConfirm(`Delete Room #${r.number}?`,'This cannot be undone.',()=>{
+  showConfirm(`Delete Room #${r.number}?`,'This cannot be undone.',(async ()=>{
     DB.rooms=DB.rooms.filter(x=>x.id!==id);
     logActivity('Room Deleted', 'Room #'+r.number, 'Room');
     await saveDB(); renderPage('rooms'); toast('Room deleted','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

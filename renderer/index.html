@@ -23,44 +23,66 @@
 <body>
 
 
-<!-- WARDEN LOGIN SCREEN -->
-<div id="login-screen" style="position:fixed;inset:0;z-index:99999;background:#060c18;display:flex;align-items:center;justify-content:center;font-family:'Outfit','Segoe UI',sans-serif;">
-  <div style="background:#071428;border:1px solid #1e3c6a;border-radius:22px;padding:42px 38px;width:100%;max-width:430px;box-shadow:0 24px 80px rgba(0,0,0,0.75);text-align:center;position:relative;overflow:hidden;">
-    <!-- decorative top bar -->
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#1e5fd4,#c8a84b,#1e5fd4);border-radius:22px 22px 0 0;"></div>
-    <!-- logo icon -->
-    <div id="login-logo-wrap" style="width:68px;height:68px;border-radius:17px;background:linear-gradient(135deg,#c8a84b,#e6c96e);border:none;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:30px;box-shadow:0 6px 24px rgba(30,95,212,0.4);overflow:hidden;position:relative;">
-      <img id="login-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;border-radius:17px;">
-      <span id="login-logo-emoji">&#x1F3E8;</span>
+<!-- WARDEN LOGIN SCREEN — Premium v2.0 -->
+<div id="login-screen">
+  <!-- Animated background -->
+  <div id="login-bg"></div>
+  <!-- Floating ambient orbs -->
+  <div id="login-orb-1"></div>
+  <div id="login-orb-2"></div>
+  <div id="login-orb-3"></div>
+
+  <!-- Card -->
+  <div id="login-card">
+    <!-- Logo -->
+    <div class="login-logo-wrap" id="login-logo-wrap">
+      <img id="login-logo-img" src="" alt="">
+      <span id="login-logo-emoji">🏨</span>
     </div>
-    <!-- hostel name -->
-    <div id="login-hostel-name" style="font-size:22px;font-weight:900;color:#e6c96e;margin-bottom:2px;font-family:'DM Serif Display',serif;letter-spacing:0.3px;">HOSTIX</div>
-    <div style="font-size:10px;color:#4d6a90;margin-bottom:4px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">Management System</div>
-    <div id="login-address" style="font-size:11px;color:#3a6090;margin-bottom:24px;">&#x1F4CD; 4/1 Kakakhel Street, Danishabad, Peshawar</div>
+
+    <!-- Hostel identity -->
+    <div class="login-hostel-name" id="login-hostel-name">HOSTIX</div>
+    <div class="login-system-label">Management System</div>
+    <div class="login-address" id="login-address">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.5;flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      <span>4/1 Kakakhel Street, Danishabad, Peshawar</span>
+    </div>
+
     <!-- Warden selector -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
-      <div id="rb-warden1" onclick="selectWarden('warden1')" style="cursor:pointer;padding:12px 8px;border-radius:12px;border:2px solid #1e3050;background:transparent;transition:all 0.15s">
-        <div class="warden-login-emoji" style="font-size:22px;margin-bottom:4px;">&#x1F9D1;&#x200D;&#x1F4BC;</div>
-        <div id="wb1-name" style="font-size:12px;font-weight:800;color:#e6c96e;margin-bottom:2px;">Warden 1</div>
-        <div style="font-size:9px;color:#4d6580;">Full Access</div>
+    <div class="login-warden-grid">
+      <div class="login-warden-btn selected" id="rb-warden1" onclick="selectWarden('warden1')" tabindex="0" role="button" aria-pressed="true">
+        <div class="login-warden-photo" id="w1-photo"><span class="warden-login-emoji">🧑‍💼</span></div>
+        <div class="login-warden-name" id="wb1-name">Warden 1</div>
+        <div class="login-warden-role">Full Access</div>
       </div>
-      <div id="rb-warden2" onclick="selectWarden('warden2')" style="cursor:pointer;padding:12px 8px;border-radius:12px;border:2px solid #1e3050;background:transparent;transition:all 0.15s">
-        <div class="warden-login-emoji" style="font-size:22px;margin-bottom:4px;">&#x1F9D1;&#x200D;&#x1F4BC;</div>
-        <div id="wb2-name" style="font-size:12px;font-weight:800;color:#8fa5c8;margin-bottom:2px;">Warden 2</div>
-        <div style="font-size:9px;color:#4d6580;">Full Access</div>
+      <div class="login-warden-btn" id="rb-warden2" onclick="selectWarden('warden2')" tabindex="0" role="button" aria-pressed="false">
+        <div class="login-warden-photo" id="w2-photo"><span class="warden-login-emoji">🧑‍💼</span></div>
+        <div class="login-warden-name" id="wb2-name">Warden 2</div>
+        <div class="login-warden-role">Full Access</div>
       </div>
     </div>
-    <div style="position:relative;margin-bottom:10px;">
-      <input id="login-input" type="password" placeholder="Enter your password" autocomplete="current-password"
-        style="width:100%;box-sizing:border-box;padding:13px 44px 13px 16px;background:#0f1a2e;border:1px solid #1e3050;border-radius:10px;color:#e8eef8;font-size:15px;font-family:inherit;outline:none;"
-        onfocus="this.style.borderColor='#c8a84b'" onblur="this.style.borderColor='#1e3050'">
-      <span onclick="var i=document.getElementById('login-input');i.type=i.type==='password'?'text':'password'" style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;color:#4d6580;font-size:16px;">&#x1F441;</span>
+
+    <!-- Password -->
+    <div class="login-input-wrap">
+      <input id="login-input" type="password" placeholder="Enter password" autocomplete="current-password" aria-label="Password">
+      <button id="login-pw-toggle" type="button" aria-label="Toggle password visibility" onclick="(function(){var i=document.getElementById('login-input');i.type=i.type==='password'?'text':'password';})()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
     </div>
-    <div id="login-hint" style="font-size:11px;color:#4d6580;margin-bottom:8px;min-height:14px;"></div>
-    <div id="login-error" style="color:#e05252;font-size:12px;margin-bottom:8px;display:none;">Wrong password. Try again.</div>
-    <button id="login-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#e05252,#f07070);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">&#x1F513; Login</button>
-    <div id="login-pw-hint" style="margin-top:12px;background:#0f1a2e;border-radius:8px;padding:9px 12px;font-size:10px;color:#4d6580;text-align:left;">
-      <span style="color:#8fa5c8;font-weight:700;">Hint:</span> Enter your warden password to continue.
+
+    <div id="login-hint" aria-live="polite"></div>
+    <div id="login-error" role="alert">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      Wrong password. Try again.
+    </div>
+
+    <button id="login-btn" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Sign In
+    </button>
+
+    <div class="login-hint-box" id="login-pw-hint">
+      <strong>Hint:</strong> Enter your warden password to continue.
     </div>
   </div>
 </div>

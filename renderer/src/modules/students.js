@@ -263,7 +263,7 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
       showConfirm(
         '⚠️ Room Is At Full Capacity',
         `Room #${selectedRoom.number} (${roomType.name}) already has ${currentOcc}/${roomType.capacity} students. Do you want to force-add ${name} anyway? Room capacity display will remain at ${roomType.capacity} but this room will show as over-capacity.`,
-        () => {
+        async () => {
           t.isForced = true; // FIX: force-added students don't count against available seats
           DB.students.push(t);
           const room2 = DB.rooms.find(r=>r.id===roomId);
@@ -984,11 +984,11 @@ async function submitEditStudent(id) {
 async function confirmDeleteStudent(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   closeModal();
-  showConfirm(`Remove ${t.name}?`,'This will permanently delete the student record.',()=>{
+  showConfirm(`Remove ${t.name}?`,'This will permanently delete the student record.',(async ()=>{
     DB.students=DB.students.filter(x=>x.id!==id);
     DB.payments=DB.payments.filter(p=>p.studentId!==id);
     await saveDB(); renderPage('students'); toast('Student removed','info');
-  });
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1445,9 +1445,6 @@ async function submitRestoreStudent(studentId) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-function showUserMgmt() {
-  var rows = '';
-
 function downloadAllStudentsPDF() {
   // Build last 24 month options
   var monthOpts = '';
@@ -1732,6 +1729,7 @@ function doGenerateStudentsPDF(monthKey) {
 
   // ── IN-APP VIEWER (always — no window.open, no external save dialog) ─────────
   // Removes old viewer if open, builds a full-screen overlay with toolbar,
+}
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────
 function filterRoomSearch(q) {

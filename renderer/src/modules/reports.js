@@ -517,13 +517,13 @@ function showTransferRecordsModal() {
 }
 
 async function deleteTransferFromModal(id) {
-  showConfirm('Delete transfer?','This cannot be undone.',()=>{
+  showConfirm('Delete transfer?','This cannot be undone.',(async ()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
     await saveDB();
     closeModal();
     setTimeout(()=>showTransferRecordsModal(), 100);
     toast('Transfer deleted','info');
-  });
+  }));
 }
 
 function showEditTransferModal(id) {
@@ -556,7 +556,7 @@ function showEditTransferModal(id) {
    <button class="btn btn-primary" onclick="submitEditTransfer('${id}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
 }
 
-function submitEditTransfer(id) {
+async function submitEditTransfer(id) {
   const tr = (DB.transfers||[]).find(x=>x.id===id);
   if(!tr) return;
   const amt = parseFloat(document.getElementById('fe-tramt').value);
@@ -618,10 +618,10 @@ async function submitAddTransfer() {
   toast('Transfer recorded — ' + fmtPKR(amt) + ' sent to owner','success');
 }
 async function deleteTransfer(id) {
-  showConfirm('Delete transfer record?','This cannot be undone.',()=>{
+  showConfirm('Delete transfer record?','This cannot be undone.',(async ()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
     await saveDB(); renderPage('reports'); toast('Transfer deleted','info');
-  });
+  }));
 }
 
 
@@ -1001,4 +1001,4 @@ function downloadDetailCSV(type) {
   setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 18: revoke blob URL to free memory
   toast('Downloaded: '+filename,'success');
 }
-let calPopoverOpen = false;
+// calPopoverOpen declared in dashboard.js (shared)
