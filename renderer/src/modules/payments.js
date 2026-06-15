@@ -30,7 +30,7 @@ function renderPayments() {
   return `
   <div class="filter-bar">
     <div class="search-wrap">
-      <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
       <input class="form-control" id="search-payments" placeholder="Student name, room…" value="${escHtml(payFilter.search)}" oninput="capFirstChar(this);payFilter.search=this.value;_dPayments();toggleClearBtn('search-payments','clear-payments')">
       <button class="search-clear ${payFilter.search?'visible':''}" id="clear-payments" onclick="payFilter.search='';document.getElementById('search-payments').value='';this.classList.remove('visible');renderPage('payments')" title="Clear">✕</button>
     </div>
@@ -548,7 +548,7 @@ function showAddPaymentModal() {
       <div class="field col-full"><label>Search Student *</label>
         <div style="position:relative;min-width:0">
           <div style="position:relative">
-            <svg style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
             <input class="form-control" id="f-pstudent-search" style="padding-left:34px" placeholder="Type name, room# or phone to search…" oninput="filterStudentDropdown(this.value)" autocomplete="off">
           </div>
           <input type="hidden" id="f-pstudent" value="">
