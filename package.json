@@ -1,7 +1,7 @@
 {
-  "name": "damam-hostel",
+  "name": "hostix-app",
   "version": "4.0.0",
-  "description": "DAMAM Boys Hostel Management System",
+  "description": "HOSTIX — Hostel Management System by Zeerak Hostix",
   "author": {
     "name": "MUSHTAQ AHMAD",
     "email": "mushtaqahmadicp@gmail.com"
@@ -9,21 +9,25 @@
   "main": "main.js",
   "scripts": {
     "start": "electron . --dev",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
     "build": "electron-builder --win --x64 --ia32",
+    "build:x64": "electron-builder --win nsis portable --x64",
+    "build:ia32": "electron-builder --win nsis portable --ia32",
     "build:portable": "electron-builder --win portable --x64 --ia32",
     "build:installer": "electron-builder --win nsis --x64 --ia32",
     "build:all": "electron-builder --win --x64 --ia32",
-    "test:license": "node test-license.js",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "test:license": "node test-license.js"
   },
   "build": {
-    "appId": "com.damam.hostel",
-    "productName": "DAMAM Boys Hostel",
-    "copyright": "Copyright \u00a9 2025 MUSHTAQ AHMAD",
+    "appId": "com.zeerak.hostix",
+    "productName": "HOSTIX",
+    "copyright": "Copyright © 2025 Zeerak Hostix — MUSHTAQ AHMAD",
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*"
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*"
     ],
     "directories": {
       "output": "dist",
@@ -43,29 +47,25 @@
       "!**/node_modules/.bin/**",
       "!dist/**",
       "!**/Thumbs.db",
-      "!**/*.map"
+      "!**/*.map",
+      "!**/*.log"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/better-sqlite3/build/Release",
+        "to": "app/node_modules/better-sqlite3/build/Release",
+        "filter": ["**/*.node"]
+      }
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
+        { "target": "nsis",     "arch": ["x64", "ia32"] },
+        { "target": "portable", "arch": ["x64", "ia32"] }
       ],
       "icon": "assets/logo.ico",
       "requestedExecutionLevel": "asInvoker",
-      "fileAssociations": [],
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -74,17 +74,21 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DAMAM Hostel",
+      "shortcutName": "HOSTIX",
       "installerIcon": "assets/logo.ico",
       "uninstallerIcon": "assets/logo.ico",
       "installerHeader": "assets/logo.ico",
-      "license": null,
       "deleteAppDataOnUninstall": false,
       "displayLanguageSelector": false,
-      "include": null
+      "include": null,
+      "license": null,
+      "artifactName": "HOSTIX-Setup-${version}-${arch}.exe",
+      "warningsAsErrors": false,
+      "differentialPackage": false
     },
     "portable": {
-      "artifactName": "DAMAM-Hostel-Portable-${version}-${arch}.exe"
+      "artifactName": "HOSTIX-Portable-${version}-${arch}.exe",
+      "useZip": false
     },
     "publish": {
       "provider": "github",
