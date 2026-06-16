@@ -153,6 +153,9 @@
 <!-- SIDEBAR -->
 <aside id="sidebar">
   <div class="sb-logo">
+    <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Toggle sidebar width">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18-6-6 6-6"/></svg>
+    </button>
     <div class="sb-logo-mark">
       <!-- Icon mark with SVG building -->
       <div class="sb-logo-icon" id="sb-logo-icon" onclick="document.getElementById('logo-upload').click()" title="Click to upload logo" style="cursor:pointer">
@@ -225,63 +228,63 @@
 
   <nav class="sb-nav">
     <div class="sb-section">Main</div>
-    <div class="nav-item active" onclick="navigate('dashboard')" data-page="dashboard">
+    <div class="nav-item active" onclick="navigate('dashboard')" data-page="dashboard" title="Dashboard">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect width="7" height="9" x="3" y="3" rx="1" />
         <rect width="7" height="5" x="14" y="3" rx="1" />
         <rect width="7" height="9" x="14" y="12" rx="1" />
         <rect width="7" height="5" x="3" y="16" rx="1" />
       </svg>
-      Dashboard
+      <span class="nav-label">Dashboard</span>
     </div>
-    <div class="nav-item" onclick="navigate('rooms')" data-page="rooms">
+    <div class="nav-item" onclick="navigate('rooms')" data-page="rooms" title="Rooms">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
         <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       </svg>
-      Rooms
+      <span class="nav-label">Rooms</span>
     </div>
-    <div class="nav-item" onclick="navigate('students')" data-page="students">
+    <div class="nav-item" onclick="navigate('students')" data-page="students" title="Students">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <path d="M16 3.128a4 4 0 0 1 0 7.744" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
         <circle cx="9" cy="7" r="4" />
       </svg>
-      Students
+      <span class="nav-label">Students</span>
     </div>
-    <div class="nav-item" onclick="navigate('cancellations')" data-page="cancellations" style="color:var(--red)">
+    <div class="nav-item" onclick="navigate('cancellations')" data-page="cancellations" style="color:var(--red)" title="Cancellation List">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="m15 9-6 6" />
         <path d="m9 9 6 6" />
       </svg>
-      Cancellation List
+      <span class="nav-label">Cancellation List</span>
       <span id="cancel-badge" class="nav-badge" style="display:none;background:var(--red)">0</span>
     </div>
-    <div class="nav-item" onclick="navigate('issues')" data-page="issues">
+    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints &amp; Maintenance">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
       </svg>
-      Complaints &amp; Maintenance
+      <span class="nav-label">Complaints &amp; Maintenance</span>
       <span id="issues-badge" class="nav-badge" style="display:none;background:var(--amber)">0</span>
     </div>
     <div class="sb-section" style="margin-top:8px">Finance</div>
-    <div class="nav-item" onclick="navigate('payments')" data-page="payments">
+    <div class="nav-item" onclick="navigate('payments')" data-page="payments" title="Payments">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect width="20" height="14" x="2" y="5" rx="2" />
         <line x1="2" x2="22" y1="10" y2="10" />
       </svg>
-      Payments
+      <span class="nav-label">Payments</span>
     </div>
-    <div class="nav-item" onclick="navigate('expenses')" data-page="expenses">
+    <div class="nav-item" onclick="navigate('expenses')" data-page="expenses" title="Expenses">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" x2="12" y1="2" y2="22" />
         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
       </svg>
-      Expenses
+      <span class="nav-label">Expenses</span>
     </div>
-    <div class="nav-item" onclick="navigate('reports')" data-page="reports">
+    <div class="nav-item" onclick="navigate('reports')" data-page="reports" title="Reports">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M11 13v4" />
         <path d="M15 5v4" />
@@ -289,33 +292,33 @@
         <rect x="7" y="13" width="9" height="4" rx="1" />
         <rect x="7" y="5" width="12" height="4" rx="1" />
       </svg>
-      Reports
+      <span class="nav-label">Reports</span>
     </div>
     <!-- old features removed -->
     <div class="sb-section" style="margin-top:8px">System</div>
-    <div class="nav-item" onclick="navigate('settings')" data-page="settings">
+    <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
         <circle cx="12" cy="12" r="3" />
       </svg>
-      Settings
+      <span class="nav-label">Settings</span>
     </div>
-    <div class="nav-item" onclick="showBackupRestoreModal()" data-page="backup" style="color:var(--teal)">
+    <div class="nav-item" onclick="showBackupRestoreModal()" data-page="backup" style="color:var(--teal)" title="Backup &amp; Restore">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 13v8l-4-4" />
         <path d="m12 21 4-4" />
         <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" />
       </svg>
-      Backup & Restore
+      <span class="nav-label">Backup &amp; Restore</span>
     </div>
-    <div class="nav-item" onclick="navigate('activitylog')" data-page="activitylog">
+    <div class="nav-item" onclick="navigate('activitylog')" data-page="activitylog" title="Activity Log">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 6v6l4 2" />
       </svg>
-      Activity Log
+      <span class="nav-label">Activity Log</span>
     </div>
-    <div class="nav-item" onclick="showClearAllMenu()" data-page="clearall" style="color:var(--red);margin-top:4px">
+    <div class="nav-item" onclick="showClearAllMenu()" data-page="clearall" style="color:var(--red);margin-top:4px" title="Clear All Data">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M10 11v6" />
         <path d="M14 11v6" />
@@ -323,7 +326,7 @@
         <path d="M3 6h18" />
         <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
       </svg>
-      Clear All Data
+      <span class="nav-label">Clear All Data</span>
     </div>
 
   </nav>
