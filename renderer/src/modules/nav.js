@@ -20,6 +20,20 @@ function closeSidebar() {
   if (sb) sb.classList.remove('open');
   if (ov) ov.classList.remove('active');
 }
+
+// ── DESKTOP COLLAPSIBLE SIDEBAR — icon-only compact mode ────────────────────
+function toggleSidebarCollapse() {
+  const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+  const btn = document.getElementById('sidebar-collapse-btn');
+  if (btn) btn.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+}
+// Restore collapsed state immediately so the sidebar never flashes wide-then-narrow
+(function applySavedSidebarCollapse() {
+  if (localStorage.getItem('sidebar_collapsed') === '1') {
+    document.body.classList.add('sidebar-collapsed');
+  }
+})();
 // Auto-close sidebar on navigation (mobile UX)
 // ─────────────────────────────────────────────────────────────────────────────
 
