@@ -4309,6 +4309,62 @@ h1, h2, h3,
 .quick-action-btn .qa-icon { font-size: 28px; color: var(--gold); }
 .quick-action-btn:hover .qa-icon { transform: scale(1.1); }
 
+/* ── COLLAPSIBLE SIDEBAR — icon-only compact mode ────────────────────────── */
+:root { --sidebar-w-collapsed: 76px; }
+
+#sidebar { transition: width 0.28s cubic-bezier(0.4,0,0.2,1); }
+#main    { transition: margin-left 0.28s cubic-bezier(0.4,0,0.2,1); }
+
+body.sidebar-collapsed #sidebar { width: var(--sidebar-w-collapsed); }
+body.sidebar-collapsed #main    { margin-left: var(--sidebar-w-collapsed); }
+
+body.sidebar-collapsed .sb-logo-text,
+body.sidebar-collapsed .sb-logo-meta,
+body.sidebar-collapsed .sb-logo-divider,
+body.sidebar-collapsed .sb-section,
+body.sidebar-collapsed .nav-label,
+body.sidebar-collapsed .nav-badge,
+body.sidebar-collapsed #sb-calendar-wrap {
+    display: none !important;
+}
+
+body.sidebar-collapsed .sb-logo-mark  { justify-content: center; }
+body.sidebar-collapsed .sb-logo       { padding: 16px 8px; }
+body.sidebar-collapsed .nav-item      { justify-content: center; padding: 11px; }
+body.sidebar-collapsed .nav-icon      { margin: 0; }
+body.sidebar-collapsed .sb-nav        { padding: 12px 8px; }
+
+.sidebar-collapse-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 5;
+}
+
+.sidebar-collapse-btn:hover {
+    background: rgba(255,183,128,0.10);
+    color: var(--gold);
+    border-color: rgba(255,183,128,0.3);
+}
+
+.sidebar-collapse-btn svg { transition: transform 0.25s ease; }
+body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
+
+@media (max-width: 900px) {
+    .sidebar-collapse-btn { display: none; }
+    body.sidebar-collapsed #sidebar { width: var(--sidebar-w); }
+    body.sidebar-collapsed #main    { margin-left: 0; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    STITCH DESIGN SYSTEM v2 — END
    ═══════════════════════════════════════════════════════════════════════════ */
