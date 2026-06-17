@@ -161,17 +161,20 @@
       <div class="sb-logo-icon" id="sb-logo-icon" onclick="document.getElementById('logo-upload').click()" title="Click to upload logo" style="cursor:pointer">
         <img id="sb-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:11px;position:absolute;top:0;left:0">
         <span id="sb-logo-emoji" style="display:none">🏨</span>
-        <!-- SVG monogram mark — violet M crest -->
+        <!-- SVG hostel building mark -->
         <svg id="sb-logo-svg" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
-          <defs>
-            <linearGradient id="sbLogoGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#8B7CF6"/>
-              <stop offset="100%" stop-color="#5A4AE3"/>
-            </linearGradient>
-          </defs>
-          <rect width="26" height="26" rx="7" fill="url(#sbLogoGrad)"/>
-          <path d="M8.3 16.8 V10.0 C8.3 9.2 9.4 8.9 9.8 9.6 L13 14.4 L16.2 9.6 C16.6 8.9 17.7 9.2 17.7 10.0 V16.8"
-                fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Base building -->
+          <rect x="3" y="10" width="20" height="14" rx="1" fill="rgba(200,168,75,0.12)" stroke="rgba(200,168,75,0.55)" stroke-width="1"/>
+          <!-- Roof / gable -->
+          <path d="M2 11 L13 3 L24 11" stroke="rgba(200,168,75,0.65)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- Door -->
+          <rect x="10.5" y="17" width="5" height="7" rx="0.5" fill="rgba(200,168,75,0.2)" stroke="rgba(200,168,75,0.45)" stroke-width="0.8"/>
+          <!-- Windows row -->
+          <rect x="5" y="13" width="4" height="3" rx="0.5" fill="rgba(200,168,75,0.15)" stroke="rgba(200,168,75,0.4)" stroke-width="0.7"/>
+          <rect x="17" y="13" width="4" height="3" rx="0.5" fill="rgba(200,168,75,0.15)" stroke="rgba(200,168,75,0.4)" stroke-width="0.7"/>
+          <!-- Chimney/flag pole top -->
+          <line x1="13" y1="3" x2="13" y2="0.5" stroke="rgba(200,168,75,0.4)" stroke-width="0.9" stroke-linecap="round"/>
+          <circle cx="13" cy="0.5" r="0.9" fill="rgba(200,168,75,0.55)"/>
         </svg>
       </div>
       <input type="file" id="logo-upload" accept="image/*" style="display:none" onchange="uploadLogo(this)">
