@@ -1145,24 +1145,8 @@ function printMonthReport(monthKey, monthLabel) {
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
-  <style>
-    body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:13px}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #c8a84b}
-    .title{font-size:20px;font-weight:900;color:#1e293b}.subtitle{font-size:12px;color:#64748b;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:#c8a84b22;color:#8b6a00;border:1px solid #c8a84b55}
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
-    .kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
-    .kpi .val{font-size:20px;font-weight:900;color:#1e293b}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px}
-    .section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
-    .green{color:#16a34a;font-weight:700}.red{color:#dc2626;font-weight:700}.gold{color:#854d0e;font-weight:700}
-    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
-    @media print{body{padding:16px}}
-  </style></head><body>
+  ${printDocStyles()}
+  </head><body>
   <div class="header">
     <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
     <div class="badge">Monthly Report</div>

@@ -107,6 +107,63 @@ function moneyValue(amount, opts) {
        + `</span>`;
 }
 
+// ── PRINT / PDF STYLESHEET — single source of truth for ALL printed reports ──
+// Printed documents are always white/black-on-paper regardless of the app's
+// dark/light theme (correct for print), but every report generator used to
+// hand-roll its own near-duplicate <style> block with slightly different
+// brand colours, radii, and class names. This is the one place to edit the
+// brand look of every PDF (Monthly Report, Rent Summary, Transfers, etc.)
+const PRINT_BRAND = {
+  gold:  '#c07840',   // matches --gold (light theme)
+  green: '#16a34a',
+  red:   '#dc2626',
+  ink:   '#1a1a2e',
+  muted: '#64748b',
+  faint: '#94a3b8',
+};
+
+function printDocStyles() {
+  const b = PRINT_BRAND;
+  return `<style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:${b.ink};background:#fff;padding:28px;font-size:12.5px}
+    .header,.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid ${b.gold};margin-bottom:20px}
+    .title,.ht{font-size:21px;font-weight:800}
+    .subtitle,.hs{font-size:11px;color:#666;margin-top:3px}
+    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:${b.gold}22;color:#8b6a00;border:1px solid ${b.gold}55}
+    /* KPI grid — supports both .kpi-grid > .kpi and .kg > .kc legacy markup */
+    .kpi-grid,.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+    .kpi,.kc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center}
+    .kpi label,.kl{font-size:9.5px;color:${b.faint};text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
+    .kpi .val,.kv{font-size:20px;font-weight:900;color:${b.ink}}
+    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px}
+    .section h3,h3{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${b.muted};margin:16px 0 10px}
+    .summary-box{border-radius:12px;padding:18px;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;font-size:11.5px}
+    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:${b.muted};font-weight:700;border-bottom:1px solid #e2e8f0}
+    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
+    .green,.gr{color:${b.green};font-weight:700}
+    .red,.re{color:${b.red};font-weight:700}
+    .gold,.go{color:#854d0e;font-weight:700}
+    .footer,.ft{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:${b.faint}}
+    @media print{body{padding:16px}}
+  </style>`;
+}
+
+// Renders a row of KPI tiles for a printed report. items: [{label, value, cls}]
+// value should already be a formatted string (e.g. fmtPKR(x) or a plain count).
+function printKpiGrid(items) {
+  return `<div class="kpi-grid">${items.map(it =>
+    `<div class="kpi"><label>${it.label}</label><div class="val${it.cls ? ' ' + it.cls : ''}"${it.color ? ` style="color:${it.color}"` : ''}>${it.value}</div></div>`
+  ).join('')}</div>`;
+}
+
+function printHeader(hostelName, title, subtitle) {
+  return `<div class="header"><div><div class="title">${hostelName}</div>` +
+    (subtitle ? `<div class="subtitle">${title} · ${subtitle}</div>` : `<div class="subtitle">${title}</div>`) +
+    `</div></div>`;
+}
+
 // BUG FIX: new Date('YYYY-MM-DD') parses as UTC midnight → wrong day in PKT (UTC+5)
 // Appending 'T00:00:00' forces local-time parsing.
 function fmtDate(d) {
