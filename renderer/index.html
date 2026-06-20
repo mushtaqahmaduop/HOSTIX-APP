@@ -50,12 +50,12 @@
 
     <!-- Warden selector -->
     <div class="login-warden-grid">
-      <div class="login-warden-btn selected" id="rb-warden1" onclick="selectWarden('warden1')" tabindex="0" role="button" aria-pressed="true">
+      <div class="login-warden-btn selected" id="rb-warden1" onclick="selectWarden('warden1')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden1');}" tabindex="0" role="button" aria-pressed="true">
         <div class="login-warden-photo" id="w1-photo"><span class="warden-login-emoji">🧑‍💼</span></div>
         <div class="login-warden-name" id="wb1-name">Warden 1</div>
         <div class="login-warden-role">Full Access</div>
       </div>
-      <div class="login-warden-btn" id="rb-warden2" onclick="selectWarden('warden2')" tabindex="0" role="button" aria-pressed="false">
+      <div class="login-warden-btn" id="rb-warden2" onclick="selectWarden('warden2')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden2');}" tabindex="0" role="button" aria-pressed="false">
         <div class="login-warden-photo" id="w2-photo"><span class="warden-login-emoji">🧑‍💼</span></div>
         <div class="login-warden-name" id="wb2-name">Warden 2</div>
         <div class="login-warden-role">Full Access</div>
