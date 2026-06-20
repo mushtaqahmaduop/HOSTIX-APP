@@ -12,6 +12,8 @@
 //  FIX-08  Import backup file size limited to 50MB
 //  FIX-09  receipt:savePDF validates htmlContent is string and < 2MB
 //  FIX-10  license:activate validates key is string and < 50 chars
+//  FIX-11  Context menu (right-click → Inspect) blocked in production
+//  FIX-12  Removed duplicate _readLastRun() (buggy async version) and duplicate _writeLastRun()
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -140,20 +142,6 @@ async function _writeLastRun() {
   }
 }
 
-async function _readLastRun() {
-  try {
-    if (await fsPromises.access(LAST_RUN_PATH)) {
-      const data = await fsPromises.readFile(LAST_RUN_PATH, 'utf8');
-      const d = new Date(data.trim());
-      if (!isNaN(d.getTime())) return d;
-    }
-    if (await fsPromises.access(LICENSE_PATH)) await _writeLastRun();
-  } catch (e) {
-    console.error('[DAMAM] Error reading last run date:', e.message);
-  }
-  return null;
-}
-
 function getMachineId() {
   if (_cachedMachineId) return _cachedMachineId; // [FIX-05] use cached value
   try {
@@ -222,14 +210,6 @@ function _readLastRun() {
     if (fs.existsSync(LICENSE_PATH)) _writeLastRun();
   } catch (e) {}
   return null;
-}
-
-async function _writeLastRun() {
-  try {
-    await fsPromises.writeFile(LAST_RUN_PATH, new Date().toISOString(), 'utf8');
-  } catch (e) {
-    console.error('[DAMAM] Failed to write last run date:', e.message);
-  }
 }
 
 // ── Full Startup Validation ───────────────────────────────────────────────────
@@ -398,6 +378,7 @@ function createWindow() {
     mainWindow.maximize();
 
     if (IS_PROD) {
+      // Block DevTools keyboard shortcuts
       mainWindow.webContents.on('before-input-event', (_evt, input) => {
         const k = input.key.toUpperCase();
         const blocked =
@@ -406,6 +387,8 @@ function createWindow() {
           (input.control && k === 'U');
         if (blocked) _evt.preventDefault();
       });
+      // [FIX-11] Block right-click → Inspect context menu in production
+      mainWindow.webContents.on('context-menu', (e) => e.preventDefault());
     }
   });
 

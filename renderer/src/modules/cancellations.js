@@ -20,7 +20,7 @@ function renderCancellations(filterStatus='All') {
     const statusBadgeHtml = c.status==='Pending'
       ? '<span class="badge badge-red">⏳ Pending</span>'
       : c.status==='Confirmed'
-        ? '<span class="badge badge-gray" style="background:rgba(224,82,82,0.1);color:var(--red);border-color:rgba(224,82,82,0.3)">✅ Confirmed</span>'
+        ? '<span class="badge badge-gray" style="background:rgba(224,82,82,0.1);color:var(--red);border-color:rgba(224,82,82,0.3)">'+icon('check','sm')+' Confirmed</span>'
         : '<span class="badge badge-green">↩️ Restored</span>';
     const actionBtns = c.status==='Pending'
       ? '<button class="btn btn-danger btn-sm" style="font-size:11px" onclick="confirmCancellation(\''+c.id+'\')"><span class=\"micon\" style=\"font-size:14px\">check_circle</span></button>'
@@ -51,7 +51,7 @@ function renderCancellations(filterStatus='All') {
   return `
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
     <div onclick="renderPage('cancellations_All')" style="background:${filterStatus==='All'?'var(--bg3)':'var(--card)'};border:1px solid ${filterStatus==='All'?'var(--border2)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      <div style="font-size:20px;margin-bottom:6px">📋</div>
+      <div style="font-size:20px;margin-bottom:6px">${icon('list')}</div>
       <div style="font-size:36px;font-weight:900;color:var(--text);line-height:1;margin-bottom:4px">${list.length}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='All'?'var(--gold2)':'var(--text3)'}">All Records</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='All'?'▲ showing all':'click to show all'}</div>
@@ -65,7 +65,7 @@ function renderCancellations(filterStatus='All') {
     </div>
     <div onclick="renderPage('cancellations_Confirmed')" style="background:${filterStatus==='Confirmed'?'rgba(224,82,82,0.08)':'var(--card)'};border:1px solid ${filterStatus==='Confirmed'?'rgba(224,82,82,0.3)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
       ${filterStatus==='Confirmed'?`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>`:''}
-      <div style="font-size:20px;margin-bottom:6px">✅</div>
+      <div style="font-size:20px;margin-bottom:6px">${icon('check')}</div>
       <div style="font-size:36px;font-weight:900;color:var(--text2);line-height:1;margin-bottom:4px">${confirmed.length}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Confirmed'?'var(--red)':'var(--text3)'}">Confirmed</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Confirmed'?'▲ showing':'Students left'}</div>
@@ -82,7 +82,7 @@ function renderCancellations(filterStatus='All') {
   <!-- Freed Seats banner clickable -->
   <div onclick="renderPage('cancellations_Freed')" style="background:${filterStatus==='Freed'?'var(--teal-dim)':'var(--card)'};border:1px solid ${filterStatus==='Freed'?'rgba(15,188,173,0.4)':'var(--border)'};border-radius:var(--radius);padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
     <div style="display:flex;align-items:center;gap:14px">
-      <div style="width:44px;height:44px;border-radius:10px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;font-size:20px">🛏️</div>
+      <div style="width:44px;height:44px;border-radius:10px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;font-size:20px">${icon('bed','sm')}</div>
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--teal)">Freed Seats (Pending + Confirmed)</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">These seats are now vacant and available for new bookings</div>
@@ -96,14 +96,14 @@ function renderCancellations(filterStatus='All') {
 
   ${pending.length>0&&filterStatus==='All'?`
   <div style="background:rgba(224,82,82,0.07);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
-    <span style="font-size:16px">⚠️</span>
+    <span style="font-size:16px">${icon('warning','sm')}</span>
     <span style="font-size:12.5px;color:var(--text2)">${pending.length} pending cancellation${pending.length!==1?'s':''} await action — seats already freed. Click <strong style="color:var(--red)">Pending</strong> card above to view them.</span>
   </div>`:''}
 
   <div class="card">
     <div class="card-header">
       <div class="card-title">
-        ${filterStatus==='All'?'📋 All Cancellations':filterStatus==='Pending'?'🚨 Pending Cancellations':filterStatus==='Confirmed'?'✅ Confirmed Cancellations':filterStatus==='Restored'?'↩️ Restored Cancellations':'🛏️ Freed Seats (Pending + Confirmed)'}
+        ${filterStatus==='All'?icon('list')+' All Cancellations':filterStatus==='Pending'?'🚨 Pending Cancellations':filterStatus==='Confirmed'?icon('check','sm')+' Confirmed Cancellations':filterStatus==='Restored'?'↩️ Restored Cancellations':icon('bed','sm')+' Freed Seats (Pending + Confirmed)'}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:12px;color:var(--text3)">${filtered.length} record${filtered.length!==1?'s':''}</span>
@@ -111,7 +111,7 @@ function renderCancellations(filterStatus='All') {
         ${filterStatus!=='All'?`<button class="btn btn-secondary btn-sm" onclick="renderPage('cancellations_All')">✕ Clear Filter</button>`:''}
       </div>
     </div>
-    ${filtered.length===0?`<div class="empty-state" style="padding:32px"><div class="icon">${filterStatus==='Pending'?'🎉':'📋'}</div><div>${filterStatus==='Pending'?'No pending cancellations!':'No records found'}</div></div>`:
+    ${filtered.length===0?`<div class="empty-state" style="padding:32px"><div class="icon">${filterStatus==='Pending'?'🎉':icon('list')}</div><div>${filterStatus==='Pending'?'No pending cancellations!':'No records found'}</div></div>`:
     `<div class="table-wrap">
       <table><thead><tr><th>Student</th><th>Room</th><th>Type</th><th>Request Date</th><th>Vacate By</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
       <tbody>${filtered.map(c=>mkRow(c)).join('')}</tbody>
@@ -142,8 +142,8 @@ function showEditCancellationModal(cancId) {
           document.getElementById('cancel-status-note').style.display=v==='Confirmed'?'block':'none';
           document.getElementById('restore-status-note').style.display=v==='Restored'?'block':'none';
         ">${statusOpts}</select>
-        <div id="cancel-status-note" style="display:${c.status==='Confirmed'?'block':'none'};font-size:11px;color:var(--red);margin-top:4px">⚠️ Student will be marked as Left</div>
-        <div id="restore-status-note" style="display:${c.status==='Restored'?'block':'none'};font-size:11px;color:var(--green);margin-top:4px">✅ Student will be restored to Active</div>
+        <div id="cancel-status-note" style="display:${c.status==='Confirmed'?'block':'none'};font-size:11px;color:var(--red);margin-top:4px">${icon('warning','sm')} Student will be marked as Left</div>
+        <div id="restore-status-note" style="display:${c.status==='Restored'?'block':'none'};font-size:11px;color:var(--green);margin-top:4px">${icon('check','sm')} Student will be restored to Active</div>
       </div>
       <div class="field"><label>Vacate By Date</label><input class="form-control cdp-trigger" id="f-cvacate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${c.vacateDate||''}"></div>
       <div class="field col-full"><label>Reason / Notes</label><textarea class="form-control" id="f-creason" rows="3" placeholder="Reason for cancellation…">${escHtml(c.reason||'')}</textarea></div>
@@ -209,7 +209,7 @@ function showAddCancellationModal() {
 
   showModal('modal-md','🚫 Add Cancellation Request',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--text2)">
-      ⚠️ <strong>Note:</strong> Once added, the student's seat is immediately marked as <strong style="color:var(--red)">Vacant</strong> and available for new bookings.
+      ${icon('warning','sm')} <strong>Note:</strong> Once added, the student's seat is immediately marked as <strong style="color:var(--red)">Vacant</strong> and available for new bookings.
     </div>
     <div class="form-grid">
       <div class="field col-full">

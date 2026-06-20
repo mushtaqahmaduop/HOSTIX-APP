@@ -54,7 +54,7 @@ function _electronPDF(html, suggestedName, opts) {
     '</style></head>');
   // Insert a prominent Save PDF button before </body>
   var btnHtml = '<div class="no-print" style="text-align:center;padding:16px 0 8px">'
-    + '<button class="pdf-print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>'
+    + '<button class="pdf-print-btn" onclick="window.print()">' + icon('print','sm') + ' Print / Save as PDF</button>'
     + '<div style="font-size:11px;color:#888;margin-top:6px;font-family:sans-serif">In the print dialog: set Destination → Save as PDF</div>'
     + '</div>';
   // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child

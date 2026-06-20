@@ -416,16 +416,18 @@
        SCRIPT LOAD ORDER — mandatory, do not reorder
        1. config.js       — LS_KEY, DB schema, _ACTIVE_HOSTEL
        2. utils.js        — pure helpers: uid, escHtml, fmtDate, fmtPKR…
-       3. auth.js         — warden login, session, role management
-       4. storage.js      — loadDB/saveDB (async, SQLite-first)
-       5. license.js      — license check stubs
-       6. receipt.js      — PDF receipt builder
-       7-19. modules/     — feature modules (depend on 1-6 globals)
-       20. app.js         — boot, keyboard shortcuts, misc
+       3. icons.js        — shared SVG icon system (offline-safe, no CDN)
+       4. auth-nev.js     — warden login v2: PBKDF2, session TTL, lockout
+       5. storage.js      — loadDB/saveDB (async, SQLite-first)
+       6. license.js      — license check stubs
+       7. receipt.js      — PDF receipt builder
+       8-20. modules/     — feature modules (depend on 1-7 globals)
+       21. app.js         — boot, keyboard shortcuts, misc
        ═══════════════════════════════════════════════════════════════════════ -->
   <script src="src/config.js"></script>
   <script src="src/utils.js"></script>
-  <script src="src/auth.js"></script>
+  <script src="src/icons.js"></script>
+  <script src="src/auth-nev.js"></script>
   <script src="src/storage.js"></script>
   <script src="src/license.js"></script>
   <script src="src/receipt.js"></script>

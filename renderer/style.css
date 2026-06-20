@@ -4368,3 +4368,102 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 /* ═══════════════════════════════════════════════════════════════════════════
    STITCH DESIGN SYSTEM v2 — END
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   HOSTIX — ICON SYSTEM (v1)
+   Self-contained inline SVG icons. No CDN/network dependency — required
+   for an offline-first desktop app. Replaces emoji-as-icon usage.
+
+   Style: filled/solid (bolder weight, higher contrast on small screens).
+   All icons use fill="currentColor" so they inherit color from their
+   container and theme correctly in both dark and light mode automatically,
+   the same way .nav-icon / #theme-icon already do.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* Icon size scale — use one of these on every .icon, never a one-off px value */
+    --icon-xs:  14px;
+    --icon-sm:  16px;
+    --icon-md:  20px;
+    --icon-lg:  24px;
+    --icon-xl:  32px;
+
+    /* Icon container scale — the colored circle/square the icon sits inside */
+    --icon-box-sm: 28px;
+    --icon-box-md: 34px;
+    --icon-box-lg: 40px;
+}
+
+.icon {
+    /* NOTE: fill/stroke intentionally NOT forced here (was: fill:currentColor; stroke:none).
+       Filled icons (existing dashboard.js set) declare fill="currentColor" inline on their own
+       <svg> tag. True Lucide icons declare fill="none" stroke="currentColor" inline. Forcing
+       fill/stroke at this class level overrode Lucide's own stroke attributes (a CSS class
+       beats inline presentation attributes), turning clean line icons into solid filled blobs.
+       Each icon now owns its own fill/stroke so both styles coexist under one sizing class. */
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: middle;
+    width: var(--icon-md);
+    height: var(--icon-md);
+}
+
+.icon-xs { width: var(--icon-xs); height: var(--icon-xs); }
+.icon-sm { width: var(--icon-sm); height: var(--icon-sm); }
+.icon-md { width: var(--icon-md); height: var(--icon-md); }
+.icon-lg { width: var(--icon-lg); height: var(--icon-lg); }
+.icon-xl { width: var(--icon-xl); height: var(--icon-xl); }
+
+/* ── ICON BOX — the colored rounded container an icon sits inside.
+   Replaces ad-hoc inline `width:34px;height:34px;...font-size:16px` blocks
+   that were scattered per call-site. One class, sized by modifier, colored
+   by the same .stat-card.<color> ancestor pattern already in use. ── */
+.icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    flex-shrink: 0;
+    transition: var(--transition);
+}
+
+.icon-box-sm { width: var(--icon-box-sm); height: var(--icon-box-sm); border-radius: 8px; }
+.icon-box-md { width: var(--icon-box-md); height: var(--icon-box-md); border-radius: 9px; }
+.icon-box-lg { width: var(--icon-box-lg); height: var(--icon-box-lg); border-radius: 10px; }
+
+.icon-box-sm .icon { width: var(--icon-sm); height: var(--icon-sm); }
+.icon-box-md .icon { width: var(--icon-md); height: var(--icon-md); }
+.icon-box-lg .icon { width: var(--icon-lg); height: var(--icon-lg); }
+
+/* Color variants — same palette .stat-card already uses, so existing
+   .stat-card.gold / .green / .red / .blue / .teal / .purple ancestors
+   keep working with zero markup change beyond swapping the emoji span
+   for an <svg class="icon">. */
+.icon-box.gold   { background: var(--gold-dim);   color: var(--gold);   }
+.icon-box.green  { background: var(--green-dim);  color: var(--green);  }
+.icon-box.red    { background: var(--red-dim);    color: var(--red);    }
+.icon-box.blue   { background: var(--royal-dim);  color: var(--royal2); }
+.icon-box.teal   { background: var(--teal-dim);   color: var(--teal);   }
+.icon-box.purple { background: var(--purple-dim); color: var(--purple); }
+.icon-box.amber  { background: var(--amber-dim);  color: var(--amber);  }
+.icon-box.neutral{ background: var(--bg4);        color: var(--text2);  }
+
+/* ── RESPONSIVE SCALING ──────────────────────────────────────────────────
+   Icons shrink in step with the layout breakpoints already defined for
+   .stat-grid etc., instead of staying pinned to their desktop size while
+   the card around them shrinks. This is the direct fix for icons looking
+   cramped/misaligned on small laptop panels. ── */
+@media (max-width: 900px) {
+    :root {
+        --icon-box-lg: 36px;
+        --icon-lg: 20px;
+    }
+}
+
+@media (max-width: 600px) {
+    :root {
+        --icon-box-md: 30px;
+        --icon-box-lg: 34px;
+        --icon-md: 18px;
+        --icon-lg: 18px;
+    }
+}
