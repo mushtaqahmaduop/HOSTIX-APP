@@ -248,43 +248,7 @@ function toggleSettingsDropdown() {
 
 
 // ── CLEAR ALL DATA ───────────────────────────────────────────────────────────
-function showClearAllMenu() {
-  if (typeof showConfirm !== 'function') return;
-  showConfirm(
-    '⚠️ Clear ALL data?',
-    'This will permanently delete ALL students, payments, rooms, expenses and every other record. This CANNOT be undone. Export a backup first!',
-    async function() {
-      // Second confirmation for a destructive action
-      showConfirm(
-        '🚨 Are you absolutely sure?',
-        'Type "DELETE" in your mind — all data will be wiped. The app settings (hostel name, room types, wardens) will be preserved.',
-        async function() {
-          try {
-            const tableMap = {
-              rooms: [], students: [], payments: [], expenses: [],
-              cancellations: [], maintenance: [], complaints: [],
-              checkinlog: [], notices: [], fines: [],
-              activityLog: [], inspections: [], billSplits: [], transfers: []
-            };
-            Object.assign(DB, tableMap);
-            await saveDB();
-            if (typeof logActivity === 'function')
-              logActivity('SYSTEM', 'All data cleared by warden', 'danger');
-            if (typeof updateSidebar   === 'function') updateSidebar();
-            if (typeof navigate        === 'function') navigate('dashboard');
-            if (typeof toast           === 'function') toast('🗑️ All data cleared.', 'success');
-          } catch (e) {
-            if (typeof toast === 'function') toast('❌ Clear failed: ' + e.message, 'error');
-          }
-        },
-        'Delete Everything',
-        'Cancel'
-      );
-    },
-    'Yes, Clear All',
-    'Cancel'
-  );
-}
+// Defined in expenses.js (password-protected). Do NOT duplicate here.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── INPUT AUTO-FORMAT ────────────────────────────────────────────────────────

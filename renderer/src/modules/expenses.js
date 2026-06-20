@@ -220,12 +220,28 @@ function clearAllDataWithPassword() {
      <button class="btn btn-danger" onclick="confirmClearAllWithPassword()">Delete Everything</button>`);
   setTimeout(()=>{ const i=document.getElementById('clear-all-pwd'); if(i) i.focus(); },120);
 }
-function confirmClearAllWithPassword() {
+async function confirmClearAllWithPassword() {
   const pwd = document.getElementById('clear-all-pwd')?.value||'';
   const errEl = document.getElementById('clear-pwd-err');
-  const user = CUR_USER || (DB.settings && DB.settings.wardens && DB.settings.wardens[0]);
-  const storedPwd = user?.password || user?.pass || '';
-  if (!pwd || (storedPwd && pwd !== storedPwd)) {
+  if (!pwd) {
+    if(errEl) errEl.style.display='block';
+    const inp = document.getElementById('clear-all-pwd');
+    if(inp) { inp.value=''; inp.focus(); }
+    return;
+  }
+  const user = CUR_USER;
+  if (!user || !user.pw) {
+    if(errEl) { errEl.textContent='❌ No user session found. Please re-login.'; errEl.style.display='block'; }
+    return;
+  }
+  const inputHash = await _hashPassword(pwd);
+  let matches = false;
+  if (/^[0-9a-f]{64}$/.test(user.pw) || /^FALLBACK_/.test(user.pw)) {
+    matches = (inputHash === user.pw);
+  } else {
+    matches = (pwd === user.pw);
+  }
+  if (!matches) {
     if(errEl) errEl.style.display='block';
     const inp = document.getElementById('clear-all-pwd');
     if(inp) { inp.value=''; inp.focus(); }
