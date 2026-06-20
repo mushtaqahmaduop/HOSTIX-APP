@@ -1435,7 +1435,7 @@ async function submitRestoreStudent(studentId) {
     if(extraCharges.length) notesParts.push('Charges: '+extraCharges.map(c=>`${c.label} ${fmtPKR(c.amount)}`).join(', '));
     if(concession>0) notesParts.push(`Concession: ${fmtPKR(concession)}${concReason?' ('+concReason+')':''}`);
     if(extraNotes) notesParts.push(extraNotes);
-    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,amount,unpaid,fee:0,extraCharges,extraTotal,concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
+    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
   }
   if(!DB.activityLog) DB.activityLog=[];
   DB.activityLog.unshift({id:uid(),type:'restore',icon:'🔄',text:`${t.name} restored to Room #${room?.number||''}`,date:new Date().toISOString()});
@@ -1723,11 +1723,33 @@ function doGenerateStudentsPDF(monthKey) {
   var _waLink  = 'whatsapp://send?' + (_waPhone?'phone='+_waPhone+'&':'') + 'text=' + encodeURIComponent(_shareText);
   var _gmailLink = 'https://mail.google.com/mail/?view=cm&su=' + encodeURIComponent(hostel+' Fee Report '+monthLabel) + '&body=' + encodeURIComponent(_shareText);
 
-  // FIX-PRINT-HANG: Auto-print script removed — calling window.print() automatically
-  // in a child window.open() hangs the Electron renderer on Windows. User uses the button.
   html += '</body></html>';
 
-  _electronPDF(html, (hostel||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_Students_Fee_' + monthKey + '.pdf', { landscape: true });
+  // ── IN-APP VIEWER — full-screen overlay with toolbar ──────────────────────
+  var old = document.getElementById('pdf-viewer-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'pdf-viewer-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;flex-direction:column';
+  var toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 18px;background:#0f1a2e;border-bottom:2px solid #c8a84b;flex-shrink:0';
+  toolbar.innerHTML = '<div style="font-size:14px;font-weight:800;color:#e6c96e;flex:1">' + escHtml(hostel) + ' — Students Fee Report · ' + monthLabel + '</div>'
+    + '<button onclick="document.getElementById(\'pdf-viewer-frame\').contentWindow.print()" style="background:#1e5fd4;color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Print / Save PDF</button>'
+    + '<button onclick="openExternalLink(\'' + _waLink.replace(/'/g,"\\'") + '\')" style="background:#25d366;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📱 WhatsApp</button>'
+    + '<button onclick="openExternalLink(\'' + _gmailLink.replace(/'/g,"\\'") + '\')" style="background:#ea4335;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📧 Gmail</button>'
+    + '<button onclick="document.getElementById(\'pdf-viewer-overlay\').remove()" style="background:#dc2626;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✕ Close</button>';
+  overlay.appendChild(toolbar);
+  var frame = document.createElement('iframe');
+  frame.id = 'pdf-viewer-frame';
+  frame.style.cssText = 'flex:1;border:none;background:#fff';
+  overlay.appendChild(frame);
+  document.body.appendChild(overlay);
+  frame.contentDocument.open();
+  frame.contentDocument.write(html);
+  frame.contentDocument.close();
+  // ESC key to close
+  overlay._escHandler = function(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', overlay._escHandler); } };
+  document.addEventListener('keydown', overlay._escHandler);
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────

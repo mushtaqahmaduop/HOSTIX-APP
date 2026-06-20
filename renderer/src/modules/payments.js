@@ -524,6 +524,7 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
+    admissionFee: 0,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
     concession: concessionPS, concessionDesc: concessionDescPS,
     discount: concessionPS,
