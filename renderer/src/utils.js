@@ -88,6 +88,7 @@ function safeOpenWindow(width, height) {
 // ── Date & money formatters ───────────────────────────────────────────────────
 function today() { return new Date().toISOString().split('T')[0]; }
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
+function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
 // BUG FIX: new Date('YYYY-MM-DD') parses as UTC midnight → wrong day in PKT (UTC+5)
 // Appending 'T00:00:00' forces local-time parsing.

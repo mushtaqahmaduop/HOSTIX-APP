@@ -1055,7 +1055,7 @@ tr:hover td { background: rgba(208, 138, 82, 0.03); }
 .badge-blue   { background: var(--royal-dim);  border: 1px solid rgba(208,138,82,0.25);  color: var(--royal2); }
 .badge-teal   { background: var(--teal-dim);   border: 1px solid rgba(45,212,191,0.25);  color: var(--teal);   }
 .badge-purple { background: var(--purple-dim); border: 1px solid rgba(192,132,252,0.25); color: var(--purple); }
-.badge-gray   { background: rgba(255,255,255,0.04); border: 1px solid var(--border);     color: var(--text3);  }
+.badge-gray   { background: var(--bg4);             border: 1px solid var(--border);     color: var(--text3);  }
 .badge-amber  { background: var(--amber-dim);  border: 1px solid rgba(251,191,36,0.25);  color: var(--amber);  }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -3961,7 +3961,7 @@ body.light-theme tbody tr:hover td { background: rgba(208,138,82,0.04); }
 .badge-blue   { background: rgba(255,183,128,0.08); border: 1px solid rgba(255,183,128,0.20); color: var(--royal2); }
 .badge-teal   { background: rgba(68,226,205,0.10);  border: 1px solid rgba(68,226,205,0.25);  color: var(--teal); }
 .badge-purple { background: rgba(192,132,252,0.10); border: 1px solid rgba(192,132,252,0.25); color: var(--purple); }
-.badge-gray   { background: rgba(255,255,255,0.04); border: 1px solid var(--hairline);        color: var(--text3); }
+.badge-gray   { background: var(--bg4);             border: 1px solid var(--border);           color: var(--text3); }
 .badge-amber  { background: rgba(251,191,36,0.10);  border: 1px solid rgba(251,191,36,0.25);  color: var(--amber); }
 
 /* ── FORMS — Stitch inputs ───────────────────────────────────────────────── */
