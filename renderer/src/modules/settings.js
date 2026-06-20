@@ -275,7 +275,7 @@ const INSPECTION_ITEMS = ['Walls & Paint','Flooring','Windows & Locks','Bathroom
       <div class="field"><label>Inspection Date</label><input id="ins-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
       <div class="field"><label>Inspected By</label><input id="ins-by" class="form-control" placeholder="Inspector name"></div>
     </div>
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin:16px 0 10px">✅ Inspection Checklist</div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin:16px 0 10px;display:flex;align-items:center;gap:6px">${icon('check','xs')} Inspection Checklist</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       ${INSPECTION_ITEMS.map(item=>`
       <label style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -593,14 +593,14 @@ function renderSettings() {
       <!-- DATA MANAGEMENT -->
       <div class="settings-panel ${settingsTab==='data'?'active':''}">
         <div class="card">
-          <div class="card-header"><div class="card-title">💾 Data Management</div>
+          <div class="card-header"><div class="card-title">${icon('download','sm')} Data Management</div>
             <div style="font-size:12px;color:var(--text3)">For backup & restore, use the <strong style="color:var(--gold2)">Backup & Restore</strong> option in the sidebar menu.</div>
           </div>
           <div class="form-grid">
             <!-- EXCEL/CSV IMPORT CARD -->
             <div class="card" style="padding:16px;border-color:rgba(74,156,240,0.4);grid-column:span 2">
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                <div style="width:34px;height:34px;border-radius:8px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:16px">📊</div>
+                <div style="width:34px;height:34px;border-radius:8px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;color:var(--green)">${icon('chart','sm')}</div>
                 <div>
                   <div style="font-weight:700;color:var(--text)">Import Students from Excel / CSV</div>
                   <div style="font-size:12px;color:var(--text3)">Bulk-add students from a spreadsheet — download the template, fill it in, then upload</div>
@@ -1152,7 +1152,7 @@ function importFromExcel(input) {
 function _showExcelImportPreview(rows, errors) {
   const errHtml = errors.length
     ? `<div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.3);border-radius:8px;padding:12px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ ${errors.length} row${errors.length!==1?'s':''} skipped:</div>
+        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;display:flex;align-items:center;gap:6px">${icon('warning','sm')} ${errors.length} row${errors.length!==1?'s':''} skipped:</div>
         ${errors.map(e=>`<div style="font-size:11.5px;color:var(--text2);padding:2px 0">• ${escHtml(e)}</div>`).join('')}
        </div>` : '';
 
@@ -1167,9 +1167,9 @@ function _showExcelImportPreview(rows, errors) {
       <td>${statusBadge(r.status)}</td>
     </tr>`).join('');
 
-  showModal('modal-xl', '📊 Excel Import Preview', `
+  showModal('modal-xl', `${icon('chart','sm')} Excel Import Preview`, `
     <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
-      <div style="font-size:22px">✅</div>
+      <div style="display:flex;align-items:center;color:var(--green)">${icon('check')}</div>
       <div>
         <div style="font-weight:700;color:var(--green)">${rows.length} student${rows.length!==1?'s':''} ready to import</div>
         <div style="font-size:12px;color:var(--text3)">Review the data below before confirming. Duplicate names in the same room will still be added.</div>
@@ -1265,7 +1265,7 @@ async function confirmExcelImport() {
 function _showExcelImportResult(rows, errors) {
   showModal('modal-sm','Import Result',`
     <div style="text-align:center;padding:20px 0">
-      <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+      <div style="margin-bottom:10px;color:var(--amber)">${icon('warning','lg')}</div>
       <div style="font-weight:700;font-size:16px;margin-bottom:14px">No rows could be imported</div>
       ${errors.map(e=>`<div style="font-size:12px;color:var(--red);padding:3px 0">${escHtml(e)}</div>`).join('')}
     </div>`,

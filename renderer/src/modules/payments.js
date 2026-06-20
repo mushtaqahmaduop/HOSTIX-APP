@@ -333,7 +333,7 @@ function showAddPaymentForStudent(studentId) {
   const pmOpts = DB.settings.paymentMethods.map(m => `<option ${m===t.paymentMethod?'selected':''}>${m}</option>`).join('');
   showModal('modal-md', `💳 Add Payment — ${escHtml(t.name)}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">👤</div>
+      <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">${icon('student','sm')}</div>
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--text)">${escHtml(t.name)}</div>
         <div style="font-size:11px;color:var(--text3)">Room #${room ? room.number : '—'} · ${room ? getRoomType(room).name : '—'} · ${escHtml(t.phone || '—')}</div>
@@ -394,9 +394,16 @@ function showAddPaymentForStudent(studentId) {
     const mb = document.querySelector('#modal-container .modal-body');
     if (mb) {
       const banner = document.createElement('div');
+      banner.id = 'already-paid-banner';
       banner.style.cssText = 'background:rgba(224,82,82,0.12);border:1.5px solid rgba(224,82,82,0.5);border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px';
-      banner.innerHTML = '<span style="font-size:18px">⚠️</span><div><div style="font-weight:800;color:var(--red);font-size:13px">Already Paid for '+escHtml(curMonthLabel)+'</div><div style="font-size:11px;color:var(--text2);margin-top:2px">'+escHtml(t.name)+' has already paid <strong>'+fmtPKR(existingPaid.amount)+'</strong> (Collected by: '+(existingPaid.collectedBy||'—')+'). Adding another payment will create a duplicate record.</div></div>';
+      banner.innerHTML = icon('warning','sm')+'<div><div style="font-weight:800;color:var(--red);font-size:13px">Already Paid for '+escHtml(curMonthLabel)+'</div><div style="font-size:11px;color:var(--text2);margin-top:2px">'+escHtml(t.name)+' has already paid <strong>'+fmtPKR(existingPaid.amount)+'</strong> (Collected by: '+(existingPaid.collectedBy||'—')+'). Adding another payment will create a duplicate record.</div></div>';
       mb.insertBefore(banner, mb.firstChild);
+      // U10 FIX: clear stale banner when user changes the month
+      const monthInput = document.getElementById('f-ps-month');
+      if (monthInput) monthInput.addEventListener('input', function() {
+        const b = document.getElementById('already-paid-banner');
+        if (b) b.remove();
+      }, { once: true });
     }
   }
   if (existingPending) {
