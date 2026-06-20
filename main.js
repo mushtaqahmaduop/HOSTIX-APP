@@ -15,6 +15,8 @@
 //  FIX-11  Context menu (right-click → Inspect) blocked in production
 //  FIX-12  Removed duplicate _readLastRun() (buggy async version) and duplicate _writeLastRun()
 //  FIX-13  db:all column name whitelisted — prevents SQL injection via where[0]
+//  FIX-14  BIOS serial added as 6th machine ID factor (harder to spoof than registry/drive)
+//  FIX-15  Clock-rollback tolerance reduced from 1 day to 5 minutes
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -135,6 +137,17 @@ function _getDriveSerial() {
   } catch (e) { return ''; }
 }
 
+// [S5-FIX] BIOS serial — harder to spoof than registry GUID or drive serial
+function _getBiosSerial() {
+  if (os.platform() !== 'win32') return '';
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('wmic bios get SerialNumber /value', { encoding: 'utf8', timeout: 2000, windowsHide: true });
+    const m = out.match(/SerialNumber=([^\r\n]+)/);
+    return m ? m[1].trim() : '';
+  } catch (e) { return ''; }
+}
+
 async function _writeLastRun() {
   try {
     await fsPromises.writeFile(LAST_RUN_PATH, new Date().toISOString(), 'utf8');
@@ -152,7 +165,8 @@ function getMachineId() {
       os.arch(),
       (os.cpus()[0] && os.cpus()[0].model) || 'cpu',
       _getWinMachineGuid(),
-      _getDriveSerial()
+      _getDriveSerial(),
+      _getBiosSerial()  // [S5-FIX] BIOS serial adds a 6th hardware factor
     ].join('|');
     _cachedMachineId = crypto.createHash('sha256').update(raw).digest('hex');
   } catch (e) {
@@ -251,10 +265,11 @@ function checkLicenseValidity() {
       expiry: data.expiry };
   }
 
-  // [FIX-06] Reject if clock is rolled back before activation date (> 1 day tolerance)
+  // [FIX-06 / S6-FIX] Reject if clock is rolled back before activation date.
+  // Tolerance reduced from 1 day to 5 minutes — 24h window was too generous.
   if (data.activatedAt) {
     const activatedAt = new Date(data.activatedAt);
-    if (!isNaN(activatedAt.getTime()) && now < new Date(activatedAt.getTime() - 86400000)) {
+    if (!isNaN(activatedAt.getTime()) && now < new Date(activatedAt.getTime() - 300000)) {
       return { valid: false, reason: 'time_cheat',
         message: `System time is set before this license's activation date.\nPlease set your clock to the correct time and restart.` };
     }
