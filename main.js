@@ -14,6 +14,7 @@
 //  FIX-10  license:activate validates key is string and < 50 chars
 //  FIX-11  Context menu (right-click → Inspect) blocked in production
 //  FIX-12  Removed duplicate _readLastRun() (buggy async version) and duplicate _writeLastRun()
+//  FIX-13  db:all column name whitelisted — prevents SQL injection via where[0]
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -856,11 +857,16 @@ ipcMain.handle('update:install', () => {
 // DB IPC HANDLERS (better-sqlite3)
 // ════════════════════════════════════════════════════════════════════════════
 
+// [FIX-13] Whitelist column names in db:all — SQL column names cannot be
+// parameterised with ?, so we validate against a known-safe set instead.
+const _ALLOWED_WHERE_COLS = new Set(['id', 'status', 'roomId', 'studentId']);
+
 ipcMain.handle('db:all', (_e, table, where) => {
   try {
     if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
     if (where) {
       const [col, val] = where;
+      if (!_ALLOWED_WHERE_COLS.has(col)) throw new Error('Invalid column: ' + col);
       return db.prepare(`SELECT data FROM ${table} WHERE ${col} = ?`).all(val)
         .map(r => JSON.parse(r.data));
     }

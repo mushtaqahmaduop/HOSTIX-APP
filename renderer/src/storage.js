@@ -246,8 +246,19 @@ if (window.electronAPI) {
       const data   = JSON.parse(jsonString);
       const dbData = data.db || data;
 
-      if (!Array.isArray(dbData.rooms) && !Array.isArray(dbData.students)) {
+      // BUG FIX (B6): was && — only caught case where BOTH were missing
+      if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
         if (typeof toast === 'function') toast('❌ Invalid backup file — missing required data', 'error');
+        return;
+      }
+
+      // BUG FIX (B6): validate each record has an id field to prevent silent import failures
+      if (dbData.students.some(function(s){ return !s || typeof s !== 'object' || !s.id; })) {
+        if (typeof toast === 'function') toast('❌ Backup has corrupted student records — missing id fields', 'error');
+        return;
+      }
+      if (dbData.rooms.some(function(r){ return !r || typeof r !== 'object' || !r.id; })) {
+        if (typeof toast === 'function') toast('❌ Backup has corrupted room records — missing id fields', 'error');
         return;
       }
 

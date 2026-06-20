@@ -81,7 +81,7 @@ async function processAutoCancellations() {
     c.status          = 'Confirmed';
     c.autoConfirmedAt = todayStr;
     var student = DB.students.find(function(s){ return s.id === c.studentId; });
-    if (student && student.status !== 'Left') {
+    if (student && student.status !== 'Left' && student.status !== 'Transferred') {
       student.status   = 'Left';
       student.leftDate = c.vacateDate;
     }
