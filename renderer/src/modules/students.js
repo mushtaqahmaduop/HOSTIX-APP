@@ -1727,8 +1727,7 @@ function doGenerateStudentsPDF(monthKey) {
   // in a child window.open() hangs the Electron renderer on Windows. User uses the button.
   html += '</body></html>';
 
-  // ── IN-APP VIEWER (always — no window.open, no external save dialog) ─────────
-  // Removes old viewer if open, builds a full-screen overlay with toolbar,
+  _electronPDF(html, (hostel||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_Students_Fee_' + monthKey + '.pdf', { landscape: true });
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────

@@ -330,37 +330,48 @@ function renderReports() {
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : ''}
   <!-- REPORTS: dashboard-style stat cards — each opens its own detail view -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:18px">
-    <div style="background:linear-gradient(135deg,#0d2d1a,#0a2015);border:1px solid rgba(46,201,138,${reportDetail==='financial'?'0.7':'0.3'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='financial';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px">
+    <div class="stat-card green" onclick="reportDetail='financial';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='financial'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='financial'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(46,201,138,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💵</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green)">Revenue</div><div style="font-size:18px;font-weight:900;color:#fff">${fmtPKR(rev)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='financial'?'▲ showing detail':'click for detail →'}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💵</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green)">Revenue</div><div class="stat-value" style="font-size:18px">${fmtPKR(rev)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='financial'?'▲ showing detail':'click for detail →'}</div></div>
+      </div>
     </div>
-    <div style="background:linear-gradient(135deg,#1a1000,#120b00);border:1px solid rgba(240,160,48,${reportDetail==='pending'?'0.7':'0.3'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='pending';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+    <div class="stat-card gold" onclick="reportDetail='pending';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='pending'?';border-color:var(--amber)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='pending'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--amber)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(240,160,48,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏳</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--amber)">Pending</div><div style="font-size:18px;font-weight:900;color:#fff">${fmtPKR(pending)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='pending'?'▲ showing detail':'click for detail →'}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏳</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--amber)">Pending</div><div class="stat-value" style="font-size:18px">${fmtPKR(pending)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='pending'?'▲ showing detail':'click for detail →'}</div></div>
+      </div>
     </div>
-    <div style="background:linear-gradient(135deg,#1a0e05,#140b02);border:1px solid rgba(224,82,82,${reportDetail==='expenses'?'0.7':'0.3'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='expenses';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+    <div class="stat-card red" onclick="reportDetail='expenses';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='expenses'?';border-color:var(--red)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='expenses'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(224,82,82,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📉</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--red)">Expenses</div><div style="font-size:18px;font-weight:900;color:#fff">${fmtPKR(totalExp)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='expenses'?'▲ showing detail':'click for detail →'}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📉</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--red)">Expenses</div><div class="stat-value" style="font-size:18px">${fmtPKR(totalExp)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='expenses'?'▲ showing detail':'click for detail →'}</div></div>
+      </div>
     </div>
-    <div style="background:linear-gradient(135deg,#1a1020,#120c1a);border:1px solid rgba(155,109,240,${reportDetail==='netprofit'?'0.7':'0.3'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='netprofit';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+    <div class="stat-card purple" onclick="reportDetail='netprofit';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='netprofit'?';border-color:var(--purple)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='netprofit'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--purple)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(155,109,240,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📊</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple)">Available Fund</div><div style="font-size:18px;font-weight:900;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='netprofit'?'▲ showing detail':'click for detail →'}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📊</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple)">Available Fund</div><div class="stat-value" style="font-size:18px;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='netprofit'?'▲ showing detail':'click for detail →'}</div></div>
+      </div>
     </div>
-    <div style="background:linear-gradient(135deg,#001a1a,#001212);border:1px solid rgba(15,188,173,${reportDetail==='rooms'?'0.7':'0.3'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='rooms';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+    <div class="stat-card teal" onclick="reportDetail='rooms';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='rooms'?';border-color:var(--teal)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='rooms'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--teal)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(15,188,173,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏠</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Occupancy</div><div style="font-size:18px;font-weight:900;color:#fff">${occRate}%</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${occ}/${DB.rooms.length} rooms</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏠</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Occupancy</div><div class="stat-value" style="font-size:18px">${occRate}%</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${occ}/${DB.rooms.length} rooms</div></div>
+      </div>
     </div>
-    <!-- FEATURE 4: Transfers to Owner as a full clickable record card -->
-    <div style="background:linear-gradient(135deg,#070e18,#040a12);border:1px solid rgba(74,156,240,${reportDetail==='transfers'?'0.7':'0.2'});border-radius:var(--radius);padding:16px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition)" onclick="reportDetail='transfers';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)"></div>':''}
-      <div style="width:38px;height:38px;border-radius:9px;background:rgba(74,156,240,0.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏦</div>
-      <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue)">Transfers</div><div style="font-size:18px;font-weight:900;color:#fff">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records · Owner</div></div>
+    <div class="stat-card blue" onclick="reportDetail='transfers';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='transfers'?';border-color:var(--royal)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--royal)"></div>':''}
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏦</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--royal2)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records · Owner</div></div>
+      </div>
     </div>
   </div>
 
