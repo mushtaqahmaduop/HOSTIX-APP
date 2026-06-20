@@ -1613,7 +1613,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
 .empty-state { text-align: center; padding: 56px 24px; color: var(--text3); }
-.empty-state .icon { font-size: 48px; margin-bottom: 14px; opacity: 0.4; }
+.empty-state .icon { width: 48px; height: 48px; margin-bottom: 14px; opacity: 0.4; display: block; margin-left: auto; margin-right: auto; }
 .empty-state h3 { font-family: var(--font-display); font-size: 20px; color: var(--text2); margin-bottom: 6px; }
 
 .text-gold   { color: var(--gold2);  }

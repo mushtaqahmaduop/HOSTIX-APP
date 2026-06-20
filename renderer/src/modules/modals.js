@@ -390,13 +390,19 @@ async function restoreBackup() {
       showConfirm('Restore Backup?',
         `This will replace ALL current data with backup data (${count} students). This cannot be undone!`,
         async ()=>{
-          DB = _initDBFields(parsed);
-          await saveDB();
-          updateSidebar();
-          applySavedTheme();
-          navigate('dashboard');
-          toast('Data restored successfully from backup!', 'success');
-          closeModal();
+          const btn = document.querySelector('.btn-danger');
+          if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
+          try {
+            DB = _initDBFields(parsed);
+            await saveDB();
+            updateSidebar();
+            applySavedTheme();
+            navigate('dashboard');
+            toast('Data restored successfully from backup!', 'success');
+            closeModal();
+          } finally {
+            if (btn && !btn.closest('#modal-container')) { btn.disabled = false; btn.textContent = 'Restore Data from File'; }
+          }
         }
       );
     } catch(err) {
@@ -776,7 +782,7 @@ function showUserMgmt() {
     rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
     rows += '<div style="position:relative;flex-shrink:0">';
     rows += avatarHtml;
-    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;border:2px solid var(--bg3)" title="Change photo">✏️</div>';
+    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--bg3);color:var(--bg)" title="Change photo">'+(typeof icon==='function'?icon('edit','xs'):'')+'</div>';
     rows += '<input type="file" id="warden-photo-input-'+key+'" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\''+key+'\')">';
     rows += '</div>';
     rows += '<div style="flex:1">';
