@@ -1,0 +1,40 @@
+# HOSTIX-APP — Claude Code Context
+
+## What this is
+Offline Electron desktop app for hostel management. Deployed to 50+ Pakistani hostels under Zeerak Hostix brand. Vanilla JS/HTML/CSS — NO build step, NO framework, NO bundler. SQLite via better-sqlite3.
+
+## Code structure
+- `app.js` was a 9,270-line monolith — now split into 13 modular feature files.
+- All DB writes go through async `saveDB()`. Never call it without await.
+- CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. Violet scheme.
+
+## HARD RULES — read before touching code
+
+1. **Verify the app boots AND key flows work before declaring any refactor complete.**
+   Smoke test: login → dashboard → add student → record payment → view receipt.
+   Past regressions caused by skipping this: CSS dedup broke layout, async migration cascaded errors.
+
+2. **Never push directly to `master`.** Branch → test → PR. `master` is what clients run.
+
+3. **Known-good baseline: commit `6629fb1b`.** If something breaks badly, force-reset to this.
+
+4. **Currency formatting: use `fmtPKR()` OR `<span class="pkr">`, NEVER both.** Double-prefix bug history.
+
+5. **CSS tokens: only `--accent*`. The old `--gold*` / `--royal*` are DELETED — do not reintroduce.**
+
+6. **Dark surfaces must span more than 8 lightness points apart** for visible contrast.
+
+7. **CSS deduplication is dangerous.** Structural rules (position, display, grid, flex) look duplicate but often aren't. Manual review required for any CSS cleanup pass.
+
+## Before editing, always ask yourself
+- Which module file will this touch?
+- Does this change CSS structural rules? → Manual review required.
+- Will the app still boot? Has it been tested with `npm start` in dev mode?
+
+## Run + smoke test
+- `npm start` — launches Electron in dev mode
+- No automated test suite. Manual smoke test only.
+
+## Communication
+- Reply concisely. Don't pad with explanations I didn't ask for.
+- When unsure between two approaches, ask — don't guess and commit.
