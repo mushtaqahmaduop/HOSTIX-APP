@@ -90,6 +90,23 @@ function today() { return new Date().toISOString().split('T')[0]; }
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
 function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
+// ── MONEYVALUE — single reusable renderer for ALL currency display ───────────
+// Currency code renders small & muted, the amount renders large & bold.
+// Never produces a duplicated "PKR PKR" prefix — always use this instead of
+// hand-rolling fmtPKR()/fmtNum() + a literal "PKR" string in markup.
+// size: 'display' (KPI cards, 32-40px) | 'section' (22px) | 'body' (14-16px) | 'label' (11-13px)
+function moneyValue(amount, opts) {
+  opts = opts || {};
+  const size = opts.size || 'body';
+  const currency = opts.currency || 'PKR';
+  const color = opts.color ? `style="color:${opts.color}"` : '';
+  const cls = opts.className ? ' ' + opts.className : '';
+  return `<span class="money-value money-value--${size}${cls}" ${color}>`
+       + `<span class="money-cur">${currency}</span>`
+       + `<span class="money-amt">${fmtNum(amount)}</span>`
+       + `</span>`;
+}
+
 // BUG FIX: new Date('YYYY-MM-DD') parses as UTC midnight → wrong day in PKT (UTC+5)
 // Appending 'T00:00:00' forces local-time parsing.
 function fmtDate(d) {

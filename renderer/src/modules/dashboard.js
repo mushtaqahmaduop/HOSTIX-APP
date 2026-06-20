@@ -200,7 +200,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
+      <div>${moneyValue(collected,{size:"display"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
@@ -210,7 +210,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
+      <div>${moneyValue(netProfit,{size:"display",color:netProfit>=0?"var(--teal)":"var(--red)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
     </div>
@@ -220,7 +220,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
+      <div>${moneyValue(moExp,{size:"display",color:"var(--red)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
@@ -232,7 +232,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
+      <div>${moneyValue(moTransferTotal,{size:"display"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
@@ -242,7 +242,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
+      <div>${moneyValue(pending,{size:"display",color:"var(--amber)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
