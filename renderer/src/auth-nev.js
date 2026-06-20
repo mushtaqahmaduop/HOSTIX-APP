@@ -258,7 +258,7 @@ async function _checkDefaultPasswords() {
         setTimeout(() => {
           if (typeof toast === 'function') {
             toast(
-              '⚠️ Security: One or more wardens are using default passwords. ' +
+              'Security: One or more wardens are using default passwords. ' +
               'Change them in Settings → Wardens.',
               'error', 8000
             );
@@ -448,7 +448,7 @@ function updateRoleBadge() {
   const safe = typeof escHtml === 'function' ? escHtml : (s) => s;
   const photo = CUR_USER?.photo
     ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(200,168,75,.5);flex-shrink:0">`
-    : '<span style="font-size:14px">🧑‍💼</span>';
+    : (typeof icon === 'function' ? icon('warden', 'sm') : '');
   b.innerHTML  = `${photo}&nbsp;${safe(CUR_USER?.name || '')}`;
   b.style.cssText = 'display:flex;align-items:center;gap:6px;';
 }
@@ -473,7 +473,7 @@ function logout() {
       const el   = _ui('login-hostel-name');
       const addr = _ui('login-address');
       if (el   && s?.hostelName) el.textContent = s.hostelName;
-      if (addr && s?.location)   addr.innerHTML  = '📍 ' + s.location;
+      if (addr && s?.location)   addr.innerHTML  = (typeof icon === 'function' ? icon('pin', 'xs') : '') + ' ' + s.location;
     }
     const logo = localStorage.getItem('hostel_logo_' + _hid());
     if (logo) {
