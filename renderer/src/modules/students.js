@@ -21,7 +21,7 @@ function renderStudents() {
 
   if(students.length===0 && DB.students.length===0) return `
     <div class="empty-state">
-      <div class="icon">👤</div>
+      <div class="icon">${icon('student','sm')}</div>
       <h3>No Students Yet</h3>
       <p style="margin-bottom:16px">Add your first student to get started</p>
       <button class="btn btn-primary" onclick="showAddStudentModal()">+ Add Student</button>
@@ -131,7 +131,7 @@ function showAddStudentModal(presetRoomId='') {
 
   <!-- SECTION 1: IDENTITY -->
   <div class="as-section">
-    <div class="as-section-title">👤 Student Identity</div>
+    <div class="as-section-title">${icon('student','sm')} Student Identity</div>
     <div class="form-grid" style="gap:12px">
       <div class="field"><label>Full Name *</label><input class="form-control" id="f-tname" placeholder="Muhammad Ali" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
       <div class="field"><label>Father Name *</label><input class="form-control" id="f-tfname" placeholder="Muhammad Khan" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
@@ -379,7 +379,7 @@ function showViewStudentModal(id) {
     <!-- PERSONAL INFO GRID -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);margin-bottom:14px;display:flex;align-items:center;gap:6px">👤 Personal Information</div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('student','sm')} Personal Information</div>
         ${[['Father / Guardian',t.fatherName],['Occupation / Course',t.occupation],['CNIC / ID',t.cnic],['Phone Number',t.phone],['Email Address',t.email],['Emergency Contact',t.emergencyContact]].map(([k,v])=>`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:11.5px;color:var(--text3);flex-shrink:0;width:130px">${k}</span>
@@ -805,7 +805,7 @@ function printStudentCard(id) {
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
     <div class="section">
-      <div class="section-title">👤 Personal Information</div>
+      <div class="section-title">${icon('student','sm')} Personal Information</div>
       <div class="info-grid">
         ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v||'—'}</div></div>`).join('')}
       </div>
@@ -873,7 +873,7 @@ function showEditStudentModal(id) {
     </div>
   </div>
   <div class="as-section">
-    <div class="as-section-title">👤 Student Identity</div>
+    <div class="as-section-title">${icon('student','sm')} Student Identity</div>
     <div class="form-grid" style="gap:12px">
       <div class="field"><label>Full Name *</label><input class="form-control" id="f-tname" value="${escHtml(t.name)}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
       <div class="field"><label>Father Name</label><input class="form-control" id="f-tfname" value="${escHtml(t.fatherName||'')}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
@@ -1055,7 +1055,7 @@ function showRoomShiftModal(studentId) {
     </div>
 
     <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px">
-      ⚠️ Shifting will update the student's room assignment and adjust all future payment records. Past payments stay unchanged.
+      ${icon('warning','sm')} Shifting will update the student's room assignment and adjust all future payment records. Past payments stay unchanged.
     </div>
   `,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1194,8 +1194,8 @@ function formerStudentSearch(query) {
     const totalPaid  = payHistory.filter(p=>p.status==='Paid').reduce((sum,p)=>sum+Number(p.amount||0),0);
     const pendRecs   = payHistory.filter(p=>p.status==='Pending');
     const totalPend  = pendRecs.reduce((sum,p)=>sum+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-    const histBadge  = totalPend>0?`<span style="background:rgba(255,77,109,0.15);color:var(--red);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">⚠️ ${pendRecs.length} pending · ${fmtPKR(totalPend)}</span>`:payHistory.length?`<span style="background:rgba(46,201,138,0.1);color:var(--green);border:1px solid rgba(46,201,138,0.2);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">✅ All clear</span>`:`<span style="background:var(--bg4);color:var(--text3);border-radius:6px;padding:2px 8px;font-size:10px">No history</span>`;
-    const recentRows = payHistory.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3)">${escHtml(p.month||fmtDate(p.date)||'—')}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${fmtPKR(p.amount)}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'}">${p.status==='Paid'?'✅':'⏳'}</span></div>`).join('');
+    const histBadge  = totalPend>0?`<span style="background:rgba(255,77,109,0.15);color:var(--red);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">${icon('warning','sm')} ${pendRecs.length} pending · ${fmtPKR(totalPend)}</span>`:payHistory.length?`<span style="background:rgba(46,201,138,0.1);color:var(--green);border:1px solid rgba(46,201,138,0.2);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">${icon('checkmark','xs')} All clear</span>`:`<span style="background:var(--bg4);color:var(--text3);border-radius:6px;padding:2px 8px;font-size:10px">No history</span>`;
+    const recentRows = payHistory.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3)">${escHtml(p.month||fmtDate(p.date)||'—')}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${fmtPKR(p.amount)}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'}">${p.status==='Paid'?icon('checkmark','xs'):'⏳'}</span></div>`).join('');
     return `<div id="fsr-${s.id}" style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;gap:13px">
         <div style="width:44px;height:44px;border-radius:11px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
@@ -1247,7 +1247,7 @@ function openRestoreStudentForm(studentId) {
   const totalPaid = payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount||0),0);
   const pendRecs  = payHistory.filter(p=>p.status==='Pending');
   const totalPend = pendRecs.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${(p.unpaid||0)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?'✅':'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
+  const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${(p.unpaid||0)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?icon('checkmark','xs'):'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
 
   showModal('modal-lg', `<span style="color:var(--green)">🔄 Restore — ${escHtml(t.name)}</span>`,
     `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;background:var(--green-dim);border:1px solid rgba(46,201,138,0.25);border-radius:8px;padding:10px 14px">All previous details are pre-filled. Update room, rent, and payment details.</div>
@@ -1256,7 +1256,7 @@ function openRestoreStudentForm(studentId) {
         <div style="font-size:12px;font-weight:700;color:var(--blue)">📋 Past Payment History</div>
         <div style="display:flex;gap:8px">
           <span style="font-size:11px;font-weight:700;color:var(--green)">Paid: ${fmtPKR(totalPaid)}</span>
-          ${totalPend>0?`<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(255,77,109,0.1);padding:2px 8px;border-radius:5px">⚠️ Past pending: ${fmtPKR(totalPend)}</span>`:`<span style="font-size:11px;color:var(--green)">✅ No past dues</span>`}
+          ${totalPend>0?`<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(255,77,109,0.1);padding:2px 8px;border-radius:5px">${icon('warning','sm')} Past pending: ${fmtPKR(totalPend)}</span>`:`<span style="font-size:11px;color:var(--green)">${icon('checkmark','xs')} No past dues</span>`}
         </div>
       </div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
@@ -1278,7 +1278,7 @@ function openRestoreStudentForm(studentId) {
       <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">🏠 New Room Assignment</div></div>
       <div class="field"><label>Assign Room *</label><select class="form-control" id="rs-room"><option value="">— Select available room —</option>${roomOpts}</select></div>
       <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="rs-rent" type="number" value="${t.rent||''}" placeholder="e.g. 16000" oninput="rsRecalc()"></div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--gold2);margin-bottom:10px">💰 First Month Payment</div></div>
+      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--gold2);margin-bottom:10px">${icon('money')} First Month Payment</div></div>
       <div class="field"><label>Payment Month</label><input class="form-control" id="rs-month" type="text" value="${thisMonthLabel()}" oninput="rsCheckMonthDuplicate('${t.id}',this.value)" placeholder="e.g. March 2026"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="rs-pm">${pmOpts}</select></div>
       <div id="rs-month-warning" class="field col-full" style="display:none"></div>
@@ -1346,7 +1346,7 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
   const pending = existing.find(p => p.status === 'Pending');
   if (paid) {
     warn.style.display = '';
-    warn.innerHTML = '<div style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.35);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--red);font-weight:600">⚠️ This student already has a <strong>Paid</strong> payment for <strong>' + monthVal + '</strong>. The payment section below has been disabled to avoid duplicates. Change the month or leave amount empty.</div>';
+    warn.innerHTML = '<div style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.35);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--red);font-weight:600">' + icon('warning','sm') + ' This student already has a <strong>Paid</strong> payment for <strong>' + monthVal + '</strong>. The payment section below has been disabled to avoid duplicates. Change the month or leave amount empty.</div>';
     // Disable and clear payment fields
     ['rs-amount','rs-pending','rs-concession'].forEach(function(id){
       const el = document.getElementById(id);
@@ -1356,7 +1356,7 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
     if (ps) ps.disabled = true;
   } else if (pending) {
     warn.style.display = '';
-    warn.innerHTML = '<div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--gold2);font-weight:600">⚠️ This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
+    warn.innerHTML = '<div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--gold2);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
     ['rs-amount','rs-pending','rs-concession','rs-pstatus'].forEach(function(id){
       const el = document.getElementById(id); if (el) el.disabled = false;
     });
@@ -1464,15 +1464,15 @@ function downloadAllStudentsPDF() {
     +'<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">'
     +'<div style="font-size:12px;font-weight:700;color:var(--gold2);margin-bottom:8px">📋 Report will include:</div>'
     +'<div style="font-size:12px;color:var(--text2);line-height:1.8">'
-    +'✅ Student name, father\'s name, room number<br>'
-    +'✅ CNIC and phone number<br>'
-    +'✅ Monthly rent &amp; deposit paid on joining<br>'
-    +'✅ Amount paid in selected month<br>'
-    +'✅ Pending / unpaid balance for that month<br>'
-    +'✅ Payment status badge<br>'
-    +'✅ <strong style="color:var(--amber)">Expenses summary badge &amp; full breakdown</strong><br>'
-    +'✅ <strong style="color:var(--blue)">Transfer to Owner badge &amp; full breakdown</strong><br>'
-    +'✅ <strong style="color:var(--green)">Net Available fund calculation</strong>'
+    +icon('checkmark','xs')+' Student name, father\'s name, room number<br>'
+    +icon('checkmark','xs')+' CNIC and phone number<br>'
+    +icon('checkmark','xs')+' Monthly rent &amp; deposit paid on joining<br>'
+    +icon('checkmark','xs')+' Amount paid in selected month<br>'
+    +icon('checkmark','xs')+' Pending / unpaid balance for that month<br>'
+    +icon('checkmark','xs')+' Payment status badge<br>'
+    +icon('checkmark','xs')+' <strong style="color:var(--amber)">Expenses summary badge &amp; full breakdown</strong><br>'
+    +icon('checkmark','xs')+' <strong style="color:var(--blue)">Transfer to Owner badge &amp; full breakdown</strong><br>'
+    +icon('checkmark','xs')+' <strong style="color:var(--green)">Net Available fund calculation</strong>'
     +'</div>'
     +'</div>'
     +'</div>',
