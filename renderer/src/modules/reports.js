@@ -39,7 +39,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _pg = paginate(paidOnly, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">💰 Revenue — Paid Transactions (${periodLabel})</div>
+        <div class="card-title">${icon('money')} Revenue — Paid Transactions (${periodLabel})</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('financial','var(--green)')}${pdfBtn}</div>
       </div>
       <div class="two-col" style="margin-bottom:16px">
@@ -122,7 +122,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _pg = paginate(allItems, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">📊 Available Fund — ${periodLabel}</div>
+        <div class="card-title">${icon('chart')} Available Fund — ${periodLabel}</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('netprofit','var(--accent)')}${pdfBtn}</div>
       </div>
       <div style="background:${net>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${net>=0?'rgba(46,201,138,0.4)':'rgba(224,82,82,0.4)'};border-radius:12px;padding:22px;text-align:center;margin-bottom:16px">
@@ -133,7 +133,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>
       ${_pg.slice.map(item=>`<tr>
         <td class="text-muted" style="font-size:12px">${fmtDate(item.date)}</td>
-        <td>${item.type==='income'?'<span class="badge badge-green">💰 Income</span>':'<span class="badge badge-red">📉 Expense</span>'}</td>
+        <td>${item.type==='income'?`<span class="badge badge-green">${icon('money')} Income</span>`:'<span class="badge badge-red">📉 Expense</span>'}</td>
         <td><div style="font-weight:600">${item.label}</div><div style="font-size:11px;color:var(--text3)">${item.desc}</div></td>
         <td style="font-weight:700;color:${item.type==='income'?'var(--green)':'var(--red)'};">${item.type==='income'?'+':'−'}${fmtPKR(item.amount)}</td>
       </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No transactions</td></tr>'}
@@ -407,7 +407,7 @@ function renderReports() {
     <div class="stat-card purple" onclick="reportDetail='netprofit';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='netprofit'?';border-color:var(--purple)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='netprofit'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--purple)"></div>':''}
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📊</div>
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icon('chart')}</div>
         <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple)">Available Fund</div><div class="stat-value" style="font-size:18px;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='netprofit'?'▲ showing detail':'click for detail →'}</div></div>
       </div>
     </div>
@@ -437,7 +437,7 @@ function renderReports() {
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
   <div class="two-col" style="margin-bottom:20px">
     <div class="card">
-      <div class="card-header"><div class="card-title">📈 Revenue vs Expenses</div></div>
+      <div class="card-header"><div class="card-title">${icon('trendUp')} Revenue vs Expenses</div></div>
       <div style="display:flex;gap:6px;align-items:flex-end;height:140px">${trendHTML}</div>
       <div class="chart-legend mt-8"><div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--green)"></div>Revenue</div><div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--red)"></div>Expenses</div></div>
     </div>
