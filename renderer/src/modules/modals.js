@@ -9,6 +9,36 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+// ── ICON MAP (Lucide, offline-vendored — see dashboard.js for the original filled-icon
+//    system). Named MODAL_ICONS, not ICONS, because all module files share one global
+//    script scope and dashboard.js already owns the top-level `ICONS` identifier — a
+//    second `const ICONS` here would throw a duplicate-declaration error and break the
+//    whole app (the exact collision-bug class already fixed once in this codebase). ──
+const MODAL_ICONS = {
+  shieldCheck: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></svg>',
+  lock: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>',
+  download: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>',
+  clipboardCopy: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M16 4h2a2 2 0 0 1 2 2v4" /><path d="M21 14H11" /><path d="m15 10-4 4 4 4" /></svg>',
+  cloud: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg>',
+  cloudUpload: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8" /><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="m8 17 4-4 4 4" /></svg>',
+  lightbulb: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></svg>',
+  upload: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /><path d="m17 8-5-5-5 5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg>',
+  alertTriangle: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>',
+  clipboardPaste: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 14h10" /><path d="M16 4h2a2 2 0 0 1 2 2v1.344" /><path d="m17 18 4-4-4-4" /><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" /><rect x="8" y="2" width="8" height="4" rx="1" /></svg>',
+  save: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" /><path d="M7 3v4a1 1 0 0 0 1 1h7" /></svg>',
+  moon: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>',
+  calendar: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></svg>',
+  cameraOff: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.564 14.558a3 3 0 1 1-4.122-4.121" /><path d="m2 2 20 20" /><path d="M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175" /><path d="M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344" /></svg>',
+  smartphone: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2" /><path d="M12 18h.01" /></svg>',
+  trash: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6" /><path d="M14 11v6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>',
+  statusActive: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="1" /></svg>',
+  statusLeft: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.1 2.182a10 10 0 0 1 3.8 0" /><path d="M13.9 21.818a10 10 0 0 1-3.8 0" /><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7" /><path d="M2.182 13.9a10 10 0 0 1 0-3.8" /><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69" /><path d="M21.818 10.1a10 10 0 0 1 0 3.8" /><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" /><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7" /></svg>',
+  statusX: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>',
+  statusBan: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M4.929 4.929 19.07 19.071" /></svg>',
+  statusCheck: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>',
+  statusClock: '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>',
+};
+
 function showModal(size, title, body, footer='') {
   const html=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal ${size}">
@@ -53,9 +83,9 @@ async function showBackupRestoreModal() {
   const paymentCount = DB.payments.length;
   const roomCount = DB.rooms.length;
 
-  showModal('modal-md','🛡️ Backup & Restore Data',`
+  showModal('modal-md',`${MODAL_ICONS.shieldCheck} Backup & Restore Data`,`
     <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
-      <div style="font-size:22px">🔒</div>
+      <div>${MODAL_ICONS.lock}</div>
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--teal)">Your data is safe in this browser</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Export a backup file to your PC/phone to protect against browser data loss</div>
@@ -84,7 +114,7 @@ async function showBackupRestoreModal() {
 
     <!-- Export section -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:10px">📤 Export / Download Backup</div>
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.download} Export / Download Backup</div>
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">Download a <strong style="color:var(--text)">.json</strong> backup file containing all your hostel data. Store it on your PC, USB, or Google Drive.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="exportBackup('json')" style="flex:1">
@@ -92,7 +122,7 @@ async function showBackupRestoreModal() {
           Download JSON Backup
         </button>
         <button class="btn btn-secondary" onclick="exportBackup('copy')">
-          📋 Copy to Clipboard
+          ${MODAL_ICONS.clipboardCopy} Copy to Clipboard
         </button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Last snapshot: ${ts}</div>
@@ -101,7 +131,7 @@ async function showBackupRestoreModal() {
     <!-- FIX: Google Drive Backup Section (replaces Gmail) -->
     <div style="background:var(--bg3);border:1px solid rgba(66,133,244,0.35);border-radius:10px;padding:16px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:30px;height:30px;background:rgba(66,133,244,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">☁️</div>
+        <div style="width:30px;height:30px;background:rgba(66,133,244,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#4285f4">${MODAL_ICONS.cloud}</div>
         <div>
           <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4285f4">Google Drive Backup</div>
           <div style="font-size:11px;color:var(--text3)">Save backup file directly to Google Drive</div>
@@ -130,19 +160,19 @@ async function showBackupRestoreModal() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="sendBackupToDrive()" style="background:linear-gradient(135deg,#4285f4,#1a6ed8);border:none;flex:1;display:flex;align-items:center;justify-content:center;gap:6px">
-          <span style="font-size:14px">☁️</span> Backup Now to Google Drive
+          <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.cloudUpload}</span> Backup Now to Google Drive
         </button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;padding:8px 10px;background:var(--bg4);border-radius:6px">
-        💡 Clicking <strong>Backup Now</strong> downloads the JSON file and opens your Google Drive${DB.settings.driveEmail?` (<strong>${escHtml(DB.settings.driveEmail)}</strong>)`:''} in the browser. Upload the file there to save it in the cloud.
+        <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.lightbulb}</span> Clicking <strong>Backup Now</strong> downloads the JSON file and opens your Google Drive${DB.settings.driveEmail?` (<strong>${escHtml(DB.settings.driveEmail)}</strong>)`:''} in the browser. Upload the file there to save it in the cloud.
       </div>
     </div>
 
     <!-- Restore section -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px">📥 Restore from Backup</div>
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
       <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
-        ⚠️ <strong>Warning:</strong> Restoring will <strong style="color:var(--red)">replace ALL current data</strong>. Make sure to export a backup first!
+        <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.alertTriangle}</span> <strong>Warning:</strong> Restoring will <strong style="color:var(--red)">replace ALL current data</strong>. Make sure to export a backup first!
       </div>
       <div style="margin-bottom:10px">
         <label style="display:block;font-size:11.5px;color:var(--text3);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px">Select Backup File (.json)</label>
@@ -155,7 +185,7 @@ async function showBackupRestoreModal() {
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
         <div style="font-size:11.5px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Or Paste JSON directly</div>
         <textarea id="restore-json-paste" class="form-control" rows="3" placeholder="Paste JSON backup data here…" style="font-family:var(--font-mono);font-size:11px"></textarea>
-        <button class="btn btn-secondary" onclick="restoreFromPaste()" style="width:100%;margin-top:8px">📋 Restore from Pasted JSON</button>
+        <button class="btn btn-secondary" onclick="restoreFromPaste()" style="width:100%;margin-top:8px">${MODAL_ICONS.clipboardPaste} Restore from Pasted JSON</button>
       </div>
     </div>
   `, `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
@@ -248,7 +278,7 @@ function checkAutoBackupSchedule() {
       '<span style="flex:1">Scheduled backup is due. ' + lastStr + ' Back up now to avoid data loss.</span>' +
       '<button onclick="sendBackupToDrive();this.parentElement.remove();" ' +
         'style="background:#e6c96e;color:#071428;border:none;border-radius:7px;padding:6px 16px;' +
-        'font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">💾 Backup Now</button>' +
+        'font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">'+MODAL_ICONS.save+' Backup Now</button>' +
       '<button onclick="this.parentElement.remove();" ' +
         'style="background:rgba(255,255,255,0.1);color:#e8eef8;border:none;border-radius:7px;' +
         'padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap">Dismiss</button>';
@@ -276,7 +306,7 @@ function checkAutoBackupSchedule() {
       var daysSince = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : 999;
       if (daysSince >= intervalDays) {
         sendBackupToDrive();
-        if (typeof toast === 'function') toast('🌙 Midnight auto-backup completed to Google Drive.', 'success');
+        if (typeof toast === 'function') toast('Midnight auto-backup completed to Google Drive.', 'success');
       }
     } catch(e) { console.warn('[AutoBackup] midnight check error:', e); }
   }
@@ -410,7 +440,7 @@ async function restoreFromPaste() {
 // ════════════════════════════════════════════════════════════════════════════
 function statusBadge(s) {
   const map={Paid:'badge-green',Pending:'badge-gold',Active:'badge-green',Left:'badge-gray',Blacklisted:'badge-red',Cancelling:'badge-red'};
-  const icons={Active:'●',Left:'◌',Blacklisted:'✕',Cancelling:'🚫',Paid:'✓',Pending:'⏳'};
+  const icons={Active:MODAL_ICONS.statusActive,Left:MODAL_ICONS.statusLeft,Blacklisted:MODAL_ICONS.statusX,Cancelling:MODAL_ICONS.statusBan,Paid:MODAL_ICONS.statusCheck,Pending:MODAL_ICONS.statusClock};
   return `<span class="badge ${map[s]||'badge-gray'}">${icons[s]||''} ${escHtml(s||'—')}</span>`;
 }
 function pmBadge(m) {
@@ -509,7 +539,7 @@ function pmBadge(m) {
   overlay.innerHTML = `
     <div id="_cdp-box">
       <div id="_cdp-header">
-        <span id="_cdp-icon">📅</span>
+        <span id="_cdp-icon">${MODAL_ICONS.calendar}</span>
         <span id="_cdp-display">Select date</span>
         <button id="_cdp-clear" title="Clear date" onclick="_cdpClear()">✕</button>
       </div>
@@ -685,7 +715,7 @@ function _showCameraPermBanner() {
     'box-shadow:-4px 4px 20px rgba(0,0,0,0.5)'
   ].join(';');
   b.innerHTML =
-    '<span style="font-size:18px;flex-shrink:0;margin-top:1px">📷</span>' +
+    '<span style="display:inline-flex;flex-shrink:0;margin-top:1px">'+MODAL_ICONS.cameraOff+'</span>' +
     '<span style="flex:1"><strong style="color:#e05252;display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
     'Go to <strong style="color:#f0c0c0">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
     '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
@@ -757,11 +787,11 @@ function showUserMgmt() {
     rows += '<div class="form-grid" style="gap:8px">';
     rows += '<div class="field"><label style="font-size:11px">Display Name</label><input id="wn-'+key+'" class="form-control" value="'+escHtml(w.name)+'" placeholder="Warden Name"></div>';
     rows += '<div class="field"><label style="font-size:11px">New Password</label><input id="wp-'+key+'" class="form-control" type="password" placeholder="Leave blank to keep current"></div>';
-    rows += '<div class="field col-full"><label style="font-size:11px">📱 WhatsApp Number <span style="font-weight:400;color:var(--text3)">(used as default WA reminder number)</span></label><input id="wwa-'+key+'" class="form-control" value="'+escHtml(w.phone||'')+'" placeholder="03XX-XXXXXXX"></div>';
+    rows += '<div class="field col-full"><label style="font-size:11px;display:flex;align-items:center;gap:5px">'+MODAL_ICONS.smartphone+' WhatsApp Number <span style="font-weight:400;color:var(--text3)">(used as default WA reminder number)</span></label><input id="wwa-'+key+'" class="form-control" value="'+escHtml(w.phone||'')+'" placeholder="03XX-XXXXXXX"></div>';
     rows += '</div>';
     rows += '<div style="display:flex;gap:8px;margin-top:10px">';
     rows += '<button class="btn btn-primary btn-sm" style="flex:1" onclick="saveWardenInfo(\''+key+'\')">&#x1F4BE; Save Changes</button>';
-    if(photoSrc) rows += '<button class="btn btn-danger btn-sm" onclick="removeWardenPhoto(\''+key+'\')" title="Remove profile photo">🗑 Photo</button>';
+    if(photoSrc) rows += '<button class="btn btn-danger btn-sm" onclick="removeWardenPhoto(\''+key+'\')" title="Remove profile photo">'+MODAL_ICONS.trash+' Photo</button>';
     rows += '</div>';
     rows += '</div>';
   });

@@ -4394,11 +4394,15 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 }
 
 .icon {
+    /* NOTE: fill/stroke intentionally NOT forced here (was: fill:currentColor; stroke:none).
+       Filled icons (existing dashboard.js set) declare fill="currentColor" inline on their own
+       <svg> tag. True Lucide icons declare fill="none" stroke="currentColor" inline. Forcing
+       fill/stroke at this class level overrode Lucide's own stroke attributes (a CSS class
+       beats inline presentation attributes), turning clean line icons into solid filled blobs.
+       Each icon now owns its own fill/stroke so both styles coexist under one sizing class. */
     display: inline-block;
     flex-shrink: 0;
     vertical-align: middle;
-    fill: currentColor;
-    stroke: none;
     width: var(--icon-md);
     height: var(--icon-md);
 }
