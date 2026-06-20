@@ -220,9 +220,9 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtPKR(collected)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtPKR(totalExpected)}</div>
+      <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
     <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(45,212,191,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
@@ -230,7 +230,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:${netProfit>=0?'var(--teal)':'var(--red)'}"><span class="pkr">PKR</span>${fmtPKR(netProfit)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:${netProfit>=0?'var(--teal)':'var(--red)'}"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (owner)`:''} − ${fmtPKR(moExp)}</div>
     </div>
@@ -240,7 +240,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--red)"><span class="pkr">PKR</span>${fmtPKR(moExp)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--red)"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
@@ -252,7 +252,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">To Owner</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtPKR(moTransferTotal)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
@@ -262,7 +262,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--amber)"><span class="pkr">PKR</span>${fmtPKR(pending)}</div>
+      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--amber)"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
@@ -312,30 +312,30 @@ function renderDashboard() {
     <!-- Header: title row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:26px;height:26px;border-radius:7px;background:rgba(46,201,138,0.13);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#2ec98a"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
-        <div style="font-size:12px;font-weight:800;color:#e8eef8">Revenue Trend <span style="font-size:9px;font-weight:400;color:rgba(142,165,200,0.55)">· Jan–Dec</span></div>
+        <div style="width:26px;height:26px;border-radius:7px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--green)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
+        <div style="font-size:12px;font-weight:800;color:var(--text)">Revenue Trend <span style="font-size:9px;font-weight:400;color:var(--text3)">· Jan–Dec</span></div>
       </div>
       <!-- Legend -->
       <div style="display:flex;align-items:center;gap:10px">
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:#00e676;border-radius:2px"></span><span style="font-size:9px;color:rgba(0,230,118,0.95);font-weight:700">Revenue</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:#ff4d6d;border-radius:2px"></span><span style="font-size:9px;color:rgba(255,77,109,0.95);font-weight:700">Expenses</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:#ff8c42;border-radius:2px"></span><span style="font-size:9px;color:rgba(255,140,66,0.95);font-weight:700">Transfers</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:#f0c040;border-radius:2px"></span><span style="font-size:9px;color:rgba(240,192,64,0.9);font-weight:600">Pending</span></span>
+        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--green);border-radius:2px"></span><span style="font-size:9px;color:var(--green);font-weight:700">Revenue</span></span>
+        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--red);border-radius:2px"></span><span style="font-size:9px;color:var(--red);font-weight:700">Expenses</span></span>
+        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--amber);border-radius:2px"></span><span style="font-size:9px;color:var(--amber);font-weight:700">Transfers</span></span>
+        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:var(--gold);border-radius:2px"></span><span style="font-size:9px;color:var(--gold);font-weight:600">Pending</span></span>
       </div>
     </div>
     <!-- KPI chips row -->
     <div style="display:flex;gap:6px;margin-bottom:6px">
       <div style="flex:1;background:var(--green-dim);border:1px solid rgba(52,211,153,0.2);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:rgba(46,201,138,0.7);font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Revenue</span>
-        <span style="font-size:15px;font-weight:900;color:#2ec98a;letter-spacing:-0.5px">${fmtPKR(collected)}</span>
+        <span style="font-size:9px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Revenue</span>
+        <span style="font-size:15px;font-weight:900;color:var(--green);letter-spacing:-0.5px">${fmtPKR(collected)}</span>
       </div>
       <div style="flex:1;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:rgba(224,82,82,0.7);font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Expenses</span>
-        <span style="font-size:15px;font-weight:900;color:#e05252;letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
+        <span style="font-size:9px;color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Expenses</span>
+        <span style="font-size:15px;font-weight:900;color:var(--red);letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
       </div>
       <div style="flex:1;background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)'};border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:${netProfit>=0?'rgba(46,201,138,0.7)':'rgba(224,82,82,0.7)'};font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Net</span>
-        <span style="font-size:13px;font-weight:900;color:${netProfit>=0?'#2ec98a':'#e05252'};letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
+        <span style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Net</span>
+        <span style="font-size:13px;font-weight:900;color:${netProfit>=0?'var(--green)':'var(--red)'};letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
       </div>
     </div>
     <!-- Chart.js canvas -->
@@ -584,7 +584,7 @@ function printSeatAvailability() {
           ${hasBath?'<span class="bath">'+ICONS.bath+' Bath</span>':''}
           <span class="seats ${isFull?'seats-full':'seats-free'}">${isFull?'Full':free+' free'}</span>
         </div>
-        <div class="occ-bar"><div style="width:${Math.round(occ/cap*100)}%;background:${isFull?'#16a34a':'#dc2626'};height:100%;border-radius:2px"></div></div>`;
+        <div class="occ-bar"><div style="width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--red)'};height:100%;border-radius:2px"></div></div>`;
 
       if (students.length) {
         students.forEach((s,i) => {
@@ -1241,30 +1241,41 @@ function drawTrendChart() {
     real.push(isPast&&rev>0);
   }
 
+  // resolve CSS vars at draw time → adapts to dark/light theme
+  var _cs = getComputedStyle(document.body);
+  var cGreen  = _cs.getPropertyValue('--green').trim()  || '#45dfa4';
+  var cRed    = _cs.getPropertyValue('--red').trim()    || '#ffb4ab';
+  var cAmber  = _cs.getPropertyValue('--amber').trim()  || '#fbbf24';
+  var cGold   = _cs.getPropertyValue('--gold').trim()   || '#ffb780';
+  var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
+  var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
+  var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
+  var cBorder = _cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
+
   var plotRev = revD.map(function(v){return v!==null?v:0;});
   var ptColors = plotRev.map(function(v,i){
-    if(!real[i]) return 'rgba(0,230,118,0.15)';
-    if(i===0) return '#00e676';
-    var p=null; for(var j=i-1;j>=0;j--){if(real[j]){p=plotRev[j];break;}} return v>=(p||0)?'#00e676':'#ff4d6d';
+    if(!real[i]) return cGreen+'26';
+    if(i===0) return cGreen;
+    var p=null; for(var j=i-1;j>=0;j--){if(real[j]){p=plotRev[j];break;}} return v>=(p||0)?cGreen:cRed;
   });
   var lblColors = plotRev.map(function(v,i){
-    if(!real[i]) return 'rgba(255,255,255,0.1)';
-    if(i===0) return '#00e676';
-    return v>=(plotRev[i-1]||0)?'#00e676':'#ff4d6d';
+    if(!real[i]) return cText3;
+    if(i===0) return cGreen;
+    return v>=(plotRev[i-1]||0)?cGreen:cRed;
   });
 
   var badge = document.getElementById('trend-hb');
   function showBadge(idx,x,y){
     var rev=revD[idx]||0, exp=expD[idx]||0, trf=trfD[idx]||0, pend=pendD[idx]||0, net=rev-exp-trf;
     var isR=real[idx];
-    badge.innerHTML='<div style="font-size:12px;font-weight:700;color:#e8eef8;margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:#8a9ab8"><span style="width:7px;height:7px;border-radius:50%;background:#00e676;display:inline-block"></span>Revenue</span><span style="font-weight:700;color:#00e676">'+fmtPKR(rev)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:#8a9ab8"><span style="width:7px;height:7px;border-radius:50%;background:#ff4d6d;display:inline-block"></span>Expenses</span><span style="font-weight:700;color:#ff4d6d">'+fmtPKR(exp)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:#8a9ab8"><span style="width:7px;height:7px;border-radius:50%;background:#ff8c42;display:inline-block"></span>Transfers</span><span style="font-weight:700;color:#ff8c42">'+fmtPKR(trf)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:#8a9ab8"><span style="width:7px;height:7px;border-radius:50%;background:#f0c040;display:inline-block"></span>Pending</span><span style="font-weight:700;color:#f0c040">'+fmtPKR(pend)+'</span></div>',
-      '<hr style="border:none;border-top:1px solid #2a3d52;margin:6px 0"/>',
-      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?'#00e676':'#ff4d6d')+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
-    ].join(''):'<div style="color:#4a6080;font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
+    badge.innerHTML='<div style="font-size:12px;font-weight:700;color:'+cText2+';margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGreen+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cGreen+'">'+fmtPKR(rev)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRed+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cRed+'">'+fmtPKR(exp)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAmber+';display:inline-block"></span>Transfers</span><span style="font-weight:700;color:'+cAmber+'">'+fmtPKR(trf)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGold+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cGold+'">'+fmtPKR(pend)+'</span></div>',
+      '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
+      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
+    ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
     var vw=window.innerWidth, vh=window.innerHeight;
     var left=x+16; if(left+230>vw) left=x-240;
     var top=y-80;  if(top<8) top=y+16; if(top+220>vh) top=vh-230;
@@ -1279,7 +1290,7 @@ function drawTrendChart() {
       labels:months.map(function(m){return m.label;}),
       datasets:[{
         data:plotRev,
-        borderColor:function(c){var g=c.chart.ctx.createLinearGradient(0,0,c.chart.width,0);g.addColorStop(0,'#00e676');g.addColorStop(1,'rgba(0,230,118,0.3)');return g;},
+        borderColor:function(c){var g=c.chart.ctx.createLinearGradient(0,0,c.chart.width,0);g.addColorStop(0,cGreen);g.addColorStop(1,cGreen+'4d');return g;},
         borderWidth:2.5,
         pointBackgroundColor:ptColors, pointBorderColor:ptColors,
         pointRadius:function(c){return real[c.dataIndex]?6:3;}, pointHoverRadius:9,
@@ -1288,7 +1299,7 @@ function drawTrendChart() {
           display:function(c){return real[c.dataIndex];},
           anchor:'end',align:'top',offset:6,
           color:function(c){return lblColors[c.dataIndex];},
-          backgroundColor:'#0f1c2e', borderColor:function(c){return lblColors[c.dataIndex];},
+          backgroundColor:cBg2, borderColor:function(c){return lblColors[c.dataIndex];},
           borderWidth:1, borderRadius:4, padding:{top:3,bottom:3,left:7,right:7},
           font:{size:10,weight:'700'},
           formatter:function(v,c){
@@ -1313,8 +1324,8 @@ function drawTrendChart() {
         } else { if(badge) badge.style.display='none'; }
       },
       scales:{
-        x:{grid:{color:'rgba(255,255,255,0.03)'},border:{display:false},ticks:{color:'#4a6080',font:{size:11}}},
-        y:{grid:{color:'rgba(255,255,255,0.03)'},border:{display:false},ticks:{color:'#4a6080',font:{size:11},callback:function(v){return v>=1e6?(v/1e6).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}
+        x:{grid:{color:cBorder},border:{display:false},ticks:{color:cText3,font:{size:11}}},
+        y:{grid:{color:cBorder},border:{display:false},ticks:{color:cText3,font:{size:11},callback:function(v){return v>=1e6?(v/1e6).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}
       }
     }
   });
