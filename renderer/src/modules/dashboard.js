@@ -5,6 +5,28 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+// ══ ICON HELPER — filled SVG icons, no CDN dependency (offline-safe) ════════
+// Used to replace emoji-as-icon usage throughout this module. Each entry is
+// a ready-to-inline <svg> string sized with the .icon utility classes
+// defined in style.css (--icon-xs/sm/md/lg/xl). Pass an optional size class.
+const ICONS = {
+  bed:      '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>',
+  home:     '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg>',
+  key:      '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg>',
+  student:  '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg>',
+  card:     '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>',
+  money:    '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg>',
+  trendDown:'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg>',
+  calendar: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V3a1 1 0 0 0-2 0v1H8V3a1 1 0 0 0-2 0v1H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM4 9h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/></svg>',
+  download: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v6H4a1 1 0 0 0-.71 1.71l8 8a1 1 0 0 0 1.42 0l8-8A1 1 0 0 0 19 9ZM5 19a1 1 0 0 0 0 2h14a1 1 0 0 0 0-2Z"/></svg>',
+  print:    '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>',
+  check:    '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg>',
+  trash:    '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6h-5V4.33A2.42 2.42 0 0 0 13.5 2h-3A2.42 2.42 0 0 0 8 4.33V6H3a1 1 0 0 0 0 2h1v11a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8h1a1 1 0 0 0 0-2ZM10 4.33c0-.16.21-.33.5-.33h3c.29 0 .5.17.5.33V6h-4ZM18 19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V8h12Zm-7-2a1 1 0 0 0 1-1v-4a1 1 0 0 0-2 0v4a1 1 0 0 0 1 1Zm4 0a1 1 0 0 0 1-1v-4a1 1 0 0 0-2 0v4a1 1 0 0 0 1 1Z"/></svg>',
+  pin:      '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 11.5 7.3 11.74a1 1 0 0 0 1.4 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8Zm0 11a3 3 0 1 1 3-3 3 3 0 0 1-3 3Z"/></svg>',
+  edit:     '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z"/></svg>',
+  bath:     '<svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9V6a3 3 0 0 0-5.62-1.45A1 1 0 1 0 15.1 5.6 1 1 0 0 1 17 6v3H4a1 1 0 0 0-1 1v2a5 5 0 0 0 3 4.58V20a1 1 0 0 0 2 0v-1h8v1a1 1 0 0 0 2 0v-3.42A5 5 0 0 0 21 12v-2a1 1 0 0 0-1-1Z"/></svg>',
+};
+
 // ══ SINGLE SOURCE OF TRUTH FOR REVENUE ══════════════════════════════════════
 // Revenue = Paid payments + partial Pending payments (where amount>0 & unpaid is explicitly set)
 // This is used by dashboard, reports, CSVs, PDFs, WhatsApp/email share — everywhere.
@@ -88,15 +110,19 @@ function renderDashboard() {
   const totalBeds = DB.rooms.reduce((sum,r)=>{const rt=getRoomType(r);return sum+(rt?rt.capacity:0);},0);
   const occRate = totalBeds>0?Math.round(totalOccupied/totalBeds*100):0;
   const alerts = [];
-  if(overduePayments.length>0) alerts.push({type:'warning',icon:'💰',msg:`${overduePayments.length} pending payment${overduePayments.length>1?'s':''} — ${fmtPKR(overduePayments.reduce((s,p)=>s+Number(p.amount||0),0))} uncollected`,action:"navigate('payments')"});
-  if(openMaint>0) alerts.push({type:'info',icon:'🔧',msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
-  if(openComp>0) alerts.push({type:'danger',icon:'💬',msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
-  if(occRate < 60) alerts.push({type:'warning',icon:'🏠',msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
+  const ICON_MONEY = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg>';
+  const ICON_WRENCH = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.7 17.3 16 11.6a6 6 0 0 0-7.4-7.4 1 1 0 0 0-.46 1.67l2.6 2.6-1.5 1.5-2.6-2.6A1 1 0 0 0 5 7.4a6 6 0 0 0 7.4 7.4l5.7 5.7a2.41 2.41 0 0 0 3.4 0l.2-.2a2.41 2.41 0 0 0 0-3.4Z"/></svg>';
+  const ICON_MESSAGE = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z"/></svg>';
+  const ICON_HOME = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg>';
+  if(overduePayments.length>0) alerts.push({type:'warning',icon:ICON_MONEY,msg:`${overduePayments.length} pending payment${overduePayments.length>1?'s':''} — ${fmtPKR(overduePayments.reduce((s,p)=>s+Number(p.amount||0),0))} uncollected`,action:"navigate('payments')"});
+  if(openMaint>0) alerts.push({type:'info',icon:ICON_WRENCH,msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
+  if(openComp>0) alerts.push({type:'danger',icon:ICON_MESSAGE,msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
+  if(occRate < 60) alerts.push({type:'warning',icon:ICON_HOME,msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
   const alertColors = {warning:'var(--amber)',info:'var(--blue)',danger:'var(--red)'};
   const alertBg = {warning:'var(--amber-dim)',info:'var(--blue-dim)',danger:'var(--red-dim)'};
   const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:20px">${alerts.map(a=>`
     <div onclick="${a.action}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${alertBg[a.type]};border:1px solid ${alertColors[a.type]}55;border-radius:10px;cursor:pointer;transition:var(--transition)" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-      <span style="font-size:18px">${a.icon}</span>
+      <span class="icon-box icon-box-sm" style="background:transparent;color:${alertColors[a.type]}">${a.icon}</span>
       <span style="font-size:13px;font-weight:600;color:${alertColors[a.type]}">${a.msg}</span>
       <span style="margin-left:auto;font-size:12px;color:${alertColors[a.type]}">View →</span>
     </div>`).join('')}</div>`:'';
@@ -178,7 +204,7 @@ function renderDashboard() {
   return `
   ${pendingCancels.length>0?`
   <div style="background:var(--red-dim);border:1px solid rgba(248,113,113,0.3);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="navigate('cancellations')">
-    <div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px">🚨</span>
+    <div style="display:flex;align-items:center;gap:10px"><span class="icon-box icon-box-sm red"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
       <div><div style="font-size:13px;font-weight:700;color:var(--red)">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
       <div style="font-size:11px;color:var(--text3)">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div></div>
     </div>
@@ -190,7 +216,7 @@ function renderDashboard() {
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
     <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(99,102,241,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><span style="font-size:16px">💰</span></div>
+        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
@@ -200,7 +226,7 @@ function renderDashboard() {
     </div>
     <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(45,212,191,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><span style="font-size:16px">📊</span></div>
+        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
@@ -210,7 +236,7 @@ function renderDashboard() {
     </div>
     <div onclick="navigate('expenses')" class="stat-card red" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(248,113,113,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><span style="font-size:16px">📉</span></div>
+        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
@@ -222,7 +248,7 @@ function renderDashboard() {
     <div onclick="showAddTransferModal()" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>':''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon" style="background:var(--bg4)"><span style="font-size:16px">🏦</span></div>
+        <div class="stat-icon" style="background:var(--bg4)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text2)"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">To Owner</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
@@ -232,7 +258,7 @@ function renderDashboard() {
     </div>
     <div onclick="navigate('payments')" class="stat-card gold" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(251,191,36,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><span style="font-size:16px">⏳</span></div>
+        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
@@ -245,7 +271,7 @@ function renderDashboard() {
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
     <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(52,211,153,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🏠</span></div>
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px">Occupied Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
@@ -257,7 +283,7 @@ function renderDashboard() {
       </div>
     </div>
     <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(45,212,191,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🔑</span></div>
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:3px">Vacant Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
@@ -268,7 +294,7 @@ function renderDashboard() {
       </div>
     </div>
     <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(192,132,252,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><span style="font-size:18px">🧑‍🎓</span></div>
+      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:3px">Active Students</div>
         <div style="display:flex;align-items:baseline;gap:6px">
@@ -286,7 +312,7 @@ function renderDashboard() {
     <!-- Header: title row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:26px;height:26px;border-radius:7px;background:rgba(46,201,138,0.13);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">📈</div>
+        <div style="width:26px;height:26px;border-radius:7px;background:rgba(46,201,138,0.13);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#2ec98a"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
         <div style="font-size:12px;font-weight:800;color:#e8eef8">Revenue Trend <span style="font-size:9px;font-weight:400;color:rgba(142,165,200,0.55)">· Jan–Dec</span></div>
       </div>
       <!-- Legend -->
@@ -324,11 +350,11 @@ function renderDashboard() {
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:30px;height:30px;border-radius:8px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;font-size:14px">🛏️</div>
+          <div style="width:30px;height:30px;border-radius:8px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--teal)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Seat Availability</div>
         </div>
         <div style="display:flex;gap:6px">
-          <button onclick="printSeatAvailability()" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px"><span class="micon" style="font-size:13px">print</span>Print</button>
+          <button onclick="printSeatAvailability()" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
           <button onclick="showSeatDetailModal('rooms')" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">Expand ↗</button>
         </div>
       </div>
@@ -367,7 +393,7 @@ function renderDashboard() {
       <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--gold)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
         <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
-        <span style="font-size:10px;color:var(--text3);margin-left:auto">👆 tap any room</span>
+        <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
       </div>
     </div>
   </div><!-- end 2-col trend+seat grid -->
@@ -377,7 +403,7 @@ function renderDashboard() {
   <div class="card" style="position:relative;margin-bottom:0">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:var(--radius) var(--radius) 0 0"></div>
     <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(15,188,173,0.1);border-color:rgba(15,188,173,0.25);color:var(--teal)"><span class="micon" style="font-size:16px">bed</span>By Room Type</span></div>
+      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(15,188,173,0.1);border-color:rgba(15,188,173,0.25);color:var(--teal)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>By Room Type</span></div>
       <span style="font-size:12px;color:var(--teal);font-weight:800;background:var(--teal-dim);padding:3px 10px;border-radius:20px;border:1px solid rgba(15,188,173,0.25)">${seatPct}% full</span>
     </div>
     <div style="height:5px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:12px">
@@ -389,12 +415,12 @@ function renderDashboard() {
   <div class="card" style="position:relative;display:flex;flex-direction:column;margin-bottom:0">
       <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--amber))"></div>
       <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0">
-        <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.25);color:var(--gold2)"><span class="micon" style="font-size:16px">schedule</span>Pending Payments</span></div>
+        <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.25);color:var(--gold2)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>Pending Payments</span></div>
         <span class="badge badge-gold" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
       </div>
       <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
-        '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🎉</div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
+        '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--green)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg></div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
           const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,48,80,0.5)">'
@@ -407,12 +433,12 @@ function renderDashboard() {
           +'<div style="font-size:12px;font-weight:800;color:var(--red)">'+fmtPKR(unpaidShow)+'</div>'
           +'<div style="font-size:9px;color:var(--text3)">unpaid</div>'
           +'</div>'
-          +'<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" style="font-size:10px;padding:3px 7px" title="Mark paid"><span class=\"micon\" style=\"font-size:14px\">check_circle</span></button>'
-          +'<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" style="font-size:10px;padding:3px 7px" title="Edit"><span class=\"micon\" style=\"font-size:14px\">edit</span></button>'
+          +'<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" style="font-size:10px;padding:3px 7px" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
+          +'<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" style="font-size:10px;padding:3px 7px" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:10px;border-top:1px solid var(--border);margin-top:auto;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" style="flex:1" onclick="navigate('payments')">View All →</button><button class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;border:none" onclick="showRentReminderModal()"><span class=\"micon\" style=\"font-size:14px\">chat</span> Remind</button></div>`:''}
+      ${pendingCount>0?`<div style="padding-top:10px;border-top:1px solid var(--border);margin-top:auto;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" style="flex:1" onclick="navigate('payments')">View All →</button><button class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;border:none" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Remind</button></div>`:''}
     </div>
   </div>
   </div><!-- end row3+4 grid -->
@@ -421,10 +447,10 @@ function renderDashboard() {
   <div class="card" style="position:relative">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--purple))"></div>
     <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(74,156,240,0.1);border-color:rgba(74,156,240,0.25);color:var(--blue)"><span class="micon" style="font-size:16px">credit_card</span>Recent Payments</span></div>
+      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(74,156,240,0.1);border-color:rgba(74,156,240,0.25);color:var(--blue)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>Recent Payments</span></div>
       <button class="btn btn-secondary btn-sm" onclick="navigate('payments')" style="font-size:11px">View All →</button>
     </div>
-    ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">💳</div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
+    ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
     '<div class="table-wrap" style="border:none">'
     +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Monthly Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
     +recentPay.map(p=>{
@@ -476,14 +502,14 @@ function showRoomSeatDetailModal(roomId) {
           </div>
         </div>
         <div style="display:flex;gap:5px">
-          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showViewStudentModal('${s.id}')">👁 View</button>
-          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showEditStudentModal('${s.id}')">✏️ Edit</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showViewStudentModal('${s.id}')"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7Zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5Z"/><circle cx="12" cy="12" r="2.2"/></svg> View</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showEditStudentModal('${s.id}')"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z"/></svg> Edit</button>
         </div>
       </div>`;
     } else {
       seatSlots += `<div style="background:var(--amber-dim);border:1px dashed rgba(200,168,75,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:rgba(200,168,75,0.1);display:flex;align-items:center;justify-content:center;font-size:14px">🪑</div>
+          <div style="width:28px;height:28px;border-radius:7px;background:rgba(200,168,75,0.1);display:flex;align-items:center;justify-content:center;color:var(--gold2)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
           <div style="font-size:13px;color:var(--text3);font-style:italic">Seat ${i+1} — Free</div>
         </div>
         <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Add Student</button>
@@ -491,7 +517,7 @@ function showRoomSeatDetailModal(roomId) {
     }
   }
 
-  showModal('modal-md', `🛏️ Room #${r.number} — Seat Details`,`
+  showModal('modal-md', `${ICONS.bed} Room #${r.number} — Seat Details`,`
     <!-- Room header -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center">
       <div>
@@ -518,7 +544,7 @@ function showRoomSeatDetailModal(roomId) {
     <!-- Seat slots -->
     <div style="display:flex;flex-direction:column;gap:8px">${seatSlots}</div>
   `,`
-    <button class="btn btn-secondary" onclick="closeModal();showRoomDetail('${r.id}')">🏠 Full Room Details</button>
+    <button class="btn btn-secondary" onclick="closeModal();showRoomDetail('${r.id}')">${ICONS.home} Full Room Details</button>
     ${free>0?`<button class="btn btn-primary" onclick="closeModal();showAddStudentModal('${r.id}')">+ Add Student</button>`:''}
     <button class="btn btn-secondary" onclick="closeModal()">Close</button>
   `);
@@ -555,7 +581,7 @@ function printSeatAvailability() {
         <div class="room-top">
           <span class="rnum" style="${labelStyle}">${r.roomLabel ? r.roomLabel+' · ' : ''}Rm #${r.number}</span>
           <span class="rtype">${rtype?rtype.name:'—'}</span>
-          ${hasBath?'<span class="bath">🚿 Bath</span>':''}
+          ${hasBath?'<span class="bath">'+ICONS.bath+' Bath</span>':''}
           <span class="seats ${isFull?'seats-full':'seats-free'}">${isFull?'Full':free+' free'}</span>
         </div>
         <div class="occ-bar"><div style="width:${Math.round(occ/cap*100)}%;background:${isFull?'#16a34a':'#dc2626'};height:100%;border-radius:2px"></div></div>`;
@@ -621,7 +647,7 @@ function printSeatAvailability() {
     .footer{margin-top:12px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:6px}
     .print-btn{display:block;margin:0 auto 12px;padding:8px 24px;background:#0f1a2e;color:#e6c96e;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer}
   </style></head><body>
-  <button class="print-btn no-print" onclick="window.print()">🖨️ Print Visit Sheet</button>
+  <button class="print-btn no-print" onclick="window.print()">${ICONS.print} Print Visit Sheet</button>
   <div class="header">
     <div>
       <h1>${escHtml(hostel)}</h1>
@@ -661,12 +687,12 @@ function showSeatDetailModal(type) {
       </div>`;
     });
     content += '</div>';
-    showModal('modal-xl','🛏️ All Rooms — Seat Availability',`<div style="max-height:500px;overflow-y:auto">${content}</div>`);
+    showModal('modal-xl',ICONS.bed+' All Rooms — Seat Availability',`<div style="max-height:500px;overflow-y:auto">${content}</div>`);
     return;
   }
   let title, color, rows='';
   if(type==='vacant') {
-    title='🔑 Vacant Rooms — Free Seats';
+    title=ICONS.key+' Vacant Rooms — Free Seats';
     color='var(--gold)';
     const vacantRooms = DB.rooms.filter(r=>{
       const occ=getRoomOccupancy(r);
@@ -691,7 +717,7 @@ function showSeatDetailModal(type) {
       </div>`;
     });
   } else if(type==='occupied') {
-    title='🏠 Occupied Rooms — Filled Seats';
+    title=ICONS.home+' Occupied Rooms — Filled Seats';
     color='var(--green)';
     const occRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0);
     if(!occRooms.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No occupied rooms</div>';}
@@ -718,7 +744,7 @@ function showSeatDetailModal(type) {
       </div>`;
     });
   } else {
-    title='🧑‍🎓 Students in Occupied Rooms';
+    title=ICONS.student+' Students in Occupied Rooms';
     color='var(--purple)';
     const activeStudents=DB.students.filter(s=>s.status==='Active');
     if(!activeStudents.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No active students</div>';}
@@ -764,7 +790,7 @@ function showOccupiedRoomsModal() {
       <td><button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="closeModal();showRoomDetail('${r.id}')">View</button></td>
     </tr>`;
   }).join('');
-  showModal('modal-xl','🏠 Occupied Rooms',`
+  showModal('modal-xl',ICONS.home+' Occupied Rooms',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
       <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupied Rooms</div>
@@ -818,7 +844,7 @@ function showVacantRoomsModal() {
     </tr>`;
   }).join('');
   const totalAvail=vacRooms.reduce((s,r)=>{const type=getRoomType(r);return s+(type.capacity-getRoomOccupancy(r));},0);
-  showModal('modal-xl','🔑 Rooms with Available Seats',`
+  showModal('modal-xl',ICONS.key+' Rooms with Available Seats',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
       <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700">Rooms w/ Space</div>
@@ -894,15 +920,15 @@ function renderMonthModal(monthKey, monthLabel) {
     <td>${pmBadge(p.method)}</td>
     <td>
       <select onchange="updateMonthPayStatus('${p.id}',this.value)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer">
-        <option value="Paid" ${p.status==='Paid'?'selected':''}>✅ Paid</option>
-        <option value="Pending" ${p.status==='Pending'?'selected':''}>⏳ Pending</option>
+        <option value="Paid" ${p.status==='Paid'?'selected':''}>Paid</option>
+        <option value="Pending" ${p.status==='Pending'?'selected':''}>Pending</option>
       </select>
     </td>
     <td class="text-muted" style="font-size:12px">
       <span class="editable-cell" onclick="editMonthFeeField('${p.id}','date',this)" title="Click to edit">${fmtDate(p.date)||'—'}</span>
     </td>
     <td>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthPayment('${p.id}','${monthKey}','${escHtml(monthLabel)}')">🗑</button>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthPayment('${p.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
     </td>
   </tr>`).join('');
 
@@ -920,30 +946,30 @@ function renderMonthModal(monthKey, monthLabel) {
       <span class="editable-cell" style="color:var(--red);font-weight:700" onclick="editMonthExpField('${e.id}','amount',this)" title="Click to edit">${fmtPKR(e.amount)}</span>
     </td>
     <td>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')">🗑</button>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
     </td>
   </tr>`).join('');
 
-  showModal('modal-xl', `📅 ${monthLabel} — Full Monthly Report`,
+  showModal('modal-xl', `${ICONS.calendar} ${monthLabel} — Full Monthly Report`,
   `<!-- KPI Summary -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
     <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">💰 Total Revenue</div>
+      <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
       <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(rev)}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${paidPays.length} payments</div>
     </div>
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">📉 Expenses</div>
+      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
       <div style="font-size:22px;font-weight:900;color:var(--red)">${fmtPKR(expTotal)}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} records</div>
     </div>
     <div style="background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">📊 Available Fund</div>
+      <div style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
       <div style="font-size:22px;font-weight:900;color:${netProfit>=0?'var(--green)':'var(--red)'}">${fmtPKR(netProfit)}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
     <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">⏳ Pending</div>
+      <div style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
       <div style="font-size:22px;font-weight:900;color:var(--amber)">${fmtPKR(pendTotal)}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${pendPays.length} unpaid</div>
     </div>
@@ -951,9 +977,9 @@ function renderMonthModal(monthKey, monthLabel) {
 
   <!-- TAB NAVIGATION -->
   <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px">
-    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--gold-dim);color:var(--gold2);border:1px solid rgba(200,168,75,0.3)">🧑‍🎓 Students (${activeStudents.length})</button>
-    <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">💳 Fee Records (${pays.length})</button>
-    <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">📉 Expenses (${exps.length})</button>
+    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--gold-dim);color:var(--gold2);border:1px solid rgba(200,168,75,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
+    <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.card} Fee Records (${pays.length})</button>
+    <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.trendDown} Expenses (${exps.length})</button>
   </div>
 
   <!-- STUDENTS TAB -->
@@ -971,7 +997,7 @@ function renderMonthModal(monthKey, monthLabel) {
       <button class="btn btn-primary btn-sm" onclick="addMonthPaymentFromModal('${monthKey}','${escHtml(monthLabel)}')">+ Add Fee Record</button>
     </div>
     <div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount ✏️</th><th>Method</th><th>Status</th><th>Date ✏️</th><th></th></tr></thead>
+      <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th></th></tr></thead>
       <tbody id="fee-tbody">${feeRows||'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:16px">No fee records</td></tr>'}</tbody>
       </table>
     </div>
@@ -983,14 +1009,14 @@ function renderMonthModal(monthKey, monthLabel) {
       <button class="btn btn-primary btn-sm" onclick="addMonthExpenseFromModal('${monthKey}','${escHtml(monthLabel)}')">+ Add Expense</button>
     </div>
     <div class="table-wrap">
-      <table><thead><tr><th>Date ✏️</th><th>Category ✏️</th><th>Description ✏️</th><th>Amount ✏️</th><th></th></tr></thead>
+      <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
       <tbody id="exp-tbody">${expRows||'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px">No expense records</td></tr>'}</tbody>
       </table>
     </div>
   </div>`,
-  `<button class="btn btn-secondary" onclick="exportMonthCSV('${monthKey}','${escHtml(monthLabel)}')">📥 Export CSV</button>
-   <button class="btn btn-secondary" onclick="printMonthReport('${monthKey}','${escHtml(monthLabel)}')">🖨️ Print Report</button>
-   <button class="btn btn-primary" onclick="closeModal()">✓ Done</button>`
+  `<button class="btn btn-secondary" onclick="exportMonthCSV('${monthKey}','${escHtml(monthLabel)}')">${ICONS.download} Export CSV</button>
+   <button class="btn btn-secondary" onclick="printMonthReport('${monthKey}','${escHtml(monthLabel)}')">${ICONS.print} Print Report</button>
+   <button class="btn btn-primary" onclick="closeModal()">${ICONS.check} Done</button>`
   );
 }
 
@@ -1158,17 +1184,17 @@ function printMonthReport(monthKey, monthLabel) {
     <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
     <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pend)}</div></div>
   </div>
-  <div class="section"><h3>🧑‍🎓 Active Students (${activeStudents.length})</h3>
+  <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>
     <table><thead><tr><th>Name</th><th>Room</th><th>Rent</th><th>Phone</th><th>Status</th></tr></thead><tbody>
     ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${rm?rm.number:'—'}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
     </tbody></table>
   </div>
-  <div class="section"><h3>💳 Fee Records</h3>
+  <div class="section"><h3>${ICONS.card} Fee Records</h3>
     <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
     ${pays.map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${p.roomNumber||'—'}</td><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:12px">No records</td></tr>'}
     </tbody></table>
   </div>
-  <div class="section"><h3>📉 Expenses</h3>
+  <div class="section"><h3>${ICONS.trendDown} Expenses</h3>
     <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
     ${exps.map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${escHtml(e.category||'—')}</td><td>${escHtml(e.description||'—')}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No expenses</td></tr>'}
     </tbody></table>
@@ -1420,8 +1446,8 @@ async function checkAutoMonthAdvance() {
 
   if (totalAdded > 0) {
     const msg = monthsGenerated.length === 1
-      ? '🗓️ Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated[0]
-      : '🗓️ Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated.length + ' months';
+      ? ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated[0]
+      : ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated.length + ' months';
     toast(msg, 'success');
   }
 }
@@ -1460,7 +1486,7 @@ function dashGlobalSearch(query) {
     var haystack = [s.id, s.name, s.fatherName, s.cnic, s.phone, s.emergencyContact, s.email, s.occupation, s.address, s.city, s.permanentAddress, roomLabel].filter(Boolean).join(' ').toLowerCase();
     if (haystack.includes(q)) {
       results.push({
-        type: 'student', icon: '🧑‍🎓',
+        type: 'student', icon: ICONS.student,
         title: s.name || '—',
         sub: 'ID: ' + s.id + ' · Room ' + roomLabel + (s.occupation ? ' · ' + s.occupation : '') + (s.phone ? ' · ' + s.phone : ''),
         badge: statusBadge(s.status || 'Active'),
@@ -1476,7 +1502,7 @@ function dashGlobalSearch(query) {
     var haystack = ['room', r.number, type ? type.name : '', r.floor, (r.amenities || []).join(' ')].join(' ').toLowerCase();
     if (haystack.includes(q)) {
       results.push({
-        type: 'room', icon: '🛏️',
+        type: 'room', icon: ICONS.bed,
         title: 'Room #' + r.number,
         sub: (type ? type.name : '') + ' · ' + r.floor + ' Floor · ' + occ + '/' + (type ? type.capacity : 1) + ' filled',
         badge: '<span class="badge ' + (occ >= (type ? type.capacity : 1) ? 'badge-green' : 'badge-gray') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
@@ -1500,7 +1526,7 @@ function dashGlobalSearch(query) {
   Object.keys(locationHits).slice(0, 4).forEach(function(k) {
     var hit = locationHits[k];
     results.push({
-      type: 'location', icon: '📍',
+      type: 'location', icon: ICONS.pin,
       title: hit.city,
       sub: hit.students.slice(0, 3).join(', ') + (hit.students.length > 3 ? ' +' + (hit.students.length - 3) + ' more' : ''),
       badge: '<span class="badge badge-blue">' + hit.students.length + ' student' + (hit.students.length !== 1 ? 's' : '') + '</span>',
@@ -1519,9 +1545,9 @@ function dashGlobalSearch(query) {
   });
   payHits.slice(0, 3).forEach(function(p) {
     results.push({
-      type: 'payment', icon: '💳',
+      type: 'payment', icon: ICONS.card,
       title: p.studentName || '—',
-      sub: p.month + ' · ' + (p.status === 'Paid' ? '✓ Paid' : '⏳ Pending') + ' · ' + fmtPKR(p.amount),
+      sub: p.month + ' · ' + (p.status === 'Paid' ? 'Paid' : 'Pending') + ' · ' + fmtPKR(p.amount),
       badge: statusBadge(p.status),
       action: "payFilter.search='" + (p.studentName||'').replace(/'/g, "\\'") + "';navigate('payments')"
     });
@@ -1549,7 +1575,7 @@ function dashGlobalSearch(query) {
   });
   Object.keys(courseSub).slice(0,3).forEach(function(k){
     var hit=courseSub[k];
-    grouped['student'].push({type:'student',icon:'🎓',title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-blue">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
+    grouped['student'].push({type:'student',icon:ICONS.student,title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-blue">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
   });
   results.forEach(function(r){ if (grouped[r.type]) grouped[r.type].push(r); });
 
