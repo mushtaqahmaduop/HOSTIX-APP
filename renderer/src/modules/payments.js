@@ -92,7 +92,7 @@ async function generateMonthlyRents() {
   active.forEach(t=>{
     if(!DB.payments.some(p=>p.studentId===t.id&&_payMatchesMonth(p,thisMonth()))){
       const room=DB.rooms.find(r=>r.id===t.roomId);
-      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
+      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
       added++;
     }
   });
@@ -346,6 +346,7 @@ function showAddPaymentForStudent(studentId) {
     <input type="hidden" id="f-ps-studentId" value="${t.id}">
     <div class="form-grid">
       <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${t.rent||16000}" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
       <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
@@ -426,13 +427,14 @@ function showAddPaymentForStudent(studentId) {
 }
 function recalcUnpaidPS() {
   const rent  = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const admFee = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paid  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const conc  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
   var extra = 0;
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
-  const unpaid = Math.max(0, rent + extra - conc - paid);
+  const unpaid = Math.max(0, rent + extra + admFee - conc - paid);
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
@@ -504,12 +506,13 @@ async function submitPaymentForStudent() {
   window._updatePendingPS = false;
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const admissionFeePS = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const concessionPS = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
   const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
   const extraChargesPS = getExtraChargesData();
   const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
-  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS - concessionPS);
+  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS + admissionFeePS - concessionPS);
   const unpaid      = Math.max(0, totalDuePS - paidAmount);
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // FIX 8a: persist rent change on student record
@@ -524,7 +527,7 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
-    admissionFee: 0,
+    admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
     concession: concessionPS, concessionDesc: concessionDescPS,
     discount: concessionPS,
