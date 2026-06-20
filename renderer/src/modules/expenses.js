@@ -234,13 +234,7 @@ async function confirmClearAllWithPassword() {
     if(errEl) { errEl.textContent='❌ No user session found. Please re-login.'; errEl.style.display='block'; }
     return;
   }
-  const inputHash = await _hashPassword(pwd);
-  let matches = false;
-  if (/^[0-9a-f]{64}$/.test(user.pw) || /^FALLBACK_/.test(user.pw)) {
-    matches = (inputHash === user.pw);
-  } else {
-    matches = (pwd === user.pw);
-  }
+  const matches = await verifyPassword(pwd, user.pw);
   if (!matches) {
     if(errEl) errEl.style.display='block';
     const inp = document.getElementById('clear-all-pwd');
