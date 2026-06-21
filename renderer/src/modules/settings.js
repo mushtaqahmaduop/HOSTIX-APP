@@ -393,7 +393,6 @@ function renderSettings() {
     {id:'payments', icon:'💳', label:'Payment Methods'},
     {id:'expenses', icon:'📉', label:'Expense Categories'},
     {id:'floors', icon:'🏗️', label:'Floors'},
-    {id:'theme', icon:'🎨', label:'Theme & Display'},
     {id:'data', icon:'💾', label:'Data Management'},
     {id:'license', icon:'🔐', label:'License'}
   ];
@@ -412,24 +411,18 @@ function renderSettings() {
     </div>`).join('');
 
   return `
-  <div style="display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start">
-    <div class="card" style="padding:8px;position:sticky;top:80px">
-      <div class="settings-nav">
-        ${tabs.map(t=>`<div class="settings-tab ${settingsTab===t.id?'active':''}" onclick="settingsTab='${t.id}';renderPage('settings')">${t.icon} ${t.label}</div>`).join('')}
-      </div>
+  <div class="settings-topnav-wrap">
+    <div class="settings-nav">
+      ${tabs.map(t=>`<div class="settings-tab ${settingsTab===t.id?'active':''}" onclick="settingsTab='${t.id}';renderPage('settings')">${t.icon} ${t.label}</div>`).join('')}
     </div>
+  </div>
 
-    <div>
+  <div class="settings-panels-container">
       <!-- HOSTEL INFO -->
       <div class="settings-panel ${settingsTab==='hostel'?'active':''}">
         <div class="card">
           <div class="card-header"><div class="card-title">🏨 Hostel Information</div></div>
           <div class="form-grid">
-            <div class="field col-full" style="background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:10px;padding:12px 14px">
-              <label style="color:var(--gold2);font-weight:800">⚙️ System / App Name <span style="font-size:10px;font-weight:400;color:var(--text3)">(shown in title bar, reports footer &amp; receipts)</span></label>
-              <input class="form-control" id="cfg-appname" value="${escHtml(s.appName||'HOSTIX')}" oninput="liveUpdateSetting('appName',this.value)" placeholder="e.g. HOSTIX, MyHostel, Al-Noor HMS…" style="margin-top:6px;font-weight:700;font-size:15px">
-              <div style="font-size:10px;color:var(--text3);margin-top:4px">This is your branding name — printed on every receipt and PDF report.</div>
-            </div>
             <div class="field"><label>Hostel Name</label><input class="form-control" id="cfg-name" value="${escHtml(s.hostelName)}" oninput="liveUpdateSetting('hostelName',this.value)"></div>
             <div class="field"><label>Tagline</label><input class="form-control" id="cfg-tag" value="${escHtml(s.tagline||'')}" oninput="liveUpdateSetting('tagline',this.value)"></div>
             <div class="field"><label>Location / City</label><input class="form-control" id="cfg-loc" value="${escHtml(s.location)}" oninput="liveUpdateSetting('location',this.value)"></div>
@@ -531,54 +524,7 @@ function renderSettings() {
         </div>
       </div>
 
-      <!-- APP THEME -->
-      <div class="settings-panel ${settingsTab==='theme'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">🎨 App Theme & Appearance</div></div>
-          <div class="settings-section">
-            <div class="settings-section-title">Accent Color</div>
-            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
-              ${[['#e05252','Red (Default)'],['#c8a84b','Gold'],['#38bdf8','Sky Blue'],['#2ec98a','Emerald'],['#9b6df0','Purple'],['#f0a030','Amber']].map(([col,lbl])=>`
-              <div onclick="applyThemeColor('${col}')" style="border-radius:10px;padding:12px 6px;text-align:center;cursor:pointer;border:2px solid ${(s.accentColor||'#e05252')===col?col:'transparent'};background:${col}22;transition:all 0.2s">
-                <div style="width:28px;height:28px;border-radius:50%;background:${col};margin:0 auto 6px"></div>
-                <div style="font-size:10px;color:var(--text2);font-weight:600">${lbl}</div>
-              </div>`).join('')}
-            </div>
-            <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px">Custom Accent Color</div>
-                <div class="color-picker-wrap">
-                  <input type="color" value="${s.accentColor||'#e05252'}" id="cfg-accent" onchange="applyThemeColor(this.value)">
-                  <span style="font-size:13px;color:var(--text2)" id="accent-hex-label">${s.accentColor||'#e05252'}</span>
-                </div>
-              </div>
-              <button class="btn btn-primary" onclick="applyThemeColor(document.getElementById('cfg-accent').value)">Apply Color</button>
-            </div>
-          </div>
-          <div class="settings-section">
-            <div class="settings-section-title">Dashboard Month Auto-Advance</div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
-              <div>
-                <div style="font-size:13px;font-weight:700;color:var(--text)">Auto-generate rents on 1st of month</div>
-                <div style="font-size:12px;color:var(--text3);margin-top:3px">Automatically create pending payment records when a new month starts</div>
-              </div>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" id="cfg-automonth" ${(s.autoMonthGenerate!==false)?'checked':''} onchange="(async function(){DB.settings.autoMonthGenerate=this.checked;await saveDB();toast(this.checked?'Auto-generate enabled':'Auto-generate disabled','info');}).call(this)">
-                <span style="font-size:13px;color:var(--text2)">${(s.autoMonthGenerate!==false)?'On':'Off'}</span>
-              </label>
-            </div>
-          </div>
-          <div class="settings-section">
-            <div class="settings-section-title">Sidebar Width</div>
-            <div style="display:flex;align-items:center;gap:12px">
-              <input type="range" min="220" max="320" value="${s.sidebarWidth||260}" style="flex:1;accent-color:var(--gold)" oninput="document.getElementById('cfg-sbw-val').textContent=this.value+'px';document.documentElement.style.setProperty('--sidebar-w',this.value+'px');document.getElementById('main').style.marginLeft=this.value+'px'" onchange="(async function(){DB.settings.sidebarWidth=parseInt(this.value);await saveDB();}).call(this)">
-              <span id="cfg-sbw-val" style="font-size:13px;color:var(--gold2);font-weight:700;min-width:44px">${s.sidebarWidth||260}px</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- FLOORS (existing, kept in place) -->
+      <!-- FLOORS -->
       <div class="settings-panel ${settingsTab==='floors'?'active':''}">
         <div class="card">
           <div class="card-header"><div class="card-title">🏗️ Building Floors</div></div>
@@ -695,16 +641,11 @@ function renderSettings() {
         </div>
       </div>
 
-    </div>
-  </div>
-
-
       <!-- LICENSE -->
       <div class="settings-panel ${settingsTab==='license'?'active':''}">
         ${renderLicenseSettingsPanel()}
       </div>
 
-    </div>
   </div>`;
 }
 
@@ -768,12 +709,6 @@ function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
-  if(key==='appName') {
-    const sbVer = document.getElementById('sb-version');
-    if(sbVer) sbVer.textContent = (val||'HOSTIX') + ' · ' + (DB.settings.version||'v3.0');
-    // Update page title
-    document.title = (val||'HOSTIX') + ' | Hostel Management System';
-  }
   if(key==='hostelName') {
     // Update sidebar name
     const sbName = document.getElementById('sb-hostel-name');
@@ -794,29 +729,19 @@ async function liveUpdateSetting(key, val) {
       el.textContent = val || 'Hostel Name Preview';
     });
   }
-  // BUG FIX: tagline changes were never reflected in the sidebar sub-label
-  if(key==='tagline') {
-    const subLbl = document.getElementById('sb-location-sub');
-    if(subLbl) subLbl.textContent = val || 'Boys Residence';
-  }
   if(key==='location') {
-    const loc = document.getElementById('sb-location');
-    if(loc) loc.textContent = val;
-    // Also sync login screen address
     const loginAddr = document.getElementById('login-address');
     if(loginAddr) loginAddr.innerHTML = val ? `&#x1F4CD; ${val}` : '';
   }
   if(key==='version') {
     const ver = document.getElementById('sb-version');
-    if(ver) ver.textContent = 'Management System ' + val;
+    if(ver) ver.textContent = 'v' + val;
   }
 }
 async function applyHostelFont(fontFamily) {
   DB.settings.hostelNameFont = fontFamily;
   await saveDB();
-  // Apply to sidebar name
-  const nameEl = document.getElementById('sb-hostel-name');
-  if(nameEl) nameEl.style.fontFamily = `'${fontFamily}', serif`;
+  // Sidebar hostel name is a subtitle now — no custom font needed there
   // Update the live preview span immediately without full page re-render
   const prev = document.getElementById('font-preview-name');
   if(prev) {

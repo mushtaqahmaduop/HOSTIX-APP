@@ -2,8 +2,6 @@
    Contains: renderReportDetail, renderReports, showTransferRecordsModal,
              deleteTransferFromModal, showEditTransferModal, submitEditTransfer,
              showAddTransferModal, submitAddTransfer, deleteTransfer,
-             shareReportWhatsApp, shareReportEmail, toggleRptDrop,
-             shareAllStudentsPDFWhatsApp, shareAllStudentsPDFGmail,
              downloadDetailPDF, downloadReportDetailPDF, printReport,
              downloadDetailCSV
    ─────────────────────────────────────────────────────────────────────────── */
@@ -159,7 +157,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // ── ROOMS ──────────────────────────────────────────────────────────────────
   if (id === 'rooms') {
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div>${pdfBtn}</div>
+      <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','#0d9488')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
         <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--gold2)">${DB.rooms.length-occ}</div></div>
@@ -192,7 +190,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // ── PAYMENT METHODS ────────────────────────────────────────────────────────
   if (id === 'payments') {
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div>${pdfBtn}</div>
+      <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','#6366f1')}${pdfBtn}</div></div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
       ${pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr>
         <td class="fw-700">${escHtml(p.studentName||'—')}</td>
@@ -218,7 +216,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const moTotal = moTr.reduce((s,t)=>s+Number(t.amount),0);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">🏦 Transfers to Owner — All Records</div>
+        <div class="card-title">🏦 Funds Transfer — All Records</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('transfers','#1d4ed8')}<button class="btn btn-primary btn-sm" onclick="showAddTransferModal()">+ New</button>${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
@@ -328,9 +326,8 @@ function renderReports() {
     </div>
   </div>
 
-  ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : ''}
   <!-- REPORTS: dashboard-style stat cards — each opens its own detail view -->
-  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px">
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:18px">
     <div class="stat-card green" onclick="reportDetail='financial';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='financial'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='financial'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
       <div style="display:flex;align-items:center;gap:10px">
@@ -370,11 +367,19 @@ function renderReports() {
       ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--royal)"></div>':''}
       <div style="display:flex;align-items:center;gap:10px">
         <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏦</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--royal2)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records · Owner</div></div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--royal2)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records</div></div>
+      </div>
+    </div>
+    <div class="stat-card blue" onclick="reportDetail='students';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='students'?';border-color:var(--blue)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      ${reportDetail==='students'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)"></div>':''}
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👥</div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue)">Students</div><div class="stat-value" style="font-size:18px">${DB.students.filter(t=>t.status==='Active').length}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='students'?'▲ showing detail':DB.students.length+' total'}</div></div>
       </div>
     </div>
   </div>
 
+  ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
   <div class="two-col" style="margin-bottom:20px">
     <div class="card">
       <div class="card-header"><div class="card-title">📈 Revenue vs Expenses</div></div>
@@ -402,77 +407,13 @@ function renderReports() {
       ${[['Active Students',DB.students.filter(t=>t.status==='Active').length,'var(--green)','students'],['Left',DB.students.filter(t=>t.status==='Left').length,'var(--text3)','students'],['Blacklisted',DB.students.filter(t=>t.status==='Blacklisted').length,'var(--red)','students'],['Total Registered',DB.students.length,'var(--gold)','students'],['Total Rooms',DB.rooms.length,'var(--blue)','rooms'],['Total Payments',DB.payments.length,'var(--teal)','financial']].map(([l,v,c,det])=>`<div class="card" style="padding:16px;text-align:center;cursor:pointer;transition:var(--transition)" onclick="reportDetail='${det}';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''"><div class="stat-label">${l}</div><div class="fw-800" style="font-size:28px;margin-top:6px;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">click for detail →</div></div>`).join('')}
     </div>
   </div>
-
-  ${false ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">🚨 Overdue Payments — Full Detail</div><span class="badge badge-red">${DB.payments.filter(p=>p.status==='Overdue').length} overdue</span></div>
-    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Days Late</th><th>Action</th></tr></thead><tbody>
-    ${DB.payments.filter(p=>p.status==='Overdue').length ? DB.payments.filter(p=>p.status==='Overdue').map(p=>{
-      const days=p.dueDate?Math.max(0,Math.floor((Date.now()-new Date(p.dueDate))/86400000)):0;
-      return '<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">' + escHtml(p.studentName||'—') + '</td><td class="text-gold fw-700">#' + escHtml(String(p.roomNumber||'')) + '</td><td class="text-muted">' + escHtml(p.month||'—') + '</td><td class="text-red fw-700">' + fmtPKR(p.amount) + '</td><td class="text-muted" style="font-size:12px">' + (fmtDate(p.dueDate)||'—') + '</td><td><span class="badge badge-red">' + (days>0?days+' days late':'—') + '</span></td><td><button class="btn btn-success btn-sm" onclick="markPaymentPaid(\''+p.id+'\');reportDetail=\'overdue\';renderPage(\'reports\')">Mark Paid</button></td></tr>';
-    }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">🎉 No overdue payments!</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='students' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">👥 Full Student Directory</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-blue">${DB.students.length} total</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('students')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Student ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent</th><th>Join Date</th><th>Status</th></tr></thead><tbody>
-    ${DB.students.length ? DB.students.map(t=>{const room=DB.rooms.find(r=>r.id===t.roomId); return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+t.id+'\')"><td style="font-family:var(--font-mono);font-size:11px;color:var(--gold2);font-weight:700">#' + escHtml(t.id) + '</td><td style="font-weight:600;color:var(--blue)">' + escHtml(t.name) + '</td><td class="text-gold fw-700">' + (room?'#'+room.number:'—') + '</td><td class="text-muted">' + escHtml(t.fatherName||'—') + '</td><td>' + escHtml(t.phone||'—') + '</td><td class="text-green fw-700">' + fmtPKR(t.rent) + '</td><td class="text-muted" style="font-size:12px">' + fmtDate(t.joinDate) + '</td><td>' + statusBadge(t.status) + '</td></tr>';}).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">No students found</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='rooms' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">🏠 Room Occupancy Detail</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-gold">${DB.rooms.filter(r=>getRoomOccupancy(r)>0).length}/${DB.rooms.length} occupied</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('rooms')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>
-    ${DB.rooms.map(r=>{const t=getRoomType(r);const oc=getRoomOccupancy(r);const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name);return '<tr><td class="text-gold fw-700">#'+r.number+'</td><td class="text-muted">'+r.floor+'</td><td><span class="badge" style="background:'+t.color+'22;color:'+t.color+';border:1px solid '+t.color+'44">'+escHtml(t.name)+'</span></td><td>'+t.capacity+' beds</td><td style="font-weight:700;color:'+(oc>0?'var(--green)':'var(--text3)')+'">'+oc+'/'+t.capacity+'</td><td class="text-green fw-700">'+fmtPKR(r.rent)+'</td><td>'+(oc>0?'<span class="badge badge-green">Occupied</span>':'<span class="badge badge-gold">Vacant</span>')+'</td><td style="font-size:12px;color:var(--text2)">'+(names.join(', ')||'—')+'</td></tr>';}).join('')}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='financial' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">💰 Revenue — Financial Transactions</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-green">${DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).length} paid</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('financial')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${DB.payments.filter(p=>_payMatchesMonth(p,key)).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>'<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'—')+'</td><td class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</td><td class="text-muted">'+escHtml(p.month||'—')+'</td><td class="text-green fw-700">'+fmtPKR(p.amount)+'</td><td style="color:'+((p.unpaid||0)>0?'var(--red)':'var(--text3)')+'">'+fmtPKR(p.unpaid||0)+'</td><td>'+pmBadge(p.method)+'</td><td>'+statusBadge(p.status)+'</td><td class="text-muted" style="font-size:12px">'+fmtDate(p.date)+'</td></tr>').join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">No transactions found</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='pending' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">⏳ Pending Payments — Outstanding Detail</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-gold">${DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,key)).length} unpaid this period</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('pending')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Method</th><th>Due Date</th><th>Action</th></tr></thead><tbody>
-    ${DB.payments.filter(p=>p.status==='Pending').sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>'<tr><td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal(\''+p.studentId+'\')">'+escHtml(p.studentName||'—')+'</td><td class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</td><td class="text-muted">'+escHtml(p.month||'—')+'</td><td style="color:'+(Number(p.amount)>0?'var(--green)':'var(--text3)')+'">'+fmtPKR(p.amount||0)+'</td><td style="font-weight:700;color:var(--red)">'+fmtPKR(p.unpaid!=null?p.unpaid:p.amount)+'</td><td>'+pmBadge(p.method)+'</td><td class="text-muted" style="font-size:12px">'+(fmtDate(p.dueDate)||'—')+'</td><td><button class="btn btn-success btn-sm" style="font-size:11px" onclick="markPaymentPaid(\''+p.id+'\');reportDetail=\'pending\';renderPage(\'reports\')">✓ Collect</button></td></tr>').join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">🎉 No pending payments!</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='netprofit' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">📊 Available Fund — Summary</div><div style="display:flex;gap:8px;align-items:center"><span class="badge" style="background:${net>=0?'rgba(46,201,138,0.15)':'rgba(224,82,82,0.15)'};color:${net>=0?'var(--green)':'var(--red)'};">${net>=0?'Profit':'Loss'}</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('netprofit')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding:16px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Total Revenue</div><div style="font-size:24px;font-weight:800;color:var(--green)">${fmtPKR(rev)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px">${pays.filter(p=>p.status==='Paid').length} paid transactions</div></div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Total Expenses</div><div style="font-size:24px;font-weight:800;color:var(--red)">${fmtPKR(totalExp)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px">${exps.length} expense records</div></div>
-      <div style="background:var(--bg3);border:1px solid ${net>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:16px;text-align:center"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Available Fund</div><div style="font-size:28px;font-weight:900;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px">${rev>0?Math.round(net/rev*100):0}% margin</div></div>
-    </div>
-    <div style="padding:0 16px 16px"><div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Expense Breakdown by Category</div>
-    <table><thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th><th>Entries</th></tr></thead><tbody>
-    ${DB.settings.expenseCategories.map(cat=>{const amt=exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);const cnt=exps.filter(e=>e.category===cat).length;const pct=totalExp>0?Math.round(amt/totalExp*100):0;return amt>0?'<tr><td><span class="badge badge-amber">'+escHtml(cat)+'</span></td><td class="text-red fw-700">'+fmtPKR(amt)+'</td><td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--red);border-radius:3px"></div></div><span style="font-size:11px;color:var(--text3);width:30px">'+pct+'%</span></div></td><td class="text-muted" style="font-size:12px">'+cnt+'</td></tr>':'';}).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:16px">No expenses recorded</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
-
-  ${reportDetail==='expenses' ? `
-  <div class="card" style="margin-top:20px">
-    <div class="card-header"><div class="card-title">📉 Expense Detail</div><div style="display:flex;gap:8px;align-items:center"><span class="badge badge-red">${exps.length} records · ${fmtPKR(totalExp)}</span><button class="btn btn-primary btn-sm" onclick="downloadDetailPDF('expenses')" style="font-size:11px">⬇ Download PDF</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-    ${DB.expenses.filter(e=>e.date?.startsWith(key)).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>'<tr><td class="text-muted" style="font-size:12px">'+fmtDate(e.date)+'</td><td><span class="badge badge-amber">'+escHtml(e.category)+'</span></td><td>'+escHtml(e.description||'—')+'</td><td class="text-red fw-700">'+fmtPKR(e.amount)+'</td></tr>').join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:24px">No expenses found</td></tr>'}
-    </tbody></table></div>
-  </div>` : ''}
+  `}
 
   `;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TRANSFERS TO OWNER
+// FUNDS TRANSFER
 // ════════════════════════════════════════════════════════════════════════════
 function showTransferRecordsModal() {
   const transfers = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -500,10 +441,10 @@ function showTransferRecordsModal() {
         ).join('')
       + '</tbody></table></div>';
 
-  showModal('modal-xl','🏦 Transfer Records — Hostel → Owner',`
+  showModal('modal-xl','🏦 Funds Transfer Records',`
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
       <div style="background:linear-gradient(135deg,#0a1828,#060f1c);border:1px solid rgba(74,156,240,0.4);border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px">🏦 Total Transferred</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px">🏦 Total Funds Transferred</div>
         <div style="font-size:28px;font-weight:900;color:var(--blue)">${fmtPKR(totalAll)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${transfers.length} record${transfers.length!==1?'s':''} total</div>
       </div>
@@ -540,7 +481,7 @@ async function deleteTransferFromModal(id) {
 function showEditTransferModal(id) {
   const tr = (DB.transfers||[]).find(x=>x.id===id);
   if(!tr) return;
-  showModal('modal-md','✏️ Edit Transfer — Hostel → Owner',`
+  showModal('modal-md','✏️ Edit Funds Transfer',`
     <div style="background:linear-gradient(135deg,#0d1a2d,#081525);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
       Editing transfer recorded on <strong>${fmtDate(tr.date)}</strong>
     </div>
@@ -587,9 +528,9 @@ async function submitEditTransfer(id) {
 }
 
 function showAddTransferModal() {
-  showModal('modal-md','🏦 New Transfer to Owner',`
+  showModal('modal-md','🏦 New Funds Transfer',`
     <div style="background:linear-gradient(135deg,#0d1a2d,#081525);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text2)">
-      Record cash or bank transfer sent from this hostel to the <strong>Owner</strong>
+      Record a cash or bank funds transfer
     </div>
     <div class="form-grid">
       <div class="field"><label>Transfer Method *</label>
@@ -626,7 +567,7 @@ async function submitAddTransfer() {
   await saveDB(); closeModal();
   // Stay on current page (dashboard) and refresh it — don't redirect to reports
   renderPage(currentPage);
-  toast('Transfer recorded — ' + fmtPKR(amt) + ' sent to owner','success');
+  toast('Transfer recorded — ' + fmtPKR(amt) + ' transferred','success');
 }
 async function deleteTransfer(id) {
   showConfirm('Delete transfer record?','This cannot be undone.',(async ()=>{
@@ -636,143 +577,6 @@ async function deleteTransfer(id) {
 }
 
 
-function shareReportWhatsApp() {
-  const mo=reportPeriod==='month'?thisMonth():thisYear();
-  const rev=calcRevenue(mo);
-  const exps=DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
-  const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
-  const msg=`*${DB.settings.hostelName}*
-*${reportPeriod==='month'?'Monthly':'Annual'} Report*
-━━━━━━━━━━━━━━━━━━━━
-💰 *Revenue:* ${fmtPKR(rev)}
-📉 *Expenses:* ${fmtPKR(exps)}
-📊 *Available Fund:* ${fmtPKR(rev-exps)}
-━━━━━━━━━━━━━━━━━━━━
-🏠 *Rooms:* ${occ}/${DB.rooms.length} occupied
-👥 *Active Students:* ${DB.students.filter(t=>t.status==='Active').length}
-━━━━━━━━━━━━━━━━━━━━
-Generated by ${DB.settings.hostelName} MS`;
-  openExternalLink('whatsapp://send?text='+encodeURIComponent(msg));
-}
-
-function shareReportEmail() {
-  const mo=reportPeriod==='month'?thisMonth():thisYear();
-  const rev=calcRevenue(mo);
-  const exps=DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
-  const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
-  const subject=encodeURIComponent(`${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}`);
-  const body=encodeURIComponent(`${DB.settings.hostelName}\n${reportPeriod==='month'?'Monthly':'Annual'} Financial Report\n${'─'.repeat(40)}\n\nREVENUE: ${fmtPKR(rev)}\nEXPENSES: ${fmtPKR(exps)}\nNET PROFIT: ${fmtPKR(rev-exps)}\nROOMS: ${occ}/${DB.rooms.length} occupied\nACTIVE STUDENTS: ${DB.students.filter(t=>t.status==='Active').length}\n\n${'─'.repeat(40)}\nGenerated ${new Date().toLocaleDateString()} by ${DB.settings.hostelName} Management System`);
-  // Open Gmail compose directly in browser
-  openExternalLink('https://mail.google.com/mail/?view=cm&fs=1&su='+subject+'&body='+body);
-}
-
-// ── REPORT DROPDOWN TOGGLE ────────────────────────────────────────────────────
-function toggleRptDrop(id) {
-  const el = document.getElementById(id);
-  if(!el) return;
-  const isOpen = el.style.display === 'block';
-  // Close all report dropdowns first
-  ['rpt-print-drop','rpt-stu-drop'].forEach(function(did) {
-    const d = document.getElementById(did);
-    if(d) d.style.display = 'none';
-  });
-  if(!isOpen) {
-    el.style.display = 'block';
-    // Close when clicking outside
-    setTimeout(function() {
-      function outside(e) {
-        if(!el.contains(e.target)) { el.style.display='none'; document.removeEventListener('click',outside,true); }
-      }
-      document.addEventListener('click', outside, true);
-    }, 10);
-  }
-}
-
-// ── SHARE ALL-STUDENTS PDF SUMMARY via WhatsApp ───────────────────────────────
-function shareAllStudentsPDFWhatsApp() {
-  const mo = thisMonth();
-  const moLabel = thisMonthLabel();
-
-  // Per-student fee data for this month
-  const activeStudents = DB.students.filter(function(s){ return s.status==='Active'; })
-    .slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
-
-  var grandPaid = 0, grandPending = 0, grandRent = 0;
-
-  var studentLines = activeStudents.map(function(s) {
-    var room = DB.rooms.find(function(r){ return r.id===s.roomId; });
-    var roomNo = room ? '#'+room.number : '—';
-    var _mkDate = new Date(mo+'-01');
-    var _mkLabel = _mkDate.toLocaleString('default',{month:'long',year:'numeric'});
-    var _mkLabel2 = _mkDate.toLocaleString('default',{month:'short',year:'numeric'});
-    var mPays = DB.payments.filter(function(p){
-      return p.studentId===s.id && _payMatchesMonth(p, mo);
-    });
-    var paid    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(s,p){return s+Number(p.amount);},0);
-    var pending = mPays.filter(function(p){return p.status==='Pending';}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount));},0);
-    var status  = mPays.length===0 ? '⬜ No record' : pending>0 ? '🔴 Pending' : '✅ Paid';
-    grandRent    += Number(s.rent||0);
-    grandPaid    += paid;
-    grandPending += pending;
-    return status+' '+escHtml(s.name)+' ('+roomNo+') Rent:'+fmtPKR(s.rent)+(paid>0?' Paid:'+fmtPKR(paid):'')+(pending>0?' Due:'+fmtPKR(pending):'');
-  });
-
-  var lines = [
-    '*'+DB.settings.hostelName+'*',
-    '*Students Fee Report — '+moLabel+'*',
-    '━━━━━━━━━━━━━━━━━━━━'
-  ].concat(studentLines).concat([
-    '━━━━━━━━━━━━━━━━━━━━',
-    '👥 Total Active: '+activeStudents.length,
-    '✅ Collected: '+fmtPKR(grandPaid),
-    '🔴 Pending: '+fmtPKR(grandPending),
-    '📅 Generated: '+new Date().toLocaleDateString()
-  ]);
-
-  openExternalLink('whatsapp://send?text=' + encodeURIComponent(lines.join('\n')));
-}
-
-// ── SHARE ALL-STUDENTS PDF SUMMARY via Gmail ──────────────────────────────────
-function shareAllStudentsPDFGmail() {
-  const mo = thisMonth();
-  const moLabel = thisMonthLabel();
-  const activeStudents = DB.students.filter(function(s){ return s.status==='Active'; })
-    .slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
-
-  var grandPaid = 0, grandPending = 0;
-  var studentLines = [];
-
-  activeStudents.forEach(function(s) {
-    var room = DB.rooms.find(function(r){ return r.id===s.roomId; });
-    var roomNo = room ? '#'+room.number : '—';
-    var _mkDate = new Date(mo+'-01');
-    var _mkLabel = _mkDate.toLocaleString('default',{month:'long',year:'numeric'});
-    var _mkLabel2 = _mkDate.toLocaleString('default',{month:'short',year:'numeric'});
-    var mPays = DB.payments.filter(function(p){
-      return p.studentId===s.id && _payMatchesMonth(p, mo);
-    });
-    var paid    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(s,p){return s+Number(p.amount);},0);
-    var pending = mPays.filter(function(p){return p.status==='Pending';}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount));},0);
-    var status  = mPays.length===0 ? 'NO RECORD' : pending>0 ? 'PENDING' : 'PAID';
-    grandPaid    += paid;
-    grandPending += pending;
-    studentLines.push('['+status+'] '+(s.name||'?')+' | Room '+roomNo+' | Rent: '+fmtPKR(s.rent)+(paid>0?' | Paid: '+fmtPKR(paid):'')+(pending>0?' | Due: '+fmtPKR(pending):''));
-  });
-
-  const subject = encodeURIComponent('Students Fee Report — ' + moLabel + ' | ' + DB.settings.hostelName);
-  const bodyText =
-    DB.settings.hostelName + '\nStudents Fee Report — ' + moLabel +
-    '\n' + '─'.repeat(50) +
-    '\n\n' + studentLines.join('\n') +
-    '\n\n' + '─'.repeat(50) +
-    '\nTOTAL COLLECTED: ' + fmtPKR(grandPaid) +
-    '\nTOTAL PENDING:   ' + fmtPKR(grandPending) +
-    '\n' + '─'.repeat(50) +
-    '\nGenerated ' + new Date().toLocaleDateString() + ' | ' + DB.settings.hostelName + ' Management System';
-  const body = encodeURIComponent(bodyText);
-  // Open Gmail compose directly — no default mail client needed
-  openExternalLink('https://mail.google.com/mail/?view=cm&fs=1&su=' + subject + '&body=' + body);
-}
 
 function downloadDetailPDF(type) {
   const key = reportPeriod==='month' ? thisMonth() : thisYear();
@@ -852,10 +656,10 @@ function downloadReportDetailPDF(detailId) {
       ${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#aaa;padding:10px">No expenses this period</td></tr>'}
       </tbody></table>
       ${allTr.length>0?`
-      <h3 style="margin-top:18px">🏦 Transfers to Owner</h3>
+      <h3 style="margin-top:18px">🏦 Funds Transfer</h3>
       <table><thead><tr><th>Date</th><th>Method</th><th>Description</th><th>Received By</th><th>Amount</th></tr></thead><tbody>
       ${allTr.map(t=>`<tr><td>${fmtDate(t.date)}</td><td>${t.method||'—'}</td><td>${t.description||'—'}</td><td>${t.receivedBy||'—'}</td><td class="red">${fmtPKR(t.amount)}</td></tr>`).join('')}
-      <tr style="background:#f8fafc;font-weight:700"><td colspan="4" style="text-align:right;padding:8px 12px">Total Transferred</td><td class="red">${fmtPKR(trTotal)}</td></tr>
+      <tr style="background:#f8fafc;font-weight:700"><td colspan="4" style="text-align:right;padding:8px 12px">Total Funds Transferred</td><td class="red">${fmtPKR(trTotal)}</td></tr>
       </tbody></table>`:''}`;
   } else if(detailId==='transfers') {
     const allTr2 = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -870,7 +674,7 @@ function downloadReportDetailPDF(detailId) {
           <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;font-weight:700;margin-bottom:4px">Period Revenue</div><div style="font-size:22px;font-weight:900;color:#16a34a">${fmtPKR(rev)}</div></div>
         </div>
       </div>
-      <h3>🏦 All Transfer Records</h3>
+      <h3>🏦 All Funds Transfer Records</h3>
       <table><thead><tr><th>Date</th><th>Method</th><th>Description</th><th>Received By</th><th>By Warden</th><th>Amount</th></tr></thead><tbody>
       ${allTr2.length===0?'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:14px">No transfers recorded yet</td></tr>':allTr2.map(t=>`<tr><td>${fmtDate(t.date)}</td><td>${t.method||'—'}</td><td>${t.description||'—'}</td><td>${t.receivedBy||'—'}</td><td>${t.byWarden||'—'}</td><td class="red" style="font-weight:900">${fmtPKR(t.amount)}</td></tr>`).join('')}
       <tr style="background:#f8fafc;font-weight:700"><td colspan="5" style="text-align:right;padding:8px 12px">Grand Total</td><td class="red">${fmtPKR(trTotal2)}</td></tr>
@@ -925,7 +729,7 @@ function printReport() {
     <div class="kpi"><label>Rooms Occupied</label><div class="val">${occ}/${DB.rooms.length}</div></div>
     <div class="kpi"><label>Active Students</label><div class="val">${DB.students.filter(t=>t.status==='Active').length}</div></div>
     <div class="kpi"><label>Total Payments</label><div class="val">${pays.filter(p=>p.status==='Paid').length}</div></div>
-    <div class="kpi"><label>Transferred to Owner</label><div class="val" style="color:#854d0e">${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div></div>
+    <div class="kpi"><label>Funds Transferred</label><div class="val" style="color:#854d0e">${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div></div>
   </div>
   <div class="section">
     <h3>💳 Payment Transactions</h3>
@@ -940,11 +744,11 @@ function printReport() {
     </tbody></table>
   </div>
   <div class="section">
-    <h3>🏦 Transfers to Owner</h3>
+    <h3>🏦 Funds Transfer</h3>
     <table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th></tr></thead><tbody>
     ${(DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).map(tr=>`<tr><td>${fmtDate(tr.date)}</td><td>${escHtml(tr.description||'Transfer')}</td><td>${escHtml(tr.method||'—')}</td><td class="gold">${fmtPKR(tr.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No transfers this period</td></tr>'}
     </tbody></table>
-    ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#854d0e">Total Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
+    ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#854d0e">Total Funds Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
   </body></html>`;
@@ -979,7 +783,7 @@ function downloadDetailCSV(type) {
       rows.push([e.date||'—',e.category||'—',e.description||'—',e.amount]);
     });
   } else if (type === 'transfers') {
-    filename = 'Transfers.csv';
+    filename = 'Funds_Transfer.csv';
     rows.push(['Date','Description','Method','Amount','Received By','Notes']);
     (DB.transfers||[]).forEach(t=>{
       rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);
@@ -991,6 +795,20 @@ function downloadDetailCSV(type) {
     list.forEach(t=>{
       const r = DB.rooms.find(x=>x.id===t.roomId);
       rows.push([t.name||'—',t.fatherName||'—',r?'#'+r.number:'—',t.phone||'—',t.cnic||'—',t.joinDate||'—',t.rent,t.status||'—']);
+    });
+  } else if (type === 'rooms') {
+    filename = 'Rooms_Occupancy.csv';
+    rows.push(['Room','Floor','Type','Capacity','Occupied','Rent','Status','Students']);
+    DB.rooms.forEach(r=>{
+      const t=getRoomType(r); const oc=getRoomOccupancy(r);
+      const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name).join('; ');
+      rows.push(['#'+r.number,r.floor||'—',t.name||'—',t.capacity,oc,r.rent,oc>0?'Occupied':'Vacant',names||'—']);
+    });
+  } else if (type === 'payments') {
+    filename = 'PaymentMethods_'+key+'.csv';
+    rows.push(['Student','Room','Month','Amount Paid','Method','Status','Date']);
+    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
+      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.status,p.date||'—']);
     });
   } else if (type === 'netprofit') {
     filename = 'AvailableFund_'+key+'.csv';

@@ -47,7 +47,7 @@ function renderRooms() {
         <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showEditRoomModal('${r.id}')">Edit</button>
         ${occ<cap
           ? `<button class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showAddStudentModal('${r.id}')">+ Student</button>`
-          : `<button class="btn btn-sm" style="flex:1;font-size:11px;background:#b8860b;color:#fff;border:1px solid #c8a84b" onclick="event.stopPropagation();showAddStudentModal('${r.id}')" title="Room is full — force add anyway">⚡ Force Add</button>`}
+          : `<button class="btn btn-sm" style="flex:1;font-size:11px;background:var(--amber);color:#000;border:1px solid var(--amber)" onclick="event.stopPropagation();showAddStudentModal('${r.id}')" title="Room is full — force add anyway">⚡ Force Add</button>`}
       </div>
     </div>`;
   }).join('');

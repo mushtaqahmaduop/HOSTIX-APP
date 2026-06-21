@@ -121,7 +121,7 @@ function renderDashboard() {
   const overdue = 0; // overdue feature removed
   const moExp = DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
   const totalExpected = collected + pending;
-  // Transfer to owner is also an outgoing expense — include in net calculation
+  // Funds transfer is also an outgoing — include in net calculation
   const netProfit = collected - moExp - moTransferDeduct;
 
   // Seat calculations
@@ -194,55 +194,55 @@ function renderDashboard() {
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
-    <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(99,102,241,0.15)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
+      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
-    <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(45,212,191,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:${netProfit>=0?'var(--teal)':'var(--red)'}"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
+      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (owner)`:''} − ${fmtPKR(moExp)}</div>
+      <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
     </div>
-    <div onclick="navigate('expenses')" class="stat-card red" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(248,113,113,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('expenses')" class="stat-card red" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--red)"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
+      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
-    <!-- Transfer to Owner Card -->
+    <!-- Funds Transfer Card -->
     <div onclick="showAddTransferModal()" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>':''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon" style="background:var(--bg4)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text2)"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">To Owner</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
+      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
-    <div onclick="navigate('payments')" class="stat-card gold" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow),0 0 20px rgba(251,191,36,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('payments')" class="stat-card gold" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div class="stat-value" style="font-size:30px;margin-bottom:7px;color:var(--amber)"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
+      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
@@ -250,35 +250,35 @@ function renderDashboard() {
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-    <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(52,211,153,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px">Occupied Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:28px;color:var(--green)">${occ}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--green)">${occ}</span>
           <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
           ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-green" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
         </div>
         <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--green);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(45,212,191,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:3px">Vacant Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:28px;color:var(--teal)">${vac}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--teal)">${vac}</span>
           <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
         </div>
         <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--teal);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow),0 0 16px rgba(192,132,252,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:3px">Active Students</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:28px;color:var(--purple)">${activeStudents}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--purple)">${activeStudents}</span>
           <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
         </div>
         <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--purple);border-radius:2px;transition:width 0.5s"></div></div>
@@ -288,7 +288,6 @@ function renderDashboard() {
   <!-- ══ TREND + SEAT AVAILABILITY ROW ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
   <div class="card" style="padding:10px 14px 6px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--teal),transparent)"></div>
     <!-- Header: title row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
@@ -326,7 +325,6 @@ function renderDashboard() {
   </div>
   <!-- Seat availability — interactive room grid -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;overflow:hidden">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--teal),var(--purple))"></div>
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px">
@@ -381,21 +379,30 @@ function renderDashboard() {
   <!-- ══ ROW 3+4: BY ROOM TYPE + PENDING PAYMENTS (same row) ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
   <div class="card" style="position:relative;margin-bottom:0">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:var(--radius) var(--radius) 0 0"></div>
     <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(15,188,173,0.1);border-color:rgba(15,188,173,0.25);color:var(--teal)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>By Room Type</span></div>
-      <span style="font-size:12px;color:var(--teal);font-weight:800;background:var(--teal-dim);padding:3px 10px;border-radius:20px;border:1px solid rgba(15,188,173,0.25)">${seatPct}% full</span>
+      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>
+        By Room Type
+      </div>
+      <span style="font-size:11px;color:var(--text2);font-weight:700;background:var(--bg3);padding:3px 10px;border-radius:20px;border:1px solid var(--border)">${seatPct}% full</span>
     </div>
-    <div style="height:5px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:12px">
-      <div style="height:100%;width:${seatPct}%;background:linear-gradient(90deg,var(--green),var(--gold));border-radius:3px;transition:width 0.6s"></div>
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:16px;padding:8px 0">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <canvas id="dash-roomtype-donut" width="260" height="260" style="width:130px;height:130px"></canvas>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px">${filledSeats}<span style="color:var(--text3);font-weight:500">/${totalSeats}</span> <span style="font-size:10px;color:var(--text2);font-weight:500">seats</span></div>
+      </div>
+      <div>
+        ${seatBreakdown}
+      </div>
     </div>
-    ${seatBreakdown.replace(/<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var\(--border\)">/g,'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(30,48,80,0.5)">')}
   </div>
   <!-- PENDING PAYMENTS -->
   <div class="card" style="position:relative;display:flex;flex-direction:column;margin-bottom:0">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--amber))"></div>
       <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0">
-        <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.25);color:var(--gold2)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>Pending Payments</span></div>
+        <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>
+          Pending Payments
+        </div>
         <span class="badge badge-gold" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
       </div>
       <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
@@ -425,9 +432,11 @@ function renderDashboard() {
 
   <!-- ══ ROW 5: RECENT PAYMENTS ══ -->
   <div class="card" style="position:relative">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--purple))"></div>
     <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:16px"><span class="dash-pill-heading" style="background:rgba(74,156,240,0.1);border-color:rgba(74,156,240,0.25);color:var(--blue)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>Recent Payments</span></div>
+      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>
+        Recent Payments
+      </div>
       <button class="btn btn-secondary btn-sm" onclick="navigate('payments')" style="font-size:11px">View All →</button>
     </div>
     ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
@@ -1188,7 +1197,70 @@ function printMonthReport(monthKey, monthLabel) {
 // CANCELLATIONS
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── TREND CHART DRAWING (stock-market style) ─────────────────────────────────
+// ── ROOM TYPE DONUT CHART ────────────────────────────────────────────────────
+var _dashDonutChart = null;
+function drawRoomDonut() {
+  var canvas = document.getElementById('dash-roomtype-donut');
+  if(!canvas || typeof Chart==='undefined') return;
+  if(_dashDonutChart){_dashDonutChart.destroy();_dashDonutChart=null;}
+
+  var types = DB.settings.roomTypes || [];
+  if(!types.length) return;
+
+  var labels = [];
+  var data = [];
+  var colors = [];
+  var grayScale = ['#525252','#737373','#a3a3a3','#d4d4d4','#e5e5e5'];
+
+  types.forEach(function(t, i) {
+    var tRooms = DB.rooms.filter(function(r){return r.typeId===t.id;});
+    var seats = tRooms.length * t.capacity;
+    if(seats > 0) {
+      labels.push(t.name);
+      data.push(seats);
+      colors.push(grayScale[i % grayScale.length]);
+    }
+  });
+
+  if(data.length > 0) {
+    var maxIdx = data.indexOf(Math.max.apply(null, data));
+    colors[maxIdx] = '#38bdf8';
+  }
+
+  _dashDonutChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: colors,
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      cutout: '65%',
+      responsive: false,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          titleFont: { size: 13, weight: '700' },
+          bodyFont: { size: 12, weight: '600' },
+          padding: 10,
+          callbacks: {
+            label: function(ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+              var pct = total>0 ? Math.round(ctx.parsed/total*100) : 0;
+              return ctx.label + ': ' + ctx.parsed + ' seats (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 // ── TREND CHART (Chart.js — Jan–Dec, revenue line + hover tooltip) ───────────
 var _dashTrendChart = null;
 setTimeout(function(){
@@ -1447,7 +1519,7 @@ async function quickDashTransfer() {
   const amt = parseFloat(document.getElementById('dash-transfer-amt')?.value)||0;
   const method = document.getElementById('dash-transfer-method')?.value||'Cash';
   const recv = document.getElementById('dash-transfer-recv')?.value?.trim()||'';
-  const desc = document.getElementById('dash-transfer-desc')?.value?.trim()||'Transfer to Owner';
+  const desc = document.getElementById('dash-transfer-desc')?.value?.trim()||'Funds Transfer';
   if(!amt||amt<=0){toast('Enter a valid amount','error');return;}
   if(!DB.transfers) DB.transfers=[];
   DB.transfers.push({id:'tr_'+uid(),amount:amt,method,receivedBy:recv,description:desc,date:today()});

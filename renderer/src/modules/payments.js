@@ -46,7 +46,7 @@ function renderPayments() {
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
       <span class="text-muted" style="font-size:12px">${pays.length} records · <span class="text-green fw-700">${fmtPKR(total)}</span></span>
       <button class="btn btn-secondary btn-sm" onclick="generateMonthlyRents()">⚡ Auto-Generate Month</button>
-      <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:#25d366;color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
+      <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:var(--green);color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
     </div>
   </div>
   <div class="table-wrap">
@@ -385,7 +385,7 @@ function showAddPaymentForStudent(studentId) {
       <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-ps-due" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
       <div class="field col-full"><label>Notes</label><input class="form-control" id="f-ps-notes" placeholder="Optional notes…"></div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:linear-gradient(135deg,#e6a817,#f0c040);color:#1a1200;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
   // Auto-fill from existing pending payment for current month; warn if already fully paid
   const curMonthLabel = thisMonthLabel();
   const existingPaid    = DB.payments.find(p=>p.studentId===t.id&&p.status==='Paid'&&p.month===curMonthLabel);
@@ -609,7 +609,7 @@ function showAddPaymentModal() {
       <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
       <div class="field col-full"><label>Notes</label><input class="form-control" id="f-pnotes-main" placeholder="Optional notes…"></div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:linear-gradient(135deg,#e6a817,#f0c040);color:#1a1200;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
 }
 async function submitAddPayment() {
   // Try to auto-select if only one student matches the search text

@@ -27,19 +27,19 @@ let currentPage = 'dashboard';
 let pageHistory = ['dashboard'];
 function goBack(){if(pageHistory.length>1){pageHistory.pop();navigate(pageHistory[pageHistory.length-1],true);}}
 const pageConfig = {
-  dashboard:     { title:'Dashboard', sub:'Overview of your hostel', action:'Add Student' },
-  rooms:         { title:'Rooms', sub:'Manage all rooms', action:'Add Room' },
-  students:      { title:'Students', sub:'Resident management', action:'Add Student' },
-  payments:      { title:'Finance', sub:'Rent & payment tracking', action:'Add Payment' },
-  expenses:      { title:'Expenses', sub:'Operational cost tracking', action:'Add Expense' },
-  cancellations: { title:'Cancellation List', sub:'Seat cancellation requests', action:'Add Cancellation' },
-  reports:       { title:'Reports', sub:'Financial analytics', action:null },
-  issues:        { title:'Complaints & Maintenance', sub:'Complaints and repair requests', action:'Add Issue' },
-  activitylog:   { title:'Activity Log', sub:'Full system audit trail', action:null },
-  settings:      { title:'Settings', sub:'Configure your system', action:null },
-  archive: { title:'Annual Archive', sub:'Full year data breakdown', action:null },
-  maintenance:   { title:'Complaints & Maintenance', sub:'Repair requests', action:'Add Issue' },
-  complaints:    { title:'Complaints & Maintenance', sub:'Complaints', action:'Add Issue' }
+  dashboard:     { title:'Dashboard', sub:'', action:'Add Student' },
+  rooms:         { title:'Rooms', sub:'', action:'Add Room' },
+  students:      { title:'Students', sub:'', action:'Add Student' },
+  payments:      { title:'Finance', sub:'', action:'Add Payment' },
+  expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
+  cancellations: { title:'Cancellation List', sub:'', action:'Add Cancellation' },
+  reports:       { title:'Reports', sub:'', action:null },
+  issues:        { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
+  activitylog:   { title:'Activity Log', sub:'', action:null },
+  settings:      { title:'Settings', sub:'', action:null },
+  archive:       { title:'Annual Archive', sub:'', action:null },
+  maintenance:   { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
+  complaints:    { title:'Complaints & Maintenance', sub:'', action:'Add Issue' }
 };
 
 function navigate(page, isBack=false) {
@@ -176,21 +176,14 @@ function renderPage(p, resetScroll=false) {
     }
     if(basePage==='reports') drawCharts();
     if(basePage==='settings') bindSettingsEvents();
-    if(basePage==='dashboard') setTimeout(drawTrendChart, 50);
+    if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);
   },80);
 }
 
 function updateSidebar() {
   const setEl = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
-  setEl('sb-hostel-name', DB.settings.hostelName);
-  // Apply saved font
-  const nameEl2 = document.getElementById('sb-hostel-name');
-  if(nameEl2 && DB.settings.hostelNameFont) nameEl2.style.fontFamily = `'${DB.settings.hostelNameFont}', serif`;
-  // BUG FIX: sync tagline to sidebar sub-label
-  setEl('sb-location-sub', DB.settings.tagline || 'Boys Residence');
-  setEl('sb-location', DB.settings.location);
-  // Show appName (HOSTIX / custom) as the system brand label
-  setEl('sb-version', (DB.settings.appName || 'HOSTIX') + ' · ' + DB.settings.version);
+  setEl('sb-hostel-name', DB.settings.hostelName || 'Hostel Management');
+  setEl('sb-version', 'v' + (DB.settings.version || '4.0'));
   // Update cancellation badge
   const cancelBadge = document.getElementById('cancel-badge');
   const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending').length;

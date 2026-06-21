@@ -385,7 +385,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: encodeURIComponent(lic.message) }
+      query: { reason: lic.reason, message: lic.message }
     });
   }
 
@@ -592,7 +592,7 @@ ipcMain.handle('license:deactivateWithDialog', async () => {
   const result = deactivateLicense();
   if (result.success && mainWindow) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: 'not_activated', message: encodeURIComponent('License deactivated. Please enter a new license key.') }
+      query: { reason: 'not_activated', message: 'License deactivated. Please enter a new license key.' }
     });
   }
   // Close the settings child window (if open) after deactivation
@@ -622,7 +622,7 @@ ipcMain.handle('license:reset', async () => {
   const result = deactivateLicense();
   if (result.success && mainWindow) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: 'not_activated', message: encodeURIComponent('License has been fully reset. Please enter your license key.') }
+      query: { reason: 'not_activated', message: 'License has been fully reset. Please enter your license key.' }
     });
   }
   // Close the settings child window (if open) after reset
@@ -677,7 +677,7 @@ ipcMain.handle('license:loadApp', () => {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: encodeURIComponent(lic.message) }
+      query: { reason: lic.reason, message: lic.message }
     });
   }
 });
@@ -736,6 +736,34 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
   } finally {
     try { fs.unlinkSync(tmpFile); } catch(_) {}  // clean up temp file
     pdfWin.destroy();
+  }
+});
+
+// Open PDF report in a separate BrowserWindow
+ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
+  if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) return;
+  const safeTitle = (typeof title === 'string' ? title : 'Report').slice(0, 200);
+
+  const pdfWin = new BrowserWindow({
+    width: 1050, height: 750, minWidth: 600, minHeight: 400,
+    title: safeTitle,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    backgroundColor: '#ffffff',
+    autoHideMenuBar: true
+  });
+
+  const tmpFile = path.join(os.tmpdir(), 'damam_report_' + Date.now() + '.html');
+  try {
+    fs.writeFileSync(tmpFile, htmlContent, 'utf8');
+    pdfWin.loadFile(tmpFile);
+    pdfWin.on('closed', () => {
+      try { fs.unlinkSync(tmpFile); } catch (_) {}
+    });
+  } catch (e) {
+    console.error('[DAMAM] open-pdf-window failed:', e.message);
+    pdfWin.destroy();
+    try { fs.unlinkSync(tmpFile); } catch (_) {}
   }
 });
 

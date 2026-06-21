@@ -161,8 +161,8 @@ async function clearStudents(fromMenu=false) {
     DB.students=[];
     DB.payments=[];
     DB.cancellations=[];
-    // FIX: DB.transfers are owner-level financial records, NOT student records.
-    // Clearing students must NOT wipe owner transfer history.
+    // FIX: DB.transfers are fund-level financial records, NOT student records.
+    // Clearing students must NOT wipe transfer history.
     DB.fines=[];
     DB.checkinlog=[];
     await saveDB();
@@ -171,9 +171,9 @@ async function clearStudents(fromMenu=false) {
     toast('All students and their records cleared','info');
   };
   if(fromMenu) {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Owner transfers are preserved.`,doIt);
+    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved.`,doIt);
   } else {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Owner transfers are preserved. Cannot be undone!`,doIt);
+    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved. Cannot be undone!`,doIt);
   }
 }
 
