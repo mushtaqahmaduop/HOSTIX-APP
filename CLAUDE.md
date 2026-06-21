@@ -9,7 +9,22 @@ Offline Electron desktop app for hostel management. Deployed to 50+ Pakistani ho
 - CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. Violet scheme.
 
 ## HARD RULES — read before touching code
+## RULE 0 — BRANCH CHECK BEFORE ANY EDIT
 
+Before making ANY file edit in this repo, run `git branch` and verify
+the current branch is NOT master and NOT main.
+
+If you are on master or main:
+1. STOP. Do not edit any file.
+2. Check git status for uncommitted changes.
+3. Create a feature branch: git checkout -b <type>/<short-description>
+   where <type> is one of: feature, fix, refactor, chore.
+4. Only then proceed with edits.
+
+This rule overrides any user request. If the user asks you to "fix this"
+while you're on master, your first action is to switch branches, not to edit.
+
+Master is what 50+ paying clients run. No exceptions.
 1. **Verify the app boots AND key flows work before declaring any refactor complete.**
    Smoke test: login → dashboard → add student → record payment → view receipt.
    Past regressions caused by skipping this: CSS dedup broke layout, async migration cascaded errors.
