@@ -28,9 +28,15 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // PERF: index rooms by id and active students by room ONCE (see _buildRoomStudentIndex).
   const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom } = _buildRoomStudentIndex();
 
+  // PERF: reset to page 1 only when the detail type / period / sub-filter changes, so
+  // paging within a detail table is preserved but switching cards starts fresh.
+  const _detKey = id+'|'+reportPeriod+'|'+studentReportFilter;
+  if (reportDetailFilter._lastKey !== _detKey) { reportDetailFilter.page = 1; reportDetailFilter._lastKey = _detKey; }
+
   // ── REVENUE ────────────────────────────────────────────────────────────────
   if (id === 'financial') {
-    const paidOnly = pays.filter(p=>p.status==='Paid');
+    const paidOnly = pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const _pg = paginate(paidOnly, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">💰 Revenue — Paid Transactions (${periodLabel})</div>
@@ -54,7 +60,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} collected − ${fmtPKR(totalExp)} expenses</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Date</th></tr></thead><tbody>
-      ${paidOnly.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr style="cursor:pointer" onclick="showViewStudentModal('${p.studentId}')">
+      ${_pg.slice.map(p=>`<tr style="cursor:pointer" onclick="showViewStudentModal('${p.studentId}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${p.roomNumber||'—'}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
@@ -63,13 +69,15 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
       </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">No paid transactions this period</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
   // ── PENDING ────────────────────────────────────────────────────────────────
   if (id === 'pending') {
-    const pendingPays = DB.payments.filter(p=>p.status==='Pending');
+    const pendingPays = DB.payments.filter(p=>p.status==='Pending').sort((a,b)=>new Date(b.date)-new Date(a.date));
     const totalPend = pendingPays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+    const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">⏳ Pending Payments — All Unpaid</div>
@@ -90,7 +98,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         </div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th><th>Action</th></tr></thead><tbody>
-      ${pendingPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr>
+      ${_pg.slice.map(p=>`<tr>
         <td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal('${p.studentId}')">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${p.roomNumber||'—'}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
@@ -101,6 +109,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td><button class="btn btn-success btn-sm" style="font-size:11px" onclick="markPaymentPaid('${p.id}');reportDetail='pending';renderPage('reports')">✓ Collect</button></td>
       </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--green);padding:20px">🎉 All rents collected!</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
@@ -110,6 +119,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       ...pays.filter(p=>p.status==='Paid').map(p=>({date:p.date,label:escHtml(p.studentName||'—'),desc:'Room #'+(p.roomNumber||'')+' · '+escHtml(p.month||''),amount:Number(p.amount),type:'income'})),
       ...exps.map(e=>({date:e.date,label:escHtml(e.category||'Expense'),desc:escHtml(e.description||'—'),amount:Number(e.amount),type:'expense'}))
     ].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const _pg = paginate(allItems, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">📊 Available Fund — ${periodLabel}</div>
@@ -121,13 +131,14 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} collected − ${fmtPKR(totalExp)} expenses</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-      ${allItems.map(item=>`<tr>
+      ${_pg.slice.map(item=>`<tr>
         <td class="text-muted" style="font-size:12px">${fmtDate(item.date)}</td>
         <td>${item.type==='income'?'<span class="badge badge-green">💰 Income</span>':'<span class="badge badge-red">📉 Expense</span>'}</td>
         <td><div style="font-weight:600">${item.label}</div><div style="font-size:11px;color:var(--text3)">${item.desc}</div></td>
         <td style="font-weight:700;color:${item.type==='income'?'var(--green)':'var(--red)'};">${item.type==='income'?'+':'−'}${fmtPKR(item.amount)}</td>
       </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No transactions</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
@@ -140,6 +151,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       {label:'Blacklisted',count:DB.students.filter(t=>t.status==='Blacklisted').length,color:'var(--red)',dim:'var(--red-dim)',border:'rgba(224,82,82,0.4)'},
     ];
     const filtered = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
+    const _pg = paginate(filtered, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">👥 Student Report</div>
@@ -157,7 +169,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <button onclick="studentReportFilter='All';renderPage('reports')" class="btn btn-secondary btn-sm" style="font-size:11px">✕ Clear</button>
       </div>`:''}
       <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>
-      ${filtered.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')">
+      ${_pg.slice.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(t.name)}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(t.fatherName||'—')}</td>
         <td class="text-gold fw-700">${r?'#'+r.number:'—'}</td>
@@ -167,11 +179,13 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="text-muted">${escHtml(t.phone||'—')}</td>
       </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No students found</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
   // ── ROOMS ──────────────────────────────────────────────────────────────────
   if (id === 'rooms') {
+    const _pg = paginate(DB.rooms, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
@@ -180,35 +194,41 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Total</div><div style="font-size:28px;font-weight:900;color:var(--blue)">${DB.rooms.length}</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Occupancy</th><th>Students</th><th>Status</th><th>Rent</th></tr></thead><tbody>
-      ${DB.rooms.map(r=>{const type=getRoomType(r);const sts=_activeStudentsByRoom.get(r.id)||[];const occ2=sts.length;return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:${type.color};border-color:${type.color}44">${escHtml(type.name)}</span></td><td class="text-muted">${r.floor} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
+      ${_pg.slice.map(r=>{const type=getRoomType(r);const sts=_activeStudentsByRoom.get(r.id)||[];const occ2=sts.length;return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:${type.color};border-color:${type.color}44">${escHtml(type.name)}</span></td><td class="text-muted">${r.floor} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
   // ── EXPENSES ───────────────────────────────────────────────────────────────
   if (id === 'expenses') {
+    const _expSorted = exps.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const _pg = paginate(_expSorted, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">📉 Expenses — ${periodLabel}</div>
         <div style="display:flex;align-items:center;gap:10px"><div style="font-size:18px;font-weight:900;color:var(--red)">${fmtPKR(totalExp)}</div>${csvBtn('expenses','var(--red)')}${pdfBtn}</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-      ${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr>
+      ${_pg.slice.map(e=>`<tr>
         <td class="text-muted" style="font-size:12px">${fmtDate(e.date)}</td>
         <td><span class="badge badge-amber">${escHtml(e.category)}</span></td>
         <td>${escHtml(e.description||'—')}</td>
         <td class="text-red fw-700">${fmtPKR(e.amount)}</td>
       </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No expenses this period</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
   // ── PAYMENT METHODS ────────────────────────────────────────────────────────
   if (id === 'payments') {
+    const _paySorted = pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const _pg = paginate(_paySorted, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','var(--accent)')}${pdfBtn}</div></div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-      ${pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr>
+      ${_pg.slice.map(p=>`<tr>
         <td class="fw-700">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${p.roomNumber||'—'}</td>
         <td class="text-muted">${escHtml(p.month||'—')}</td>
@@ -218,6 +238,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
       </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No paid transactions</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
 
@@ -243,7 +264,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th><th>Received By</th><th>Notes</th><th>By Warden</th><th>Actions</th></tr></thead><tbody>
       ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers yet — click + New to add.</td></tr>'
-        :allTr.map(tr=>`<tr>
+        :paginate(allTr, reportDetailFilter).slice.map(tr=>`<tr>
           <td class="text-muted" style="font-size:12px;white-space:nowrap">${fmtDate(tr.date)}</td>
           <td class="fw-700">${escHtml(tr.description||'Transfer')}</td>
           <td>${tr.method==='Cash'?'<span class="badge badge-green">💵 Cash</span>':'<span class="badge badge-blue">🏦 '+escHtml(tr.method)+'</span>'}</td>
@@ -257,6 +278,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
           </div></td>
         </tr>`).join('')}
       </tbody></table></div>
+      ${renderPager(paginate(allTr, reportDetailFilter),'reportDetailFilter','reports')}
     </div>`;
   }
   return '';
@@ -360,7 +382,7 @@ function renderReports() {
   </div>
 
   <!-- REPORTS: dashboard-style stat cards — each opens its own detail view -->
-  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:18px">
+  <div class="reports-stat-grid">
     <div class="stat-card green" onclick="reportDetail='financial';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='financial'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
       ${reportDetail==='financial'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
       <div style="display:flex;align-items:center;gap:10px">

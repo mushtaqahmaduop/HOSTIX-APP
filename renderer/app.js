@@ -60,11 +60,24 @@ function _electronPDF(html, suggestedName, opts) {
   // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child
   // window.open() window hangs the Electron renderer on Windows. User presses the button.
   injected = injected.replace('</body>', btnHtml + '</body>');
+  // PERF/UX: open the popup and paint a lightweight "Generating…" placeholder
+  // IMMEDIATELY, then write the (potentially large) report HTML on the next tick.
+  // Parsing a big document.write blob is what made the window appear ~1s late;
+  // showing the shell first makes it feel instant. (Fixes: PDF opens 1s later.)
   var w = window.open('', '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
   if (!w) { if (typeof toast === 'function') toast('⚠️ Allow popups for this app to open PDFs.', 'error'); return; }
   w.document.open();
-  w.document.write(injected);
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Generating report…</title></head>'
+    + '<body style="margin:0;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#555">'
+    + '<div style="text-align:center"><div style="font-size:15px;font-weight:600">Generating report…</div>'
+    + '<div style="font-size:12px;color:#999;margin-top:6px">Please wait a moment.</div></div></body></html>');
   w.document.close();
+  setTimeout(function () {
+    if (w.closed) return;
+    w.document.open();
+    w.document.write(injected);
+    w.document.close();
+  }, 0);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // Cancelling students do NOT count toward occupancy — their seat is immediately freed

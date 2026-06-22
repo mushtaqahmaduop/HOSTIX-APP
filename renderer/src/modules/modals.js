@@ -742,8 +742,18 @@ async function saveWardenInfo(key) {
   var pwEl   = document.getElementById('wp-'+key);
   var wwaEl  = document.getElementById('wwa-'+key);
   if(!nameEl||!nameEl.value.trim()){toast('Name cannot be empty','error');return;}
+  // CRITICAL FIX: hash the new password with PBKDF2 (auth-nev.js) BEFORE storing.
+  // Previously this stored the raw plaintext string, which verifyPassword() rejects
+  // (it only accepts a v2 {hash,salt,v} object or a 64-char SHA-256 hex string) — so
+  // after any password change, NEITHER the new password NOR the default would log in,
+  // and the default credential was destroyed. Validate + hash first; abort on bad input.
+  let _newPwHash = null;
+  if(pwEl && pwEl.value.trim()){
+    try { _newPwHash = await hashNewPassword(pwEl.value.trim()); }
+    catch(e){ toast(e.message || 'Invalid password','error'); return; }
+  }
   WARDENS[key].name = nameEl.value.trim();
-  if(pwEl&&pwEl.value.trim()) WARDENS[key].pw = pwEl.value.trim();
+  if(_newPwHash) WARDENS[key].pw = _newPwHash;
   if(pwEl) pwEl.value='';
   if(wwaEl) {
     WARDENS[key].phone = wwaEl.value.trim();

@@ -251,6 +251,11 @@ async function confirmClearAllWithPassword() {
 let reportPeriod='month';
 let reportDetail=null;
 let studentReportFilter='All';
+// PERF: pagination state for Reports KPI-card detail tables. Rendering EVERY row
+// (all payments/students) into the DOM on each card click was the source of the lag;
+// we now slice to PAGE_SIZE like the Students/Payments screens. _lastKey lets us reset
+// to page 1 only when the detail type or sub-filter changes (not when paging within one).
+let reportDetailFilter={page:1,_lastKey:''};
 
 // ════════════════════════════════════════════════════════════════════════════
 // REPORT DETAIL RENDERERS
