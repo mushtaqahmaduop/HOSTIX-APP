@@ -669,8 +669,8 @@ function renderLicenseSettingsPanel() {
         🔐 License Information
         <span style="font-size:11px;padding:2px 10px;border-radius:20px;font-weight:700;
           ${hasLic
-            ? 'background:rgba(46,201,138,0.15);border:1px solid rgba(46,201,138,0.4);color:#2ec98a'
-            : 'background:rgba(224,82,82,0.15);border:1px solid rgba(224,82,82,0.4);color:#e05252'}">
+            ? 'background:var(--success-bg);border:1px solid var(--success-border);color:var(--success-fg)'
+            : 'background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-fg)'}">
           ${hasLic ? '✅ Active' : '❌ Not Active'}
         </span>
       </div>
@@ -1117,7 +1117,7 @@ function _showExcelImportPreview(rows, errors) {
       ${rows.length>20?`<div style="padding:10px;text-align:center;font-size:12px;color:var(--text3)">… and ${rows.length-20} more rows (all will be imported)</div>`:''}
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" style="background:linear-gradient(135deg,#0d2d1a,#0a2015);border-color:rgba(46,201,138,0.5);color:var(--green)" onclick="confirmExcelImport()">✅ Import ${rows.length} Students</button>`
+   <button class="btn btn-primary" onclick="confirmExcelImport()">✅ Import ${rows.length} Students</button>`
   );
   // Store rows in a safe global — avoids JSON-in-onclick breakage on apostrophes/special chars
   window._excelImportRows = rows;

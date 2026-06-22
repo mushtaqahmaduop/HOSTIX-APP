@@ -18,7 +18,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">💰 Revenue — Paid Transactions (${periodLabel})</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('financial','#16a34a')}${pdfBtn}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('financial','var(--green)')}${pdfBtn}</div>
       </div>
       <div class="two-col" style="margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:18px;text-align:center">
@@ -57,7 +57,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">⏳ Pending Payments — All Unpaid</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('pending','#d97706')}${pdfBtn}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('pending','var(--amber)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
         <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:16px;text-align:center">
@@ -97,7 +97,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">📊 Available Fund — ${periodLabel}</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('netprofit','#7c3aed')}${pdfBtn}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('netprofit','var(--accent)')}${pdfBtn}</div>
       </div>
       <div style="background:${net>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${net>=0?'rgba(46,201,138,0.4)':'rgba(224,82,82,0.4)'};border-radius:12px;padding:22px;text-align:center;margin-bottom:16px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:${net>=0?'var(--green)':'var(--red)'};font-weight:700;margin-bottom:8px">Available Fund</div>
@@ -127,7 +127,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">👥 Student Report</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('students','#1d4ed8')}${pdfBtn}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('students','var(--blue)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
         ${badges.map(b=>`<div onclick="studentReportFilter='${b.label}';renderPage('reports')" style="background:${studentReportFilter===b.label?b.dim:'var(--card)'};border:2px solid ${studentReportFilter===b.label?b.border:'var(--border)'};border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
@@ -157,7 +157,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // ── ROOMS ──────────────────────────────────────────────────────────────────
   if (id === 'rooms') {
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','#0d9488')}${pdfBtn}</div></div>
+      <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
         <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--gold2)">${DB.rooms.length-occ}</div></div>
@@ -174,7 +174,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">📉 Expenses — ${periodLabel}</div>
-        <div style="display:flex;align-items:center;gap:10px"><div style="font-size:18px;font-weight:900;color:var(--red)">${fmtPKR(totalExp)}</div>${csvBtn('expenses','#dc2626')}${pdfBtn}</div>
+        <div style="display:flex;align-items:center;gap:10px"><div style="font-size:18px;font-weight:900;color:var(--red)">${fmtPKR(totalExp)}</div>${csvBtn('expenses','var(--red)')}${pdfBtn}</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
       ${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr>
@@ -190,7 +190,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // ── PAYMENT METHODS ────────────────────────────────────────────────────────
   if (id === 'payments') {
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','#6366f1')}${pdfBtn}</div></div>
+      <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','var(--accent)')}${pdfBtn}</div></div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
       ${pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr>
         <td class="fw-700">${escHtml(p.studentName||'—')}</td>
@@ -217,7 +217,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">🏦 Funds Transfer — All Records</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('transfers','#1d4ed8')}<button class="btn btn-primary btn-sm" onclick="showAddTransferModal()">+ New</button>${pdfBtn}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('transfers','var(--blue)')}<button class="btn btn-primary btn-sm" onclick="showAddTransferModal()">+ New</button>${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.35);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700;margin-bottom:4px">Total</div><div style="font-size:22px;font-weight:900;color:var(--blue)">${fmtPKR(totalTr)}</div><div style="font-size:10px;color:var(--text3)">${allTr.length} records</div></div>
@@ -322,7 +322,7 @@ function renderReports() {
     ${reportDetail?`<button class="btn btn-secondary btn-sm" onclick="reportDetail=null;renderPage('reports')">← Back to Reports</button>`:''}
     <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" onclick="printReport()" style="display:flex;align-items:center;gap:4px">🖨️ Print / PDF</button>
-      <button class="btn btn-primary btn-sm" onclick="downloadAllStudentsPDF()" style="background:linear-gradient(135deg,#0d2d1a,#0a2015);border:1px solid rgba(46,201,138,0.5);color:var(--green);display:flex;align-items:center;gap:4px">📥 All Students PDF</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadAllStudentsPDF()" style="color:var(--green);display:flex;align-items:center;gap:4px">📥 All Students PDF</button>
     </div>
   </div>
 
@@ -443,19 +443,19 @@ function showTransferRecordsModal() {
 
   showModal('modal-xl','🏦 Funds Transfer Records',`
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-      <div style="background:linear-gradient(135deg,#0a1828,#060f1c);border:1px solid rgba(74,156,240,0.4);border-radius:12px;padding:16px;text-align:center">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px">🏦 Total Funds Transferred</div>
         <div style="font-size:28px;font-weight:900;color:var(--blue)">${fmtPKR(totalAll)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${transfers.length} record${transfers.length!==1?'s':''} total</div>
       </div>
-      <div style="background:linear-gradient(135deg,#082818,#051a10);border:1px solid rgba(46,201,138,0.35);border-radius:12px;padding:16px;text-align:center">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px">📅 This Month</div>
         <div style="font-size:28px;font-weight:900;color:var(--green)">${fmtPKR(moTotal)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${moTransfers.length} transfer${moTransfers.length!==1?'s':''}</div>
       </div>
-      <div style="background:linear-gradient(135deg,#14082a,#0d0520);border:1px solid rgba(155,109,240,0.35);border-radius:12px;padding:16px;text-align:center">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:6px">💵 Cash vs Bank</div>
-        <div style="font-size:16px;font-weight:900;color:#fff;line-height:1.4">
+        <div style="font-size:16px;font-weight:900;color:var(--text);line-height:1.4">
           <span style="color:var(--green)">${fmtPKR(transfers.filter(t=>t.method==='Cash').reduce((s,t)=>s+Number(t.amount),0))}</span>
           <span style="color:var(--text3);font-size:12px"> cash</span><br>
           <span style="color:var(--blue)">${fmtPKR(transfers.filter(t=>t.method!=='Cash').reduce((s,t)=>s+Number(t.amount),0))}</span>
@@ -482,7 +482,7 @@ function showEditTransferModal(id) {
   const tr = (DB.transfers||[]).find(x=>x.id===id);
   if(!tr) return;
   showModal('modal-md','✏️ Edit Funds Transfer',`
-    <div style="background:linear-gradient(135deg,#0d1a2d,#081525);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
       Editing transfer recorded on <strong>${fmtDate(tr.date)}</strong>
     </div>
     <div class="form-grid">
@@ -529,7 +529,7 @@ async function submitEditTransfer(id) {
 
 function showAddTransferModal() {
   showModal('modal-md','🏦 New Funds Transfer',`
-    <div style="background:linear-gradient(135deg,#0d1a2d,#081525);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text2)">
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text2)">
       Record a cash or bank funds transfer
     </div>
     <div class="form-grid">

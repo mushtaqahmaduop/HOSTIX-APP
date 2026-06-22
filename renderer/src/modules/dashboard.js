@@ -193,14 +193,14 @@ function renderDashboard() {
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin-bottom:12px">
     <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
+      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
@@ -210,7 +210,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
+      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
     </div>
@@ -220,7 +220,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
+      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
@@ -232,7 +232,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
+      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
@@ -242,7 +242,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div class="stat-value" style="font-size:34px;margin-bottom:7px"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
+      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
@@ -1242,8 +1242,10 @@ function drawRoomDonut() {
       cutout: '65%',
       responsive: false,
       maintainAspectRatio: false,
+      animation: false,
       plugins: {
         legend: { display: false },
+        datalabels: { display: false },
         tooltip: {
           titleFont: { size: 13, weight: '700' },
           bodyFont: { size: 12, weight: '600' },
@@ -1366,6 +1368,7 @@ function drawTrendChart() {
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      animation:false,
       layout:{padding:{top:50,right:10,left:4,bottom:0}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       onHover:function(event,els){

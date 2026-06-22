@@ -181,3 +181,58 @@
 3. Keep old token aliases until all screens migrated
 4. Take before/after screenshots
 5. If unsure, stop and ask
+
+---
+
+# Session addendum — June 21, 2026 (evening)
+
+## Performance (large-data fixes for ~400 students)
+- **storage.js `saveDB()`** rewrote ALL 14 tables on every mutation (DELETE+reinsert, 92 call sites) → now **surgical, diff-based**: snapshots each table (id→JSON), writes only changed/added/deleted rows via `db:upsert`/`db:delete`. Old full rewrite kept as `_saveDBFull()` fallback. Snapshot refreshed in `loadDB()` + after each save.
+- **rooms.js / students.js renders** were O(n²) (per-row `getRoomOccupancy` / `DB.rooms.find`) → now precompute Maps once per render (O(n)).
+- **Pagination** added (50/page) to Students, Payments, Rooms via `paginate()` / `renderPager()` / `gotoPage()` in `utils.js` (+ `.pager` CSS). Page resets to 1 on filter/search change. `.page` added to studentFilter/payFilter/roomFilter.
+- **Students fee-report PDF** (`doGenerateStudentsPDF`): removed network Google-Fonts `<link>` (stalled offline) → Segoe UI; grouped payments by studentId + indexed rooms once (was O(n²)).
+- **Dashboard charts**: `animation:false` on trend + donut (laggy redraw on theme switch); donut `datalabels:{display:false}` (was stamping numbers on slices = "blurry data").
+
+## UI fixes
+- **KPI cards**: numbers were clipped + blurry → `.kpi-amt` fixed 22px (crisp), KPI grid `repeat(auto-fit,minmax(185px,1fr))` so cards wrap instead of squishing.
+- **Payments table**: removed **Date** column; frozen **Actions** column (`.col-actions` sticky right + 2px divider, opaque bg) so Delete stays visible without overlap. Whole row clickable → Edit Payment; action buttons use `event.stopPropagation()`. Removed in-row ✏️ edit button.
+
+## Phase 4 migration — COMPLETE (this session)
+- **Students** ✅ — list+modal avatars rainbow→neutral accent tokens; concession `#e05c5c`→`var(--red)`; flattened Confirm-Shift / Restore-Student button gradients. PDF templates + `#000` video bg left hardcoded (intentional).
+- **Reports** ✅ — CSV button colors→tokens; flattened transfer/edit/add modal gradient cards→`var(--bg3)`/`var(--border)`; All-Students-PDF button degraded to btn-secondary. PDF templates (`downloadDetailPDF`/`downloadReportDetailPDF`) left hardcoded.
+- **Cancellations** ✅ — only remaining hex is in print template (kept); stat cards already migrated.
+- **Issues** ✅ — 0 hex (already clean).
+- **Settings** ✅ — license status badge→success/danger tokens; import button gradient flattened. WhatsApp brand colors (#25d366/#128C7E) + room-type/accent data defaults left (not theme colors).
+- **Modals** ✅ — camera-permission banner + warden-avatar gradient→tokens; date-picker clear-hover→danger tokens. Date-picker already used `var(--x,#fallback)`; room-type color data defaults left.
+
+## ⚠️ Cleanup phase NOT done (deliberately)
+Removing legacy alias tokens (`--gold`, `--royal`, `--accent`, etc.) is **unsafe** — they are still used app-wide (this migration mapped raw hex → these existing tokens, not away from them). Do NOT delete them or the UI breaks. Token-pruning would need a full usage audit first.
+
+## Not yet tested in-app
+All above changes are code-only and pass `node --check`. The app was NOT launched/clicked-through this session (user away). Needs a manual pass before committing per ground rules.
+
+---
+
+# Session addendum 2 — June 22, 2026
+
+## Beyond-Phase-4 roadmap: Sortable columns ✅ (first item done)
+- New shared helpers in `utils.js`: `applySort(arr, filter, accessors)`, `toggleSort(filter, pageName, key)`, `sortableTh(filter, filterName, pageName, key, label, attrs)`. Blanks always sink; numeric-aware string compare.
+- `sortKey`/`sortDir` added to studentFilter, payFilter, roomFilter. Sort applied AFTER filter, BEFORE `paginate()`; clicking a header resets to page 1.
+- **Students** table: ID, Student, Room, Rent/Mo, Status headers clickable.
+- **Payments** table: Student, Room, Rent/Mo, Amt Paid, Unpaid, Method, Status clickable (date-desc remains the default when no column chosen).
+- **Rooms** is a card grid (no columns) → added a **sort dropdown** (Room#, Rent ↑/↓, Occupancy, Floor) via `setRoomSort()`.
+- CSS: `.th-sortable` / `.th-arrow` (neutral ⇅, active column highlighted blue ▲/▼).
+- Roadmap remaining: Ctrl+K command palette, loading skeletons, inline edit, bulk multi-select, CSV export on all lists, toast-with-undo, optimistic updates.
+
+## Beyond-Phase-4: CSV export on all lists ✅ (2nd item done)
+- Shared `downloadCSV(rows, filename)` in `utils.js` (UTF-8 BOM for Excel, quotes-escaped).
+- `exportStudentsCSV()` / `exportPaymentsCSV()` / `exportRoomsCSV()` — each re-applies the SAME filter + sort as its render fn, so the export matches exactly what's on screen (all pages, not just the visible page). NOTE: filter logic is duplicated from the render fns — keep in sync if filters change.
+- "📥 CSV" button added to each list's filter bar.
+- Roadmap remaining: Ctrl+K command palette, loading skeletons, inline edit, bulk multi-select, toast-with-undo, optimistic updates.
+
+## Beyond-Phase-4: Ctrl+K command palette ✅ (3rd item done)
+- New module `renderer/src/modules/command-palette.js` (registered in `index.html` before app.js). Self-contained IIFE overlay; global `Ctrl/Cmd+K` toggle; ↑↓ navigate, ↵ open, esc close; mouse hover/click.
+- Commands: navigate to all pages, actions (Add Student/Room/Payment/Expense/Cancellation/Issue, New Transfer, Export *CSV, Toggle theme — each guarded by `typeof window[fn]`), plus live **student search** (name/id → opens profile).
+- Only opens when logged in (`CUR_USER` guard). Exposes `window.openCommandPalette`.
+- "Ctrl K" hint chip added to the header search box. CSS: `.cmdk-*` in style.css.
+- Roadmap remaining: loading skeletons, inline edit, bulk multi-select, toast-with-undo, optimistic updates.

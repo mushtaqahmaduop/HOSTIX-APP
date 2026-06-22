@@ -389,7 +389,7 @@ async function restoreFromCancellation(cancId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ROOMS
 // ════════════════════════════════════════════════════════════════════════════
-let roomFilter = {status:'All', type:'All', floor:'All', search:''};
+let roomFilter = {status:'All', type:'All', floor:'All', search:'', page:1, sortKey:null, sortDir:'asc'};
 
 function downloadCancellationReport() {
   const list = DB.cancellations || [];

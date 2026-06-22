@@ -352,7 +352,7 @@ function pmBadge(m) {
       color:var(--text3,#6b7a99);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;
       transition:background 0.15s;line-height:1;padding:0;
     }
-    #_cdp-clear:hover{background:rgba(224,82,82,0.25);color:#e05252}
+    #_cdp-clear:hover{background:var(--danger-bg);color:var(--danger-fg)}
     #_cdp-nav{
       display:flex;align-items:center;justify-content:space-between;
       padding:10px 14px;gap:6px;
@@ -572,11 +572,11 @@ function _showCameraPermBanner() {
   b.id = 'cam-perm-banner';
   b.style.cssText = [
     'position:fixed','top:0','right:0','z-index:99998',
-    'background:linear-gradient(135deg,#2a0a0a,#3d0f0f)',
-    'border:1.5px solid rgba(224,82,82,0.6)',
+    'background:var(--danger-bg)',
+    'border:1.5px solid var(--danger-border)',
     'border-top:none','border-right:none',
     'border-radius:0 0 0 12px',
-    'color:#f0c0c0','font-size:12.5px','font-weight:500',
+    'color:var(--danger-fg)','font-size:12.5px','font-weight:500',
     'padding:10px 14px 10px 16px',
     'display:flex','align-items:flex-start','gap:10px',
     'max-width:340px','line-height:1.5',
@@ -584,10 +584,10 @@ function _showCameraPermBanner() {
   ].join(';');
   b.innerHTML =
     '<span style="display:inline-flex;flex-shrink:0;margin-top:1px">'+MODAL_ICONS.cameraOff+'</span>' +
-    '<span style="flex:1"><strong style="color:#e05252;display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
-    'Go to <strong style="color:#f0c0c0">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
+    '<span style="flex:1"><strong style="color:var(--danger-fg);display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
+    'Go to <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
     '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
-      'style="background:none;border:none;color:#e05252;font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
+      'style="background:none;border:none;color:var(--danger-fg);font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
       'title="Dismiss">✕</button>';
   document.body.appendChild(b);
 }
@@ -639,7 +639,7 @@ function showUserMgmt() {
     var photoSrc = w.photo || '';
     var avatarHtml = photoSrc
       ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--gold);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
-      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--gold),#9a7a1a);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed rgba(200,168,75,0.3)" title="Click to upload photo">&#x1F464;</div>';
+      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
     rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(200,168,75,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
     rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
     rows += '<div style="position:relative;flex-shrink:0">';

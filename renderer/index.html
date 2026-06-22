@@ -338,6 +338,8 @@
           style="display:none;background:rgba(255,255,255,0.08);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;margin-right:4px;height:26px;align-items:center;justify-content:center"
           onmouseover="this.style.background='rgba(255,255,255,0.15)';this.style.color='var(--text)'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='var(--text2)'"
           title="Clear search (Esc)"><span class="micon" style="font-size:16px">close</span></button>
+        <kbd onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)"
+          style="cursor:pointer;flex-shrink:0;margin-right:6px;font-size:10px;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:5px;padding:2px 6px;font-family:var(--font-mono,monospace)">Ctrl K</kbd>
       </div>
       <!-- Search results dropdown — anchored to hdr-search-wrap -->
       <div id="dash-search-results" style="display:none;position:fixed;top:56px;width:min(460px,calc(100vw - 32px));background:var(--bg2);border:1px solid var(--border2);border-radius:12px;z-index:9999;max-height:420px;overflow-y:auto;box-shadow:0 16px 50px rgba(0,0,0,0.7)"></div>
@@ -443,6 +445,7 @@
   <script src="src/modules/modals.js"></script>
   <script src="src/modules/sidebar_calendar.js"></script>
   <script src="src/modules/issues.js"></script>
+  <script src="src/modules/command-palette.js"></script>
   <!-- Boot & misc -->
   <script src="app.js" defer></script>
 </body>
