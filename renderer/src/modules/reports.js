@@ -7,10 +7,26 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+// PERF: shared room/student indexes built in ONE pass, so report tables and PDF builders
+// stop doing a DB.rooms.find / DB.students.filter per row (which was O(rows × students)).
+function _buildRoomStudentIndex() {
+  const roomById = new Map(DB.rooms.map(r=>[r.id, r]));
+  const activeStudentsByRoom = new Map();   // roomId -> [active students]
+  (DB.students||[]).forEach(t=>{
+    if(t.status!=='Active') return;
+    let arr=activeStudentsByRoom.get(t.roomId); if(!arr){ arr=[]; activeStudentsByRoom.set(t.roomId,arr); }
+    arr.push(t);
+  });
+  return { roomById, activeStudentsByRoom, occ: r => (activeStudentsByRoom.get(r.id)||[]).length };
+}
+
 function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   const periodLabel = reportPeriod==='month' ? thisMonth() : thisYear();
   const csvBtn = (type, color) => `<button onclick="downloadDetailCSV('${type}')" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📥 CSV</button>`;
   const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" style="background:var(--gold);color:#000;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📄 PDF</button>`;
+
+  // PERF: index rooms by id and active students by room ONCE (see _buildRoomStudentIndex).
+  const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom } = _buildRoomStudentIndex();
 
   // ── REVENUE ────────────────────────────────────────────────────────────────
   if (id === 'financial') {
@@ -141,7 +157,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <button onclick="studentReportFilter='All';renderPage('reports')" class="btn btn-secondary btn-sm" style="font-size:11px">✕ Clear</button>
       </div>`:''}
       <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>
-      ${filtered.map(t=>{const r=DB.rooms.find(x=>x.id===t.roomId);return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')">
+      ${filtered.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(t.name)}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(t.fatherName||'—')}</td>
         <td class="text-gold fw-700">${r?'#'+r.number:'—'}</td>
@@ -164,7 +180,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Total</div><div style="font-size:28px;font-weight:900;color:var(--blue)">${DB.rooms.length}</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Occupancy</th><th>Students</th><th>Status</th><th>Rent</th></tr></thead><tbody>
-      ${DB.rooms.map(r=>{const type=getRoomType(r);const occ2=getRoomOccupancy(r);const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:${type.color};border-color:${type.color}44">${escHtml(type.name)}</span></td><td class="text-muted">${r.floor} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
+      ${DB.rooms.map(r=>{const type=getRoomType(r);const sts=_activeStudentsByRoom.get(r.id)||[];const occ2=sts.length;return `<tr style="cursor:pointer" onclick="showRoomDetail('${r.id}')"><td class="fw-700 text-gold">#${r.number}</td><td><span class="badge" style="background:${type.color}22;color:${type.color};border-color:${type.color}44">${escHtml(type.name)}</span></td><td class="text-muted">${r.floor} Floor</td><td class="text-muted">${occ2}/${type.capacity}</td><td style="font-size:12px">${sts.map(t=>escHtml(t.name)).join(', ')||'<span style="color:var(--text3)">Empty</span>'}</td><td><span class="badge ${occ2>0?'badge-green':'badge-gray'}">${occ2>0?'Occupied':'Vacant'}</span></td><td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td></tr>`;}).join('')}
       </tbody></table></div>
     </div>`;
   }
@@ -255,7 +271,24 @@ function renderReports() {
   const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,key)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const totalExp=exps.reduce((s,e)=>s+Number(e.amount),0);
   const net=rev-totalExp;
-  const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
+
+  // PERF: index active students by room ONCE so the per-room / per-type loops below are
+  // O(students+rooms) instead of O(rooms×students). getRoomOccupancy() rescans ALL students
+  // on every call, which made Reports lag badly with hundreds of students.
+  const _activeByRoom = new Map();              // roomId -> active student count
+  const _activeIdsByType = new Map();           // typeId -> Set of active studentIds
+  const _typeIdByRoomId = new Map(DB.rooms.map(r=>[r.id, r.typeId]));
+  DB.students.forEach(t=>{
+    if(t.status!=='Active') return;
+    _activeByRoom.set(t.roomId, (_activeByRoom.get(t.roomId)||0)+1);
+    const tid=_typeIdByRoomId.get(t.roomId);
+    if(tid==null) return;
+    let set=_activeIdsByType.get(tid); if(!set){ set=new Set(); _activeIdsByType.set(tid,set); }
+    set.add(t.id);
+  });
+  const _roomOcc = r => _activeByRoom.get(r.id)||0;
+
+  const occ=DB.rooms.filter(r=>_roomOcc(r)>0).length;
   const occRate=DB.rooms.length?Math.round(occ/DB.rooms.length*100):0;
 
   // Expense by category
@@ -280,9 +313,9 @@ function renderReports() {
   // Room type table
   const rtRows=DB.settings.roomTypes.map(type=>{
     const tRooms=DB.rooms.filter(r=>r.typeId===type.id);
-    const tOcc=tRooms.filter(r=>getRoomOccupancy(r)>0).length;
-    const tIds=DB.students.filter(t=>DB.rooms.find(r=>r.typeId===type.id&&r.id===t.roomId)&&t.status==='Active').map(t=>t.id);
-    const tRev=pays.filter(p=>p.status==='Paid'&&tIds.includes(p.studentId)).reduce((s,p)=>s+Number(p.amount),0);
+    const tOcc=tRooms.filter(r=>_roomOcc(r)>0).length;
+    const tIds=_activeIdsByType.get(type.id)||new Set();   // O(1) membership instead of per-student rooms.find
+    const tRev=pays.filter(p=>p.status==='Paid'&&tIds.has(p.studentId)).reduce((s,p)=>s+Number(p.amount),0);
     return `<tr><td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
       <td class="fw-700">${tRooms.length}</td><td class="text-green fw-700">${tOcc}</td>
       <td class="text-gold">${tRooms.length-tOcc}</td><td class="text-green fw-700">${fmtPKR(tRev)}</td></tr>`;
@@ -603,9 +636,11 @@ function downloadDetailPDF(type) {
     body+=`<div class="kc" style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:18px"><span class="kl">Total Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div>`;
     body+=`<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr><td>${e.date||'—'}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="re">PKR ${Number(e.amount).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
   } else if(type==='students'){
-    body+=`<table><thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent/mo</th><th>Join Date</th><th>Status</th></tr></thead><tbody>${DB.students.map(t=>{const room=DB.rooms.find(r=>r.id===t.roomId);return `<tr><td style="font-size:10px;color:#aaa">#${t.id}</td><td>${t.name}</td><td class="go">${room?'#'+room.number:'—'}</td><td>${t.fatherName||'—'}</td><td>${t.phone||'—'}</td><td class="gr">PKR ${Number(t.rent||0).toLocaleString()}</td><td>${t.joinDate||'—'}</td><td class="${t.status==='Active'?'gr':t.status==='Blacklisted'?'re':''}">${t.status}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No students</td></tr>'}</tbody></table>`;
+    const _idx=_buildRoomStudentIndex();
+    body+=`<table><thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent/mo</th><th>Join Date</th><th>Status</th></tr></thead><tbody>${DB.students.map(t=>{const room=_idx.roomById.get(t.roomId);return `<tr><td style="font-size:10px;color:#aaa">#${t.id}</td><td>${t.name}</td><td class="go">${room?'#'+room.number:'—'}</td><td>${t.fatherName||'—'}</td><td>${t.phone||'—'}</td><td class="gr">PKR ${Number(t.rent||0).toLocaleString()}</td><td>${t.joinDate||'—'}</td><td class="${t.status==='Active'?'gr':t.status==='Blacklisted'?'re':''}">${t.status}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No students</td></tr>'}</tbody></table>`;
   } else if(type==='rooms'){
-    body+=`<table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>${DB.rooms.map(r=>{const t=getRoomType(r);const oc=getRoomOccupancy(r);const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name);return `<tr><td class="go">#${r.number}</td><td>${r.floor}</td><td>${t.name}</td><td>${t.capacity} beds</td><td class="${oc>0?'gr':''}">${oc}/${t.capacity}</td><td class="gr">PKR ${Number(r.rent||0).toLocaleString()}</td><td class="${oc>0?'gr':'go'}">${oc>0?'Occupied':'Vacant'}</td><td>${names.join(', ')||'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No rooms</td></tr>'}</tbody></table>`;
+    const _idx=_buildRoomStudentIndex();
+    body+=`<table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>${DB.rooms.map(r=>{const t=getRoomType(r);const _sts=_idx.activeStudentsByRoom.get(r.id)||[];const oc=_sts.length;const names=_sts.map(s=>s.name);return `<tr><td class="go">#${r.number}</td><td>${r.floor}</td><td>${t.name}</td><td>${t.capacity} beds</td><td class="${oc>0?'gr':''}">${oc}/${t.capacity}</td><td class="gr">PKR ${Number(r.rent||0).toLocaleString()}</td><td class="${oc>0?'gr':'go'}">${oc>0?'Occupied':'Vacant'}</td><td>${names.join(', ')||'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No rooms</td></tr>'}</tbody></table>`;
   }
   body += `<div class="ft">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>`;
   _electronPDF(`<!DOCTYPE html><html><head><title>${type} detail</title>${css}</head><body>${body}</body></html>`,
@@ -632,9 +667,11 @@ function downloadReportDetailPDF(detailId) {
     const pendPays = DB.payments.filter(p=>p.status==='Pending');
     tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td>#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td><td>${p.method||'—'}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='students') {
-    tableHTML = `<h3>Student Directory</h3><table><thead><tr><th>Name</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>${DB.students.map(t=>{const r=DB.rooms.find(x=>x.id===t.roomId);return `<tr><td>${t.name}</td><td>${r?'#'+r.number:'—'}</td><td>${fmtDate(t.joinDate)}</td><td class="green">${fmtPKR(t.rent)}</td><td>${t.status}</td><td>${t.phone||'—'}</td></tr>`;}).join('')}</tbody></table>`;
+    const _idx=_buildRoomStudentIndex();
+    tableHTML = `<h3>Student Directory</h3><table><thead><tr><th>Name</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>${DB.students.map(t=>{const r=_idx.roomById.get(t.roomId);return `<tr><td>${t.name}</td><td>${r?'#'+r.number:'—'}</td><td>${fmtDate(t.joinDate)}</td><td class="green">${fmtPKR(t.rent)}</td><td>${t.status}</td><td>${t.phone||'—'}</td></tr>`;}).join('')}</tbody></table>`;
   } else if(detailId==='rooms') {
-    tableHTML = `<h3>Room Occupancy</h3><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Capacity</th><th>Students</th><th>Status</th></tr></thead><tbody>${DB.rooms.map(r=>{const type=getRoomType(r);const occ=getRoomOccupancy(r);const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return `<tr><td class="gold">#${r.number}</td><td>${type.name}</td><td>${r.floor}</td><td>${occ}/${type.capacity}</td><td>${sts.map(t=>t.name).join(', ')||'Empty'}</td><td>${occ>0?'Occupied':'Vacant'}</td></tr>`;}).join('')}</tbody></table>`;
+    const _idx=_buildRoomStudentIndex();
+    tableHTML = `<h3>Room Occupancy</h3><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Capacity</th><th>Students</th><th>Status</th></tr></thead><tbody>${DB.rooms.map(r=>{const type=getRoomType(r);const sts=_idx.activeStudentsByRoom.get(r.id)||[];const occ=sts.length;return `<tr><td class="gold">#${r.number}</td><td>${type.name}</td><td>${r.floor}</td><td>${occ}/${type.capacity}</td><td>${sts.map(t=>t.name).join(', ')||'Empty'}</td><td>${occ>0?'Occupied':'Vacant'}</td></tr>`;}).join('')}</tbody></table>`;
   } else if(detailId==='netprofit') {
     // Full breakdown: revenue transactions + expense list + transfers deduction
     const allTr = (DB.transfers||[]).filter(t=>(t.date||'').startsWith(mo));
@@ -693,7 +730,8 @@ function printReport() {
   const expTotal=exps.reduce((s,e)=>s+Number(e.amount),0);
   const _printKey=reportPeriod==='month'?thisMonth():thisYear();
   const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-  const occ=DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
+  const _occIdx=_buildRoomStudentIndex();
+  const occ=DB.rooms.filter(r=>_occIdx.occ(r)>0).length;
   const _rptHtml = `<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -792,16 +830,18 @@ function downloadDetailCSV(type) {
     filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
     rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
     const list = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
+    const _idx=_buildRoomStudentIndex();
     list.forEach(t=>{
-      const r = DB.rooms.find(x=>x.id===t.roomId);
+      const r = _idx.roomById.get(t.roomId);
       rows.push([t.name||'—',t.fatherName||'—',r?'#'+r.number:'—',t.phone||'—',t.cnic||'—',t.joinDate||'—',t.rent,t.status||'—']);
     });
   } else if (type === 'rooms') {
     filename = 'Rooms_Occupancy.csv';
     rows.push(['Room','Floor','Type','Capacity','Occupied','Rent','Status','Students']);
+    const _idx=_buildRoomStudentIndex();
     DB.rooms.forEach(r=>{
-      const t=getRoomType(r); const oc=getRoomOccupancy(r);
-      const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name).join('; ');
+      const t=getRoomType(r); const _sts=_idx.activeStudentsByRoom.get(r.id)||[]; const oc=_sts.length;
+      const names=_sts.map(s=>s.name).join('; ');
       rows.push(['#'+r.number,r.floor||'—',t.name||'—',t.capacity,oc,r.rent,oc>0?'Occupied':'Vacant',names||'—']);
     });
   } else if (type === 'payments') {
