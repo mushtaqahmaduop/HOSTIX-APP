@@ -385,7 +385,7 @@ function showViewStudentModal(id) {
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Monthly Rent</div>
-        <div style="font-size:28px;font-weight:900;color:var(--green)">${fmtPKR(t.rent)}</div>
+        <div>${moneyValue(t.rent,{size:"display",color:"var(--green)"})}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Adm. Paid: ${fmtPKR(t.deposit||0)}</div>
       </div>
     </div>
@@ -1294,15 +1294,15 @@ function openRestoreStudentForm(studentId) {
       <!-- Net Payable summary -->
       <div class="field col-full">
         <div id="rs-total-box" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Rent</div><div id="rs-tot-rent" style="font-size:16px;font-weight:900;color:var(--blue)">PKR 0</div></div>
+          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Rent</div><div id="rs-tot-rent">${moneyValue(0,{size:"body",color:"var(--blue)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">+</div>
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Extra Charges</div><div id="rs-tot-extra" style="font-size:16px;font-weight:900;color:var(--red)">PKR 0</div></div>
+          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Extra Charges</div><div id="rs-tot-extra">${moneyValue(0,{size:"body",color:"var(--red)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">−</div>
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Concession</div><div id="rs-tot-conc" style="font-size:16px;font-weight:900;color:var(--teal)">PKR 0</div></div>
+          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Concession</div><div id="rs-tot-conc">${moneyValue(0,{size:"body",color:"var(--teal)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">=</div>
           <div style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;padding:8px 14px">
             <div style="font-size:10px;color:var(--gold2);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Net Payable</div>
-            <div id="rs-tot-net" style="font-size:22px;font-weight:900;color:var(--gold2)">PKR 0</div>
+            <div id="rs-tot-net">${moneyValue(0,{size:"section",color:"var(--gold2)"})}</div>
           </div>
         </div>
       </div>
@@ -1374,12 +1374,11 @@ function rsRecalc() {
   const conc=parseFloat(document.getElementById('rs-concession')?.value)||0;
   let extra=0; document.querySelectorAll('.rs-extra-amt').forEach(el=>{extra+=parseFloat(el.value)||0;});
   const net=rent+extra-conc;
-  const f=v=>'PKR '+Math.round(Math.abs(v)).toLocaleString();
   const el=id=>document.getElementById(id);
-  if(el('rs-tot-rent'))  el('rs-tot-rent').textContent =f(rent);
-  if(el('rs-tot-extra')) el('rs-tot-extra').textContent=f(extra);
-  if(el('rs-tot-conc'))  el('rs-tot-conc').textContent =f(conc);
-  if(el('rs-tot-net'))   el('rs-tot-net').textContent  =f(net);
+  if(el('rs-tot-rent'))  el('rs-tot-rent').innerHTML  =moneyValue(Math.abs(rent),{size:'body',color:'var(--blue)'});
+  if(el('rs-tot-extra')) el('rs-tot-extra').innerHTML =moneyValue(Math.abs(extra),{size:'body',color:'var(--red)'});
+  if(el('rs-tot-conc'))  el('rs-tot-conc').innerHTML  =moneyValue(Math.abs(conc),{size:'body',color:'var(--teal)'});
+  if(el('rs-tot-net'))   el('rs-tot-net').innerHTML   =moneyValue(Math.abs(net),{size:'section',color:'var(--gold2)'});
   const pendEl=el('rs-pending'), statEl=el('rs-pstatus');
   if(pendEl&&!pendEl.dataset.manual){
     const autoPend=Math.max(0,net-paid);

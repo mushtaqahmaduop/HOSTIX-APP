@@ -200,7 +200,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(collected)}</div>
+      <div>${moneyValue(collected,{size:"display"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
@@ -210,7 +210,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
         <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(netProfit)}</div>
+      <div>${moneyValue(netProfit,{size:"display",color:netProfit>=0?"var(--teal)":"var(--red)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
     </div>
@@ -220,7 +220,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
         <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moExp)}</div>
+      <div>${moneyValue(moExp,{size:"display",color:"var(--red)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
@@ -232,7 +232,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
         <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(moTransferTotal)}</div>
+      <div>${moneyValue(moTransferTotal,{size:"display"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
     </div>
@@ -242,7 +242,7 @@ function renderDashboard() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
         <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
-      <div class="stat-value kpi-amt"><span class="pkr">PKR</span>${fmtNum(pending)}</div>
+      <div>${moneyValue(pending,{size:"display",color:"var(--amber)"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
@@ -944,22 +944,22 @@ function renderMonthModal(monthKey, monthLabel) {
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
     <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
-      <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(rev)}</div>
+      <div>${moneyValue(rev,{size:"section",color:"var(--green)"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${paidPays.length} payments</div>
     </div>
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
-      <div style="font-size:22px;font-weight:900;color:var(--red)">${fmtPKR(expTotal)}</div>
+      <div>${moneyValue(expTotal,{size:"section",color:"var(--red)"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} records</div>
     </div>
     <div style="background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
-      <div style="font-size:22px;font-weight:900;color:${netProfit>=0?'var(--green)':'var(--red)'}">${fmtPKR(netProfit)}</div>
+      <div>${moneyValue(netProfit,{size:"section",color:netProfit>=0?"var(--green)":"var(--red)"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
     <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
-      <div style="font-size:22px;font-weight:900;color:var(--amber)">${fmtPKR(pendTotal)}</div>
+      <div>${moneyValue(pendTotal,{size:"section",color:"var(--amber)"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${pendPays.length} unpaid</div>
     </div>
   </div>
@@ -1145,24 +1145,8 @@ function printMonthReport(monthKey, monthLabel) {
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
-  <style>
-    body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:13px}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #c8a84b}
-    .title{font-size:20px;font-weight:900;color:#1e293b}.subtitle{font-size:12px;color:#64748b;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:#c8a84b22;color:#8b6a00;border:1px solid #c8a84b55}
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
-    .kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
-    .kpi .val{font-size:20px;font-weight:900;color:#1e293b}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px}
-    .section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
-    .green{color:#16a34a;font-weight:700}.red{color:#dc2626;font-weight:700}.gold{color:#854d0e;font-weight:700}
-    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
-    @media print{body{padding:16px}}
-  </style></head><body>
+  ${printDocStyles()}
+  </head><body>
   <div class="header">
     <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
     <div class="badge">Monthly Report</div>

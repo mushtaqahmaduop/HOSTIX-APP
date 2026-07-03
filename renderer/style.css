@@ -68,6 +68,34 @@
     /* Motion — avoid 'all', specify properties for performance */
     --transition:          background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
     --transition-bounce:   transform 0.2s ease, box-shadow 0.2s ease;
+
+    --font-icon: 'Material Symbols Rounded';
+
+    /* ── SEMANTIC DESIGN TOKENS (single source of truth — use these in new/edited code) ── */
+    --background:         var(--bg);
+    --surface:             var(--card);
+    --surface-secondary:   var(--card2);
+    --border-token:        var(--border);
+    --text-primary:        var(--text);
+    --text-secondary:      var(--text2);
+    --muted:               var(--text3);
+    --primary:             var(--gold);
+    --success:             var(--green);
+    --danger:              var(--red);
+    --warning:             var(--amber);
+
+    /* ── TYPOGRAPHY SCALE ── */
+    --fs-display:   clamp(32px, 2.6vw, 38px); /* KPI / hero numbers */
+    --fs-section:   22px;                      /* section titles */
+    --fs-body:      14px;
+    --fs-label:     12px;
+    --fw-display:   800;
+    --fw-section:   700;
+    --fw-body:       400;
+    --fw-label:      600;
+
+    /* ── CARD SHAPE (premium SaaS radius) ── */
+    --radius-card:  22px;
 }
 
 /* Kill ALL transitions during theme switch to prevent mass reflow */
@@ -3352,6 +3380,35 @@ body.light-theme .stat-card.glass {
     letter-spacing: 0;
 }
 
+/* ── MONEYVALUE COMPONENT ─────────────────────────────────────────────────
+   Use moneyValue(amount, opts) from utils.js to render this markup.
+   Guarantees the currency code is never duplicated and stays visually
+   subordinate to the amount everywhere in the app.
+   ─────────────────────────────────────────────────────────────────────────── */
+.money-value {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-family: var(--font);
+    font-variant-numeric: tabular-nums;
+}
+.money-value .money-cur {
+    font-size: 0.45em;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.money-value .money-amt {
+    font-weight: var(--fw-display);
+    letter-spacing: -0.5px;
+    color: inherit;
+}
+.money-value--display { font-size: var(--fs-display); }
+.money-value--section  { font-size: var(--fs-section); font-weight: var(--fw-section); }
+.money-value--body     { font-size: var(--fs-body); }
+.money-value--label    { font-size: var(--fs-label); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    TABLE PREMIUM — Zebra, hover glow, sortable
    ══════════════════════════════════════════════════════════════════════════ */
@@ -3894,13 +3951,13 @@ body.light-theme #sidebar {
     text-shadow: none;
 }
 
-/* ── NAV ITEMS — Stitch border-l-4 active style ──────────────────────────── */
+/* ── NAV ITEMS — modern pill active state ────────────────────────────────── */
 .nav-item {
-    border-radius: var(--r-md);
+    border-radius: var(--r-full);
     font-size: 13.5px;
     font-weight: 500;
     margin-bottom: 2px;
-    padding: 9px 12px;
+    padding: 9px 14px;
     border: 1px solid transparent;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
@@ -3919,6 +3976,7 @@ body.light-theme #sidebar {
     color: #7dd3fc;
     border-color: transparent;
     font-weight: 600;
+    box-shadow: 0 2px 10px rgba(255,183,128,0.35);
 }
 
 .nav-item.active::before {
@@ -3983,13 +4041,14 @@ body.light-theme .card {
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
-/* ── STAT CARDS — Stitch style with icon chip + thin progress bar ─────────── */
+/* ── STAT CARDS — Premium SaaS style: bigger radius, surface bg, soft shadow ── */
 .stat-card {
-    background: var(--bg2);
+    background: var(--surface);
     border: var(--hairline);
-    border-radius: var(--r-xl);
-    padding: 16px;
-    transition: background 0.15s ease, border-color 0.2s ease, transform 0.2s ease;
+    border-radius: var(--radius-card);
+    padding: 20px;
+    box-shadow: var(--s-elev-1);
+    transition: background 0.15s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
     overflow: hidden;
     position: relative;
 }
@@ -4063,14 +4122,14 @@ body.light-theme .card {
     margin-bottom: 6px;
 }
 
-/* Stitch stat value — stat-lg style (Outfit 800) */
+/* Stat value — display number scale (Inter, 800) */
 .stat-value {
-    font-family: 'Outfit', var(--font-display);
-    font-size: 22px;
-    font-weight: 800;
+    font-family: var(--font);
+    font-size: var(--fs-display);
+    font-weight: var(--fw-display);
     color: var(--text);
     line-height: 1;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.5px;
     margin-bottom: 4px;
 }
 
@@ -4090,11 +4149,12 @@ body.light-theme .card {
 }
 
 body.light-theme .stat-card {
-    background: #ffffff;
-    border: 1px solid #d7c3b5;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(208,138,82,0.05);
 }
 
-body.light-theme .stat-card:hover { background: #f8f7f6; }
+body.light-theme .stat-card:hover { background: #fafafa; }
 
 /* ── TABLES — Stitch clean ───────────────────────────────────────────────── */
 .table-wrap {
