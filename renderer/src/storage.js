@@ -98,7 +98,31 @@ async function loadDB() {
   }
 
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
+  _takeFullSnapshot();
   _checkBackupReminder();
+}
+
+// ── Save snapshot (for surgical, change-only saves) ─────────────────────────────
+// We keep a per-table map of id → JSON.stringify(record) representing the last
+// persisted state. saveDB() diffs the in-memory DB against this snapshot and only
+// writes the rows that actually changed/were added/deleted — instead of wiping and
+// rewriting all 14 tables on every single mutation (the old behaviour, which made
+// the app crawl once there were hundreds of students + thousands of payments).
+let _dbSnapshot = {};
+
+function _snapshotTable(records) {
+  const m = new Map();
+  for (const r of (records || [])) {
+    if (r && r.id != null) m.set(r.id, JSON.stringify(r));
+  }
+  return m;
+}
+
+function _takeFullSnapshot() {
+  _dbSnapshot = {};
+  for (const dbKey of Object.keys(_TABLE_MAP)) {
+    _dbSnapshot[dbKey] = _snapshotTable(DB[dbKey]);
+  }
 }
 
 function _loadFromLocalStorage() {
@@ -126,6 +150,50 @@ function _loadFromLocalStorage() {
 async function saveDB() {
   if (typeof enforceDataRetention === 'function') enforceDataRetention();
 
+  if (window.electronAPI && window.electronAPI.dbUpsert) {
+    try {
+      for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+        const prev = _dbSnapshot[dbKey] || new Map();
+        const cur  = DB[dbKey] || [];
+        const seen = new Set();
+
+        // Upsert new + changed rows only
+        for (const r of cur) {
+          if (!r || r.id == null) continue;
+          seen.add(r.id);
+          const js = JSON.stringify(r);
+          if (prev.get(r.id) !== js) {
+            const res = await window.electronAPI.dbUpsert(table, r.id, r);
+            if (res && res.ok === false) throw new Error(res.error || ('upsert ' + table));
+          }
+        }
+        // Delete rows that were removed in memory
+        for (const id of prev.keys()) {
+          if (!seen.has(id)) {
+            const res = await window.electronAPI.dbDelete(table, id);
+            if (res && res.ok === false) throw new Error(res.error || ('delete ' + table));
+          }
+        }
+      }
+      await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
+
+      _takeFullSnapshot();
+      if (typeof updateSidebar         === 'function') updateSidebar();
+      if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+      return true;
+    } catch (e) {
+      console.error('[HOSTIX] surgical saveDB failed, falling back to full rewrite:', e);
+      // Safety net: if anything goes wrong with the diff path, guarantee
+      // consistency by rewriting everything the old way.
+      return _saveDBFull();
+    }
+  } else {
+    return _saveToLocalStorage();
+  }
+}
+
+// Full rewrite of every table — kept as a fallback for the surgical saveDB() path.
+async function _saveDBFull() {
   if (window.electronAPI && window.electronAPI.dbBulkReplace) {
     try {
       for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
@@ -133,6 +201,7 @@ async function saveDB() {
       }
       await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
 
+      _takeFullSnapshot();
       if (typeof updateSidebar         === 'function') updateSidebar();
       if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
       return true;
@@ -246,8 +315,19 @@ if (window.electronAPI) {
       const data   = JSON.parse(jsonString);
       const dbData = data.db || data;
 
-      if (!Array.isArray(dbData.rooms) && !Array.isArray(dbData.students)) {
+      // BUG FIX (B6): was && — only caught case where BOTH were missing
+      if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
         if (typeof toast === 'function') toast('❌ Invalid backup file — missing required data', 'error');
+        return;
+      }
+
+      // BUG FIX (B6): validate each record has an id field to prevent silent import failures
+      if (dbData.students.some(function(s){ return !s || typeof s !== 'object' || !s.id; })) {
+        if (typeof toast === 'function') toast('❌ Backup has corrupted student records — missing id fields', 'error');
+        return;
+      }
+      if (dbData.rooms.some(function(r){ return !r || typeof r !== 'object' || !r.id; })) {
+        if (typeof toast === 'function') toast('❌ Backup has corrupted room records — missing id fields', 'error');
         return;
       }
 

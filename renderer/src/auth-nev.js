@@ -100,6 +100,13 @@ async function verifyPassword(plain, stored) {
     const candidate = await _sha256v1(plain);
     return _ctEqual(candidate, stored);
   }
+  // RESCUE — a raw plaintext password got stored by an older buggy change-password
+  // modal (it skipped hashing). Such installs are otherwise locked out completely.
+  // Accept a direct match here; checkLogin's _migrateIfNeeded() immediately re-hashes
+  // it to PBKDF2 v2, so the plaintext exists only until the next successful login.
+  if (typeof stored === 'string' && stored.length > 0) {
+    return _ctEqual(plain, stored);
+  }
   return false;
 }
  

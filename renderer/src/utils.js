@@ -156,6 +156,118 @@ function debounce(fn, delay) {
   };
 }
 
+// ── Pagination ──────────────────────────────────────────────────────────────────
+// Large lists (students/payments/rooms) only render one page of rows at a time so
+// the browser isn't asked to build thousands of DOM nodes in one blocking pass.
+const PAGE_SIZE = 50;
+
+// Slice a filtered array down to the current page. `filter` is the module's filter
+// state object (must have a numeric `.page`). Returns { slice, page, pages, total, from, to }.
+function paginate(arr, filter) {
+  const total = arr.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  let page = filter && filter.page ? filter.page : 1;
+  if (page > pages) page = pages;
+  if (page < 1) page = 1;
+  if (filter) filter.page = page; // clamp back so the controls stay in sync
+  const start = (page - 1) * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
+  return { slice: arr.slice(start, end), page, pages, total, from: total ? start + 1 : 0, to: end };
+}
+
+// Jump to a page for a given filter object, then re-render that page (scrolled to top).
+function gotoPage(filter, pageName, page) {
+  filter.page = page;
+  renderPage(pageName, true);
+}
+
+// ── Sorting ──────────────────────────────────────────────────────────────────────
+// Sort a filtered array by filter.sortKey / filter.sortDir using a map of
+// key → accessor(row). Returns a NEW array (or the same array if no active sort).
+function applySort(arr, filter, accessors) {
+  const key = filter && filter.sortKey;
+  if (!key || !accessors || !accessors[key]) return arr;
+  const acc = accessors[key];
+  const dir = filter.sortDir === 'desc' ? -1 : 1;
+  return arr.slice().sort(function (a, b) {
+    let va = acc(a), vb = acc(b);
+    const na = (va === null || va === undefined || va === '');
+    const nb = (vb === null || vb === undefined || vb === '');
+    if (na && nb) return 0;
+    if (na) return 1;   // blanks always sink to the bottom
+    if (nb) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+  });
+}
+
+// Build CSV text from an array of row-arrays (first row = headers) and download it.
+function downloadCSV(rows, filename) {
+  if (!rows || rows.length <= 1) { if (typeof toast === 'function') toast('No data to export', 'error'); return; }
+  const csv = rows.map(function (r) {
+    return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM → Excel reads UTF-8
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+  if (typeof toast === 'function') toast('Downloaded: ' + filename, 'success');
+}
+
+// Toggle the sort for a column: first click = asc, second = desc, then re-render.
+function toggleSort(filter, pageName, key) {
+  if (filter.sortKey === key) {
+    filter.sortDir = filter.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    filter.sortKey = key;
+    filter.sortDir = 'asc';
+  }
+  filter.page = 1;
+  renderPage(pageName, true);
+}
+
+// Render a clickable sortable <th>. `filterName` is the GLOBAL var name of the
+// filter object so inline onclick can reference it. `attrs` = extra th attributes.
+function sortableTh(filter, filterName, pageName, key, label, attrs) {
+  const active = filter.sortKey === key;
+  const arrow = active ? (filter.sortDir === 'asc' ? '▲' : '▼') : '⇅';
+  return '<th class="th-sortable' + (active ? ' sorted' : '') + '" ' + (attrs || '') +
+    ' onclick="toggleSort(' + filterName + ',\'' + pageName + '\',\'' + key + '\')" title="Sort by ' + label + '">' +
+    '<span class="th-sort-inner">' + label + '<span class="th-arrow">' + arrow + '</span></span></th>';
+}
+
+// Build the pager control bar. `filterName` is the GLOBAL variable name of the
+// filter object (e.g. 'studentFilter') so inline onclick can reference it.
+function renderPager(info, filterName, pageName) {
+  if (info.pages <= 1) {
+    return `<div class="pager"><span class="pager-info">${info.total} total</span></div>`;
+  }
+  const btn = (label, target, opts) => {
+    opts = opts || {};
+    if (opts.disabled) return `<button class="pager-btn" disabled>${label}</button>`;
+    if (opts.active)   return `<button class="pager-btn active">${label}</button>`;
+    return `<button class="pager-btn" onclick="gotoPage(${filterName},'${pageName}',${target})">${label}</button>`;
+  };
+  const { page, pages } = info;
+  // Window of page numbers around the current page (max 5).
+  let lo = Math.max(1, page - 2), hi = Math.min(pages, lo + 4);
+  lo = Math.max(1, hi - 4);
+  let nums = '';
+  if (lo > 1) nums += btn('1', 1) + (lo > 2 ? '<span class="pager-gap">…</span>' : '');
+  for (let i = lo; i <= hi; i++) nums += btn(String(i), i, { active: i === page });
+  if (hi < pages) nums += (hi < pages - 1 ? '<span class="pager-gap">…</span>' : '') + btn(String(pages), pages);
+  return `<div class="pager">
+    <span class="pager-info">Showing ${info.from}–${info.to} of ${info.total}</span>
+    <div class="pager-controls">
+      ${btn('‹ Prev', page - 1, { disabled: page <= 1 })}
+      ${nums}
+      ${btn('Next ›', page + 1, { disabled: page >= pages })}
+    </div>
+  </div>`;
+}
+
 // ── Course autocomplete ───────────────────────────────────────────────────────
 const COURSE_LIST = [
   // Medical

@@ -50,30 +50,31 @@ function renderCancellations(filterStatus='All') {
 
   return `
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-    <div onclick="renderPage('cancellations_All')" style="background:${filterStatus==='All'?'var(--bg3)':'var(--card)'};border:1px solid ${filterStatus==='All'?'var(--border2)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      <div style="font-size:20px;margin-bottom:6px">${icon('list')}</div>
-      <div style="font-size:36px;font-weight:900;color:var(--text);line-height:1;margin-bottom:4px">${list.length}</div>
+    <div class="stat-card gold" onclick="renderPage('cancellations_All')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='All'?';border-color:var(--gold)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      ${filterStatus==='All'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--gold)"></div>':''}
+      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">${icon('list')}</div>
+      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px">${list.length}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='All'?'var(--gold2)':'var(--text3)'}">All Records</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='All'?'▲ showing all':'click to show all'}</div>
     </div>
-    <div onclick="renderPage('cancellations_Pending')" style="background:${filterStatus==='Pending'?'var(--red-dim)':'var(--card)'};border:1px solid ${filterStatus==='Pending'?'rgba(224,82,82,0.4)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Pending'?`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>`:''}
-      <div style="font-size:20px;margin-bottom:6px">🚨</div>
-      <div style="font-size:36px;font-weight:900;color:var(--red);line-height:1;margin-bottom:4px">${pending.length}</div>
+    <div class="stat-card red" onclick="renderPage('cancellations_Pending')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Pending'?';border-color:var(--red)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      ${filterStatus==='Pending'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>':''}
+      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">🚨</div>
+      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px;color:var(--red)">${pending.length}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Pending'?'var(--red)':'var(--text3)'}">Pending</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Pending'?'▲ showing':'Awaiting action'}</div>
     </div>
-    <div onclick="renderPage('cancellations_Confirmed')" style="background:${filterStatus==='Confirmed'?'rgba(224,82,82,0.08)':'var(--card)'};border:1px solid ${filterStatus==='Confirmed'?'rgba(224,82,82,0.3)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Confirmed'?`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>`:''}
-      <div style="font-size:20px;margin-bottom:6px">${icon('check')}</div>
-      <div style="font-size:36px;font-weight:900;color:var(--text2);line-height:1;margin-bottom:4px">${confirmed.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Confirmed'?'var(--red)':'var(--text3)'}">Confirmed</div>
+    <div class="stat-card teal" onclick="renderPage('cancellations_Confirmed')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Confirmed'?';border-color:var(--teal)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      ${filterStatus==='Confirmed'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--teal)"></div>':''}
+      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">${icon('check')}</div>
+      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px">${confirmed.length}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Confirmed'?'var(--teal)':'var(--text3)'}">Confirmed</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Confirmed'?'▲ showing':'Students left'}</div>
     </div>
-    <div onclick="renderPage('cancellations_Restored')" style="background:${filterStatus==='Restored'?'var(--green-dim)':'var(--card)'};border:1px solid ${filterStatus==='Restored'?'rgba(46,201,138,0.4)':'var(--border)'};border-radius:var(--radius);padding:18px 16px;text-align:center;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Restored'?`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>`:''}
-      <div style="font-size:20px;margin-bottom:6px">↩️</div>
-      <div style="font-size:36px;font-weight:900;color:var(--green);line-height:1;margin-bottom:4px">${restored.length}</div>
+    <div class="stat-card green" onclick="renderPage('cancellations_Restored')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Restored'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      ${filterStatus==='Restored'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
+      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">↩️</div>
+      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px;color:var(--green)">${restored.length}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Restored'?'var(--green)':'var(--text3)'}">Restored</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Restored'?'▲ showing':'Reversed cancels'}</div>
     </div>
@@ -388,7 +389,7 @@ async function restoreFromCancellation(cancId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ROOMS
 // ════════════════════════════════════════════════════════════════════════════
-let roomFilter = {status:'All', type:'All', floor:'All', search:''};
+let roomFilter = {status:'All', type:'All', floor:'All', search:'', page:1, sortKey:null, sortDir:'asc'};
 
 function downloadCancellationReport() {
   const list = DB.cancellations || [];

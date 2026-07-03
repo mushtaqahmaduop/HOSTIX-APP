@@ -7,11 +7,17 @@
 
 // ── THEME SYSTEM ─────────────────────────────────────────────────────────────
 function toggleTheme() {
+  document.body.classList.add('no-transition');
   const isLight = document.body.classList.toggle('light-theme');
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
   updateThemeUI(isLight);
-  // Re-draw charts if needed for contrast
-  if (typeof drawTrendChart === 'function') drawTrendChart();
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      document.body.classList.remove('no-transition');
+    });
+  });
+  if (typeof drawTrendChart === 'function') setTimeout(drawTrendChart, 50);
+  if (typeof drawRoomDonut === 'function') setTimeout(drawRoomDonut, 50);
 }
 function updateThemeUI(isLight) {
   const icon = document.getElementById('theme-icon');
@@ -71,4 +77,5 @@ function applySavedSidebar() {
   }
 }
 
-document.getElementById('hdr-date').textContent = new Date().toLocaleDateString('en-PK',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+var _hdrDate = document.getElementById('hdr-date');
+if(_hdrDate) _hdrDate.textContent = new Date().toLocaleDateString('en-PK',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});

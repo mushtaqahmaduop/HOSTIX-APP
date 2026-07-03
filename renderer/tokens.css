@@ -1,0 +1,216 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTIX — Enterprise Design Tokens (Phase 1)
+
+   This file loads BEFORE style.css. It defines the new token system that
+   screens will migrate to one at a time. Existing --gold, --royal, --bg
+   tokens in style.css continue to work unchanged.
+
+   Rule: Color = meaning. If a color isn't telling the user something,
+   it shouldn't be there.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ════════════════════════════════════════════════════════════════════════
+     NEUTRALS — workhorse, 90% of the UI
+     ════════════════════════════════════════════════════════════════════════ */
+  --gray-50:  #fafafa;
+  --gray-100: #f5f5f5;
+  --gray-200: #e5e5e5;
+  --gray-300: #d4d4d4;
+  --gray-400: #a3a3a3;
+  --gray-500: #737373;
+  --gray-600: #525252;
+  --gray-700: #404040;
+  --gray-800: #262626;
+  --gray-900: #171717;
+  --gray-950: #0a0a0a;
+
+  /* ════════════════════════════════════════════════════════════════════════
+     ACCENT — violet, used sparingly
+     ════════════════════════════════════════════════════════════════════════ */
+  --accent-50:  #f5f3ff;
+  --accent-100: #ede9fe;
+  --accent-200: #ddd6fe;
+  --accent-300: #c4b5fd;
+  --accent-400: #a78bfa;
+  --accent-500: #8b5cf6;
+  --accent-600: #7c3aed;
+  --accent-700: #6d28d9;
+  --accent-800: #5b21b6;
+  --accent-900: #4c1d95;
+
+  /* ════════════════════════════════════════════════════════════════════════
+     SEMANTIC — only for status, never decoration
+     ════════════════════════════════════════════════════════════════════════ */
+  --success-bg:     #ecfdf5;
+  --success-fg:     #047857;
+  --success-border: #a7f3d0;
+
+  --warning-bg:     #fffbeb;
+  --warning-fg:     #b45309;
+  --warning-border: #fde68a;
+
+  --danger-bg:      #fef2f2;
+  --danger-fg:      #b91c1c;
+  --danger-border:  #fecaca;
+
+  --info-bg:        #eff6ff;
+  --info-fg:        #1d4ed8;
+  --info-border:    #bfdbfe;
+
+  /* ════════════════════════════════════════════════════════════════════════
+     SURFACE
+     ════════════════════════════════════════════════════════════════════════ */
+  --surface:        #ffffff;
+  --surface-muted:  var(--gray-50);
+  --surface-sunken: var(--gray-100);
+  --surface-border: var(--gray-200);
+  --surface-divider: var(--gray-200);
+
+  /* ════════════════════════════════════════════════════════════════════════
+     TEXT
+     ════════════════════════════════════════════════════════════════════════ */
+  --text-primary:   var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-tertiary:  var(--gray-400);
+  --text-on-accent: #ffffff;
+  --text-link:      var(--accent-700);
+
+  /* ════════════════════════════════════════════════════════════════════════
+     ELEVATION (flat, no glow)
+     ════════════════════════════════════════════════════════════════════════ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  /* ════════════════════════════════════════════════════════════════════════
+     RADIUS & SPACING
+     ════════════════════════════════════════════════════════════════════════ */
+  --radius-sm-new: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ════════════════════════════════════════════════════════════════════════
+     TYPOGRAPHY
+     ════════════════════════════════════════════════════════════════════════ */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 14px;
+  --text-md:   15px;
+  --text-lg:   17px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --leading-tight:  1.25;
+  --leading-normal: 1.5;
+  --leading-loose:  1.75;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — MORE desaturated, not less
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --surface:         #141414;
+  --surface-muted:   #1c1c1c;
+  --surface-sunken:  #0f0f0f;
+  --surface-border:  #2a2a2a;
+  --surface-divider: #262626;
+
+  --text-primary:    #e5e5e5;
+  --text-secondary:  #a3a3a3;
+  --text-tertiary:   #737373;
+
+  --accent-600:      #8b5cf6;
+  --accent-700:      #a78bfa;
+
+  --success-bg:      rgba(52, 211, 153, 0.1);
+  --success-fg:      #34d399;
+  --success-border:  rgba(52, 211, 153, 0.2);
+
+  --warning-bg:      rgba(251, 191, 36, 0.1);
+  --warning-fg:      #fbbf24;
+  --warning-border:  rgba(251, 191, 36, 0.2);
+
+  --danger-bg:       rgba(248, 113, 113, 0.1);
+  --danger-fg:       #f87171;
+  --danger-border:   rgba(248, 113, 113, 0.2);
+
+  --info-bg:         rgba(96, 165, 250, 0.1);
+  --info-fg:         #60a5fa;
+  --info-border:     rgba(96, 165, 250, 0.2);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Light mode overrides for new tokens */
+body.light-theme {
+  --surface:         #ffffff;
+  --surface-muted:   var(--gray-50);
+  --surface-sunken:  var(--gray-100);
+  --surface-border:  var(--gray-200);
+  --surface-divider: var(--gray-200);
+
+  --text-primary:    var(--gray-900);
+  --text-secondary:  var(--gray-600);
+  --text-tertiary:   var(--gray-400);
+
+  --accent-600:      #7c3aed;
+  --accent-700:      #6d28d9;
+
+  --success-bg:      #ecfdf5;
+  --success-fg:      #047857;
+  --success-border:  #a7f3d0;
+
+  --warning-bg:      #fffbeb;
+  --warning-fg:      #b45309;
+  --warning-border:  #fde68a;
+
+  --danger-bg:       #fef2f2;
+  --danger-fg:       #b91c1c;
+  --danger-border:   #fecaca;
+
+  --info-bg:         #eff6ff;
+  --info-fg:         #1d4ed8;
+  --info-border:     #bfdbfe;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEGACY ALIASES — keep until Phase 4 complete
+
+   These bridge old token names to new values. Any unmigrated view
+   still works. Do NOT remove early.
+
+   When migrating a screen, switch from old to new tokens. After ALL
+   screens are migrated, remove these aliases.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --accent:           var(--accent-600);
+  --accent-soft:      var(--accent-100);
+  --accent-strong:    var(--accent-700);
+}

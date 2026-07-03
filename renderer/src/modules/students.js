@@ -2,18 +2,20 @@
    Contains: renderStudents, showAddStudentModal, submitAddStudent,
              showViewStudentModal, showEditStudentModal, submitEditStudent,
              confirmDeleteStudent, showRoomShiftModal, submitRoomShift,
-             photo upload/camera, quickCancelStudent, shareStudentWhatsApp,
+             photo upload/camera, quickCancelStudent,
              printStudentCard, downloadAllStudentsPDF, formerStudents flow,
              filterRoomSearch, pickRoomSearch, extra charge helpers
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
 function renderStudents() {
+  // PERF: build a roomId → room lookup once, instead of DB.rooms.find() per student row.
+  const _roomById = new Map(DB.rooms.map(r=>[r.id, r]));
   let students = DB.students.filter(t=>{
     if(studentFilter.status!=='All' && t.status!==studentFilter.status) return false;
     if(studentFilter.search){
       const s=studentFilter.search.toLowerCase();
-      const room4s = DB.rooms.find(r=>r.id===t.roomId);
+      const room4s = _roomById.get(t.roomId);
       if(![t.name,t.fatherName,t.id,t.cnic,t.phone,t.email,t.address,t.emergencyContact,t.occupation||t.course,room4s?.number&&String(room4s.number),room4s?.floor].some(f=>f&&String(f).toLowerCase().includes(s))) return false;
     }
     return true;
@@ -27,42 +29,50 @@ function renderStudents() {
       <button class="btn btn-primary" onclick="showAddStudentModal()">+ Add Student</button>
     </div>`;
 
+  students = applySort(students, studentFilter, {
+    id:     t => t.id,
+    name:   t => t.name,
+    room:   t => { const r = _roomById.get(t.roomId); return r ? r.number : ''; },
+    rent:   t => Number(t.rent || 0),
+    status: t => t.status
+  });
+  const _pg = paginate(students, studentFilter);
+
   return `
   <div class="filter-bar">
     <div class="search-wrap">
       <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-      <input class="form-control" id="search-students" placeholder="Name, father, ID, CNIC, phone, email, room, floor, course…" value="${escHtml(studentFilter.search)}" oninput="capFirstChar(this);studentFilter.search=this.value;_dStudents();toggleClearBtn('search-students','clear-students')">
-      <button class="search-clear ${studentFilter.search?'visible':''}" id="clear-students" onclick="studentFilter.search='';document.getElementById('search-students').value='';this.classList.remove('visible');renderPage('students')" title="Clear">✕</button>
+      <input class="form-control" id="search-students" placeholder="Name, father, ID, CNIC, phone, email, room, floor, course…" value="${escHtml(studentFilter.search)}" oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents();toggleClearBtn('search-students','clear-students')">
+      <button class="search-clear ${studentFilter.search?'visible':''}" id="clear-students" onclick="studentFilter.search='';studentFilter.page=1;document.getElementById('search-students').value='';this.classList.remove('visible');renderPage('students')" title="Clear">✕</button>
     </div>
     <div class="filter-tabs">
-      ${['All','Active','Left','Blacklisted'].map(s=>`<button class="ftab ${studentFilter.status===s?'active':''}" onclick="studentFilter.status='${s}';renderPage('students')">${s}</button>`).join('')}
+      ${['All','Active','Left','Blacklisted'].map(s=>`<button class="ftab ${studentFilter.status===s?'active':''}" onclick="studentFilter.status='${s}';studentFilter.page=1;renderPage('students')">${s}</button>`).join('')}
     </div>
     <span class="text-muted" style="font-size:12px;margin-left:auto">${students.length} students</span>
+    <button class="btn btn-secondary btn-sm" onclick="exportStudentsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
   </div>
   <div class="table-wrap">
     <table style="font-size:12px;border-collapse:collapse">
       <thead><tr>
-        <th style="width:60px;padding:8px 8px">ID</th>
-        <th style="min-width:140px;padding:8px 8px">Student</th>
-        <th style="min-width:110px;padding:8px 8px">Room</th>
+        ${sortableTh(studentFilter,'studentFilter','students','id','ID','style="width:60px;padding:8px 8px"')}
+        ${sortableTh(studentFilter,'studentFilter','students','name','Student','style="min-width:140px;padding:8px 8px"')}
+        ${sortableTh(studentFilter,'studentFilter','students','room','Room','style="min-width:110px;padding:8px 8px"')}
         <th style="min-width:120px;padding:8px 8px">Phone / Emergency</th>
         <th style="min-width:120px;padding:8px 8px">CNIC</th>
         <th style="min-width:120px;padding:8px 8px">Address</th>
         <th style="min-width:100px;padding:8px 8px">Course</th>
-        <th style="min-width:80px;padding:8px 8px">Rent/Mo</th>
-        <th style="min-width:70px;padding:8px 8px">Status</th>
-        <th style="min-width:90px;padding:8px 8px">Actions</th>
+        ${sortableTh(studentFilter,'studentFilter','students','rent','Rent/Mo','style="min-width:80px;padding:8px 8px"')}
+        ${sortableTh(studentFilter,'studentFilter','students','status','Status','style="min-width:70px;padding:8px 8px"')}
+        <th class="col-actions" style="min-width:90px;padding:8px 8px">Actions</th>
       </tr></thead>
       <tbody>
         ${students.length===0?`<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No students match filters</td></tr>`:
-        students.map(t=>{
-          const room=DB.rooms.find(r=>r.id===t.roomId);
+        _pg.slice.map(t=>{
+          const room=_roomById.get(t.roomId);
           const av=t.name?t.name[0].toUpperCase():'?';
-          const colors=['#4a9cf0','#9b6df0','#2ec98a','#c8a84b','#f0a030','#e05252','#0fbcad'];
-          const c=colors[t.name?.charCodeAt(0)%colors.length]||'#4a9cf0';
           return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
             <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--gold2);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
-            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:${c}22;color:${c};width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
+            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:var(--bg3);color:var(--accent);width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
             <td style="padding:8px 6px"><span class="text-gold fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
             <td style="padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}${t.emergencyContact?'<div style="font-size:10px;color:var(--text3);margin-top:2px">🆘 '+escHtml(t.emergencyContact)+'</div>':''}</td>
             <td style="padding:8px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${escHtml(t.cnic||'—')}</td>
@@ -70,7 +80,7 @@ function renderStudents() {
             <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.occupation||t.course||'—')}</td>
             <td style="padding:8px 6px" class="text-green fw-700">${fmtPKR(t.rent)}</td>
             <td style="padding:8px 6px">${statusBadge(t.status||'Active')}</td>
-            <td style="padding:8px 4px">
+            <td class="col-actions" style="padding:8px 4px">
               <div style="display:flex;gap:3px;flex-wrap:nowrap;white-space:nowrap">
                 <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:11px">👁</button>
                 <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="color:var(--blue);padding:4px 7px;font-size:11px">🔀</button>
@@ -81,7 +91,33 @@ function renderStudents() {
         }).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>
+  ${renderPager(_pg, 'studentFilter', 'students')}`;
+}
+
+// Export the currently filtered + sorted students to CSV. (Mirrors renderStudents' filter/sort.)
+function exportStudentsCSV() {
+  const _roomById = new Map(DB.rooms.map(r=>[r.id, r]));
+  let students = DB.students.filter(t=>{
+    if(studentFilter.status!=='All' && t.status!==studentFilter.status) return false;
+    if(studentFilter.search){
+      const s=studentFilter.search.toLowerCase();
+      const room4s = _roomById.get(t.roomId);
+      if(![t.name,t.fatherName,t.id,t.cnic,t.phone,t.email,t.address,t.emergencyContact,t.occupation||t.course,room4s?.number&&String(room4s.number),room4s?.floor].some(f=>f&&String(f).toLowerCase().includes(s))) return false;
+    }
+    return true;
+  });
+  students = applySort(students, studentFilter, {
+    id:t=>t.id, name:t=>t.name,
+    room:t=>{ const r=_roomById.get(t.roomId); return r?r.number:''; },
+    rent:t=>Number(t.rent||0), status:t=>t.status
+  });
+  const rows=[['ID','Name','Father Name','Room','Floor','Phone','Emergency','CNIC','Address','Course','Rent/Mo','Status']];
+  students.forEach(t=>{
+    const r=_roomById.get(t.roomId);
+    rows.push([t.id,t.name||'',t.fatherName||'',r?'#'+r.number:'',r?r.floor:'',t.phone||'',t.emergencyContact||'',t.cnic||'',t.address||'',t.occupation||t.course||'',t.rent||0,t.status||'Active']);
+  });
+  downloadCSV(rows, 'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+today()+'.csv');
 }
 
 function showAddStudentModal(presetRoomId='') {
@@ -332,12 +368,10 @@ function showViewStudentModal(id) {
   // Due = only actual unpaid remainder
   const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const av=t.name?t.name[0].toUpperCase():'?';
-  const colors=['#4a9cf0','#9b6df0','#2ec98a','#c8a84b','#f0a030','#e05252','#0fbcad'];
-  const ac=colors[t.name?.charCodeAt(0)%colors.length]||'#4a9cf0';
   showModal('modal-xl',``,`
     <!-- PROFILE HEADER -->
     <div style="background:linear-gradient(135deg,var(--bg3),var(--bg4));border-radius:12px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;border:1px solid var(--border2)">
-      <div style="width:72px;height:72px;border-radius:18px;background:${ac}22;border:2px solid ${ac}55;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;color:${ac};flex-shrink:0;overflow:hidden">
+      <div style="width:72px;height:72px;border-radius:18px;background:var(--bg2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;color:var(--accent);flex-shrink:0;overflow:hidden">
         ${t.docs?.photo ? `<img src="${t.docs.photo}" style="width:100%;height:100%;object-fit:cover">` : av}
       </div>
       <div style="flex:1">
@@ -417,7 +451,7 @@ function showViewStudentModal(id) {
           let paidCell='<span style="font-weight:800;color:var(--green)">'+fmtPKR(p.amount)+'</span>';
           if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--blue);font-weight:700;margin-top:2px">🎓 +'+fmtPKR(admFee)+' adm.</div>';
           extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--amber);font-weight:700;margin-top:1px">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
-          if(conc>0) paidCell+='<div style="font-size:10px;color:#e05c5c;font-weight:700;margin-top:1px">−'+fmtPKR(conc)+' concession</div>';
+          if(conc>0) paidCell+='<div style="font-size:10px;color:var(--red);font-weight:700;margin-top:1px">−'+fmtPKR(conc)+' concession</div>';
           return '<tr style="border-top:1px solid var(--border);background:'+(i%2?'var(--bg3)':'transparent')+'">'
           +'<td style="padding:10px 14px;font-weight:600">'+escHtml(p.month||'—')+'</td>'
           +'<td style="padding:10px 14px;font-weight:800;color:var(--text)">'+(mRent>0?fmtPKR(mRent):'<span style="color:var(--text3)">—</span>')+'</td>'
@@ -477,7 +511,6 @@ function showViewStudentModal(id) {
       </div>`;
     })()}
   `,`
-    <button class="btn btn-secondary" onclick="shareStudentWhatsApp('${id}')">&#x1F4F1; WhatsApp</button>
     <button class="btn btn-secondary" onclick="printStudentCard('${id}')">&#x1F5A8; Print</button>
     <button class="btn btn-secondary" style="background:var(--blue-dim);border-color:rgba(74,156,240,0.35);color:var(--blue)" onclick="closeModal();showRoomShiftModal('${id}')">🔀 Shift Room</button>
     <button class="btn btn-secondary" onclick="closeModal();showEditStudentModal('${id}')">&#x270F; Edit</button>
@@ -704,40 +737,6 @@ async function quickCancelStudent(studentId) {
   if(currentPage==='dashboard') renderPage('dashboard');
 }
 
-function shareStudentWhatsApp(id) {
-  const t=DB.students.find(x=>x.id===id); if(!t) return;
-  const room=DB.rooms.find(r=>r.id===t.roomId);
-  const payHistory=DB.payments.filter(p=>p.studentId===id);
-  const totalPaid=payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  // FIX 1: use unpaid field so partial payments are not double-counted
-  const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const msg=`*${DB.settings.hostelName}*
-━━━━━━━━━━━━━━━━━━━━
-👤 *Student Profile*
-━━━━━━━━━━━━━━━━━━━━
-*Name:* ${t.name}
-*ID:* ${t.id}
-*Father:* ${t.fatherName||'—'}
-*CNIC:* ${t.cnic||'—'}
-*Phone:* ${t.phone||'—'}
-*Email:* ${t.email||'—'}
-*Emergency:* ${t.emergencyContact||'—'}
-━━━━━━━━━━━━━━━━━━━━
-🏠 *Room Details*
-*Room:* #${room?.number||'—'} (${room?DB.settings.roomTypes.find(x=>x.id===room.typeId)?.name:'—'})
-*Floor:* ${room?.floor||'—'}
-*Monthly Rent:* ${fmtPKR(t.rent)}
-*Amount Paid:* ${fmtPKR(totalPaid)}
-━━━━━━━━━━━━━━━━━━━━
-💰 *Payment Summary*
-*Total Paid:* ${fmtPKR(totalPaid)}
-*Outstanding:* ${fmtPKR(totalDue)}
-*Status:* ${t.status}
-*Payment Method:* ${t.paymentMethod||'Cash'}
-━━━━━━━━━━━━━━━━━━━━
-Generated by ${DB.settings.hostelName} MS`;
-  openExternalLink('whatsapp://send?text='+encodeURIComponent(msg));
-}
 function printStudentCard(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const room=DB.rooms.find(r=>r.id===t.roomId);
@@ -1059,7 +1058,7 @@ function showRoomShiftModal(studentId) {
     </div>
   `,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" style="background:linear-gradient(135deg,var(--blue),#2a6cc0)" onclick="submitRoomShift('${studentId}')">🔀 Confirm Shift</button>`
+   <button class="btn btn-primary" onclick="submitRoomShift('${studentId}')">🔀 Confirm Shift</button>`
   );
 }
 
@@ -1139,7 +1138,7 @@ async function submitRoomShift(studentId) {
 // ════════════════════════════════════════════════════════════════════════════
 // PAYMENTS
 // ════════════════════════════════════════════════════════════════════════════
-let payFilter = {status:'All', method:'All', search:'', showAll: false};
+let payFilter = {status:'All', method:'All', search:'', showAll: false, page:1, sortKey:null, sortDir:'asc'};
 
 // ── FORMER STUDENTS — search & restore ───────────────────────────────────────
 function showFormerStudentsModal() {
@@ -1223,7 +1222,7 @@ function formerStudentSearch(query) {
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
         <button onclick="openRestoreStudentForm('${s.id}')"
-          style="background:linear-gradient(135deg,#00c853,#00e676);border:none;color:#060c18;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px">
+          style="background:var(--green);border:none;color:#fff;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6" /> <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
           Restore Student
         </button>
@@ -1435,7 +1434,7 @@ async function submitRestoreStudent(studentId) {
     if(extraCharges.length) notesParts.push('Charges: '+extraCharges.map(c=>`${c.label} ${fmtPKR(c.amount)}`).join(', '));
     if(concession>0) notesParts.push(`Concession: ${fmtPKR(concession)}${concReason?' ('+concReason+')':''}`);
     if(extraNotes) notesParts.push(extraNotes);
-    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,amount,unpaid,fee:0,extraCharges,extraTotal,concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
+    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
   }
   if(!DB.activityLog) DB.activityLog=[];
   DB.activityLog.unshift({id:uid(),type:'restore',icon:'🔄',text:`${t.name} restored to Room #${room?.number||''}`,date:new Date().toISOString()});
@@ -1471,7 +1470,7 @@ function downloadAllStudentsPDF() {
     +icon('checkmark','xs')+' Pending / unpaid balance for that month<br>'
     +icon('checkmark','xs')+' Payment status badge<br>'
     +icon('checkmark','xs')+' <strong style="color:var(--amber)">Expenses summary badge &amp; full breakdown</strong><br>'
-    +icon('checkmark','xs')+' <strong style="color:var(--blue)">Transfer to Owner badge &amp; full breakdown</strong><br>'
+    +icon('checkmark','xs')+' <strong style="color:var(--blue)">Funds Transfer badge &amp; full breakdown</strong><br>'
     +icon('checkmark','xs')+' <strong style="color:var(--green)">Net Available fund calculation</strong>'
     +'</div>'
     +'</div>'
@@ -1493,12 +1492,23 @@ function doGenerateStudentsPDF(monthKey) {
   // Sort all students by name
   var allStudents = DB.students.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
 
+  // PERF: group payments by studentId + index rooms by id ONCE, so the per-student
+  // loop below is O(students) instead of O(students × payments) — this is what made
+  // the report lag with hundreds of students and thousands of payment rows.
+  var _payByStudent = new Map();
+  (DB.payments||[]).forEach(function(p){
+    var arr = _payByStudent.get(p.studentId);
+    if(!arr){ arr=[]; _payByStudent.set(p.studentId, arr); }
+    arr.push(p);
+  });
+  var _roomById = new Map((DB.rooms||[]).map(function(r){return [r.id, r];}));
+
   // FIX #4: Exclude Left/Cancelling students who left BEFORE the selected month.
   // Exception: always include if they have an actual payment record for that month.
   var students = allStudents.filter(function(s) {
     if (s.status !== 'Left' && s.status !== 'Cancelling') return true;
     // If they have a payment record for this month, include them regardless
-    if (DB.payments.some(function(p){ return p.studentId===s.id && _payMatchesMonth(p, monthKey); })) return true;
+    if ((_payByStudent.get(s.id)||[]).some(function(p){ return _payMatchesMonth(p, monthKey); })) return true;
     // Exclude if leftDate is before the first day of selected month
     if (s.leftDate && s.leftDate < monthKey+'-01') return false;
     return true;
@@ -1517,12 +1527,12 @@ function doGenerateStudentsPDF(monthKey) {
 
   var rows = '';
   students.forEach(function(s, i) {
-    var room = DB.rooms.find(function(r){return r.id===s.roomId;});
+    var room = _roomById.get(s.roomId);
 
     // FIX #1 #5: use _payMatchesMonth — correctly matches both "2026-04-15" date fields
     // AND "April 2026" month labels (the old startsWith never matched month labels).
-    var mPays = DB.payments.filter(function(p){
-      return p.studentId===s.id && _payMatchesMonth(p, monthKey);
+    var mPays = (_payByStudent.get(s.id)||[]).filter(function(p){
+      return _payMatchesMonth(p, monthKey);
     });
 
     var paidAmt    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(acc,p){return acc+Number(p.amount||0);},0)
@@ -1606,11 +1616,10 @@ function doGenerateStudentsPDF(monthKey) {
   // ── HTML ──────────────────────────────────────────────────────────────────
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1300">';
   html += '<title>'+hostel+' — Students Fee Report '+monthLabel+'</title>';
-  html += '<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">';
   html += '<style>';
   html += '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}';
   html += '@page{size:A4 landscape;margin:7mm 9mm}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
-  html += 'body{font-family:\'Outfit\',Arial,sans-serif;background:#fff;color:#111;padding:14px 18px;font-size:10.5px}';
+  html += 'body{font-family:"Segoe UI",-apple-system,Roboto,Arial,sans-serif;background:#fff;color:#111;padding:14px 18px;font-size:10.5px}';
   html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
   // 11 cols: # name father room cnic phone rent paid pend fst sst
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
@@ -1644,7 +1653,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<div class="sum" style="background:'+(_pdfPending>0?'#fde8e8':'#edfaf3')+'">';
   html += '<div class="v" style="color:'+(_pdfPending>0?'#8b1a1a':'#1a6b3a')+'">'+fmtPKR(_pdfPending)+'</div><div class="l">Pending<br>Unpaid</div></div>';
   html += '<div class="sum" style="background:#fff8e1;border-color:#e8a830"><div class="v" style="color:#854d0e">'+fmtPKR(grandExpenses)+'</div><div class="l">Expenses<br>'+monthLabel+'</div></div>';
-  html += '<div class="sum" style="background:#eef2ff"><div class="v" style="color:#1a2c80">'+fmtPKR(grandTransfers)+'</div><div class="l">Transfer<br>to Owner</div></div>';
+  html += '<div class="sum" style="background:#eef2ff"><div class="v" style="color:#1a2c80">'+fmtPKR(grandTransfers)+'</div><div class="l">Funds<br>Transfer</div></div>';
   html += '<div class="sum" style="background:'+(netFund>=0?'#edfaf3':'#fde8e8')+'"><div class="v" style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</div><div class="l">Net<br>Available</div></div>';
   html += '</div>';
 
@@ -1690,7 +1699,7 @@ function doGenerateStudentsPDF(monthKey) {
   var monthTransfers = (DB.transfers||[]).filter(function(t){ return (t.date||'').startsWith(monthKey); });
   if(monthTransfers.length) {
     html += '<div style="margin-top:14px;padding:12px 14px;background:#f0f4ff;border:1px solid #c5d0e6;border-radius:10px">';
-    html += '<div style="font-size:13px;font-weight:800;color:#0f1a2e;margin-bottom:8px">🏦 Transfers to Owner — '+monthLabel+'</div>';
+    html += '<div style="font-size:13px;font-weight:800;color:#0f1a2e;margin-bottom:8px">🏦 Funds Transfer — '+monthLabel+'</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
     html += '<thead><tr style="background:#0f1a2e"><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Date</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Description</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Method</th><th style="padding:6px 10px;color:#e6c96e;text-align:right;border:1px solid #1e3050">Amount</th></tr></thead><tbody>';
     var trTotal=0;
@@ -1712,23 +1721,16 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#854d0e">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
   html += '</div>';
 
-  // FIX-PDF-SHARE: Build share text for WhatsApp / Gmail
-  var _shareText = hostel + ' — Fee Report ' + monthLabel + '\n'
-    + 'Students: ' + total + ' · Active: ' + active + '\n'
-    + 'Collected: ' + fmtPKR(grandPaid) + '\n'
-    + 'Expenses: '  + fmtPKR(grandExpenses) + '\n'
-    + 'Pending: '   + fmtPKR(_pdfPending) + '\n'
-    + 'Net Available: ' + fmtPKR(netFund);
-  var _waPhone = (CUR_USER&&CUR_USER.phone) ? CUR_USER.phone.replace(/[^0-9]/g,'').replace(/^0/,'92') : '';
-  var _waLink  = 'whatsapp://send?' + (_waPhone?'phone='+_waPhone+'&':'') + 'text=' + encodeURIComponent(_shareText);
-  var _gmailLink = 'https://mail.google.com/mail/?view=cm&su=' + encodeURIComponent(hostel+' Fee Report '+monthLabel) + '&body=' + encodeURIComponent(_shareText);
-
-  // FIX-PRINT-HANG: Auto-print script removed — calling window.print() automatically
-  // in a child window.open() hangs the Electron renderer on Windows. User uses the button.
   html += '</body></html>';
 
-  // ── IN-APP VIEWER (always — no window.open, no external save dialog) ─────────
-  // Removes old viewer if open, builds a full-screen overlay with toolbar,
+  // ── Open PDF in a separate window via main process ────────────────────────
+  var _pdfTitle = escHtml(hostel) + ' — Students Fee Report · ' + monthLabel;
+  if (window.electronAPI && window.electronAPI.openPdfWindow) {
+    window.electronAPI.openPdfWindow(html, _pdfTitle);
+  } else {
+    var w = window.open('', '_blank', 'width=1000,height=700');
+    if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+  }
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────

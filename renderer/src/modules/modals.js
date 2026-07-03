@@ -2,9 +2,7 @@
    Contains: showModal, closeModal, showConfirm, toast, showCustomDatePicker,
              _cdpClose/_cdpClear/_cdpPrev/_cdpNext/_cdpRender/_cdpPick,
              _showCameraPermBanner, statusBadge, pmBadge,
-             showBackupRestoreModal, exportBackup, getNextBackupLabel,
-             updateBackupScheduleLabel, sendBackupToDrive, sendBackupToGmail,
-             checkAutoBackupSchedule, restoreBackup, restoreFromPaste,
+             showBackupRestoreModal, exportBackup, restoreBackup, restoreFromPaste,
              _initDBFields, saveWardenInfo/showUserMgmt/handleWardenPhoto
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
@@ -128,46 +126,6 @@ async function showBackupRestoreModal() {
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Last snapshot: ${ts}</div>
     </div>
 
-    <!-- FIX: Google Drive Backup Section (replaces Gmail) -->
-    <div style="background:var(--bg3);border:1px solid rgba(66,133,244,0.35);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div style="width:30px;height:30px;background:rgba(66,133,244,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#4285f4">${MODAL_ICONS.cloud}</div>
-        <div>
-          <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4285f4">Google Drive Backup</div>
-          <div style="font-size:11px;color:var(--text3)">Save backup file directly to Google Drive</div>
-        </div>
-      </div>
-      <!-- FIX-GDRIVE: Gmail account input field -->
-      <div class="field" style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Google Account (Gmail) for Drive Upload</label>
-        <input class="form-control" id="gdrive-email" type="email" placeholder="yourname@gmail.com"
-          value="${escHtml(DB.settings.driveEmail||'')}"
-          oninput="(async()=>{DB.settings.driveEmail=this.value.trim();await saveDB();})()"
-          style="font-size:12px">
-        <div style="font-size:10px;color:var(--text3);margin-top:4px">Saved for reference — used to open the correct Drive account in your browser.</div>
-      </div>
-      <div class="field" style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:5px">Auto-Backup Schedule</label>
-        <select class="form-control" id="backup-schedule" onchange="(async function(){DB.settings.backupSchedule=this.value;await saveDB();updateBackupScheduleLabel();}).call(this)">
-          <option value="" ${!DB.settings.backupSchedule?'selected':''}>Disabled</option>
-          <option value="daily" ${DB.settings.backupSchedule==='daily'?'selected':''}>Every Day</option>
-          <option value="2days" ${DB.settings.backupSchedule==='2days'?'selected':''}>Every 2 Days</option>
-          <option value="3days" ${DB.settings.backupSchedule==='3days'?'selected':''}>Every 3 Days</option>
-          <option value="weekly" ${DB.settings.backupSchedule==='weekly'?'selected':''}>Every Week</option>
-          <option value="monthly" ${DB.settings.backupSchedule==='monthly'?'selected':''}>Every Month</option>
-        </select>
-        <div id="schedule-next-lbl" style="font-size:11px;color:var(--text3);margin-top:5px">${getNextBackupLabel()}</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="sendBackupToDrive()" style="background:linear-gradient(135deg,#4285f4,#1a6ed8);border:none;flex:1;display:flex;align-items:center;justify-content:center;gap:6px">
-          <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.cloudUpload}</span> Backup Now to Google Drive
-        </button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px;padding:8px 10px;background:var(--bg4);border-radius:6px">
-        <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.lightbulb}</span> Clicking <strong>Backup Now</strong> downloads the JSON file and opens your Google Drive${DB.settings.driveEmail?` (<strong>${escHtml(DB.settings.driveEmail)}</strong>)`:''} in the browser. Upload the file there to save it in the cloud.
-      </div>
-    </div>
-
     <!-- Restore section -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
       <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
@@ -212,110 +170,14 @@ function exportBackup(mode) {
   }
 }
 
-// ── Fix #7: Gmail Backup Helpers ─────────────────────────────────────────────
-function getNextBackupLabel() {
-  const sched = DB.settings && DB.settings.backupSchedule;
-  const last  = DB.settings && DB.settings.lastBackupDate;
-  if (!sched) return 'Auto-backup is disabled.';
-  const intervalDays = {daily:1,'2days':2,'3days':3,weekly:7,monthly:30}[sched] || 0;
-  if (!intervalDays) return '';
-  const lastDate = last ? new Date(last) : null;
-  if (!lastDate) return 'Next: on next app open';
-  const nextDate = new Date(lastDate.getTime() + intervalDays * 86400000);
-  const diff = Math.ceil((nextDate - Date.now()) / 86400000);
-  return diff <= 0 ? '⏰ Backup due now!' : `Next backup in ${diff} day${diff!==1?'s':''}`;
-}
-function updateBackupScheduleLabel() {
-  const el = document.getElementById('schedule-next-lbl');
-  if(el) el.textContent = getNextBackupLabel();
-}
-// FIX: Replace Gmail backup with direct Google Drive backup
-async function sendBackupToDrive() {
-  // Step 1: Download the backup JSON file to PC
-  exportBackup('json');
-  // Step 2: Open Google Drive upload page in system browser
-  var driveUrl = 'https://drive.google.com/drive/my-drive';
-  openExternalLink(driveUrl);
-  // Update last backup date
-  DB.settings.lastBackupDate = new Date().toISOString().slice(0,10);
-  await saveDB();
-  updateBackupScheduleLabel();
-  toast('✅ Backup downloaded! Now upload it to Google Drive in your browser.', 'success');
-}
-// Keep old name as alias for any auto-backup calls
-function sendBackupToGmail() { sendBackupToDrive(); }
-// Auto-backup check on app start — runs after DB is loaded
-function checkAutoBackupSchedule() {
-  const sched = DB.settings && DB.settings.backupSchedule;
-  if (!sched) return;
-  const intervalDays = {daily:1,'2days':2,'3days':3,weekly:7,monthly:30}[sched] || 0;
-  if (!intervalDays) return;
-  const last = DB.settings.lastBackupDate;
-  if (last) {
-    const daysSince = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
-    if (daysSince < intervalDays) return; // not due yet
-  }
-  // FIX-B2: Show a prominent sticky banner with a one-click "Backup Now" button
-  // instead of a silent toast the warden might miss or dismiss accidentally.
-  setTimeout(function() {
-    if (document.getElementById('backup-due-banner')) return; // no duplicates
-    var lastStr = last
-      ? 'Last backup: ' + new Date(last).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) + '.'
-      : 'No backup has been made yet.';
-    var banner = document.createElement('div');
-    banner.id = 'backup-due-banner';
-    // FIX B5: moved to bottom so it does not cover the app header/sidebar
-    banner.style.cssText = [
-      'position:fixed','bottom:0','left:0','right:0','z-index:99999',
-      'background:linear-gradient(90deg,#1e3c6a,#2a5298)',
-      'color:#e8eef8','font-size:13px','font-weight:600',
-      'padding:10px 20px','display:flex','align-items:center',
-      'gap:12px','box-shadow:0 -3px 16px rgba(0,0,0,0.55)'
-    ].join(';');
-    // FIX B5: use this.parentElement.remove() — avoids broken inner-quote bug
-    banner.innerHTML =
-      '<span style="font-size:18px">⏰</span>' +
-      '<span style="flex:1">Scheduled backup is due. ' + lastStr + ' Back up now to avoid data loss.</span>' +
-      '<button onclick="sendBackupToDrive();this.parentElement.remove();" ' +
-        'style="background:#e6c96e;color:#071428;border:none;border-radius:7px;padding:6px 16px;' +
-        'font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">'+MODAL_ICONS.save+' Backup Now</button>' +
-      '<button onclick="this.parentElement.remove();" ' +
-        'style="background:rgba(255,255,255,0.1);color:#e8eef8;border:none;border-radius:7px;' +
-        'padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap">Dismiss</button>';
-    document.body.prepend(banner);
-  }, 3000);
-}
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ── MIDNIGHT AUTO-BACKUP SCHEDULER (BUG-5 FIX) ───────────────────────────────
-// Fires at 00:00 every night. If a backup schedule is set AND it is due,
-// runs sendBackupToDrive() automatically — no user action needed.
-(function _initMidnightBackup() {
-  function _msUntilMidnight() {
-    var n = new Date();
-    var m = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 15); // 00:00:15
-    return m - n;
-  }
-  function _midnightCheck() {
-    try {
-      var sched = DB && DB.settings && DB.settings.backupSchedule;
-      if (!sched || sched === 'off') return;
-      var intervalDays = {daily:1,'2days':2,'3days':3,weekly:7,monthly:30}[sched] || 0;
-      if (!intervalDays) return;
-      var last = DB.settings.lastBackupDate;
-      var daysSince = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : 999;
-      if (daysSince >= intervalDays) {
-        sendBackupToDrive();
-        if (typeof toast === 'function') toast('Midnight auto-backup completed to Google Drive.', 'success');
-      }
-    } catch(e) { console.warn('[AutoBackup] midnight check error:', e); }
-  }
-  // Schedule first tick at next midnight, then repeat every 24 h
-  setTimeout(function _firstMidnightTick() {
-    _midnightCheck();
-    setInterval(_midnightCheck, 24 * 60 * 60 * 1000);
-  }, _msUntilMidnight());
-})();
+// (Google Drive backup functions removed — backup is now download-only)
+// Stub no-ops to avoid errors from any remaining call sites:
+function getNextBackupLabel()        { return ''; }
+function updateBackupScheduleLabel() {}
+function sendBackupToDrive()         { exportBackup('json'); }
+function sendBackupToGmail()         { exportBackup('json'); }
+function checkAutoBackupSchedule()   {}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _initDBFields(d) {
@@ -490,7 +352,7 @@ function pmBadge(m) {
       color:var(--text3,#6b7a99);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;
       transition:background 0.15s;line-height:1;padding:0;
     }
-    #_cdp-clear:hover{background:rgba(224,82,82,0.25);color:#e05252}
+    #_cdp-clear:hover{background:var(--danger-bg);color:var(--danger-fg)}
     #_cdp-nav{
       display:flex;align-items:center;justify-content:space-between;
       padding:10px 14px;gap:6px;
@@ -710,11 +572,11 @@ function _showCameraPermBanner() {
   b.id = 'cam-perm-banner';
   b.style.cssText = [
     'position:fixed','top:0','right:0','z-index:99998',
-    'background:linear-gradient(135deg,#2a0a0a,#3d0f0f)',
-    'border:1.5px solid rgba(224,82,82,0.6)',
+    'background:var(--danger-bg)',
+    'border:1.5px solid var(--danger-border)',
     'border-top:none','border-right:none',
     'border-radius:0 0 0 12px',
-    'color:#f0c0c0','font-size:12.5px','font-weight:500',
+    'color:var(--danger-fg)','font-size:12.5px','font-weight:500',
     'padding:10px 14px 10px 16px',
     'display:flex','align-items:flex-start','gap:10px',
     'max-width:340px','line-height:1.5',
@@ -722,10 +584,10 @@ function _showCameraPermBanner() {
   ].join(';');
   b.innerHTML =
     '<span style="display:inline-flex;flex-shrink:0;margin-top:1px">'+MODAL_ICONS.cameraOff+'</span>' +
-    '<span style="flex:1"><strong style="color:#e05252;display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
-    'Go to <strong style="color:#f0c0c0">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
+    '<span style="flex:1"><strong style="color:var(--danger-fg);display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
+    'Go to <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
     '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
-      'style="background:none;border:none;color:#e05252;font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
+      'style="background:none;border:none;color:var(--danger-fg);font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
       'title="Dismiss">✕</button>';
   document.body.appendChild(b);
 }
@@ -777,7 +639,7 @@ function showUserMgmt() {
     var photoSrc = w.photo || '';
     var avatarHtml = photoSrc
       ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--gold);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
-      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--gold),#9a7a1a);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed rgba(200,168,75,0.3)" title="Click to upload photo">&#x1F464;</div>';
+      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
     rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(200,168,75,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
     rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
     rows += '<div style="position:relative;flex-shrink:0">';
@@ -880,8 +742,18 @@ async function saveWardenInfo(key) {
   var pwEl   = document.getElementById('wp-'+key);
   var wwaEl  = document.getElementById('wwa-'+key);
   if(!nameEl||!nameEl.value.trim()){toast('Name cannot be empty','error');return;}
+  // CRITICAL FIX: hash the new password with PBKDF2 (auth-nev.js) BEFORE storing.
+  // Previously this stored the raw plaintext string, which verifyPassword() rejects
+  // (it only accepts a v2 {hash,salt,v} object or a 64-char SHA-256 hex string) — so
+  // after any password change, NEITHER the new password NOR the default would log in,
+  // and the default credential was destroyed. Validate + hash first; abort on bad input.
+  let _newPwHash = null;
+  if(pwEl && pwEl.value.trim()){
+    try { _newPwHash = await hashNewPassword(pwEl.value.trim()); }
+    catch(e){ toast(e.message || 'Invalid password','error'); return; }
+  }
   WARDENS[key].name = nameEl.value.trim();
-  if(pwEl&&pwEl.value.trim()) WARDENS[key].pw = pwEl.value.trim();
+  if(_newPwHash) WARDENS[key].pw = _newPwHash;
   if(pwEl) pwEl.value='';
   if(wwaEl) {
     WARDENS[key].phone = wwaEl.value.trim();

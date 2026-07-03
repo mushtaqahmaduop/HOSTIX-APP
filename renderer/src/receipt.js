@@ -113,8 +113,8 @@ function buildReceiptHTML(payId) {
   }
   html += '<div style="font-size:18px;font-weight:900;letter-spacing:1.5px;line-height:1.2;color:#000">' + escHtml(hostel) + '</div>';
   if (location) html += '<div style="font-size:9.5px;color:#333;font-weight:700;margin-top:4px;letter-spacing:0.5px">' + escHtml(location) + '</div>';
-  if (phone)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:2px">📞 ' + escHtml(phone) + '</div>';
-  if (email)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:1px">✉ ' + escHtml(email) + '</div>';
+  if (phone)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:2px">Tel: ' + escHtml(phone) + '</div>';
+  if (email)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:1px">Email: ' + escHtml(email) + '</div>';
 
   html += sep();
   html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#000;font-weight:900">';

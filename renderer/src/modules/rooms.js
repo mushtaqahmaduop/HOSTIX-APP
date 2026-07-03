@@ -10,9 +10,28 @@ function getRoomType(room) { return getTypeById(room.typeId); }
 function getRoomOccupancy(room) { return DB.students.filter(t=>t.roomId===room.id && t.status==='Active').length; }
 
 
+function setRoomSort(v) {
+  const parts = (v||'').split('|');
+  roomFilter.sortKey = parts[0] || null;
+  roomFilter.sortDir = parts[1] || 'asc';
+  roomFilter.page = 1;
+  renderPage('rooms');
+}
+
 function renderRooms() {
+  // PERF: compute active-student count + names per room in ONE pass over students,
+  // instead of scanning all students for every room (was O(rooms × students), 3×).
+  const _activeByRoom = new Map();
+  for (const t of DB.students) {
+    if (t.status !== 'Active') continue;
+    let e = _activeByRoom.get(t.roomId);
+    if (!e) { e = { count: 0, names: [] }; _activeByRoom.set(t.roomId, e); }
+    e.count++; e.names.push(t.name);
+  }
+  const _occOf = id => (_activeByRoom.get(id) ? _activeByRoom.get(id).count : 0);
+
   let rooms = DB.rooms.filter(r=>{
-    const occ = getRoomOccupancy(r) > 0;
+    const occ = _occOf(r.id) > 0;
     if(roomFilter.status==='Occupied' && !occ) return false;
     if(roomFilter.status==='Vacant' && occ) return false;
     if(roomFilter.type!=='All' && r.typeId!==roomFilter.type) return false;
@@ -24,12 +43,20 @@ function renderRooms() {
   const typeOptions = DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${roomFilter.type===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
   const floorOptions = DB.settings.floors.map(f=>`<option value="${f}" ${roomFilter.floor===f?'selected':''}>${f} Floor</option>`).join('');
 
-  const cards = rooms.map(r=>{
+  rooms = applySort(rooms, roomFilter, {
+    number:    r => r.number,
+    rent:      r => Number(r.rent || 0),
+    occupancy: r => _occOf(r.id),
+    floor:     r => r.floor,
+    type:      r => getRoomType(r).name
+  });
+  const _pg = paginate(rooms, roomFilter);
+  const cards = _pg.slice.map(r=>{
     const type = getRoomType(r);
-    const occ = getRoomOccupancy(r);
+    const occ = _occOf(r.id);
     const cap = type.capacity;
     const pct = cap>0?Math.round(occ/cap*100):0;
-    const activeStudentNames = DB.students.filter(t=>t.roomId===r.id&&t.status==='Active').map(t=>t.name);
+    const activeStudentNames = _activeByRoom.get(r.id) ? _activeByRoom.get(r.id).names : [];
     return `<div class="room-card ${occ>0?'occupied':'vacant'}" onclick="showRoomDetail('${r.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div class="room-num">#${r.number}</div>
@@ -47,7 +74,7 @@ function renderRooms() {
         <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showEditRoomModal('${r.id}')">Edit</button>
         ${occ<cap
           ? `<button class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showAddStudentModal('${r.id}')">+ Student</button>`
-          : `<button class="btn btn-sm" style="flex:1;font-size:11px;background:#b8860b;color:#fff;border:1px solid #c8a84b" onclick="event.stopPropagation();showAddStudentModal('${r.id}')" title="Room is full — force add anyway">⚡ Force Add</button>`}
+          : `<button class="btn btn-sm" style="flex:1;font-size:11px;background:var(--amber);color:#000;border:1px solid var(--amber)" onclick="event.stopPropagation();showAddStudentModal('${r.id}')" title="Room is full — force add anyway">⚡ Force Add</button>`}
       </div>
     </div>`;
   }).join('');
@@ -56,21 +83,59 @@ function renderRooms() {
   <div class="filter-bar">
     <div class="search-wrap" style="max-width:200px">
       <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input class="form-control" id="search-rooms" placeholder="Room number…" value="${escHtml(roomFilter.search)}" oninput="capFirstChar(this);roomFilter.search=this.value;_dRooms();toggleClearBtn('search-rooms','clear-rooms')">
-      <button class="search-clear ${roomFilter.search?'visible':''}" id="clear-rooms" onclick="roomFilter.search='';document.getElementById('search-rooms').value='';this.classList.remove('visible');renderPage('rooms')" title="Clear">✕</button>
+      <input class="form-control" id="search-rooms" placeholder="Room number…" value="${escHtml(roomFilter.search)}" oninput="capFirstChar(this);roomFilter.search=this.value;roomFilter.page=1;_dRooms();toggleClearBtn('search-rooms','clear-rooms')">
+      <button class="search-clear ${roomFilter.search?'visible':''}" id="clear-rooms" onclick="roomFilter.search='';roomFilter.page=1;document.getElementById('search-rooms').value='';this.classList.remove('visible');renderPage('rooms')" title="Clear">✕</button>
     </div>
     <div class="filter-tabs">
-      ${['All','Occupied','Vacant'].map(s=>`<button class="ftab ${roomFilter.status===s?'active':''}" onclick="roomFilter.status='${s}';renderPage('rooms')">${s}</button>`).join('')}
+      ${['All','Occupied','Vacant'].map(s=>`<button class="ftab ${roomFilter.status===s?'active':''}" onclick="roomFilter.status='${s}';roomFilter.page=1;renderPage('rooms')">${s}</button>`).join('')}
     </div>
-    <select class="form-control" style="width:140px" onchange="roomFilter.type=this.value;renderPage('rooms')">
+    <select class="form-control" style="width:140px" onchange="roomFilter.type=this.value;roomFilter.page=1;renderPage('rooms')">
       <option value="All">All Types</option>${typeOptions}
     </select>
-    <select class="form-control" style="width:140px" onchange="roomFilter.floor=this.value;renderPage('rooms')">
+    <select class="form-control" style="width:140px" onchange="roomFilter.floor=this.value;roomFilter.page=1;renderPage('rooms')">
       <option value="All">All Floors</option>${floorOptions}
     </select>
+    ${(()=>{ const cur=(roomFilter.sortKey||'')+'|'+roomFilter.sortDir; const opt=(v,l)=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`; return `
+    <select class="form-control" style="width:150px" onchange="setRoomSort(this.value)">
+      ${opt('|asc','Sort: Default')}
+      ${opt('number|asc','Room # ↑')}
+      ${opt('rent|asc','Rent: Low → High')}
+      ${opt('rent|desc','Rent: High → Low')}
+      ${opt('occupancy|desc','Occupancy: High → Low')}
+      ${opt('floor|asc','Floor ↑')}
+    </select>`; })()}
     <span class="text-muted" style="font-size:12px;margin-left:auto">${rooms.length} rooms</span>
+    <button class="btn btn-secondary btn-sm" onclick="exportRoomsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
   </div>
-  <div class="room-grid">${cards||'<div class="empty-state"><div class="icon">🏠</div><h3>No rooms found</h3></div>'}</div>`;
+  <div class="room-grid">${cards||'<div class="empty-state"><div class="icon">🏠</div><h3>No rooms found</h3></div>'}</div>
+  ${renderPager(_pg, 'roomFilter', 'rooms')}`;
+}
+
+// Export the currently filtered + sorted rooms to CSV. (Mirrors renderRooms' filter/sort.)
+function exportRoomsCSV() {
+  const activeByRoom = new Map();
+  for (const t of DB.students) { if(t.status!=='Active') continue; activeByRoom.set(t.roomId,(activeByRoom.get(t.roomId)||0)+1); }
+  const occ = id => activeByRoom.get(id)||0;
+  let rooms = DB.rooms.filter(r=>{
+    const o = occ(r.id) > 0;
+    if(roomFilter.status==='Occupied' && !o) return false;
+    if(roomFilter.status==='Vacant' && o) return false;
+    if(roomFilter.type!=='All' && r.typeId!==roomFilter.type) return false;
+    if(roomFilter.floor!=='All' && r.floor!==roomFilter.floor) return false;
+    if(roomFilter.search && !String(r.number).toLowerCase().includes(roomFilter.search.toLowerCase())) return false;
+    return true;
+  });
+  rooms = applySort(rooms, roomFilter, {
+    number:r=>r.number, rent:r=>Number(r.rent||0), occupancy:r=>occ(r.id),
+    floor:r=>r.floor, type:r=>getRoomType(r).name
+  });
+  const rows=[['Room','Type','Floor','Capacity','Occupied','Vacant','Rent/Mo','Status','Students']];
+  rooms.forEach(r=>{
+    const t=getRoomType(r); const o=occ(r.id);
+    const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name).join('; ');
+    rows.push(['#'+r.number,t.name,r.floor,t.capacity,o,Math.max(0,t.capacity-o),r.rent||0,o>0?'Occupied':'Vacant',names]);
+  });
+  downloadCSV(rows, 'Rooms_'+today()+'.csv');
 }
 
 function showRoomDetail(id) {
@@ -184,4 +249,4 @@ async function confirmDeleteRoom(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // TENANTS
 // ════════════════════════════════════════════════════════════════════════════
-let studentFilter = {status:'All', search:''};
+let studentFilter = {status:'All', search:'', page:1, sortKey:null, sortDir:'asc'};

@@ -79,6 +79,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbSetSetting:  (key, value)        => ipcRenderer.invoke('db:setSetting',  key, value),
   dbExportFull:  ()                  => ipcRenderer.invoke('db:exportFull'),
   dbImportFull:  (data)              => ipcRenderer.invoke('db:importFull',  data),
+  // Open PDF report in a separate window
+  openPdfWindow: (htmlContent, title) => {
+    if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) {
+      console.warn('[Preload] openPdfWindow: invalid content');
+      return;
+    }
+    ipcRenderer.send('open-pdf-window', htmlContent, typeof title === 'string' ? title.slice(0, 200) : 'Report');
+  },
+
   // [FIX-P2] Receipt PDF — validate htmlContent and suggestedName; supports opts {landscape}
   receiptSavePDF: (htmlContent, suggestedName, opts) => {
     if (typeof htmlContent !== 'string') {

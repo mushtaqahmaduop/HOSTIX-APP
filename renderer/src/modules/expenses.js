@@ -161,8 +161,8 @@ async function clearStudents(fromMenu=false) {
     DB.students=[];
     DB.payments=[];
     DB.cancellations=[];
-    // FIX: DB.transfers are owner-level financial records, NOT student records.
-    // Clearing students must NOT wipe owner transfer history.
+    // FIX: DB.transfers are fund-level financial records, NOT student records.
+    // Clearing students must NOT wipe transfer history.
     DB.fines=[];
     DB.checkinlog=[];
     await saveDB();
@@ -171,9 +171,9 @@ async function clearStudents(fromMenu=false) {
     toast('All students and their records cleared','info');
   };
   if(fromMenu) {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Owner transfers are preserved.`,doIt);
+    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved.`,doIt);
   } else {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Owner transfers are preserved. Cannot be undone!`,doIt);
+    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved. Cannot be undone!`,doIt);
   }
 }
 
@@ -220,12 +220,22 @@ function clearAllDataWithPassword() {
      <button class="btn btn-danger" onclick="confirmClearAllWithPassword()">Delete Everything</button>`);
   setTimeout(()=>{ const i=document.getElementById('clear-all-pwd'); if(i) i.focus(); },120);
 }
-function confirmClearAllWithPassword() {
+async function confirmClearAllWithPassword() {
   const pwd = document.getElementById('clear-all-pwd')?.value||'';
   const errEl = document.getElementById('clear-pwd-err');
-  const user = CUR_USER || (DB.settings && DB.settings.wardens && DB.settings.wardens[0]);
-  const storedPwd = user?.password || user?.pass || '';
-  if (!pwd || (storedPwd && pwd !== storedPwd)) {
+  if (!pwd) {
+    if(errEl) errEl.style.display='block';
+    const inp = document.getElementById('clear-all-pwd');
+    if(inp) { inp.value=''; inp.focus(); }
+    return;
+  }
+  const user = CUR_USER;
+  if (!user || !user.pw) {
+    if(errEl) { errEl.textContent='❌ No user session found. Please re-login.'; errEl.style.display='block'; }
+    return;
+  }
+  const matches = await verifyPassword(pwd, user.pw);
+  if (!matches) {
     if(errEl) errEl.style.display='block';
     const inp = document.getElementById('clear-all-pwd');
     if(inp) { inp.value=''; inp.focus(); }
@@ -241,6 +251,11 @@ function confirmClearAllWithPassword() {
 let reportPeriod='month';
 let reportDetail=null;
 let studentReportFilter='All';
+// PERF: pagination state for Reports KPI-card detail tables. Rendering EVERY row
+// (all payments/students) into the DOM on each card click was the source of the lag;
+// we now slice to PAGE_SIZE like the Students/Payments screens. _lastKey lets us reset
+// to page 1 only when the detail type or sub-filter changes (not when paging within one).
+let reportDetailFilter={page:1,_lastKey:''};
 
 // ════════════════════════════════════════════════════════════════════════════
 // REPORT DETAIL RENDERERS

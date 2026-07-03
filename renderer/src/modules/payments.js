@@ -22,6 +22,17 @@ function renderPayments() {
     return true;
   }).sort((a,b)=>new Date(b.date)-new Date(a.date));
 
+  pays = applySort(pays, payFilter, {
+    student: p => p.studentName,
+    room:    p => p.roomNumber,
+    rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
+    paid:    p => Number(p.amount || 0),
+    unpaid:  p => Number(p.unpaid || 0),
+    method:  p => p.method,
+    status:  p => p.status
+  });
+  const _pg = paginate(pays, payFilter);
+
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${m}" ${payFilter.method===m?'selected':''}>${m}</option>`).join('');
   const total=pays.reduce((s,p)=>s+Number(p.amount),0);
   const paidAmt=DB.payments.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
@@ -31,33 +42,34 @@ function renderPayments() {
   <div class="filter-bar">
     <div class="search-wrap">
       <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-      <input class="form-control" id="search-payments" placeholder="Student name, room…" value="${escHtml(payFilter.search)}" oninput="capFirstChar(this);payFilter.search=this.value;_dPayments();toggleClearBtn('search-payments','clear-payments')">
-      <button class="search-clear ${payFilter.search?'visible':''}" id="clear-payments" onclick="payFilter.search='';document.getElementById('search-payments').value='';this.classList.remove('visible');renderPage('payments')" title="Clear">✕</button>
+      <input class="form-control" id="search-payments" placeholder="Student name, room…" value="${escHtml(payFilter.search)}" oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments();toggleClearBtn('search-payments','clear-payments')">
+      <button class="search-clear ${payFilter.search?'visible':''}" id="clear-payments" onclick="payFilter.search='';payFilter.page=1;document.getElementById('search-payments').value='';this.classList.remove('visible');renderPage('payments')" title="Clear">✕</button>
     </div>
     <div class="filter-tabs">
-      ${['All','Paid','Pending'].map(s=>`<button class="ftab ${payFilter.status===s?'active':''}" onclick="payFilter.status='${s}';renderPage('payments')">${s}</button>`).join('')}
+      ${['All','Paid','Pending'].map(s=>`<button class="ftab ${payFilter.status===s?'active':''}" onclick="payFilter.status='${s}';payFilter.page=1;renderPage('payments')">${s}</button>`).join('')}
     </div>
-    <select class="form-control" style="width:160px" onchange="payFilter.method=this.value;renderPage('payments')">
+    <select class="form-control" style="width:160px" onchange="payFilter.method=this.value;payFilter.page=1;renderPage('payments')">
       <option value="All">All Methods</option>${pmOpts}
     </select>
-    <button class="btn btn-sm ${payFilter.showAll?'btn-primary':'btn-secondary'}" style="white-space:nowrap;font-size:11px" onclick="payFilter.showAll=!payFilter.showAll;renderPage('payments')" title="${payFilter.showAll?'Showing all months — click to filter by '+moLabel:'Showing '+moLabel+' only — click to show all'}">
+    <button class="btn btn-sm ${payFilter.showAll?'btn-primary':'btn-secondary'}" style="white-space:nowrap;font-size:11px" onclick="payFilter.showAll=!payFilter.showAll;payFilter.page=1;renderPage('payments')" title="${payFilter.showAll?'Showing all months — click to filter by '+moLabel:'Showing '+moLabel+' only — click to show all'}">
       ${payFilter.showAll ? '📅 All Months' : '📅 '+moLabel}
     </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
       <span class="text-muted" style="font-size:12px">${pays.length} records · <span class="text-green fw-700">${fmtPKR(total)}</span></span>
+      <button class="btn btn-secondary btn-sm" onclick="exportPaymentsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
       <button class="btn btn-secondary btn-sm" onclick="generateMonthlyRents()">⚡ Auto-Generate Month</button>
-      <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:#25d366;color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
+      <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:var(--green);color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
     </div>
   </div>
   <div class="table-wrap">
     <table style="border-collapse:collapse;width:100%">
-      <thead><tr><th style="padding:8px 8px">Student</th><th style="padding:8px 8px">Room</th><th style="padding:8px 8px">Month</th><th style="padding:8px 8px">Rent/Mo</th><th style="padding:8px 6px;min-width:70px">Adm.Fee</th><th style="padding:8px 6px;min-width:90px">Extra Chrgs</th><th style="padding:8px 6px;min-width:80px">Concession</th><th style="padding:8px 8px">Amt Paid</th><th style="padding:8px 8px">Unpaid</th><th style="padding:8px 8px">Method</th><th style="padding:8px 8px">Status</th><th style="padding:8px 8px">Date</th><th style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
+      <thead><tr>${sortableTh(payFilter,'payFilter','payments','student','Student','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','room','Room','style="padding:8px 8px"')}<th style="padding:8px 8px">Month</th>${sortableTh(payFilter,'payFilter','payments','rent','Rent/Mo','style="padding:8px 8px"')}<th style="padding:8px 6px;min-width:70px">Adm.Fee</th><th style="padding:8px 6px;min-width:90px">Extra Chrgs</th><th style="padding:8px 6px;min-width:80px">Concession</th>${sortableTh(payFilter,'payFilter','payments','paid','Amt Paid','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','unpaid','Unpaid','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','method','Method','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','status','Status','style="padding:8px 8px"')}<th class="col-actions" style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
       <tbody>
         ${pays.length===0?'<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
-        pays.map(p=>{
+        _pg.slice.map(p=>{
           const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
-          return '<tr>'
-          +'<td class="fw-700" style="cursor:pointer;white-space:nowrap;padding:8px 8px" onclick="showViewStudentModal(\''+p.studentId+'\'" title="Click to view student details"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
+          return '<tr style="cursor:pointer" onclick="showEditPaymentModal(\''+p.id+'\')" title="Click row to edit this payment">'
+          +'<td class="fw-700" style="white-space:nowrap;padding:8px 8px"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
           +'<td style="white-space:nowrap;padding:8px 8px"><span class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
           +'<td class="text-muted" style="white-space:nowrap;padding:8px 8px">'+escHtml(p.month||'')+'</td>'
           +'<td class="text-muted fw-700" style="font-size:12px;padding:8px 8px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
@@ -68,18 +80,43 @@ function renderPayments() {
           +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
           +'<td style="padding:8px 8px">'+pmBadge(p.method)+'</td>'
           +'<td style="padding:8px 8px">'+statusBadge(p.status)+'</td>'
-          +'<td style="padding:8px 8px;font-size:12px;color:var(--text3)">'+(fmtDate(p.date)||'—')+'</td>'
-          +'<td style="padding:6px 4px;white-space:nowrap"><div style="display:flex;gap:2px;align-items:center;flex-wrap:nowrap">'
-          +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:11px;padding:3px 6px">✓ Paid</button>':'')
-          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:11px;padding:3px 6px">🧾</button>'
-          +'<button class="btn btn-sm btn-icon" onclick="sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:11px;padding:3px 6px">📱</button>'
-          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditPaymentModal(\''+p.id+'\')" title="Edit" style="font-size:11px;padding:3px 6px">✏️</button>'
-          +'<button class="btn btn-danger btn-icon btn-sm" onclick="deletePayment(\''+p.id+'\')" title="Delete" style="font-size:11px;padding:3px 6px">🗑</button>'
+          +'<td class="col-actions" style="padding:6px 4px;white-space:nowrap"><div style="display:flex;gap:2px;align-items:center;flex-wrap:nowrap">'
+          +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:11px;padding:3px 6px">✓</button>':'')
+          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:11px;padding:3px 6px">🧾</button>'
+          +'<button class="btn btn-sm btn-icon" onclick="event.stopPropagation();sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:11px;padding:3px 6px">📱</button>'
+          +'<button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();deletePayment(\''+p.id+'\')" title="Delete" style="font-size:11px;padding:3px 6px">🗑</button>'
           +'</div></td>'
           +'</tr>';}).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>
+  ${renderPager(_pg, 'payFilter', 'payments')}`;
+}
+
+// Export the currently filtered + sorted payments to CSV. (Mirrors renderPayments' filter/sort.)
+function exportPaymentsCSV() {
+  const mo = thisMonth();
+  let pays=DB.payments.filter(p=>{
+    if(!payFilter.showAll){ if(!_payMatchesMonth(p, mo)) return false; }
+    if(payFilter.status!=='All' && p.status!==payFilter.status) return false;
+    if(payFilter.method!=='All' && p.method!==payFilter.method) return false;
+    if(payFilter.search){const _ps=payFilter.search.toLowerCase();const _st4p=DB.students.find(s=>s.id===p.studentId);if(![p.studentName,String(p.roomNumber),p.month,p.method,p.status,_st4p?.fatherName,_st4p?.cnic,_st4p?.phone,_st4p?.email].some(f=>f&&String(f).toLowerCase().includes(_ps))) return false;}
+    return true;
+  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  pays = applySort(pays, payFilter, {
+    student:p=>p.studentName, room:p=>p.roomNumber,
+    rent:p=>Number(p.monthlyRent||p.totalRent||p.amount||0),
+    paid:p=>Number(p.amount||0), unpaid:p=>Number(p.unpaid||0),
+    method:p=>p.method, status:p=>p.status
+  });
+  const rows=[['Student','Room','Month','Rent/Mo','Adm.Fee','Extra Charges','Concession','Amount Paid','Unpaid','Method','Status','Date']];
+  pays.forEach(p=>{
+    const _paf=Number(p.admissionFee||p.fee||0);
+    const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
+    const _pc=Number(p.concession||p.discount||0);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,_paf||'',_pex||'',_pc||'',p.amount||0,p.unpaid||0,p.method||'',p.status||'',p.date||'']);
+  });
+  downloadCSV(rows, 'Payments_'+(payFilter.showAll?'AllMonths':mo)+'.csv');
 }
 
 async function generateMonthlyRents() {
@@ -92,7 +129,7 @@ async function generateMonthlyRents() {
   active.forEach(t=>{
     if(!DB.payments.some(p=>p.studentId===t.id&&_payMatchesMonth(p,thisMonth()))){
       const room=DB.rooms.find(r=>r.id===t.roomId);
-      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
+      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
       added++;
     }
   });
@@ -333,7 +370,7 @@ function showAddPaymentForStudent(studentId) {
   const pmOpts = DB.settings.paymentMethods.map(m => `<option ${m===t.paymentMethod?'selected':''}>${m}</option>`).join('');
   showModal('modal-md', `💳 Add Payment — ${escHtml(t.name)}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">👤</div>
+      <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">${icon('student','sm')}</div>
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--text)">${escHtml(t.name)}</div>
         <div style="font-size:11px;color:var(--text3)">Room #${room ? room.number : '—'} · ${room ? getRoomType(room).name : '—'} · ${escHtml(t.phone || '—')}</div>
@@ -346,6 +383,7 @@ function showAddPaymentForStudent(studentId) {
     <input type="hidden" id="f-ps-studentId" value="${t.id}">
     <div class="form-grid">
       <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${t.rent||16000}" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
       <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
@@ -384,7 +422,7 @@ function showAddPaymentForStudent(studentId) {
       <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-ps-due" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
       <div class="field col-full"><label>Notes</label><input class="form-control" id="f-ps-notes" placeholder="Optional notes…"></div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:linear-gradient(135deg,#e6a817,#f0c040);color:#1a1200;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
   // Auto-fill from existing pending payment for current month; warn if already fully paid
   const curMonthLabel = thisMonthLabel();
   const existingPaid    = DB.payments.find(p=>p.studentId===t.id&&p.status==='Paid'&&p.month===curMonthLabel);
@@ -394,9 +432,16 @@ function showAddPaymentForStudent(studentId) {
     const mb = document.querySelector('#modal-container .modal-body');
     if (mb) {
       const banner = document.createElement('div');
+      banner.id = 'already-paid-banner';
       banner.style.cssText = 'background:rgba(224,82,82,0.12);border:1.5px solid rgba(224,82,82,0.5);border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px';
-      banner.innerHTML = '<span style="font-size:18px">⚠️</span><div><div style="font-weight:800;color:var(--red);font-size:13px">Already Paid for '+escHtml(curMonthLabel)+'</div><div style="font-size:11px;color:var(--text2);margin-top:2px">'+escHtml(t.name)+' has already paid <strong>'+fmtPKR(existingPaid.amount)+'</strong> (Collected by: '+(existingPaid.collectedBy||'—')+'). Adding another payment will create a duplicate record.</div></div>';
+      banner.innerHTML = icon('warning','sm')+'<div><div style="font-weight:800;color:var(--red);font-size:13px">Already Paid for '+escHtml(curMonthLabel)+'</div><div style="font-size:11px;color:var(--text2);margin-top:2px">'+escHtml(t.name)+' has already paid <strong>'+fmtPKR(existingPaid.amount)+'</strong> (Collected by: '+(existingPaid.collectedBy||'—')+'). Adding another payment will create a duplicate record.</div></div>';
       mb.insertBefore(banner, mb.firstChild);
+      // U10 FIX: clear stale banner when user changes the month
+      const monthInput = document.getElementById('f-ps-month');
+      if (monthInput) monthInput.addEventListener('input', function() {
+        const b = document.getElementById('already-paid-banner');
+        if (b) b.remove();
+      }, { once: true });
     }
   }
   if (existingPending) {
@@ -419,13 +464,14 @@ function showAddPaymentForStudent(studentId) {
 }
 function recalcUnpaidPS() {
   const rent  = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const admFee = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paid  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const conc  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
   var extra = 0;
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
-  const unpaid = Math.max(0, rent + extra - conc - paid);
+  const unpaid = Math.max(0, rent + extra + admFee - conc - paid);
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
@@ -497,12 +543,13 @@ async function submitPaymentForStudent() {
   window._updatePendingPS = false;
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const admissionFeePS = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const concessionPS = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
   const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
   const extraChargesPS = getExtraChargesData();
   const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
-  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS - concessionPS);
+  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS + admissionFeePS - concessionPS);
   const unpaid      = Math.max(0, totalDuePS - paidAmount);
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // FIX 8a: persist rent change on student record
@@ -517,6 +564,7 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
+    admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
     concession: concessionPS, concessionDesc: concessionDescPS,
     discount: concessionPS,
@@ -598,7 +646,7 @@ function showAddPaymentModal() {
       <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
       <div class="field col-full"><label>Notes</label><input class="form-control" id="f-pnotes-main" placeholder="Optional notes…"></div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:linear-gradient(135deg,#e6a817,#f0c040);color:#1a1200;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
 }
 async function submitAddPayment() {
   // Try to auto-select if only one student matches the search text
