@@ -2,7 +2,7 @@
    Quick keyboard launcher: jump to any page, run an action, or open a student.
    Self-contained overlay (own container), global Ctrl+K toggle, keyboard nav.
    Depends on globals: navigate, showViewStudentModal, escHtml, DB, CUR_USER,
-   and the various show*/export* action functions (guarded by typeof).
+   and the various show* / export* action functions (guarded by typeof).
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
