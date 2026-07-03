@@ -105,6 +105,7 @@ body.no-transition *::before,
 body.no-transition *::after {
     transition: none !important;
     animation: none !important;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    CLAUDE LIGHT THEME  —  Clean neutral white
