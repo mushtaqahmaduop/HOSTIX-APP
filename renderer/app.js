@@ -258,35 +258,8 @@ function toggleSettingsDropdown() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── INPUT AUTO-FORMAT ────────────────────────────────────────────────────────
-function fmtPhone(inp) {
-  let v = inp.value.replace(/\D/g,'');
-  if(v.length > 4) v = v.slice(0,4) + '-' + v.slice(4,11);
-  inp.value = v;
-}
-function fmtCnic(inp) {
-  let v = inp.value.replace(/\D/g,'');
-  if(v.length > 5) v = v.slice(0,5) + '-' + v.slice(5);
-  if(v.length > 13) v = v.slice(0,13) + '-' + v.slice(13,14);
-  inp.value = v;
-}
-function fmtEmail(inp) {
-  const hint = document.getElementById('f-temail-hint');
-  // FIX 7: trim before checking to avoid stale hint on trailing-space input
-  const v = inp.value.trim();
-  if(v && !v.includes('@')) {
-    if(hint) hint.style.display = 'block';
-  } else {
-    if(hint) hint.style.display = 'none';
-  }
-}
-function getEmailValue() {
-  const el = document.getElementById('f-temail');
-  if(!el) return '';
-  const v = el.value.trim();
-  if(!v) return '';
-  // FIX 8: full email kept as-is (user@yahoo.com etc.), bare username gets @gmail.com
-  return v.includes('@') ? v : v + '@gmail.com';
-}
+// fmtPhone / fmtCnic / fmtEmail / getEmailValue are defined in
+// src/modules/students.js (loads before app.js). Do NOT duplicate here.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── CANCELLATION DOWNLOAD REPORT ─────────────────────────────────────────────
