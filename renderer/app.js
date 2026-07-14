@@ -23,15 +23,8 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 // ── SAFE WINDOW HELPER ───────────────────────────────────────────────────────
-// Opens a popup; shows a toast and returns null if blocked.
-function safeOpenWindow(w, h) {
-  const win = window.open('', '_blank', 'width='+w+',height='+h+',scrollbars=yes,resizable=yes');
-  if (!win) {
-    if (typeof toast === 'function') toast('⚠️ Popup blocked — please allow popups for this page.', 'error');
-    return null;
-  }
-  return win;
-}
+// safeOpenWindow(width, height) is defined in src/utils.js (loads before app.js).
+// Do NOT duplicate here — it opens with scrollbars/resizable and a 1000x720 default.
 
 // ── ELECTRON PDF HELPER (Issue 1) ────────────────────────────────────────────
 // Unified PDF function: uses Electron native printToPDF when available (saves

@@ -76,7 +76,7 @@ function toggleClearBtn(inputId, btnId) {
 function safeOpenWindow(width, height) {
   width  = width  || 1000;
   height = height || 720;
-  var w = window.open('', '_blank', 'width=' + width + ',height=' + height);
+  var w = window.open('', '_blank', 'width=' + width + ',height=' + height + ',scrollbars=yes,resizable=yes');
   if (!w) {
     if (typeof toast === 'function')
       toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
