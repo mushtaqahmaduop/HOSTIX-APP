@@ -1388,64 +1388,8 @@ function navigateToMonth(monthKey) {
   toast('Viewing → ' + d.toLocaleString('default',{month:'long',year:'numeric'}), 'info');
 }
 
-// Download detail panel as CSV
-function downloadDetailCSV(type) {
-  const key = reportPeriod==='month' ? thisMonth() : thisYear();
-  let rows = [], filename = '';
-  if (type === 'financial') {
-    filename = 'Revenue_'+key+'.csv';
-    rows.push(['Student','Room','Month','Amount Paid','Method','Date']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
-    });
-  } else if (type === 'pending') {
-    filename = 'Pending_Payments.csv';
-    rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
-    DB.payments.filter(p=>p.status==='Pending').forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        p.unpaid!=null?p.amount:0, p.unpaid!=null?p.unpaid:p.amount,
-        p.method||'—', p.date||'—']);
-    });
-  } else if (type === 'expenses') {
-    filename = 'Expenses_'+key+'.csv';
-    rows.push(['Date','Category','Description','Amount']);
-    DB.expenses.filter(e=>(e.date||'').startsWith(key)).forEach(e=>{
-      rows.push([e.date||'—',e.category||'—',e.description||'—',e.amount]);
-    });
-  } else if (type === 'transfers') {
-    filename = 'Transfers.csv';
-    rows.push(['Date','Description','Method','Amount','Received By','Notes']);
-    (DB.transfers||[]).forEach(t=>{
-      rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);
-    });
-  } else if (type === 'students') {
-    filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
-    rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
-    const list = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
-    list.forEach(t=>{
-      const r = DB.rooms.find(x=>x.id===t.roomId);
-      rows.push([t.name||'—',t.fatherName||'—',r?'#'+r.number:'—',t.phone||'—',t.cnic||'—',t.joinDate||'—',t.rent,t.status||'—']);
-    });
-  } else if (type === 'netprofit') {
-    filename = 'AvailableFund_'+key+'.csv';
-    rows.push(['Date','Type','Description','Amount']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
-      rows.push([p.date||'—','Income',p.studentName+' · '+p.month,p.amount]);
-    });
-    DB.expenses.filter(e=>(e.date||'').startsWith(key)).forEach(e=>{
-      rows.push([e.date||'—','Expense',e.category+': '+e.description,'-'+e.amount]);
-    });
-  }
-  if (!rows.length) { toast('No data to export','error'); return; }
-  const csv = rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 18: revoke blob URL to free memory
-  toast('Downloaded: '+filename,'success');
-}
+// downloadDetailCSV(type) is defined in src/modules/reports.js (loads after this
+// file and is a strict superset). The former copy here was dead-shadowed; removed.
 let calPopoverOpen = false;
 function calPopSelect(key, label) {
   document.getElementById('cal-popover-el')?.remove();
