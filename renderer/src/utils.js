@@ -66,7 +66,7 @@ function migrateStudentIdsToNumeric() {
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 function toggleClearBtn(inputId, btnId) {
-  const inp = document.getElementById(inputId);
+  const inp = /** @type {HTMLInputElement} */ (document.getElementById(inputId));
   const btn = document.getElementById(btnId);
   if (!inp || !btn) return;
   btn.classList.toggle('visible', inp.value.length > 0);
@@ -380,7 +380,7 @@ const COURSE_LIST = [
 function toggleOccField(val) {
   const custom = document.getElementById('f-tocccustom');
   const wrap   = document.getElementById('f-tocc-wrap');
-  const main   = document.getElementById('f-tocc');
+  const main   = /** @type {HTMLInputElement} */ (document.getElementById('f-tocc'));
   if (val === 'other') {
     if (wrap)   wrap.style.display   = 'none';
     if (custom) { custom.style.display = 'block'; custom.style.marginTop = '0'; }
@@ -426,7 +426,7 @@ function _renderCourseSuggestions(matches, val, activeIdx) {
 }
 
 function pickCourse(val) {
-  const inp = document.getElementById('f-tocc');
+  const inp = /** @type {HTMLInputElement} */ (document.getElementById('f-tocc'));
   if (inp) { inp.value = val; inp.focus(); }
   const box = document.getElementById('course-suggestions');
   if (box) box.style.display = 'none';
@@ -442,7 +442,7 @@ function pickCourse(val) {
 function courseKeyNav(e) {
   const box = document.getElementById('course-suggestions');
   if (!box || box.style.display === 'none') return;
-  const items = box.querySelectorAll('.cs-item');
+  const items = /** @type {NodeListOf<HTMLElement>} */ (box.querySelectorAll('.cs-item'));
   if (!items.length) return;
   let cur = Array.from(items).findIndex(el => el.classList.contains('cs-active'));
   if (e.key === 'ArrowDown') {

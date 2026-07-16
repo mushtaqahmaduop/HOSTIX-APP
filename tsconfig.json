@@ -1,0 +1,21 @@
+{
+  "// NOTE": "Dev-time TYPE-CHECKING only — no build step, no emit. The app still",
+  "// NOTE2": "ships the exact same plain .js via <script> tags. Run: npm run typecheck.",
+  "// NOTE3": "Scope grows one file at a time (Phase 2 §6.1) as files are annotated.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "module": "none",
+    "lib": ["ES2020", "DOM"],
+    "moduleDetection": "force",
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "renderer/globals.d.ts",
+    "renderer/src/utils.js"
+  ]
+}

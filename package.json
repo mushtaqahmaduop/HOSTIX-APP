@@ -19,7 +19,8 @@
     "build:all": "electron-builder --win --x64 --ia32",
     "test:license": "node test-license.js",
     "test:e2e": "playwright test",
-    "test:migrate": "node migrations/001-relational-schema.test.js"
+    "test:migrate": "node migrations/001-relational-schema.test.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {
     "appId": "com.zeerak.hostix",
@@ -118,7 +119,8 @@
     "@playwright/test": "^1.61.1",
     "electron": "^22.3.27",
     "electron-builder": "^26.8.1",
-    "electron-rebuild": "^3.2.9"
+    "electron-rebuild": "^3.2.9",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
