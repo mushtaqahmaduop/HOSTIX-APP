@@ -1450,14 +1450,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 .room-card:hover::after { animation: shimmerSweep 0.5s ease-out forwards; }
 
-.room-card.occupied { border-color: rgba(52, 211, 153, 0.25); }
+.room-card.occupied { border-color: var(--border); }
 .room-card.occupied::before {
     content: '';
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 2px;
-    background: var(--green);
-    opacity: 0.7;
+    background: var(--text3);
+    opacity: 0.3;
 }
 
 .room-card.vacant::before {
@@ -1479,7 +1479,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .room-meta-row { display: flex; justify-content: space-between; font-size: 12px; }
 .room-meta-row .k { color: var(--text3); }
 .room-meta-row .v { color: var(--text); font-weight: 500; }
-.room-rent { font-size: 13px; font-weight: 700; color: var(--green); margin-top: 8px; }
+.room-rent { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 8px; }
 
 .room-occ-bar { margin-top: 8px; }
 .room-occ-track { height: 3px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
@@ -4348,7 +4348,7 @@ body.light-theme .btn-primary {
     box-shadow: var(--s-elev-3);
 }
 
-.room-card.occupied { border-color: rgba(69,223,164,0.20); }
+.room-card.occupied { border-color: var(--border); }
 .room-card.vacant   { border-color: rgba(0,0,0,0.1); }
 .room-card.maintenance { border-color: rgba(255,180,171,0.20); }
 
