@@ -6,7 +6,7 @@
    ├─ src/storage.js           ─ loadDB, saveDB (async, SQLite)
    ├─ src/license.js           ─ license check stubs
    ├─ src/receipt.js           ─ PDF receipt builder
-   ├─ src/modules/theme.js     ─ toggleTheme, applySavedTheme
+   ├─ src/modules/theme.js     ─ toggleTheme, applySavedSidebar
    ├─ src/modules/nav.js       ─ navigate, renderPage, updateSidebar
    ├─ src/modules/dashboard.js ─ renderDashboard, calcRevenue, charts, search
    ├─ src/modules/cancellations.js
@@ -99,7 +99,6 @@ async function processAutoCancellations() {
   }
 }
 // ── Pre-boot: theme/logo/sidebar don't need DB — run immediately ─────────────
-applySavedTheme();
 applySavedSidebar();
 loadSavedLogo();
 updateSidebar(); // shows zeros/defaults until boot() completes

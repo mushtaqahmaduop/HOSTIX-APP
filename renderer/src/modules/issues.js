@@ -25,10 +25,10 @@ function renderIssues() {
   // Tab bar
   var mActive = issuesTab==='maintenance';
   html += '<div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px">';
-  html += '<button onclick="issuesTab=\'maintenance\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(mActive?'var(--gold-dim)':'var(--bg3)')+';color:'+(mActive?'var(--gold2)':'var(--text2)')+'">&#x1F527; Maintenance ('+(mlist.filter(function(x){return x.status!=='Resolved';}).length)+' active)</button>';
+  html += '<button onclick="issuesTab=\'maintenance\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(mActive?'var(--accent-dim)':'var(--bg3)')+';color:'+(mActive?'var(--accent-strong)':'var(--text2)')+'">&#x1F527; Maintenance ('+(mlist.filter(function(x){return x.status!=='Resolved';}).length)+' active)</button>';
   html += '<div style="width:1px;background:var(--border)"></div>';
   var cActive = issuesTab==='complaints';
-  html += '<button onclick="issuesTab=\'complaints\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(cActive?'var(--gold-dim)':'var(--bg3)')+';color:'+(cActive?'var(--gold2)':'var(--text2)')+'">&#x1F4AC; Complaints ('+(clist.filter(function(x){return x.status!=='Resolved';}).length)+' open)</button>';
+  html += '<button onclick="issuesTab=\'complaints\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(cActive?'var(--accent-dim)':'var(--bg3)')+';color:'+(cActive?'var(--accent-strong)':'var(--text2)')+'">&#x1F4AC; Complaints ('+(clist.filter(function(x){return x.status!=='Resolved';}).length)+' open)</button>';
   html += '</div>';
 
   if(issuesTab==='maintenance') {
@@ -90,8 +90,8 @@ function showAddIssueModal() {
   var students = DB.students.filter(function(s){return s.status==='Active';}).map(function(s){return '<option value="'+s.id+'">'+escHtml(s.name)+'</option>';}).join('');
   showModal('modal-md','Add Complaint / Maintenance',
     '<div style="display:flex;gap:8px;margin-bottom:18px">'+
-    '<button type="button" id="ib-maint" onclick="document.getElementById(\'if-maint\').style.display=\'block\';document.getElementById(\'if-comp\').style.display=\'none\';this.style.background=\'var(--gold-dim)\';this.style.color=\'var(--gold2)\';document.getElementById(\'ib-comp\').style.background=\'var(--bg3)\';document.getElementById(\'ib-comp\').style.color=\'var(--text2)\'" class="btn" style="flex:1;background:var(--gold-dim);color:var(--gold2);">&#x1F527; Maintenance</button>'+
-    '<button type="button" id="ib-comp" onclick="document.getElementById(\'if-comp\').style.display=\'block\';document.getElementById(\'if-maint\').style.display=\'none\';this.style.background=\'var(--gold-dim)\';this.style.color=\'var(--gold2)\';document.getElementById(\'ib-maint\').style.background=\'var(--bg3)\';document.getElementById(\'ib-maint\').style.color=\'var(--text2)\'" class="btn btn-secondary" style="flex:1">&#x1F4AC; Complaint</button>'+
+    '<button type="button" id="ib-maint" onclick="document.getElementById(\'if-maint\').style.display=\'block\';document.getElementById(\'if-comp\').style.display=\'none\';this.style.background=\'var(--accent-dim)\';this.style.color=\'var(--accent-strong)\';document.getElementById(\'ib-comp\').style.background=\'var(--bg3)\';document.getElementById(\'ib-comp\').style.color=\'var(--text2)\'" class="btn" style="flex:1;background:var(--accent-dim);color:var(--accent-strong);">&#x1F527; Maintenance</button>'+
+    '<button type="button" id="ib-comp" onclick="document.getElementById(\'if-comp\').style.display=\'block\';document.getElementById(\'if-maint\').style.display=\'none\';this.style.background=\'var(--accent-dim)\';this.style.color=\'var(--accent-strong)\';document.getElementById(\'ib-maint\').style.background=\'var(--bg3)\';document.getElementById(\'ib-maint\').style.color=\'var(--text2)\'" class="btn btn-secondary" style="flex:1">&#x1F4AC; Complaint</button>'+
     '</div>'+
     '<div id="if-maint"><div class="form-grid">'+
     '<div class="field col-full"><label>Issue Title *</label><input id="mt-title" class="form-control" placeholder="e.g. Broken fan, Leaking pipe"></div>'+

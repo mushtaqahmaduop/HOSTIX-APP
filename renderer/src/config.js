@@ -19,7 +19,6 @@ let DB = {
     phone:           '',
     email:           '',
     version:         'v3.0',
-    accentColor:     '#e05252',
     currency:        'PKR',
     receiptCounter:  0,
     roomTypes: [

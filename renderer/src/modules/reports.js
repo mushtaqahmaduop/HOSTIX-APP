@@ -23,7 +23,7 @@ function _buildRoomStudentIndex() {
 function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   const periodLabel = reportPeriod==='month' ? thisMonth() : thisYear();
   const csvBtn = (type, color) => `<button onclick="downloadDetailCSV('${type}')" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📥 CSV</button>`;
-  const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" style="background:var(--gold);color:#000;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📄 PDF</button>`;
+  const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" style="background:var(--accent);color:#000;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📄 PDF</button>`;
 
   // PERF: index rooms by id and active students by room ONCE (see _buildRoomStudentIndex).
   const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom } = _buildRoomStudentIndex();
@@ -190,7 +190,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
-        <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--gold2)">${DB.rooms.length-occ}</div></div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--accent-strong)">${DB.rooms.length-occ}</div></div>
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Total</div><div style="font-size:28px;font-weight:900;color:var(--blue)">${DB.rooms.length}</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Occupancy</th><th>Students</th><th>Status</th><th>Rent</th></tr></thead><tbody>
@@ -260,7 +260,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.35);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700;margin-bottom:4px">Total</div><div>${moneyValue(totalTr,{size:"section",color:"var(--blue)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.length} records</div></div>
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:4px">Cash</div><div>${moneyValue(cashTr,{size:"section",color:"var(--green)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method==='Cash').length} records</div></div>
         <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);font-weight:700;margin-bottom:4px">Bank</div><div>${moneyValue(bankTr,{size:"section",color:"var(--purple)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method!=='Cash').length} records</div></div>
-        <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);font-weight:700;margin-bottom:4px">This Period</div><div>${moneyValue(moTotal,{size:"section",color:"var(--gold2)"})}</div><div style="font-size:10px;color:var(--text3)">${moTr.length} transfers</div></div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">This Period</div><div>${moneyValue(moTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${moTr.length} transfers</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th><th>Received By</th><th>Notes</th><th>By Warden</th><th>Actions</th></tr></thead><tbody>
       ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers yet — click + New to add.</td></tr>'
@@ -418,11 +418,11 @@ function renderReports() {
         <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Occupancy</div><div class="stat-value" style="font-size:18px">${occRate}%</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${occ}/${DB.rooms.length} rooms</div></div>
       </div>
     </div>
-    <div class="stat-card blue" onclick="reportDetail='transfers';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='transfers'?';border-color:var(--royal)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--royal)"></div>':''}
+    <div class="stat-card blue" onclick="reportDetail='transfers';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='transfers'?';border-color:var(--accent)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)"></div>':''}
       <div style="display:flex;align-items:center;gap:10px">
         <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏦</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--royal2)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records</div></div>
+        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records</div></div>
       </div>
     </div>
     <div class="stat-card blue" onclick="reportDetail='students';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='students'?';border-color:var(--blue)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
@@ -459,7 +459,7 @@ function renderReports() {
   <div class="card">
     <div class="card-header"><div class="card-title">👥 Student Summary</div><div style="display:flex;gap:8px"><button class="btn btn-secondary btn-sm" onclick="reportDetail='students';renderPage('reports')" style="font-size:11px">👁 View All →</button></div></div>
     <div class="three-col">
-      ${[['Active Students',DB.students.filter(t=>t.status==='Active').length,'var(--green)','students'],['Left',DB.students.filter(t=>t.status==='Left').length,'var(--text3)','students'],['Blacklisted',DB.students.filter(t=>t.status==='Blacklisted').length,'var(--red)','students'],['Total Registered',DB.students.length,'var(--gold)','students'],['Total Rooms',DB.rooms.length,'var(--blue)','rooms'],['Total Payments',DB.payments.length,'var(--teal)','financial']].map(([l,v,c,det])=>`<div class="card" style="padding:16px;text-align:center;cursor:pointer;transition:var(--transition)" onclick="reportDetail='${det}';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''"><div class="stat-label">${l}</div><div class="fw-800" style="font-size:28px;margin-top:6px;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">click for detail →</div></div>`).join('')}
+      ${[['Active Students',DB.students.filter(t=>t.status==='Active').length,'var(--green)','students'],['Left',DB.students.filter(t=>t.status==='Left').length,'var(--text3)','students'],['Blacklisted',DB.students.filter(t=>t.status==='Blacklisted').length,'var(--red)','students'],['Total Registered',DB.students.length,'var(--accent)','students'],['Total Rooms',DB.rooms.length,'var(--blue)','rooms'],['Total Payments',DB.payments.length,'var(--teal)','financial']].map(([l,v,c,det])=>`<div class="card" style="padding:16px;text-align:center;cursor:pointer;transition:var(--transition)" onclick="reportDetail='${det}';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''"><div class="stat-label">${l}</div><div class="fw-800" style="font-size:28px;margin-top:6px;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">click for detail →</div></div>`).join('')}
     </div>
   </div>
   `}
@@ -758,10 +758,10 @@ function printReport() {
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #c8a84b;margin-bottom:24px}
+    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #7c3aed;margin-bottom:24px}
     .title{font-size:22px;font-weight:800;color:#1a1a2e}
     .subtitle{font-size:12px;color:#666;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:#c8a84b22;color:#8b6a00;border:1px solid #c8a84b55}
+    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:#7c3aed22;color:#6d28d9;border:1px solid #7c3aed55}
     .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
     .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
     .kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
@@ -773,7 +773,7 @@ function printReport() {
     td{padding:8px 12px;border-bottom:1px solid #f8fafc}
     .green{color:#16a34a;font-weight:700}
     .red{color:#dc2626;font-weight:700}
-    .gold{color:#854d0e;font-weight:700}
+    .gold{color:#5b21b6;font-weight:700}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
     @media print{body{padding:16px}}
   </style></head><body>
@@ -789,7 +789,7 @@ function printReport() {
     <div class="kpi"><label>Rooms Occupied</label><div class="val">${occ}/${DB.rooms.length}</div></div>
     <div class="kpi"><label>Active Students</label><div class="val">${DB.students.filter(t=>t.status==='Active').length}</div></div>
     <div class="kpi"><label>Total Payments</label><div class="val">${pays.filter(p=>p.status==='Paid').length}</div></div>
-    <div class="kpi"><label>Funds Transferred</label><div class="val" style="color:#854d0e">${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div></div>
+    <div class="kpi"><label>Funds Transferred</label><div class="val" style="color:#5b21b6">${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div></div>
   </div>
   <div class="section">
     <h3>💳 Payment Transactions</h3>
@@ -808,7 +808,7 @@ function printReport() {
     <table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th></tr></thead><tbody>
     ${(DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).map(tr=>`<tr><td>${fmtDate(tr.date)}</td><td>${escHtml(tr.description||'Transfer')}</td><td>${escHtml(tr.method||'—')}</td><td class="gold">${fmtPKR(tr.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No transfers this period</td></tr>'}
     </tbody></table>
-    ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#854d0e">Total Funds Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
+    ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#5b21b6">Total Funds Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
   </body></html>`;

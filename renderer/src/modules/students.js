@@ -71,7 +71,7 @@ function renderStudents() {
           const room=_roomById.get(t.roomId);
           const av=t.name?t.name[0].toUpperCase():'?';
           return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
-            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--gold2);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--accent-strong);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
             <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:var(--bg3);color:var(--accent);width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
             <td style="padding:8px 6px"><span class="text-gold fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
             <td style="padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}${t.emergencyContact?'<div style="font-size:10px;color:var(--text3);margin-top:2px">🆘 '+escHtml(t.emergencyContact)+'</div>':''}</td>
@@ -132,11 +132,11 @@ function showAddStudentModal(presetRoomId='') {
   showModal('modal-xl','➕ Add New Student',`
   <style>
   .as-section{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold2);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-strong);margin-bottom:12px;display:flex;align-items:center;gap:6px}
   .room-card{border:2px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all 0.15s;background:var(--card);text-align:center;min-width:0}
-  .room-card:hover{border-color:var(--gold2);background:var(--bg4)}
-  .room-card.selected{border-color:var(--gold2);background:rgba(200,168,75,0.12);box-shadow:0 0 0 2px rgba(200,168,75,0.3)}
-  .room-card .rc-num{font-size:18px;font-weight:900;color:var(--gold2);line-height:1}
+  .room-card:hover{border-color:var(--accent-strong);background:var(--bg4)}
+  .room-card.selected{border-color:var(--accent-strong);background:rgba(124,58,237,0.12);box-shadow:0 0 0 2px rgba(124,58,237,0.3)}
+  .room-card .rc-num{font-size:18px;font-weight:900;color:var(--accent-strong);line-height:1}
   .room-card .rc-type{font-size:9px;color:var(--text3);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
   .room-card .rc-occ{font-size:10px;font-weight:700;margin-top:4px}
   .room-card .rc-rent{font-size:10px;color:var(--text3);margin-top:1px}
@@ -144,9 +144,9 @@ function showAddStudentModal(presetRoomId='') {
 
   <!-- PHOTO BANNER at top -->
   <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,var(--bg3),var(--bg4));border:1px solid var(--border2);border-radius:12px">
-    <div id="add-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(200,168,75,0.5);background:rgba(200,168,75,0.07);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;cursor:pointer" onclick="triggerStudentPhotoUpload()" title="Click to upload photo">🧑‍🎓</div>
+    <div id="add-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(124,58,237,0.5);background:rgba(124,58,237,0.07);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;cursor:pointer" onclick="triggerStudentPhotoUpload()" title="Click to upload photo">🧑‍🎓</div>
     <div style="flex:1">
-      <div style="font-size:13px;font-weight:800;color:var(--gold2);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
+      <div style="font-size:13px;font-weight:800;color:var(--accent-strong);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" class="btn btn-secondary btn-sm" onclick="triggerStudentPhotoUpload()" style="font-size:11px">📁 Upload</button>
         <button type="button" class="btn btn-secondary btn-sm" id="add-student-cam-btn" onclick="openAddStudentCamera()" style="font-size:11px">📷 Camera</button>
@@ -235,7 +235,7 @@ function showAddStudentModal(presetRoomId='') {
             +' onmouseover="this.style.background=\'var(--bg4)\'" onmouseout="this.style.background=\''+(isFull?'rgba(224,82,82,0.05)':'')+'\'}"'
             +' onmousedown="pickRoomSearch(\''+r.id+'\','+(parseFloat(r.rent)||16000)+',\''+lbl+'\')">'
             +'<div>'
-            +'<span style="font-size:15px;font-weight:900;color:var(--gold2)">Room #'+r.number+'</span>'
+            +'<span style="font-size:15px;font-weight:900;color:var(--accent-strong)">Room #'+r.number+'</span>'
             +'<span style="font-size:11px;color:var(--text3);margin-left:8px">'+rt.name+' · '+r.floor+' Floor</span>'
             +(isFull?'<span style="font-size:10px;font-weight:800;color:var(--red);margin-left:8px;background:rgba(224,82,82,0.15);padding:1px 6px;border-radius:20px">⚠ FULL</span>':'')
             +'</div>'
@@ -413,7 +413,7 @@ function showViewStudentModal(id) {
     <!-- PERSONAL INFO GRID -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('student','sm')} Personal Information</div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('student','sm')} Personal Information</div>
         ${[['Father / Guardian',t.fatherName],['Occupation / Course',t.occupation],['CNIC / ID',t.cnic],['Phone Number',t.phone],['Email Address',t.email],['Emergency Contact',t.emergencyContact]].map(([k,v])=>`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:11.5px;color:var(--text3);flex-shrink:0;width:130px">${k}</span>
@@ -748,17 +748,17 @@ function printStudentCard(id) {
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #c8a84b;margin-bottom:24px}
+    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #7c3aed;margin-bottom:24px}
     .hostel-name{font-size:22px;font-weight:800;color:#1a1a2e}
     .hostel-sub{font-size:12px;color:#666;margin-top:3px}
-    .report-badge{background:#c8a84b22;border:1px solid #c8a84b55;color:#8b6a00;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700}
+    .report-badge{background:#7c3aed22;border:1px solid #7c3aed55;color:#6d28d9;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700}
     .profile-hero{background:linear-gradient(135deg,#0d1b2a,#1a2d4a);border-radius:12px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;color:#fff}
-    .avatar{width:64px;height:64px;border-radius:14px;background:#c8a84b33;border:2px solid #c8a84b88;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#c8a84b;flex-shrink:0}
+    .avatar{width:64px;height:64px;border-radius:14px;background:#7c3aed33;border:2px solid #7c3aed88;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#7c3aed;flex-shrink:0}
     .badges{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
     .badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
     .badge-green{background:#dcfce7;color:#166534}
     .badge-blue{background:#dbeafe;color:#1e40af}
-    .badge-gold{background:#fef9c3;color:#854d0e}
+    .badge-gold{background:#fef9c3;color:#5b21b6}
     .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:16px}
     .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -846,14 +846,14 @@ function showEditStudentModal(id) {
   showModal('modal-lg',`✏️ Edit Student — ${escHtml(t.name)}`,`
   <style>
   .as-section{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold2);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-strong);margin-bottom:12px;display:flex;align-items:center;gap:6px}
   </style>
   <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,var(--bg3),var(--bg4));border:1px solid var(--border2);border-radius:12px">
-    <div id="edit-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(200,168,75,0.5);background:rgba(200,168,75,0.07);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden">
+    <div id="edit-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(124,58,237,0.5);background:rgba(124,58,237,0.07);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden">
       ${t.docs?.photo?`<img src="${t.docs.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`:'🧑‍🎓'}
     </div>
     <div style="flex:1">
-      <div style="font-size:13px;font-weight:800;color:var(--gold2);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
+      <div style="font-size:13px;font-weight:800;color:var(--accent-strong);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('edit-student-photo-file').click()" style="font-size:11px">📁 Upload</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="openEditStudentCamera()" style="font-size:11px">📷 Camera</button>
@@ -905,7 +905,7 @@ function showEditStudentModal(id) {
         value="${escHtml(presetLabel)}"
         oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)" onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
       <div id="room-search-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:500;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px">
-        ${allRooms.map(r=>{const rt=getRoomType(r);const occ=getRoomOccupancy(r);const free=rt.capacity-occ;const lbl=`Room #${r.number} · ${rt.name} · ${r.floor} Floor`;return `<div class="room-search-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''" onmousedown="pickRoomSearch('${r.id}',${parseFloat(r.rent)||0},'${lbl}')"><div><span style="font-size:15px;font-weight:900;color:var(--gold2)">Room #${r.number}</span><span style="font-size:11px;color:var(--text3);margin-left:8px">${rt.name} · ${r.floor} Floor</span></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;color:${free>0?'var(--green)':'var(--red)'}">${occ}/${rt.capacity} occ</div><div style="font-size:11px;color:var(--text3)">${fmtPKR(parseFloat(r.rent)||0)}/mo</div></div></div>`;}).join('')}
+        ${allRooms.map(r=>{const rt=getRoomType(r);const occ=getRoomOccupancy(r);const free=rt.capacity-occ;const lbl=`Room #${r.number} · ${rt.name} · ${r.floor} Floor`;return `<div class="room-search-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''" onmousedown="pickRoomSearch('${r.id}',${parseFloat(r.rent)||0},'${lbl}')"><div><span style="font-size:15px;font-weight:900;color:var(--accent-strong)">Room #${r.number}</span><span style="font-size:11px;color:var(--text3);margin-left:8px">${rt.name} · ${r.floor} Floor</span></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;color:${free>0?'var(--green)':'var(--red)'}">${occ}/${rt.capacity} occ</div><div style="font-size:11px;color:var(--text3)">${fmtPKR(parseFloat(r.rent)||0)}/mo</div></div></div>`;}).join('')}
       </div>
     </div>
   </div>
@@ -1022,7 +1022,7 @@ function showRoomShiftModal(studentId) {
       <div style="font-size:24px">🧑‍🎓</div>
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--text)">${escHtml(t.name)}</div>
-        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--gold2)">Room #${fromRoom ? fromRoom.number : '?'}</strong> · Rent: <strong style="color:var(--green)">${fmtPKR(t.rent)}/mo</strong></div>
+        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${fromRoom ? fromRoom.number : '?'}</strong> · Rent: <strong style="color:var(--green)">${fmtPKR(t.rent)}/mo</strong></div>
       </div>
     </div>
 
@@ -1148,7 +1148,7 @@ function showFormerStudentsModal() {
     `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Search by name, ID, mobile, CNIC, email, father name, occupation, location or former room.</div>
      <div style="display:flex;gap:8px;margin-bottom:14px">
        <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;text-align:center">
-         <div style="font-size:18px;font-weight:900;color:var(--gold2)">${total}</div>
+         <div style="font-size:18px;font-weight:900;color:var(--accent-strong)">${total}</div>
          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Former Students</div>
        </div>
        <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;text-align:center">
@@ -1197,7 +1197,7 @@ function formerStudentSearch(query) {
     const recentRows = payHistory.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3)">${escHtml(p.month||fmtDate(p.date)||'—')}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${fmtPKR(p.amount)}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'}">${p.status==='Paid'?icon('checkmark','xs'):'⏳'}</span></div>`).join('');
     return `<div id="fsr-${s.id}" style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;gap:13px">
-        <div style="width:44px;height:44px;border-radius:11px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">${escHtml(s.name||'—')}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;margin-bottom:8px">
@@ -1206,7 +1206,7 @@ function formerStudentSearch(query) {
             ${s.fatherName?`<div style="font-size:11px;color:var(--text3)">👨 ${escHtml(s.fatherName)}</div>`:''}
             ${s.email?`<div style="font-size:11px;color:var(--text3)">✉️ ${escHtml(s.email)}</div>`:''}
             ${s.occupation?`<div style="font-size:11px;color:var(--text3)">💼 ${escHtml(s.occupation)}</div>`:''}
-            ${(s.lastRoom||s.roomNumber)?`<div style="font-size:11px;color:var(--gold2);font-weight:600">🏠 Former Rm #${escHtml(String(s.lastRoom||s.roomNumber||'—'))}</div>`:''}
+            ${(s.lastRoom||s.roomNumber)?`<div style="font-size:11px;color:var(--accent-strong);font-weight:600">🏠 Former Rm #${escHtml(String(s.lastRoom||s.roomNumber||'—'))}</div>`:''}
             ${s.leftDate?`<div style="font-size:11px;color:var(--red)">📅 Left: ${fmtDate(s.leftDate)}</div>`:''}
             ${s.rent?`<div style="font-size:11px;color:var(--green);font-weight:600">💰 ${fmtPKR(s.rent)}/mo</div>`:''}
           </div>
@@ -1277,7 +1277,7 @@ function openRestoreStudentForm(studentId) {
       <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">🏠 New Room Assignment</div></div>
       <div class="field"><label>Assign Room *</label><select class="form-control" id="rs-room"><option value="">— Select available room —</option>${roomOpts}</select></div>
       <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="rs-rent" type="number" value="${t.rent||''}" placeholder="e.g. 16000" oninput="rsRecalc()"></div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--gold2);margin-bottom:10px">${icon('money')} First Month Payment</div></div>
+      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:10px">${icon('money')} First Month Payment</div></div>
       <div class="field"><label>Payment Month</label><input class="form-control" id="rs-month" type="text" value="${thisMonthLabel()}" oninput="rsCheckMonthDuplicate('${t.id}',this.value)" placeholder="e.g. March 2026"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="rs-pm">${pmOpts}</select></div>
       <div id="rs-month-warning" class="field col-full" style="display:none"></div>
@@ -1300,9 +1300,9 @@ function openRestoreStudentForm(studentId) {
           <div style="color:var(--border2);font-size:20px">−</div>
           <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Concession</div><div id="rs-tot-conc">${moneyValue(0,{size:"body",color:"var(--teal)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">=</div>
-          <div style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;padding:8px 14px">
-            <div style="font-size:10px;color:var(--gold2);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Net Payable</div>
-            <div id="rs-tot-net">${moneyValue(0,{size:"section",color:"var(--gold2)"})}</div>
+          <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:8px;padding:8px 14px">
+            <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Net Payable</div>
+            <div id="rs-tot-net">${moneyValue(0,{size:"section",color:"var(--accent-strong)"})}</div>
           </div>
         </div>
       </div>
@@ -1355,7 +1355,7 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
     if (ps) ps.disabled = true;
   } else if (pending) {
     warn.style.display = '';
-    warn.innerHTML = '<div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--gold2);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
+    warn.innerHTML = '<div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--accent-strong);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
     ['rs-amount','rs-pending','rs-concession','rs-pstatus'].forEach(function(id){
       const el = document.getElementById(id); if (el) el.disabled = false;
     });
@@ -1378,7 +1378,7 @@ function rsRecalc() {
   if(el('rs-tot-rent'))  el('rs-tot-rent').innerHTML  =moneyValue(Math.abs(rent),{size:'body',color:'var(--blue)'});
   if(el('rs-tot-extra')) el('rs-tot-extra').innerHTML =moneyValue(Math.abs(extra),{size:'body',color:'var(--red)'});
   if(el('rs-tot-conc'))  el('rs-tot-conc').innerHTML  =moneyValue(Math.abs(conc),{size:'body',color:'var(--teal)'});
-  if(el('rs-tot-net'))   el('rs-tot-net').innerHTML   =moneyValue(Math.abs(net),{size:'section',color:'var(--gold2)'});
+  if(el('rs-tot-net'))   el('rs-tot-net').innerHTML   =moneyValue(Math.abs(net),{size:'section',color:'var(--accent-strong)'});
   const pendEl=el('rs-pending'), statEl=el('rs-pstatus');
   if(pendEl&&!pendEl.dataset.manual){
     const autoPend=Math.max(0,net-paid);
@@ -1460,7 +1460,7 @@ function downloadAllStudentsPDF() {
     +'<div style="font-size:11px;color:var(--text3);margin-top:6px">The PDF will show each student\'s rent, deposit, paid amount, and pending balance for the selected month.</div>'
     +'</div>'
     +'<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">'
-    +'<div style="font-size:12px;font-weight:700;color:var(--gold2);margin-bottom:8px">📋 Report will include:</div>'
+    +'<div style="font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:8px">📋 Report will include:</div>'
     +'<div style="font-size:12px;color:var(--text2);line-height:1.8">'
     +icon('checkmark','xs')+' Student name, father\'s name, room number<br>'
     +icon('checkmark','xs')+' CNIC and phone number<br>'
@@ -1600,8 +1600,8 @@ function doGenerateStudentsPDF(monthKey) {
 
   // Totals row — adm/ext/conc NOT grand-totalled (they are per-student breakdown only)
   rows += '<tr style="background:#0f1a2e">';
-  rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#e6c96e;font-size:12px;border:1px solid #2a3d5a">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#e6c96e">'+fmtPKR(grandRent)+'</td>';
+  rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#a78bfa;font-size:12px;border:1px solid #2a3d5a">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
+  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(grandRent)+'</td>';
   rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
   rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
   rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
@@ -1623,17 +1623,17 @@ function doGenerateStudentsPDF(monthKey) {
   // 11 cols: # name father room cnic phone rent paid pend fst sst
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
   html += 'col.c-no{width:3%}col.c-name{width:13%}col.c-father{width:10%}col.c-room{width:4%}col.c-cnic{width:11%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:7%}col.c-ext{width:8%}col.c-conc{width:8%}col.c-paid{width:8%}col.c-pend{width:7%}col.c-fst{width:7%}col.c-sst{width:6%}';
-  html += 'thead th{background:#0f1a2e;color:#e6c96e;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
+  html += 'thead th{background:#0f1a2e;color:#a78bfa;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
   html += 'td{padding:5px 5px;border:1px solid #c8d0db !important;word-break:break-word;vertical-align:middle;font-size:10px}';
   html += 'tr:hover td{background:#f0f4ff!important}';
   html += '.sum{display:inline-flex;align-items:center;gap:5px;background:#f5f7ff;border:1px solid #dde2ea;border-radius:8px;padding:5px 10px;margin:2px}';
   html += '.sum .v{font-size:15px;font-weight:900}.sum .l{font-size:8px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}';
-  html += '.pbtn{background:#0f1a2e;color:#e6c96e;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,Arial,sans-serif}';
+  html += '.pbtn{background:#0f1a2e;color:#a78bfa;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,Arial,sans-serif}';
   html += '</style></head><body>';
 
   // Header
-  html += '<div style="border-bottom:3px solid #c8a84b;padding-bottom:10px;margin-bottom:12px;display:flex;align-items:flex-start;justify-content:space-between">';
+  html += '<div style="border-bottom:3px solid #7c3aed;padding-bottom:10px;margin-bottom:12px;display:flex;align-items:flex-start;justify-content:space-between">';
   html += '<div><div style="font-size:22px;font-weight:900;color:#0f1a2e">'+escHtml(hostel)+'</div>';
   if(location) html += '<div style="font-size:11px;color:#666;margin-top:2px">📍 '+escHtml(location)+'</div>';
   html += '<div style="font-size:14px;font-weight:800;color:#b8860b;margin-top:4px;text-transform:uppercase;letter-spacing:0.8px">Students Fee Report — '+monthLabel+'</div></div>';
@@ -1651,7 +1651,7 @@ function doGenerateStudentsPDF(monthKey) {
   var _pdfPending=DB.payments.filter(function(p){return p.status==='Pending'&&_payMatchesMonth(p,monthKey);}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
   html += '<div class="sum" style="background:'+(_pdfPending>0?'#fde8e8':'#edfaf3')+'">';
   html += '<div class="v" style="color:'+(_pdfPending>0?'#8b1a1a':'#1a6b3a')+'">'+fmtPKR(_pdfPending)+'</div><div class="l">Pending<br>Unpaid</div></div>';
-  html += '<div class="sum" style="background:#fff8e1;border-color:#e8a830"><div class="v" style="color:#854d0e">'+fmtPKR(grandExpenses)+'</div><div class="l">Expenses<br>'+monthLabel+'</div></div>';
+  html += '<div class="sum" style="background:#fff8e1;border-color:#e8a830"><div class="v" style="color:#5b21b6">'+fmtPKR(grandExpenses)+'</div><div class="l">Expenses<br>'+monthLabel+'</div></div>';
   html += '<div class="sum" style="background:#eef2ff"><div class="v" style="color:#1a2c80">'+fmtPKR(grandTransfers)+'</div><div class="l">Funds<br>Transfer</div></div>';
   html += '<div class="sum" style="background:'+(netFund>=0?'#edfaf3':'#fde8e8')+'"><div class="v" style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</div><div class="l">Net<br>Available</div></div>';
   html += '</div>';
@@ -1679,7 +1679,7 @@ function doGenerateStudentsPDF(monthKey) {
     html += '<div style="margin-top:16px;padding:12px 14px;background:#fffbf0;border:1px solid #e8c86a;border-radius:10px">';
     html += '<div style="font-size:13px;font-weight:800;color:#6b3d00;margin-bottom:8px">📉 Expenses — '+monthLabel+'</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-    html += '<thead><tr style="background:#3d2000"><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #6b3d00">Date</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #6b3d00">Category</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #6b3d00">Description</th><th style="padding:6px 10px;color:#e6c96e;text-align:right;border:1px solid #6b3d00">Amount</th></tr></thead><tbody>';
+    html += '<thead><tr style="background:#3d2000"><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Date</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Category</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Description</th><th style="padding:6px 10px;color:#a78bfa;text-align:right;border:1px solid #6b3d00">Amount</th></tr></thead><tbody>';
     var expTotal=0;
     monthExpenses.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');}).forEach(function(e,i){
       expTotal+=Number(e.amount||0);
@@ -1690,7 +1690,7 @@ function doGenerateStudentsPDF(monthKey) {
       html+='<td style="padding:5px 10px;border:1px solid #e8c86a;text-align:right;font-weight:800;color:#8b1a1a">'+fmtPKR(e.amount)+'</td>';
       html+='</tr>';
     });
-    html+='<tr style="background:#3d2000"><td colspan="3" style="padding:6px 10px;border:1px solid #6b3d00;font-weight:900;color:#e6c96e">Total Expenses</td><td style="padding:6px 10px;border:1px solid #6b3d00;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(expTotal)+'</td></tr>';
+    html+='<tr style="background:#3d2000"><td colspan="3" style="padding:6px 10px;border:1px solid #6b3d00;font-weight:900;color:#a78bfa">Total Expenses</td><td style="padding:6px 10px;border:1px solid #6b3d00;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(expTotal)+'</td></tr>';
     html+='</tbody></table></div>';
   }
 
@@ -1700,7 +1700,7 @@ function doGenerateStudentsPDF(monthKey) {
     html += '<div style="margin-top:14px;padding:12px 14px;background:#f0f4ff;border:1px solid #c5d0e6;border-radius:10px">';
     html += '<div style="font-size:13px;font-weight:800;color:#0f1a2e;margin-bottom:8px">🏦 Funds Transfer — '+monthLabel+'</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-    html += '<thead><tr style="background:#0f1a2e"><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Date</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Description</th><th style="padding:6px 10px;color:#e6c96e;text-align:left;border:1px solid #1e3050">Method</th><th style="padding:6px 10px;color:#e6c96e;text-align:right;border:1px solid #1e3050">Amount</th></tr></thead><tbody>';
+    html += '<thead><tr style="background:#0f1a2e"><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Date</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Description</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Method</th><th style="padding:6px 10px;color:#a78bfa;text-align:right;border:1px solid #1e3050">Amount</th></tr></thead><tbody>';
     var trTotal=0;
     monthTransfers.forEach(function(t,i){
       trTotal+=Number(t.amount||0);
@@ -1708,16 +1708,16 @@ function doGenerateStudentsPDF(monthKey) {
       html+='<td style="padding:5px 10px;border:1px solid #dde2ea">'+fmtDate(t.date)+'</td>';
       html+='<td style="padding:5px 10px;border:1px solid #dde2ea;font-weight:600">'+escHtml(t.description||'Transfer')+'</td>';
       html+='<td style="padding:5px 10px;border:1px solid #dde2ea">'+escHtml(t.method||'—')+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:#854d0e">'+fmtPKR(t.amount)+'</td>';
+      html+='<td style="padding:5px 10px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:#5b21b6">'+fmtPKR(t.amount)+'</td>';
       html+='</tr>';
     });
-    html+='<tr style="background:#0f1a2e"><td colspan="3" style="padding:6px 10px;border:1px solid #1e3050;font-weight:900;color:#e6c96e">Total Transferred</td><td style="padding:6px 10px;border:1px solid #1e3050;text-align:right;font-weight:900;color:#e6c96e">'+fmtPKR(trTotal)+'</td></tr>';
+    html+='<tr style="background:#0f1a2e"><td colspan="3" style="padding:6px 10px;border:1px solid #1e3050;font-weight:900;color:#a78bfa">Total Transferred</td><td style="padding:6px 10px;border:1px solid #1e3050;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(trTotal)+'</td></tr>';
     html+='</tbody></table></div>';
   }
 
   html += '<div style="margin-top:12px;padding-top:6px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center">';
   html += '<div style="font-size:9px;color:#aaa">Generated by <strong>' + escHtml(appName) + '</strong> · '+escHtml(hostel)+' · '+monthLabel+'</div>';
-  html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#854d0e">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
+  html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#5b21b6">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
   html += '</div>';
 
   html += '</body></html>';

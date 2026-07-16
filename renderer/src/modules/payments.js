@@ -234,7 +234,7 @@ function filterStudentDropdown(query) {
     const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
     return `<div onclick="selectStudentForPayment('${t.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;border-radius:8px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">${t.name[0].toUpperCase()}</div>
+        <div style="width:32px;height:32px;border-radius:8px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">${t.name[0].toUpperCase()}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(t.name)}</div>
           <div style="font-size:11px;color:var(--text3)">Room #${room?.number||'?'} · ${rtype?.name||''} · ${escHtml(t.phone||'No phone')}</div>
@@ -286,7 +286,7 @@ function selectStudentForPayment(studentId) {
   info.style.display = 'block';
   info.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap">
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Student ID</span><div style="font-weight:700;color:var(--text);font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Room</span><div style="font-weight:700;color:var(--gold2)">#${room?.number||'?'} · ${rtype?.name||''} · ${room?.floor||''} Floor</div></div>
+    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Room</span><div style="font-weight:700;color:var(--accent-strong)">#${room?.number||'?'} · ${rtype?.name||''} · ${room?.floor||''} Floor</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Phone</span><div style="font-weight:600">${escHtml(t.phone||'—')}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(currentRent)}</div></div>
     <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Address</span><div style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div></div>
@@ -801,10 +801,10 @@ function showEditPaymentModal(id) {
   const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + admissionFee - concession - paidAmount);
   showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <div style="width:38px;height:38px;border-radius:9px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${(p.studentName||'?')[0].toUpperCase()}</div>
+      <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${(p.studentName||'?')[0].toUpperCase()}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(p.studentName||'—')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">Room <span style="color:var(--gold2);font-weight:700">#${room?.number||'?'}</span>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">Room <span style="color:var(--accent-strong);font-weight:700">#${room?.number||'?'}</span>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:900;color:var(--green)">${fmtPKR(t?.rent||monthlyRent)}</div>
