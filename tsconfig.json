@@ -16,6 +16,8 @@
   "include": [
     "renderer/globals.d.ts",
     "renderer/src/utils.js",
-    "renderer/src/storage.js"
+    "renderer/src/storage.js",
+    "renderer/src/receipt.js",
+    "renderer/src/license.js"
   ]
 }

@@ -25,6 +25,25 @@ declare var currentPage: string;
 // ── Session ──────────────────────────────────────────────────────────────────
 declare var CUR_USER: any;
 
+// ── Utility helpers (defined in utils.js — which is a CommonJS module for the
+//    node license test, so TS doesn't see its functions as global; at runtime in
+//    the browser they ARE global. Declared here so script files can use them.) ──
+declare function escHtml(s: any): string;
+declare function fmtPKR(n: any): string;
+declare function fmtNum(n: any): string;
+declare function fmtDate(d?: any): string;
+declare function today(): string;
+declare function moneyValue(amount: any, opts?: any): string;
+declare function openExternalLink(url: string): void;
+
+// ── config.js ────────────────────────────────────────────────────────────────
+declare var _ACTIVE_HOSTEL: string;
+
+// ── modals.js ────────────────────────────────────────────────────────────────
+declare function showModal(size: string, title: string, body: string, footer?: string): void;
+declare function showConfirm(title: string, text: string, onConfirm?: Function, onCancel?: Function): void;
+declare function closeModal(): void;
+
 // ── Secure IPC bridge exposed by preload.js ──────────────────────────────────
 interface ElectronAPI {
   openExternal(url: string): void;
@@ -36,4 +55,5 @@ interface ElectronAPI {
 }
 interface Window {
   electronAPI: ElectronAPI;
+  _damam_license_cache?: any;
 }

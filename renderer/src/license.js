@@ -151,10 +151,10 @@ function licFormatKey(inp) {
 
 // ── [FIX-L3] ACTIVATE BUTTON — disable on click, prevent double-submit ────────
 async function licDoActivate() {
-  const inp   = document.getElementById('lic-key-input');
+  const inp   = /** @type {HTMLInputElement} */ (document.getElementById('lic-key-input'));
   const errEl = document.getElementById('lic-error');
   const okEl  = document.getElementById('lic-success');
-  const btn   = document.getElementById('lic-activate-btn');
+  const btn   = /** @type {HTMLButtonElement} */ (document.getElementById('lic-activate-btn'));
   if (!inp) return;
 
   // [FIX-L3] Prevent double-click activation
