@@ -40,6 +40,7 @@
       "renderer/**/*",
       "main.js",
       "preload.js",
+      "migrations/001-relational-schema.js",
       "assets/**/*",
       "package.json",
       "!keygen.js",

@@ -202,6 +202,47 @@ test('security: clear-all is blocked without the correct warden password', async
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+test('schema migration: indexed WHERE queries work end-to-end via dbAll', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  const preStuds = await win.evaluate(() => window.electronAPI.dbAll('students'));
+  expect(preStuds.length, 'SAFETY ABORT: isolated DB not empty').toBe(0);
+
+  const studentId = await seedRoomAndStudent(win); // one Active student in a room
+  const roomId = await win.evaluate((sid) => (DB.students.find(s => s.id === sid) || {}).roomId, studentId);
+  expect(studentId).toBeTruthy();
+
+  // Add a payment for that student so payments.studentId is exercised.
+  await win.evaluate((sid) => {
+    DB.payments = [];
+    showAddPaymentForStudent(sid);
+    document.getElementById('f-ps-amt').value = '16000';
+    document.getElementById('f-ps-paid').value = '16000';
+    submitPaymentForStudent();
+  }, studentId);
+  await win.waitForTimeout(250);
+
+  // Filtered reads go through db:all's WHERE path against the migrated,
+  // now-indexed columns (status, roomId, studentId).
+  const active = await win.evaluate(() => window.electronAPI.dbAll('students', ['status', 'Active']));
+  expect(active.some(s => s.id === studentId), 'WHERE status=Active should return the seeded student').toBeTruthy();
+
+  const left = await win.evaluate(() => window.electronAPI.dbAll('students', ['status', 'Left']));
+  expect(left.length, 'no students are Left yet').toBe(0);
+
+  const inRoom = await win.evaluate((rid) => window.electronAPI.dbAll('students', ['roomId', rid]), roomId);
+  expect(inRoom.some(s => s.id === studentId), 'WHERE roomId should return the seeded student').toBeTruthy();
+
+  const pays = await win.evaluate((sid) => window.electronAPI.dbAll('payments', ['studentId', sid]), studentId);
+  expect(pays.length, 'WHERE studentId should return the payment').toBeGreaterThan(0);
+
+  await app.close();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 test('archive page renders (regression: renderArchive was undefined → Render Error)', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
