@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HOSTYLLO | Hostel Management System</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.sheetjs.com https://cdn.jsdelivr.net https://wa.me whatsapp:; img-src 'self' data: blob:; connect-src 'self';">
+  <title>HOSTIX | Hostel Management System</title>
+  <!-- CSP is enforced via a single header policy in main.js (session.defaultSession). -->
 
-  <!-- Google Fonts (loads when online, system fonts used offline) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" onerror="console.log('Fonts unavailable, using system fonts')">
+  <!-- Self-hosted fonts (bundled — no network required) -->
+  <link rel="stylesheet" href="vendor/fonts.css">
 
-  <!-- SheetJS for Excel/CSV import (loads when online) -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="console.warn('SheetJS offline — Excel import unavailable')"></script>
+  <!-- SheetJS for Excel/CSV import (bundled locally) -->
+  <script src="vendor/js/xlsx.full.min.js"></script>
 
-  <!-- Chart.js for Revenue Trend -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <!-- Chart.js + datalabels for Revenue Trend (bundled locally) -->
+  <script src="vendor/js/chart.umd.js"></script>
+  <script src="vendor/js/chartjs-plugin-datalabels.min.js"></script>
 
   <!-- App Styles — tokens first, then components, then main -->
   <link rel="stylesheet" href="tokens.css">
@@ -42,7 +41,7 @@
         <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(56,189,248,0.12)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
         <text x="14" y="18.5" text-anchor="middle" fill="#38bdf8" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
       </svg>
-      <span class="login-app-name">HOSTYLLO</span>
+      <span class="login-app-name">HOSTIX</span>
     </div>
 
     <!-- Hostel identity -->
@@ -113,7 +112,7 @@
       if (s && s.hostelName) {
         var hn = document.getElementById('login-hostel-name');
         if (hn) hn.textContent = s.hostelName;
-        document.title = 'HOSTYLLO | ' + s.hostelName;
+        document.title = 'HOSTIX | ' + s.hostelName;
       }
       if (s && s.location) {
         var addr = document.getElementById('login-address');
@@ -142,7 +141,7 @@
           if (card) {
             var emojiEl = card.querySelector('.warden-login-emoji');
             if (emojiEl) {
-              emojiEl.innerHTML = '<img src="'+w[k].photo+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;border:2px solid rgba(200,168,75,0.5)">';
+              emojiEl.innerHTML = '<img src="'+w[k].photo+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;border:2px solid rgba(124,58,237,0.5)">';
             }
           }
         }
@@ -170,13 +169,13 @@
         <img id="sb-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:11px;position:absolute;top:0;left:0">
         <span id="sb-logo-emoji" style="display:none"></span>
         <svg id="sb-logo-svg" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
-          <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(200,168,75,0.12)" stroke="rgba(200,168,75,0.45)" stroke-width="1"/>
-          <text x="14" y="18" text-anchor="middle" fill="rgba(200,168,75,0.8)" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
+          <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(124,58,237,0.12)" stroke="rgba(124,58,237,0.45)" stroke-width="1"/>
+          <text x="14" y="18" text-anchor="middle" fill="rgba(124,58,237,0.8)" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
         </svg>
       </div>
       <input type="file" id="logo-upload" accept="image/*" style="display:none" onchange="uploadLogo(this)">
       <div class="sb-logo-text">
-        <div class="name">HOSTYLLO</div>
+        <div class="name">HOSTIX</div>
         <div class="sub" id="sb-hostel-name">Hostel Management</div>
       </div>
     </div>
@@ -322,7 +321,7 @@
     <!-- Global search in header -->
     <div style="flex:1;max-width:420px;position:relative;margin:0 16px" id="hdr-search-wrap">
       <div style="display:flex;align-items:center;background:rgba(255,255,255,0.05);border:1px solid var(--border2);border-radius:10px;overflow:visible;transition:border-color 0.2s"
-        onfocusin="this.style.borderColor='rgba(200,168,75,0.55)';this.style.background='rgba(255,255,255,0.07)'"
+        onfocusin="this.style.borderColor='rgba(124,58,237,0.55)';this.style.background='rgba(255,255,255,0.07)'"
         onfocusout="this.style.borderColor='var(--border2)';this.style.background='rgba(255,255,255,0.05)'">
         <div style="padding:0 10px;color:var(--text3);display:flex;align-items:center;flex-shrink:0">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
@@ -374,8 +373,8 @@
     </div>
 
     <div class="hdr-right">
-      <div id="role-badge" onclick="showUserMgmt()" style="display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);font-size:11px;font-weight:700;color:#e6c96e;cursor:pointer;" title="Manage users"></div>
-      <button onclick="showFormerStudentsModal()" style="background:var(--bg3);border:1px solid rgba(200,168,75,0.35);color:#e6c96e;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Search former students & restore">
+      <div id="role-badge" onclick="showUserMgmt()" style="display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.25);font-size:11px;font-weight:700;color:#a78bfa;cursor:pointer;" title="Manage users"></div>
+      <button onclick="showFormerStudentsModal()" style="background:var(--bg3);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Search former students & restore">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
         Former Students
       </button>

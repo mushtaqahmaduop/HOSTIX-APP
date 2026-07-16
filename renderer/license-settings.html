@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>License Settings — DAMAM Hostel</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data:;">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <title>License Settings — HOSTIX</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;">
+  <link rel="stylesheet" href="vendor/fonts.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --gold:   #c8a84b; --gold2:  #e6c96e;
+      --accent:   #7c3aed; --accent-light:  #a78bfa;
       --red:    #e05252; --red2:   #ff6b6b;
       --green:  #2ec98a; --blue:   #1e5fd4;
       --orange: #e07b30;
@@ -34,12 +34,12 @@
     }
     .header-icon {
       width: 42px; height: 42px; border-radius: 11px;
-      background: linear-gradient(135deg, rgba(200,168,75,0.2), rgba(200,168,75,0.06));
-      border: 1px solid rgba(200,168,75,0.3);
+      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(124,58,237,0.06));
+      border: 1px solid rgba(124,58,237,0.3);
       display: flex; align-items: center; justify-content: center;
       font-size: 20px; flex-shrink: 0;
     }
-    .header-text h1 { font-size: 18px; font-weight: 800; color: var(--gold2); }
+    .header-text h1 { font-size: 18px; font-weight: 800; color: var(--accent-light); }
     .header-text p  { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: 0.3px; }
 
     /* Cards */
@@ -53,8 +53,8 @@
       content: ''; position: absolute; top: 0; left: 0; right: 0;
       height: 2px; border-radius: 16px 16px 0 0;
     }
-    .card.card-info::before   { background: linear-gradient(90deg, #1e5fd4, #c8a84b); }
-    .card.card-danger::before { background: linear-gradient(90deg, #e05252, #c8a84b); }
+    .card.card-info::before   { background: linear-gradient(90deg, #1e5fd4, #7c3aed); }
+    .card.card-danger::before { background: linear-gradient(90deg, #e05252, #7c3aed); }
     .card-title {
       font-size: 10px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 1.5px; color: var(--text3); margin-bottom: 14px;
@@ -79,7 +79,7 @@
     .info-row:last-child { border-bottom: none; padding-bottom: 0; }
     .info-label { font-size: 11px; color: var(--text3); font-weight: 600; flex-shrink: 0; padding-top: 1px; }
     .info-value { font-size: 12px; color: var(--text2); text-align: right; word-break: break-all; }
-    .info-value.mono  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gold2); letter-spacing: 1px; }
+    .info-value.mono  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-light); letter-spacing: 1px; }
     .info-value.green { color: var(--green); font-weight: 700; }
     .info-value.red   { color: var(--red);  font-weight: 700; }
 
@@ -148,7 +148,7 @@
 
   <!-- Header -->
   <div class="header">
-    <button onclick="window.history.back()" style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);color:#c8a84b;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">← Back</button>
+    <button onclick="window.history.back()" style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);color:#7c3aed;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">← Back</button>
     <div class="header-icon">⚙️</div>
     <div class="header-text">
       <h1>License Settings</h1>

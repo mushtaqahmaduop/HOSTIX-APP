@@ -454,7 +454,7 @@ function updateRoleBadge() {
   if (!b) return;
   const safe = typeof escHtml === 'function' ? escHtml : (s) => s;
   const photo = CUR_USER?.photo
-    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(200,168,75,.5);flex-shrink:0">`
+    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(124,58,237,.5);flex-shrink:0">`
     : (typeof icon === 'function' ? icon('warden', 'sm') : '');
   b.innerHTML  = `${photo}&nbsp;${safe(CUR_USER?.name || '')}`;
   b.style.cssText = 'display:flex;align-items:center;gap:6px;';

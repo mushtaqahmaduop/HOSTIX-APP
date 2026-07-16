@@ -93,7 +93,7 @@ async function showBackupRestoreModal() {
     <!-- Stats row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--gold2)">${studentCount}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--accent-strong)">${studentCount}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Students</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
@@ -152,7 +152,7 @@ async function showBackupRestoreModal() {
 function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'DAMAM2_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -211,7 +211,6 @@ function _initDBFields(d) {
   if (!d.settings.email) d.settings.email = '';
   if (!d.settings.version) d.settings.version = 'v1.0';
   // Appearance
-  if (!d.settings.accentColor) d.settings.accentColor = '#e05252';
   if (!d.settings.hostelNameFont) d.settings.hostelNameFont = 'DM Serif Display';
   if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
@@ -223,7 +222,7 @@ function _initDBFields(d) {
     { id:'1s', name:'1-Seater', capacity:1, defaultRent:16000, color:'#4a9cf0' },
     { id:'2s', name:'2-Seater', capacity:2, defaultRent:16000, color:'#9b6df0' },
     { id:'3s', name:'3-Seater', capacity:3, defaultRent:16000, color:'#2ec98a' },
-    { id:'4s', name:'4-Seater', capacity:4, defaultRent:16000, color:'#c8a84b' },
+    { id:'4s', name:'4-Seater', capacity:4, defaultRent:16000, color:'#7c3aed' },
     { id:'5s', name:'5-Seater', capacity:5, defaultRent:16000, color:'#f0a030' }
   ];
   if (!d.settings.paymentMethods) d.settings.paymentMethods = ['Cash','JazzCash','EasyPaisa','Bank Transfer','Cheque'];
@@ -246,7 +245,7 @@ async function restoreBackup() {
       // BUG FIX: Support both flat format (direct DB) and old wrapped {db:...,archive:...} format
       if (parsed.db && parsed.db.students) parsed = parsed.db;
       if(!parsed.students || !parsed.rooms || !parsed.settings){
-        toast('Invalid backup file — not a DAMAM hostel backup', 'error'); return;
+        toast('Invalid backup file — not a HOSTIX hostel backup', 'error'); return;
       }
       const count = parsed.students.length;
       showConfirm('Restore Backup?',
@@ -258,7 +257,6 @@ async function restoreBackup() {
             DB = _initDBFields(parsed);
             await saveDB();
             updateSidebar();
-            applySavedTheme();
             navigate('dashboard');
             toast('Data restored successfully from backup!', 'success');
             closeModal();
@@ -282,7 +280,7 @@ async function restoreFromPaste() {
     // BUG FIX: Support both flat format and old wrapped {db:...,archive:...} format
     if (parsed.db && parsed.db.students) parsed = parsed.db;
     if(!parsed.students || !parsed.rooms || !parsed.settings){
-      toast('Invalid JSON — not a valid DAMAM hostel backup', 'error'); return;
+      toast('Invalid JSON — not a valid HOSTIX hostel backup', 'error'); return;
     }
     const count = parsed.students.length;
     showConfirm('Restore from Pasted Data?',
@@ -291,7 +289,6 @@ async function restoreFromPaste() {
         DB = _initDBFields(parsed);
         await saveDB();
         updateSidebar();
-        applySavedTheme();
         navigate('dashboard');
         toast('Data restored from pasted backup!', 'success');
         closeModal();
@@ -387,8 +384,8 @@ function pmBadge(m) {
       border:none;background:transparent;
     }
     ._cdp-day:hover{background:var(--bg3,rgba(255,255,255,0.08))}
-    ._cdp-day.today{background:var(--gold,#c8a84b);color:#000;font-weight:800}
-    ._cdp-day.today:hover{background:var(--gold2,#dbbe6e)}
+    ._cdp-day.today{background:var(--accent);color:#000;font-weight:800}
+    ._cdp-day.today:hover{background:var(--accent-strong)}
     ._cdp-day.selected{background:var(--blue,#4a9cf0);color:#fff;font-weight:800}
     ._cdp-day.other-month{color:var(--text3,#6b7a99);opacity:0.45}
     ._cdp-day.other-month:hover{opacity:0.7}
@@ -638,17 +635,17 @@ function showUserMgmt() {
     var isActive = key===CUR_ROLE;
     var photoSrc = w.photo || '';
     var avatarHtml = photoSrc
-      ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--gold);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
+      ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
       : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
-    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(200,168,75,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
+    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(124,58,237,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
     rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
     rows += '<div style="position:relative;flex-shrink:0">';
     rows += avatarHtml;
-    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--bg3);color:var(--bg)" title="Change photo">'+(typeof icon==='function'?icon('edit','xs'):'')+'</div>';
+    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--bg3);color:var(--bg)" title="Change photo">'+(typeof icon==='function'?icon('edit','xs'):'')+'</div>';
     rows += '<input type="file" id="warden-photo-input-'+key+'" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\''+key+'\')">';
     rows += '</div>';
     rows += '<div style="flex:1">';
-    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--gold-dim);color:var(--gold2);padding:2px 8px;border-radius:20px;border:1px solid rgba(200,168,75,0.3)">● LOGGED IN</span>':'')+'</div>';
+    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--accent-dim);color:var(--accent-strong);padding:2px 8px;border-radius:20px;border:1px solid rgba(124,58,237,0.3)">● LOGGED IN</span>':'')+'</div>';
     rows += '<div style="font-size:11px;color:var(--text3);margin-top:2px">Full access · Add, edit payments &amp; records</div>';
     rows += (photoSrc ? '<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Profile photo set</div>' : '<div style="font-size:10px;color:var(--text3);margin-top:4px">Click avatar to upload a photo</div>');
     rows += '</div></div>';
@@ -691,7 +688,7 @@ function handleWardenPhoto(event, key) {
       // Live-update the avatar in the modal without closing it
       var imgEl = document.getElementById('warden-avatar-img-'+key);
       if(imgEl) {
-        imgEl.outerHTML = '<img src="'+dataUrl+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--gold);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">';
+        imgEl.outerHTML = '<img src="'+dataUrl+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">';
       }
       // Update the role badge in header if it's the current user
       if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
@@ -726,7 +723,7 @@ function updateLoginAvatar(key) {
     } else {
       var emojiEl = card.querySelector('.warden-login-emoji');
       if(emojiEl) {
-        emojiEl.innerHTML = '<img class="warden-login-photo" src="'+w.photo+'" style="width:36px;height:36px;border-radius:9px;object-fit:cover;border:1.5px solid rgba(200,168,75,0.5)">';
+        emojiEl.innerHTML = '<img class="warden-login-photo" src="'+w.photo+'" style="width:36px;height:36px;border-radius:9px;object-fit:cover;border:1.5px solid rgba(124,58,237,0.5)">';
       }
     }
   } else {

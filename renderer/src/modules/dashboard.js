@@ -197,11 +197,11 @@ function renderDashboard() {
     <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--royal2)">Total Revenue</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent-strong)">Total Revenue</div>
         <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
       <div>${moneyValue(collected,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--royal);border-radius:2px;transition:width 0.5s"></div></div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--accent);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
     </div>
     <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -299,7 +299,7 @@ function renderDashboard() {
         <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--green);border-radius:2px"></span><span style="font-size:9px;color:var(--green);font-weight:700">Revenue</span></span>
         <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--red);border-radius:2px"></span><span style="font-size:9px;color:var(--red);font-weight:700">Expenses</span></span>
         <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--amber);border-radius:2px"></span><span style="font-size:9px;color:var(--amber);font-weight:700">Transfers</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:var(--gold);border-radius:2px"></span><span style="font-size:9px;color:var(--gold);font-weight:600">Pending</span></span>
+        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:var(--accent);border-radius:2px"></span><span style="font-size:9px;color:var(--accent);font-weight:600">Pending</span></span>
       </div>
     </div>
     <!-- KPI chips row -->
@@ -361,15 +361,15 @@ function renderDashboard() {
           const pct=Math.round(occ2/cap*100);
           const isFull=free===0;
           const students2=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
-          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'rgba(46,201,138,0.12)':'rgba(200,168,75,0.1)'};border:1px solid ${isFull?'rgba(46,201,138,0.3)':'rgba(200,168,75,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--green)':'var(--gold2)'}">${r.number}</div>
+          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'rgba(46,201,138,0.12)':'rgba(124,58,237,0.1)'};border:1px solid ${isFull?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${r.number}</div>
             <div style="font-size:9px;color:var(--text3)">${occ2}/${cap}</div>
-            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--green)':'var(--gold)'};border-radius:2px"></div></div>
+            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
           </div>`;
         }).join('')}
       </div>
       <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--gold)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
         <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
       </div>
@@ -453,9 +453,9 @@ function renderDashboard() {
       extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--amber);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
       return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+p.studentId+'\')">'
       +'<td><div style="display:flex;align-items:center;gap:7px">'
-      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+(p.studentName||'?')[0].toUpperCase()+'</div>'
+      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+(p.studentName||'?')[0].toUpperCase()+'</div>'
       +'<span style="font-weight:700;color:var(--blue);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
-      +'<td><span style="color:var(--gold2);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
+      +'<td><span style="color:var(--accent-strong);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
       +'<td><span style="font-weight:700;font-size:12px">'+(mRent>0?fmtPKR(mRent):'—')+'</span></td>'
       +'<td>'+paidCell+'</td>'
       +'<td><span style="color:'+(unpaidAmt2>0?'var(--red)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
@@ -484,7 +484,7 @@ function showRoomSeatDetailModal(roomId) {
     if(s){
       seatSlots += `<div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${s.name[0]}</div>
           <div>
             <div style="font-weight:700;font-size:13px;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -496,9 +496,9 @@ function showRoomSeatDetailModal(roomId) {
         </div>
       </div>`;
     } else {
-      seatSlots += `<div style="background:var(--amber-dim);border:1px dashed rgba(200,168,75,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--amber-dim);border:1px dashed rgba(124,58,237,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:rgba(200,168,75,0.1);display:flex;align-items:center;justify-content:center;color:var(--gold2)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
+          <div style="width:28px;height:28px;border-radius:7px;background:rgba(124,58,237,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
           <div style="font-size:13px;color:var(--text3);font-style:italic">Seat ${i+1} — Free</div>
         </div>
         <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Add Student</button>
@@ -510,7 +510,7 @@ function showRoomSeatDetailModal(roomId) {
     <!-- Room header -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center">
       <div>
-        <div style="font-size:22px;font-weight:900;color:var(--gold2)">#${r.number}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--accent-strong)">#${r.number}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Room</div>
       </div>
       <div>
@@ -518,7 +518,7 @@ function showRoomSeatDetailModal(roomId) {
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Type</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:${isFull?'var(--green)':'var(--gold2)'}">${occ}/${cap}</div>
+        <div style="font-size:22px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${occ}/${cap}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Occupied</div>
       </div>
       <div>
@@ -528,7 +528,7 @@ function showRoomSeatDetailModal(roomId) {
     </div>
     <!-- Progress bar -->
     <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:18px">
-      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--gold)'};border-radius:3px;transition:width 0.5s"></div>
+      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:3px;transition:width 0.5s"></div>
     </div>
     <!-- Seat slots -->
     <div style="display:flex;flex-direction:column;gap:8px">${seatSlots}</div>
@@ -634,7 +634,7 @@ function printSeatAvailability() {
     .outgoing-row{opacity:0.75}
     .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;border-radius:20px;padding:1px 6px;white-space:nowrap;margin-left:auto}
     .footer{margin-top:12px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:6px}
-    .print-btn{display:block;margin:0 auto 12px;padding:8px 24px;background:#0f1a2e;color:#e6c96e;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer}
+    .print-btn{display:block;margin:0 auto 12px;padding:8px 24px;background:#0f1a2e;color:#a78bfa;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer}
   </style></head><body>
   <button class="print-btn no-print" onclick="window.print()">${ICONS.print} Print Visit Sheet</button>
   <div class="header">
@@ -665,14 +665,14 @@ function showSeatDetailModal(type) {
     let content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
     allRooms.forEach(r=>{
       const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
-      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${free===0?'rgba(46,201,138,0.3)':'rgba(200,168,75,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${free===0?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${r.number}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${rt?.name||'—'} · Floor ${r.floor||'?'}</div>
         <div style="margin-top:8px;display:flex;justify-content:space-between">
-          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--green)':'var(--gold2)'}">Occ: ${occ2}/${cap}</span>
+          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--green)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
           <span style="font-size:12px;font-weight:700;color:${free>0?'var(--teal)':'var(--text3)'}">${free} free</span>
         </div>
-        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--green)':'var(--gold)'};border-radius:2px"></div></div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
       </div>`;
     });
     content += '</div>';
@@ -682,7 +682,7 @@ function showSeatDetailModal(type) {
   let title, color, rows='';
   if(type==='vacant') {
     title=ICONS.key+' Vacant Rooms — Free Seats';
-    color='var(--gold)';
+    color='var(--accent)';
     const vacantRooms = DB.rooms.filter(r=>{
       const occ=getRoomOccupancy(r);
       const cap=getRoomType(r)?.capacity||1;
@@ -724,7 +724,7 @@ function showSeatDetailModal(type) {
           <span style="font-size:12px;font-weight:700;color:var(--green)">${occ}/${cap} filled</span>
         </div>
         ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--green)">
-          <div style="width:26px;height:26px;border-radius:7px;background:var(--gold-dim);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${s.name[0]}</div>
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -749,7 +749,7 @@ function showSeatDetailModal(type) {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:12px;font-weight:700;color:var(--gold2)">Rm #${room?.number||'?'}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--accent-strong)">Rm #${room?.number||'?'}</div>
           <div style="font-size:11px;color:var(--text3)">${rtype?.name||'—'}</div>
         </div>
       </div>`;
@@ -770,7 +770,7 @@ function showOccupiedRoomsModal() {
     const occ=students.length;
     const cap=type.capacity;
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--gold2)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
       <td class="text-muted">${r.floor} Floor</td>
       <td><span class="badge badge-green">${occ}/${cap} beds</span></td>
@@ -789,9 +789,9 @@ function showOccupiedRoomsModal() {
         <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Total Students</div>
         <div style="font-size:26px;font-weight:900;color:var(--blue)">${DB.students.filter(t=>t.status==='Active').length}</div>
       </div>
-      <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--gold2);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
-        <div style="font-size:26px;font-weight:900;color:var(--gold2)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
+      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
+        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
       </div>
       <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;font-weight:700">Monthly Revenue</div>
@@ -822,7 +822,7 @@ function showVacantRoomsModal() {
     const avail=type.capacity-occ;
     const students=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--gold2)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
       <td class="text-muted">${r.floor} Floor</td>
       <td><span class="badge badge-gold">${occ}/${type.capacity} occupied</span></td>
@@ -843,9 +843,9 @@ function showVacantRoomsModal() {
         <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Free Seats</div>
         <div style="font-size:26px;font-weight:900;color:var(--green)">${totalAvail}</div>
       </div>
-      <div style="background:var(--gold-dim);border:1px solid rgba(200,168,75,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--gold2);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
-        <div style="font-size:26px;font-weight:900;color:var(--gold2)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
+      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
+        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
       </div>
       <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Partial Rooms</div>
@@ -891,7 +891,7 @@ function renderMonthModal(monthKey, monthLabel) {
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
       <td><span style="font-weight:700;color:var(--blue)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
-      <td style="font-weight:700;color:var(--gold2)">#${room?room.number:'—'}</td>
+      <td style="font-weight:700;color:var(--accent-strong)">#${room?room.number:'—'}</td>
       <td style="color:var(--text3);font-size:12px">${fmtPKR(s.rent)}/mo</td>
       <td style="color:var(--green);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
       <td style="color:${sPend>0?'var(--amber)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
@@ -901,7 +901,7 @@ function renderMonthModal(monthKey, monthLabel) {
 
   const feeRows = pays.map(p=>`<tr id="fee-row-${p.id}">
     <td><span style="color:var(--blue);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
-    <td style="color:var(--gold2);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
+    <td style="color:var(--accent-strong);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
     <td class="text-muted">${escHtml(p.month||'—')}</td>
     <td>
       <span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>
@@ -966,7 +966,7 @@ function renderMonthModal(monthKey, monthLabel) {
 
   <!-- TAB NAVIGATION -->
   <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px">
-    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--gold-dim);color:var(--gold2);border:1px solid rgba(200,168,75,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
+    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);border:1px solid rgba(124,58,237,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
     <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.card} Fee Records (${pays.length})</button>
     <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.trendDown} Expenses (${exps.length})</button>
   </div>
@@ -1016,7 +1016,7 @@ function switchMonthTab(tab) {
     if(!panel||!btn) return;
     const active = t===tab;
     panel.style.display=active?'block':'none';
-    if(active){btn.style.background='var(--gold-dim)';btn.style.color='var(--gold2)';btn.style.border='1px solid rgba(200,168,75,0.3)';}
+    if(active){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent-strong)';btn.style.border='1px solid rgba(124,58,237,0.3)';}
     else{btn.style.background='transparent';btn.style.color='var(--text3)';btn.style.border='none';}
   });
 }
@@ -1284,7 +1284,7 @@ function drawTrendChart() {
   var cGreen  = _cs.getPropertyValue('--green').trim()  || '#45dfa4';
   var cRed    = _cs.getPropertyValue('--red').trim()    || '#ffb4ab';
   var cAmber  = _cs.getPropertyValue('--amber').trim()  || '#fbbf24';
-  var cGold   = _cs.getPropertyValue('--gold').trim()   || '#ffb780';
+  var cAccent = _cs.getPropertyValue('--accent').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
   var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
@@ -1310,7 +1310,7 @@ function drawTrendChart() {
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGreen+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cGreen+'">'+fmtPKR(rev)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRed+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cRed+'">'+fmtPKR(exp)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAmber+';display:inline-block"></span>Transfers</span><span style="font-weight:700;color:'+cAmber+'">'+fmtPKR(trf)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGold+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cGold+'">'+fmtPKR(pend)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAccent+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cAccent+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
       '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
     ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
@@ -1388,64 +1388,8 @@ function navigateToMonth(monthKey) {
   toast('Viewing → ' + d.toLocaleString('default',{month:'long',year:'numeric'}), 'info');
 }
 
-// Download detail panel as CSV
-function downloadDetailCSV(type) {
-  const key = reportPeriod==='month' ? thisMonth() : thisYear();
-  let rows = [], filename = '';
-  if (type === 'financial') {
-    filename = 'Revenue_'+key+'.csv';
-    rows.push(['Student','Room','Month','Amount Paid','Method','Date']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
-    });
-  } else if (type === 'pending') {
-    filename = 'Pending_Payments.csv';
-    rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
-    DB.payments.filter(p=>p.status==='Pending').forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        p.unpaid!=null?p.amount:0, p.unpaid!=null?p.unpaid:p.amount,
-        p.method||'—', p.date||'—']);
-    });
-  } else if (type === 'expenses') {
-    filename = 'Expenses_'+key+'.csv';
-    rows.push(['Date','Category','Description','Amount']);
-    DB.expenses.filter(e=>(e.date||'').startsWith(key)).forEach(e=>{
-      rows.push([e.date||'—',e.category||'—',e.description||'—',e.amount]);
-    });
-  } else if (type === 'transfers') {
-    filename = 'Transfers.csv';
-    rows.push(['Date','Description','Method','Amount','Received By','Notes']);
-    (DB.transfers||[]).forEach(t=>{
-      rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);
-    });
-  } else if (type === 'students') {
-    filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
-    rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
-    const list = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
-    list.forEach(t=>{
-      const r = DB.rooms.find(x=>x.id===t.roomId);
-      rows.push([t.name||'—',t.fatherName||'—',r?'#'+r.number:'—',t.phone||'—',t.cnic||'—',t.joinDate||'—',t.rent,t.status||'—']);
-    });
-  } else if (type === 'netprofit') {
-    filename = 'AvailableFund_'+key+'.csv';
-    rows.push(['Date','Type','Description','Amount']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
-      rows.push([p.date||'—','Income',p.studentName+' · '+p.month,p.amount]);
-    });
-    DB.expenses.filter(e=>(e.date||'').startsWith(key)).forEach(e=>{
-      rows.push([e.date||'—','Expense',e.category+': '+e.description,'-'+e.amount]);
-    });
-  }
-  if (!rows.length) { toast('No data to export','error'); return; }
-  const csv = rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 18: revoke blob URL to free memory
-  toast('Downloaded: '+filename,'success');
-}
+// downloadDetailCSV(type) is defined in src/modules/reports.js (loads after this
+// file and is a strict superset). The former copy here was dead-shadowed; removed.
 let calPopoverOpen = false;
 function calPopSelect(key, label) {
   document.getElementById('cal-popover-el')?.remove();

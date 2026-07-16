@@ -19,3 +19,9 @@ keygen.html
 app_old.js
 archive_recovery.js
 .lucide-tmp/
+
+# Playwright (Phase 0 e2e safety net)
+test-results/
+playwright-report/
+blob-report/
+.last-run.json

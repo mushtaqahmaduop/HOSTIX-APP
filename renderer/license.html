@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zeerak Hostix — Activate License</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob:;">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <title>HOSTIX — Activate License</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:; font-src 'self' data:;">
+  <link rel="stylesheet" href="vendor/fonts.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --gold:      #c8a84b;
-      --gold2:     #e6c96e;
+      --accent:      #7c3aed;
+      --accent-light:     #a78bfa;
       --red:       #e05252;
       --green:     #2ec98a;
       --blue:      #1e5fd4;
@@ -60,7 +59,7 @@
       z-index: 0;
     }
     .orb-1 { width: 500px; height: 500px; background: #1e5fd4; top: -150px; left: -150px; }
-    .orb-2 { width: 400px; height: 400px; background: #c8a84b; bottom: -100px; right: -100px; animation: orb2 8s ease-in-out infinite alternate; }
+    .orb-2 { width: 400px; height: 400px; background: #7c3aed; bottom: -100px; right: -100px; animation: orb2 8s ease-in-out infinite alternate; }
     @keyframes orb2 { from { transform: translate(0,0); } to { transform: translate(-30px,-30px); } }
 
     .card {
@@ -84,25 +83,25 @@
       top: 0; left: 0; right: 0;
       height: 3px;
       border-radius: 24px 24px 0 0;
-      background: linear-gradient(90deg, #1e5fd4, #c8a84b, #1e5fd4);
+      background: linear-gradient(90deg, #1e5fd4, #7c3aed, #1e5fd4);
     }
 
     .logo {
       width: 72px; height: 72px;
       border-radius: 18px;
-      background: linear-gradient(135deg, rgba(200,168,75,0.2), rgba(200,168,75,0.08));
-      border: 1px solid rgba(200,168,75,0.35);
+      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(124,58,237,0.08));
+      border: 1px solid rgba(124,58,237,0.35);
       display: flex; align-items: center; justify-content: center;
       font-size: 32px;
       margin: 0 auto 20px;
-      box-shadow: 0 8px 32px rgba(200,168,75,0.15);
+      box-shadow: 0 8px 32px rgba(124,58,237,0.15);
     }
 
     .title {
       text-align: center;
       font-size: 22px;
       font-weight: 900;
-      color: var(--gold2);
+      color: var(--accent-light);
       margin-bottom: 4px;
       letter-spacing: 0.3px;
     }
@@ -116,7 +115,7 @@
     }
     .divider {
       width: 50px; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
       margin: 16px auto 28px;
       border-radius: 2px;
     }
@@ -146,15 +145,15 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 16px;
       font-weight: 600;
-      color: var(--gold2);
+      color: var(--accent-light);
       letter-spacing: 2px;
       flex: 1;
       word-break: break-all;
     }
     .copy-btn {
-      background: rgba(200,168,75,0.12);
-      border: 1px solid rgba(200,168,75,0.3);
-      color: var(--gold);
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.3);
+      color: var(--accent);
       border-radius: 8px;
       padding: 6px 12px;
       font-size: 12px;
@@ -165,7 +164,7 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .copy-btn:hover { background: rgba(200,168,75,0.22); }
+    .copy-btn:hover { background: rgba(124,58,237,0.22); }
     .copy-btn.copied { background: rgba(46,201,138,0.15); border-color: rgba(46,201,138,0.4); color: var(--green); }
 
     .machine-hint {
@@ -201,7 +200,7 @@
       text-transform: uppercase;
     }
     .key-input::placeholder { color: var(--text3); letter-spacing: 1px; font-size: 13px; }
-    .key-input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200,168,75,0.12); }
+    .key-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
     .key-input.error { border-color: var(--red); box-shadow: 0 0 0 3px rgba(224,82,82,0.12); }
     .key-input.success { border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,201,138,0.12); }
 
@@ -283,7 +282,7 @@
     <!-- Logo -->
     <div class="logo">🏨</div>
 
-    <div class="title">Zeerak Hostix</div>
+    <div class="title">HOSTIX</div>
     <div class="subtitle">License Activation</div>
     <div class="divider"></div>
 
@@ -345,7 +344,7 @@
         const bannerColors = {
           expired:      { bg: 'rgba(224,82,82,0.12)',  border: 'rgba(224,82,82,0.4)',  color: '#f08080' },
           tampered:     { bg: 'rgba(224,82,82,0.15)',  border: 'rgba(224,82,82,0.5)',  color: '#ff7070' },
-          wrong_machine:{ bg: 'rgba(200,168,75,0.10)', border: 'rgba(200,168,75,0.4)', color: '#e6c96e' },
+          wrong_machine:{ bg: 'rgba(124,58,237,0.10)', border: 'rgba(124,58,237,0.4)', color: '#a78bfa' },
           time_cheat:   { bg: 'rgba(240,160,48,0.12)', border: 'rgba(240,160,48,0.4)', color: '#f0a030' },
           corrupt:      { bg: 'rgba(224,82,82,0.10)',  border: 'rgba(224,82,82,0.35)', color: '#f08080' },
         };

@@ -231,7 +231,7 @@ function calcBillSplit() {
         </div>
         <div style="text-align:right">
           <div style="font-size:12px;color:var(--text3)">Each Pays (${unitLabel})</div>
-          <div style="font-size:24px;font-weight:800;color:var(--gold2)">${fmtPKR(perUnit)}</div>
+          <div style="font-size:24px;font-weight:800;color:var(--accent-strong)">${fmtPKR(perUnit)}</div>
         </div>
       </div>
       <div style="max-height:300px;overflow-y:auto">
@@ -278,7 +278,7 @@ const INSPECTION_ITEMS = ['Walls & Paint','Flooring','Windows & Locks','Bathroom
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin:16px 0 10px;display:flex;align-items:center;gap:6px">${icon('check','xs')} Inspection Checklist</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       ${INSPECTION_ITEMS.map(item=>`
-      <label style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+      <label style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <input type="checkbox" id="ins-chk-${item.replace(/[^a-z]/gi,'_')}" style="width:16px;height:16px;accent-color:var(--green)">
         <span style="font-size:13px">${item}</span>
       </label>`).join('')}
@@ -434,7 +434,7 @@ function renderSettings() {
                 🔤 Hostel Name Font Style
                 <span style="flex:1"></span>
                 <span style="font-size:11px;color:var(--text3);font-weight:400;margin-right:6px">Show font picker</span>
-                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="(async function(){DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none';}).call(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold2)">
+                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="(async function(){DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none';}).call(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent-strong)">
               </label>
               <div id="font-picker-grid-wrap" style="display:${s.showFontPicker!==false?'block':'none'}">
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;margin-top:8px;max-height:280px;overflow-y:auto;padding-right:2px">
@@ -459,14 +459,14 @@ function renderSettings() {
                   ['Arial Black','Arial Black'],
                   ['Times New Roman','Times New Roman'],
                   ['Segoe UI','Segoe UI'],
-                ].map(([ff,label])=>`<div onclick="applyHostelFont('${ff}')" style="cursor:pointer;border:2px solid ${(s.hostelNameFont||'DM Serif Display')===ff?'var(--gold)':'var(--border)'};border-radius:8px;padding:8px 6px;text-align:center;background:${(s.hostelNameFont||'DM Serif Display')===ff?'var(--gold-dim)':'var(--bg3)'};transition:all 0.15s" onmouseover="this.style.borderColor='var(--gold2)'" onmouseout="this.style.borderColor='${(s.hostelNameFont||'DM Serif Display')===ff?'var(--gold)':'var(--border)'}'">
-                  <div class="font-card-label" style="font-family:'${ff}',serif;font-size:13px;font-weight:700;color:var(--gold2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.hostelName||'Hostel Name')}</div>
+                ].map(([ff,label])=>`<div onclick="applyHostelFont('${ff}')" style="cursor:pointer;border:2px solid ${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent)':'var(--border)'};border-radius:8px;padding:8px 6px;text-align:center;background:${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent-dim)':'var(--bg3)'};transition:all 0.15s" onmouseover="this.style.borderColor='var(--accent-strong)'" onmouseout="this.style.borderColor='${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent)':'var(--border)'}'">
+                  <div class="font-card-label" style="font-family:'${ff}',serif;font-size:13px;font-weight:700;color:var(--accent-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.hostelName||'Hostel Name')}</div>
                   <div style="font-size:8.5px;color:var(--text3);margin-top:2px">${label}</div>
                 </div>`).join('')}
               </div>
               <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center">
                 <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Preview: </span>
-                <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--gold2)">${escHtml(s.hostelName||'DAMAM Boys Hostel')}</span>
+                <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--accent-strong)">${escHtml(s.hostelName||'DAMAM Boys Hostel')}</span>
               </div>
               </div><!-- /font-picker-grid-wrap -->
             </div>
@@ -540,7 +540,7 @@ function renderSettings() {
       <div class="settings-panel ${settingsTab==='data'?'active':''}">
         <div class="card">
           <div class="card-header"><div class="card-title">${icon('download','sm')} Data Management</div>
-            <div style="font-size:12px;color:var(--text3)">For backup & restore, use the <strong style="color:var(--gold2)">Backup & Restore</strong> option in the sidebar menu.</div>
+            <div style="font-size:12px;color:var(--text3)">For backup & restore, use the <strong style="color:var(--accent-strong)">Backup & Restore</strong> option in the sidebar menu.</div>
           </div>
           <div class="form-grid">
             <!-- EXCEL/CSV IMPORT CARD -->
@@ -559,7 +559,7 @@ function renderSettings() {
                 <button class="btn btn-primary btn-sm" onclick="document.getElementById('excel-import-file').click()">📤 Upload & Import File</button>
               </div>
               <div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-                <strong style="color:var(--gold2)">Required columns:</strong> Name, Father Name, CNIC, Phone, Room Number, Monthly Rent, Join Date, Payment Method, Status, Amount Paid
+                <strong style="color:var(--accent-strong)">Required columns:</strong> Name, Father Name, CNIC, Phone, Room Number, Monthly Rent, Join Date, Payment Method, Status, Amount Paid
                 <span style="margin-left:8px;color:var(--text3)">· Optional: Email, Occupation / Course, Emergency Contact, Notes, Amount Paid</span>
               </div>
             </div>
@@ -579,13 +579,13 @@ function renderSettings() {
       <div class="settings-panel ${settingsTab==='rentupdate'?'active':''}">
         <div class="card">
           <div class="card-header" style="padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:16px">
-            <div class="card-title" style="font-size:16px;display:flex;align-items:center;gap:8px"><span class="micon" style="font-size:20px;color:var(--gold2)">payments</span>Bulk Rent Update</div>
+            <div class="card-title" style="font-size:16px;display:flex;align-items:center;gap:8px"><span class="micon" style="font-size:20px;color:var(--accent-strong)">payments</span>Bulk Rent Update</div>
             <div style="font-size:12px;color:var(--text3);margin-top:4px">Update monthly rent for all or selected students. Changes apply to all future pending payments automatically.</div>
           </div>
 
           <!-- By Room Type quick-set -->
           <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:16px;margin-bottom:18px">
-            <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gold2);margin-bottom:12px">⚡ Quick Set by Room Type</div>
+            <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);margin-bottom:12px">⚡ Quick Set by Room Type</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
               ${DB.settings.roomTypes.map(function(type){
                 var cnt=DB.students.filter(function(s){return s.status==='Active'&&DB.rooms.find(function(r){return r.id===s.roomId&&r.typeId===type.id;});}).length;
@@ -627,7 +627,7 @@ function renderSettings() {
                   var rtype=room?DB.settings.roomTypes.find(function(t){return t.id===room.typeId;}):null;
                   return '<tr style="border-top:1px solid var(--border);background:'+(i%2?'var(--bg3)':'transparent')+'">'
                     +'<td style="padding:10px 12px"><div style="font-weight:700;color:var(--text)">'+escHtml(s.name)+'</div><div style="font-size:11px;color:var(--text3)">'+escHtml(s.phone||'—')+'</div></td>'
-                    +'<td style="padding:10px 12px;font-weight:700;color:var(--gold2)">#'+(room?room.number:'—')+'</td>'
+                    +'<td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">#'+(room?room.number:'—')+'</td>'
                     +'<td style="padding:10px 12px"><span style="font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2)">'+(rtype?escHtml(rtype.name):'—')+'</span></td>'
                     +'<td style="padding:10px 12px;font-weight:700;color:var(--green)">'+fmtPKR(s.rent)+'</td>'
                     +'<td style="padding:10px 12px"><input class="form-control" type="number" id="sr-'+s.id+'" value="'+s.rent+'" style="width:120px;font-size:13px" placeholder="New rent"></td>'
@@ -678,7 +678,7 @@ function renderLicenseSettingsPanel() {
     <div class="form-grid">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">License Key</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--gold2);letter-spacing:1px">${escHtml(keyStr)}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent-strong);letter-spacing:1px">${escHtml(keyStr)}</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Valid Until</div>
@@ -950,7 +950,7 @@ function downloadExcelTemplate() {
   ws['!cols'] = [20,18,18,14,22,20,10,12,18,12,10,14,24,20].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Student');
-  XLSX.writeFile(wb, 'DAMAM_Students_Template.xlsx');
+  XLSX.writeFile(wb, 'HOSTIX_Students_Template.xlsx');
   toast('Template downloaded — fill it in and re-upload','success');
 }
 
@@ -960,7 +960,7 @@ function downloadCSVTemplate() {
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'DAMAM_Students_Template.csv';
+  a.download = 'HOSTIX_Students_Template.csv';
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   toast('CSV template downloaded','success');
@@ -1085,7 +1085,7 @@ function _showExcelImportPreview(rows, errors) {
     <tr>
       <td class="fw-700" style="color:var(--blue)">${escHtml(r.name)}</td>
       <td style="color:var(--text2)">${escHtml(r.fatherName||'—')}</td>
-      <td style="color:var(--gold2)">Rm #${r.roomNumber}</td>
+      <td style="color:var(--accent-strong)">Rm #${r.roomNumber}</td>
       <td style="color:var(--green)">${fmtPKR(r.rent)}</td>
       <td style="font-size:11px;color:var(--text3)">${r.joinDate}</td>
       <td>${r.paidAtAdmission>0?`<span style="color:var(--green)">${fmtPKR(r.paidAtAdmission)}</span>`:'<span style="color:var(--text3)">—</span>'}</td>

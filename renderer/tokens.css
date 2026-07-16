@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    HOSTIX — Enterprise Design Tokens (Phase 1)
 
-   This file loads BEFORE style.css. It defines the new token system that
-   screens will migrate to one at a time. Existing --gold, --royal, --bg
-   tokens in style.css continue to work unchanged.
+   This file loads BEFORE style.css and defines the canonical violet
+   --accent token set. The old orange --gold/--royal tokens were removed
+   in Phase 1 §5.5b and re-pointed here; --accent is now the single accent.
 
    Rule: Color = meaning. If a color isn't telling the user something,
    it shouldn't be there.
@@ -213,4 +213,7 @@ body.light-theme {
   --accent:           var(--accent-600);
   --accent-soft:      var(--accent-100);
   --accent-strong:    var(--accent-700);
+  /* Translucent violet overlay — replaces the former --gold-dim/--royal-dim.
+     One value works on both themes (subtle accent wash on any surface). */
+  --accent-dim:       rgba(139, 92, 246, 0.12);
 }

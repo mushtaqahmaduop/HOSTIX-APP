@@ -6,7 +6,7 @@
    ├─ src/storage.js           ─ loadDB, saveDB (async, SQLite)
    ├─ src/license.js           ─ license check stubs
    ├─ src/receipt.js           ─ PDF receipt builder
-   ├─ src/modules/theme.js     ─ toggleTheme, applySavedTheme
+   ├─ src/modules/theme.js     ─ toggleTheme, applySavedSidebar
    ├─ src/modules/nav.js       ─ navigate, renderPage, updateSidebar
    ├─ src/modules/dashboard.js ─ renderDashboard, calcRevenue, charts, search
    ├─ src/modules/cancellations.js
@@ -23,15 +23,8 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 // ── SAFE WINDOW HELPER ───────────────────────────────────────────────────────
-// Opens a popup; shows a toast and returns null if blocked.
-function safeOpenWindow(w, h) {
-  const win = window.open('', '_blank', 'width='+w+',height='+h+',scrollbars=yes,resizable=yes');
-  if (!win) {
-    if (typeof toast === 'function') toast('⚠️ Popup blocked — please allow popups for this page.', 'error');
-    return null;
-  }
-  return win;
-}
+// safeOpenWindow(width, height) is defined in src/utils.js (loads before app.js).
+// Do NOT duplicate here — it opens with scrollbars/resizable and a 1000x720 default.
 
 // ── ELECTRON PDF HELPER (Issue 1) ────────────────────────────────────────────
 // Unified PDF function: uses Electron native printToPDF when available (saves
@@ -106,7 +99,6 @@ async function processAutoCancellations() {
   }
 }
 // ── Pre-boot: theme/logo/sidebar don't need DB — run immediately ─────────────
-applySavedTheme();
 applySavedSidebar();
 loadSavedLogo();
 updateSidebar(); // shows zeros/defaults until boot() completes
@@ -265,35 +257,8 @@ function toggleSettingsDropdown() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── INPUT AUTO-FORMAT ────────────────────────────────────────────────────────
-function fmtPhone(inp) {
-  let v = inp.value.replace(/\D/g,'');
-  if(v.length > 4) v = v.slice(0,4) + '-' + v.slice(4,11);
-  inp.value = v;
-}
-function fmtCnic(inp) {
-  let v = inp.value.replace(/\D/g,'');
-  if(v.length > 5) v = v.slice(0,5) + '-' + v.slice(5);
-  if(v.length > 13) v = v.slice(0,13) + '-' + v.slice(13,14);
-  inp.value = v;
-}
-function fmtEmail(inp) {
-  const hint = document.getElementById('f-temail-hint');
-  // FIX 7: trim before checking to avoid stale hint on trailing-space input
-  const v = inp.value.trim();
-  if(v && !v.includes('@')) {
-    if(hint) hint.style.display = 'block';
-  } else {
-    if(hint) hint.style.display = 'none';
-  }
-}
-function getEmailValue() {
-  const el = document.getElementById('f-temail');
-  if(!el) return '';
-  const v = el.value.trim();
-  if(!v) return '';
-  // FIX 8: full email kept as-is (user@yahoo.com etc.), bare username gets @gmail.com
-  return v.includes('@') ? v : v + '@gmail.com';
-}
+// fmtPhone / fmtCnic / fmtEmail / getEmailValue are defined in
+// src/modules/students.js (loads before app.js). Do NOT duplicate here.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── CANCELLATION DOWNLOAD REPORT ─────────────────────────────────────────────

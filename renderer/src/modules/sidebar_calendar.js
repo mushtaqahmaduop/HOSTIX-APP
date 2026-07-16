@@ -112,7 +112,7 @@ function renderSidebarCalendar() {
     let bg = 'transparent';
     let color = isPast ? 'var(--text3)' : 'var(--text)';
     let border = 'none';
-    if(isToday) { bg='var(--gold)'; color='#000'; border='none'; }
+    if(isToday) { bg='var(--accent)'; color='#000'; border='none'; }
 
     html += `<div onclick="navigateToMonth('${monthKey}');closeSbCal()" title="View ${monthKey} on dashboard" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;aspect-ratio:1;border-radius:5px;cursor:pointer;background:${bg};color:${color};font-size:10.5px;font-weight:${isToday?'800':'500'};transition:background 0.12s;border:${border}" onmouseover="if('${isToday}'!=='true')this.style.background='var(--bg3)'" onmouseout="if('${isToday}'!=='true')this.style.background='transparent'">
       ${day}

@@ -33,7 +33,7 @@ function renderCancellations(filterStatus='All') {
         <div style="font-weight:700;color:var(--blue)">${escHtml(c.studentName||'—')}</div>
         <div style="font-size:11px;color:var(--text3)">${escHtml(student?.phone||'')}</div>
       </td>
-      <td><span style="font-size:15px;font-weight:900;color:var(--gold2)">#${c.roomNumber||'—'}</span></td>
+      <td><span style="font-size:15px;font-weight:900;color:var(--accent-strong)">#${c.roomNumber||'—'}</span></td>
       <td><span class="badge badge-gray">${escHtml(c.roomType||'—')}</span></td>
       <td class="text-muted" style="font-size:12px">${fmtDate(c.requestDate)}</td>
       <td class="text-muted" style="font-size:12px">${fmtDate(c.vacateDate)||'End of Month'}</td>
@@ -50,11 +50,11 @@ function renderCancellations(filterStatus='All') {
 
   return `
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-    <div class="stat-card gold" onclick="renderPage('cancellations_All')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='All'?';border-color:var(--gold)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='All'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--gold)"></div>':''}
+    <div class="stat-card gold" onclick="renderPage('cancellations_All')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='All'?';border-color:var(--accent)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      ${filterStatus==='All'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)"></div>':''}
       <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">${icon('list')}</div>
       <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px">${list.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='All'?'var(--gold2)':'var(--text3)'}">All Records</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='All'?'var(--accent-strong)':'var(--text3)'}">All Records</div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='All'?'▲ showing all':'click to show all'}</div>
     </div>
     <div class="stat-card red" onclick="renderPage('cancellations_Pending')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Pending'?';border-color:var(--red)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
@@ -287,7 +287,7 @@ function cancStudentSearch(query) {
         <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(s.name)}</div>
         <div style="font-size:11px;color:var(--text3)">${roomLabel} · ${escHtml(s.phone||'—')}</div>
       </div>
-      <div style="font-size:10px;font-weight:700;color:var(--gold2);background:var(--gold-dim);border-radius:6px;padding:2px 7px">${roomLabel}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--accent-strong);background:var(--accent-dim);border-radius:6px;padding:2px 7px">${roomLabel}</div>
     </div>`;
   }).join('');
   drop.style.display = 'block';
@@ -408,7 +408,7 @@ function downloadCancellationReport() {
     h1 { font-size: 20px; color: #0f1a2e; margin-bottom: 4px; }
     .sub { color: #888; font-size: 11px; margin-bottom: 20px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-    th { background: #0f1a2e; color: #e6c96e; padding: 8px 10px; text-align: left; font-size: 11px; letter-spacing: 0.5px; }
+    th { background: #0f1a2e; color: #a78bfa; padding: 8px 10px; text-align: left; font-size: 11px; letter-spacing: 0.5px; }
     td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11px; }
     tr:nth-child(even) td { background: #f8f9fb; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
@@ -416,10 +416,10 @@ function downloadCancellationReport() {
     .badge-green { background: #dcfce7; color: #16a34a; }
     .badge-amber { background: #fef3c7; color: #b45309; }
     .badge-gray { background: #f3f4f6; color: #555; }
-    .section-title { font-size: 13px; font-weight: 800; color: #0f1a2e; border-left: 4px solid #c8a84b; padding-left: 10px; margin: 20px 0 10px; }
+    .section-title { font-size: 13px; font-weight: 800; color: #0f1a2e; border-left: 4px solid #7c3aed; padding-left: 10px; margin: 20px 0 10px; }
     .pay-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #eee; font-size: 11px; }
     .no-print { margin-bottom: 16px; }
-    button { padding: 8px 18px; background: #0f1a2e; color: #e6c96e; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; margin-right: 8px; }
+    button { padding: 8px 18px; background: #0f1a2e; color: #a78bfa; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; margin-right: 8px; }
   </style></head><body>
   <div class="no-print">
     <button onclick="window.print()"><span class=\"micon\" style=\"font-size:15px\">print</span> Print</button>

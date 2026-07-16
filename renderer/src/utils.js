@@ -76,7 +76,7 @@ function toggleClearBtn(inputId, btnId) {
 function safeOpenWindow(width, height) {
   width  = width  || 1000;
   height = height || 720;
-  var w = window.open('', '_blank', 'width=' + width + ',height=' + height);
+  var w = window.open('', '_blank', 'width=' + width + ',height=' + height + ',scrollbars=yes,resizable=yes');
   if (!w) {
     if (typeof toast === 'function')
       toast('⚠️ Popup blocked — allow popups for this page and try again.', 'error');
@@ -114,7 +114,7 @@ function moneyValue(amount, opts) {
 // brand colours, radii, and class names. This is the one place to edit the
 // brand look of every PDF (Monthly Report, Rent Summary, Transfers, etc.)
 const PRINT_BRAND = {
-  gold:  '#c07840',   // matches --gold (light theme)
+  accent: '#7c3aed',  // matches --accent (violet, light theme)
   green: '#16a34a',
   red:   '#dc2626',
   ink:   '#1a1a2e',
@@ -127,10 +127,10 @@ function printDocStyles() {
   return `<style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:${b.ink};background:#fff;padding:28px;font-size:12.5px}
-    .header,.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid ${b.gold};margin-bottom:20px}
+    .header,.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid ${b.accent};margin-bottom:20px}
     .title,.ht{font-size:21px;font-weight:800}
     .subtitle,.hs{font-size:11px;color:#666;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:${b.gold}22;color:#8b6a00;border:1px solid ${b.gold}55}
+    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:${b.accent}22;color:#6d28d9;border:1px solid ${b.accent}55}
     /* KPI grid — supports both .kpi-grid > .kpi and .kg > .kc legacy markup */
     .kpi-grid,.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi,.kc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center}
@@ -144,7 +144,7 @@ function printDocStyles() {
     td{padding:8px 12px;border-bottom:1px solid #f8fafc}
     .green,.gr{color:${b.green};font-weight:700}
     .red,.re{color:${b.red};font-weight:700}
-    .gold,.go{color:#854d0e;font-weight:700}
+    .gold,.go{color:#5b21b6;font-weight:700}
     .footer,.ft{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:${b.faint}}
     @media print{body{padding:16px}}
   </style>`;
@@ -414,7 +414,7 @@ function _renderCourseSuggestions(matches, val, activeIdx) {
     const lo = val.toLowerCase();
     const hi = lo ? c.replace(
       new RegExp('(' + lo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'),
-      '<b style="color:var(--gold2)">$1</b>'
+      '<b style="color:var(--accent-strong)">$1</b>'
     ) : escHtml(c);
     const active = i === activeIdx;
     return `<div class="cs-item${active ? ' cs-active' : ''}" data-idx="${i}" data-val="${c.replace(/"/g, '&quot;')}"

@@ -17,7 +17,8 @@
     "build:portable": "electron-builder --win portable --x64 --ia32",
     "build:installer": "electron-builder --win nsis --x64 --ia32",
     "build:all": "electron-builder --win --x64 --ia32",
-    "test:license": "node test-license.js"
+    "test:license": "node test-license.js",
+    "test:e2e": "playwright test"
   },
   "build": {
     "appId": "com.zeerak.hostix",
@@ -113,6 +114,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@playwright/test": "^1.61.1",
     "electron": "^22.3.27",
     "electron-builder": "^26.8.1",
     "electron-rebuild": "^3.2.9"
