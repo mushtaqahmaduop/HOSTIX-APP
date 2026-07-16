@@ -890,18 +890,18 @@ function renderMonthModal(monthKey, monthLabel) {
     const sPaid = sPays.filter(p=>p.status==='Paid').reduce((t,p)=>t+Number(p.amount),0);
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
-      <td><span style="font-weight:700;color:var(--blue)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
-      <td style="font-weight:700;color:var(--accent-strong)">#${room?room.number:'—'}</td>
+      <td><span style="font-weight:700;color:var(--text)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
+      <td style="font-weight:700;color:var(--text2)">#${room?room.number:'—'}</td>
       <td style="color:var(--text3);font-size:12px">${fmtPKR(s.rent)}/mo</td>
-      <td style="color:var(--green);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
-      <td style="color:${sPend>0?'var(--amber)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
+      <td style="color:var(--text);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
+      <td style="color:${sPend>0?'var(--text)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
       <td>${statusBadge(s.status)}</td>
     </tr>`;
   }).join('');
 
   const feeRows = pays.map(p=>`<tr id="fee-row-${p.id}">
-    <td><span style="color:var(--blue);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
-    <td style="color:var(--accent-strong);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
+    <td><span style="color:var(--text);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
+    <td style="color:var(--text2);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
     <td class="text-muted">${escHtml(p.month||'—')}</td>
     <td>
       <span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>
@@ -932,7 +932,7 @@ function renderMonthModal(monthKey, monthLabel) {
       <span class="editable-cell" onclick="editMonthExpField('${e.id}','description',this)" title="Click to edit">${escHtml(e.description||'—')}</span>
     </td>
     <td>
-      <span class="editable-cell" style="color:var(--red);font-weight:700" onclick="editMonthExpField('${e.id}','amount',this)" title="Click to edit">${fmtPKR(e.amount)}</span>
+      <span class="editable-cell" style="color:var(--text);font-weight:700" onclick="editMonthExpField('${e.id}','amount',this)" title="Click to edit">${fmtPKR(e.amount)}</span>
     </td>
     <td>
       <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
@@ -942,24 +942,24 @@ function renderMonthModal(monthKey, monthLabel) {
   showModal('modal-xl', `${ICONS.calendar} ${monthLabel} — Full Monthly Report`,
   `<!-- KPI Summary -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-    <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
-      <div>${moneyValue(rev,{size:"section",color:"var(--green)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
+      <div>${moneyValue(rev,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${paidPays.length} payments</div>
     </div>
-    <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
-      <div>${moneyValue(expTotal,{size:"section",color:"var(--red)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
+      <div>${moneyValue(expTotal,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} records</div>
     </div>
-    <div style="background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
-      <div>${moneyValue(netProfit,{size:"section",color:netProfit>=0?"var(--green)":"var(--red)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
+      <div>${moneyValue(netProfit,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
-    <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
-      <div>${moneyValue(pendTotal,{size:"section",color:"var(--amber)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
+      <div>${moneyValue(pendTotal,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${pendPays.length} unpaid</div>
     </div>
   </div>
@@ -1042,7 +1042,7 @@ async function editMonthFeeField(payId, field, cell) {
     span.title='Click to edit';
     span.onclick=()=>editMonthFeeField(payId,field,span);
     span.textContent = field==='amount'?fmtPKR(pay.amount):(field==='date'?fmtDate(pay[field]):pay[field]);
-    if(field==='amount'){span.style.color='var(--green)';span.style.fontWeight='700';}
+    if(field==='amount'){span.style.color='var(--text)';span.style.fontWeight='700';}
     inp.replaceWith(span);
     toast('Updated successfully','success');
   };
@@ -1071,7 +1071,7 @@ function editMonthExpField(expId, field, cell) {
     span.title='Click to edit';
     span.onclick=()=>editMonthExpField(expId,field,span);
     span.textContent = field==='amount'?fmtPKR(exp.amount):(field==='date'?fmtDate(exp[field]):exp[field]);
-    if(field==='amount'){span.style.color='var(--red)';span.style.fontWeight='700';}
+    if(field==='amount'){span.style.color='var(--text)';span.style.fontWeight='700';}
     inp.replaceWith(span);
     toast('Updated successfully','success');
   };
@@ -1499,7 +1499,7 @@ function dashGlobalSearch(query) {
         type: 'room', icon: ICONS.bed,
         title: 'Room #' + r.number,
         sub: (type ? type.name : '') + ' · ' + r.floor + ' Floor · ' + occ + '/' + (type ? type.capacity : 1) + ' filled',
-        badge: '<span class="badge ' + (occ >= (type ? type.capacity : 1) ? 'badge-green' : 'badge-gray') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
+        badge: '<span class="badge" style="' + (occ >= (type ? type.capacity : 1) ? 'background:var(--bg4);border:1px solid var(--border);color:var(--text3)' : 'background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);color:var(--accent-strong)') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
         action: "showRoomDetail('" + r.id + "')"
       });
     }
@@ -1523,7 +1523,7 @@ function dashGlobalSearch(query) {
       type: 'location', icon: ICONS.pin,
       title: hit.city,
       sub: hit.students.slice(0, 3).join(', ') + (hit.students.length > 3 ? ' +' + (hit.students.length - 3) + ' more' : ''),
-      badge: '<span class="badge badge-blue">' + hit.students.length + ' student' + (hit.students.length !== 1 ? 's' : '') + '</span>',
+      badge: '<span class="badge badge-gray">' + hit.students.length + ' student' + (hit.students.length !== 1 ? 's' : '') + '</span>',
       action: "studentFilter.search='" + hit.city.replace(/'/g, "\\'") + "';navigate('students')"
     });
   });
@@ -1569,7 +1569,7 @@ function dashGlobalSearch(query) {
   });
   Object.keys(courseSub).slice(0,3).forEach(function(k){
     var hit=courseSub[k];
-    grouped['student'].push({type:'student',icon:ICONS.student,title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-blue">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
+    grouped['student'].push({type:'student',icon:ICONS.student,title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-gray">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
   });
   results.forEach(function(r){ if (grouped[r.type]) grouped[r.type].push(r); });
 
