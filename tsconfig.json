@@ -9,13 +9,13 @@
     "target": "ES2020",
     "module": "none",
     "lib": ["ES2020", "DOM"],
-    "moduleDetection": "force",
     "strict": false,
     "noImplicitAny": false,
     "skipLibCheck": true
   },
   "include": [
     "renderer/globals.d.ts",
-    "renderer/src/utils.js"
+    "renderer/src/utils.js",
+    "renderer/src/storage.js"
   ]
 }
