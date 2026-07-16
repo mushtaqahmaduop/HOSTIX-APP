@@ -291,7 +291,7 @@ function renderDashboard() {
     <!-- Header: title row -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:26px;height:26px;border-radius:7px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--green)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
+        <div style="width:26px;height:26px;border-radius:7px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text3)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
         <div style="font-size:12px;font-weight:800;color:var(--text)">Revenue Trend <span style="font-size:9px;font-weight:400;color:var(--text3)">· Jan–Dec</span></div>
       </div>
       <!-- Legend -->
@@ -304,17 +304,17 @@ function renderDashboard() {
     </div>
     <!-- KPI chips row -->
     <div style="display:flex;gap:6px;margin-bottom:6px">
-      <div style="flex:1;background:var(--green-dim);border:1px solid rgba(52,211,153,0.2);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Revenue</span>
-        <span style="font-size:15px;font-weight:900;color:var(--green);letter-spacing:-0.5px">${fmtPKR(collected)}</span>
+      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Revenue</span>
+        <span style="font-size:15px;font-weight:900;color:var(--text);letter-spacing:-0.5px">${fmtPKR(collected)}</span>
       </div>
-      <div style="flex:1;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Expenses</span>
-        <span style="font-size:15px;font-weight:900;color:var(--red);letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
+      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Expenses</span>
+        <span style="font-size:15px;font-weight:900;color:var(--text);letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
       </div>
-      <div style="flex:1;background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)'};border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Net</span>
-        <span style="font-size:13px;font-weight:900;color:${netProfit>=0?'var(--green)':'var(--red)'};letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
+      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Net</span>
+        <span style="font-size:13px;font-weight:900;color:var(--text);letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
       </div>
     </div>
     <!-- Chart.js canvas -->
