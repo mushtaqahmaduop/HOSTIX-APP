@@ -152,7 +152,7 @@ function renderDashboard() {
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:11px;color:var(--green);font-weight:600">${typeAvail} free</div>
+          <div style="font-size:11px;color:var(--text2);font-weight:600">${typeAvail} free</div>
           <div style="font-size:10px;color:var(--text3)">${typePct}% full</div>
         </div>
       </div>`;
@@ -328,8 +328,8 @@ function renderDashboard() {
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:30px;height:30px;border-radius:8px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--teal)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Seat Availability</div>
+          <div style="width:30px;height:30px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text3)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Seat Availability</div>
         </div>
         <div style="display:flex;gap:6px">
           <button onclick="printSeatAvailability()" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
@@ -338,16 +338,16 @@ function renderDashboard() {
       </div>
       <!-- Summary row -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px">
-        <div onclick="showSeatDetailModal('rooms')" style="background:rgba(15,188,173,0.1);border:1px solid rgba(15,188,173,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="All rooms">
-          <div style="font-size:20px;font-weight:900;color:var(--teal)">${totalSeats}</div>
+        <div onclick="showSeatDetailModal('rooms')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="All rooms">
+          <div style="font-size:20px;font-weight:900;color:var(--text)">${totalSeats}</div>
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Total</div>
         </div>
-        <div onclick="showSeatDetailModal('vacant')" style="background:rgba(46,201,138,0.1);border:1px solid rgba(46,201,138,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Free seats">
-          <div style="font-size:20px;font-weight:900;color:var(--green)">${availSeats}</div>
+        <div onclick="showSeatDetailModal('vacant')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Free seats">
+          <div style="font-size:20px;font-weight:900;color:var(--text)">${availSeats}</div>
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Free</div>
         </div>
-        <div onclick="showSeatDetailModal('occupied')" style="background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Filled seats">
-          <div style="font-size:20px;font-weight:900;color:var(--red)">${allActiveSeats}</div>
+        <div onclick="showSeatDetailModal('occupied')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Filled seats">
+          <div style="font-size:20px;font-weight:900;color:var(--text)">${allActiveSeats}</div>
           <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Filled</div>
         </div>
       </div>
@@ -361,16 +361,16 @@ function renderDashboard() {
           const pct=Math.round(occ2/cap*100);
           const isFull=free===0;
           const students2=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
-          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'rgba(46,201,138,0.12)':'rgba(124,58,237,0.1)'};border:1px solid ${isFull?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${r.number}</div>
+          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'var(--bg4)':'rgba(124,58,237,0.1)'};border:1px solid ${isFull?'var(--border)':'rgba(124,58,237,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--text2)':'var(--accent-strong)'}">${r.number}</div>
             <div style="font-size:9px;color:var(--text3)">${occ2}/${cap}</div>
-            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
+            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--text3)':'var(--accent)'};border-radius:2px"></div></div>
           </div>`;
         }).join('')}
       </div>
       <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--text3)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
       </div>
     </div>
@@ -403,7 +403,7 @@ function renderDashboard() {
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>
           Pending Payments
         </div>
-        <span class="badge badge-gold" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
+        <span class="badge badge-gray" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
       </div>
       <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
@@ -412,12 +412,12 @@ function renderDashboard() {
           const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,48,80,0.5)">'
           +'<div onclick="showViewStudentModal(\''+p.studentId+'\')" style="cursor:pointer;flex:1;min-width:0">'
-          +'<div style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(p.studentName||'')+'</div>'
+          +'<div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(p.studentName||'')+'</div>'
           +'<div style="font-size:10px;color:var(--text3);margin-top:1px">Rm #'+(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:8px">'
           +'<div style="text-align:right">'
-          +'<div style="font-size:12px;font-weight:800;color:var(--red)">'+fmtPKR(unpaidShow)+'</div>'
+          +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+fmtPKR(unpaidShow)+'</div>'
           +'<div style="font-size:9px;color:var(--text3)">unpaid</div>'
           +'</div>'
           +'<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" style="font-size:10px;padding:3px 7px" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
@@ -448,17 +448,17 @@ function renderDashboard() {
       const admFee = Number(p.fee||0);
       const extras = p.extraCharges||[];
       const unpaidAmt2=p.unpaid!=null?p.unpaid:0;
-      let paidCell='<span style="color:var(--green);font-weight:700;font-size:12px">'+fmtPKR(p.amount)+'</span>';
-      if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--blue);font-weight:700">+'+fmtPKR(admFee)+' adm.</div>';
-      extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--amber);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
+      let paidCell='<span style="color:var(--text);font-weight:700;font-size:12px">'+fmtPKR(p.amount)+'</span>';
+      if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(admFee)+' adm.</div>';
+      extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
       return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+p.studentId+'\')">'
       +'<td><div style="display:flex;align-items:center;gap:7px">'
       +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+(p.studentName||'?')[0].toUpperCase()+'</div>'
-      +'<span style="font-weight:700;color:var(--blue);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
-      +'<td><span style="color:var(--accent-strong);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
+      +'<span style="font-weight:700;color:var(--text);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
+      +'<td><span style="color:var(--text2);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
       +'<td><span style="font-weight:700;font-size:12px">'+(mRent>0?fmtPKR(mRent):'—')+'</span></td>'
       +'<td>'+paidCell+'</td>'
-      +'<td><span style="color:'+(unpaidAmt2>0?'var(--red)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
+      +'<td><span style="color:'+(unpaidAmt2>0?'var(--text)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
       +'<td>'+pmBadge(p.method)+'</td>'
       +'<td>'+statusBadge(p.status)+'</td>'
       +'<td style="font-size:11px;color:var(--text3)">'+fmtDate(p.date)+'</td>'
