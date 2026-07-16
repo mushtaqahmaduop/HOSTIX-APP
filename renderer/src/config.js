@@ -49,5 +49,6 @@ let DB = {
   activityLog:   [],
   inspections:   [],
   billSplits:    [],
-  transfers:     []
+  transfers:     [],
+  archive:       []   // Annual Archive — historical payment/expense records
 };

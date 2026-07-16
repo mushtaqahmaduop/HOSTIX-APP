@@ -893,3 +893,89 @@ function downloadDetailCSV(type) {
   toast('Downloaded: '+filename,'success');
 }
 // calPopoverOpen declared in dashboard.js (shared)
+// ════════════════════════════════════════════════════════════════════════════
+// ANNUAL ARCHIVE  (page: 'archive' — nav.js / command palette)
+// Read-only viewer of historical records in DB.archive (old payment/expense
+// records, e.g. migrated from the legacy localStorage build). Grouped by year.
+// Restored in Phase 2 §6.1 — the call site existed but renderArchive() was never
+// implemented, so the page threw a ReferenceError (caught by TypeScript).
+// ════════════════════════════════════════════════════════════════════════════
+function _archiveClassify(r) {
+  // An expense record has a category and no student/month fields; everything
+  // else is treated as a payment record.
+  const isExpense = r && r.category !== undefined &&
+    r.studentName === undefined && r.studentId === undefined && r.month === undefined;
+  const date  = (r && (r.date || r.paidDate || r.dueDate)) || '';
+  const mYear = (r && r.month && String(r.month).match(/\d{4}/)) ? String(r.month).match(/\d{4}/)[0] : '';
+  const year  = mYear || (date ? String(date).slice(0, 4) : '') || 'Undated';
+  const label = isExpense
+    ? (r.category || 'Expense') + (r.description ? ' — ' + r.description : '')
+    : (r.studentName || '—') + (r.month ? ' · ' + r.month : '');
+  return { isExpense, date, year, label, amount: Number((r && r.amount) || 0) };
+}
+
+function renderArchive() {
+  const items = (DB.archive || []).map(_archiveClassify);
+
+  if (items.length === 0) {
+    return `
+    <div class="empty-state" style="padding:48px 24px;text-align:center">
+      <div class="icon" style="font-size:40px;margin-bottom:8px">🗄</div>
+      <h3>No archived records yet</h3>
+      <div style="font-size:13px;color:var(--text3);max-width:440px;margin:8px auto 0;line-height:1.6">
+        The Annual Archive holds historical payment and expense records from
+        previous years (for example, data carried over from an older version of
+        the app). Nothing has been archived on this device yet.
+      </div>
+    </div>`;
+  }
+
+  const payTotal = items.filter(x => !x.isExpense).reduce((s, x) => s + x.amount, 0);
+  const expTotal = items.filter(x =>  x.isExpense).reduce((s, x) => s + x.amount, 0);
+
+  // Group by year, newest first.
+  const byYear = {};
+  items.forEach(x => { (byYear[x.year] = byYear[x.year] || []).push(x); });
+  const years = Object.keys(byYear).sort((a, b) => String(b).localeCompare(String(a)));
+
+  const summary = `
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Records</div>
+      <div style="font-size:22px;font-weight:900;color:var(--text)">${items.length}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">${years.length} year${years.length !== 1 ? 's' : ''}</div>
+    </div>
+    <div style="background:var(--card);border:1px solid rgba(46,201,138,0.25);border-radius:var(--radius);padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Payments</div>
+      <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(payTotal)}</div>
+    </div>
+    <div style="background:var(--card);border:1px solid rgba(224,82,82,0.25);border-radius:var(--radius);padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Expenses</div>
+      <div style="font-size:22px;font-weight:900;color:var(--red)">${fmtPKR(expTotal)}</div>
+    </div>
+  </div>`;
+
+  const sections = years.map(y => {
+    const rows = byYear[y]
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .map(x => `
+        <tr>
+          <td style="padding:8px 12px;color:var(--text3);white-space:nowrap">${escHtml(x.date || '—')}</td>
+          <td style="padding:8px 12px">
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${x.isExpense ? 'rgba(224,82,82,0.12)' : 'rgba(46,201,138,0.12)'};color:${x.isExpense ? 'var(--red)' : 'var(--green)'}">${x.isExpense ? 'Expense' : 'Payment'}</span>
+          </td>
+          <td style="padding:8px 12px;color:var(--text)">${escHtml(x.label)}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:${x.isExpense ? 'var(--red)' : 'var(--green)'}">${fmtPKR(x.amount)}</td>
+        </tr>`).join('');
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden">
+      <div style="padding:12px 16px;font-weight:800;font-size:14px;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span class="micon" style="font-size:18px;color:var(--accent)">event</span>${escHtml(String(y))}
+        <span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--text3)">${byYear[y].length} record${byYear[y].length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">${rows}</table></div>
+    </div>`;
+  }).join('');
+
+  return summary + sections;
+}

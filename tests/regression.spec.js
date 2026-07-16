@@ -202,6 +202,39 @@ test('security: clear-all is blocked without the correct warden password', async
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+test('archive page renders (regression: renderArchive was undefined → Render Error)', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  // Empty archive → friendly empty state, NOT a render error.
+  await win.evaluate(() => navigate('archive'));
+  await win.waitForTimeout(300);
+  const emptyHtml = await win.evaluate(() => document.getElementById('content').innerHTML);
+  expect(emptyHtml, 'archive page threw a render error (renderArchive missing?)').not.toContain('Render Error');
+  expect(emptyHtml).toContain('No archived records');
+
+  // Populated archive → records render grouped by year, still no error.
+  // (renderPage swaps #content inside a setTimeout fade, so wait before reading.)
+  await win.evaluate(() => {
+    DB.archive = [
+      { id: 'a1', studentName: 'Old Student', month: 'January 2024', amount: 16000, date: '2024-01-05', status: 'Paid' },
+      { id: 'a2', category: 'Electricity', amount: 5000, date: '2024-02-01', description: 'WAPDA' },
+    ];
+    renderPage('archive');
+  });
+  await win.waitForTimeout(400);
+  const html = await win.evaluate(() => document.getElementById('content').innerHTML);
+  expect(html, 'archive render error with data').not.toContain('Render Error');
+  expect(html).toContain('Old Student');
+  expect(html).toContain('Electricity');
+  expect(html).toContain('2024');
+
+  await app.close();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Runs last: it drives repeated failures and ends with the account locked.
 test('login: wrong password is rejected, decrements attempts, locks after 5', async () => {
   const app = await electron.launch(launchOpts());

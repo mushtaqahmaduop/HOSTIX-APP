@@ -31,7 +31,8 @@ const _TABLE_MAP = {
   activityLog:   'activitylog',
   inspections:   'inspections',
   billSplits:    'billsplits',
-  transfers:     'transfers'
+  transfers:     'transfers',
+  archive:       'archive'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────
