@@ -250,38 +250,38 @@ function renderDashboard() {
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-    <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="showOccupiedRoomsModal()" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px">Occupied Rooms</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Occupied Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--green)">${occ}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--text)">${occ}</span>
           <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
-          ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-green" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+          ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-gray" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--green);border-radius:2px;transition:width 0.5s"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="showVacantRoomsModal()" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:3px">Vacant Rooms</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Vacant Rooms</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--teal)">${vac}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--text)">${vac}</span>
           <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--teal);border-radius:2px;transition:width 0.5s"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
-    <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div onclick="navigate('students')" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:3px">Active Students</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Active Students</div>
         <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--purple)">${activeStudents}</span>
+          <span class="stat-value" style="font-size:32px;color:var(--text)">${activeStudents}</span>
           <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--purple);border-radius:2px;transition:width 0.5s"></div></div>
+        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       </div>
     </div>
   </div>
