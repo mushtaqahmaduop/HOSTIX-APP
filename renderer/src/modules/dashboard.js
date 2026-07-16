@@ -198,7 +198,7 @@ function renderDashboard() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Total Revenue</div>
-        <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
+        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
       </div>
       <div>${moneyValue(collected,{size:"display"})}</div>
       <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--accent);border-radius:2px;transition:width 0.5s"></div></div>
@@ -208,20 +208,20 @@ function renderDashboard() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Available Fund</div>
-        <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
+        <span class="badge ${netProfit>=0?'badge-gray':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
       </div>
       <div>${moneyValue(netProfit,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
     </div>
     <div onclick="navigate('expenses')" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Expenses</div>
-        <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
+        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
       </div>
       <div>${moneyValue(moExp,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">this month</div>
     </div>
     <!-- Funds Transfer Card -->
@@ -240,10 +240,10 @@ function renderDashboard() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
         <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Pending</div>
-        <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
+        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
       </div>
       <div>${moneyValue(pending,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
       <div style="font-size:11px;color:var(--text3)">click to collect</div>
     </div>
   </div>`;})()}

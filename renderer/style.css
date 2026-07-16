@@ -3387,8 +3387,9 @@ body.light-theme .stat-card.glass {
     text-transform: uppercase;
 }
 .money-value .money-amt {
+    font-family: var(--font-mono);   /* distinct numeric font — money-grade, tabular */
     font-weight: var(--fw-display);
-    letter-spacing: -0.5px;
+    letter-spacing: -0.02em;
     color: inherit;
 }
 .money-value--display { font-size: var(--fs-display); }
@@ -4766,6 +4767,8 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 
 /* ── KPI amounts: crisp fixed size, never clipped (cards wrap responsively) ───── */
 .kpi-amt {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
     font-size: 22px;
     white-space: nowrap;
     margin-bottom: 7px;
