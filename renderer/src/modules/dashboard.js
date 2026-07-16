@@ -482,7 +482,7 @@ function showRoomSeatDetailModal(roomId) {
   for(let i=0;i<cap;i++){
     const s = students[i];
     if(s){
-      seatSlots += `<div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
           <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${s.name[0]}</div>
           <div>
@@ -496,7 +496,7 @@ function showRoomSeatDetailModal(roomId) {
         </div>
       </div>`;
     } else {
-      seatSlots += `<div style="background:var(--amber-dim);border:1px dashed rgba(124,58,237,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--accent-dim);border:1px dashed rgba(124,58,237,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
           <div style="width:28px;height:28px;border-radius:7px;background:rgba(124,58,237,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
           <div style="font-size:13px;color:var(--text3);font-style:italic">Seat ${i+1} — Free</div>
@@ -518,17 +518,17 @@ function showRoomSeatDetailModal(roomId) {
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Type</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${occ}/${cap}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text)">${occ}/${cap}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Occupied</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:${free>0?'var(--teal)':'var(--text3)'}">${free}</div>
+        <div style="font-size:22px;font-weight:900;color:${free>0?'var(--text)':'var(--text3)'}">${free}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Free</div>
       </div>
     </div>
     <!-- Progress bar -->
     <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:18px">
-      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:3px;transition:width 0.5s"></div>
+      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--text3)':'var(--accent)'};border-radius:3px;transition:width 0.5s"></div>
     </div>
     <!-- Seat slots -->
     <div style="display:flex;flex-direction:column;gap:8px">${seatSlots}</div>
@@ -665,14 +665,14 @@ function showSeatDetailModal(type) {
     let content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
     allRooms.forEach(r=>{
       const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
-      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${free===0?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(124,58,237,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(124,58,237,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${r.number}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${rt?.name||'—'} · Floor ${r.floor||'?'}</div>
         <div style="margin-top:8px;display:flex;justify-content:space-between">
-          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--green)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
-          <span style="font-size:12px;font-weight:700;color:${free>0?'var(--teal)':'var(--text3)'}">${free} free</span>
+          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--text2)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
+          <span style="font-size:12px;font-weight:700;color:${free>0?'var(--text2)':'var(--text3)'}">${free} free</span>
         </div>
-        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--text3)':'var(--accent)'};border-radius:2px"></div></div>
       </div>`;
     });
     content += '</div>';
@@ -700,14 +700,14 @@ function showSeatDetailModal(type) {
           <div style="font-size:12px;color:var(--text3)">${type?.name||'—'} · Floor ${r.floor||'?'}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:13px;font-weight:700;color:var(--green)">${free} free seat${free!==1?'s':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${free} free seat${free!==1?'s':''}</div>
           <div style="font-size:11px;color:var(--text3)">${occ}/${cap} occupied</div>
         </div>
       </div>`;
     });
   } else if(type==='occupied') {
     title=ICONS.home+' Occupied Rooms — Filled Seats';
-    color='var(--green)';
+    color='var(--accent)';
     const occRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0);
     if(!occRooms.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No occupied rooms</div>';}
     else occRooms.forEach(r=>{
@@ -721,9 +721,9 @@ function showSeatDetailModal(type) {
             <span style="font-weight:700;color:var(--text)">Room #${r.number}</span>
             <span style="font-size:12px;color:var(--text3);margin-left:8px">${rtype?.name||'—'} · Floor ${r.floor||'?'}</span>
           </div>
-          <span style="font-size:12px;font-weight:700;color:var(--green)">${occ}/${cap} filled</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text2)">${occ}/${cap} filled</span>
         </div>
-        ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--green)">
+        ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--border)">
           <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${s.name[0]}</div>
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
@@ -734,7 +734,7 @@ function showSeatDetailModal(type) {
     });
   } else {
     title=ICONS.student+' Students in Occupied Rooms';
-    color='var(--purple)';
+    color='var(--accent)';
     const activeStudents=DB.students.filter(s=>s.status==='Active');
     if(!activeStudents.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No active students</div>';}
     else activeStudents.forEach(s=>{
@@ -742,9 +742,9 @@ function showSeatDetailModal(type) {
       const rtype=room?getRoomType(room):null;
       rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();showViewStudentModal('${s.id}')">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:9px;background:var(--purple-dim);color:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${s.name[0]}</div>
           <div>
-            <div style="font-weight:700;color:var(--blue)">${escHtml(s.name)}</div>
+            <div style="font-weight:700;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
           </div>
         </div>
@@ -773,33 +773,33 @@ function showOccupiedRoomsModal() {
       <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
       <td class="text-muted">${r.floor} Floor</td>
-      <td><span class="badge badge-green">${occ}/${cap} beds</span></td>
-      <td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td>
+      <td><span class="badge badge-gray">${occ}/${cap} beds</span></td>
+      <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
       <td>${students.map(s=>`<div style="font-size:12px;color:var(--text);font-weight:600">• ${escHtml(s.name)}</div>`).join('')||'—'}</td>
       <td><button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="closeModal();showRoomDetail('${r.id}')">View</button></td>
     </tr>`;
   }).join('');
   showModal('modal-xl',ICONS.home+' Occupied Rooms',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
-      <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupied Rooms</div>
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${occRooms.length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupied Rooms</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${occRooms.length}</div>
       </div>
-      <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Total Students</div>
-        <div style="font-size:26px;font-weight:900;color:var(--blue)">${DB.students.filter(t=>t.status==='Active').length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Total Students</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${DB.students.filter(t=>t.status==='Active').length}</div>
       </div>
-      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
-        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
       </div>
-      <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;font-weight:700">Monthly Revenue</div>
-        <div style="font-size:18px;font-weight:900;color:var(--purple)">${fmtPKR(occRooms.reduce((s,r)=>{const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return s+sts.reduce((ss,t)=>ss+Number(t.rent),0);},0))}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Monthly Revenue</div>
+        <div style="font-size:18px;font-weight:900;color:var(--text)">${fmtPKR(occRooms.reduce((s,r)=>{const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return s+sts.reduce((ss,t)=>ss+Number(t.rent),0);},0))}</div>
       </div>
-      <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupancy Rate</div>
-        <div style="font-size:26px;font-weight:900;color:var(--teal)">${DB.rooms.length?Math.round(occRooms.length/DB.rooms.length*100):0}%</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupancy Rate</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${DB.rooms.length?Math.round(occRooms.length/DB.rooms.length*100):0}%</div>
       </div>
     </div>
     <div class="table-wrap">
@@ -825,9 +825,9 @@ function showVacantRoomsModal() {
       <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
       <td class="text-muted">${r.floor} Floor</td>
-      <td><span class="badge badge-gold">${occ}/${type.capacity} occupied</span></td>
-      <td><span class="badge badge-green" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>
-      <td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td>
+      <td><span class="badge badge-gray">${occ}/${type.capacity} occupied</span></td>
+      <td><span class="badge badge-gray" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>
+      <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
       <td>${students.length?students.map(s=>`<div style="font-size:12px;color:var(--text2)">• ${escHtml(s.name)}</div>`).join(''):'<span style="font-size:12px;color:var(--text3)">Empty</span>'}</td>
       <td><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Student</button></td>
     </tr>`;
@@ -835,25 +835,25 @@ function showVacantRoomsModal() {
   const totalAvail=vacRooms.reduce((s,r)=>{const type=getRoomType(r);return s+(type.capacity-getRoomOccupancy(r));},0);
   showModal('modal-xl',ICONS.key+' Rooms with Available Seats',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
-      <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700">Rooms w/ Space</div>
-        <div style="font-size:26px;font-weight:900;color:var(--teal)">${vacRooms.length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Rooms w/ Space</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.length}</div>
       </div>
-      <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Free Seats</div>
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${totalAvail}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Free Seats</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${totalAvail}</div>
       </div>
-      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
-        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
       </div>
-      <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Partial Rooms</div>
-        <div style="font-size:26px;font-weight:900;color:var(--blue)">${vacRooms.filter(r=>getRoomOccupancy(r)>0).length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Partial Rooms</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.filter(r=>getRoomOccupancy(r)>0).length}</div>
       </div>
-      <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;font-weight:700">Students in Vacant</div>
-        <div style="font-size:26px;font-weight:900;color:var(--purple)">${vacRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Students in Vacant</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
       </div>
     </div>
     <div class="table-wrap">
