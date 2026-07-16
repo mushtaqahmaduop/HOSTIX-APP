@@ -950,7 +950,7 @@ function downloadExcelTemplate() {
   ws['!cols'] = [20,18,18,14,22,20,10,12,18,12,10,14,24,20].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Student');
-  XLSX.writeFile(wb, 'DAMAM_Students_Template.xlsx');
+  XLSX.writeFile(wb, 'HOSTIX_Students_Template.xlsx');
   toast('Template downloaded — fill it in and re-upload','success');
 }
 
@@ -960,7 +960,7 @@ function downloadCSVTemplate() {
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'DAMAM_Students_Template.csv';
+  a.download = 'HOSTIX_Students_Template.csv';
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   toast('CSV template downloaded','success');

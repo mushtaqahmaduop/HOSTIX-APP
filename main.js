@@ -343,7 +343,7 @@ function openLicenseSettings() {
     width: 720, height: 700,
     parent: mainWindow,
     modal: false,
-    title: 'License Settings — DAMAM Hostel',
+    title: 'License Settings — HOSTIX',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -436,7 +436,7 @@ function createWindow() {
             if (!mainWindow) return;
             const { filePath } = await dialog.showSaveDialog(mainWindow, {
               title: 'Export Backup',
-              defaultPath: `DAMAM_Backup_${new Date().toISOString().slice(0, 10)}.json`,
+              defaultPath: `HOSTIX_Backup_${new Date().toISOString().slice(0, 10)}.json`,
               filters: [{ name: 'JSON Backup', extensions: ['json'] }]
             });
             if (filePath) mainWindow.webContents.send('export-backup', filePath);
@@ -477,12 +477,12 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
-          label: 'About DAMAM Hostel',
+          label: 'About HOSTIX',
           click: () => {
             if (!mainWindow) return;
             dialog.showMessageBox(mainWindow, {
               type: 'info', title: 'About',
-              message: 'DAMAM Boys Hostel Management System',
+              message: 'HOSTIX — Hostel Management System',
               detail: 'Version 3.0 (Security Patched)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
             });
           }
@@ -504,7 +504,7 @@ function createWindow() {
               if (!result || !result.updateInfo) {
                 dialog.showMessageBox(mainWindow, {
                   type: 'info', title: 'Up to Date',
-                  message: '✅ You have the latest version of DAMAM Hostel.'
+                  message: '✅ You have the latest version of HOSTIX.'
                 });
               }
             } catch (e) {
@@ -661,7 +661,7 @@ ipcMain.handle('license:prepareUninstall', async () => {
   await dialog.showMessageBox(mainWindow, {
     type: 'info', title: 'Ready to Uninstall',
     message: '✅ License data cleared',
-    detail: 'You can now safely uninstall the app from\nWindows Settings → Apps & Features.\n\nThank you for using DAMAM Hostel Management!'
+    detail: 'You can now safely uninstall the app from\nWindows Settings → Apps & Features.\n\nThank you for using HOSTIX!'
   });
 
   return { success: true, results };
@@ -835,7 +835,7 @@ function setupAutoUpdater() {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Available',
-      message: `DAMAM Hostel v${info.version} is available`,
+      message: `HOSTIX v${info.version} is available`,
       detail: 'A new version is downloading in the background.\nThe app will update automatically when you close it.',
       buttons: ['OK']
     });
@@ -864,7 +864,7 @@ function setupAutoUpdater() {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Ready',
-      message: `DAMAM Hostel v${info.version} is ready to install`,
+      message: `HOSTIX v${info.version} is ready to install`,
       detail: 'Restart now to apply the update, or it will install automatically when you next close the app.',
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,

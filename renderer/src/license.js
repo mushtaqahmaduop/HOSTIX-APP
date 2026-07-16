@@ -81,7 +81,7 @@ function _showActivationScreen(reason, expiry) {
     + '<div style="width:68px;height:68px;border-radius:17px;background:linear-gradient(135deg,#1e3c6a,#2a5298);'
     + 'display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:30px;">🔐</div>'
     + '<div style="font-size:20px;font-weight:900;color:#e6c96e;margin-bottom:6px;font-family:\'DM Serif Display\',serif;">License Activation</div>'
-    + '<div style="font-size:10px;color:#4d6a90;margin-bottom:20px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">DAMAM Boys Hostel Management</div>'
+    + '<div style="font-size:10px;color:#4d6a90;margin-bottom:20px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">HOSTIX — Hostel Management</div>'
     + '<div style="background:' + (canActivate ? 'rgba(30,60,106,0.4)' : 'rgba(224,82,82,0.15)') + ';'
     + 'border:1px solid ' + (canActivate ? '#1e3c6a' : 'rgba(224,82,82,0.4)') + ';'
     + 'border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;'

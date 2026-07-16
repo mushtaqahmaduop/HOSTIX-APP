@@ -152,7 +152,7 @@ async function showBackupRestoreModal() {
 function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'DAMAM2_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -246,7 +246,7 @@ async function restoreBackup() {
       // BUG FIX: Support both flat format (direct DB) and old wrapped {db:...,archive:...} format
       if (parsed.db && parsed.db.students) parsed = parsed.db;
       if(!parsed.students || !parsed.rooms || !parsed.settings){
-        toast('Invalid backup file — not a DAMAM hostel backup', 'error'); return;
+        toast('Invalid backup file — not a HOSTIX hostel backup', 'error'); return;
       }
       const count = parsed.students.length;
       showConfirm('Restore Backup?',
@@ -282,7 +282,7 @@ async function restoreFromPaste() {
     // BUG FIX: Support both flat format and old wrapped {db:...,archive:...} format
     if (parsed.db && parsed.db.students) parsed = parsed.db;
     if(!parsed.students || !parsed.rooms || !parsed.settings){
-      toast('Invalid JSON — not a valid DAMAM hostel backup', 'error'); return;
+      toast('Invalid JSON — not a valid HOSTIX hostel backup', 'error'); return;
     }
     const count = parsed.students.length;
     showConfirm('Restore from Pasted Data?',
