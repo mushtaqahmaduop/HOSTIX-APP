@@ -29,10 +29,29 @@ const crypto = require('crypto');
 const os = require('os');
 // ── SQLite Database ───────────────────────────────────────────────────────────
 const Database = require('better-sqlite3');
+const migration001 = require('./migrations/001-relational-schema');
 let db = null;
+let _schemaMigrated = false;
+
+// Insert/replace a row, populating the promoted typed columns for the tables that
+// have them (post-migration) and falling back to (id, data) otherwise — so writes
+// work identically before and after the relational-schema migration.
+function _dbInsert(table, id, record) {
+  if (_schemaMigrated && migration001.PROMOTED[table]) {
+    const rec = Object.assign({}, record, { id: (record && record.id != null) ? record.id : id });
+    const row = migration001.promoteRecord(table, rec);
+    const cols = Object.keys(row);
+    return db.prepare(
+      `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(c => '@' + c).join(', ')})`
+    ).run(row);
+  }
+  return db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`)
+    .run(id, JSON.stringify(record));
+}
 
 function initDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'hostix.db');
+  const dbExisted = fs.existsSync(dbPath);
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -72,7 +91,28 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS archive       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
 
-  console.log('[HOSTIX] SQLite DB initialized at:', dbPath);
+  // ── Relational-schema migration (Phase 2 §6.3) ──────────────────────────────
+  // Promotes UI-filtered fields to real indexed columns while keeping the full
+  // record in the `data` blob (lossless). Idempotent + transactional. Existing
+  // client DBs are snapshotted to hostix.db.pre-v1.bak once, before the first
+  // migration, as an extra safety net beyond the transaction rollback.
+  try {
+    if (dbExisted && migration001.currentVersion(db) < migration001.SCHEMA_VERSION) {
+      const bak = dbPath + '.pre-v1.bak';
+      if (!fs.existsSync(bak)) {
+        db.exec(`VACUUM INTO '${bak.replace(/'/g, "''")}'`);
+        console.log('[HOSTIX] Pre-migration backup written:', bak);
+      }
+    }
+    const migRes = migration001.migrateDatabase(db);
+    if (migRes.migrated) console.log('[HOSTIX] Schema migrated to v' + migRes.version);
+  } catch (e) {
+    console.error('[HOSTIX] Schema migration failed (continuing on existing schema):', e.message);
+  }
+  _schemaMigrated = migration001.currentVersion(db) >= migration001.SCHEMA_VERSION;
+
+  console.log('[HOSTIX] SQLite DB initialized at:', dbPath, '| schema v' +
+    migration001.currentVersion(db));
   return db;
 }
 
@@ -921,8 +961,7 @@ ipcMain.handle('db:all', (_e, table, where) => {
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
     if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
-    db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`)
-      .run(id, JSON.stringify(record));
+    _dbInsert(table, id, record);
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 });
@@ -938,10 +977,9 @@ ipcMain.handle('db:delete', (_e, table, id) => {
 ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   try {
     if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
-    const insert = db.prepare(`INSERT OR REPLACE INTO ${table} (id, data) VALUES (?, ?)`);
     const transaction = db.transaction((rows) => {
       db.prepare(`DELETE FROM ${table}`).run();
-      for (const r of rows) insert.run(r.id, JSON.stringify(r));
+      for (const r of rows) _dbInsert(table, r.id, r);
     });
     transaction(records);
     return { ok: true };

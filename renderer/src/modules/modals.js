@@ -198,6 +198,7 @@ function _initDBFields(d) {
   if (!d.billSplits) d.billSplits = [];
   if (!d.transfers) d.transfers = [];
   if (!d.roomShifts) d.roomShifts = [];   // Room shift history records
+  if (!d.archive) d.archive = [];         // Annual Archive — historical records
   if (!d.settings) d.settings = {};
   // Init roomTypes BEFORE generateRooms so rooms get correct default rents
   // roomTypes already initialized above (before generateRooms)

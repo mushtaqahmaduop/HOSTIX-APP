@@ -62,10 +62,13 @@ test.beforeAll(() => {
   if (!PROFILE) throw new Error('HOSTIX_TEST_PROFILE env var is not set');
   if (!fs.existsSync(path.join(PROFILE, 'license.enc')))
     throw new Error('Isolated profile is missing license.enc: ' + PROFILE);
-  // Fresh DB each invocation; keep the copied license.enc + localStorage.
+  // Fresh DB each invocation; keep the copied license.enc.
   for (const f of fs.readdirSync(PROFILE)) {
     if (f.startsWith('hostix.db')) fs.rmSync(path.join(PROFILE, f), { force: true });
   }
+  // Also reset Chromium localStorage so wardens re-seed to the default and any
+  // lockout left by a prior spec (e.g. regression.spec.js) can't fail login here.
+  fs.rmSync(path.join(PROFILE, 'Local Storage'), { recursive: true, force: true });
 });
 
 test('HOSTIX smoke: login → all pages render → add room+student → persist across restart → backup', async () => {

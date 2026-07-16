@@ -1,7 +1,27 @@
 # Phase 1 §5.1 — Electron Upgrade Prep Note
 
-**Status:** DEFERRED to a focused session with GUI access (Mushtaq's call, 2026-07-16).
-Everything below is groundwork so the upgrade is a clean, low-surprise task.
+**Status:** BLOCKED on a build-machine prerequisite (see below), then a focused
+GUI session. Everything below is groundwork so the upgrade is a clean task.
+
+## ⚠️ BLOCKER FOUND (2026-07-17) — build machine needs Node ≥ 22.12
+
+An upgrade attempt to Electron 43 + better-sqlite3 12 failed at the native
+build. Root cause is the **build machine's Node version**, not the code:
+
+- This machine runs **Node 20.19.2**.
+- Electron 43 requires **Node ≥ 22.12** (`EBADENGINE` on install).
+- better-sqlite3 12 ships no prebuilt for Node 20 and falls back to source
+  build via **node-gyp 12, which also requires Node ≥ 22** → the build dies with
+  `AssignProcessToJobObject: (87) The parameter is incorrect`.
+- Not a sandbox issue (failed identically with the sandbox disabled).
+
+**Unblock:** install **Node 22 LTS** on the build machine (nvm-windows:
+`nvm install 22 && nvm use 22`, or the Node 22 MSI), then re-run the procedure
+below. The failed attempt was fully reverted; the app is back on the working
+Electron 22 / better-sqlite3 9.4.3 stack (smoke test green).
+
+Note: the app *ships* fine on Node 20 today — this prerequisite is only for
+*building* the newer Electron/native-module toolchain.
 
 ## Why deferred
 The upgrade needs a native `better-sqlite3` rebuild against the new Electron ABI

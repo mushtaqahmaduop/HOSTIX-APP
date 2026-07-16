@@ -31,7 +31,8 @@ const _TABLE_MAP = {
   activityLog:   'activitylog',
   inspections:   'inspections',
   billSplits:    'billsplits',
-  transfers:     'transfers'
+  transfers:     'transfers',
+  archive:       'archive'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────
@@ -264,7 +265,7 @@ function _checkBackupReminder() {
     const last = DB.settings && DB.settings.lastBackupReminder
       ? new Date(DB.settings.lastBackupReminder)
       : null;
-    const daysSince = last ? (new Date() - last) / 86400000 : 999;
+    const daysSince = last ? (Date.now() - last.getTime()) / 86400000 : 999;
     if (daysSince < 7) return;
     setTimeout(function () {
       if (typeof toast === 'function')
