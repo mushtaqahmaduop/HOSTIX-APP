@@ -1013,13 +1013,16 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   callback({
     responseHeaders: {
       ...details.responseHeaders,
+      // Single source of truth for CSP (the <meta> CSP in index.html was removed).
+      // All libs/fonts are bundled locally, so no remote hosts are allowed.
+      // 'unsafe-inline' stays: the UI relies on inline event handlers throughout.
       'Content-Security-Policy': [
         "default-src 'self';" +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.sheetjs.com;" +
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com;" +
-        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;" +
-        "img-src 'self' data: blob: https:;" +
-        "connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.sheetjs.com;" +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval';" +
+        "style-src 'self' 'unsafe-inline';" +
+        "font-src 'self' data:;" +
+        "img-src 'self' data: blob:;" +
+        "connect-src 'self';" +
         "worker-src 'self' blob:;"
       ]
     }

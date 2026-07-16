@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HOSTYLLO | Hostel Management System</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.sheetjs.com https://cdn.jsdelivr.net https://wa.me whatsapp:; img-src 'self' data: blob:; connect-src 'self';">
+  <title>HOSTIX | Hostel Management System</title>
+  <!-- CSP is enforced via a single header policy in main.js (session.defaultSession). -->
 
-  <!-- Google Fonts (loads when online, system fonts used offline) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" onerror="console.log('Fonts unavailable, using system fonts')">
+  <!-- Self-hosted fonts (bundled — no network required) -->
+  <link rel="stylesheet" href="vendor/fonts.css">
 
-  <!-- SheetJS for Excel/CSV import (loads when online) -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" onerror="console.warn('SheetJS offline — Excel import unavailable')"></script>
+  <!-- SheetJS for Excel/CSV import (bundled locally) -->
+  <script src="vendor/js/xlsx.full.min.js"></script>
 
-  <!-- Chart.js for Revenue Trend -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <!-- Chart.js + datalabels for Revenue Trend (bundled locally) -->
+  <script src="vendor/js/chart.umd.js"></script>
+  <script src="vendor/js/chartjs-plugin-datalabels.min.js"></script>
 
   <!-- App Styles — tokens first, then components, then main -->
   <link rel="stylesheet" href="tokens.css">
