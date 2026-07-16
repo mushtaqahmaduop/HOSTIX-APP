@@ -60,15 +60,15 @@ function renderRooms() {
     return `<div class="room-card ${occ>0?'occupied':'vacant'}" onclick="showRoomDetail('${r.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div class="room-num">#${r.number}</div>
-        <span class="badge ${occ>0?'badge-green':'badge-gold'}">${occ>0?'Occupied':'Vacant'}</span>
+        ${occ>0?'<span class="badge badge-gray">Occupied</span>':'<span class="badge" style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);color:var(--accent-strong)">Vacant</span>'}
       </div>
-      <div class="room-type" style="color:${escHtml(type.color)}">${escHtml(type.name)}</div>
+      <div class="room-type">${escHtml(type.name)}</div>
       <div class="room-meta">
         <div class="room-meta-row"><span class="k">Floor</span><span class="v">${r.floor}</span></div>
         <div class="room-meta-row"><span class="k">Capacity</span><span class="v">${occ}/${cap} beds</span></div>
       </div>
       <div class="room-rent">${fmtPKR(r.rent)}/mo</div>
-      <div class="room-occ-bar"><div class="room-occ-track"><div class="room-occ-fill" style="width:${pct}%;background:${escHtml(type.color)}"></div></div></div>
+      <div class="room-occ-bar"><div class="room-occ-track"><div class="room-occ-fill" style="width:${pct}%;background:var(--accent)"></div></div></div>
       ${activeStudentNames.length?`<div class="room-students">${activeStudentNames.map(n=>`<div class="room-student-name">• ${escHtml(n)}</div>`).join('')}</div>`:''}
       <div style="margin-top:10px;display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();showEditRoomModal('${r.id}')">Edit</button>
@@ -145,13 +145,13 @@ function showRoomDetail(id) {
   const activeStudents = DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
   showModal('modal-md',`Room #${r.number} — ${type.name}`,`
     <div class="form-grid">
-      <div class="card" style="padding:14px"><div class="stat-label">Type</div><div style="font-weight:700;color:${type.color}">${escHtml(type.name)}</div></div>
+      <div class="card" style="padding:14px"><div class="stat-label">Type</div><div style="font-weight:700;color:var(--text)">${escHtml(type.name)}</div></div>
       <div class="card" style="padding:14px"><div class="stat-label">Floor</div><div style="font-weight:700">${r.floor}</div></div>
       <div class="card" style="padding:14px"><div class="stat-label">Capacity</div><div style="font-weight:700">${occ}/${type.capacity} occupied</div></div>
-      <div class="card" style="padding:14px"><div class="stat-label">Monthly Rent</div><div style="font-weight:700;color:var(--green)">${fmtPKR(r.rent)}</div></div>
+      <div class="card" style="padding:14px"><div class="stat-label">Monthly Rent</div><div style="font-weight:700;color:var(--text)">${fmtPKR(r.rent)}</div></div>
     </div>
     <div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Amenities</div><div class="tag-list">${(r.amenities||[]).map(a=>`<div class="tag-item">${escHtml(a)}</div>`).join('')||'<span class="text-muted">None listed</span>'}</div></div>
-    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${t.name[0]}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div><div class="ml-auto text-green fw-700">${fmtPKR(t.rent)}</div></div>`).join('')}</div>`:''}
+    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${t.name[0]}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div><div class="ml-auto fw-700">${fmtPKR(t.rent)}</div></div>`).join('')}</div>`:''}
     ${r.notes?`<div style="margin-top:14px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px"><div class="stat-label" style="margin-bottom:4px">Notes</div><div style="font-size:13px;color:var(--text2)">${escHtml(r.notes)}</div></div>`:''}
   `,`<button class="btn btn-secondary" onclick="closeModal();showEditRoomModal('${r.id}')">Edit Room</button><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
 }
