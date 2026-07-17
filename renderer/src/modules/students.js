@@ -71,19 +71,19 @@ function renderStudents() {
           const room=_roomById.get(t.roomId);
           const av=t.name?t.name[0].toUpperCase():'?';
           return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
-            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--accent-strong);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
-            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:var(--bg3);color:var(--accent);width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--blue)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
-            <td style="padding:8px 6px"><span class="text-gold fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
+            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--text3);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
+            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:var(--bg3);color:var(--text2);width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--text)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
+            <td style="padding:8px 6px"><span class="fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
             <td style="padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}${t.emergencyContact?'<div style="font-size:10px;color:var(--text3);margin-top:2px">🆘 '+escHtml(t.emergencyContact)+'</div>':''}</td>
             <td style="padding:8px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${escHtml(t.cnic||'—')}</td>
             <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.address||'—')}</td>
             <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.occupation||t.course||'—')}</td>
-            <td style="padding:8px 6px" class="text-green fw-700">${fmtPKR(t.rent)}</td>
+            <td style="padding:8px 6px" class="fw-700">${fmtPKR(t.rent)}</td>
             <td style="padding:8px 6px">${statusBadge(t.status||'Active')}</td>
             <td class="col-actions" style="padding:8px 4px">
               <div style="display:flex;gap:3px;flex-wrap:nowrap;white-space:nowrap">
                 <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:11px">👁</button>
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="color:var(--blue);padding:4px 7px;font-size:11px">🔀</button>
+                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="padding:4px 7px;font-size:11px">🔀</button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete" style="padding:4px 7px;font-size:11px">🗑</button>
               </div>
             </td>
