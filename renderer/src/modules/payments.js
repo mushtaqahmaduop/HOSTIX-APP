@@ -55,7 +55,7 @@ function renderPayments() {
       ${payFilter.showAll ? '📅 All Months' : '📅 '+moLabel}
     </button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-      <span class="text-muted" style="font-size:12px">${pays.length} records · <span class="text-green fw-700">${fmtPKR(total)}</span></span>
+      <span class="text-muted" style="font-size:12px">${pays.length} records · <span class="fw-700">${fmtPKR(total)}</span></span>
       <button class="btn btn-secondary btn-sm" onclick="exportPaymentsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
       <button class="btn btn-secondary btn-sm" onclick="generateMonthlyRents()">⚡ Auto-Generate Month</button>
       <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:var(--green);color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
@@ -69,15 +69,15 @@ function renderPayments() {
         _pg.slice.map(p=>{
           const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
           return '<tr style="cursor:pointer" onclick="showEditPaymentModal(\''+p.id+'\')" title="Click row to edit this payment">'
-          +'<td class="fw-700" style="white-space:nowrap;padding:8px 8px"><span style="color:var(--blue)">'+escHtml(p.studentName||'')+'</span></td>'
-          +'<td style="white-space:nowrap;padding:8px 8px"><span class="text-gold fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
+          +'<td class="fw-700" style="white-space:nowrap;padding:8px 8px"><span style="color:var(--text)">'+escHtml(p.studentName||'')+'</span></td>'
+          +'<td style="white-space:nowrap;padding:8px 8px"><span class="fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
           +'<td class="text-muted" style="white-space:nowrap;padding:8px 8px">'+escHtml(p.month||'')+'</td>'
           +'<td class="text-muted fw-700" style="font-size:12px;padding:8px 8px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--blue)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--amber)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--teal)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td class="text-green fw-700" style="padding:8px 8px">'+fmtPKR(p.amount)+'</td>'
-          +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--green)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--text2)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--text2)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--text2)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
+          +'<td class="fw-700" style="padding:8px 8px">'+fmtPKR(p.amount)+'</td>'
+          +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--text)':'var(--text3)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
           +'<td style="padding:8px 8px">'+pmBadge(p.method)+'</td>'
           +'<td style="padding:8px 8px">'+statusBadge(p.status)+'</td>'
           +'<td class="col-actions" style="padding:6px 4px;white-space:nowrap"><div style="display:flex;gap:2px;align-items:center;flex-wrap:nowrap">'
