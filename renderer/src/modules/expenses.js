@@ -34,7 +34,7 @@ function renderExpenses() {
     <button class="btn btn-sm ${expFilter.showAll?'btn-primary':'btn-secondary'}" style="white-space:nowrap;font-size:11px" onclick="expFilter.showAll=!expFilter.showAll;renderPage('expenses')" title="${expFilter.showAll?'Showing all months — click to filter by '+moLabel:'Showing '+moLabel+' only — click to show all'}">
       ${expFilter.showAll ? '📅 All Months' : '📅 '+moLabel}
     </button>
-    <span class="text-muted" style="font-size:12px;margin-left:auto">${exps.length} records · <span class="text-red fw-700">${fmtPKR(total)}</span></span>
+    <span class="text-muted" style="font-size:12px;margin-left:auto">${exps.length} records · <span class="fw-700">${fmtPKR(total)}</span></span>
   </div>
   <div class="table-wrap">
     <table style="border-collapse:collapse;width:100%">
@@ -43,9 +43,9 @@ function renderExpenses() {
         ${exps.length===0?`<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">No expenses found</td></tr>`:
         exps.map(e=>`<tr>
           <td class="text-muted" style="font-size:12px;padding:8px 10px">${fmtDate(e.date)}</td>
-          <td style="padding:8px 10px"><span class="badge badge-amber">${escHtml(e.category)}</span></td>
+          <td style="padding:8px 10px"><span class="badge badge-gray">${escHtml(e.category)}</span></td>
           <td style="padding:8px 10px">${escHtml(e.description||'—')}</td>
-          <td class="text-red fw-700" style="padding:8px 10px">${fmtPKR(e.amount)}</td>
+          <td class="fw-700" style="padding:8px 10px">${fmtPKR(e.amount)}</td>
           <td style="padding:8px 8px">
             <div style="display:flex;gap:4px">
               <button class="btn btn-secondary btn-icon btn-sm" onclick="showEditExpenseModal('${e.id}')">✏️</button>
