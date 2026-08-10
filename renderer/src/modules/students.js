@@ -1138,7 +1138,13 @@ async function submitRoomShift(studentId) {
 // ════════════════════════════════════════════════════════════════════════════
 // PAYMENTS
 // ════════════════════════════════════════════════════════════════════════════
-let payFilter = {status:'All', method:'All', search:'', showAll: false, page:1, sortKey:null, sortDir:'asc'};
+// Payments v5 adds room / month selects, a page-size picker, an "unpaid only"
+// toggle and a row-selection set. `status` now also accepts 'Partial' and
+// 'Overdue', which are derived states — see payStatusOf() / payIsOverdue().
+let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
+                 showAll:false, unpaidOnly:false, pageSize:10,
+                 page:1, sortKey:null, sortDir:'asc'};
+let paySelected = new Set();
 
 // ── FORMER STUDENTS — search & restore ───────────────────────────────────────
 function showFormerStudentsModal() {

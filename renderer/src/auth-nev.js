@@ -458,6 +458,10 @@ function updateRoleBadge() {
     : (typeof icon === 'function' ? icon('warden', 'sm') : '');
   b.innerHTML  = `${photo}&nbsp;${safe(CUR_USER?.name || '')}`;
   b.style.cssText = 'display:flex;align-items:center;gap:6px;';
+  // Chrome v5: the warden's identity now lives in the header user chip and the
+  // sidebar user card. #role-badge is kept (and kept hidden by chrome.css) so
+  // the existing showUserMgmt() entry point is undisturbed.
+  if (typeof refreshChromeUser === 'function') refreshChromeUser();
 }
  
 // ─────────────────────────────────────────────────────────────────────────────

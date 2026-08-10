@@ -2,42 +2,14 @@
    HOSTIX — DASHBOARD v5
    Owner reference design (docs/design/dashboard1.png).
 
-   Loaded AFTER style.css and scoped entirely to `dash-*` / `dh-*` class names.
+   Loaded AFTER ui-kit.css and scoped entirely to `dash-*` class names.
    Nothing here overrides an existing selector, so no other screen can be
    affected by edits in this file (CLAUDE.md rule 7 — no structural CSS edits
    to shared rules).
 
-   COLOUR MODEL
-   Every dashboard block picks a hue by adding a `dh-*` class. That class sets
-   three locals which every child component reads:
-       --dh     ink / icon / value colour
-       --dh-bg  tint used for chips, pills, avatars, banners
-       --dh-2   gradient partner for progress fills
-   Both themes are declared here, so dark and light stay in lockstep and a new
-   hue only has to be added in two places.
+   The `dh-*` hue palette this file consumes (--dh / --dh-bg / --dh-2) lives in
+   ui-kit.css, because payments.css uses the same language.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Hue palette · dark (default :root theme) ────────────────────────────── */
-.dh-blue   { --dh:#60a5fa; --dh-2:#3b82f6; --dh-bg:rgba(96,165,250,.16);  }
-.dh-green  { --dh:#34d399; --dh-2:#10b981; --dh-bg:rgba(52,211,153,.16);  }
-.dh-red    { --dh:#f87171; --dh-2:#ef4444; --dh-bg:rgba(248,113,113,.16); }
-.dh-violet { --dh:#a78bfa; --dh-2:#8b5cf6; --dh-bg:rgba(167,139,250,.16); }
-.dh-amber  { --dh:#fbbf24; --dh-2:#f59e0b; --dh-bg:rgba(251,191,36,.16);  }
-.dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:rgba(255,255,255,.09); }
-
-/* ── Hue palette · light ─────────────────────────────────────────────────── */
-body.light-theme .dh-blue   { --dh:#2563eb; --dh-2:#3b82f6; --dh-bg:#dbeafe; }
-body.light-theme .dh-green  { --dh:#16a34a; --dh-2:#22c55e; --dh-bg:#dcfce7; }
-body.light-theme .dh-red    { --dh:#dc2626; --dh-2:#ef4444; --dh-bg:#fee2e2; }
-body.light-theme .dh-violet { --dh:#7c3aed; --dh-2:#8b5cf6; --dh-bg:#ede9fe; }
-body.light-theme .dh-amber  { --dh:#ea580c; --dh-2:#f97316; --dh-bg:#ffedd5; }
-body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#eef0f3; }
-
-/* Sunken surfaces used INSIDE cards. The dark values sit far enough off
-   --card (#161616) to stay visible, and every one carries a border as a
-   second cue (CLAUDE.md rule 6 — dark surfaces need real separation). */
-:root            { --dash-sunk:rgba(255,255,255,.055); --dash-track:rgba(255,255,255,.10); }
-body.light-theme { --dash-sunk:#f6f7f9;                --dash-track:#e9ecf1;              }
 
 /* ── Card shell ──────────────────────────────────────────────────────────── */
 .dash-card {
@@ -174,5 +146,63 @@ body.light-theme { --dash-sunk:#f6f7f9;                --dash-track:#e9ecf1;    
 .dash-banner__go   { margin-left:auto; flex-shrink:0; font-size:12px; font-weight:700; color:var(--dh); white-space:nowrap; }
 
 /* ── Two-column section rows ─────────────────────────────────────────────── */
-.dash-split { display:grid; grid-template-columns:1.25fr 1fr; gap:12px; margin-bottom:12px; align-items:start; }
+.dash-split { display:grid; grid-template-columns:1.25fr 1fr; gap:10px; margin-bottom:10px; align-items:start; }
 @media (max-width:1180px) { .dash-split { grid-template-columns:1fr; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DENSITY PASS — "zoom out a little" (owner request)
+   Everything above is authored at the reference design's size; this block
+   scales the whole screen down ~12% so more fits above the fold. Kept as one
+   trailing block rather than edited inline, so the density can be dialled up
+   or down (or dropped entirely) without touching the component rules.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dash-card              { padding:13px 15px; border-radius:14px; }
+.dash-sec               { padding:12px 14px; border-radius:14px; }
+.dash-kpi-grid          { grid-template-columns:repeat(auto-fit,minmax(196px,1fr)); gap:10px; margin-bottom:10px; }
+.dash-tile-grid         { grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:10px; margin-bottom:10px; }
+
+.dash-kpi__top          { gap:9px;  margin-bottom:10px; }
+.dash-kpi__label        { font-size:10.5px; letter-spacing:.8px; }
+.dash-kpi__value        { margin-bottom:7px; }
+/* The KPI number is the single biggest thing on the screen — trimming it is
+   what actually buys the vertical room. */
+.dash-kpi__value .money-value--display { font-size:clamp(25px, 1.95vw, 29px); }
+.dash-kpi__sub          { font-size:10.5px; line-height:1.5; }
+
+.dash-chip              { width:34px; height:34px; border-radius:10px; }
+.dash-chip .icon        { width:17px; height:17px; }
+.dash-chip--lg          { width:39px; height:39px; border-radius:11px; }
+.dash-chip--lg .icon    { width:19px; height:19px; }
+
+.dash-tile__head        { gap:10px; margin-bottom:9px; }
+.dash-tile__num         { font-size:26px; }
+
+.dash-spark             { height:30px; }
+.dash-spark-empty       { height:30px; }
+.dash-track             { height:5px; margin-bottom:6px; }
+
+.dash-sec__head         { margin-bottom:10px; gap:8px; }
+.dash-sec__title        { font-size:13px; }
+
+.dash-mini              { padding:6px 10px; border-radius:9px; }
+.dash-mini__v           { font-size:13px; }
+
+.dash-seat-sum          { gap:7px; margin-bottom:9px; }
+.dash-seat-sum > div    { padding:8px 6px; border-radius:10px; }
+.dash-seat-sum .n       { font-size:21px; }
+
+.dash-room              { min-width:41px; padding:5px 7px; border-radius:8px; }
+.dash-room-wrap         { max-height:96px; }
+
+.dash-rt                { padding:7px 0; gap:10px; }
+.dash-rt__name          { font-size:12px; }
+.dash-rt__bar           { width:84px; height:5px; }
+
+.dash-pay               { padding:8px 0; gap:10px; }
+.dash-av                { width:31px; height:31px; font-size:11px; }
+.dash-pay__name         { font-size:12.5px; }
+
+/* Chart wells shrink with everything else, otherwise the cards around them
+   get denser while the charts keep their old footprint. */
+#trend-chart-wrap       { height:150px !important; }
+#dash-roomtype-donut    { width:118px !important; height:118px !important; }

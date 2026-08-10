@@ -20,8 +20,12 @@
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="components.css">
   <link rel="stylesheet" href="style.css">
-  <!-- Dashboard v5 — namespaced (dash-*/dh-*), must load after style.css -->
+  <!-- v5 screens — ui-kit supplies the dh-* hue palette both sheets consume -->
+  <link rel="stylesheet" href="ui-kit.css">
   <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="payments.css">
+  <!-- App chrome v5 (sidebar + header) — loads last so it wins on ties -->
+  <link rel="stylesheet" href="chrome.css">
 </head>
 <body>
 
@@ -170,9 +174,8 @@
       <div class="sb-logo-icon" id="sb-logo-icon" onclick="document.getElementById('logo-upload').click()" title="Click to upload logo" style="cursor:pointer">
         <img id="sb-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:11px;position:absolute;top:0;left:0">
         <span id="sb-logo-emoji" style="display:none"></span>
-        <svg id="sb-logo-svg" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
-          <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(124,58,237,0.12)" stroke="rgba(124,58,237,0.45)" stroke-width="1"/>
-          <text x="14" y="18" text-anchor="middle" fill="rgba(124,58,237,0.8)" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
+        <svg id="sb-logo-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
+          <text x="12" y="17" text-anchor="middle" fill="#ffffff" font-family="Outfit, sans-serif" font-size="15" font-weight="800" letter-spacing="0.5">H</text>
         </svg>
       </div>
       <input type="file" id="logo-upload" accept="image/*" style="display:none" onchange="uploadLogo(this)">
@@ -301,6 +304,16 @@
       <span class="nav-label">Help &amp; Support</span>
     </div>
   </div>
+
+  <!-- USER CARD — mirrors the header user chip; opens the same menu -->
+  <div class="sb-user" id="sb-user" onclick="toggleUserMenu(event)" title="Account">
+    <div class="sb-user__av" id="sb-user-av">MA</div>
+    <div class="sb-user__id">
+      <div class="sb-user__name" id="sb-user-name">Warden</div>
+      <div class="sb-user__role" id="sb-user-role">Admin</div>
+    </div>
+    <svg class="sb-user__caret" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+  </div>
 </aside>
 
 <!-- MAIN -->
@@ -315,32 +328,27 @@
       <button id="hdr-back-btn" onclick="pageHistory.length > 1 ? goBack() : navigate('dashboard')" style="display:none;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:var(--transition);align-items:center;gap:6px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='var(--bg3)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg> Back
       </button>
-      <div>
+      <div class="hdr-title-wrap">
         <div class="page-title" id="hdr-title">Dashboard</div>
         <div class="page-sub" id="hdr-sub" style="display:none"></div>
       </div>
     </div>
     <!-- Global search in header -->
-    <div style="flex:1;max-width:420px;position:relative;margin:0 16px" id="hdr-search-wrap">
-      <div style="display:flex;align-items:center;background:rgba(255,255,255,0.05);border:1px solid var(--border2);border-radius:10px;overflow:visible;transition:border-color 0.2s"
-        onfocusin="this.style.borderColor='rgba(124,58,237,0.55)';this.style.background='rgba(255,255,255,0.07)'"
-        onfocusout="this.style.borderColor='var(--border2)';this.style.background='rgba(255,255,255,0.05)'">
-        <div style="padding:0 10px;color:var(--text3);display:flex;align-items:center;flex-shrink:0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-        </div>
+    <div id="hdr-search-wrap">
+      <div class="hdr-search">
+        <span class="hdr-search__ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
+        </span>
         <input id="dash-global-search" type="text"
-          placeholder="Search students, rooms, locations…"
+          placeholder="Search students, rooms, payments…"
           autocomplete="off"
-          style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:12px;font-family:var(--font);padding:8px 0;min-width:0"
           oninput="dashGlobalSearch(this.value)"
           onkeydown="if(event.key==='Escape'){this.value='';dashGlobalSearchClear();}">
         <button id="dash-search-clear"
           onclick="document.getElementById('dash-global-search').value='';dashGlobalSearchClear()"
-          style="display:none;background:rgba(255,255,255,0.08);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;margin-right:4px;height:26px;align-items:center;justify-content:center"
-          onmouseover="this.style.background='rgba(255,255,255,0.15)';this.style.color='var(--text)'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='var(--text2)'"
+          style="display:none;background:var(--bg3);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;height:24px;align-items:center;justify-content:center"
           title="Clear search (Esc)"><span class="micon" style="font-size:16px">close</span></button>
-        <kbd onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)"
-          style="cursor:pointer;flex-shrink:0;margin-right:6px;font-size:10px;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:5px;padding:2px 6px;font-family:var(--font-mono,monospace)">Ctrl K</kbd>
+        <kbd class="hdr-kbd" onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)">Ctrl K</kbd>
       </div>
       <!-- Search results dropdown — anchored to hdr-search-wrap -->
       <div id="dash-search-results" style="display:none;position:fixed;top:56px;width:min(460px,calc(100vw - 32px));background:var(--bg2);border:1px solid var(--border2);border-radius:12px;z-index:9999;max-height:420px;overflow-y:auto;box-shadow:0 16px 50px rgba(0,0,0,0.7)"></div>
@@ -375,21 +383,59 @@
     </div>
 
     <div class="hdr-right">
-      <div id="role-badge" onclick="showUserMgmt()" style="display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.25);font-size:11px;font-weight:700;color:#a78bfa;cursor:pointer;" title="Manage users"></div>
-      <button onclick="showFormerStudentsModal()" style="background:var(--bg3);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Search former students & restore">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-        Former Students
+      <div id="role-badge" onclick="showUserMgmt()" style="display:none"></div>
+
+      <!-- Notifications — count and contents come from real DB state -->
+      <div style="position:relative">
+        <button class="hdr-btn" id="hdr-bell" onclick="toggleNotifMenu(event)" title="Notifications" aria-label="Notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
+          <span class="hdr-btn__count" id="hdr-bell-count" style="display:none">0</span>
+        </button>
+        <div class="hdr-menu" id="notif-menu" style="display:none"></div>
+      </div>
+
+      <button class="hdr-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Mode" aria-label="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
       </button>
-      <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Toggle Light/Dark Mode">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
-      </button>
-      <button onclick="logout()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5" /> <path d="M21 12H9" /> <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg> Logout</button>
+
+      <!-- User chip — Former Students, Settings and Logout live in its menu -->
+      <div style="position:relative">
+        <div class="hdr-user" id="hdr-user" onclick="toggleUserMenu(event)" title="Account">
+          <div class="hdr-user__av" id="hdr-user-av">MA</div>
+          <span class="hdr-user__name" id="hdr-user-name">Warden</span>
+          <svg class="hdr-user__caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div class="hdr-menu" id="user-menu" style="display:none">
+          <div class="hdr-menu__head">
+            <b id="user-menu-name">Warden</b>
+            <span id="user-menu-role">Admin</span>
+          </div>
+          <button class="hdr-menu__item" onclick="closeHdrMenus();showFormerStudentsModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+            Former Students
+          </button>
+          <button class="hdr-menu__item" onclick="closeHdrMenus();showUserMgmt()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+            Manage Users
+          </button>
+          <button class="hdr-menu__item" onclick="closeHdrMenus();navigate('settings')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/></svg>
+            Settings
+          </button>
+          <div class="hdr-menu__sep"></div>
+          <button class="hdr-menu__item hdr-menu__item--danger" onclick="closeHdrMenus();logout()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>
+            Logout
+          </button>
+        </div>
+      </div>
+
       <button class="btn btn-success btn-sm" id="hdr-action2" style="display:none" onclick="headerAction2()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
         <span id="hdr-action2-text">Add Payment</span>
       </button>
       <button class="btn btn-primary btn-sm" id="hdr-action" style="display:none" onclick="headerAction()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
         <span id="hdr-action-text">Add</span>
       </button>
     </div>

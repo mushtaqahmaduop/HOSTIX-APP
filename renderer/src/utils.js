@@ -239,13 +239,16 @@ const PAGE_SIZE = 50;
 // state object (must have a numeric `.page`). Returns { slice, page, pages, total, from, to }.
 function paginate(arr, filter) {
   const total = arr.length;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // A filter may carry its own page size (the payments screen lets the user
+  // pick one). Everything else keeps the module-wide PAGE_SIZE default.
+  const size = (filter && Number(filter.pageSize)) || PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(total / size));
   let page = filter && filter.page ? filter.page : 1;
   if (page > pages) page = pages;
   if (page < 1) page = 1;
   if (filter) filter.page = page; // clamp back so the controls stay in sync
-  const start = (page - 1) * PAGE_SIZE;
-  const end = Math.min(start + PAGE_SIZE, total);
+  const start = (page - 1) * size;
+  const end = Math.min(start + size, total);
   return { slice: arr.slice(start, end), page, pages, total, from: total ? start + 1 : 0, to: end };
 }
 

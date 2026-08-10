@@ -7,116 +7,493 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
-function renderPayments() {
+/* ══════════════════════════════════════════════════════════════════════════
+   PAYMENTS v5 — derived state helpers
+   The stored `status` field only ever holds 'Paid' or 'Pending'. The reference
+   design distinguishes three more states that the data already supports, so
+   they are DERIVED here rather than written back to the record.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+// A pending payment is overdue once its own dueDate is in the past.
+function payIsOverdue(p) {
+  if (!p || p.status === 'Paid') return false;
+  const d = p.dueDate || '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(d)) return false;
+  return d.slice(0,10) < today();
+}
+
+// 'Paid' | 'Partial' (something was collected, a balance remains) | 'Pending'.
+function payStatusOf(p) {
+  if (!p) return 'Pending';
+  if (p.status === 'Paid') return 'Paid';
+  return Number(p.amount || 0) > 0 ? 'Partial' : 'Pending';
+}
+
+function payStatusHue(s) {
+  return s === 'Paid' ? 'dh-green' : s === 'Partial' ? 'dh-amber' : 'dh-slate';
+}
+
+// Stable avatar hue from the name, so a student keeps the same colour between
+// renders (an index-based rotation would reshuffle on every sort or filter).
+function payAvatarHue(name) {
+  const hues = ['dh-violet','dh-blue','dh-green','dh-amber','dh-red'];
+  let h = 0; const s = String(name || '?');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return hues[h % hues.length];
+}
+
+// Mask all but the first five and last digit of a CNIC — the list is visible
+// on a shared warden screen and the full number is never needed at a glance.
+function payMaskCnic(c) {
+  const d = String(c || '').replace(/\D/g, '');
+  if (d.length < 7) return c ? escHtml(String(c)) : '';
+  return escHtml(d.slice(0,5)) + '-' + '*'.repeat(Math.max(1, d.length - 6)) + '-' + escHtml(d.slice(-1));
+}
+
+// Every month present in the data, newest first — the month select is built
+// from real records, so it can never offer a month with nothing behind it.
+function payMonthOptions() {
+  const seen = new Map();
+  DB.payments.forEach(p => { if (p.month) seen.set(String(p.month), true); });
+  return [...seen.keys()].sort((a,b) => {
+    const da = new Date(a + ' 1'), db2 = new Date(b + ' 1');
+    if (!isNaN(da) && !isNaN(db2)) return db2 - da;
+    return String(b).localeCompare(String(a));
+  });
+}
+
+// Single source of truth for the filtered+sorted list. Used by the table, the
+// CSV export and the stat strip so the three can never disagree.
+function payFiltered() {
   const mo = thisMonth();
-  const moLabel = thisMonthLabel();
+  let pays = DB.payments.filter(p => {
+    // Month: an explicit pick wins; otherwise fall back to the this-month /
+    // all-months scope toggle in the Filters popover.
+    if (payFilter.month !== 'All') { if (String(p.month || '') !== payFilter.month) return false; }
+    else if (!payFilter.showAll)   { if (!_payMatchesMonth(p, mo)) return false; }
 
-  let pays=DB.payments.filter(p=>{
-    // Month filter — only show records for the selected calendar month unless showAll
-    if(!payFilter.showAll) {
-      if(!_payMatchesMonth(p, mo)) return false;
+    if (payFilter.room !== 'All' && String(p.roomNumber || '') !== payFilter.room) return false;
+    if (payFilter.method !== 'All' && p.method !== payFilter.method) return false;
+    if (payFilter.unpaidOnly && !(Number(p.unpaid || 0) > 0)) return false;
+
+    if (payFilter.status !== 'All') {
+      if (payFilter.status === 'Overdue') { if (!payIsOverdue(p)) return false; }
+      else if (payStatusOf(p) !== payFilter.status) return false;
     }
-    if(payFilter.status!=='All' && p.status!==payFilter.status) return false;
-    if(payFilter.method!=='All' && p.method!==payFilter.method) return false;
-    if(payFilter.search){const _ps=payFilter.search.toLowerCase();const _st4p=DB.students.find(s=>s.id===p.studentId);if(![p.studentName,String(p.roomNumber),p.month,p.method,p.status,_st4p?.fatherName,_st4p?.cnic,_st4p?.phone,_st4p?.email].some(f=>f&&String(f).toLowerCase().includes(_ps))) return false;}
+    if (payFilter.search) {
+      const q = payFilter.search.toLowerCase();
+      const st = DB.students.find(s => s.id === p.studentId);
+      const hay = [p.studentName, String(p.roomNumber), p.month, p.method, p.status,
+                   st?.fatherName, st?.cnic, st?.phone, st?.email];
+      if (!hay.some(f => f && String(f).toLowerCase().includes(q))) return false;
+    }
     return true;
-  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  }).sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  pays = applySort(pays, payFilter, {
+  return applySort(pays, payFilter, {
     student: p => p.studentName,
-    room:    p => p.roomNumber,
+    room:    p => Number(p.roomNumber) || 0,
+    month:   p => new Date((p.month || '') + ' 1').getTime() || 0,
     rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
     paid:    p => Number(p.amount || 0),
     unpaid:  p => Number(p.unpaid || 0),
     method:  p => p.method,
-    status:  p => p.status
+    status:  p => payStatusOf(p)
   });
+}
+
+function renderPayments() {
+  const mo = thisMonth();
+  const moLabel = thisMonthLabel();
+
+  let pays = payFiltered();
+
   const _pg = paginate(pays, payFilter);
 
-  const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${m}" ${payFilter.method===m?'selected':''}>${m}</option>`).join('');
+  const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${m}" ${payFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
   const total=pays.reduce((s,p)=>s+Number(p.amount),0);
-  const paidAmt=DB.payments.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  const unpaidAmt=DB.payments.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+
+  // ── Stat strip figures — all computed from the CURRENT filtered list, so the
+  //    cards always describe exactly what the table below is showing.
+  const nPaid    = pays.filter(p=>payStatusOf(p)==='Paid').length;
+  const nPending = pays.filter(p=>payStatusOf(p)!=='Paid').length;
+  const nOverdue = pays.filter(p=>payIsOverdue(p)).length;
+  const outstanding = pays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):0),0);
+  const share = n => pays.length ? Math.round(n/pays.length*100) : 0;
+
+  // Month-over-month change in collections. Real months only — renders nothing
+  // when there is no previous month to compare against.
+  const _mDelta = (()=>{
+    const d = new Date(); const cur = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const pd = new Date(d.getFullYear(), d.getMonth()-1, 1);
+    const prev = pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+    const sum = k => DB.payments.filter(p=>_payMatchesMonth(p,k)).reduce((s,p)=>s+Number(p.amount||0),0);
+    const a = sum(prev); if(!a) return null;
+    return ((sum(cur)-a)/a)*100;
+  })();
+
+  const upArrow   = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>';
+  const downArrow = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7 17 17"/><path d="M17 9v8H9"/></svg>';
+
+  const roomNums = [...new Set(DB.payments.map(p=>String(p.roomNumber||'')).filter(Boolean))]
+                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const monthOpts = payMonthOptions();
+  const activeFilters = [payFilter.showAll, payFilter.unpaidOnly].filter(Boolean).length;
+
+  const th = (key,label,extra) => {
+    const on = payFilter.sortKey===key;
+    const arw = on ? (payFilter.sortDir==='asc'?'▲':'▼') : '⇅';
+    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(payFilter,'payments','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+  };
 
   return `
-  <div class="filter-bar">
-    <div class="search-wrap">
-      <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-      <input class="form-control" id="search-payments" placeholder="Student name, room…" value="${escHtml(payFilter.search)}" oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments();toggleClearBtn('search-payments','clear-payments')">
-      <button class="search-clear ${payFilter.search?'visible':''}" id="clear-payments" onclick="payFilter.search='';payFilter.page=1;document.getElementById('search-payments').value='';this.classList.remove('visible');renderPage('payments')" title="Clear">✕</button>
+  <!-- ══ STAT STRIP ══ -->
+  <div class="pay-stats">
+    <div class="pay-stat dh-green">
+      <div class="pay-stat__top">
+        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></div>
+        <div class="pay-stat__label">Total Collected</div>
+      </div>
+      <div class="pay-stat__val"><span class="cur">PKR</span>${fmtNum(total)}</div>
+      <div class="pay-stat__foot">
+        <span class="pay-stat__sub">${payFilter.month!=='All'?escHtml(payFilter.month):(payFilter.showAll?'All months':escHtml(moLabel))}</span>
+        ${_mDelta!==null?`<span class="pay-stat__delta ${_mDelta>=0?'dh-green':'dh-red'}">${_mDelta>=0?upArrow:downArrow}${Math.abs(_mDelta).toFixed(1)}%</span>`:''}
+      </div>
     </div>
-    <div class="filter-tabs">
-      ${['All','Paid','Pending'].map(s=>`<button class="ftab ${payFilter.status===s?'active':''}" onclick="payFilter.status='${s}';payFilter.page=1;renderPage('payments')">${s}</button>`).join('')}
+
+    <div class="pay-stat pay-stat--click dh-green" onclick="paySetStatus('Paid')" title="Show only paid records">
+      <div class="pay-stat__top">
+        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <div class="pay-stat__label">Paid</div>
+      </div>
+      <div class="pay-stat__val">${nPaid}</div>
+      <div class="pay-stat__foot">
+        <span class="pay-stat__sub">Records</span>
+        <span class="pay-stat__delta">${share(nPaid)}%</span>
+      </div>
     </div>
-    <select class="form-control" style="width:160px" onchange="payFilter.method=this.value;payFilter.page=1;renderPage('payments')">
-      <option value="All">All Methods</option>${pmOpts}
-    </select>
-    <button class="btn btn-sm ${payFilter.showAll?'btn-primary':'btn-secondary'}" style="white-space:nowrap;font-size:11px" onclick="payFilter.showAll=!payFilter.showAll;payFilter.page=1;renderPage('payments')" title="${payFilter.showAll?'Showing all months — click to filter by '+moLabel:'Showing '+moLabel+' only — click to show all'}">
-      ${payFilter.showAll ? '📅 All Months' : '📅 '+moLabel}
-    </button>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-      <span class="text-muted" style="font-size:12px">${pays.length} records · <span class="fw-700">${fmtPKR(total)}</span></span>
-      <button class="btn btn-secondary btn-sm" onclick="exportPaymentsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
-      <button class="btn btn-secondary btn-sm" onclick="generateMonthlyRents()">⚡ Auto-Generate Month</button>
-      <button class="btn btn-sm" onclick="showRentReminderModal()" style="background:var(--green);color:#fff;border:none" title="Send WhatsApp reminders to all with pending rent">&#x1F4F1; WhatsApp Reminders</button>
+
+    <div class="pay-stat pay-stat--click dh-amber" onclick="paySetStatus('Pending')" title="Show only unsettled records">
+      <div class="pay-stat__top">
+        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="pay-stat__label">Pending</div>
+      </div>
+      <div class="pay-stat__val">${nPending}</div>
+      <div class="pay-stat__foot">
+        <span class="pay-stat__sub">Records</span>
+        <span class="pay-stat__delta">${share(nPending)}%</span>
+      </div>
+    </div>
+
+    <div class="pay-stat pay-stat--click dh-red" onclick="paySetStatus('Overdue')" title="Show only records past their due date">
+      <div class="pay-stat__top">
+        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+        <div class="pay-stat__label">Overdue</div>
+      </div>
+      <div class="pay-stat__val">${nOverdue}</div>
+      <div class="pay-stat__foot">
+        <span class="pay-stat__sub">Past due date</span>
+        <span class="pay-stat__delta">${share(nOverdue)}%</span>
+      </div>
+    </div>
+
+    <div class="pay-stat dh-violet">
+      <div class="pay-stat__top">
+        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/></svg></div>
+        <div class="pay-stat__label">Unpaid Amount</div>
+      </div>
+      <div class="pay-stat__val"><span class="cur">PKR</span>${fmtNum(outstanding)}</div>
+      <div class="pay-stat__foot"><span class="pay-stat__sub">Total outstanding</span></div>
     </div>
   </div>
-  <div class="table-wrap">
-    <table style="border-collapse:collapse;width:100%">
-      <thead><tr>${sortableTh(payFilter,'payFilter','payments','student','Student','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','room','Room','style="padding:8px 8px"')}<th style="padding:8px 8px">Month</th>${sortableTh(payFilter,'payFilter','payments','rent','Rent/Mo','style="padding:8px 8px"')}<th style="padding:8px 6px;min-width:70px">Adm.Fee</th><th style="padding:8px 6px;min-width:90px">Extra Chrgs</th><th style="padding:8px 6px;min-width:80px">Concession</th>${sortableTh(payFilter,'payFilter','payments','paid','Amt Paid','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','unpaid','Unpaid','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','method','Method','style="padding:8px 8px"')}${sortableTh(payFilter,'payFilter','payments','status','Status','style="padding:8px 8px"')}<th class="col-actions" style="padding:8px 8px;min-width:130px">Actions</th></tr></thead>
-      <tbody>
-        ${pays.length===0?'<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:30px;border:none">No payment records found</td></tr>':
+
+  <!-- ══ TOOLBAR ══ -->
+  <div class="pay-panel">
+    <div class="pay-tools">
+      <div class="pay-search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        <input id="search-payments" placeholder="Search student name, room…" value="${escHtml(payFilter.search)}"
+          oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments()">
+      </div>
+
+      <select class="pay-select${payFilter.room!=='All'?' is-set':''}" onchange="payFilter.room=this.value;payFilter.page=1;renderPage('payments')" title="Filter by room">
+        <option value="All">All Rooms</option>
+        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${payFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
+      </select>
+
+      <select class="pay-select${payFilter.month!=='All'?' is-set':''}" onchange="payFilter.month=this.value;payFilter.page=1;renderPage('payments')" title="Filter by month">
+        <option value="All">All Months</option>
+        ${monthOpts.map(m=>`<option value="${escHtml(m)}" ${payFilter.month===m?'selected':''}>${escHtml(m)}</option>`).join('')}
+      </select>
+
+      <select class="pay-select${payFilter.method!=='All'?' is-set':''}" onchange="payFilter.method=this.value;payFilter.page=1;renderPage('payments')" title="Filter by payment method">
+        <option value="All">All Methods</option>${pmOpts}
+      </select>
+
+      <select class="pay-select${payFilter.status!=='All'?' is-set':''}" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')" title="Filter by status">
+        ${['All','Paid','Partial','Pending','Overdue'].map(s=>`<option value="${s}" ${payFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
+      </select>
+
+      <div style="position:relative">
+        <button class="pay-btn${activeFilters?' pay-btn--hue dh-blue':''}" onclick="payTogglePop(event)" title="More filters">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+          Filters${activeFilters?`<span class="pay-btn__count">${activeFilters}</span>`:''}
+        </button>
+        <div class="pay-pop" id="pay-pop" style="display:none">
+          <div class="pay-pop__t">Scope</div>
+          <label class="pay-pop__row"><input type="checkbox" ${payFilter.showAll?'checked':''}
+            onchange="payFilter.showAll=this.checked;payFilter.page=1;renderPage('payments')"> Include every month</label>
+          <div class="pay-pop__t" style="margin-top:10px">Balance</div>
+          <label class="pay-pop__row"><input type="checkbox" ${payFilter.unpaidOnly?'checked':''}
+            onchange="payFilter.unpaidOnly=this.checked;payFilter.page=1;renderPage('payments')"> Only rows with an unpaid balance</label>
+          <div class="pay-pop__sep"></div>
+          <div class="pay-pop__row" onclick="payResetFilters()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset all filters
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ META ROW ══ -->
+    <div class="pay-meta">
+      <span class="pay-meta__txt">${pays.length} record${pays.length===1?'':'s'} &nbsp;·&nbsp; Total collected: <b>${fmtPKR(total)}</b></span>
+      <div class="pay-meta__acts">
+        <button class="pay-btn" onclick="exportPaymentsCSV()" title="Export the current list to CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          CSV
+        </button>
+        <button class="pay-btn pay-btn--hue dh-blue" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+          Auto-Generate Month
+        </button>
+        <button class="pay-btn pay-btn--hue dh-green" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+          WhatsApp Reminders
+        </button>
+      </div>
+    </div>
+
+    ${paySelected.size>0?`
+    <div class="pay-bulk dh-blue">
+      <span class="pay-bulk__n">${paySelected.size} selected</span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="pay-btn" onclick="payBulkExport()">Export selected</button>
+        <button class="pay-btn pay-btn--hue dh-green" onclick="payBulkMarkPaid()">Mark ${paySelected.size} paid</button>
+        <button class="pay-btn" onclick="paySelected.clear();renderPage('payments')">Clear</button>
+      </div>
+    </div>`:''}
+
+    <!-- ══ TABLE ══ -->
+    <div class="pay-table-wrap">
+      <table class="pay-table">
+        <thead><tr>
+          <th style="width:36px"><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(p=>paySelected.has(p.id))?'checked':''} onclick="payToggleAll(this.checked)" title="Select all on this page"></th>
+          ${th('student','Student')}
+          ${th('room','Room')}
+          ${th('month','Month')}
+          ${th('rent','Rent/Mo')}
+          <th>Adm. Fee</th>
+          <th>Extra Chrgs</th>
+          <th>Concession</th>
+          ${th('paid','Amt Paid')}
+          ${th('unpaid','Unpaid')}
+          ${th('method','Method')}
+          ${th('status','Status')}
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>
+        ${_pg.slice.length===0?`<tr><td colspan="13"><div class="pay-empty">No payment records match these filters.</div></td></tr>`:
         _pg.slice.map(p=>{
-          const _paf=Number(p.admissionFee||p.fee||0),_pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0),_pc=Number(p.concession||p.discount||0),_pcd=p.concessionDesc||p.discountDesc||'';
-          return '<tr style="cursor:pointer" onclick="showEditPaymentModal(\''+p.id+'\')" title="Click row to edit this payment">'
-          +'<td class="fw-700" style="white-space:nowrap;padding:8px 8px"><span style="color:var(--text)">'+escHtml(p.studentName||'')+'</span></td>'
-          +'<td style="white-space:nowrap;padding:8px 8px"><span class="fw-700">#'+escHtml(String(p.roomNumber||''))+'</span></td>'
-          +'<td class="text-muted" style="white-space:nowrap;padding:8px 8px">'+escHtml(p.month||'')+'</td>'
-          +'<td class="text-muted fw-700" style="font-size:12px;padding:8px 8px">'+fmtPKR(p.monthlyRent||p.totalRent||p.amount)+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_paf>0?'<span style="font-size:11px;font-weight:700;color:var(--text2)">'+fmtPKR(_paf)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pex.length?_pex.map(c=>'<div style="font-size:10px;font-weight:700;color:var(--text2)">'+(c.label?escHtml(c.label)+': ':'')+fmtPKR(c.amount)+'</div>').join(''):'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td style="padding:8px 6px;vertical-align:middle">'+(_pc>0?'<span style="font-size:11px;font-weight:700;color:var(--text2)">'+(_pcd?escHtml(_pcd)+': ':'')+'−'+fmtPKR(_pc)+'</span>':'<span style="color:var(--text3);font-size:10px">—</span>')+'</td>'
-          +'<td class="fw-700" style="padding:8px 8px">'+fmtPKR(p.amount)+'</td>'
-          +'<td style="font-weight:700;color:'+((p.unpaid||0)>0?'var(--text)':'var(--text3)')+';padding:8px 8px">'+fmtPKR(p.unpaid||0)+'</td>'
-          +'<td style="padding:8px 8px">'+pmBadge(p.method)+'</td>'
-          +'<td style="padding:8px 8px">'+statusBadge(p.status)+'</td>'
-          +'<td class="col-actions" style="padding:6px 4px;white-space:nowrap"><div style="display:flex;gap:2px;align-items:center;flex-wrap:nowrap">'
-          +(p.status!=='Paid'?'<button class="btn btn-success btn-icon btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\')" title="Mark Paid" style="font-size:11px;padding:3px 6px">✓</button>':'')
-          +'<button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();printReceipt(\''+p.id+'\')" title="Receipt" style="font-size:11px;padding:3px 6px">🧾</button>'
-          +'<button class="btn btn-sm btn-icon" onclick="event.stopPropagation();sendWA(\''+p.id+'\')" title="WhatsApp" style="background:#25d366;color:#fff;border:none;font-size:11px;padding:3px 6px">📱</button>'
-          +'<button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();deletePayment(\''+p.id+'\')" title="Delete" style="font-size:11px;padding:3px 6px">🗑</button>'
-          +'</div></td>'
-          +'</tr>';}).join('')}
-      </tbody>
-    </table>
-  </div>
-  ${renderPager(_pg, 'payFilter', 'payments')}`;
+          const st    = DB.students.find(s=>s.id===p.studentId);
+          const room  = DB.rooms.find(r=>String(r.number)===String(p.roomNumber));
+          const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;
+          const admFee = Number(p.admissionFee||p.fee||0);
+          const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0);
+          const conc   = Number(p.concession||p.discount||0);
+          const concD  = p.concessionDesc||p.discountDesc||'';
+          const unpaid = Number(p.unpaid||0);
+          const sLabel = payStatusOf(p);
+          const sHue   = payStatusHue(sLabel);
+          const picked = paySelected.has(p.id);
+          const nm     = String(p.studentName||'?');
+          const ini    = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+          return `<tr class="${picked?'is-picked dh-blue':''}">
+            <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="payToggleRow('${p.id}')"></td>
+            <td>
+              <div class="pay-who">
+                <div class="pay-who__av ${payAvatarHue(nm)}">${escHtml(ini)}</div>
+                <div style="min-width:0">
+                  <div class="pay-who__name">${escHtml(nm)}</div>
+                  ${st&&st.cnic?`<div class="pay-who__meta">CNIC: ${payMaskCnic(st.cnic)}</div>`:''}
+                  ${st&&st.phone?`<div class="pay-who__meta"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>${escHtml(st.phone)}</div>`:''}
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="pay-room__n">#${escHtml(String(p.roomNumber||'—'))}</div>
+              ${rtype?`<div class="pay-room__t">${escHtml(rtype.name)}</div>`:''}
+              ${room&&room.floor?`<div class="pay-room__t">${escHtml(room.floor)} Floor</div>`:''}
+            </td>
+            <td>${escHtml(p.month||'—')}</td>
+            <td class="pay-money">${fmtPKR(p.monthlyRent||p.totalRent||p.amount)}</td>
+            <td>${admFee>0?`<span class="pay-money">${fmtPKR(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
+            <td>${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtPKR(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
+            <td>${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtPKR(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
+            <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
+            <td><span class="pay-pill dh-slate">${escHtml(p.method||'—')}</span></td>
+            <td>
+              <span class="pay-pill ${sHue}">
+                ${sLabel==='Paid'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>':''}
+                ${sLabel}
+              </span>
+              ${payIsOverdue(p)?'<div style="font-size:10px;font-weight:700;color:var(--red);margin-top:3px">Overdue</div>':''}
+            </td>
+            <td>
+              <div class="pay-acts">
+                <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="View / edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="pay-act dh-green" onclick="event.stopPropagation();printReceipt('${p.id}')" title="Receipt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
+                <button class="pay-act dh-red"   onclick="event.stopPropagation();deletePayment('${p.id}')" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    ${payPager(_pg)}
+  </div>`;
 }
+
+// Footer: page-size picker, range readout and the numbered pager.
+function payPager(pg) {
+  const btn = (label, target, o) => {
+    o = o || {};
+    if (o.disabled) return `<button disabled>${label}</button>`;
+    if (o.active)   return `<button class="is-on">${label}</button>`;
+    return `<button onclick="gotoPage(payFilter,'payments',${target})">${label}</button>`;
+  };
+  const { page, pages } = pg;
+  let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
+  lo = Math.max(1, hi-4);
+  let nums = '';
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="pay-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
+  if (hi < pages) nums += (hi<pages-1?'<span class="pay-pager__gap">…</span>':'') + btn(String(pages), pages);
+
+  return `<div class="pay-foot">
+    <div class="pay-foot__size">
+      Show
+      <select onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')">
+        ${[10,25,50,100].map(n=>`<option value="${n}" ${payFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      entries
+    </div>
+    <div class="pay-foot__info">${pg.total?`Showing ${pg.from} to ${pg.to} of ${pg.total} entries`:'No entries'}</div>
+    <div class="pay-pager">
+      ${btn('«',1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1})}
+      ${nums}
+      ${btn('›',page+1,{disabled:page>=pages})}
+      ${btn('»',pages,{disabled:page>=pages})}
+    </div>
+  </div>`;
+}
+
+/* ── Payments v5 — toolbar / selection behaviour ─────────────────────────── */
+function paySetStatus(s) {
+  payFilter.status = (payFilter.status === s) ? 'All' : s;   // click again to clear
+  payFilter.page = 1;
+  renderPage('payments');
+}
+
+function payResetFilters() {
+  payFilter.status='All'; payFilter.method='All'; payFilter.room='All'; payFilter.month='All';
+  payFilter.search=''; payFilter.showAll=false; payFilter.unpaidOnly=false; payFilter.page=1;
+  paySelected.clear();
+  renderPage('payments');
+}
+
+function payTogglePop(ev) {
+  if (ev) ev.stopPropagation();
+  const p = document.getElementById('pay-pop'); if (!p) return;
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+document.addEventListener('click', function (e) {
+  const p = document.getElementById('pay-pop');
+  if (p && p.style.display === 'block' && e.target.closest && !e.target.closest('#pay-pop')) p.style.display = 'none';
+});
+
+function payToggleRow(id) {
+  if (paySelected.has(id)) paySelected.delete(id); else paySelected.add(id);
+  renderPage('payments');
+}
+function payToggleAll(on) {
+  paginate(payFiltered(), payFilter).slice.forEach(p => {
+    if (on) paySelected.add(p.id); else paySelected.delete(p.id);
+  });
+  renderPage('payments');
+}
+
+// Bulk mark-paid reuses the same arithmetic as the single-row action, including
+// the partialPayments installment log, so a bulk settle is indistinguishable
+// from settling each row by hand.
+async function payBulkMarkPaid() {
+  const ids = [...paySelected];
+  const targets = DB.payments.filter(p => ids.includes(p.id) && p.status !== 'Paid');
+  if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
+  showConfirm(`Mark ${targets.length} payment${targets.length>1?'s':''} as paid?`,
+    `This collects the outstanding balance on each selected row and stamps today's date.`, async () => {
+      targets.forEach(p => {
+        const prevUnpaid = Number(p.unpaid) || 0;
+        p.amount = (Number(p.amount)||0) + prevUnpaid;
+        p.unpaid = 0;
+        p.status = 'Paid';
+        p.paidDate = today();
+        if (!p.partialPayments) p.partialPayments = [];
+        if (prevUnpaid > 0) p.partialPayments.push({
+          date: today(), amount: prevUnpaid, method: p.method || 'Cash',
+          collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
+          note: 'Pending cleared (bulk)'
+        });
+      });
+      await saveDB();
+      paySelected.clear();
+      renderPage('payments');
+      toast(`${targets.length} payment${targets.length>1?'s':''} marked paid`, 'success');
+    });
+}
+
+function payBulkExport() {
+  const ids = [...paySelected];
+  const rows = [['Student','Room','Month','Rent/Mo','Adm.Fee','Extra Charges','Concession','Amount Paid','Unpaid','Method','Status','Date']];
+  payFiltered().filter(p => ids.includes(p.id)).forEach(p => {
+    const admFee = Number(p.admissionFee||p.fee||0);
+    const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
+    const conc   = Number(p.concession||p.discount||0);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
+      p.monthlyRent||p.totalRent||p.amount||0, admFee||'', extras||'', conc||'',
+      p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p), p.date||'']);
+  });
+  downloadCSV(rows, 'Payments_Selected.csv');
+}
+
 
 // Export the currently filtered + sorted payments to CSV. (Mirrors renderPayments' filter/sort.)
 function exportPaymentsCSV() {
   const mo = thisMonth();
-  let pays=DB.payments.filter(p=>{
-    if(!payFilter.showAll){ if(!_payMatchesMonth(p, mo)) return false; }
-    if(payFilter.status!=='All' && p.status!==payFilter.status) return false;
-    if(payFilter.method!=='All' && p.method!==payFilter.method) return false;
-    if(payFilter.search){const _ps=payFilter.search.toLowerCase();const _st4p=DB.students.find(s=>s.id===p.studentId);if(![p.studentName,String(p.roomNumber),p.month,p.method,p.status,_st4p?.fatherName,_st4p?.cnic,_st4p?.phone,_st4p?.email].some(f=>f&&String(f).toLowerCase().includes(_ps))) return false;}
-    return true;
-  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  pays = applySort(pays, payFilter, {
-    student:p=>p.studentName, room:p=>p.roomNumber,
-    rent:p=>Number(p.monthlyRent||p.totalRent||p.amount||0),
-    paid:p=>Number(p.amount||0), unpaid:p=>Number(p.unpaid||0),
-    method:p=>p.method, status:p=>p.status
-  });
+  // Reuses payFiltered() — the export and the table can no longer drift apart,
+  // which they previously could since each kept its own copy of the filter.
   const rows=[['Student','Room','Month','Rent/Mo','Adm.Fee','Extra Charges','Concession','Amount Paid','Unpaid','Method','Status','Date']];
-  pays.forEach(p=>{
+  payFiltered().forEach(p=>{
     const _paf=Number(p.admissionFee||p.fee||0);
     const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const _pc=Number(p.concession||p.discount||0);
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,_paf||'',_pex||'',_pc||'',p.amount||0,p.unpaid||0,p.method||'',p.status||'',p.date||'']);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,_paf||'',_pex||'',_pc||'',p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),p.date||'']);
   });
-  downloadCSV(rows, 'Payments_'+(payFilter.showAll?'AllMonths':mo)+'.csv');
+  downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
 }
 
 async function generateMonthlyRents() {

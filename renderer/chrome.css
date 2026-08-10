@@ -1,0 +1,331 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTIX — APP CHROME v5  (sidebar + header)
+   Owner reference design: docs/design/payments.png
+
+   Loaded LAST so it wins on equal specificity. It intentionally overrides the
+   existing #sidebar / #header / .nav-item rules in style.css rather than
+   editing them in place — style.css is shared by every screen and CLAUDE.md
+   rule 7 warns off structural edits there. Everything is confined to the
+   chrome; no page content selector is touched.
+
+   THEME MODEL (owner's call)
+   The sidebar is dark in BOTH themes — deep navy in light, near-black in dark.
+   Only the content area flips. So sidebar colours are declared as their own
+   --sb-* token set instead of borrowing the page tokens, which would drag the
+   sidebar to white in light mode.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* Dark theme: the sidebar sits BELOW the page surface so it recedes.
+       #0A0A0A against the #0f0f0f page is a small delta, so the separation is
+       carried by an explicit border, not by fill alone (CLAUDE.md rule 6). */
+    --sb-bg:       #0A0A0A;
+    --sb-border:   rgba(255,255,255,.09);
+    --sb-fg:       #f5f5f5;
+    --sb-fg2:      rgba(255,255,255,.66);
+    --sb-fg3:      rgba(255,255,255,.40);
+    --sb-hover:    rgba(255,255,255,.07);
+    --sb-active:   #3b82f6;
+    --sb-active-fg:#ffffff;
+    --sb-divider:  rgba(255,255,255,.08);
+    --sb-avatar:   #3b82f6;
+
+    --sidebar-w:   244px;
+    --header-h:    66px;
+}
+
+body.light-theme {
+    /* Light theme: deep navy, per payments.png. */
+    --sb-bg:       #0B1B33;
+    --sb-border:   rgba(255,255,255,.07);
+    --sb-fg:       #ffffff;
+    --sb-fg2:      rgba(255,255,255,.70);
+    --sb-fg3:      rgba(255,255,255,.44);
+    --sb-hover:    rgba(255,255,255,.08);
+    --sb-active:   #2563eb;
+    --sb-active-fg:#ffffff;
+    --sb-divider:  rgba(255,255,255,.10);
+    --sb-avatar:   #2563eb;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+#sidebar {
+    background: var(--sb-bg);
+    border-right: 1px solid var(--sb-border);
+    box-shadow: none;
+    color: var(--sb-fg);
+}
+
+/* Brand block */
+#sidebar .sb-logo {
+    padding: 18px 16px 16px;
+    background: none;
+    border-bottom: 1px solid var(--sb-divider);
+}
+#sidebar .sb-logo::after { display: none; }
+#sidebar .sb-logo-mark { display: flex; align-items: center; gap: 11px; }
+#sidebar .sb-logo-icon {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    background: var(--sb-active);
+    display: flex; align-items: center; justify-content: center;
+    border: none; box-shadow: none;
+}
+#sidebar .sb-logo-icon::before,
+#sidebar .sb-logo-icon::after { display: none; }
+#sidebar .sb-logo-text .name {
+    font-size: 16px; font-weight: 800; letter-spacing: .2px;
+    color: var(--sb-fg); background: none; -webkit-text-fill-color: currentColor;
+}
+#sidebar .sb-logo-text .sub {
+    font-size: 11px; font-weight: 500; color: var(--sb-fg2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Collapse affordance — the circular chevron on the sidebar edge */
+#sidebar .sidebar-collapse-btn {
+    position: absolute; top: 26px; right: -11px; z-index: 5;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); color: var(--text2);
+    border: 1px solid var(--border2); cursor: pointer; padding: 0;
+    box-shadow: var(--shadow-sm);
+}
+#sidebar .sidebar-collapse-btn:hover { color: var(--sb-active); border-color: var(--sb-active); }
+
+/* Nav */
+#sidebar .sb-nav { padding: 14px 12px; }
+#sidebar .sb-section {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--sb-fg3); padding: 14px 10px 6px;
+}
+#sidebar .sb-nav > .sb-section:first-child { padding-top: 2px; }
+
+#sidebar .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; margin-bottom: 3px;
+    border-radius: 10px; border: 1px solid transparent;
+    color: var(--sb-fg2); font-size: 13.5px; font-weight: 500;
+    cursor: pointer; overflow: hidden;
+    transition: background .15s ease, color .15s ease;
+}
+/* The shimmer sweep and the translate-on-hover belong to the old look. */
+#sidebar .nav-item::after  { display: none; }
+#sidebar .nav-item::before { display: none; }
+#sidebar .nav-item:hover {
+    background: var(--sb-hover); color: var(--sb-fg);
+    border-color: transparent; transform: none;
+}
+#sidebar .nav-item.active {
+    background: var(--sb-active);
+    color: var(--sb-active-fg);
+    border-color: transparent;
+    font-weight: 600;
+}
+#sidebar .nav-item.active .nav-icon { color: var(--sb-active-fg); }
+#sidebar .nav-item .nav-icon { width: 19px; height: 19px; opacity: .95; }
+#sidebar .nav-item--danger { color: #f87171 !important; }
+
+#sidebar .sidebar__bottom {
+    border-top: 1px solid var(--sb-divider);
+    padding: 12px 12px 10px;
+}
+#sidebar .sidebar__bottom .nav-item { margin-bottom: 2px; }
+
+/* User card pinned under the nav */
+.sb-user {
+    display: flex; align-items: center; gap: 11px;
+    margin: 0 12px 14px; padding: 10px 12px;
+    background: var(--sb-hover); border: 1px solid var(--sb-divider);
+    border-radius: 12px; cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+.sb-user:hover { background: rgba(255,255,255,.12); border-color: var(--sb-active); }
+.sb-user__av {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sb-avatar); color: #fff;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
+}
+.sb-user__id   { flex: 1; min-width: 0; }
+.sb-user__name { font-size: 13px; font-weight: 700; color: var(--sb-fg);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-user__role { font-size: 11px; color: var(--sb-fg2); margin-top: 1px; }
+.sb-user__caret{ flex-shrink: 0; color: var(--sb-fg2); }
+
+/* Collapsed sidebar — hide labels, centre the icons */
+body.sidebar-collapsed .sb-user__id,
+body.sidebar-collapsed .sb-user__caret,
+body.sidebar-collapsed #sidebar .sb-logo-text,
+body.sidebar-collapsed #sidebar .sb-section { display: none; }
+body.sidebar-collapsed .sb-user { justify-content: center; padding: 8px; }
+body.sidebar-collapsed #sidebar .nav-item { justify-content: center; padding: 10px 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+#header {
+    height: var(--header-h);
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    gap: 14px;
+    box-shadow: none;
+}
+
+.hdr-title-wrap { min-width: 0; }
+#header .page-title {
+    font-size: 20px; font-weight: 800; letter-spacing: -.02em;
+    color: var(--text); line-height: 1.2;
+}
+#header .page-sub {
+    font-size: 12px; font-weight: 400; color: var(--text3); margin-top: 2px;
+}
+
+#sidebar-toggle {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text2); cursor: pointer;
+    transition: var(--transition);
+}
+#sidebar-toggle:hover { background: var(--bg3); color: var(--text); }
+
+/* Search pill */
+.hdr-search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 11px; padding: 0 10px; height: 40px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.hdr-search:focus-within {
+    border-color: var(--sb-active);
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+.hdr-search__ico { color: var(--text3); display: flex; flex-shrink: 0; }
+.hdr-search input {
+    flex: 1; min-width: 0; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--font); font-size: 13px; padding: 0;
+}
+.hdr-search input::placeholder { color: var(--text3); }
+.hdr-kbd {
+    flex-shrink: 0; cursor: pointer;
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 7px; font-family: var(--font-mono, monospace);
+}
+.hdr-kbd:hover { color: var(--text2); }
+
+/* Right-hand control cluster */
+.hdr-right { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+
+.hdr-btn {
+    position: relative; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border2);
+    color: var(--text2); cursor: pointer; transition: var(--transition);
+}
+.hdr-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+.hdr-btn__count {
+    position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 999px;
+    background: #ef4444; color: #fff;
+    font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+    border: 2px solid var(--card);
+}
+
+/* Date pill wraps the existing month picker */
+.hdr-month-picker {
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 11px; height: 40px; display: flex; align-items: center;
+    padding: 0 4px; flex-shrink: 0;
+}
+.hdr-month-picker .sb-month-picker__header {
+    display: flex; align-items: center; gap: 2px; background: none; border: none; padding: 0;
+}
+.hdr-month-picker .sb-month-picker__display {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 0 6px; color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.hdr-month-picker .sb-month-picker__icon { color: var(--sb-active); flex-shrink: 0; }
+.hdr-month-picker .sb-month-picker__arrow {
+    width: 26px; height: 30px; border-radius: 8px; border: none; background: none;
+    color: var(--text3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.hdr-month-picker .sb-month-picker__arrow:hover { background: var(--bg3); color: var(--text); }
+
+/* User chip + its menu */
+.hdr-user {
+    display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+    height: 40px; padding: 0 10px 0 5px; border-radius: 11px;
+    background: var(--card); border: 1px solid var(--border2);
+    cursor: pointer; transition: var(--transition);
+}
+.hdr-user:hover { background: var(--bg3); }
+.hdr-user__av {
+    width: 29px; height: 29px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sb-avatar); color: #fff; font-size: 11px; font-weight: 800;
+}
+.hdr-user__name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.hdr-user__caret { color: var(--text3); flex-shrink: 0; }
+
+.hdr-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 9999;
+    min-width: 216px; padding: 6px;
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 12px; box-shadow: var(--shadow);
+}
+.hdr-menu__item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px; border-radius: 9px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--text2);
+    transition: var(--transition); border: none; background: none;
+    width: 100%; text-align: left; font-family: var(--font);
+}
+.hdr-menu__item:hover { background: var(--bg3); color: var(--text); }
+.hdr-menu__item svg { flex-shrink: 0; opacity: .8; }
+.hdr-menu__item--danger { color: var(--red); }
+.hdr-menu__item--danger:hover { background: var(--red-dim); color: var(--red); }
+.hdr-menu__sep { height: 1px; background: var(--border); margin: 5px 4px; }
+.hdr-menu__head {
+    padding: 9px 11px 7px; border-bottom: 1px solid var(--border); margin-bottom: 5px;
+}
+.hdr-menu__head b { display: block; font-size: 13px; color: var(--text); }
+.hdr-menu__head span { font-size: 11px; color: var(--text3); }
+
+/* Notification dropdown rows */
+.hdr-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 11px; border-radius: 9px; cursor: pointer;
+    transition: var(--transition);
+}
+.hdr-note:hover { background: var(--bg3); }
+.hdr-note__ico {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.hdr-note__msg { font-size: 12.5px; font-weight: 500; color: var(--text); line-height: 1.4; }
+.hdr-note__empty { padding: 22px 12px; text-align: center; font-size: 12.5px; color: var(--text3); }
+
+/* Primary header action */
+#header .btn-primary,
+#header .btn-success {
+    height: 40px; border-radius: 11px; padding: 0 16px;
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+
+/* The old header search block is replaced by .hdr-search */
+#hdr-search-wrap { flex: 1; max-width: 380px; min-width: 0; margin: 0; position: relative; }
+
+/* The warden identity moved to the user chip + sidebar card. #role-badge stays
+   in the DOM so showUserMgmt()'s entry point and updateRoleBadge() keep
+   working untouched, but it is never shown. */
+#role-badge { display: none !important; }
+
+@media (max-width: 1100px) {
+    #hdr-search-wrap { display: none; }
+    .hdr-user__name  { display: none; }
+}

@@ -1,0 +1,39 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTIX — UI KIT v5
+   The shared colour language behind the v5 screens (dashboard, payments, …).
+
+   Loaded after style.css and before the per-screen sheets. It defines ONLY
+   custom properties — no component selectors — so it can never collide with
+   an existing rule (CLAUDE.md rule 7).
+
+   HOW IT WORKS
+   A block opts into a hue by adding a `dh-*` class. That class sets three
+   locals which the screen stylesheets read:
+       --dh     ink: icon, value, label
+       --dh-bg  tint: chip, pill, avatar, banner background
+       --dh-2   gradient partner for progress fills
+   Dark and light are declared together so a new hue is added in exactly two
+   places and the themes can never drift apart.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hue palette · dark (default :root theme) ────────────────────────────── */
+.dh-blue   { --dh:#60a5fa; --dh-2:#3b82f6; --dh-bg:rgba(96,165,250,.16);  }
+.dh-green  { --dh:#34d399; --dh-2:#10b981; --dh-bg:rgba(52,211,153,.16);  }
+.dh-red    { --dh:#f87171; --dh-2:#ef4444; --dh-bg:rgba(248,113,113,.16); }
+.dh-violet { --dh:#a78bfa; --dh-2:#8b5cf6; --dh-bg:rgba(167,139,250,.16); }
+.dh-amber  { --dh:#fbbf24; --dh-2:#f59e0b; --dh-bg:rgba(251,191,36,.16);  }
+.dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:rgba(255,255,255,.09); }
+
+/* ── Hue palette · light ─────────────────────────────────────────────────── */
+body.light-theme .dh-blue   { --dh:#2563eb; --dh-2:#3b82f6; --dh-bg:#dbeafe; }
+body.light-theme .dh-green  { --dh:#16a34a; --dh-2:#22c55e; --dh-bg:#dcfce7; }
+body.light-theme .dh-red    { --dh:#dc2626; --dh-2:#ef4444; --dh-bg:#fee2e2; }
+body.light-theme .dh-violet { --dh:#7c3aed; --dh-2:#8b5cf6; --dh-bg:#ede9fe; }
+body.light-theme .dh-amber  { --dh:#ea580c; --dh-2:#f97316; --dh-bg:#ffedd5; }
+body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#eef0f3; }
+
+/* Sunken surfaces used INSIDE cards. The dark values sit far enough off
+   --card (#161616) to stay visible, and every consumer also draws a border as
+   a second cue (CLAUDE.md rule 6 — dark surfaces need real separation). */
+:root            { --dash-sunk:rgba(255,255,255,.055); --dash-track:rgba(255,255,255,.10); }
+body.light-theme { --dash-sunk:#f6f7f9;                --dash-track:#e9ecf1;              }
