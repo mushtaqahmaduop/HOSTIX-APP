@@ -1,0 +1,173 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTIX — ROOMS v5
+   Owner reference design: docs/design/rooms.png
+
+   Loaded after ui-kit.css (which supplies the `dh-*` hue palette) and scoped
+   to `rms-*` class names. It defines no existing selector, so no other screen
+   is affected (CLAUDE.md rule 7).
+
+   NOT `rm-*`: that prefix is already taken. `.rm-btn` is the remove-row button
+   inside extra-charge rows (payments.js, students.js), and a generic `.rm-btn`
+   here would have silently restyled it into a 40px toolbar button.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Stat strip ──────────────────────────────────────────────────────────── */
+.rms-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:12px; margin-bottom:12px; }
+.rms-stat  { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:15px 16px; }
+.rms-stat__top   { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+.rms-stat__chip  {
+    width:44px; height:44px; border-radius:13px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.rms-stat__label { font-size:12px; font-weight:600; color:var(--text2); }
+.rms-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text);
+                  font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; }
+.rms-stat__val small { font-size:17px; font-weight:700; color:var(--text3); }
+.rms-stat__sub   { font-size:11px; color:var(--text3); margin-top:2px; }
+.rms-stat__bar   { height:6px; border-radius:999px; background:var(--dash-track); overflow:hidden; margin-top:11px; }
+.rms-stat__bar > i { display:block; height:100%; border-radius:999px;
+                    background:linear-gradient(90deg,var(--dh-2),var(--dh)); transition:width .5s ease; }
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.rms-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+.rms-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+.rms-search {
+    display:flex; align-items:center; gap:8px; flex:1 1 200px; min-width:180px; max-width:280px;
+    height:40px; padding:0 12px; border-radius:11px;
+    background:var(--card); border:1px solid var(--border2);
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+.rms-search:focus-within { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.rms-search svg   { color:var(--text3); flex-shrink:0; }
+.rms-search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font-family:var(--font); font-size:13px; }
+.rms-search input::placeholder { color:var(--text3); }
+
+/* Segmented All / Occupied / Vacant */
+.rms-seg { display:flex; align-items:center; gap:4px; padding:4px; border-radius:12px;
+          background:var(--dash-sunk); border:1px solid var(--border); }
+.rms-seg button {
+    height:32px; padding:0 15px; border-radius:9px; cursor:pointer; white-space:nowrap;
+    background:none; border:none; color:var(--text2);
+    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
+}
+.rms-seg button:hover     { color:var(--text); }
+.rms-seg button.is-on     { background:var(--accent-dim); color:var(--accent-strong); }
+
+.rms-select {
+    height:40px; min-width:132px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
+    background:var(--card); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:13px; font-weight:500;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+}
+.rms-select:focus  { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.rms-select.is-set { border-color:var(--blue); color:var(--blue); font-weight:600; }
+
+.rms-btn {
+    height:40px; padding:0 14px; border-radius:11px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:7px;
+    background:var(--card); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
+}
+.rms-btn:hover { background:var(--dash-sunk); color:var(--text); }
+
+/* ── Grid header + view switch ───────────────────────────────────────────── */
+.rms-head  { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.rms-head__t { display:flex; align-items:center; gap:9px; font-size:15px; font-weight:700; color:var(--text); }
+.rms-head__t svg { color:var(--accent-strong); flex-shrink:0; }
+.rms-view  { margin-left:auto; display:flex; gap:4px; padding:4px; border-radius:11px;
+            background:var(--dash-sunk); border:1px solid var(--border); }
+.rms-view button {
+    width:32px; height:32px; border-radius:8px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    background:none; border:none; color:var(--text3); transition:var(--transition);
+}
+.rms-view button:hover  { color:var(--text); }
+.rms-view button.is-on  { background:var(--accent-dim); color:var(--accent-strong); }
+
+.rms-shell { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
+
+/* ── Room cards ──────────────────────────────────────────────────────────── */
+.rms-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(214px,1fr)); gap:14px; }
+
+.rms-card {
+    display:flex; flex-direction:column;
+    background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.rms-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
+
+.rms-card__pic {
+    position:relative; height:132px; flex-shrink:0; cursor:pointer;
+    background:var(--dash-sunk); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; color:var(--text3);
+}
+.rms-card__pic img { width:100%; height:100%; object-fit:cover; display:block; }
+.rms-card__state {
+    position:absolute; top:9px; right:9px;
+    padding:4px 11px; border-radius:999px;
+    background:var(--dh-bg); color:var(--dh); font-size:11px; font-weight:700;
+    backdrop-filter:blur(4px);
+}
+.rms-card__beds {
+    position:absolute; bottom:9px; right:9px;
+    padding:4px 11px; border-radius:999px;
+    background:var(--card); border:1px solid var(--border);
+    color:var(--text); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+}
+
+.rms-card__body { padding:12px 13px; display:flex; flex-direction:column; flex:1; }
+.rms-card__num  { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text);
+                 font-variant-numeric:tabular-nums; line-height:1.1; }
+.rms-card__type { display:inline-block; margin-top:5px; padding:3px 9px; border-radius:999px;
+                 background:var(--dh-bg); color:var(--dh); font-size:10.5px; font-weight:700; align-self:flex-start; }
+
+.rms-row { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:11.5px; }
+.rms-row svg  { color:var(--text3); flex-shrink:0; }
+.rms-row .k   { color:var(--text3); }
+.rms-row .v   { margin-left:auto; color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+.rms-occ  { display:flex; flex-wrap:wrap; gap:5px; margin-top:11px; }
+.rms-occ__chip {
+    display:inline-flex; align-items:center; gap:5px; max-width:100%;
+    padding:4px 9px; border-radius:999px;
+    background:var(--dash-sunk); border:1px solid var(--border);
+    font-size:10.5px; color:var(--text2); cursor:pointer;
+}
+.rms-occ__chip:hover { border-color:var(--dh); color:var(--text); }
+.rms-occ__chip i { width:5px; height:5px; border-radius:50%; background:var(--dh); flex-shrink:0; }
+.rms-occ__chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.rms-acts { display:flex; gap:7px; margin-top:auto; padding-top:12px; }
+.rms-acts button {
+    flex:1; height:34px; border-radius:9px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; justify-content:center; gap:5px;
+    font-family:var(--font); font-size:12px; font-weight:600; transition:var(--transition);
+    background:var(--card); border:1px solid var(--border2); color:var(--text2);
+}
+.rms-acts button:hover      { background:var(--dash-sunk); color:var(--text); }
+.rms-acts .rms-add           { background:var(--accent); border-color:var(--accent); color:#fff; }
+.rms-acts .rms-add:hover     { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+.rms-acts .rms-force         { background:#f59e0b; border-color:#f59e0b; color:#3a2500; }
+.rms-acts .rms-force:hover   { background:#d97706; border-color:#d97706; color:#fff; }
+
+/* ── List view ───────────────────────────────────────────────────────────── */
+.rms-list       { overflow-x:auto; border:1px solid var(--border); border-radius:12px; }
+.rms-list table { width:100%; border-collapse:separate; border-spacing:0; }
+.rms-list th {
+    position:sticky; top:0; z-index:2;
+    background:var(--dash-sunk); border-bottom:1px solid var(--border);
+    padding:11px 12px; text-align:left; white-space:nowrap;
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--text3);
+}
+.rms-list td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle;
+              font-size:12.5px; color:var(--text2); }
+.rms-list tr:last-child td { border-bottom:none; }
+.rms-list tbody tr:hover   { background:var(--dash-sunk); }
+.rms-list .num { font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+
+.rms-empty { padding:52px 20px; text-align:center; color:var(--text3); font-size:13px; }
+.rms-empty svg { color:var(--text3); opacity:.5; margin-bottom:12px; }

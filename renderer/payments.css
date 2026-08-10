@@ -169,3 +169,142 @@
 .pay-pager__gap { color:var(--text3); padding:0 3px; }
 
 @media (max-width:900px) { .pay-foot__info { order:3; flex-basis:100%; text-align:left; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADD / EDIT PAYMENT MODAL  (docs/design/payment-form.png)
+   Scoped to `pf-*`. The modal shell itself (.modal-overlay/.modal) is shared
+   by every screen and is NOT touched — only what showAddPaymentModal() puts
+   inside it, plus the two-line header which is composed inside .modal-title.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Two-line modal header, built inside the existing .modal-title element so no
+   shared modal rule has to change. */
+.pf-head   { display:flex; flex-direction:column; gap:3px; }
+.pf-head b { font-size:17px; font-weight:800; letter-spacing:-.01em; color:var(--text); }
+.pf-head s { font-size:12px; font-weight:400; color:var(--text3); text-decoration:none; }
+
+/* Numbered section card */
+.pf-sec   { background:var(--card); border:1px solid var(--border); border-radius:13px;
+            padding:15px 16px; margin-bottom:12px; }
+.pf-sec:last-child { margin-bottom:0; }
+.pf-sec__h {
+    display:flex; align-items:center; gap:8px; margin-bottom:14px;
+    font-size:12.5px; font-weight:700; color:var(--accent-strong);
+}
+.pf-sec__h svg { flex-shrink:0; }
+
+.pf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:13px 14px; }
+.pf-f    { min-width:0; }
+.pf-f--wide { grid-column:1 / -1; }
+.pf-f > label { display:block; font-size:11.5px; font-weight:600; color:var(--text2); margin-bottom:6px; }
+.pf-f > label .req  { color:var(--red); margin-left:2px; }
+.pf-f > label .opt  { color:var(--text3); font-weight:400; }
+
+/* Inputs — these override .form-control for elements inside the payment modal
+   only, so the shared form styling elsewhere is untouched. */
+.pf-in, .pf-sel {
+    width:100%; min-width:0; height:42px; padding:0 12px; border-radius:10px;
+    background:var(--card); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:13px; outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+.pf-in::placeholder { color:var(--text3); }
+.pf-in:focus, .pf-sel:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.pf-in[readonly] { background:var(--dash-sunk); }
+.pf-sel {
+    cursor:pointer; padding-right:32px; appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+}
+.pf-in--due { color:var(--red); font-weight:700; }
+
+.pf-wrapin { position:relative; display:flex; align-items:center; }
+.pf-wrapin > svg { position:absolute; left:12px; color:var(--text3); pointer-events:none; z-index:1; }
+.pf-wrapin > .pf-in, .pf-wrapin > .pf-sel { padding-left:36px; }
+.pf-wrapin > .pf-caret { position:absolute; right:12px; color:var(--text3); pointer-events:none; }
+
+/* Student search result list + selected-student readout */
+.pf-results {
+    display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:300;
+    max-height:236px; overflow-y:auto;
+    background:var(--card); border:1px solid var(--border2); border-radius:11px; box-shadow:var(--shadow);
+}
+.pf-picked {
+    display:none; margin-top:10px; padding:11px 13px; border-radius:11px;
+    background:var(--dash-sunk); border:1px solid var(--border); font-size:13px;
+}
+
+/* Extra charges / add-ons panel */
+.pf-extra { background:var(--dash-sunk); border:1px solid var(--border); border-radius:11px; padding:12px 13px; }
+.pf-extra__h { display:flex; align-items:center; gap:8px; margin-bottom:10px;
+               font-size:11.5px; font-weight:600; color:var(--text2); }
+.pf-extra__h svg { color:var(--accent-strong); flex-shrink:0; }
+.pf-extra__add {
+    margin-left:auto; height:28px; padding:0 11px; border-radius:8px; cursor:pointer;
+    background:var(--card); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:11.5px; font-weight:600; transition:var(--transition);
+}
+.pf-extra__add:hover { background:var(--card); border-color:var(--accent); color:var(--accent-strong); }
+.pf-extra__total {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin-top:10px; padding-top:10px; border-top:1px solid var(--border);
+    font-size:12px; color:var(--text3);
+}
+.pf-extra__total b { font-size:13px; font-weight:800; color:var(--accent-strong); font-variant-numeric:tabular-nums; }
+
+.pf-ta {
+    width:100%; min-height:86px; padding:11px 12px; border-radius:10px; resize:vertical;
+    background:var(--card); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:13px; line-height:1.55; outline:none;
+}
+.pf-ta:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.pf-count { font-size:10.5px; color:var(--text3); text-align:right; margin-top:4px; }
+
+/* Running totals strip above the footer */
+.pf-sum {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0;
+    margin-top:14px; border-radius:13px; overflow:hidden;
+    background:var(--dash-sunk); border:1px solid var(--border);
+}
+.pf-sum__c { display:flex; align-items:center; gap:10px; padding:13px 15px; border-right:1px solid var(--border); }
+.pf-sum__c:last-child { border-right:none; }
+.pf-sum__i {
+    width:32px; height:32px; border-radius:9px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.pf-sum__l { font-size:10.5px; color:var(--text3); }
+.pf-sum__v { font-size:14px; font-weight:800; color:var(--dh); font-variant-numeric:tabular-nums; margin-top:1px; }
+
+/* Footer actions */
+.pf-btn {
+    height:42px; padding:0 17px; border-radius:11px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--card); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
+}
+.pf-btn:hover       { background:var(--dash-sunk); color:var(--text); }
+.pf-btn--go         { background:var(--accent); border-color:var(--accent); color:#fff; }
+.pf-btn--go:hover   { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+
+/* Student search hits inside the payment modal */
+.pf-hit { display:flex; align-items:center; gap:11px; padding:10px 13px; cursor:pointer;
+          border-bottom:1px solid var(--border); transition:background .12s ease; }
+.pf-hit:last-child { border-bottom:none; }
+.pf-hit:hover      { background:var(--dash-sunk); }
+.pf-hit__av   { width:32px; height:32px; border-radius:50%; flex-shrink:0;
+                display:flex; align-items:center; justify-content:center;
+                font-size:11px; font-weight:800; background:var(--dh-bg); color:var(--dh); }
+.pf-hit__name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-hit__sub  { font-size:11px; color:var(--text3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-hit__rent { font-size:12.5px; font-weight:800; color:var(--green); font-variant-numeric:tabular-nums; flex-shrink:0; }
+
+/* Extra-charge rows built by addExtraChargeRow(). The remove button keeps its
+   shared .rm-btn class — only the inputs are restyled, scoped to this list. */
+#extra-charges-list .extra-charge-row { display:flex; gap:7px; align-items:center; margin-bottom:7px; }
+#extra-charges-list input {
+    height:36px; padding:0 11px; border-radius:9px; min-width:0;
+    background:var(--card); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:12.5px; outline:none;
+}
+#extra-charges-list input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }

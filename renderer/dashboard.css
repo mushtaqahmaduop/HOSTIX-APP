@@ -12,7 +12,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Card shell ──────────────────────────────────────────────────────────── */
-.dash-card {
+.dsh-card {
     position: relative;
     background: var(--card);
     border: 1px solid var(--border);
@@ -20,8 +20,8 @@
     padding: 16px 18px;
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
-.dash-card--click { cursor: pointer; }
-.dash-card--click:hover {
+.dsh-card--click { cursor: pointer; }
+.dsh-card--click:hover {
     transform: translateY(-3px);
     box-shadow: var(--shadow);
     border-color: var(--border2);
@@ -161,7 +161,7 @@
    trailing block rather than edited inline, so the density can be dialled up
    or down (or dropped entirely) without touching the component rules.
    ═══════════════════════════════════════════════════════════════════════════ */
-.dash-card              { padding:13px 15px; border-radius:14px; }
+.dsh-card              { padding:13px 15px; border-radius:14px; }
 .dash-sec               { padding:12px 14px; border-radius:14px; }
 .dash-kpi-grid          { grid-template-columns:repeat(auto-fit,minmax(196px,1fr)); gap:10px; margin-bottom:10px; }
 .dash-tile-grid         { grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:10px; margin-bottom:10px; }

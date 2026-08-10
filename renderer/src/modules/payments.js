@@ -609,15 +609,15 @@ function filterStudentDropdown(query) {
   results.innerHTML = matches.map(t => {
     const room = DB.rooms.find(r => r.id === t.roomId);
     const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
-    return `<div onclick="selectStudentForPayment('${t.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:32px;height:32px;border-radius:8px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0">${t.name[0].toUpperCase()}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(t.name)}</div>
-          <div style="font-size:11px;color:var(--text3)">Room #${room?.number||'?'} · ${rtype?.name||''} · ${escHtml(t.phone||'No phone')}</div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:var(--green)">${fmtPKR(t.rent)}</div>
+    const nm = String(t.name||'?');
+    const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+    return `<div class="pf-hit" onclick="selectStudentForPayment('${t.id}')">
+      <div class="pf-hit__av ${payAvatarHue(nm)}">${escHtml(ini)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="pf-hit__name">${escHtml(nm)}</div>
+        <div class="pf-hit__sub">Room #${escHtml(String(room?.number||'?'))} · ${escHtml(rtype?.name||'')} · ${escHtml(t.phone||'No phone')}</div>
       </div>
+      <div class="pf-hit__rent">${fmtPKR(t.rent)}</div>
     </div>`;
   }).join('');
   results.style.display = 'block';
@@ -702,6 +702,14 @@ function recalcUnpaid() {
   if(st) st.value = (pa >= total && total > 0) ? 'Paid' : 'Pending';
   const etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + Number(extra).toLocaleString('en-PK');
+
+  // v5 modal: keep the running-totals strip above the footer in sync. Guarded
+  // so the older forms that also call recalcUnpaid() are unaffected.
+  const setSum = (id, val) => { const n = document.getElementById(id); if (n) n.textContent = fmtPKR(val); };
+  setSum('pf-sum-rent',  mr);
+  setSum('pf-sum-extra', extra);
+  setSum('pf-sum-paid',  pa);
+  setSum('pf-sum-due',   u);
 }
 
 function getExtraChargesTotal() {
@@ -968,62 +976,138 @@ function showAddPaymentModal() {
   const totalPaid=DB.payments.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
   const totalPending=DB.payments.filter(p=>p.status==='Pending').reduce((s,p)=>s+Number(p.amount),0);
 
-  showModal('modal-md','Add Payment',`
-    <div class="form-grid">
-      <div class="field col-full"><label>Search Student *</label>
-        <div style="position:relative;min-width:0">
-          <div style="position:relative">
-            <svg style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-            <input class="form-control" id="f-pstudent-search" style="padding-left:34px" placeholder="Type name, room# or phone to search…" oninput="filterStudentDropdown(this.value)" autocomplete="off">
-          </div>
-          <input type="hidden" id="f-pstudent" value="">
-          <div id="student-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4)"></div>
-        </div>
-        <div id="selected-student-info" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px"></div>
+  showModal('modal-md',
+  `<span class="pf-head"><b>Add / Edit Payment</b><s>Record a new payment or update existing payment details.</s></span>`,
+  `
+    <!-- 1. SEARCH STUDENT -->
+    <div class="pf-sec">
+      <div class="pf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+        1. Search Student
       </div>
-      <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-pamt" type="number" placeholder="Enter monthly rent" value="" oninput="recalcUnpaid()"></div>
-      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ppaid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaid()"></div>
-      <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
-      <!-- Concession + Extra Charges side by side -->
-      <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
-        <!-- LEFT: Concession PKR + Description stacked -->
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div>
-            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession / Discount (PKR)</label>
-            <input class="form-control" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession Description <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label>
-            <input class="form-control" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship, Early payment…">
-          </div>
+      <div style="position:relative;min-width:0">
+        <div class="pf-wrapin">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <input class="pf-in" id="f-pstudent-search" placeholder="Type student name, room number or phone…" oninput="filterStudentDropdown(this.value)" autocomplete="off">
+          <svg class="pf-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </div>
-        <!-- RIGHT: Extra Charges panel -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
-          <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">
-            <span>➕ Extra Charges / Add-ons</span>
-            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 9px" onclick="addExtraChargeRow()">+ Add</button>
-          </label>
+        <input type="hidden" id="f-pstudent" value="">
+        <div class="pf-results" id="student-search-results"></div>
+      </div>
+      <div class="pf-picked" id="selected-student-info"></div>
+    </div>
+
+    <!-- 2. PAYMENT DETAILS -->
+    <div class="pf-sec">
+      <div class="pf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+        2. Payment Details
+      </div>
+      <div class="pf-grid">
+        <div class="pf-f"><label for="f-pamt">Monthly Rent (PKR)<span class="req">*</span></label>
+          <input class="pf-in" id="f-pamt" type="number" placeholder="Enter monthly rent" value="" oninput="recalcUnpaid()"></div>
+        <div class="pf-f"><label for="f-ppaid">Amount Paid (PKR)<span class="req">*</span></label>
+          <input class="pf-in" id="f-ppaid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaid()"></div>
+        <div class="pf-f"><label for="f-padmfee">Admission Fee (PKR)</label>
+          <input class="pf-in" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
+      </div>
+
+      <div class="pf-grid" style="margin-top:13px;grid-template-columns:1fr 1fr;align-items:start">
+        <div>
+          <div class="pf-f"><label for="f-pconcession">Concession / Discount (PKR)</label>
+            <input class="pf-in" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
+          <div class="pf-f" style="margin-top:13px"><label for="f-pconcession-desc">Concession Description <span class="opt">(optional)</span></label>
+            <input class="pf-in" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship, Early payment…"></div>
+        </div>
+        <div class="pf-extra">
+          <div class="pf-extra__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></svg>
+            Extra Charges / Add-ons
+            <button type="button" class="pf-extra__add" onclick="addExtraChargeRow()">+ Add</button>
+          </div>
           <div id="extra-charges-list"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:12px">
-            <span style="color:var(--text3)">Total Extra:</span>
-            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">PKR 0</span>
-          </div>
+          <div class="pf-extra__total"><span>Total Extra:</span><b id="extra-charges-total">PKR 0</b></div>
         </div>
       </div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="0" readonly style="background:var(--bg3);font-weight:700;color:var(--red)" title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
-      <div class="field"><label>Payment Method</label><select class="form-control" id="f-pmethod">${pmOpts}</select></div>
-      <div class="field"><label>Month</label><input class="form-control" id="f-pmonth" value="${thisMonthLabel()}"></div>
-      <div class="field"><label>Status</label>
-        <select class="form-control" id="f-pstat">
-          <option value="Paid">✓ Paid</option>
-          <option value="Pending" selected>⏳ Unpaid / Pending</option>
-        </select>
+    </div>
+
+    <!-- 3. PAYMENT INFORMATION -->
+    <div class="pf-sec">
+      <div class="pf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
+        3. Payment Information
       </div>
-      <div class="field"><label>Payment Date</label><input class="form-control cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
-      <div class="field col-full"><label>Notes</label><input class="form-control" id="f-pnotes-main" placeholder="Optional notes…"></div>
+      <div class="pf-grid">
+        <div class="pf-f"><label for="f-punpaid">Unpaid / Remaining (PKR)</label>
+          <input class="pf-in pf-in--due" id="f-punpaid" type="number" value="0" readonly
+            title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
+        <div class="pf-f"><label for="f-pmethod">Payment Method<span class="req">*</span></label>
+          <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
+        <div class="pf-f"><label for="f-pmonth">Month<span class="req">*</span></label>
+          <input class="pf-in" id="f-pmonth" value="${escHtml(thisMonthLabel())}"></div>
+      </div>
+      <div class="pf-grid" style="margin-top:13px">
+        <div class="pf-f"><label for="f-pdate">Payment Date<span class="req">*</span></label>
+          <div class="pf-wrapin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+            <input class="pf-in cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}">
+          </div></div>
+        <div class="pf-f"><label for="f-pdue">Due Date</label>
+          <div class="pf-wrapin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+            <input class="pf-in cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}">
+          </div></div>
+        <div class="pf-f"><label for="f-pstat">Status<span class="req">*</span></label>
+          <select class="pf-sel" id="f-pstat">
+            <option value="Paid">Paid</option>
+            <option value="Pending" selected>Unpaid / Pending</option>
+          </select></div>
+      </div>
+    </div>
+
+    <!-- 4. NOTES -->
+    <div class="pf-sec">
+      <div class="pf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        4. Notes
+      </div>
+      <textarea class="pf-ta" id="f-pnotes-main" maxlength="250" placeholder="Add any notes about this payment…" oninput="pfCount()"></textarea>
+      <div class="pf-count" id="f-pnotes-count">0/250</div>
+    </div>
+
+    <!-- RUNNING TOTALS — kept in sync by recalcUnpaid() -->
+    <div class="pf-sum">
+      <div class="pf-sum__c dh-blue">
+        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/></svg></span>
+        <div><div class="pf-sum__l">Monthly Rent</div><div class="pf-sum__v" id="pf-sum-rent">PKR 0</div></div>
+      </div>
+      <div class="pf-sum__c dh-violet">
+        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+        <div><div class="pf-sum__l">Total Extra</div><div class="pf-sum__v" id="pf-sum-extra">PKR 0</div></div>
+      </div>
+      <div class="pf-sum__c dh-green">
+        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></span>
+        <div><div class="pf-sum__l">Total Paid</div><div class="pf-sum__v" id="pf-sum-paid">PKR 0</div></div>
+      </div>
+      <div class="pf-sum__c dh-red">
+        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+        <div><div class="pf-sum__l">Remaining</div><div class="pf-sum__v" id="pf-sum-due">PKR 0</div></div>
+      </div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitAddPayment()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitAddPayment()"><span class="micon" style="font-size:15px">payments</span> Add Payment</button>`);
+  `<button class="pf-btn" onclick="closeModal()">Cancel</button>
+   <button class="pf-btn" onclick="printAndSubmitAddPayment()">
+     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+     Print &amp; Add Payment</button>
+   <button class="pf-btn pf-btn--go" onclick="submitAddPayment()">
+     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+     Add Payment</button>`);
+  recalcUnpaid();   // paint the running totals from the initial (empty) state
+}
+
+// Notes counter for the payment modal.
+function pfCount() {
+  const ta = document.getElementById('f-pnotes-main'), el = document.getElementById('f-pnotes-count');
+  if (ta && el) el.textContent = ta.value.length + '/250';
 }
 async function submitAddPayment() {
   // Try to auto-select if only one student matches the search text

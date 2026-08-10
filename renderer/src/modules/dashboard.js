@@ -268,7 +268,7 @@ function renderDashboard() {
   <div class="dash-kpi-grid">
 
     <!-- Total Revenue — blue -->
-    <div onclick="navigate('payments')" class="dash-card dash-card--click dh-blue">
+    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-blue">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
         <div class="dash-kpi__label">Total<br>Revenue</div>
@@ -284,7 +284,7 @@ function renderDashboard() {
 
     <!-- Available Fund — green when in profit, red when the fund is negative
          (a negative fund is genuine danger, not decoration) -->
-    <div onclick="navigate('reports')" class="dash-card dash-card--click ${netProfit>=0?'dh-green':'dh-red'}">
+    <div onclick="navigate('reports')" class="dsh-card dsh-card--click ${netProfit>=0?'dh-green':'dh-red'}">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
         <div class="dash-kpi__label">Available<br>Fund</div>
@@ -298,7 +298,7 @@ function renderDashboard() {
     </div>
 
     <!-- Expenses — red -->
-    <div onclick="navigate('expenses')" class="dash-card dash-card--click dh-red">
+    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
         <div class="dash-kpi__label">Expenses</div>
@@ -310,7 +310,7 @@ function renderDashboard() {
     </div>
 
     <!-- Funds Transfer — violet -->
-    <div onclick="showAddTransferModal()" class="dash-card dash-card--click dh-violet">
+    <div onclick="showAddTransferModal()" class="dsh-card dsh-card--click dh-violet">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
         <div class="dash-kpi__label">Funds<br>Transfer</div>
@@ -322,7 +322,7 @@ function renderDashboard() {
     </div>
 
     <!-- Pending — amber -->
-    <div onclick="navigate('payments')" class="dash-card dash-card--click dh-amber">
+    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-amber">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
         <div class="dash-kpi__label">Pending</div>
@@ -339,7 +339,7 @@ function renderDashboard() {
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div class="dash-tile-grid">
-    <div onclick="showOccupiedRoomsModal()" class="dash-card dash-card--click dh-blue">
+    <div onclick="showOccupiedRoomsModal()" class="dsh-card dsh-card--click dh-blue">
       <div class="dash-tile__head">
         <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
         <div style="min-width:0">
@@ -355,7 +355,7 @@ function renderDashboard() {
       <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%"></div></div>
     </div>
 
-    <div onclick="showVacantRoomsModal()" class="dash-card dash-card--click dh-green">
+    <div onclick="showVacantRoomsModal()" class="dsh-card dsh-card--click dh-green">
       <div class="dash-tile__head">
         <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
         <div style="min-width:0">
@@ -370,7 +370,7 @@ function renderDashboard() {
       <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%"></div></div>
     </div>
 
-    <div onclick="navigate('students')" class="dash-card dash-card--click dh-violet">
+    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-violet">
       <div class="dash-tile__head">
         <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
         <div style="min-width:0">

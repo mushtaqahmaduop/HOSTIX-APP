@@ -241,22 +241,22 @@ body.light-theme #header {
 #hdr-back-btn:hover { background: var(--bg3) !important; color: var(--text) !important; }
 
 /* Search pill */
-.hdr-search {
+.hdr-find {
     display: flex; align-items: center; gap: 8px;
     background: var(--card); border: 1px solid var(--border2);
     border-radius: 11px; padding: 0 10px; height: 40px;
     transition: border-color .15s ease, box-shadow .15s ease;
 }
-.hdr-search:focus-within {
+.hdr-find:focus-within {
     border-color: var(--sb-active);
     box-shadow: 0 0 0 3px rgba(59,130,246,.12);
 }
-.hdr-search__ico { color: var(--text3); display: flex; flex-shrink: 0; }
-.hdr-search input {
+.hdr-find__ico { color: var(--text3); display: flex; flex-shrink: 0; }
+.hdr-find input {
     flex: 1; min-width: 0; background: none; border: none; outline: none;
     color: var(--text); font-family: var(--font); font-size: 13px; padding: 0;
 }
-.hdr-search input::placeholder { color: var(--text3); }
+.hdr-find input::placeholder { color: var(--text3); }
 .hdr-kbd {
     flex-shrink: 0; cursor: pointer;
     font-size: 10px; font-weight: 700; color: var(--text3);
@@ -390,7 +390,7 @@ body.light-theme .btn-primary:hover {
     font-size: 13px; font-weight: 600; white-space: nowrap;
 }
 
-/* The old header search block is replaced by .hdr-search */
+/* The old header search block is replaced by .hdr-find */
 #hdr-search-wrap { flex: 1; max-width: 380px; min-width: 0; margin: 0; position: relative; }
 
 /* The warden identity moved to the user chip + sidebar card. #role-badge stays
