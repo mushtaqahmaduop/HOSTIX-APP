@@ -82,10 +82,10 @@ async function showBackupRestoreModal() {
   const roomCount = DB.rooms.length;
 
   showModal('modal-md',`${MODAL_ICONS.shieldCheck} Backup & Restore Data`,`
-    <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
       <div>${MODAL_ICONS.lock}</div>
       <div>
-        <div style="font-size:13px;font-weight:700;color:var(--teal)">Your data is safe in this browser</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Your data is safe in this browser</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Export a backup file to your PC/phone to protect against browser data loss</div>
       </div>
     </div>
@@ -93,26 +93,26 @@ async function showBackupRestoreModal() {
     <!-- Stats row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--accent-strong)">${studentCount}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--text)">${studentCount}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Students</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--green)">${roomCount}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--text)">${roomCount}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Rooms</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--blue)">${paymentCount}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--text)">${paymentCount}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Payments</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--purple)">${dataSize}KB</div>
+        <div style="font-size:20px;font-weight:900;color:var(--text)">${dataSize}KB</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Data Size</div>
       </div>
     </div>
 
     <!-- Export section -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.download} Export / Download Backup</div>
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.download} Export / Download Backup</div>
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">Download a <strong style="color:var(--text)">.json</strong> backup file containing all your hostel data. Store it on your PC, USB, or Google Drive.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="exportBackup('json')" style="flex:1">
@@ -128,7 +128,7 @@ async function showBackupRestoreModal() {
 
     <!-- Restore section -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
       <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
         <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.alertTriangle}</span> <strong>Warning:</strong> Restoring will <strong style="color:var(--red)">replace ALL current data</strong>. Make sure to export a backup first!
       </div>
@@ -312,8 +312,8 @@ function statusBadge(s) {
 function pmBadge(m) {
   // BUG FIX: 'EasypaIsa' was a dead duplicate key with a capital-I typo that
   // could never match any real payment method. Removed. EasyPaisa is sufficient.
-  const map={Cash:'badge-green',JazzCash:'badge-purple',EasyPaisa:'badge-teal','Bank Transfer':'badge-blue',Cheque:'badge-amber'};
-  return `<span class="badge ${map[m]||'badge-gray'}">${escHtml(m||'—')}</span>`;
+  // Payment methods are categories, not status — neutral pills per the rebrand.
+  return `<span class="badge badge-gray">${escHtml(m||'—')}</span>`;
 }
 
 
@@ -385,9 +385,11 @@ function pmBadge(m) {
       border:none;background:transparent;
     }
     ._cdp-day:hover{background:var(--bg3,rgba(255,255,255,0.08))}
-    ._cdp-day.today{background:var(--accent);color:#000;font-weight:800}
-    ._cdp-day.today:hover{background:var(--accent-strong)}
-    ._cdp-day.selected{background:var(--blue,#4a9cf0);color:#fff;font-weight:800}
+    /* Today = accent ring, selected = accent fill. Two accent states instead of
+       accent-vs-blue, so the picker stops introducing an off-brand hue. */
+    ._cdp-day.today{color:var(--accent);font-weight:800;box-shadow:inset 0 0 0 1px var(--accent)}
+    ._cdp-day.today:not(.selected):hover{background:var(--bg3,rgba(255,255,255,0.08))}
+    ._cdp-day.selected{background:var(--accent);color:#fff;font-weight:800;box-shadow:none}
     ._cdp-day.other-month{color:var(--text3,#6b7a99);opacity:0.45}
     ._cdp-day.other-month:hover{opacity:0.7}
     .cdp-input-wrap{position:relative;display:inline-block;width:100%}
