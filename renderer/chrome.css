@@ -26,6 +26,7 @@
     --sb-fg3:      rgba(255,255,255,.40);
     --sb-hover:    rgba(255,255,255,.07);
     --sb-active:   #3b82f6;
+    --sb-active-hover:#60a5fa;
     --sb-active-fg:#ffffff;
     --sb-divider:  rgba(255,255,255,.08);
     --sb-avatar:   #3b82f6;
@@ -43,6 +44,7 @@ body.light-theme {
     --sb-fg3:      rgba(255,255,255,.44);
     --sb-hover:    rgba(255,255,255,.08);
     --sb-active:   #2563eb;
+    --sb-active-hover:#1d4ed8;
     --sb-active-fg:#ffffff;
     --sb-divider:  rgba(255,255,255,.10);
     --sb-avatar:   #2563eb;
@@ -90,16 +92,18 @@ body.light-theme #sidebar {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Collapse affordance — the circular chevron on the sidebar edge */
+/* Collapse affordance. It sits just INSIDE the rail: #sidebar is
+   `overflow:hidden`, so the half-outside placement the mock shows was being
+   clipped into a sliver. */
 #sidebar .sidebar-collapse-btn {
-    position: absolute; top: 26px; right: -11px; z-index: 5;
-    width: 22px; height: 22px; border-radius: 50%;
+    position: absolute; top: 22px; right: 12px; z-index: 5;
+    width: 24px; height: 24px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: var(--card); color: var(--text2);
-    border: 1px solid var(--border2); cursor: pointer; padding: 0;
-    box-shadow: var(--shadow-sm);
+    background: var(--sb-hover); color: var(--sb-fg2);
+    border: 1px solid var(--sb-divider); cursor: pointer; padding: 0;
+    box-shadow: none; transition: var(--transition);
 }
-#sidebar .sidebar-collapse-btn:hover { color: var(--sb-active); border-color: var(--sb-active); }
+#sidebar .sidebar-collapse-btn:hover { background: var(--sb-active); color: #fff; border-color: var(--sb-active); }
 
 /* Nav */
 #sidebar .sb-nav { padding: 14px 12px; }
@@ -134,11 +138,34 @@ body.light-theme #sidebar {
 #sidebar .nav-item .nav-icon { width: 19px; height: 19px; opacity: .95; }
 #sidebar .nav-item--danger { color: #f87171 !important; }
 
+/* style.css paints this strip with `background: var(--sidebar-bg)`, which is
+   #f2f2f2 in light theme — a light-grey band across the bottom of a navy rail,
+   with white labels on it that were almost unreadable. It inherits the rail
+   colour instead. */
 #sidebar .sidebar__bottom {
+    background: transparent;
     border-top: 1px solid var(--sb-divider);
-    padding: 12px 12px 10px;
+    padding: 10px 12px 8px;
 }
-#sidebar .sidebar__bottom .nav-item { margin-bottom: 2px; }
+#sidebar .sidebar__bottom .nav-item { margin-bottom: 2px; font-size: 13px; padding: 9px 12px; }
+#sidebar .sidebar__bottom .nav-icon { width: 18px; height: 18px; }
+
+/* Nav labels must not wrap — "Complaints & Maintenance" broke onto a second
+   line and threw off the rhythm of every row below it. */
+#sidebar .nav-label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+#sidebar .nav-badge {
+    margin-left: auto; flex-shrink: 0;
+    background: var(--sb-active); color: #fff;
+    min-width: 19px; height: 19px; border-radius: 999px;
+    font-size: 10px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; padding: 0 5px;
+}
+#sidebar .nav-item.active .nav-badge { background: rgba(255,255,255,.28); }
 
 /* User card pinned under the nav */
 .sb-user {
@@ -321,6 +348,30 @@ body.light-theme #header {
 }
 .hdr-note__msg { font-size: 12.5px; font-weight: 500; color: var(--text); line-height: 1.4; }
 .hdr-note__empty { padding: 22px 12px; text-align: center; font-size: 12.5px; color: var(--text3); }
+
+/* ── Primary action colour ───────────────────────────────────────────────────
+   style.css paints .btn-primary as a violet gradient (--accent), so "Add
+   Student" came out purple. In both reference designs the primary action is
+   flat blue; violet stays reserved for what it actually means on these screens
+   (funds transfer, seat availability, active students).
+
+   This changes the primary button app-wide, which is the intent — the accent
+   TOKEN is untouched, so every other violet element keeps its meaning.
+   `body.light-theme .btn-primary` is matched explicitly because style.css
+   defines it at that specificity; a bare .btn-primary would lose to it. */
+.btn-primary,
+body.light-theme .btn-primary {
+    background: var(--sb-active);
+    color: #fff;
+    box-shadow: none;
+    text-shadow: none;
+}
+.btn-primary:hover,
+body.light-theme .btn-primary:hover {
+    background: var(--sb-active-hover);
+    transform: none;
+    box-shadow: 0 2px 10px rgba(37,99,235,.28);
+}
 
 /* Primary header action */
 #header .btn-primary,

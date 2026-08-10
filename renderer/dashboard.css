@@ -58,7 +58,7 @@
 /* ── Quick tiles (row 2) ─────────────────────────────────────────────────── */
 .dash-tile-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(258px,1fr)); gap:12px; margin-bottom:12px; }
 .dash-tile__head  { display:flex; align-items:center; gap:12px; margin-bottom:11px; }
-.dash-tile__num   { font-size:30px; font-weight:800; line-height:1; letter-spacing:-.02em; color:var(--text); font-family:var(--font-mono); }
+.dash-tile__num   { font-size:30px; font-weight:800; line-height:1; letter-spacing:-.02em; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; }
 .dash-tile__caret { margin-left:auto; flex-shrink:0; font-size:20px; line-height:1; color:var(--text3); }
 
 /* ── Section cards ───────────────────────────────────────────────────────── */
@@ -99,19 +99,19 @@
     background:var(--dash-sunk); border:1px solid var(--border); border-radius:10px; padding:7px 11px;
 }
 .dash-mini__k { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--text3); }
-.dash-mini__v { font-size:14px; font-weight:800; letter-spacing:-.02em; color:var(--dh); font-family:var(--font-mono); }
+.dash-mini__v { font-size:14px; font-weight:800; letter-spacing:-.02em; color:var(--dh); font-family:var(--font); font-variant-numeric:tabular-nums; }
 
 /* ── Seat availability ───────────────────────────────────────────────────── */
 .dash-seat-sum         { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
 .dash-seat-sum > div   { background:var(--dash-sunk); border:1px solid var(--border); border-radius:12px; padding:10px 8px; text-align:center; cursor:pointer; transition:var(--transition); }
 .dash-seat-sum > div:hover { border-color:var(--dh); }
-.dash-seat-sum .n      { font-size:24px; font-weight:800; line-height:1.1; color:var(--dh); font-family:var(--font-mono); }
+.dash-seat-sum .n      { font-size:24px; font-weight:800; line-height:1.1; color:var(--dh); font-family:var(--font); font-variant-numeric:tabular-nums; }
 .dash-seat-sum .l      { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--text3); margin-top:3px; }
 
 .dash-room-wrap    { display:flex; flex-wrap:wrap; gap:5px; max-height:104px; overflow-y:auto; }
 .dash-room         { background:var(--dh-bg); border:1px solid transparent; border-radius:9px; padding:6px 8px; min-width:44px; text-align:center; cursor:pointer; transition:transform .15s ease; }
 .dash-room:hover   { transform:translateY(-2px); }
-.dash-room .n      { font-size:12px; font-weight:800; line-height:1.1; color:var(--dh); font-family:var(--font-mono); }
+.dash-room .n      { font-size:12px; font-weight:800; line-height:1.1; color:var(--dh); font-family:var(--font); font-variant-numeric:tabular-nums; }
 .dash-room .c      { font-size:9px; color:var(--text3); margin-top:1px; }
 .dash-room.is-full         { background:var(--dash-sunk); border-color:var(--border); }
 .dash-room.is-full .n      { color:var(--text2); }
@@ -126,7 +126,7 @@
 .dash-rt__meta     { flex-shrink:0; width:64px; text-align:right; font-size:11px; color:var(--text3); }
 .dash-rt__bar      { flex-shrink:0; width:92px; height:6px; border-radius:999px; background:var(--dash-track); overflow:hidden; }
 .dash-rt__bar > i  { display:block; height:100%; border-radius:999px; transition:width .5s ease; }
-.dash-rt__pct      { flex-shrink:0; width:40px; text-align:right; font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-mono); }
+.dash-rt__pct      { flex-shrink:0; width:40px; text-align:right; font-size:12px; font-weight:700; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; }
 
 /* ── Pending payment rows ────────────────────────────────────────────────── */
 .dash-pay            { display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid var(--border); }
@@ -135,7 +135,7 @@
 .dash-pay__id        { flex:1; min-width:0; cursor:pointer; }
 .dash-pay__name      { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .dash-pay__room      { font-size:11px; color:var(--text3); margin-top:1px; }
-.dash-pay__amt       { font-size:13px; font-weight:800; color:var(--red); font-family:var(--font-mono); text-align:right; white-space:nowrap; }
+.dash-pay__amt       { font-size:13px; font-weight:800; color:var(--red); font-family:var(--font); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
 .dash-pay__due       { font-size:10.5px; color:var(--text3); margin-top:1px; text-align:right; white-space:nowrap; }
 .dash-status         { font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
 

@@ -23,7 +23,7 @@
     background:var(--dh-bg); color:var(--dh);
 }
 .pay-stat__label { font-size:12px; font-weight:600; color:var(--text2); line-height:1.3; }
-.pay-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-family:var(--font-mono); line-height:1.1; }
+.pay-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; line-height:1.1; }
 .pay-stat__val .cur { font-size:13px; font-weight:600; color:var(--text3); font-family:var(--font); margin-right:5px; }
 .pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:6px; }
 .pay-stat__sub   { font-size:11px; color:var(--text3); }
@@ -120,16 +120,16 @@
 .pay-who__meta { font-size:10.5px; color:var(--text3); margin-top:2px; display:flex; align-items:center; gap:4px; white-space:nowrap; }
 .pay-who__meta svg { opacity:.7; flex-shrink:0; }
 
-.pay-room__n  { font-size:13px; font-weight:800; color:var(--text); font-family:var(--font-mono); }
+.pay-room__n  { font-size:13px; font-weight:800; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; }
 .pay-room__t  { font-size:10.5px; color:var(--text3); margin-top:2px; }
 
-.pay-money      { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--font-mono); white-space:nowrap; }
+.pay-money      { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .pay-money--in  { color:var(--green); }
 .pay-money--due { color:var(--red); }
 .pay-money--nil { color:var(--text3); font-weight:600; }
 .pay-dash       { color:var(--text3); }
 .pay-extra      { font-size:10.5px; color:var(--text3); line-height:1.5; }
-.pay-extra b    { display:block; color:var(--text2); font-weight:700; font-family:var(--font-mono); }
+.pay-extra b    { display:block; color:var(--text2); font-weight:700; font-family:var(--font); font-variant-numeric:tabular-nums; }
 
 .pay-pill   { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
               font-size:10.5px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }

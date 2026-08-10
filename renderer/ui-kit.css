@@ -37,3 +37,14 @@ body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#e
    a second cue (CLAUDE.md rule 6 — dark surfaces need real separation). */
 :root            { --dash-sunk:rgba(255,255,255,.055); --dash-track:rgba(255,255,255,.10); }
 body.light-theme { --dash-sunk:#f6f7f9;                --dash-track:#e9ecf1;              }
+
+/* ── Numerals ────────────────────────────────────────────────────────────────
+   style.css sets the shared money component in --font-mono, which rendered
+   every headline figure in the typewriter face. The reference designs use the
+   same proportional sans as the rest of the UI, so the mono is dropped here
+   and `tabular-nums` keeps digits column-aligned without it. Same specificity
+   as the style.css rule — this file loads later, so it wins. */
+.money-value .money-amt {
+    font-family: var(--font);
+    font-variant-numeric: tabular-nums;
+}
