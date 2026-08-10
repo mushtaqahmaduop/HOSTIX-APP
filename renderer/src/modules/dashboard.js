@@ -81,6 +81,81 @@ function generateRooms(roomTypes) {
   return rooms;
 }
 
+// ── DASHBOARD v5 HELPERS ─────────────────────────────────────────────────────
+// Small pure helpers backing the KPI cards. Everything here derives from DB —
+// no placeholder series, no invented deltas. If the data isn't there the
+// component renders its own empty state rather than a made-up number.
+
+// Real month-by-month series for the current year, truncated at the current
+// month (future months are absent, not zero — a zero would read as "no income
+// in November" on a chart).
+function _dashSeries() {
+  const now = new Date();
+  const yr  = now.getFullYear();
+  const cur = now.getMonth(); // 0-based
+  const out = { rev:[], exp:[], trf:[], pend:[] };
+  for (let i = 0; i <= cur; i++) {
+    const k = yr + '-' + String(i+1).padStart(2,'0');
+    out.rev.push(calcRevenue(k));
+    out.exp.push((DB.expenses||[]).filter(e=>(e.date||'').startsWith(k))
+      .reduce((s,e)=>s+Number(e.amount||0),0));
+    out.trf.push((DB.transfers||[]).filter(t=>(t.date||'').startsWith(k))
+      .reduce((s,t)=>s+Number(t.amount||0),0));
+    out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
+      .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
+  }
+  return out;
+}
+
+// Inline SVG sparkline. Stroke colour comes from the parent's --dh via CSS
+// (an SVG *attribute* cannot resolve a CSS variable — only the stylesheet can),
+// so .dash-spark polyline{stroke:var(--dh)} in dashboard.css does the colouring.
+function _dashSpark(series) {
+  const pts = (series||[]).filter(v=>typeof v==='number' && isFinite(v));
+  if (pts.length < 2) return '<div class="dash-spark-empty">not enough history yet</div>';
+  const W = 200, H = 34;
+  const max = Math.max.apply(null, pts), min = Math.min.apply(null, pts);
+  const span = (max - min) || 1;
+  const d = pts.map(function(v,i){
+    const x = (i/(pts.length-1))*W;
+    const y = H - ((v-min)/span)*(H-4) - 2;
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  return '<svg class="dash-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'
+       + '<polyline points="'+d+'" fill="none" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+// Month-over-month change of the last two real months. Returns null when there
+// is no prior month to compare against, so the card shows nothing instead of a
+// fabricated "+0%".
+function _dashDelta(series) {
+  if (!series || series.length < 2) return null;
+  const cur = series[series.length-1], prev = series[series.length-2];
+  if (!prev) return null;
+  return ((cur - prev) / prev) * 100;
+}
+
+// Stable avatar hue from the name — same student always gets the same colour
+// across renders (index-based rotation would reshuffle whenever the list moves).
+function _dashAvatarHue(name) {
+  const hues = ['dh-violet','dh-blue','dh-green','dh-amber','dh-red'];
+  let h = 0;
+  const s = String(name||'?');
+  for (let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return hues[h % hues.length];
+}
+
+// Due-state of a pending payment, derived from its own dueDate.
+function _dashDueState(p) {
+  const due = p.dueDate || '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(due)) return { label:'Pending', hue:'dh-slate' };
+  const d0 = new Date(today()), d1 = new Date(due.slice(0,10));
+  const days = Math.round((d1 - d0) / 86400000);
+  if (days <  0) return { label:'Overdue',  hue:'dh-red'   };
+  if (days <= 3) return { label:'Due Soon', hue:'dh-amber' };
+  return { label:'Pending', hue:'dh-slate' };
+}
+
 function renderDashboard() {
   // Alert system
   const overduePayments = DB.payments.filter(p=>p.status==='Pending');
@@ -98,13 +173,12 @@ function renderDashboard() {
   if(openMaint>0) alerts.push({type:'info',icon:ICON_WRENCH,msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
   if(openComp>0) alerts.push({type:'danger',icon:ICON_MESSAGE,msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
   if(occRate < 60) alerts.push({type:'warning',icon:ICON_HOME,msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
-  const alertColors = {warning:'var(--amber)',info:'var(--blue)',danger:'var(--red)'};
-  const alertBg = {warning:'var(--amber-dim)',info:'var(--blue-dim)',danger:'var(--red-dim)'};
-  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:20px">${alerts.map(a=>`
-    <div onclick="${a.action}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${alertBg[a.type]};border:1px solid ${alertColors[a.type]}55;border-radius:10px;cursor:pointer;transition:var(--transition)" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-      <span class="icon-box icon-box-sm" style="background:transparent;color:${alertColors[a.type]}">${a.icon}</span>
-      <span style="font-size:13px;font-weight:600;color:${alertColors[a.type]}">${a.msg}</span>
-      <span style="margin-left:auto;font-size:12px;color:${alertColors[a.type]}">View →</span>
+  const alertHue = {warning:'dh-amber',info:'dh-blue',danger:'dh-red'};
+  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:12px">${alerts.map(a=>`
+    <div onclick="${a.action}" class="dash-banner ${alertHue[a.type]}">
+      <span class="dash-chip">${a.icon}</span>
+      <span class="dash-banner__msg">${a.msg}</span>
+      <span class="dash-banner__go">View →</span>
     </div>`).join('')}</div>`:'';
 
   const occ = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
@@ -139,22 +213,15 @@ function renderDashboard() {
     const typeFilledSeats = DB.students.filter(t=>t.status==='Active'&&!t.isForced&&tRooms.some(r=>r.id===t.roomId)).length;
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
+    // type.color is DATA (owner-configured per room type), not styling — it
+    // stays as the literal colour for the dot and the fill.
     seatBreakdown += `
-      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="width:10px;height:10px;border-radius:3px;background:${type.color};flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(type.name)}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--text2);font-family:var(--font-mono)">${typeFilledSeats}/${typeTotalSeats}</span>
-          </div>
-          <div style="height:5px;background:var(--bg4);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${typePct}%;background:${type.color};border-radius:3px;transition:width 0.5s"></div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:11px;color:var(--text2);font-weight:600">${typeAvail} free</div>
-          <div style="font-size:10px;color:var(--text3)">${typePct}% full</div>
-        </div>
+      <div class="dash-rt" title="${escHtml(type.name)} — ${typeFilledSeats}/${typeTotalSeats} seats filled, ${typeAvail} free">
+        <span class="dash-rt__dot" style="background:${escHtml(type.color)}"></span>
+        <span class="dash-rt__name">${escHtml(type.name)}</span>
+        <span class="dash-rt__meta">${tRooms.length} room${tRooms.length===1?'':'s'}</span>
+        <span class="dash-rt__bar"><i style="width:${typePct}%;background:${escHtml(type.color)}"></i></span>
+        <span class="dash-rt__pct">${typePct}%</span>
       </div>`;
   });
 
@@ -181,215 +248,227 @@ function renderDashboard() {
   // Seats availability bar chart data
   const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending');
 
+  // Real 12-month series behind the KPI sparklines + the revenue MoM delta.
+  const series   = _dashSeries();
+  const revDelta = _dashDelta(series.rev);
+
   return `
   ${pendingCancels.length>0?`
-  <div style="background:var(--red-dim);border:1px solid rgba(248,113,113,0.3);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="navigate('cancellations')">
-    <div style="display:flex;align-items:center;gap:10px"><span class="icon-box icon-box-sm red"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
-      <div><div style="font-size:13px;font-weight:700;color:var(--red)">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
-      <div style="font-size:11px;color:var(--text3)">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div></div>
+  <div class="dash-banner dh-red" style="margin-bottom:12px" onclick="navigate('cancellations')">
+    <span class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
+    <div>
+      <div class="dash-banner__msg">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div>
     </div>
-    <button class="btn btn-danger btn-sm" style="font-size:11px">View →</button>
+    <span class="dash-banner__go">View →</span>
   </div>`:''}
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin-bottom:12px">
-    <div onclick="navigate('payments')" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Total Revenue</div>
-        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
+  <div class="dash-kpi-grid">
+
+    <!-- Total Revenue — blue -->
+    <div onclick="navigate('payments')" class="dash-card dash-card--click dh-blue">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
+        <div class="dash-kpi__label">Total<br>Revenue</div>
+        <div class="dash-pill-stack">
+          ${revDelta!==null?`<span class="dash-pill ${revDelta>=0?'dh-green':'dh-red'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
+          <span class="dash-pill dh-slate">${paidCount} paid</span>
+        </div>
       </div>
-      <div>${moneyValue(collected,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--accent);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
+      <div class="dash-kpi__value">${moneyValue(collected,{size:"display"})}</div>
+      <div class="dash-track"><div class="dash-track__fill" style="width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%"></div></div>
+      <div class="dash-kpi__sub">of <span class="pkr">PKR</span>${fmtNum(totalExpected)} expected</div>
     </div>
-    <div onclick="navigate('reports')" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Available Fund</div>
-        <span class="badge ${netProfit>=0?'badge-gray':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
+
+    <!-- Available Fund — green when in profit, red when the fund is negative
+         (a negative fund is genuine danger, not decoration) -->
+    <div onclick="navigate('reports')" class="dash-card dash-card--click ${netProfit>=0?'dh-green':'dh-red'}">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
+        <div class="dash-kpi__label">Available<br>Fund</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
-      <div>${moneyValue(netProfit,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
+      <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display"})}</div>
+      <div class="dash-kpi__sub">
+        ${fmtPKR(collected)} − ${fmtPKR(moExp)}
+        ${moTransferDeduct>0?`<br>(transferred) &nbsp;− ${fmtPKR(moTransferDeduct)}`:''}
+      </div>
     </div>
-    <div onclick="navigate('expenses')" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Expenses</div>
-        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
+
+    <!-- Expenses — red -->
+    <div onclick="navigate('expenses')" class="dash-card dash-card--click dh-red">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
+        <div class="dash-kpi__label">Expenses</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span></div>
       </div>
-      <div>${moneyValue(moExp,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">this month</div>
+      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display"})}</div>
+      <div class="dash-kpi__sub">this month</div>
+      ${_dashSpark(series.exp)}
     </div>
-    <!-- Funds Transfer Card -->
-    <div onclick="showAddTransferModal()" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>':''}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon" style="background:var(--bg4)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text2)"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
-        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
+
+    <!-- Funds Transfer — violet -->
+    <div onclick="showAddTransferModal()" class="dash-card dash-card--click dh-violet">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
+        <div class="dash-kpi__label">Funds<br>Transfer</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${moTransfers.length} record${moTransfers.length===1?'':'s'}</span></div>
       </div>
-      <div>${moneyValue(moTransferTotal,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
+      <div class="dash-kpi__value">${moneyValue(moTransferTotal,{size:"display"})}</div>
+      <div class="dash-kpi__sub">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
+      ${_dashSpark(series.trf)}
     </div>
-    <div onclick="navigate('payments')" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Pending</div>
-        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
+
+    <!-- Pending — amber -->
+    <div onclick="navigate('payments')" class="dash-card dash-card--click dh-amber">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
+        <div class="dash-kpi__label">Pending</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
+          <span class="dash-pill">${pendingCount} unpaid</span>
+        </div>
       </div>
-      <div>${moneyValue(pending,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">click to collect</div>
+      <div class="dash-kpi__value">${moneyValue(pending,{size:"display"})}</div>
+      <div class="dash-kpi__sub">click to collect</div>
+      ${_dashSpark(series.pend)}
     </div>
   </div>`;})()}
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-    <div onclick="showOccupiedRoomsModal()" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Occupied Rooms</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--text)">${occ}</span>
-          <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
-          ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-gray" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+  <div class="dash-tile-grid">
+    <div onclick="showOccupiedRoomsModal()" class="dash-card dash-card--click dh-blue">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Occupied Rooms</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${occ}</span>
+            <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
+            ${seatsRemainingInOccupiedRooms>0?`<span class="dash-pill dh-green">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%"></div></div>
     </div>
-    <div onclick="showVacantRoomsModal()" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Vacant Rooms</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--text)">${vac}</span>
-          <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
+
+    <div onclick="showVacantRoomsModal()" class="dash-card dash-card--click dh-green">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Vacant Rooms</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${vac}</span>
+            <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%"></div></div>
     </div>
-    <div onclick="navigate('students')" class="stat-card" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px">Active Students</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--text)">${activeStudents}</span>
-          <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
+
+    <div onclick="navigate('students')" class="dash-card dash-card--click dh-violet">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Active Students</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${activeStudents}</span>
+            <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%"></div></div>
     </div>
   </div>
   <!-- ══ TREND + SEAT AVAILABILITY ROW ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-  <div class="card" style="padding:10px 14px 6px;position:relative;overflow:hidden">
-    <!-- Header: title row -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:26px;height:26px;border-radius:7px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text3)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
-        <div style="font-size:12px;font-weight:800;color:var(--text)">Revenue Trend <span style="font-size:9px;font-weight:400;color:var(--text3)">· Jan–Dec</span></div>
-      </div>
-      <!-- Legend -->
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--green);border-radius:2px"></span><span style="font-size:9px;color:var(--green);font-weight:700">Revenue</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--red);border-radius:2px"></span><span style="font-size:9px;color:var(--red);font-weight:700">Expenses</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--amber);border-radius:2px"></span><span style="font-size:9px;color:var(--amber);font-weight:700">Transfers</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:var(--accent);border-radius:2px"></span><span style="font-size:9px;color:var(--accent);font-weight:600">Pending</span></span>
+  <div class="dash-split">
+  <div class="dash-sec">
+    <!-- Header: title + legend -->
+    <div class="dash-sec__head">
+      <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
+      <span class="dash-sec__title">Revenue Trend</span>
+      <span class="dash-sec__sub">Jan – Dec</span>
+      <div class="dash-legend" style="margin-left:auto">
+        <span class="dash-legend__k dh-green"><i></i>Revenue</span>
+        <span class="dash-legend__k dh-red"><i></i>Expenses</span>
+        <span class="dash-legend__k dh-amber"><i></i>Transfers</span>
+        <span class="dash-legend__k dh-violet"><i></i>Pending</span>
       </div>
     </div>
-    <!-- KPI chips row -->
-    <div style="display:flex;gap:6px;margin-bottom:6px">
-      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Revenue</span>
-        <span style="font-size:15px;font-weight:900;color:var(--text);letter-spacing:-0.5px">${fmtPKR(collected)}</span>
-      </div>
-      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Expenses</span>
-        <span style="font-size:15px;font-weight:900;color:var(--text);letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
-      </div>
-      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Net</span>
-        <span style="font-size:13px;font-weight:900;color:var(--text);letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
-      </div>
+    <!-- This-month figures -->
+    <div class="dash-mini-row">
+      <div class="dash-mini dh-green"><span class="dash-mini__k">Revenue</span><span class="dash-mini__v">${fmtPKR(collected)}</span></div>
+      <div class="dash-mini dh-red"><span class="dash-mini__k">Expenses</span><span class="dash-mini__v">${fmtPKR(moExp)}</span></div>
+      <div class="dash-mini ${netProfit>=0?'dh-green':'dh-red'}"><span class="dash-mini__k">Net</span><span class="dash-mini__v">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span></div>
     </div>
     <!-- Chart.js canvas -->
-    <div id="trend-chart-wrap" style="position:relative;height:160px;">
+    <div id="trend-chart-wrap" style="position:relative;height:178px;">
       <div id="trend-hb" style="position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;pointer-events:none;display:none;z-index:9999;min-width:210px;box-shadow:var(--shadow);"></div>
       <canvas id="trend-canvas" style="display:block"></canvas>
     </div>
   </div>
+
   <!-- Seat availability — interactive room grid -->
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;overflow:hidden">
-      <!-- Header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:30px;height:30px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text3)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">Seat Availability</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="printSeatAvailability()" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
-          <button onclick="showSeatDetailModal('rooms')" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">Expand ↗</button>
+    <div class="dash-sec">
+      <div class="dash-sec__head">
+        <div class="dash-chip dh-violet" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+        <span class="dash-sec__title">Seat Availability</span>
+        <div class="dash-sec__tools">
+          <button class="dash-btn" onclick="printSeatAvailability()"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
+          <button class="dash-btn" onclick="showSeatDetailModal('rooms')">Expand ↗</button>
         </div>
       </div>
       <!-- Summary row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px">
-        <div onclick="showSeatDetailModal('rooms')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="All rooms">
-          <div style="font-size:20px;font-weight:900;color:var(--text)">${totalSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Total</div>
+      <div class="dash-seat-sum">
+        <div class="dh-violet" onclick="showSeatDetailModal('rooms')" title="All seats">
+          <div class="n">${totalSeats}</div><div class="l">Total</div>
         </div>
-        <div onclick="showSeatDetailModal('vacant')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Free seats">
-          <div style="font-size:20px;font-weight:900;color:var(--text)">${availSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Free</div>
+        <div class="dh-green" onclick="showSeatDetailModal('vacant')" title="Free seats">
+          <div class="n">${availSeats}</div><div class="l">Free</div>
         </div>
-        <div onclick="showSeatDetailModal('occupied')" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Filled seats">
-          <div style="font-size:20px;font-weight:900;color:var(--text)">${allActiveSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Filled</div>
+        <div class="dh-violet" onclick="showSeatDetailModal('occupied')" title="Filled seats">
+          <div class="n">${allActiveSeats}</div><div class="l">Filled</div>
         </div>
       </div>
       <!-- Per-room mini tiles -->
-      <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:88px;overflow-y:auto">
+      <div class="dash-room-wrap">
         ${DB.rooms.map(r=>{
           const rtype2=getRoomType(r);
           const cap=rtype2?.capacity||1;
           const occ2=getRoomOccupancy(r);
           const free=cap-occ2;
-          const pct=Math.round(occ2/cap*100);
           const isFull=free===0;
-          const students2=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
-          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'var(--bg4)':'rgba(124,58,237,0.1)'};border:1px solid ${isFull?'var(--border)':'rgba(124,58,237,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--text2)':'var(--accent-strong)'}">${r.number}</div>
-            <div style="font-size:9px;color:var(--text3)">${occ2}/${cap}</div>
-            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--text3)':'var(--accent)'};border-radius:2px"></div></div>
+          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" class="dash-room dh-violet${isFull?' is-full':''}">
+            <div class="n">${r.number}</div>
+            <div class="c">${occ2}/${cap}</div>
           </div>`;
         }).join('')}
       </div>
-      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--text3)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
+      <div style="display:flex;gap:12px;margin-top:9px;flex-wrap:wrap;align-items:center">
+        <span class="dash-key dh-violet"><i></i>Has free seats</span>
+        <span class="dash-key dh-slate"><i></i>Full</span>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
       </div>
     </div>
   </div><!-- end 2-col trend+seat grid -->
 
   <!-- ══ ROW 3+4: BY ROOM TYPE + PENDING PAYMENTS (same row) ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-  <div class="card" style="position:relative;margin-bottom:0">
-    <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>
-        By Room Type
-      </div>
-      <span style="font-size:11px;color:var(--text2);font-weight:700;background:var(--bg3);padding:3px 10px;border-radius:20px;border:1px solid var(--border)">${seatPct}% full</span>
+  <div class="dash-split">
+  <div class="dash-sec">
+    <div class="dash-sec__head" style="margin-bottom:4px">
+      <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+      <span class="dash-sec__title">By Room Type</span>
+      <span class="dash-pill dh-slate" style="margin-left:auto">${seatPct}% full</span>
     </div>
-    <div style="display:grid;grid-template-columns:140px 1fr;gap:16px;padding:8px 0">
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:18px;padding:8px 0;align-items:center">
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <canvas id="dash-roomtype-donut" width="260" height="260" style="width:130px;height:130px"></canvas>
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px">${filledSeats}<span style="color:var(--text3);font-weight:500">/${totalSeats}</span> <span style="font-size:10px;color:var(--text2);font-weight:500">seats</span></div>
+        <canvas id="dash-roomtype-donut" width="280" height="280" style="width:140px;height:140px"></canvas>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:8px">${filledSeats}<span style="color:var(--text3);font-weight:500">/${totalSeats}</span> <span style="font-size:10px;color:var(--text3);font-weight:500">seats</span></div>
       </div>
       <div>
         ${seatBreakdown}
@@ -397,47 +476,48 @@ function renderDashboard() {
     </div>
   </div>
   <!-- PENDING PAYMENTS -->
-  <div class="card" style="position:relative;display:flex;flex-direction:column;margin-bottom:0">
-      <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0">
-        <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>
-          Pending Payments
-        </div>
-        <span class="badge badge-gray" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
+  <div class="dash-sec" style="display:flex;flex-direction:column">
+      <div class="dash-sec__head">
+        <div class="dash-chip dh-amber" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg></div>
+        <span class="dash-sec__title">Pending Payments</span>
+        <span class="dash-pill dh-slate">${pendingCount}</span>
+        ${pendingCount>0?`<button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>`:''}
       </div>
-      <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
+      <div style="flex:1;overflow-y:auto;max-height:288px">
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
         '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--green)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg></div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
           const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
-          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,48,80,0.5)">'
-          +'<div onclick="showViewStudentModal(\''+p.studentId+'\')" style="cursor:pointer;flex:1;min-width:0">'
-          +'<div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(p.studentName||'')+'</div>'
-          +'<div style="font-size:10px;color:var(--text3);margin-top:1px">Rm #'+(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
+          const due = _dashDueState(p);
+          const nm  = String(p.studentName||'?');
+          const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+          return '<div class="dash-pay">'
+          +'<div class="dash-av '+_dashAvatarHue(nm)+'">'+escHtml(ini)+'</div>'
+          +'<div class="dash-pay__id" onclick="showViewStudentModal(\''+p.studentId+'\')">'
+          +'<div class="dash-pay__name">'+escHtml(p.studentName||'')+'</div>'
+          +'<div class="dash-pay__room">Room '+(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
           +'</div>'
-          +'<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:8px">'
-          +'<div style="text-align:right">'
-          +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+fmtPKR(unpaidShow)+'</div>'
-          +'<div style="font-size:9px;color:var(--text3)">unpaid</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
+          +'<div>'
+          +'<div class="dash-pay__amt">'+fmtPKR(unpaidShow)+'</div>'
+          +'<div class="dash-pay__due">'+(p.dueDate?'Due: '+fmtDate(p.dueDate):'unpaid')+'</div>'
           +'</div>'
-          +'<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" style="font-size:10px;padding:3px 7px" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
-          +'<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" style="font-size:10px;padding:3px 7px" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
+          +'<span class="dash-status '+due.hue+'">'+due.label+'</span>'
+          +'<button class="dash-icon-btn dh-green" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
+          +'<button class="dash-icon-btn dh-slate" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:10px;border-top:1px solid var(--border);margin-top:auto;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" style="flex:1" onclick="navigate('payments')">View All →</button><button class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;border:none" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Remind</button></div>`:''}
+      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:9px;font-weight:600" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
     </div>
-  </div>
   </div><!-- end row3+4 grid -->
 
   <!-- ══ ROW 5: RECENT PAYMENTS ══ -->
-  <div class="card" style="position:relative">
-    <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>
-        Recent Payments
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('payments')" style="font-size:11px">View All →</button>
+  <div class="dash-sec">
+    <div class="dash-sec__head">
+      <div class="dash-chip dh-green" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div>
+      <span class="dash-sec__title">Recent Payments</span>
+      <button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>
     </div>
     ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
     '<div class="table-wrap" style="border:none">'
@@ -1194,7 +1274,10 @@ function drawRoomDonut() {
   var labels = [];
   var data = [];
   var colors = [];
-  var grayScale = ['#525252','#737373','#a3a3a3','#d4d4d4','#e5e5e5'];
+
+  // Room-type colours are DATA (owner-configured in Settings), not styling —
+  // the donut uses each type's own colour so it matches the legend beside it.
+  var fallback = ['#3b82f6','#22c55e','#f97316','#8b5cf6','#ef4444'];
 
   types.forEach(function(t, i) {
     var tRooms = DB.rooms.filter(function(r){return r.typeId===t.id;});
@@ -1202,14 +1285,9 @@ function drawRoomDonut() {
     if(seats > 0) {
       labels.push(t.name);
       data.push(seats);
-      colors.push(grayScale[i % grayScale.length]);
+      colors.push(t.color || fallback[i % fallback.length]);
     }
   });
-
-  if(data.length > 0) {
-    var maxIdx = data.indexOf(Math.max.apply(null, data));
-    colors[maxIdx] = '#38bdf8';
-  }
 
   _dashDonutChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -1219,11 +1297,11 @@ function drawRoomDonut() {
         data: data,
         backgroundColor: colors,
         borderWidth: 0,
-        hoverOffset: 4
+        hoverOffset: 5
       }]
     },
     options: {
-      cutout: '65%',
+      cutout: '68%',
       responsive: false,
       maintainAspectRatio: false,
       animation: false,
@@ -1328,11 +1406,21 @@ function drawTrendChart() {
       labels:months.map(function(m){return m.label;}),
       datasets:[{
         data:plotRev,
-        borderColor:function(c){var g=c.chart.ctx.createLinearGradient(0,0,c.chart.width,0);g.addColorStop(0,cGreen);g.addColorStop(1,cGreen+'4d');return g;},
+        borderColor:cGreen,
         borderWidth:2.5,
         pointBackgroundColor:ptColors, pointBorderColor:ptColors,
-        pointRadius:function(c){return real[c.dataIndex]?6:3;}, pointHoverRadius:9,
-        tension:0.35, fill:false,
+        pointRadius:function(c){return real[c.dataIndex]?5:3;}, pointHoverRadius:8,
+        tension:0.35,
+        // Soft area wash under the revenue line (owner reference design).
+        // chartArea is undefined on the very first layout pass — bail to
+        // transparent then, Chart.js re-invokes this once the area is known.
+        fill:{target:'origin'},
+        backgroundColor:function(c){
+          var area=c.chart.chartArea; if(!area) return 'transparent';
+          var g=c.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
+          g.addColorStop(0,cGreen+'3d'); g.addColorStop(1,cGreen+'00');
+          return g;
+        },
         datalabels:{
           display:function(c){return real[c.dataIndex];},
           anchor:'end',align:'top',offset:6,
