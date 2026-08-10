@@ -230,6 +230,16 @@ body.light-theme #header {
 }
 #sidebar-toggle:hover { background: var(--bg3); color: var(--text); }
 
+/* Back button — shown on detour pages (the add-student form). The element
+   carries inline styles from the old palette, so these need !important. */
+#hdr-back-btn {
+    height: 38px !important; padding: 0 15px !important; border-radius: 10px !important;
+    background: var(--card) !important; border: 1px solid var(--border2) !important;
+    color: var(--text2) !important; font-size: 13px !important; font-weight: 600 !important;
+    gap: 7px !important; flex-shrink: 0;
+}
+#hdr-back-btn:hover { background: var(--bg3) !important; color: var(--text) !important; }
+
 /* Search pill */
 .hdr-search {
     display: flex; align-items: center; gap: 8px;

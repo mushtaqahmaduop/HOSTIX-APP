@@ -249,4 +249,8 @@ async function confirmDeleteRoom(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // TENANTS
 // ════════════════════════════════════════════════════════════════════════════
-let studentFilter = {status:'All', search:'', page:1, sortKey:null, sortDir:'asc'};
+// Students v5 adds room / course selects, a page-size picker and a row-selection
+// set, matching the payments screen.
+let studentFilter = {status:'All', room:'All', course:'All', search:'',
+                     pageSize:10, page:1, sortKey:null, sortDir:'asc'};
+let stuSelected = new Set();

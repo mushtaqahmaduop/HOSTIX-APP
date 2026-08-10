@@ -8,20 +8,59 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
-function renderStudents() {
-  // PERF: build a roomId → room lookup once, instead of DB.rooms.find() per student row.
-  const _roomById = new Map(DB.rooms.map(r=>[r.id, r]));
-  let students = DB.students.filter(t=>{
-    if(studentFilter.status!=='All' && t.status!==studentFilter.status) return false;
-    if(studentFilter.search){
-      const s=studentFilter.search.toLowerCase();
-      const room4s = _roomById.get(t.roomId);
-      if(![t.name,t.fatherName,t.id,t.cnic,t.phone,t.email,t.address,t.emergencyContact,t.occupation||t.course,room4s?.number&&String(room4s.number),room4s?.floor].some(f=>f&&String(f).toLowerCase().includes(s))) return false;
+/* ══════════════════════════════════════════════════════════════════════════
+   STUDENTS v5 — shared helpers
+   ══════════════════════════════════════════════════════════════════════════ */
+
+// roomId → room, built once per call instead of DB.rooms.find() per row.
+function _stuRoomMap() { return new Map(DB.rooms.map(r => [r.id, r])); }
+
+// The one filter+sort pipeline. The table, the stat strip and the CSV export
+// all read from here, so they cannot drift apart.
+function studentsFiltered() {
+  const byId = _stuRoomMap();
+  let list = DB.students.filter(t => {
+    if (studentFilter.status !== 'All' && t.status !== studentFilter.status) return false;
+    const room = byId.get(t.roomId);
+    if (studentFilter.room !== 'All' && String(room ? room.number : '') !== studentFilter.room) return false;
+    if (studentFilter.course !== 'All' && String(t.occupation || t.course || '') !== studentFilter.course) return false;
+    if (studentFilter.search) {
+      const s = studentFilter.search.toLowerCase();
+      const hay = [t.name, t.fatherName, t.id, t.cnic, t.phone, t.email, t.address,
+                   t.emergencyContact, t.occupation || t.course,
+                   room && String(room.number), room && room.floor];
+      if (!hay.some(f => f && String(f).toLowerCase().includes(s))) return false;
     }
     return true;
   });
+  return applySort(list, studentFilter, {
+    id:     t => t.id,
+    name:   t => t.name,
+    room:   t => { const r = byId.get(t.roomId); return Number(r ? r.number : 0) || 0; },
+    course: t => t.occupation || t.course || '',
+    rent:   t => Number(t.rent || 0),
+    status: t => t.status
+  });
+}
 
-  if(students.length===0 && DB.students.length===0) return `
+// Stable avatar hue from the name, so a student keeps the same colour across
+// sorts and filters.
+function stuAvatarHue(name) {
+  const hues = ['dh-violet','dh-blue','dh-green','dh-amber','dh-red'];
+  let h = 0; const s = String(name || '?');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return hues[h % hues.length];
+}
+
+function stuStatusHue(s) {
+  return s === 'Active' ? 'dh-green' : s === 'Left' ? 'dh-amber'
+       : s === 'Blacklisted' ? 'dh-red' : 'dh-slate';
+}
+
+function renderStudents() {
+  const _roomById = _stuRoomMap();
+
+  if (DB.students.length === 0) return `
     <div class="empty-state">
       <div class="icon">${icon('student','sm')}</div>
       <h3>No Students Yet</h3>
@@ -29,243 +68,605 @@ function renderStudents() {
       <button class="btn btn-primary" onclick="showAddStudentModal()">+ Add Student</button>
     </div>`;
 
-  students = applySort(students, studentFilter, {
-    id:     t => t.id,
-    name:   t => t.name,
-    room:   t => { const r = _roomById.get(t.roomId); return r ? r.number : ''; },
-    rent:   t => Number(t.rent || 0),
-    status: t => t.status
-  });
+  const students = studentsFiltered();
   const _pg = paginate(students, studentFilter);
 
+  // Stat strip — counts over the WHOLE roster, not the filtered view, so the
+  // cards stay a stable summary you can filter *by* rather than a readout that
+  // changes as you narrow the table.
+  const nTotal  = DB.students.length;
+  const nActive = DB.students.filter(t=>t.status==='Active').length;
+  const nLeft   = DB.students.filter(t=>t.status==='Left').length;
+  const nBlack  = DB.students.filter(t=>t.status==='Blacklisted').length;
+  const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
+  const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
+
+  const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))]
+                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
+  const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All'].filter(Boolean).length;
+
+  const th = (key,label,extra) => {
+    const on = studentFilter.sortKey===key;
+    const arw = on ? (studentFilter.sortDir==='asc'?'▲':'▼') : '⇅';
+    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(studentFilter,'students','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+  };
+  const waIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z"/></svg>';
+
   return `
-  <div class="filter-bar">
-    <div class="search-wrap">
-      <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-      <input class="form-control" id="search-students" placeholder="Name, father, ID, CNIC, phone, email, room, floor, course…" value="${escHtml(studentFilter.search)}" oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents();toggleClearBtn('search-students','clear-students')">
-      <button class="search-clear ${studentFilter.search?'visible':''}" id="clear-students" onclick="studentFilter.search='';studentFilter.page=1;document.getElementById('search-students').value='';this.classList.remove('visible');renderPage('students')" title="Clear">✕</button>
+  <!-- ══ STAT STRIP ══ -->
+  <div class="stu-stats">
+    <div class="stu-stat stu-stat--click dh-blue" onclick="stuSetStatus('All')" title="Show every student">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/><path d="m2 10 10-5 10 5-10 5z"/></svg></div>
+        <div class="stu-stat__label">Total Students</div>
+      </div>
+      <div class="stu-stat__val">${nTotal}</div>
+      <div class="stu-stat__sub">Registered</div>
     </div>
-    <div class="filter-tabs">
-      ${['All','Active','Left','Blacklisted'].map(s=>`<button class="ftab ${studentFilter.status===s?'active':''}" onclick="studentFilter.status='${s}';studentFilter.page=1;renderPage('students')">${s}</button>`).join('')}
+
+    <div class="stu-stat stu-stat--click dh-green" onclick="stuSetStatus('Active')" title="Show only active students">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <div class="stu-stat__label">Active</div>
+      </div>
+      <div class="stu-stat__val">${nActive}</div>
+      <div class="stu-stat__sub">Students</div>
     </div>
-    <span class="text-muted" style="font-size:12px;margin-left:auto">${students.length} students</span>
-    <button class="btn btn-secondary btn-sm" onclick="exportStudentsCSV()" title="Export current list to CSV" style="white-space:nowrap">📥 CSV</button>
+
+    <div class="stu-stat stu-stat--click dh-amber" onclick="stuSetStatus('Left')" title="Show only students who have left">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="stu-stat__label">Left</div>
+      </div>
+      <div class="stu-stat__val">${nLeft}</div>
+      <div class="stu-stat__sub">Students</div>
+    </div>
+
+    <div class="stu-stat stu-stat--click dh-red" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></div>
+        <div class="stu-stat__label">Blacklisted</div>
+      </div>
+      <div class="stu-stat__val">${nBlack}</div>
+      <div class="stu-stat__sub">Students</div>
+    </div>
+
+    <div class="stu-stat stu-stat--click dh-violet" onclick="navigate('rooms')" title="Go to Rooms">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M9 17h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg></div>
+        <div class="stu-stat__label">Occupied Rooms</div>
+      </div>
+      <div class="stu-stat__val">${occRooms}<small> / ${DB.rooms.length}</small></div>
+      <div class="stu-stat__sub">${occPct}% occupied</div>
+    </div>
   </div>
-  <div class="table-wrap">
-    <table style="font-size:12px;border-collapse:collapse">
-      <thead><tr>
-        ${sortableTh(studentFilter,'studentFilter','students','id','ID','style="width:60px;padding:8px 8px"')}
-        ${sortableTh(studentFilter,'studentFilter','students','name','Student','style="min-width:140px;padding:8px 8px"')}
-        ${sortableTh(studentFilter,'studentFilter','students','room','Room','style="min-width:110px;padding:8px 8px"')}
-        <th style="min-width:120px;padding:8px 8px">Phone / Emergency</th>
-        <th style="min-width:120px;padding:8px 8px">CNIC</th>
-        <th style="min-width:120px;padding:8px 8px">Address</th>
-        <th style="min-width:100px;padding:8px 8px">Course</th>
-        ${sortableTh(studentFilter,'studentFilter','students','rent','Rent/Mo','style="min-width:80px;padding:8px 8px"')}
-        ${sortableTh(studentFilter,'studentFilter','students','status','Status','style="min-width:70px;padding:8px 8px"')}
-        <th class="col-actions" style="min-width:90px;padding:8px 8px">Actions</th>
-      </tr></thead>
-      <tbody>
-        ${students.length===0?`<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No students match filters</td></tr>`:
+
+  <!-- ══ TOOLBAR ══ -->
+  <div class="stu-panel">
+    <div class="stu-tools">
+      <div class="stu-search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        <input id="search-students" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
+          value="${escHtml(studentFilter.search)}"
+          oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents()">
+      </div>
+
+      <select class="stu-select${studentFilter.room!=='All'?' is-set':''}" onchange="studentFilter.room=this.value;studentFilter.page=1;renderPage('students')" title="Filter by room">
+        <option value="All">All Rooms</option>
+        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${studentFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
+      </select>
+
+      <select class="stu-select${studentFilter.course!=='All'?' is-set':''}" onchange="studentFilter.course=this.value;studentFilter.page=1;renderPage('students')" title="Filter by course">
+        <option value="All">All Courses</option>
+        ${courses.map(c=>`<option value="${escHtml(c)}" ${studentFilter.course===c?'selected':''}>${escHtml(c)}</option>`).join('')}
+      </select>
+
+      <select class="stu-select${studentFilter.status!=='All'?' is-set':''}" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')" title="Filter by status">
+        ${['All','Active','Left','Blacklisted'].map(s=>`<option value="${s}" ${studentFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
+      </select>
+
+      <div style="position:relative">
+        <button class="stu-btn${activeFilters?' stu-btn--hue dh-blue':''}" onclick="stuTogglePop(event)" title="More filters">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+          Filters${activeFilters?`<span class="stu-btn__count">${activeFilters}</span>`:''}
+        </button>
+        <div class="stu-pop" id="stu-pop" style="display:none">
+          <div class="stu-pop__t">Active filters</div>
+          <div class="stu-pop__row" style="cursor:default">Room: <b style="color:var(--text)">${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
+          <div class="stu-pop__row" style="cursor:default">Course: <b style="color:var(--text)">${studentFilter.course==='All'?'Any':escHtml(studentFilter.course)}</b></div>
+          <div class="stu-pop__row" style="cursor:default">Status: <b style="color:var(--text)">${studentFilter.status}</b></div>
+          <div class="stu-pop__sep"></div>
+          <div class="stu-pop__row" onclick="stuResetFilters()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Reset all filters
+          </div>
+          <div class="stu-pop__row" onclick="closeStuPop();downloadAllStudentsPDF()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            Download PDF report
+          </div>
+        </div>
+      </div>
+
+      <button class="stu-btn stu-btn--primary" style="margin-left:auto" onclick="exportStudentsCSV()" title="Export the current list to CSV">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        Export CSV
+      </button>
+    </div>
+
+    ${stuSelected.size>0?`
+    <div class="stu-bulk dh-blue">
+      <span class="stu-bulk__n">${stuSelected.size} selected</span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="stu-btn" onclick="stuBulkExport()">Export selected</button>
+        <button class="stu-btn" onclick="stuSelected.clear();renderPage('students')">Clear</button>
+      </div>
+    </div>`:''}
+
+    <!-- ══ TABLE ══ -->
+    <div class="stu-table-wrap">
+      <table class="stu-table">
+        <thead><tr>
+          <th style="width:36px"><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
+          ${th('id','ID')}
+          ${th('name','Student')}
+          ${th('room','Room')}
+          <th>Contact / Emergency</th>
+          <th>CNIC</th>
+          ${th('course','Course')}
+          ${th('rent','Rent/Mo')}
+          ${th('status','Status')}
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>
+        ${_pg.slice.length===0?`<tr><td colspan="10"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
-          const room=_roomById.get(t.roomId);
-          const av=t.name?t.name[0].toUpperCase():'?';
-          return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')" title="Click row to view full profile">
-            <td style="font-family:var(--font-mono);font-size:11px;font-weight:800;color:var(--text3);text-align:center;padding:8px 4px">#${escHtml(t.id)}</td>
-            <td style="padding:8px 6px"><div class="td-name"><div class="avatar" style="background:var(--bg3);color:var(--text2);width:30px;height:30px;font-size:13px">${av}</div><div><div style="font-weight:600;color:var(--text)">${escHtml(t.name)}</div><div style="font-size:10px;color:var(--text3)">${escHtml(t.fatherName||'')}</div></div></div></td>
-            <td style="padding:8px 6px"><span class="fw-700">${room?'#'+room.number:'—'}</span><div class="td-sub" style="font-size:10px">${room?getRoomType(room).name:'—'} · ${room?room.floor+' Fl':'—'}</div></td>
-            <td style="padding:8px 6px;font-size:12px">${escHtml(t.phone||'—')}${t.emergencyContact?'<div style="font-size:10px;color:var(--text3);margin-top:2px">🆘 '+escHtml(t.emergencyContact)+'</div>':''}</td>
-            <td style="padding:8px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${escHtml(t.cnic||'—')}</td>
-            <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.address||'—')}</td>
-            <td style="padding:8px 6px;font-size:11px;color:var(--text2)">${escHtml(t.occupation||t.course||'—')}</td>
-            <td style="padding:8px 6px" class="fw-700">${fmtPKR(t.rent)}</td>
-            <td style="padding:8px 6px">${statusBadge(t.status||'Active')}</td>
-            <td class="col-actions" style="padding:8px 4px">
-              <div style="display:flex;gap:3px;flex-wrap:nowrap;white-space:nowrap">
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View Profile" style="padding:4px 7px;font-size:11px">👁</button>
-                <button class="btn btn-secondary btn-icon btn-sm" onclick="event.stopPropagation();showRoomShiftModal('${t.id}')" title="Shift Room" style="padding:4px 7px;font-size:11px">🔀</button>
-                <button class="btn btn-danger btn-icon btn-sm" onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete" style="padding:4px 7px;font-size:11px">🗑</button>
+          const room  = _roomById.get(t.roomId);
+          const rtype = room ? getRoomType(room) : null;
+          const picked= stuSelected.has(t.id);
+          const nm    = String(t.name||'?');
+          const ini   = nm.trim().split(/\s+/).slice(0,1).map(w=>w[0]||'').join('').toUpperCase()||'?';
+          const photo = t.docs && t.docs.photo;
+          const status= t.status||'Active';
+          return `<tr class="${picked?'is-picked dh-blue':''}">
+            <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')"></td>
+            <td><span class="stu-id">#${escHtml(t.id)}</span></td>
+            <td onclick="showViewStudentModal('${t.id}')" style="cursor:pointer" title="Open full profile">
+              <div class="stu-who">
+                <div class="stu-who__av ${stuAvatarHue(nm)}">${photo?`<img src="${escHtml(photo)}" alt="">`:escHtml(ini)}</div>
+                <div style="min-width:0">
+                  <div class="stu-who__name">${escHtml(nm)}</div>
+                  ${t.fatherName?`<div class="stu-who__sub">${escHtml(t.fatherName)}</div>`:''}
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
+              ${room?`<div class="stu-room__t">${escHtml(rtype?rtype.name:'')} · ${escHtml(room.floor||'')} Floor</div>`:''}
+            </td>
+            <td>
+              <div class="stu-contact">${escHtml(t.phone||'—')}</div>
+              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i>${waIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
+            </td>
+            <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
+            <td><div class="stu-money"><small>PKR</small>${fmtNum(t.rent)}</div></td>
+            <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
+            <td>
+              <div class="stu-acts">
+                <button class="stu-act dh-slate" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="stu-act dh-blue"  onclick="event.stopPropagation();showEditStudentModal('${t.id}')" title="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+                <button class="stu-act dh-red"   onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
               </div>
             </td>
           </tr>`;
         }).join('')}
-      </tbody>
-    </table>
-  </div>
-  ${renderPager(_pg, 'studentFilter', 'students')}`;
+        </tbody>
+      </table>
+    </div>
+
+    ${stuPager(_pg)}
+  </div>`;
 }
 
-// Export the currently filtered + sorted students to CSV. (Mirrors renderStudents' filter/sort.)
-function exportStudentsCSV() {
-  const _roomById = new Map(DB.rooms.map(r=>[r.id, r]));
-  let students = DB.students.filter(t=>{
-    if(studentFilter.status!=='All' && t.status!==studentFilter.status) return false;
-    if(studentFilter.search){
-      const s=studentFilter.search.toLowerCase();
-      const room4s = _roomById.get(t.roomId);
-      if(![t.name,t.fatherName,t.id,t.cnic,t.phone,t.email,t.address,t.emergencyContact,t.occupation||t.course,room4s?.number&&String(room4s.number),room4s?.floor].some(f=>f&&String(f).toLowerCase().includes(s))) return false;
-    }
-    return true;
-  });
-  students = applySort(students, studentFilter, {
-    id:t=>t.id, name:t=>t.name,
-    room:t=>{ const r=_roomById.get(t.roomId); return r?r.number:''; },
-    rent:t=>Number(t.rent||0), status:t=>t.status
-  });
-  const rows=[['ID','Name','Father Name','Room','Floor','Phone','Emergency','CNIC','Address','Course','Rent/Mo','Status']];
-  students.forEach(t=>{
-    const r=_roomById.get(t.roomId);
-    rows.push([t.id,t.name||'',t.fatherName||'',r?'#'+r.number:'',r?r.floor:'',t.phone||'',t.emergencyContact||'',t.cnic||'',t.address||'',t.occupation||t.course||'',t.rent||0,t.status||'Active']);
-  });
-  downloadCSV(rows, 'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+today()+'.csv');
+// Footer: page-size picker, range readout and the numbered pager.
+function stuPager(pg) {
+  const btn = (label, target, o) => {
+    o = o || {};
+    if (o.disabled) return `<button disabled>${label}</button>`;
+    if (o.active)   return `<button class="is-on">${label}</button>`;
+    return `<button onclick="gotoPage(studentFilter,'students',${target})">${label}</button>`;
+  };
+  const { page, pages } = pg;
+  let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
+  lo = Math.max(1, hi-4);
+  let nums = '';
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="stu-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
+  if (hi < pages) nums += (hi<pages-1?'<span class="stu-pager__gap">…</span>':'') + btn(String(pages), pages);
+
+  return `<div class="stu-foot">
+    <div class="stu-foot__size">
+      Show
+      <select onchange="studentFilter.pageSize=Number(this.value);studentFilter.page=1;renderPage('students')">
+        ${[10,25,50,100].map(n=>`<option value="${n}" ${studentFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      entries
+    </div>
+    <div class="stu-foot__info">${pg.total?`Showing ${pg.from} to ${pg.to} of ${pg.total} students`:'No students'}</div>
+    <div class="stu-pager">
+      ${btn('«',1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1})}
+      ${nums}
+      ${btn('›',page+1,{disabled:page>=pages})}
+      ${btn('»',pages,{disabled:page>=pages})}
+    </div>
+  </div>`;
 }
+
+/* ── Students v5 — toolbar / selection behaviour ─────────────────────────── */
+function stuSetStatus(s) {
+  studentFilter.status = (studentFilter.status === s && s !== 'All') ? 'All' : s;
+  studentFilter.page = 1;
+  renderPage('students');
+}
+function stuResetFilters() {
+  studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All';
+  studentFilter.search=''; studentFilter.page=1;
+  stuSelected.clear();
+  renderPage('students');
+}
+function closeStuPop() { const p=document.getElementById('stu-pop'); if(p) p.style.display='none'; }
+function stuTogglePop(ev) {
+  if (ev) ev.stopPropagation();
+  const p = document.getElementById('stu-pop'); if (!p) return;
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+document.addEventListener('click', function (e) {
+  const p = document.getElementById('stu-pop');
+  if (p && p.style.display === 'block' && e.target.closest && !e.target.closest('#stu-pop')) p.style.display = 'none';
+});
+function stuToggleRow(id) {
+  if (stuSelected.has(id)) stuSelected.delete(id); else stuSelected.add(id);
+  renderPage('students');
+}
+function stuToggleAll(on) {
+  paginate(studentsFiltered(), studentFilter).slice.forEach(t => {
+    if (on) stuSelected.add(t.id); else stuSelected.delete(t.id);
+  });
+  renderPage('students');
+}
+function stuBulkExport() {
+  const ids = [...stuSelected];
+  _stuWriteCsv(studentsFiltered().filter(t => ids.includes(t.id)), 'Students_Selected.csv');
+}
+
+// Single CSV writer, shared by the toolbar export and the bulk-selection
+// export so the two can never produce different columns.
+function _stuWriteCsv(list, filename) {
+  const byId = _stuRoomMap();
+  const rows = [['ID','Name','Father Name','Room','Floor','Phone','Emergency Contact',
+                 'Emergency Phone','CNIC','Date of Birth','Gender','Nationality','Address',
+                 'Course','Session','Blood Group','Rent/Mo','Admission Fee','Security Deposit',
+                 'Discount','Join Date','Status']];
+  list.forEach(t => {
+    const r = byId.get(t.roomId);
+    rows.push([t.id, t.name||'', t.fatherName||'', r?'#'+r.number:'', r?r.floor:'',
+      t.phone||'', t.emergencyContact||'', t.emergencyPhone||'', t.cnic||'',
+      t.dob||'', t.gender||'', t.nationality||'', t.address||'',
+      t.occupation||t.course||'', t.session||'', t.bloodGroup||'',
+      t.rent||0, t.admissionFee||0, t.deposit||0, t.discount||0,
+      t.joinDate||'', t.status||'Active']);
+  });
+  downloadCSV(rows, filename);
+}
+
+// Export the currently filtered + sorted students. Reuses studentsFiltered(),
+// so the file always matches what is on screen — the two previously kept
+// separate copies of the filter and could disagree.
+function exportStudentsCSV() {
+  _stuWriteCsv(studentsFiltered(),
+    'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+today()+'.csv');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADD / EDIT STUDENT — full page (was a modal)
+   The reference design shows this as a page: sidebar visible, Back button in
+   the header, action bar at the foot of the content area. showAddStudentModal()
+   is kept as the entry point so the ~8 existing call sites (rooms, seat
+   modals, dashboard, command palette, header action) are untouched — it now
+   navigates instead of opening a modal.
+   ══════════════════════════════════════════════════════════════════════════ */
+let _addStudentPresetRoom = '';
 
 function showAddStudentModal(presetRoomId='') {
-  const availRooms = DB.rooms.filter(r=>{ const t=getRoomType(r); return getRoomOccupancy(r)<t.capacity; });
-  // Fix #10: ALL rooms shown — full rooms are included with a warning flag
-  const allRooms = DB.rooms;
-  const roomOpts = allRooms.map(r=>{
-    const t=getRoomType(r); const occ=getRoomOccupancy(r); const isFull=occ>=t.capacity;
-    return `<option value="${r.id}" ${r.id===presetRoomId?'selected':''}>#${r.number} · ${t.name} · ${r.floor} Floor (${occ}/${t.capacity} occ.)${isFull?' ⚠ FULL':''}</option>`;
-  }).join('');
-  const pmOpts = DB.settings.paymentMethods.map(m=>`<option value="${m}">${m}</option>`).join('');
-  showModal('modal-xl','➕ Add New Student',`
-  <style>
-  .as-section{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-strong);margin-bottom:12px;display:flex;align-items:center;gap:6px}
-  .room-card{border:2px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all 0.15s;background:var(--card);text-align:center;min-width:0}
-  .room-card:hover{border-color:var(--accent-strong);background:var(--bg4)}
-  .room-card.selected{border-color:var(--accent-strong);background:rgba(124,58,237,0.12);box-shadow:0 0 0 2px rgba(124,58,237,0.3)}
-  .room-card .rc-num{font-size:18px;font-weight:900;color:var(--accent-strong);line-height:1}
-  .room-card .rc-type{font-size:9px;color:var(--text3);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-  .room-card .rc-occ{font-size:10px;font-weight:700;margin-top:4px}
-  .room-card .rc-rent{font-size:10px;color:var(--text3);margin-top:1px}
-  </style>
-
-  <!-- PHOTO BANNER at top -->
-  <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,var(--bg3),var(--bg4));border:1px solid var(--border2);border-radius:12px">
-    <div id="add-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(124,58,237,0.5);background:rgba(124,58,237,0.07);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;cursor:pointer" onclick="triggerStudentPhotoUpload()" title="Click to upload photo">🧑‍🎓</div>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:800;color:var(--accent-strong);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="triggerStudentPhotoUpload()" style="font-size:11px">📁 Upload</button>
-        <button type="button" class="btn btn-secondary btn-sm" id="add-student-cam-btn" onclick="openAddStudentCamera()" style="font-size:11px">📷 Camera</button>
-        <button type="button" class="btn btn-danger btn-sm" onclick="clearAddStudentPhoto()" style="font-size:11px;display:none" id="add-student-clear-btn">✕ Remove</button>
-      </div>
-      <input type="file" id="add-student-photo-file" accept="image/*" style="display:none" onchange="loadAddStudentPhoto(this)">
-      <div id="add-student-cam-box" style="display:none;margin-top:8px">
-        <video id="add-student-cam-video" autoplay playsinline style="width:100%;max-height:120px;border-radius:8px;background:#000"></video>
-        <canvas id="add-student-cam-canvas" style="display:none"></canvas>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button type="button" class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="captureAddStudentPhoto()">📸 Capture</button>
-          <button type="button" class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="closeAddStudentCamera()">✕ Close</button>
-        </div>
-      </div>
-      <input type="hidden" id="add-student-photo-data" value="">
-    </div>
-  </div>
-
-  <!-- SECTION 1: IDENTITY -->
-  <div class="as-section">
-    <div class="as-section-title">${icon('student','sm')} Student Identity</div>
-    <div class="form-grid" style="gap:12px">
-      <div class="field"><label>Full Name *</label><input class="form-control" id="f-tname" placeholder="Muhammad Ali" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-      <div class="field"><label>Father Name *</label><input class="form-control" id="f-tfname" placeholder="Muhammad Khan" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-      <div class="field"><label>CNIC</label><input class="form-control" id="f-tcnic" placeholder="XXXXX-XXXXXXX-X" maxlength="15" oninput="fmtCnic(this)"></div>
-      <div class="field"><label>Course / Study Field</label>
-        <div style="position:relative" id="f-tocc-wrap">
-          <input class="form-control" id="f-tocc" placeholder="e.g. BS Computer Science, MBBS, BBA…"
-            oninput="courseAutocomplete(this)"
-            onfocus="courseAutocomplete(this)"
-            onkeydown="courseKeyNav(event)"
-            onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)"
-            autocomplete="off">
-          <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;z-index:9999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
-        </div>
-        <input type="hidden" id="f-tocctype" value="Student">
-        <input type="hidden" id="f-tocccustom" value="">
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 2: CONTACT -->
-  <div class="as-section">
-    <div class="as-section-title">📞 Contact Information</div>
-    <div class="form-grid" style="gap:12px">
-      <div class="field"><label>Phone Number *</label>
-        <input class="form-control" id="f-tphone" placeholder="03XX-XXXXXXX" maxlength="12" oninput="fmtPhone(this)">
-      </div>
-      <div class="field"><label>Emergency Contact</label>
-        <input class="form-control" id="f-temerg" placeholder="03XX-XXXXXXX (Guardian/Family)">
-      </div>
-      <div class="field"><label>Email Address</label>
-        <div style="position:relative;min-width:0">
-          <input class="form-control" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off" style="padding-right:90px">
-          <span id="f-temail-hint" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);pointer-events:none;white-space:nowrap">@gmail.com</span>
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Type username — @gmail.com added automatically</div>
-      </div>
-      <div class="field col-full"><label>Home Address</label>
-        <input class="form-control" id="f-taddress" placeholder="e.g. House #12, Street 4, Peshawar" autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()" list="">
-        <div id="f-taddress-suggestions" class="city-suggestions"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 3: ASSIGN ROOM search -->
-  <div class="as-section">
-    <div class="as-section-title" style="justify-content:space-between">
-      <span>🏠 Assign Room *</span>
-      <span id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700"></span>
-    </div>
-    <input type="hidden" id="f-troom" value="${presetRoomId||''}">
-    <div style="position:relative">
-      <input class="form-control" id="f-troom-search" placeholder="🔍 Search by room number, type, floor…" autocomplete="off"
-        value="${(()=>{if(!presetRoomId)return '';const r=DB.rooms.find(x=>x.id===presetRoomId);if(!r)return '';const rt=getRoomType(r);return 'Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';})()||''}"
-        oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)" onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
-      <div id="room-search-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:500;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px">
-        ${allRooms.map(r=>{
-          const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
-          const isFull = occ >= rt.capacity;
-          const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
-          const occColor=isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)';
-          return '<div class="room-search-item" data-id="'+r.id+'" data-rent="'+(parseFloat(r.rent)||16000)+'"'
-            +' data-label="'+lbl+'"'
-            +' style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s'+(isFull?';background:rgba(224,82,82,0.05)':'')+'"'
-            +' onmouseover="this.style.background=\'var(--bg4)\'" onmouseout="this.style.background=\''+(isFull?'rgba(224,82,82,0.05)':'')+'\'}"'
-            +' onmousedown="pickRoomSearch(\''+r.id+'\','+(parseFloat(r.rent)||16000)+',\''+lbl+'\')">'
-            +'<div>'
-            +'<span style="font-size:15px;font-weight:900;color:var(--accent-strong)">Room #'+r.number+'</span>'
-            +'<span style="font-size:11px;color:var(--text3);margin-left:8px">'+rt.name+' · '+r.floor+' Floor</span>'
-            +(isFull?'<span style="font-size:10px;font-weight:800;color:var(--red);margin-left:8px;background:rgba(224,82,82,0.15);padding:1px 6px;border-radius:20px">⚠ FULL</span>':'')
-            +'</div>'
-            +'<div style="text-align:right">'
-            +'<div style="font-size:11px;font-weight:700;color:'+occColor+'">'+occ+'/'+rt.capacity+' occ · '+(isFull?'<span style=\'color:var(--red)\'>Over capacity</span>':free+' free')+'</div>'
-            +'<div style="font-size:11px;color:var(--text3)">'+fmtPKR(parseFloat(r.rent)||0)+'/mo</div>'
-            +'</div></div>';
-        }).join('')}
-        ${allRooms.length===0?'<div style="padding:14px;color:var(--text3);font-size:12px;text-align:center">No rooms configured</div>':''}
-      </div>
-    </div>
-  </div>
-
-  <!-- hidden stay-detail inputs so submitAddStudent still works -->
-  <input type="hidden" id="f-trent" value="${presetRoomId?(parseFloat(DB.rooms.find(r=>r.id===presetRoomId)?.rent)||DB.settings.roomTypes[0]?.defaultRent||16000):DB.settings.roomTypes[0]?.defaultRent||16000}">
-  <input type="hidden" id="f-tjoin" value="${today()}">
-  <input type="hidden" id="f-tpm" value="${DB.settings.paymentMethods[0]||'Cash'}">
-
-  <!-- SECTION 5: NOTES (collapsible) -->
-  <div class="as-section" style="margin-bottom:0">
-    <div class="as-section-title" style="cursor:pointer;justify-content:space-between;margin-bottom:0" onclick="const b=document.getElementById('opt-body');const a=document.getElementById('opt-arrow');b.style.display=b.style.display==='none'?'block':'none';a.textContent=b.style.display==='none'?'▶ Show':'▼ Hide'">
-      <span>📝 Notes</span>
-      <span id="opt-arrow" style="font-size:10px;color:var(--text3);font-weight:600">▶ Show</span>
-    </div>
-    <div id="opt-body" style="display:none;margin-top:12px">
-      <div class="field"><label>Notes</label><textarea class="form-control" id="f-tnotes" placeholder="Additional notes…" rows="2"></textarea></div>
-    </div>
-  </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>${presetRoomId?'<button class="btn btn-secondary" onclick="submitAddStudent(\''+presetRoomId+'\',true)">✚ Save & Add Another</button>':''}<button class="btn btn-secondary" onclick="submitAddStudent('${presetRoomId}', false, true)">💾 Save</button><button class="btn btn-primary" onclick="submitAddStudent('${presetRoomId}')">💰 Save &amp; Proceed to Payment</button>`);
+  _addStudentPresetRoom = presetRoomId || '';
+  closeModal();              // harmless when nothing is open; clears a caller's modal
+  navigate('addstudent');
 }
+
+function renderAddStudent() {
+  const presetRoomId = _addStudentPresetRoom || '';
+  const allRooms = DB.rooms;
+  const preset = presetRoomId ? DB.rooms.find(r=>r.id===presetRoomId) : null;
+  const presetType = preset ? getRoomType(preset) : null;
+  const defaultRent = preset ? (parseFloat(preset.rent)||presetType?.defaultRent||16000)
+                             : (DB.settings.roomTypes[0]?.defaultRent||16000);
+  const presetLabel = preset ? 'Room #'+preset.number+' · '+(presetType?presetType.name:'')+' · '+(preset.floor||'')+' Floor' : '';
+
+  const sel = (id, label, opts, cur, req) => `
+    <div class="sf-f">
+      <label for="${id}">${label}${req?'<span class="req">*</span>':''}</label>
+      <select class="sf-sel" id="${id}">
+        ${opts.map(o=>`<option value="${escHtml(o)}" ${o===cur?'selected':''}>${escHtml(o||'—')}</option>`).join('')}
+      </select>
+    </div>`;
+
+  return `
+  <div class="sf-wrap">
+
+    <!-- ══ PHOTO + STUDENT ID ══ -->
+    <div class="sf-head">
+      <div class="sf-photo-block">
+        <div>
+          <div style="font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px">Student Photo</div>
+          <div class="sf-photo" id="add-student-photo-preview" onclick="triggerStudentPhotoUpload()" title="Click to upload a photo">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+          </div>
+        </div>
+        <div class="sf-photo-acts" style="margin-top:22px">
+          <div class="sf-drop" id="sf-drop" onclick="triggerStudentPhotoUpload()"
+               ondragover="event.preventDefault();this.classList.add('is-over')"
+               ondragleave="this.classList.remove('is-over')"
+               ondrop="sfDropPhoto(event)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
+            <b>Upload Photo</b><span>or drag and drop</span>
+          </div>
+          <button type="button" class="sf-btn sf-btn--ghost" id="add-student-cam-btn" style="width:190px;justify-content:center" onclick="openAddStudentCamera()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
+            Take Photo
+          </button>
+          <button type="button" class="sf-btn" id="add-student-clear-btn" style="width:190px;justify-content:center;display:none;color:var(--red)" onclick="clearAddStudentPhoto()">Remove photo</button>
+          <input type="file" id="add-student-photo-file" accept="image/*" style="display:none" onchange="loadAddStudentPhoto(this)">
+          <input type="hidden" id="add-student-photo-data" value="">
+          <div id="add-student-cam-box" style="display:none;width:190px">
+            <video id="add-student-cam-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000"></video>
+            <canvas id="add-student-cam-canvas" style="display:none"></canvas>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center;padding:0 10px" onclick="captureAddStudentPhoto()">Capture</button>
+              <button type="button" class="sf-btn" style="flex:1;justify-content:center;padding:0 10px" onclick="closeAddStudentCamera()">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sf-idcard">
+        <span class="sf-idcard__note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4"/><circle cx="16" cy="10" r="2"/></svg>
+          ID will be auto-generated
+        </span>
+        <div class="sf-idcard__l">Student ID</div>
+        <div class="sf-idcard__v">#${escHtml(nextStudentId())}</div>
+      </div>
+    </div>
+
+    <!-- ══ STUDENT IDENTITY ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+        Student Identity
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f"><label for="f-tname">Full Name<span class="req">*</span></label>
+          <input class="sf-in" id="f-tname" placeholder="Muhammad Ali" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+        <div class="sf-f"><label for="f-tfname">Father's Name<span class="req">*</span></label>
+          <input class="sf-in" id="f-tfname" placeholder="Muhammad Ikram" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+        <div class="sf-f"><label for="f-tcnic">CNIC</label>
+          <div class="sf-wrapin">
+            <input class="sf-in" id="f-tcnic" placeholder="35202-1234567-1" maxlength="15" oninput="fmtCnic(this);sfCheckCnic()">
+            <svg class="sf-ok" id="f-tcnic-ok" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="sf-grid" style="margin-top:14px">
+        <div class="sf-f"><label for="f-tdob">Date of Birth</label>
+          <input class="sf-in" id="f-tdob" type="date"></div>
+        ${sel('f-tgender','Gender',['','Male','Female','Other'],'')}
+        ${sel('f-tmarital','Marital Status',['','Single','Married'],'Single')}
+        ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
+      </div>
+      <div class="sf-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr">
+        <div class="sf-f"><label for="f-tocc">Course / Study Field</label>
+          <div style="position:relative" id="f-tocc-wrap">
+            <input class="sf-in" id="f-tocc" placeholder="BS Computer Science" autocomplete="off"
+              oninput="courseAutocomplete(this)" onfocus="courseAutocomplete(this)" onkeydown="courseKeyNav(event)"
+              onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)">
+            <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:10px;z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
+          </div>
+          <input type="hidden" id="f-tocctype" value="Student">
+          <input type="hidden" id="f-tocccustom" value="">
+        </div>
+        <div class="sf-f"><label for="f-tsession">Session / Semester</label>
+          <input class="sf-in" id="f-tsession" placeholder="Fall 2026 / 1st Semester"></div>
+      </div>
+    </div>
+
+    <!-- ══ CONTACT INFORMATION ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>
+        Contact Information
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f"><label for="f-tphone">Phone Number<span class="req">*</span></label>
+          <div style="display:flex"><span class="sf-prefix">+92</span>
+            <input class="sf-in" id="f-tphone" placeholder="301 1234567" maxlength="12" oninput="fmtPhone(this)"></div>
+        </div>
+        <div class="sf-f"><label for="f-temerg">Emergency Contact</label>
+          <input class="sf-in" id="f-temerg" placeholder="Ikram Khan (Father)"></div>
+        <div class="sf-f"><label for="f-temergphone">Emergency Phone</label>
+          <input class="sf-in" id="f-temergphone" placeholder="0300 1234567"></div>
+        <div class="sf-f"><label for="f-temail">Email Address</label>
+          <div class="sf-wrapin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <input class="sf-in" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off">
+            <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
+          </div>
+        </div>
+      </div>
+      <div class="sf-grid" style="margin-top:14px">
+        <div class="sf-f sf-f--wide"><label for="f-taddress">Home Address</label>
+          <div class="sf-wrapin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+            <input class="sf-in" id="f-taddress" placeholder="House # 25, Street 4, Peshawar, KPK, Pakistan"
+              autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">
+          </div>
+          <div id="f-taddress-suggestions" class="city-suggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ HOSTEL INFORMATION ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg>
+        Hostel Information
+      </div>
+      <div class="sf-grid sf-grid--5">
+        <div class="sf-f"><label for="f-troom-search">Room<span class="req">*</span></label>
+          <div style="position:relative">
+            <input type="hidden" id="f-troom" value="${escHtml(presetRoomId)}">
+            <input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor…" autocomplete="off"
+              value="${escHtml(presetLabel)}"
+              oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)"
+              onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
+            <div id="room-search-drop" class="sf-drop-list">
+              ${allRooms.map(r=>{
+                const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
+                const isFull = occ>=rt.capacity;
+                const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
+                return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+(parseFloat(r.rent)||16000)+'"'
+                  +' data-label="'+escHtml(lbl)+'"'
+                  +' onmousedown="pickRoomSearch(\''+r.id+'\','+(parseFloat(r.rent)||16000)+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
+                  +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
+                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
+                  +occ+'/'+rt.capacity+(isFull?' · FULL':' · '+free+' free')+'</span>'
+                  +'<div><span>'+fmtPKR(parseFloat(r.rent)||0)+'/mo</span></div></div></div>';
+              }).join('')}
+              ${allRooms.length===0?'<div class="sf-drop-item"><span>No rooms configured</span></div>':''}
+            </div>
+          </div>
+          <div id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700;margin-top:4px"></div>
+        </div>
+        <div class="sf-f"><label for="f-tbed">Bed / Seat</label>
+          <select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select></div>
+        <div class="sf-f"><label for="f-tfloor">Floor</label>
+          <input class="sf-in" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly style="background:var(--dash-sunk);color:var(--text3)"></div>
+        <div class="sf-f"><label for="f-tjoin">Join Date<span class="req">*</span></label>
+          <input class="sf-in" id="f-tjoin" type="date" value="${today()}"></div>
+        <div class="sf-f"><label for="f-texpstay">Expected Stay Until</label>
+          <input class="sf-in" id="f-texpstay" type="date"></div>
+      </div>
+
+      <div class="sf-grid sf-grid--5" style="margin-top:14px">
+        <div class="sf-f"><label for="f-tadmfee">Admission Fee</label>
+          <div style="display:flex"><span class="sf-prefix">PKR</span>
+            <input class="sf-in" id="f-tadmfee" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
+        <div class="sf-f"><label for="f-tdeposit">Security Deposit</label>
+          <div style="display:flex"><span class="sf-prefix">PKR</span>
+            <input class="sf-in" id="f-tdeposit" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
+        <div class="sf-f"><label for="f-trent">Monthly Rent<span class="req">*</span></label>
+          <div style="display:flex"><span class="sf-prefix">PKR</span>
+            <input class="sf-in" id="f-trent" type="number" min="0" value="${defaultRent}" oninput="sfRecalcTotal()"></div></div>
+        <div class="sf-f"><label for="f-tdiscount">Discount</label>
+          <div style="display:flex"><span class="sf-prefix">PKR</span>
+            <input class="sf-in" id="f-tdiscount" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
+        <div class="sf-f"><label>Total Payable</label>
+          <div class="sf-total" id="f-ttotal">PKR ${fmtNum(defaultRent)}</div></div>
+      </div>
+      <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">
+    </div>
+
+    <!-- ══ ADDITIONAL INFORMATION ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        Additional Information
+      </div>
+      <div class="sf-grid" style="grid-template-columns:180px 1fr 1.4fr">
+        ${sel('f-tblood','Blood Group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}
+        <div class="sf-f"><label for="f-tallergies">Allergies / Medical Condition</label>
+          <input class="sf-in" id="f-tallergies" placeholder="No allergies"></div>
+        <div class="sf-f"><label for="f-tnotes">Notes</label>
+          <textarea class="sf-ta" id="f-tnotes" maxlength="250" rows="3"
+            placeholder="Anything the warden should know about this student…"
+            oninput="sfCount()"></textarea>
+          <div class="sf-count" id="f-tnotes-count">0/250</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ACTIONS ══ -->
+    <div class="sf-foot">
+      <button class="sf-btn" onclick="navigate('students')">Cancel</button>
+      ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        Save &amp; Add Another</button>`:''}
+      <button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}', false, true)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+        Save as Draft</button>
+      <button class="sf-btn sf-btn--go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
+        Save &amp; Proceed to Payment
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+// Bed / seat options for a room — one per seat of its type's capacity.
+function sfBedOptions(room) {
+  if (!room) return '<option value="">Select a room first</option>';
+  const t = getRoomType(room);
+  const cap = (t && t.capacity) || 1;
+  let out = '';
+  for (let i = 1; i <= cap; i++) out += '<option value="Bed '+i+'">Bed '+i+'</option>';
+  return out;
+}
+
+// Total payable = rent + admission + deposit − discount. Never below zero.
+function sfRecalcTotal() {
+  const n = id => parseFloat(document.getElementById(id)?.value) || 0;
+  const total = Math.max(0, n('f-trent') + n('f-tadmfee') + n('f-tdeposit') - n('f-tdiscount'));
+  const el = document.getElementById('f-ttotal');
+  if (el) el.textContent = 'PKR ' + fmtNum(total);
+}
+
+function sfCount() {
+  const ta = document.getElementById('f-tnotes'), el = document.getElementById('f-tnotes-count');
+  if (ta && el) el.textContent = ta.value.length + '/250';
+}
+
+// A Pakistani CNIC is 13 digits; fmtCnic() renders it as 5-7-1.
+function sfCheckCnic() {
+  const inp = document.getElementById('f-tcnic'), ok = document.getElementById('f-tcnic-ok');
+  if (!inp || !ok) return;
+  ok.classList.toggle('on', String(inp.value).replace(/\D/g,'').length === 13);
+}
+
+function sfDropPhoto(ev) {
+  ev.preventDefault();
+  const el = document.getElementById('sf-drop');
+  if (el) el.classList.remove('is-over');
+  const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if (!file || !/^image\//.test(file.type)) { toast('Drop an image file','error'); return; }
+  const input = document.getElementById('add-student-photo-file');
+  // Reuse the existing loader so resizing/preview behaviour stays identical.
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  loadAddStudentPhoto(input);
+}
+
 async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   const name=document.getElementById('f-tname').value.trim();
   const roomId=document.getElementById('f-troom').value;
@@ -277,16 +678,30 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
   if(!name||!roomId||!rent){toast('Fill all required fields','error');return;}
   const joinDate = document.getElementById('f-tjoin').value || today();
   const payMethod = document.getElementById('f-tpm').value;
+  // Small readers so a field the form does not currently render (or a partly
+  // filled draft) yields '' / 0 rather than throwing.
+  const _v = id => document.getElementById(id)?.value?.trim() || '';
+  const _n = id => parseFloat(document.getElementById(id)?.value) || 0;
+
   const t={
-    id:nextStudentId(), name, fatherName:document.getElementById('f-tfname').value.trim(),
-    cnic:document.getElementById('f-tcnic').value.trim(),
-    phone:document.getElementById('f-tphone').value.trim(), email:getEmailValue(),
-    occupation: document.getElementById('f-tocc')?.value?.trim()||'',
+    id:nextStudentId(), name, fatherName:_v('f-tfname'),
+    cnic:_v('f-tcnic'),
+    phone:_v('f-tphone'), email:getEmailValue(),
+    occupation: _v('f-tocc'),
     roomId, rent,
-    deposit: 0,
-    admissionFee: 0,
+    deposit: _n('f-tdeposit'),
+    admissionFee: _n('f-tadmfee'),
+    discount: _n('f-tdiscount'),
     joinDate, paymentMethod: payMethod,
-    emergencyContact:document.getElementById('f-temerg').value.trim(), address:document.getElementById('f-taddress')?.value.trim()||'', notes:document.getElementById('f-tnotes').value.trim(),
+    emergencyContact:_v('f-temerg'), address:_v('f-taddress'), notes:_v('f-tnotes'),
+    // Fields added with the v5 form. They are persisted here and included in
+    // the students CSV; the student-view modal and the printed card/PDF do not
+    // render them yet.
+    dob:_v('f-tdob'), gender:_v('f-tgender'), maritalStatus:_v('f-tmarital'),
+    nationality:_v('f-tnationality'), session:_v('f-tsession'),
+    emergencyPhone:_v('f-temergphone'),
+    bed:_v('f-tbed'), expectedStay:_v('f-texpstay'),
+    bloodGroup:_v('f-tblood'), allergies:_v('f-tallergies'),
     status:'Active', createdAt:today(),
     docs: { photo: document.getElementById('add-student-photo-data')?.value || '' }
   };
@@ -309,10 +724,10 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
             closeModal(); toast('✅ ' + name + ' added to full room!','success');
             setTimeout(()=>showAddStudentModal(presetRoomId), 200);
           } else if(saveOnly) {
-            closeModal(); renderPage('students');
+            closeModal(); navigate('students');
             toast('✅ ' + name + ' added (over capacity).','success');
           } else {
-            closeModal(); renderPage('students');
+            closeModal(); navigate('students');
             toast('✅ ' + name + ' added to full room — record payment below.','success');
             setTimeout(()=>openPaymentForNewStudent(t.id), 350);
           }
@@ -1761,7 +2176,18 @@ function pickRoomSearch(roomId, rent, label) {
   if(lbl) lbl.textContent = '✓ Selected';
   const drop = document.getElementById('room-search-drop');
   if(drop) drop.style.display = 'none';
+
+  // v5 form: Floor and Bed/Seat are properties OF the room, so picking a room
+  // fills them rather than asking the warden to repeat information the app
+  // already knows. Both fields are absent on other forms — guarded accordingly.
+  const room = DB.rooms.find(r => r.id === roomId);
+  const floorEl = document.getElementById('f-tfloor');
+  if (floorEl && room) floorEl.value = (room.floor || '') + ' Floor';
+  const bedEl = document.getElementById('f-tbed');
+  if (bedEl && typeof sfBedOptions === 'function') bedEl.innerHTML = sfBedOptions(room);
+
   recalcStudentUnpaid();
+  if (typeof sfRecalcTotal === 'function') sfRecalcTotal();
 }function recalcStudentUnpaid() {
   const r = parseFloat(document.getElementById('f-trent')?.value)||0;
   const a = parseFloat(document.getElementById('f-tdeposit')?.value)||0;

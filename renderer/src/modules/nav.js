@@ -64,7 +64,12 @@ const pageConfig = {
   settings:      { title:'Settings', sub:'', action:null },
   archive:       { title:'Annual Archive', sub:'', action:null },
   maintenance:   { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
-  complaints:    { title:'Complaints & Maintenance', sub:'', action:'Add Issue' }
+  complaints:    { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
+  // v5: the add/edit student form is a page, not a modal. `nav` keeps the
+  // Students rail item lit while it is open, and `back` shows the header's
+  // Back button — the form is a detour, not a destination.
+  addstudent:    { title:'Add / Edit Student', sub:'Add new student or update existing details',
+                   action:null, nav:'students', back:true }
 };
 
 function navigate(page, isBack=false) {
@@ -87,6 +92,12 @@ function navigate(page, isBack=false) {
     payFilter.unpaidOnly = false;
     payFilter.page       = 1;
     if (typeof paySelected !== 'undefined' && paySelected) paySelected.clear();
+    // Students v5 — same reasoning as paySelected above.
+    studentFilter.room   = 'All';
+    studentFilter.course = 'All';
+    studentFilter.status = 'All';
+    studentFilter.page   = 1;
+    if (typeof stuSelected !== 'undefined' && stuSelected) stuSelected.clear();
   }
   if(!isBack) {
     pageHistory.push(page);
@@ -97,14 +108,18 @@ function navigate(page, isBack=false) {
   // BUG FIX: Reset reportDetail on every fresh navigation to reports so the
   // overview badges always show first instead of the last opened detail panel.
   if (page === 'reports') reportDetail = null;
+  const cfg = pageConfig[page] || { title: page, sub: '', action: null };
   const bb=document.getElementById('hdr-back-btn');
   if(bb) bb.style.display = page!=='dashboard' ? 'flex' : 'none';
+  // A detour page (the add-student form) keeps its parent's rail item lit,
+  // otherwise nothing in the sidebar is highlighted while the form is open.
+  const navKey = cfg.nav || page;
   document.querySelectorAll('.nav-item').forEach(el=>{
-    el.classList.toggle('active', el.dataset.page===page);
+    el.classList.toggle('active', el.dataset.page===navKey);
   });
-  const cfg = pageConfig[page] || { title: page, sub: '', action: null };
   const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
-  const _s=document.getElementById('hdr-sub'); if(_s) _s.textContent=cfg?.sub||'';
+  const _s=document.getElementById('hdr-sub');
+  if(_s) { _s.textContent=cfg?.sub||''; _s.style.display = cfg?.sub ? 'block' : 'none'; }
   const actionBtn = document.getElementById('hdr-action');
   if(actionBtn) {
     if(cfg && cfg.action) { actionBtn.style.display='flex'; document.getElementById('hdr-action-text').textContent=cfg.action; }
@@ -191,6 +206,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='maintenance') { issuesTab='maintenance'; el.innerHTML = renderIssues(); }
       else if(basePage==='complaints') { issuesTab='complaints'; el.innerHTML = renderIssues(); }
       else if(basePage==='issues') el.innerHTML = renderIssues();
+      else if(basePage==='addstudent') el.innerHTML = renderAddStudent();
       else if(basePage==='activitylog') el.innerHTML = renderActivityLog();
       else if(basePage==='settings') el.innerHTML = renderSettings();
       else if(basePage==='archive') el.innerHTML = renderArchive();
