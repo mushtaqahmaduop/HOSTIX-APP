@@ -51,7 +51,14 @@ body.light-theme {
 /* ═══════════════════════════════════════════════════════════════════════════
    SIDEBAR
    ═══════════════════════════════════════════════════════════════════════════ */
-#sidebar {
+/* style.css carries TWO `body.light-theme #sidebar { background:#ffffff }`
+   rules (lines ~3656 and ~3926). That selector is (1,1,1); a bare `#sidebar`
+   is (1,0,0), so loading this file last was NOT enough — the white always won
+   and the navy never appeared. Matching the selector exactly makes it a tie,
+   which load order then settles in our favour. Same story for #header below.
+   Do not "simplify" these back to a bare id selector. */
+#sidebar,
+body.light-theme #sidebar {
     background: var(--sb-bg);
     border-right: 1px solid var(--sb-border);
     box-shadow: none;
@@ -165,13 +172,18 @@ body.sidebar-collapsed #sidebar .nav-item { justify-content: center; padding: 10
 /* ═══════════════════════════════════════════════════════════════════════════
    HEADER
    ═══════════════════════════════════════════════════════════════════════════ */
-#header {
+/* Same specificity story as #sidebar — style.css has two
+   `body.light-theme #header` rules, one of which also adds a backdrop blur and
+   a warm #d7c3b5 border left over from the old palette. */
+#header,
+body.light-theme #header {
     height: var(--header-h);
     background: var(--card);
     border-bottom: 1px solid var(--border);
     padding: 0 20px;
     gap: 14px;
     box-shadow: none;
+    backdrop-filter: none;
 }
 
 .hdr-title-wrap { min-width: 0; }
