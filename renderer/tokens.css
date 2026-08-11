@@ -26,18 +26,25 @@
   --gray-950: #0a0a0a;
 
   /* ════════════════════════════════════════════════════════════════════════
-     ACCENT — violet, used sparingly
+     ACCENT — royal blue, used sparingly
+
+     Was a violet ramp. Repointed to royal blue on the owner's call. Because
+     every screen now reads the accent through these tokens rather than a
+     per-sheet colour, this block is the only place the app's accent is
+     decided — buttons, nav pill, focus rings, pager, sort arrows, avatars and
+     selected states all follow from here. The token NAMES stay `--accent*`
+     (CLAUDE.md rule 5); the deleted `--royal*` set is not coming back.
      ════════════════════════════════════════════════════════════════════════ */
-  --accent-50:  #f5f3ff;
-  --accent-100: #ede9fe;
-  --accent-200: #ddd6fe;
-  --accent-300: #c4b5fd;
-  --accent-400: #a78bfa;
-  --accent-500: #8b5cf6;
-  --accent-600: #7c3aed;
-  --accent-700: #6d28d9;
-  --accent-800: #5b21b6;
-  --accent-900: #4c1d95;
+  --accent-50:  #eff6ff;
+  --accent-100: #dbeafe;
+  --accent-200: #bfdbfe;
+  --accent-300: #93c5fd;
+  --accent-400: #60a5fa;
+  --accent-500: #3b82f6;
+  --accent-600: #2563eb;
+  --accent-700: #1d4ed8;
+  --accent-800: #1e40af;
+  --accent-900: #1e3a8a;
 
   /* ════════════════════════════════════════════════════════════════════════
      SEMANTIC — only for status, never decoration
@@ -140,8 +147,9 @@
   --text-secondary:  #a3a3a3;
   --text-tertiary:   #737373;
 
-  --accent-600:      #8b5cf6;
-  --accent-700:      #a78bfa;
+  /* Dark theme lifts the accent so it stays legible on near-black surfaces. */
+  --accent-600:      #3b82f6;
+  --accent-700:      #60a5fa;
 
   --success-bg:      rgba(52, 211, 153, 0.1);
   --success-fg:      #34d399;
@@ -176,8 +184,9 @@ body.light-theme {
   --text-secondary:  var(--gray-600);
   --text-tertiary:   var(--gray-400);
 
-  --accent-600:      #7c3aed;
-  --accent-700:      #6d28d9;
+  /* Light theme deepens it so accent-coloured TEXT keeps contrast on white. */
+  --accent-600:      #2563eb;
+  --accent-700:      #1d4ed8;
 
   --success-bg:      #ecfdf5;
   --success-fg:      #047857;
@@ -213,7 +222,7 @@ body.light-theme {
   --accent:           var(--accent-600);
   --accent-soft:      var(--accent-100);
   --accent-strong:    var(--accent-700);
-  /* Translucent violet overlay — replaces the former --gold-dim/--royal-dim.
+  /* Translucent accent wash — replaces the former --gold-dim/--royal-dim.
      One value works on both themes (subtle accent wash on any surface). */
-  --accent-dim:       rgba(139, 92, 246, 0.12);
+  --accent-dim:       rgba(59, 130, 246, 0.12);
 }

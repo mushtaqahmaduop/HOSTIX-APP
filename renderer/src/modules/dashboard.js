@@ -576,9 +576,9 @@ function showRoomSeatDetailModal(roomId) {
         </div>
       </div>`;
     } else {
-      seatSlots += `<div style="background:var(--accent-dim);border:1px dashed rgba(124,58,237,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--accent-dim);border:1px dashed rgba(37,99,235,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:rgba(124,58,237,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
+          <div style="width:28px;height:28px;border-radius:7px;background:rgba(37,99,235,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
           <div style="font-size:13px;color:var(--text3);font-style:italic">Seat ${i+1} — Free</div>
         </div>
         <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Add Student</button>
@@ -745,7 +745,7 @@ function showSeatDetailModal(type) {
     let content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
     allRooms.forEach(r=>{
       const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
-      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(124,58,237,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(124,58,237,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(37,99,235,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(37,99,235,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${r.number}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${rt?.name||'—'} · Floor ${r.floor||'?'}</div>
         <div style="margin-top:8px;display:flex;justify-content:space-between">
@@ -1046,7 +1046,7 @@ function renderMonthModal(monthKey, monthLabel) {
 
   <!-- TAB NAVIGATION -->
   <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px">
-    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);border:1px solid rgba(124,58,237,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
+    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);border:1px solid rgba(37,99,235,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
     <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.card} Fee Records (${pays.length})</button>
     <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.trendDown} Expenses (${exps.length})</button>
   </div>
@@ -1096,7 +1096,7 @@ function switchMonthTab(tab) {
     if(!panel||!btn) return;
     const active = t===tab;
     panel.style.display=active?'block':'none';
-    if(active){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent-strong)';btn.style.border='1px solid rgba(124,58,237,0.3)';}
+    if(active){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent-strong)';btn.style.border='1px solid rgba(37,99,235,0.3)';}
     else{btn.style.background='transparent';btn.style.color='var(--text3)';btn.style.border='none';}
   });
 }
@@ -1362,7 +1362,7 @@ function drawTrendChart() {
   var cGreen  = _cs.getPropertyValue('--green').trim()  || '#45dfa4';
   var cRed    = _cs.getPropertyValue('--red').trim()    || '#ffb4ab';
   var cAmber  = _cs.getPropertyValue('--amber').trim()  || '#fbbf24';
-  var cAccent = _cs.getPropertyValue('--accent').trim() || '#8b5cf6';
+  var cAccent = _cs.getPropertyValue('--accent').trim() || '#3b82f6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
   var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
@@ -1587,7 +1587,7 @@ function dashGlobalSearch(query) {
         type: 'room', icon: ICONS.bed,
         title: 'Room #' + r.number,
         sub: (type ? type.name : '') + ' · ' + r.floor + ' Floor · ' + occ + '/' + (type ? type.capacity : 1) + ' filled',
-        badge: '<span class="badge" style="' + (occ >= (type ? type.capacity : 1) ? 'background:var(--bg4);border:1px solid var(--border);color:var(--text3)' : 'background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);color:var(--accent-strong)') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
+        badge: '<span class="badge" style="' + (occ >= (type ? type.capacity : 1) ? 'background:var(--bg4);border:1px solid var(--border);color:var(--text3)' : 'background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);color:var(--accent-strong)') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
         action: "showRoomDetail('" + r.id + "')"
       });
     }

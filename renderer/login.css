@@ -1,0 +1,250 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — LOGIN v5
+   Owner reference design: docs/design/login.png
+
+   Loaded after style.css and scoped under #login-screen with `lg-*` class
+   names, so it replaces the old login look without touching any rule the rest
+   of the app shares (CLAUDE.md rule 7).
+
+   The reference sheet drew this screen in orange. That was NOT adopted: the
+   owner's accent is the royal blue in tokens.css, and a differently-coloured
+   entry screen reads as a different product. These three tokens are the whole
+   brand surface of the screen, so they mirror --accent-500/600/50 and nothing
+   else here carries a hue.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#login-screen {
+    --lg-brand:      #3B82F6;  /* --accent-500 */
+    --lg-brand-2:    #2563EB;  /* --accent-600 */
+    --lg-brand-soft: #EFF6FF;  /* --accent-50  */
+    --lg-ink:        #16202E;
+    --lg-ink2:       #5A6675;
+    --lg-ink3:       #94A3B0;
+    --lg-line:       #E7EAEE;
+    --lg-surface:    #FFFFFF;
+    --lg-panel:      #F4F6F8;
+
+    position: fixed; inset: 0; z-index: 9000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 28px;
+    background:
+        radial-gradient(1100px 620px at 12% -10%, #EEF2F6 0%, transparent 60%),
+        radial-gradient(900px 560px at 105% 108%, #EDF1F5 0%, transparent 62%),
+        #F7F9FB;
+    overflow: auto;
+}
+body.light-theme #login-screen { background:
+        radial-gradient(1100px 620px at 12% -10%, #EEF2F6 0%, transparent 60%),
+        radial-gradient(900px 560px at 105% 108%, #EDF1F5 0%, transparent 62%),
+        #F7F9FB; }
+
+/* The old decorative layers belong to the previous design. */
+#login-bg, #login-orb-1, #login-orb-2, #login-orb-3 { display: none !important; }
+
+/* ── Card shell ──────────────────────────────────────────────────────────── */
+#login-screen #login-card {
+    display: grid;
+    grid-template-columns: minmax(360px, 470px) minmax(0, 1fr);
+    width: 100%; max-width: 1120px;
+    background: var(--lg-surface);
+    border: 1px solid var(--lg-line);
+    border-radius: 22px;
+    box-shadow: 0 24px 70px rgba(19, 32, 48, .10);
+    overflow: hidden;
+    padding: 0;
+}
+#login-screen #login-card::before,
+#login-screen #login-card::after { display: none; }
+
+/* ── Left: the actual form ───────────────────────────────────────────────── */
+.lg-left  { padding: 40px 44px 26px; display: flex; flex-direction: column; }
+.lg-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 34px; }
+.lg-mark  {
+    width: 54px; height: 60px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--lg-brand);
+}
+.lg-brand__n { display: block; font-size: 25px; font-weight: 800; letter-spacing: .14em; color: var(--lg-ink); line-height: 1; }
+.lg-brand__s { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: .16em; color: var(--lg-ink2); margin-top: 6px; }
+
+.lg-h  { font-size: 31px; font-weight: 800; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1.15; margin: 0; }
+.lg-h em { font-style: normal; color: var(--lg-brand); }
+.lg-p  { font-size: 13.5px; line-height: 1.6; color: var(--lg-ink2); margin: 9px 0 0; }
+.lg-p b { font-weight: 700; color: var(--lg-ink); }
+.lg-addr { font-size: 12px; color: var(--lg-ink3); margin-top: 6px; }
+
+/* Warden picker */
+.lg-who { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 26px; }
+#login-screen .lg-card {
+    position: relative; padding: 16px 12px 14px; border-radius: 13px; cursor: pointer;
+    background: var(--lg-surface); border: 1.5px solid var(--lg-line);
+    text-align: center; transition: border-color .15s ease, background .15s ease;
+}
+#login-screen .lg-card:hover { border-color: #D6DBE1; }
+/* Selection is an accent state, so the fill follows the accent rather than the
+   warm tint the orange reference used. */
+#login-screen .lg-card.selected { border-color: var(--lg-brand); background: #F5F9FF; }
+.lg-card__av {
+    width: 42px; height: 42px; margin: 0 auto 10px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background: #F1F3F5; color: var(--lg-ink3);
+}
+#login-screen .lg-card.selected .lg-card__av { background: var(--lg-brand-soft); color: var(--lg-brand); }
+/* The avatar <img> ships in the markup with no src. updateLoginAvatar() (and
+   the pre-paint sync in index.html) only ever set or remove that attribute —
+   these two rules decide which of the two children is visible, so no JS has to
+   rebuild the circle. */
+.lg-card__av img { width: 100%; height: 100%; object-fit: cover; }
+.lg-card__av img:not([src]) { display: none; }
+.lg-card__av img[src] ~ svg { display: none; }
+.lg-card__n { font-size: 13px; font-weight: 700; color: var(--lg-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-card__r { font-size: 11.5px; color: var(--lg-ink3); margin-top: 3px; }
+.lg-card__tick {
+    position: absolute; top: -8px; right: -8px; width: 23px; height: 23px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    background: var(--lg-brand); color: #fff; border: 2px solid var(--lg-surface);
+}
+#login-screen .lg-card.selected .lg-card__tick { display: flex; }
+
+/* Fields */
+.lg-field { position: relative; display: flex; align-items: center; margin-top: 13px; }
+.lg-field > svg.lg-lead { position: absolute; left: 15px; color: var(--lg-ink3); pointer-events: none; }
+#login-screen .lg-in {
+    width: 100%; height: 52px; padding: 0 46px; border-radius: 12px;
+    background: var(--lg-surface); border: 1.5px solid var(--lg-line); color: var(--lg-ink);
+    font-family: var(--font); font-size: 14px; outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+#login-screen .lg-in::placeholder { color: var(--lg-ink3); }
+#login-screen .lg-in:focus { border-color: var(--lg-brand); box-shadow: 0 0 0 4px rgba(59,130,246,.10); }
+#login-screen .lg-eye {
+    position: absolute; right: 12px; width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--lg-ink3); cursor: pointer;
+}
+#login-screen .lg-eye:hover { color: var(--lg-ink2); }
+
+.lg-meta { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+#login-screen .lg-link {
+    margin-left: auto; background: none; border: none; padding: 0; cursor: pointer;
+    font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--lg-brand);
+}
+#login-screen .lg-link:hover { text-decoration: underline; }
+
+#login-screen #login-btn {
+    position: relative;
+    width: 100%; height: 54px; margin-top: 18px; border-radius: 12px; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: linear-gradient(90deg, var(--lg-brand), var(--lg-brand-2));
+    color: #fff; font-family: var(--font); font-size: 15px; font-weight: 700;
+    box-shadow: 0 8px 20px rgba(37,99,235,.26);
+    transition: filter .15s ease, transform .15s ease;
+}
+#login-screen #login-btn:hover  { filter: brightness(1.05); }
+#login-screen #login-btn:active { transform: translateY(1px); }
+#login-screen #login-btn:disabled { opacity: .72; cursor: default; }
+/* The arrow is pinned right, per the reference. It lives in its own wrapper
+   rather than being an `svg` selector, because _setLoginState('success')
+   replaces the button's innerHTML wholesale — a bare `#login-btn svg` rule
+   would then absolutely-position the success tick out at the edge. */
+.lg-arrow { position: absolute; right: 22px; display: flex; align-items: center; }
+
+/* selectWarden() writes "Signing in as …" here. The selected card already says
+   so on screen, so this is announced but not drawn. */
+#login-screen #login-hint.lg-sr {
+    position: absolute; width: 1px; height: 1px; margin: -1px;
+    padding: 0; border: 0; overflow: hidden; white-space: nowrap;
+    clip: rect(0 0 0 0); clip-path: inset(50%);
+}
+#login-screen #login-error {
+    display: none; margin-top: 13px; padding: 10px 13px; border-radius: 10px;
+    font-size: 12.5px; font-weight: 500; line-height: 1.5;
+    background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA;
+    align-items: center; gap: 8px;
+}
+#login-screen #login-error.show { display: block; }
+
+/* Answer to "Forgot Password?" — collapsed until the link is pressed. */
+.lg-note {
+    margin: 12px 0 0; padding: 11px 13px; border-radius: 10px;
+    background: var(--lg-brand-soft); border: 1px solid #BFDBFE;
+    font-size: 12.5px; font-weight: 500; line-height: 1.55; color: #1E40AF;
+}
+.lg-note b { font-weight: 700; }
+.lg-note[hidden] { display: none; }
+
+/* The reference fills the space under the button with "OR / Continue with
+   Google". With that gone, the safety note follows the button directly and the
+   footer takes the slack instead — whitespace above a bottom rule reads as
+   padding, whereas a 100px hole mid-column reads as a missing element. */
+.lg-safe {
+    display: flex; align-items: flex-start; gap: 10px; margin-top: 24px;
+}
+.lg-safe svg  { color: #16A34A; flex-shrink: 0; margin-top: 1px; }
+.lg-safe b    { display: block; font-size: 12.5px; font-weight: 600; color: var(--lg-ink); }
+.lg-safe span { display: block; font-size: 11.5px; color: var(--lg-ink3); margin-top: 2px; }
+
+.lg-foot {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: auto; padding-top: 16px; border-top: 1px solid var(--lg-line);
+    font-size: 11.5px; color: var(--lg-ink3);
+}
+/* The reference puts Privacy Policy / Terms of Service here. This is an
+   offline desktop app with nowhere for those links to go, so the slot carries
+   the build version instead — which is what a warden on the phone to support
+   actually needs to read out. */
+.lg-foot__v { margin-left: auto; font-weight: 600; color: var(--lg-ink2); font-variant-numeric: tabular-nums; }
+
+/* ── Right: brand panel ──────────────────────────────────────────────────── */
+.lg-right {
+    position: relative; padding: 44px 46px;
+    background: var(--lg-panel); border-left: 1px solid var(--lg-line);
+    display: flex; flex-direction: column;
+}
+.lg-quote  { font-size: 42px; line-height: .8; color: var(--lg-brand); font-weight: 800; }
+.lg-right h2 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); line-height: 1.25; margin: 14px 0 0; }
+.lg-right h2 em { font-style: normal; color: var(--lg-brand); }
+.lg-right p  { font-size: 13.5px; line-height: 1.65; color: var(--lg-ink2); margin: 12px 0 0; max-width: 42ch; }
+
+/* Building illustration — a drawn placeholder, not a stock photograph. */
+.lg-art {
+    position: relative; flex: 1; min-height: 205px; margin: 24px 0 0;
+    border-radius: 16px; overflow: hidden;
+    background: linear-gradient(160deg, #FFF6EE 0%, #EFF3F7 55%, #E7ECF2 100%);
+    border: 1px solid var(--lg-line);
+    display: flex; align-items: flex-end; justify-content: center;
+}
+.lg-art svg { width: 100%; height: auto; max-height: 100%; display: block; }
+
+.lg-facts {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    margin-top: 18px; border-radius: 14px; overflow: hidden;
+    background: var(--lg-surface); border: 1px solid var(--lg-line);
+}
+.lg-fact { padding: 16px 12px; text-align: center; border-right: 1px solid var(--lg-line); }
+.lg-fact:last-child { border-right: none; }
+.lg-fact__i {
+    width: 38px; height: 38px; margin: 0 auto 9px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--lg-brand-soft); color: var(--lg-brand);
+}
+.lg-fact__v { font-size: 16px; font-weight: 800; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.lg-fact__l { font-size: 11.5px; color: var(--lg-ink3); margin-top: 2px; }
+
+.lg-trust {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 14px; font-size: 12.5px; color: var(--lg-ink2);
+}
+.lg-trust svg { color: #16A34A; flex-shrink: 0; }
+
+/* ── Narrow windows: drop the brand panel, keep the form usable ──────────── */
+@media (max-width: 940px) {
+    #login-screen #login-card { grid-template-columns: 1fr; max-width: 480px; }
+    .lg-right { display: none; }
+    .lg-left  { padding: 32px 28px 22px; }
+}
+@media (max-height: 720px) {
+    .lg-left { padding-top: 26px; }
+    .lg-brand { margin-bottom: 22px; }
+    .lg-who  { margin-top: 18px; }
+}

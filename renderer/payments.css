@@ -8,9 +8,16 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Stat strip ──────────────────────────────────────────────────────────── */
-.pay-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(212px,1fr)); gap:12px; margin-bottom:12px; }
+/* One row, always. grid-auto-flow:column lays every card on a single track row
+   whatever the count, and grid-auto-columns:minmax(0,1fr) lets them share the
+   width evenly. The minmax(0,…) is load-bearing: a grid item defaults to
+   min-width:auto, so without it the cards refuse to shrink past their content
+   and the strip overflows sideways instead of fitting. */
+.pay-stats { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:12px; margin-bottom:12px; }
 .pay-stat {
-    position:relative; background:var(--card); border:1px solid var(--border);
+    min-width:0;
+    container-type:inline-size;   /* the figure sizes off the card, not the viewport */
+    position:relative; overflow:hidden; background:var(--card); border:1px solid var(--border);
     border-radius:16px; padding:15px 16px;
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
@@ -22,12 +29,22 @@
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
-.pay-stat__label { font-size:12px; font-weight:600; color:var(--text2); line-height:1.3; }
-.pay-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; line-height:1.1; }
+.pay-stat__label { min-width:0; font-size:12px; font-weight:600; color:var(--text2); line-height:1.3; overflow-wrap:anywhere; }
+/* Base size fits an 11-character figure in the narrowest card the five-across
+   row produces; @container scales it up when there is genuinely room. The
+   ellipsis is the backstop so the money can never spill past the card edge. */
+.pay-stat__val   { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@container (min-width:190px) { .pay-stat__val { font-size:22px; } }
+@container (min-width:220px) { .pay-stat__val { font-size:26px; } }
 .pay-stat__val .cur { font-size:13px; font-weight:600; color:var(--text3); font-family:var(--font); margin-right:5px; }
-.pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:6px; }
+.pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:6px; flex-wrap:wrap; }
 .pay-stat__sub   { font-size:11px; color:var(--text3); }
 .pay-stat__delta { font-size:11px; font-weight:700; color:var(--dh); display:inline-flex; align-items:center; gap:3px; white-space:nowrap; }
+
+/* Below this the row would crush the cards past reading — fall back to wrapping. */
+@media (max-width:900px) {
+    .pay-stats { grid-auto-flow:row; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+}
 
 /* ── Toolbar card ────────────────────────────────────────────────────────── */
 .pay-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; }
@@ -39,7 +56,7 @@
     background:var(--card); border:1px solid var(--border2);
     transition:border-color .15s ease, box-shadow .15s ease;
 }
-.pay-search:focus-within { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.pay-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .pay-search svg   { color:var(--text3); flex-shrink:0; }
 .pay-search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font-family:var(--font); font-size:13px; }
 .pay-search input::placeholder { color:var(--text3); }
@@ -52,8 +69,8 @@
     background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 12px center;
 }
-.pay-select:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
-.pay-select.is-set { border-color:var(--blue); color:var(--blue); font-weight:600; }
+.pay-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.pay-select.is-set { border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
 
 .pay-btn {
     height:40px; padding:0 14px; border-radius:11px; cursor:pointer; white-space:nowrap;
@@ -64,7 +81,7 @@
 .pay-btn:hover  { background:var(--dash-sunk); color:var(--text); }
 .pay-btn--hue   { color:var(--dh); border-color:var(--dh); background:var(--dh-bg); }
 .pay-btn--hue:hover { background:var(--dh-bg); filter:brightness(1.06); color:var(--dh); }
-.pay-btn__count { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--blue); color:#fff; font-size:10px; font-weight:800; line-height:18px; text-align:center; }
+.pay-btn__count { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; font-weight:800; line-height:18px; text-align:center; }
 
 /* Filters popover */
 .pay-pop {
@@ -74,7 +91,7 @@
 .pay-pop__t   { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text3); margin:2px 0 7px; }
 .pay-pop__row { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px; cursor:pointer; font-size:13px; color:var(--text2); }
 .pay-pop__row:hover { background:var(--dash-sunk); color:var(--text); }
-.pay-pop__row input { accent-color:var(--blue); width:15px; height:15px; cursor:pointer; }
+.pay-pop__row input { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
 .pay-pop__sep { height:1px; background:var(--border); margin:9px 2px; }
 
 /* ── Meta row ────────────────────────────────────────────────────────────── */
@@ -103,7 +120,7 @@
 .pay-table thead th.is-sortable { cursor:pointer; user-select:none; }
 .pay-table thead th.is-sortable:hover { color:var(--text); }
 .pay-table thead th .arw { opacity:.5; margin-left:4px; font-size:9px; }
-.pay-table thead th.is-sorted { color:var(--blue); }
+.pay-table thead th.is-sorted { color:var(--accent-strong); }
 .pay-table thead th.is-sorted .arw { opacity:1; }
 
 .pay-table tbody td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:12.5px; color:var(--text2); }
@@ -111,7 +128,7 @@
 .pay-table tbody tr { transition:background .12s ease; }
 .pay-table tbody tr:hover    { background:var(--dash-sunk); }
 .pay-table tbody tr.is-picked{ background:var(--dh-bg); }
-.pay-table input[type=checkbox] { accent-color:var(--blue); width:15px; height:15px; cursor:pointer; }
+.pay-table input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
 
 .pay-who       { display:flex; align-items:center; gap:10px; min-width:0; }
 .pay-who__av   { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
@@ -165,7 +182,7 @@
 }
 .pay-pager button:hover:not(:disabled):not(.is-on) { background:var(--dash-sunk); color:var(--text); }
 .pay-pager button:disabled { opacity:.4; cursor:not-allowed; }
-.pay-pager button.is-on    { background:var(--blue); border-color:var(--blue); color:#fff; }
+.pay-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:#fff; }
 .pay-pager__gap { color:var(--text3); padding:0 3px; }
 
 @media (max-width:900px) { .pay-foot__info { order:3; flex-basis:100%; text-align:left; } }
@@ -209,7 +226,7 @@
     transition:border-color .15s ease, box-shadow .15s ease;
 }
 .pf-in::placeholder { color:var(--text3); }
-.pf-in:focus, .pf-sel:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.pf-in:focus, .pf-sel:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .pf-in[readonly] { background:var(--dash-sunk); }
 .pf-sel {
     cursor:pointer; padding-right:32px; appearance:none; -webkit-appearance:none;
@@ -257,7 +274,7 @@
     background:var(--card); border:1px solid var(--border2); color:var(--text);
     font-family:var(--font); font-size:13px; line-height:1.55; outline:none;
 }
-.pf-ta:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.pf-ta:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .pf-count { font-size:10.5px; color:var(--text3); text-align:right; margin-top:4px; }
 
 /* Running totals strip above the footer */
@@ -307,4 +324,4 @@
     background:var(--card); border:1px solid var(--border2); color:var(--text);
     font-family:var(--font); font-size:12.5px; outline:none;
 }
-#extra-charges-list input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+#extra-charges-list input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }

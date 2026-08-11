@@ -1264,7 +1264,7 @@ function showEditStudentModal(id) {
   .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-strong);margin-bottom:12px;display:flex;align-items:center;gap:6px}
   </style>
   <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,var(--bg3),var(--bg4));border:1px solid var(--border2);border-radius:12px">
-    <div id="edit-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(124,58,237,0.5);background:rgba(124,58,237,0.07);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden">
+    <div id="edit-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(37,99,235,0.5);background:rgba(37,99,235,0.07);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden">
       ${t.docs?.photo?`<img src="${t.docs.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`:'🧑‍🎓'}
     </div>
     <div style="flex:1">
@@ -1721,7 +1721,7 @@ function openRestoreStudentForm(studentId) {
           <div style="color:var(--border2);font-size:20px">−</div>
           <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Concession</div><div id="rs-tot-conc">${moneyValue(0,{size:"body",color:"var(--teal)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">=</div>
-          <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:8px;padding:8px 14px">
+          <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-radius:8px;padding:8px 14px">
             <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Net Payable</div>
             <div id="rs-tot-net">${moneyValue(0,{size:"section",color:"var(--accent-strong)"})}</div>
           </div>
@@ -1776,7 +1776,7 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
     if (ps) ps.disabled = true;
   } else if (pending) {
     warn.style.display = '';
-    warn.innerHTML = '<div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--accent-strong);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
+    warn.innerHTML = '<div style="background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--accent-strong);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
     ['rs-amount','rs-pending','rs-concession','rs-pstatus'].forEach(function(id){
       const el = document.getElementById(id); if (el) el.disabled = false;
     });
@@ -1901,7 +1901,7 @@ function downloadAllStudentsPDF() {
 }
 
 function doGenerateStudentsPDF(monthKey) {
-  var appName  = DB.settings.appName  || 'HOSTIX';
+  var appName  = DB.settings.appName  || 'HOSTYLLO';
   var hostel   = DB.settings.hostelName || 'DAMAM Boys Hostel';
   var location = DB.settings.location  || '';
   var now      = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});

@@ -152,7 +152,7 @@ async function showBackupRestoreModal() {
 function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'HOSTYLLO_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -204,7 +204,7 @@ function _initDBFields(d) {
   // roomTypes already initialized above (before generateRooms)
   if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
   // Core identity — previously missing from restoreBackup path
-  if (!d.settings.appName) d.settings.appName = 'HOSTIX'; // ← Customisable system name
+  if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
   if (!d.settings.hostelName) d.settings.hostelName = 'DAMAM Boys Hostel';
   if (!d.settings.tagline) d.settings.tagline = 'Safe & Comfortable Living';
   if (!d.settings.location) d.settings.location = '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar';
@@ -246,7 +246,7 @@ async function restoreBackup() {
       // BUG FIX: Support both flat format (direct DB) and old wrapped {db:...,archive:...} format
       if (parsed.db && parsed.db.students) parsed = parsed.db;
       if(!parsed.students || !parsed.rooms || !parsed.settings){
-        toast('Invalid backup file — not a HOSTIX hostel backup', 'error'); return;
+        toast('Invalid backup file — not a HOSTYLLO hostel backup', 'error'); return;
       }
       const count = parsed.students.length;
       showConfirm('Restore Backup?',
@@ -281,7 +281,7 @@ async function restoreFromPaste() {
     // BUG FIX: Support both flat format and old wrapped {db:...,archive:...} format
     if (parsed.db && parsed.db.students) parsed = parsed.db;
     if(!parsed.students || !parsed.rooms || !parsed.settings){
-      toast('Invalid JSON — not a valid HOSTIX hostel backup', 'error'); return;
+      toast('Invalid JSON — not a valid HOSTYLLO hostel backup', 'error'); return;
     }
     const count = parsed.students.length;
     showConfirm('Restore from Pasted Data?',
@@ -640,7 +640,7 @@ function showUserMgmt() {
     var avatarHtml = photoSrc
       ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
       : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
-    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(124,58,237,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
+    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(37,99,235,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
     rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
     rows += '<div style="position:relative;flex-shrink:0">';
     rows += avatarHtml;
@@ -648,7 +648,7 @@ function showUserMgmt() {
     rows += '<input type="file" id="warden-photo-input-'+key+'" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\''+key+'\')">';
     rows += '</div>';
     rows += '<div style="flex:1">';
-    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--accent-dim);color:var(--accent-strong);padding:2px 8px;border-radius:20px;border:1px solid rgba(124,58,237,0.3)">● LOGGED IN</span>':'')+'</div>';
+    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--accent-dim);color:var(--accent-strong);padding:2px 8px;border-radius:20px;border:1px solid rgba(37,99,235,0.3)">● LOGGED IN</span>':'')+'</div>';
     rows += '<div style="font-size:11px;color:var(--text3);margin-top:2px">Full access · Add, edit payments &amp; records</div>';
     rows += (photoSrc ? '<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Profile photo set</div>' : '<div style="font-size:10px;color:var(--text3);margin-top:4px">Click avatar to upload a photo</div>');
     rows += '</div></div>';
@@ -714,27 +714,20 @@ function removeWardenPhoto(key) {
 }
 
 function updateLoginAvatar(key) {
-  // Update the warden selector card on the login screen
-  var num = key === 'warden1' ? '1' : '2';
-  var card = document.getElementById('rb-warden'+num);
+  // Update the warden selector card on the login screen (login v5).
+  // The avatar <img> and its fallback person icon both live in the markup, so
+  // this only sets or clears src — login.css does the rest:
+  //   .lg-card__av img:not([src])  -> hidden      (fallback icon shows)
+  //   .lg-card__av img[src] ~ svg  -> hidden      (photo shows)
+  // The previous version rewrote the avatar's innerHTML on removal, which with
+  // this markup would destroy the circle and the fallback icon with it.
+  var card = document.getElementById('rb-' + key);
   if(!card) return;
   var photoEl = card.querySelector('.warden-login-photo');
+  if(!photoEl) return;
   var w = WARDENS[key];
-  if(w.photo) {
-    if(photoEl) {
-      photoEl.src = w.photo;
-    } else {
-      var emojiEl = card.querySelector('.warden-login-emoji');
-      if(emojiEl) {
-        emojiEl.innerHTML = '<img class="warden-login-photo" src="'+w.photo+'" style="width:36px;height:36px;border-radius:9px;object-fit:cover;border:1.5px solid rgba(124,58,237,0.5)">';
-      }
-    }
-  } else {
-    if(photoEl) {
-      var parent = photoEl.parentElement;
-      parent.innerHTML = '<span class="warden-login-emoji" style="font-size:22px;margin-bottom:4px;">&#x1F9D1;&#x200D;&#x1F4BC;</span>';
-    }
-  }
+  if(w && w.photo) photoEl.setAttribute('src', w.photo);
+  else             photoEl.removeAttribute('src');
 }
 
 async function saveWardenInfo(key) {

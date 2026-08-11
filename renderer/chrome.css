@@ -25,11 +25,17 @@
     --sb-fg2:      rgba(255,255,255,.66);
     --sb-fg3:      rgba(255,255,255,.40);
     --sb-hover:    rgba(255,255,255,.07);
-    --sb-active:   #3b82f6;
-    --sb-active-hover:#60a5fa;
+    /* Was #3b82f6 royal blue, inherited from the older payments.png reference.
+       That left the app with two accents at once — blue chrome (sidebar pill,
+       avatar, header action button) against violet page content — which is the
+       mismatch the owner flagged. Pointed at the accent ramp so there is one
+       accent in the app, per CLAUDE.md rule 5, and matching the violet the
+       reports / complaints / cancellations references show. */
+    --sb-active:   var(--accent);
+    --sb-active-hover:var(--accent-strong);
     --sb-active-fg:#ffffff;
     --sb-divider:  rgba(255,255,255,.08);
-    --sb-avatar:   #3b82f6;
+    --sb-avatar:   var(--accent);
 
     --sidebar-w:   244px;
     --header-h:    66px;
@@ -43,11 +49,11 @@ body.light-theme {
     --sb-fg2:      rgba(255,255,255,.70);
     --sb-fg3:      rgba(255,255,255,.44);
     --sb-hover:    rgba(255,255,255,.08);
-    --sb-active:   #2563eb;
-    --sb-active-hover:#1d4ed8;
+    --sb-active:   var(--accent);
+    --sb-active-hover:var(--accent-strong);
     --sb-active-fg:#ffffff;
     --sb-divider:  rgba(255,255,255,.10);
-    --sb-avatar:   #2563eb;
+    --sb-avatar:   var(--accent);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

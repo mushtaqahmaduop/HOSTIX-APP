@@ -20,7 +20,7 @@ async function saveMaintenance() {
   if(!DB.maintenance) DB.maintenance=[];
   logActivity('Maintenance Added', title, 'Maintenance');
   DB.maintenance.push({
-    id:'mt_'+uid(), title, roomId:document.getElementById('mt-room')?.value||'',
+    id:'mt_'+uid(), seq:_issNextSeq(DB.maintenance), title, roomId:document.getElementById('mt-room')?.value||'',
     priority:document.getElementById('mt-priority')?.value||'Medium',
     description:document.getElementById('mt-desc')?.value?.trim()||'',
     date:document.getElementById('mt-date')?.value||today(),
@@ -33,7 +33,7 @@ async function saveMaintenance() {
   if(!DB.complaints) DB.complaints=[];
   logActivity('Complaint Added', subject, 'Complaint');
   DB.complaints.push({
-    id:'cp_'+uid(), subject,
+    id:'cp_'+uid(), seq:_issNextSeq(DB.complaints), subject,
     studentId: document.getElementById('cp-student')?.value||'',
     category: document.getElementById('cp-category')?.value||'General',
     description: document.getElementById('cp-desc')?.value?.trim()||'',
@@ -950,7 +950,7 @@ function downloadExcelTemplate() {
   ws['!cols'] = [20,18,18,14,22,20,10,12,18,12,10,14,24,20].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Student');
-  XLSX.writeFile(wb, 'HOSTIX_Students_Template.xlsx');
+  XLSX.writeFile(wb, 'HOSTYLLO_Students_Template.xlsx');
   toast('Template downloaded — fill it in and re-upload','success');
 }
 
@@ -960,7 +960,7 @@ function downloadCSVTemplate() {
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'HOSTIX_Students_Template.csv';
+  a.download = 'HOSTYLLO_Students_Template.csv';
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   toast('CSV template downloaded','success');

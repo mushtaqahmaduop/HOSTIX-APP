@@ -264,10 +264,13 @@ async function _checkDefaultPasswords() {
         sessionStorage.setItem('pw_warned', '1');
         setTimeout(() => {
           if (typeof toast === 'function') {
+            // toast() is (msg, type, title) — the third arg used to be 8000,
+            // meant as a duration, so this warning rendered with the literal
+            // title "8000". There is no duration parameter to pass.
             toast(
-              'Security: One or more wardens are using default passwords. ' +
+              'One or more wardens are using default passwords. ' +
               'Change them in Settings → Wardens.',
-              'error', 8000
+              'error', 'Security'
             );
           }
         }, 2000);
@@ -454,7 +457,7 @@ function updateRoleBadge() {
   if (!b) return;
   const safe = typeof escHtml === 'function' ? escHtml : (s) => s;
   const photo = CUR_USER?.photo
-    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(124,58,237,.5);flex-shrink:0">`
+    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(37,99,235,.5);flex-shrink:0">`
     : (typeof icon === 'function' ? icon('warden', 'sm') : '');
   b.innerHTML  = `${photo}&nbsp;${safe(CUR_USER?.name || '')}`;
   b.style.cssText = 'display:flex;align-items:center;gap:6px;';

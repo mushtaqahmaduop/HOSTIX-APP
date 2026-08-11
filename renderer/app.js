@@ -200,7 +200,10 @@ document.addEventListener('keydown', function(e) {
 // ══════════════════════════════════════════════════════════════════
 // COMBINED ISSUES PAGE (Complaints & Maintenance tabs)
 // ══════════════════════════════════════════════════════════════════
-var issuesTab = 'maintenance';
+// 'all' | 'maintenance' | 'complaints'. v5 lands on the unified feed the
+// reference design shows; nav.js still forces a single kind for the
+// /maintenance and /complaints routes.
+var issuesTab = 'all';
 
 
 // ── Fix #8: Patch window.open so receipt windows never show LICENSE INFO ──────

@@ -224,7 +224,9 @@ function renderPage(p, resetScroll=false) {
       el.scrollTop = savedScroll;
       const main = document.getElementById('main'); if(main) main.scrollTop = savedScroll;
     }
-    if(basePage==='reports') drawCharts();
+    // Same deferred pattern as the dashboard: the canvases must exist and be
+    // laid out before Chart.js measures them.
+    if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
     if(basePage==='settings') bindSettingsEvents();
     if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);
   },80);

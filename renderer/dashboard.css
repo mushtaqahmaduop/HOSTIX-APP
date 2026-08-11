@@ -74,7 +74,7 @@
     display:inline-flex; align-items:center; gap:5px; transition:var(--transition);
 }
 .dash-btn:hover  { background:var(--dash-sunk); color:var(--text); }
-.dash-link       { font-size:12px; font-weight:700; color:var(--blue); background:none; border:none; padding:0; cursor:pointer; }
+.dash-link       { font-size:12px; font-weight:700; color:var(--accent-strong); background:none; border:none; padding:0; cursor:pointer; }
 .dash-link:hover { text-decoration:underline; }
 
 /* Compact row action — keeps per-row actions available without the visual

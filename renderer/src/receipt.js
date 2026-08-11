@@ -219,7 +219,7 @@ function buildReceiptHTML(payId) {
   html += '</div>';
 
   // ── Powered-by footer (uses client's hostel name + system name) ───────────
-  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTIX';
+  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTYLLO';
   var hostelFtr = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) ? DB.settings.hostelName : '';
   var phoneFtr  = (typeof DB !== 'undefined' && DB.settings && DB.settings.phone)      ? DB.settings.phone      : '';
   html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
