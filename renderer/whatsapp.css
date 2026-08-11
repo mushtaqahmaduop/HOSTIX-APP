@@ -1,0 +1,140 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   WHATSAPP REMINDERS MODAL — built to the owner's reference design.
+   Scoped to `wa-`. WhatsApp brand green is a fixed brand colour, not a theme
+   token, so it is written literally here and stays put in both themes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root            { --wa-green:#25d366; --wa-green-2:#128c7e; --wa-tint:rgba(37,211,102,.14); }
+body.light-theme { --wa-tint:#dcfce7; }
+
+/* ── Header (passed to showModal as the title slot) ───────────────────────── */
+.wa-hd     { display:flex; align-items:center; gap:13px; text-align:left; }
+.wa-hd__ic {
+    width:44px; height:44px; border-radius:13px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--wa-tint); color:var(--wa-green);
+}
+.wa-hd__ic svg { width:22px; height:22px; }
+.wa-hd__t  { font-size:19px; font-weight:800; color:var(--text); line-height:1.2; }
+.wa-hd__s  { margin-top:3px; font-size:12.5px; font-weight:500; color:var(--text3); }
+
+.wa-body { display:flex; flex-direction:column; gap:13px; }
+
+/* ── Default number card ─────────────────────────────────────────────────── */
+.wa-card {
+    padding:15px; border-radius:13px;
+    background:var(--card); border:1px solid var(--border);
+}
+.wa-card__hd { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:11px; }
+.wa-card__t  { font-size:13.5px; font-weight:700; color:var(--text); }
+.wa-card__s  { font-size:11.5px; color:var(--text3); }
+
+.wa-num { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.wa-num__f {
+    display:flex; align-items:center; gap:10px; flex:1 1 240px; min-width:200px;
+    height:44px; padding:0 13px; border-radius:11px;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2);
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+.wa-num__f:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.wa-num__ic {
+    width:28px; height:28px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg, rgba(96,165,250,.16)); color:var(--accent);
+}
+.wa-num__f input {
+    flex:1; min-width:0; background:none; border:none; outline:none;
+    color:var(--text); font-family:var(--font); font-size:14px; font-weight:600;
+    font-variant-numeric:tabular-nums;
+}
+.wa-num__f input::placeholder { color:var(--text3); font-weight:500; }
+
+.wa-btn {
+    display:inline-flex; align-items:center; gap:7px; flex-shrink:0;
+    height:44px; padding:0 17px; border-radius:11px; cursor:pointer;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:13px; font-weight:700; transition:var(--transition);
+}
+.wa-btn:hover      { color:var(--text); border-color:var(--accent); }
+.wa-btn--go        { background:var(--wa-green-2); border-color:var(--wa-green-2); color:#fff; }
+.wa-btn--go:hover  { background:var(--wa-green); border-color:var(--wa-green); color:#fff; }
+
+/* ── Pending banner ──────────────────────────────────────────────────────── */
+.wa-note {
+    display:flex; align-items:center; gap:12px;
+    padding:14px 15px; border-radius:13px;
+    background:var(--amber-dim, rgba(251,191,36,.12));
+    border:1px solid rgba(251,191,36,.32);
+}
+.wa-note__ic  { color:var(--amber, #fbbf24); flex-shrink:0; display:flex; }
+.wa-note__c   { min-width:0; flex:1; }
+.wa-note__t   { font-size:13.5px; font-weight:800; color:var(--text); }
+.wa-note__s   { margin-top:3px; font-size:11.5px; color:var(--text3); line-height:1.5; }
+.wa-note__btn {
+    display:inline-flex; align-items:center; gap:7px; flex-shrink:0;
+    height:38px; padding:0 15px; border-radius:10px; cursor:pointer;
+    background:var(--card); border:1px solid var(--border2); color:var(--accent-strong, var(--accent));
+    font-family:var(--font); font-size:12.5px; font-weight:700; transition:var(--transition);
+}
+.wa-note__btn:hover { border-color:var(--accent); }
+
+/* ── Student rows ────────────────────────────────────────────────────────── */
+.wa-row {
+    display:flex; align-items:center; gap:13px;
+    padding:13px 15px; border-radius:13px;
+    background:var(--card); border:1px solid var(--border);
+    transition:border-color .15s ease;
+}
+.wa-row:hover { border-color:var(--border2); }
+.wa-row__av {
+    width:44px; height:44px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+    font-size:14px; font-weight:800;
+}
+.wa-row__c { min-width:0; flex:1; }
+.wa-row__n { font-size:14px; font-weight:800; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wa-row__m {
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    margin-top:3px; font-size:12px; color:var(--text3);
+}
+.wa-row__m i { width:3px; height:3px; border-radius:50%; background:var(--text3); opacity:.6; }
+.wa-row__m b { color:var(--red); font-weight:800; font-variant-numeric:tabular-nums; }
+.wa-row__p {
+    display:flex; align-items:center; gap:6px;
+    margin-top:4px; font-size:11.5px; color:var(--text3); font-variant-numeric:tabular-nums;
+}
+.wa-row__nop { color:var(--red); font-weight:600; }
+
+.wa-row__acts { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.wa-pill {
+    display:inline-flex; align-items:center; gap:7px;
+    height:40px; padding:0 15px; border-radius:11px; cursor:pointer;
+    font-family:var(--font); font-size:12.5px; font-weight:700;
+    border:1px solid transparent; transition:var(--transition);
+}
+.wa-pill--app { background:var(--wa-tint); color:var(--wa-green); }
+.wa-pill--app:hover { border-color:var(--wa-green); }
+.wa-pill--web { background:var(--dh-bg, rgba(96,165,250,.16)); color:var(--accent); }
+.wa-pill--web:hover { border-color:var(--accent); }
+
+.wa-go {
+    width:34px; height:34px; border-radius:10px; flex-shrink:0; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:none; border:1px solid transparent; color:var(--text3);
+    transition:var(--transition);
+}
+.wa-go:hover { color:var(--text); border-color:var(--border2); }
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.wa-empty {
+    display:flex; flex-direction:column; align-items:center; gap:9px;
+    padding:44px 20px; text-align:center; color:var(--green);
+}
+.wa-empty__t { font-size:15px; font-weight:800; color:var(--text); }
+.wa-empty__s { font-size:12.5px; color:var(--text3); }
+
+@media (max-width:720px) {
+    .wa-row       { flex-wrap:wrap; }
+    .wa-row__acts { width:100%; justify-content:flex-end; }
+}

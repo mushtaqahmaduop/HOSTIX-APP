@@ -1,0 +1,157 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXPENSES v5 — built to the owner's reference design.
+   Scoped to `exp-` so nothing here can reach another screen. Hue classes
+   (dh-blue / dh-green / …) come from ui-kit.css and carry their own light-theme
+   values, so nothing in this file needs a light-theme override.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Stat strip ──────────────────────────────────────────────────────────── */
+.exp-stats {
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:13px; margin-bottom:14px;
+}
+.exp-stat {
+    display:flex; align-items:center; gap:12px;
+    padding:14px 15px; border-radius:14px;
+    background:var(--card); border:1px solid var(--border);
+}
+.exp-stat__ic {
+    width:38px; height:38px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.exp-stat__ic svg { width:18px; height:18px; }
+.exp-stat__c { min-width:0; flex:1; }
+.exp-stat__l { font-size:11px; font-weight:600; color:var(--text3); white-space:nowrap; }
+.exp-stat__v {
+    margin-top:3px; font-size:19px; font-weight:800; color:var(--text);
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.exp-stat__s { margin-top:2px; font-size:10.5px; color:var(--text3); white-space:nowrap; }
+.exp-spark   { flex-shrink:0; color:var(--dh); opacity:.85; align-self:center; }
+
+@media (max-width:1180px) { .exp-stats { grid-template-columns:repeat(2, 1fr); } }
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.exp-tools {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:13px 14px; margin-bottom:13px;
+    border-radius:14px; background:var(--card); border:1px solid var(--border);
+}
+.exp-search {
+    display:flex; align-items:center; gap:8px; flex:1 1 200px; min-width:170px; max-width:380px;
+    height:40px; padding:0 12px; border-radius:11px;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2);
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+.exp-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.exp-search svg   { color:var(--text3); flex-shrink:0; }
+.exp-search input {
+    flex:1; min-width:0; background:none; border:none; outline:none;
+    color:var(--text); font-family:var(--font); font-size:13px;
+}
+.exp-search input::placeholder { color:var(--text3); }
+
+.exp-select {
+    height:40px; min-width:150px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2); color:var(--text);
+    font-family:var(--font); font-size:13px; font-weight:500;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+}
+.exp-select:focus  { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.exp-select.is-set { border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
+
+.exp-month {
+    display:flex; align-items:center; gap:7px; height:40px; padding:0 6px 0 12px;
+    border-radius:11px; background:var(--bg3, var(--card)); border:1px solid var(--border2);
+}
+.exp-month svg { color:var(--text3); flex-shrink:0; }
+.exp-month select {
+    height:100%; padding:0 6px 0 0; cursor:pointer;
+    background:none; border:none; outline:none; color:var(--text);
+    font-family:var(--font); font-size:13px; font-weight:500;
+}
+
+.exp-count { margin-left:auto; font-size:12.5px; color:var(--text3); white-space:nowrap; }
+.exp-count b { color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; }
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.exp-shell     { border-radius:14px; background:var(--card); border:1px solid var(--border); overflow:hidden; }
+.exp-table-wrap{ overflow-x:auto; }
+.exp-table     { width:100%; border-collapse:separate; border-spacing:0; }
+
+.exp-table thead th {
+    background:var(--dash-sunk); border-bottom:1px solid var(--border);
+    padding:12px 16px; text-align:left; white-space:nowrap;
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.75px; color:var(--text3);
+}
+.exp-table thead th.is-sortable      { cursor:pointer; user-select:none; }
+.exp-table thead th.is-sortable:hover{ color:var(--text); }
+.exp-table thead th .arw             { opacity:.5; margin-left:5px; font-size:9px; }
+.exp-table thead th.is-sorted        { color:var(--accent-strong); }
+.exp-table thead th.is-sorted .arw   { opacity:1; }
+
+.exp-table tbody td { padding:11px 16px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; color:var(--text2); }
+.exp-table tbody tr:last-child td { border-bottom:none; }
+.exp-table tbody tr { transition:background .12s ease; }
+.exp-table tbody tr:hover { background:var(--dash-sunk); }
+
+.exp-date { color:var(--text3); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.exp-desc { color:var(--text); }
+.exp-dash { color:var(--text3); }
+.exp-amt  {
+    font-weight:700; color:var(--text); white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+}
+
+/* Category pill — colour and icon are derived from the category name, so an
+   owner-added category styles itself without any change here. */
+.exp-cat {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 11px; border-radius:999px; white-space:nowrap;
+    background:var(--dh-bg); color:var(--dh);
+    font-size:11.5px; font-weight:700;
+}
+.exp-cat svg { flex-shrink:0; }
+
+.exp-acts { display:flex; align-items:center; gap:6px; }
+.exp-act {
+    width:30px; height:30px; border-radius:9px; flex-shrink:0; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh); border:1px solid transparent;
+    transition:var(--transition);
+}
+.exp-act:hover { border-color:var(--dh); }
+
+.exp-empty {
+    padding:52px 20px; text-align:center; color:var(--text3); font-size:13px;
+    display:flex; flex-direction:column; align-items:center; gap:11px;
+}
+.exp-empty svg { opacity:.4; }
+
+/* ── Footer / pager ──────────────────────────────────────────────────────── */
+.exp-foot {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 16px; border-top:1px solid var(--border);
+}
+.exp-foot__info { font-size:12.5px; color:var(--text3); }
+.exp-foot__size { margin-left:auto; }
+.exp-foot__size select {
+    height:34px; padding:0 26px 0 11px; border-radius:9px; cursor:pointer;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:12.5px;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 9px center;
+}
+.exp-pager { display:flex; align-items:center; gap:5px; margin:0 auto; }
+.exp-pager button {
+    min-width:33px; height:33px; padding:0 9px; border-radius:9px; cursor:pointer;
+    background:var(--bg3, var(--card)); border:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
+}
+.exp-pager button:hover:not(:disabled) { color:var(--text); border-color:var(--dh, var(--accent)); }
+.exp-pager button:disabled  { opacity:.4; cursor:default; }
+.exp-pager button.is-on     { background:var(--accent); border-color:var(--accent); color:#fff; }
+.exp-pager__gap { color:var(--text3); padding:0 2px; }

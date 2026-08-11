@@ -1393,7 +1393,7 @@ async function submitEditPayment(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSES
 // ════════════════════════════════════════════════════════════════════════════
-let expFilter = {cat:'All', search:'', showAll: false};
+let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSize:12, sortKey:'date', sortDir:'desc'};
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAYMENTS TABLE — DRAG TO PAN
