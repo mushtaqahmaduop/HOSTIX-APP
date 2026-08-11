@@ -20,6 +20,7 @@
     "test:license": "node test-license.js",
     "test:e2e": "playwright test",
     "test:migrate": "node migrations/001-relational-schema.test.js",
+    "test:retention": "node tests/retention.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {
