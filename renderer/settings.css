@@ -1,0 +1,287 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — SETTINGS v5
+   The owner reference designs for Settings → Room Types and
+   Settings → Data Management, plus the tab bar both screens share.
+
+   WHY THIS FILE EXISTS
+   Settings styling lived in style.css under `.settings-*`, mixed in with six
+   other panels. Widening those rules to reach the new layout would have
+   dragged Hostel Info, Payment Methods, Expense Categories, Floors and the
+   License panel along with it. Every selector here is new and prefixed `set-`,
+   so nothing already on screen can move (CLAUDE.md rule 7). The old
+   `.settings-topnav-wrap / .settings-nav / .settings-tab` rules in style.css
+   are left where they are — they are simply no longer referenced.
+
+   Loaded after listkit.css (whose `lk-*` chrome the record screens use) and
+   before chrome.css. Hues come from ui-kit.css via the `dh-*` classes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────────
+   The reference draws the tabs as one card that sits above the panel rather
+   than as a full-bleed sticky strip. Sticky is kept: the panels are long and
+   the tabs are the only way between them. */
+.set-tabs-wrap {
+    position: sticky; top: 0; z-index: 20;
+    margin-bottom: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 4px 6px;
+}
+/* overflow-x:auto forces overflow-y to compute as auto, so anything drawn
+   outside a tab vertically raises a stray vertical scrollbar in the row. The
+   active underline is therefore drawn INSIDE the tab (bottom:0), and the y
+   axis is clipped outright as a second guard. */
+.set-tabs {
+    display: flex; gap: 2px;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+}
+.set-tabs::-webkit-scrollbar { height: 3px; }
+.set-tabs::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+.set-tab {
+    position: relative; flex-shrink: 0; white-space: nowrap; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    padding: 13px 16px;
+    color: var(--text3); font-size: 13px; font-weight: 600;
+    transition: color .15s ease;
+}
+.set-tab svg      { flex-shrink: 0; opacity: .85; }
+.set-tab:hover    { color: var(--text); }
+/* The row is keyboard-reachable, so the focus ring has to be visible — and it
+   is inset because the row clips its own overflow. */
+.set-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 9px; }
+.set-tab.is-on    { color: var(--accent-strong); font-weight: 700; }
+/* The underline is the only active cue — no fill, no border, so the row stays
+   quiet next to the accent primary buttons on the panel below. */
+.set-tab.is-on::after {
+    content: ''; position: absolute; left: 12px; right: 12px; bottom: 0;
+    height: 2.5px; border-radius: 2px; background: var(--accent);
+}
+
+/* ── Panel shell + head ──────────────────────────────────────────────────── */
+.set-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px 22px;
+}
+.set-head     { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.set-head__ico {
+    width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-head__t  { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: var(--text); line-height: 1.2; }
+.set-head__s  { font-size: 12.5px; color: var(--text3); margin-top: 4px; }
+.set-head__end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.set-btn {
+    height: 42px; padding: 0 18px; border-radius: 11px; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text2);
+    font-family: var(--font); font-size: 13px; font-weight: 600; transition: var(--transition);
+}
+.set-btn:hover     { background: var(--dash-sunk); color: var(--text); }
+.set-btn--go       { background: var(--accent); border-color: var(--accent); color: #fff; }
+.set-btn--go:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+.set-actions       { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+/* ── Note strip (the "this only changes defaults" callout) ───────────────── */
+.set-note {
+    display: flex; align-items: center; gap: 11px;
+    margin-top: 18px; padding: 14px 16px; border-radius: 12px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text2);
+}
+.set-note__i {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-note strong { color: var(--accent-strong); font-weight: 700; }
+
+/* ── Room-type table ─────────────────────────────────────────────────────── */
+.set-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.set-table      { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 860px; }
+.set-table thead th {
+    background: var(--dash-sunk); border-bottom: 1px solid var(--border);
+    padding: 12px 14px; text-align: left; white-space: nowrap;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3);
+}
+.set-table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.set-table tbody tr:last-child td { border-bottom: none; }
+.set-table tbody tr.is-dragging   { opacity: .4; }
+/* Drop target — a line on the edge the row would land on, rather than moving
+   the rows under the cursor while the pointer is still down. */
+.set-table tbody tr.is-over-up   td { box-shadow: inset 0  2px 0 0 var(--accent); }
+.set-table tbody tr.is-over-down td { box-shadow: inset 0 -2px 0 0 var(--accent); }
+
+.set-grip {
+    display: flex; align-items: center; gap: 10px;
+}
+.set-grip__h {
+    color: var(--text3); cursor: grab; flex-shrink: 0; padding: 2px;
+    display: flex; align-items: center;
+}
+.set-grip__h:active { cursor: grabbing; }
+.set-grip__sw {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,.12);
+}
+
+/* Text / number inputs inside the table */
+.set-in {
+    width: 100%; height: 42px; padding: 0 13px; border-radius: 11px;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text);
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.set-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.set-in--name { min-width: 190px; }
+
+/* Rent field carries the currency inside the control, so the column never
+   needs a second "PKR" anywhere (CLAUDE.md rule 4 — one prefix, never two). */
+.set-money      { position: relative; min-width: 170px; }
+.set-money .set-in { padding-right: 46px; font-variant-numeric: tabular-nums; }
+.set-money__cur {
+    position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; font-weight: 700; color: var(--text3); pointer-events: none;
+}
+
+/* Capacity stepper */
+.set-step {
+    display: inline-flex; align-items: center; height: 42px; border-radius: 11px; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border2);
+}
+.set-step button {
+    width: 36px; height: 100%; flex-shrink: 0; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text2);
+    font-family: var(--font); font-size: 16px; line-height: 1; transition: var(--transition);
+}
+.set-step button:hover      { background: var(--dash-sunk); color: var(--accent-strong); }
+.set-step button:disabled   { opacity: .35; cursor: not-allowed; background: none; color: var(--text3); }
+.set-step input {
+    width: 46px; height: 100%; text-align: center;
+    background: none; border: none; outline: none; color: var(--text);
+    font-family: var(--font); font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+    border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    -moz-appearance: textfield;
+}
+.set-step input::-webkit-outer-spin-button,
+.set-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Colour picker — the native input covers the whole control so a click
+   anywhere on the chip opens the OS picker, while the hex stays readable. */
+.set-color {
+    position: relative; display: inline-flex; align-items: center; gap: 9px;
+    height: 42px; min-width: 152px; padding: 0 12px; border-radius: 11px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border2);
+    transition: border-color .15s ease;
+}
+.set-color:hover     { border-color: var(--accent); }
+.set-color__sw       { width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.12); }
+.set-color__hex      { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--text2); text-transform: uppercase; }
+.set-color__ch       { color: var(--text3); flex-shrink: 0; }
+.set-color input[type="color"] {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; border: none; padding: 0; background: none;
+}
+
+/* Row action */
+.set-rowbtn {
+    width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text3);
+    transition: var(--transition);
+}
+.set-rowbtn:hover    { background: var(--dh-bg); border-color: var(--dh); color: var(--dh); }
+.set-rowbtn:disabled { opacity: .35; cursor: not-allowed; background: var(--card); border-color: var(--border2); color: var(--text3); }
+
+/* ── Bottom summary strip ────────────────────────────────────────────────────
+   One card, cells divided by hairlines — a footnote to the panel above, not a
+   second set of headline cards (which is what lk-stats is for). */
+.set-strip {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    margin-top: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden;
+}
+.set-strip__c   { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-left: 1px solid var(--border); }
+.set-strip__c:first-child { border-left: none; }
+.set-strip__i   {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-strip__l   { font-size: 11.5px; color: var(--text3); }
+.set-strip__v   { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.set-strip__v small { font-size: 11px; font-weight: 700; color: var(--text3); margin-right: 4px; }
+@media (max-width: 1100px) { .set-strip__c { border-left: none; border-top: 1px solid var(--border); } }
+
+/* ── Data Management ─────────────────────────────────────────────────────── */
+.set-callout {
+    display: flex; align-items: center; gap: 11px;
+    max-width: 520px; padding: 13px 16px; border-radius: 12px;
+    background: var(--dh-bg); border: 1px solid transparent;
+    font-size: 12.5px; color: var(--text2); line-height: 1.45;
+}
+.set-callout svg  { color: var(--dh); flex-shrink: 0; }
+.set-callout strong { color: var(--accent-strong); font-weight: 700; }
+
+.set-split { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .set-split { grid-template-columns: 1fr; } }
+
+.set-sub      { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.set-sub__top { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.set-sub__ico {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-sub__t   { font-size: 15px; font-weight: 700; color: var(--text); }
+.set-sub__s   { font-size: 12px; color: var(--text3); margin-top: 3px; }
+.set-sub__btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.set-cols {
+    margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text2); line-height: 1.65;
+}
+.set-cols__h   { font-size: 12px; font-weight: 700; color: var(--accent-strong); margin-bottom: 4px; }
+.set-cols__div { height: 1px; background: var(--border); margin: 12px 0; }
+
+/* System stats list */
+.set-stat     { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.set-stat:last-of-type { border-bottom: none; }
+.set-stat__i  {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-stat__l  { flex: 1; font-size: 13px; color: var(--text2); }
+.set-stat__v  { font-size: 17px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Storage bar. The segments are the share each table takes of the saved
+   payload — a real measurement. There is no quota to fill: the database is a
+   SQLite file on the client's own disk, so a "% of capacity" bar would be a
+   number the app cannot know. */
+.set-store       { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.set-store__top  { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.set-store__l    { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.set-store__v    { font-size: 12.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.set-store__bar  { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--dash-track); }
+/* Colour comes from the segment's own dh-* class, so the key and the bar can
+   never drift apart and both follow the theme. */
+.set-store__seg  { height: 100%; background: var(--dh-2); }
+.set-store__key  { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.set-store__k    { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text3); }
+.set-store__dot  { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; background: var(--dh-2); }
+
+/* ── Empty state (no room types) ─────────────────────────────────────────── */
+.set-empty     { padding: 44px 20px; text-align: center; }
+.set-empty__i  {
+    width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dash-sunk); color: var(--text3);
+}
+.set-empty__t  { font-size: 14px; font-weight: 700; color: var(--text2); }
+.set-empty__s  { font-size: 12.5px; color: var(--text3); margin-top: 4px; }

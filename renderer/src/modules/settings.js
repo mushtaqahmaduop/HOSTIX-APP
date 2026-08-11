@@ -383,37 +383,457 @@ function showRentReminderModal() {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS v5 — Room Types + Data Management (owner reference designs)
+   Styles: renderer/settings.css, all selectors prefixed `set-`.
+
+   What the reference shows that this app does not draw, and why:
+   · A "Back to Settings" button and an account chip in the header. Both were
+     removed from the chrome on the owner's call (commit c62b14b) — the tab row
+     below is how you move between settings panels, and the account lives in
+     the sidebar. Re-adding them here would undo that decision.
+   · A ⋮ kebab in the room-type ACTIONS column. There is exactly one action on
+     a row — remove — so the cell draws that action instead of a menu that
+     would open with a single item in it.
+   · A "% of storage used" meter under System Stats. The database is a SQLite
+     file on the client's own disk; there is no quota, so a percentage would be
+     a number the app cannot know. The bar shows what it can measure: how the
+     saved payload divides between the tables.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Lucide outline paths. Kept as bare `d` markup so `setIco` can size them. */
+const SET_ICO = {
+  hostel:  '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+  bed:     '<path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8"/><path d="M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/><path d="M12 4v6"/><path d="M2 18h20"/>',
+  card:    '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
+  receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8"/><path d="M8 13h5"/>',
+  layers:  '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  database:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  key:     '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  plus:    '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  check:   '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  info:    '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  trash:   '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
+  grip:    '<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  sheet:   '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><path d="M8 13h8"/><path d="M8 17h8"/>',
+  upload:  '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  home:    '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  users:   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+  coins:   '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+  trend:   '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+  drive:   '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>',
+  clock:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  stack:   '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>'
+};
+function setIco(path, size, stroke) {
+  const n = size || 18;
+  return `<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" `
+       + `stroke-width="${stroke || 1.9}" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+}
+
+/* ── ROOM TYPES ──────────────────────────────────────────────────────────── */
+
+/* Beds are a property of the type, not of the room, so total capacity is the
+   sum of each room's type capacity — the same sum the Rooms screen shows. */
+function _rtTotalBeds() {
+  const types = (DB.settings.roomTypes) || [];
+  return (DB.rooms || []).reduce((n, r) => {
+    const t = types.find(x => x.id === r.typeId);
+    return n + (t ? Number(t.capacity) || 0 : 0);
+  }, 0);
+}
+function _rtAvgRent() {
+  const types = (DB.settings.roomTypes) || [];
+  if (!types.length) return 0;
+  return Math.round(types.reduce((n, t) => n + (Number(t.defaultRent) || 0), 0) / types.length);
+}
+/* "Last Updated" is a real stamp written by every room-type edit below, not a
+   render-time clock — a clock would read "just now" on a page you only looked
+   at. Types saved before this field existed read "—". */
+function _rtStampText() {
+  const iso = DB.settings.roomTypesUpdatedAt;
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return fmtDate(iso) + ', ' + d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+}
+function _rtTouch() { DB.settings.roomTypesUpdatedAt = new Date().toISOString(); }
+
+function renderRoomTypesPanel() {
+  const types = (DB.settings.roomTypes) || [];
+
+  const rows = types.map(t => {
+    const inUse   = (DB.rooms || []).filter(r => r.typeId === t.id).length;
+    const cap     = Number(t.capacity) || 1;
+    /* removeRoomType refuses both of these anyway. Showing the button as live
+       and then answering the click with a toast reads as a failure; the tooltip
+       carries the reason instead. */
+    const blocked = types.length <= 1 || inUse > 0;
+    const why     = types.length <= 1 ? 'The hostel needs at least one room type'
+                  : inUse             ? `In use by ${inUse} room${inUse !== 1 ? 's' : ''} — move them to another type first`
+                                      : 'Remove this room type';
+    return `
+      <tr id="rt-row-${t.id}"
+          ondragstart="rtDragStart(event,'${t.id}')" ondragover="rtDragOver(event,'${t.id}')"
+          ondragleave="rtDragLeave(event)" ondrop="rtDrop(event,'${t.id}')" ondragend="rtDragEnd(event)">
+        <td>
+          <div class="set-grip">
+            <span class="set-grip__h" onmousedown="rtGrab(this)"
+                  title="Drag to reorder — this is the order rooms and reports list types in">${setIco(SET_ICO.grip, 16, 2.4)}</span>
+            <span class="set-grip__sw" id="rt-sw-${t.id}" style="background:${escHtml(t.color)}"></span>
+          </div>
+        </td>
+        <td>
+          <input class="set-in set-in--name" value="${escHtml(t.name)}" placeholder="Type name"
+                 onchange="updateRoomType('${t.id}','name',this.value)">
+        </td>
+        <td>
+          <div class="set-step">
+            <button id="rt-dec-${t.id}" onclick="rtStep('${t.id}',-1)" ${cap <= 1 ? 'disabled' : ''}
+                    title="One bed fewer" aria-label="Decrease beds">&minus;</button>
+            <input id="rt-cap-${t.id}" type="number" min="1" step="1" value="${cap}"
+                   onchange="rtSetCap('${t.id}',this.value)" aria-label="Beds">
+            <button onclick="rtStep('${t.id}',1)" title="One bed more" aria-label="Increase beds">+</button>
+          </div>
+        </td>
+        <td>
+          <div class="set-money">
+            <input class="set-in" type="number" min="0" value="${Number(t.defaultRent) || 0}"
+                   onchange="updateRoomType('${t.id}','defaultRent',this.value)" aria-label="Default rent">
+            <span class="set-money__cur">${escHtml(DB.settings.currency || 'PKR')}</span>
+          </div>
+        </td>
+        <td>
+          <label class="set-color" title="Pick the colour this type shows in across the app">
+            <span class="set-color__sw" id="rt-csw-${t.id}" style="background:${escHtml(t.color)}"></span>
+            <span class="set-color__hex" id="rt-hex-${t.id}">${escHtml(t.color)}</span>
+            <span class="set-color__ch">${setIco(SET_ICO.chevron, 13, 2.4)}</span>
+            <input type="color" value="${escHtml(t.color)}"
+                   oninput="rtColorLive('${t.id}',this.value)"
+                   onchange="updateRoomType('${t.id}','color',this.value)">
+          </label>
+        </td>
+        <td>
+          <button class="set-rowbtn dh-red" onclick="removeRoomType('${t.id}')" title="${escHtml(why)}"
+                  ${blocked ? 'disabled' : ''} aria-label="Remove room type">${setIco(SET_ICO.trash, 15, 2)}</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const strip = [
+    ['stack', 'dh-violet', 'Total Room Types',  'rt-strip-types',   String(types.length)],
+    ['home',  'dh-blue',   'Total Rooms',       'rt-strip-rooms',   String((DB.rooms || []).length)],
+    ['bed',   'dh-green',  'Total Beds Capacity','rt-strip-beds',   String(_rtTotalBeds())],
+    ['coins', 'dh-amber',  'Average Rent',      'rt-strip-avg',
+      `<small>${escHtml(DB.settings.currency || 'PKR')}</small>${fmtNum(_rtAvgRent())}`],
+    ['clock', 'dh-slate',  'Last Updated',      'rt-strip-updated', escHtml(_rtStampText())]
+  ].map(([ic, hue, label, id, val]) => `
+    <div class="set-strip__c ${hue}">
+      <div class="set-strip__i">${setIco(SET_ICO[ic], 18)}</div>
+      <div style="min-width:0">
+        <div class="set-strip__l">${label}</div>
+        <div class="set-strip__v" id="${id}">${val}</div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="set-card">
+      <div class="set-head">
+        <div class="set-head__ico dh-violet">${setIco(SET_ICO.hostel, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Room Types Configuration</div>
+          <div class="set-head__s">Manage your hostel room types, capacity and default rent settings</div>
+        </div>
+        <div class="set-head__end">
+          <button class="set-btn set-btn--go" onclick="addRoomType()">${setIco(SET_ICO.plus, 16, 2.2)}Add New Type</button>
+        </div>
+      </div>
+
+      ${types.length ? `
+      <div class="set-table-wrap">
+        <table class="set-table">
+          <thead><tr>
+            <th style="width:1%">Color</th><th>Type Name</th><th style="width:1%">Capacity (Beds)</th>
+            <th style="width:1%">Default Rent (${escHtml(DB.settings.currency || 'PKR')})</th>
+            <th style="width:1%">Pick Color</th><th style="width:1%">Actions</th>
+          </tr></thead>
+          <tbody id="room-types-list">${rows}</tbody>
+        </table>
+      </div>` : `
+      <div class="set-empty">
+        <div class="set-empty__i">${setIco(SET_ICO.bed, 26, 1.7)}</div>
+        <div class="set-empty__t">No room types yet</div>
+        <div class="set-empty__s">Add one before creating rooms — every room takes its beds and default rent from its type.</div>
+      </div>`}
+
+      <div class="set-note dh-blue">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span>Changing room types here updates default values. Existing room rents remain unchanged unless you edit them individually.</span>
+      </div>
+
+      <div class="set-actions">
+        <button class="set-btn set-btn--go" onclick="saveRoomTypes()">${setIco(SET_ICO.check, 16, 2.1)}Save Room Types</button>
+      </div>
+    </div>
+
+    <div class="set-strip">${strip}</div>`;
+}
+
+/* Every room-type edit persists on change, so the strip is the only part of
+   the panel that goes stale. Patching those five cells beats re-rendering the
+   page, which would throw away scroll position and input focus mid-edit. */
+function rtRefreshStrip() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const types = (DB.settings.roomTypes) || [];
+  set('rt-strip-types',   String(types.length));
+  set('rt-strip-rooms',   String((DB.rooms || []).length));
+  set('rt-strip-beds',    String(_rtTotalBeds()));
+  set('rt-strip-updated', _rtStampText());
+  const avg = document.getElementById('rt-strip-avg');
+  if (avg) avg.innerHTML = `<small>${escHtml(DB.settings.currency || 'PKR')}</small>${fmtNum(_rtAvgRent())}`;
+}
+
+function rtColorLive(id, val) {
+  ['rt-sw-' + id, 'rt-csw-' + id].forEach(k => {
+    const el = document.getElementById(k); if (el) el.style.background = val;
+  });
+  const hex = document.getElementById('rt-hex-' + id); if (hex) hex.textContent = val;
+}
+
+/* Both the stepper and the box itself come through here. updateRoomType owns the
+   clamping, the stamp, the save and the strip refresh; this only reconciles the
+   two bits of the control that the clamp can invalidate — the box snaps back to
+   the value actually stored (type "2.5", see 3), and the minus disables at one. */
+async function rtSetCap(id, val) {
+  await updateRoomType(id, 'capacity', val);
+  const t = (DB.settings.roomTypes || []).find(x => x.id === id); if (!t) return;
+  const inp = document.getElementById('rt-cap-' + id); if (inp) inp.value = t.capacity;
+  const dec = document.getElementById('rt-dec-' + id); if (dec) dec.disabled = t.capacity <= 1;
+}
+async function rtStep(id, delta) {
+  const t = (DB.settings.roomTypes || []).find(x => x.id === id); if (!t) return;
+  const next = Math.max(1, (Number(t.capacity) || 1) + delta);
+  if (next === t.capacity) return;
+  await rtSetCap(id, next);
+}
+
+async function saveRoomTypes() {
+  _rtTouch();
+  await saveDB();
+  rtRefreshStrip();
+  toast('Room types saved', 'success');
+}
+
+/* ── Reorder ─────────────────────────────────────────────────────────────────
+   The array order is the order every other screen lists types in, so dragging
+   a row is a real edit, not a view preference. The row is only made draggable
+   while the pointer is on the grip — leaving `draggable` on permanently stops
+   you selecting text inside the row's own inputs. */
+let _rtDrag = null;
+function rtGrab(el) {
+  const tr = el.closest('tr'); if (!tr) return;
+  tr.draggable = true;
+  /* Release on the next mouseup ANYWHERE. Watching the grip's own mouseup is not
+     enough — the pointer is usually off the 16px icon by the time the button
+     comes up — and watching its mouseleave is actively wrong: leaving the grip is
+     how a drag begins, so clearing there cancels the drag before dragstart fires.
+     The `!_rtDrag` guard is what keeps a real drag alive. */
+  document.addEventListener('mouseup', function clear() {
+    if (!_rtDrag) tr.draggable = false;
+  }, { once: true });
+}
+
+function rtDragStart(ev, id) {
+  _rtDrag = id;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', id); } catch (e) {}
+  ev.currentTarget.classList.add('is-dragging');
+}
+function rtDragOver(ev, id) {
+  if (!_rtDrag || _rtDrag === id) return;
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+  const list = DB.settings.roomTypes || [];
+  const from = list.findIndex(t => t.id === _rtDrag);
+  const to   = list.findIndex(t => t.id === id);
+  ev.currentTarget.classList.toggle('is-over-up',   to < from);
+  ev.currentTarget.classList.toggle('is-over-down', to > from);
+}
+function rtDragLeave(ev) { ev.currentTarget.classList.remove('is-over-up', 'is-over-down'); }
+function rtDragEnd(ev) {
+  _rtDrag = null;
+  if (ev.currentTarget) ev.currentTarget.draggable = false;
+  document.querySelectorAll('#room-types-list tr').forEach(tr => {
+    tr.classList.remove('is-dragging', 'is-over-up', 'is-over-down');
+    tr.draggable = false;
+  });
+}
+async function rtDrop(ev, id) {
+  ev.preventDefault();
+  const list = DB.settings.roomTypes || [];
+  const from = list.findIndex(t => t.id === _rtDrag);
+  const to   = list.findIndex(t => t.id === id);
+  _rtDrag = null;
+  if (from < 0 || to < 0 || from === to) { rtDragEnd(ev); return; }
+  list.splice(to, 0, list.splice(from, 1)[0]);
+  _rtTouch();
+  await saveDB();
+  renderPage('settings');
+  toast('Room type order updated', 'success');
+}
+
+/* ── DATA MANAGEMENT ─────────────────────────────────────────────────────── */
+
+function _setBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(n / 1024 < 10 ? 1 : 0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+
+function renderDataManagementPanel() {
+  const total = JSON.stringify(DB).length;
+  /* Measured against the same serialisation saveDB() writes, so the figure is
+     the payload this app actually stores — not an estimate. */
+  const tbl = (key, hue, rows) => ({ key, hue, rows: (rows || []).length, n: JSON.stringify(rows || []).length });
+  const parts = [
+    tbl('Students', 'dh-violet', DB.students),
+    tbl('Payments', 'dh-blue',   DB.payments),
+    tbl('Expenses', 'dh-amber',  DB.expenses),
+    tbl('Rooms',    'dh-green',  DB.rooms)
+  ];
+  const counted = parts.reduce((s, p) => s + p.n, 0);
+  /* Filtered on row count, not byte count: an empty table still serialises to
+     "[]", so a byte test would keep listing tables that hold nothing at 0%. */
+  const segs = parts.filter(p => p.rows > 0)
+                    .concat([{ key: 'Other', hue: 'dh-slate', n: Math.max(0, total - counted) }])
+                    .filter(p => p.n > 0);
+  const pct = n => total ? (n / total * 100) : 0;
+
+  const stat = (ic, hue, label, val) => `
+    <div class="set-stat ${hue}">
+      <div class="set-stat__i">${setIco(SET_ICO[ic], 16)}</div>
+      <div class="set-stat__l">${label}</div>
+      <div class="set-stat__v">${val}</div>
+    </div>`;
+
+  const strip = [
+    ['home',  'dh-blue',   'Total Rooms',    String((DB.rooms || []).length),    'Active rooms'],
+    ['users', 'dh-violet', 'Total Students', String((DB.students || []).length), 'Registered students'],
+    ['card',  'dh-green',  'Total Payments', String((DB.payments || []).length), 'Payment records'],
+    ['trend', 'dh-amber',  'Total Expenses', String((DB.expenses || []).length), 'Expense records'],
+    ['drive', 'dh-slate',  'Storage Used',   _setBytes(total),                   'Database payload']
+  ].map(([ic, hue, label, val, sub]) => `
+    <div class="set-strip__c ${hue}" title="${sub}">
+      <div class="set-strip__i">${setIco(SET_ICO[ic], 18)}</div>
+      <div style="min-width:0">
+        <div class="set-strip__l">${label}</div>
+        <div class="set-strip__v">${val}</div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="set-card">
+      <div class="set-head">
+        <div class="set-head__ico dh-violet">${setIco(SET_ICO.database, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Data Management</div>
+          <div class="set-head__s">Import, export and manage your hostel data securely</div>
+        </div>
+        <div class="set-head__end">
+          <div class="set-callout dh-blue">
+            ${setIco(SET_ICO.info, 16, 2)}
+            <span>For backup &amp; restore, use the <strong>Backup &amp; Restore</strong> option in the sidebar menu.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-split">
+        <!-- IMPORT -->
+        <div class="set-sub">
+          <div class="set-sub__top">
+            <div class="set-sub__ico dh-green">${setIco(SET_ICO.sheet, 21)}</div>
+            <div style="min-width:0">
+              <div class="set-sub__t">Import Students from Excel / CSV</div>
+              <div class="set-sub__s">Bulk-add students from a spreadsheet — download the template, fill it in, then upload</div>
+            </div>
+          </div>
+
+          <div class="set-sub__btns">
+            <button class="set-btn" onclick="downloadExcelTemplate()">${setIco(SET_ICO.download, 16, 2)}Download Template (.xlsx)</button>
+            <button class="set-btn" onclick="downloadCSVTemplate()">${setIco(SET_ICO.download, 16, 2)}Download Template (.csv)</button>
+            <input type="file" id="excel-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromExcel(this)">
+            <button class="set-btn set-btn--go" onclick="document.getElementById('excel-import-file').click()">${setIco(SET_ICO.upload, 16, 2)}Upload &amp; Import File</button>
+          </div>
+
+          <div class="set-cols">
+            <div class="set-cols__h">Required columns:</div>
+            Name, Father Name, CNIC, Phone, Room Number, Monthly Rent,<br>
+            Join Date, Payment Method, Status, Amount Paid
+            <div class="set-cols__div"></div>
+            <div class="set-cols__h" style="color:var(--text3)">Optional columns:</div>
+            Email, Occupation / Course, Emergency Contact, Notes
+          </div>
+        </div>
+
+        <!-- SYSTEM STATS -->
+        <div class="set-sub">
+          <div class="set-sub__top">
+            <div class="set-sub__ico dh-violet">${setIco(SET_ICO.stack, 21)}</div>
+            <div class="set-sub__t">System Stats</div>
+          </div>
+
+          ${stat('home',  'dh-blue',   'Rooms',    (DB.rooms || []).length)}
+          ${stat('users', 'dh-green',  'Students', (DB.students || []).length)}
+          ${stat('card',  'dh-violet', 'Payments', (DB.payments || []).length)}
+          ${stat('trend', 'dh-amber',  'Expenses', (DB.expenses || []).length)}
+
+          <div class="set-store">
+            <div class="set-store__top">
+              <span class="set-store__l">Storage Used</span>
+              <span class="set-store__v">${_setBytes(total)}</span>
+            </div>
+            <div class="set-store__bar">
+              ${segs.map(p => `<div class="set-store__seg ${p.hue}" style="width:${pct(p.n).toFixed(2)}%" title="${p.key} — ${_setBytes(p.n)}"></div>`).join('')}
+            </div>
+            <div class="set-store__key">
+              ${segs.map(p => `<span class="set-store__k ${p.hue}"><span class="set-store__dot"></span>${p.key} ${pct(p.n).toFixed(0)}%</span>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="set-strip">${strip}</div>`;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 let settingsTab = 'hostel';
 function renderSettings() {
   const s = DB.settings;
   const tabs = [
-    {id:'hostel', icon:'🏨', label:'Hostel Info'},
-    {id:'rooms', icon:'🏠', label:'Room Types'},
-    {id:'payments', icon:'💳', label:'Payment Methods'},
-    {id:'expenses', icon:'📉', label:'Expense Categories'},
-    {id:'floors', icon:'🏗️', label:'Floors'},
-    {id:'data', icon:'💾', label:'Data Management'},
-    {id:'license', icon:'🔐', label:'License'}
+    {id:'hostel',   label:'Hostel Info',        svg:SET_ICO.hostel},
+    {id:'rooms',    label:'Room Types',         svg:SET_ICO.bed},
+    {id:'payments', label:'Payment Methods',    svg:SET_ICO.card},
+    {id:'expenses', label:'Expense Categories', svg:SET_ICO.receipt},
+    {id:'floors',   label:'Floors',             svg:SET_ICO.layers},
+    {id:'data',     label:'Data Management',    svg:SET_ICO.database},
+    {id:'license',  label:'License',            svg:SET_ICO.key}
   ];
 
   const pmList = (s.paymentMethods||[]).map(m=>`<div class="tag-item" id="pm-${escHtml(m)}">${escHtml(m)}<button class="tag-remove" onclick="removePaymentMethod('${escHtml(m)}')">×</button></div>`).join('');
   const ecList = (s.expenseCategories||[]).map(c=>`<div class="tag-item" id="ec-${escHtml(c)}">${escHtml(c)}<button class="tag-remove" onclick="removeExpenseCategory('${escHtml(c)}')">×</button></div>`).join('');
   const floorList = (s.floors||[]).map(f=>`<div class="tag-item" id="fl-${escHtml(f)}">${escHtml(f)}<button class="tag-remove" onclick="removeFloor('${escHtml(f)}')">×</button></div>`).join('');
-  const rtRows = (s.roomTypes||[]).map(t=>`
-    <div class="room-type-row" id="rt-${t.id}">
-      <div class="room-type-color" style="background:${t.color}"></div>
-      <input class="form-control" style="flex:2" value="${escHtml(t.name)}" onchange="updateRoomType('${t.id}','name',this.value)" placeholder="Type name">
-      <input class="form-control" style="flex:1" type="number" value="${t.capacity}" onchange="updateRoomType('${t.id}','capacity',this.value)" placeholder="Beds">
-      <input class="form-control" style="flex:2" type="number" value="${t.defaultRent}" onchange="updateRoomType('${t.id}','defaultRent',this.value)" placeholder="Default rent">
-      <input type="color" value="${t.color}" onchange="updateRoomType('${t.id}','color',this.value)" style="width:36px;height:36px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);cursor:pointer;padding:2px">
-      <button class="btn btn-danger btn-sm" onclick="removeRoomType('${t.id}')">Remove</button>
-    </div>`).join('');
-
   return `
-  <div class="settings-topnav-wrap">
-    <div class="settings-nav">
-      ${tabs.map(t=>`<div class="settings-tab ${settingsTab===t.id?'active':''}" onclick="settingsTab='${t.id}';renderPage('settings')">${t.icon} ${t.label}</div>`).join('')}
+  <div class="set-tabs-wrap">
+    <div class="set-tabs" role="tablist" aria-label="Settings sections">
+      <!-- The old tab row was a bare click-only div, so Settings had no keyboard
+           route into any of its seven panels. Same markup, now reachable. -->
+      ${tabs.map(t=>`<div class="set-tab ${settingsTab===t.id?'is-on':''}" role="tab" tabindex="0"
+             aria-selected="${settingsTab===t.id}" title="${escHtml(t.label)}"
+             onclick="settingsTab='${t.id}';renderPage('settings')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();settingsTab='${t.id}';renderPage('settings');}"
+        >${setIco(t.svg,16)}${escHtml(t.label)}</div>`).join('')}
     </div>
   </div>
 
@@ -484,20 +904,12 @@ function renderSettings() {
       </div>
 
       <!-- ROOM TYPES -->
+      <!-- Built only when it is the panel on screen. Every tab click re-enters
+           renderSettings, so the visible panel is always fresh — and the Data
+           Management body below serialises the whole DB to size it, which is not
+           work to do while someone is editing the hostel's phone number. -->
       <div class="settings-panel ${settingsTab==='rooms'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">🏠 Room Types Configuration</div><button class="btn btn-primary btn-sm" onclick="addRoomType()">+ Add Type</button></div>
-          <div style="display:grid;grid-template-columns:auto 2fr 1fr 2fr auto auto;gap:10px;margin-bottom:10px;padding:0 4px">
-            <div class="stat-label">Color</div><div class="stat-label">Type Name</div><div class="stat-label">Capacity</div><div class="stat-label">Default Rent (PKR)</div><div class="stat-label">Pick Color</div><div></div>
-          </div>
-          <div id="room-types-list">${rtRows}</div>
-          <div style="margin-top:14px;text-align:right">
-            <button class="btn btn-primary" onclick="saveSettings()">💾 Save Room Types</button>
-          </div>
-          <div style="margin-top:16px;background:var(--amber-dim);border:1px solid rgba(240,160,48,0.2);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:var(--amber)">
-            ⚠️ Changing room types here updates default values. Existing room rents remain unchanged unless you edit them individually.
-          </div>
-        </div>
+        ${settingsTab==='rooms' ? renderRoomTypesPanel() : ''}
       </div>
 
       <!-- PAYMENT METHODS -->
@@ -538,41 +950,7 @@ function renderSettings() {
 
       <!-- DATA MANAGEMENT -->
       <div class="settings-panel ${settingsTab==='data'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">${icon('download','sm')} Data Management</div>
-            <div style="font-size:12px;color:var(--text3)">For backup & restore, use the <strong style="color:var(--accent-strong)">Backup & Restore</strong> option in the sidebar menu.</div>
-          </div>
-          <div class="form-grid">
-            <!-- EXCEL/CSV IMPORT CARD -->
-            <div class="card" style="padding:16px;border-color:rgba(74,156,240,0.4);grid-column:span 2">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                <div style="width:34px;height:34px;border-radius:8px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;color:var(--green)">${icon('chart','sm')}</div>
-                <div>
-                  <div style="font-weight:700;color:var(--text)">Import Students from Excel / CSV</div>
-                  <div style="font-size:12px;color:var(--text3)">Bulk-add students from a spreadsheet — download the template, fill it in, then upload</div>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn btn-secondary btn-sm" onclick="downloadExcelTemplate()">⬇️ Download Template (.xlsx)</button>
-                <button class="btn btn-secondary btn-sm" onclick="downloadCSVTemplate()">⬇️ Download Template (.csv)</button>
-                <input type="file" id="excel-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFromExcel(this)">
-                <button class="btn btn-primary btn-sm" onclick="document.getElementById('excel-import-file').click()">📤 Upload & Import File</button>
-              </div>
-              <div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-                <strong style="color:var(--accent-strong)">Required columns:</strong> Name, Father Name, CNIC, Phone, Room Number, Monthly Rent, Join Date, Payment Method, Status, Amount Paid
-                <span style="margin-left:8px;color:var(--text3)">· Optional: Email, Occupation / Course, Emergency Contact, Notes, Amount Paid</span>
-              </div>
-            </div>
-
-            <div class="card" style="padding:16px;border-color:var(--border2)">
-              <div style="font-weight:700;margin-bottom:6px">System Stats</div>
-              <div style="font-size:13px;color:var(--text3)">
-                Rooms: ${DB.rooms.length} · Students: ${DB.students.length} · Payments: ${DB.payments.length} · Expenses: ${DB.expenses.length}
-              </div>
-              <div style="font-size:12px;color:var(--text3);margin-top:8px">Storage: ~${Math.round(JSON.stringify(DB).length/1024)}KB used</div>
-            </div>
-          </div>
-        </div>
+        ${settingsTab==='data' ? renderDataManagementPanel() : ''}
       </div>
 
       <!-- RENT UPDATE -->
@@ -834,7 +1212,21 @@ async function applyRentToAll() {
 async function updateRoomType(id, field, val) {
   const t=DB.settings.roomTypes.find(x=>x.id===id); if(!t) return;
   const oldRent = t.defaultRent;
-  if(field==='capacity'||field==='defaultRent') t[field]=parseFloat(val)||t[field];
+  /* `parseFloat(val)||t[field]` alone let a typed "2.5" through as two-and-a-half
+     beds and a typed "-3" through as negative ones, both of which then propagated
+     into Total Beds Capacity and Average Rent on the summary strip. Beds are whole
+     and positive; rent is not negative. Anything rejected keeps the old value —
+     the same thing an empty or unparseable box has always done here. Note 0 is
+     still a reject for rent, deliberately: a defaultRent change cascades to every
+     room of the type and its active students, and a mistyped 0 would zero them. */
+  if(field==='capacity') {
+    const n = Math.round(parseFloat(val));
+    t.capacity = (!n || n < 1) ? t.capacity : n;
+  }
+  else if(field==='defaultRent') {
+    const n = parseFloat(val);
+    t.defaultRent = (!n || n < 0) ? t.defaultRent : n;
+  }
   else t[field]=val;
   // Fix #14: When defaultRent changes, update all rooms of this type AND their active students
   if(field==='defaultRent' && t.defaultRent !== oldRent) {
@@ -858,17 +1250,21 @@ async function updateRoomType(id, field, val) {
     });
     toast('Default rent updated to '+fmtPKR(newRent)+' — rooms & students updated', 'success');
   }
+  _rtTouch();
   await saveDB();
+  rtRefreshStrip();   // no-op unless the Room Types panel is the one on screen
 }
 async function addRoomType() {
   const id='rt_'+uid();
   DB.settings.roomTypes.push({id,name:'New Type',capacity:1,defaultRent:16000,color:'#4a9cf0'});
+  _rtTouch();
   await saveDB(); renderPage('settings'); toast('Room type added','success');
 }
 async function removeRoomType(id) {
   if(DB.settings.roomTypes.length<=1){toast('Must have at least one room type','error');return;}
   if(DB.rooms.some(r=>r.typeId===id)){toast('Cannot remove type: rooms are using it','error');return;}
   DB.settings.roomTypes=DB.settings.roomTypes.filter(x=>x.id!==id);
+  _rtTouch();
   await saveDB(); renderPage('settings'); toast('Room type removed','info');
 }
 async function addPaymentMethod() {

@@ -173,16 +173,11 @@ body.light-theme #sidebar {
 }
 #sidebar .nav-item.active .nav-badge { background: rgba(255,255,255,.28); }
 
-/* User card pinned under the nav.
-   The account menu moved here from the header, so it opens UPWARD off the
-   bottom of the sidebar. The wrapper is the positioning context. */
+/* User card pinned under the nav. The account menu moved here from the header
+   and opens UPWARD; this wrapper is its positioning context. The rule that
+   flips it upward lives with .hdr-menu further down — it has to win on
+   specificity, and at equal weight .hdr-menu would win on source order. */
 .sb-user-wrap { position: relative; }
-.sb-user-menu {
-    position: absolute;
-    bottom: calc(100% - 4px); left: 12px; right: 12px;
-    top: auto;
-    z-index: 1200;
-}
 .sb-user {
     display: flex; align-items: center; gap: 11px;
     margin: 0 12px 14px; padding: 10px 12px;
@@ -338,6 +333,19 @@ body.light-theme #header {
     min-width: 216px; padding: 6px;
     background: var(--card); border: 1px solid var(--border2);
     border-radius: 12px; box-shadow: var(--shadow);
+}
+
+/* The account menu hangs off the BOTTOM of the sidebar, so it opens upward.
+   `top` must be unset or the rule above and this one both apply and squeeze the
+   box to a sliver below the window — which is exactly what happened. Two
+   class names deep so it beats .hdr-menu on specificity rather than on source
+   order, which is the trap that bit here the first time. */
+.sb-user-wrap .hdr-menu {
+    top: auto; bottom: calc(100% + 8px);
+    left: 12px; right: 12px;
+    /* Never taller than the sidebar above it — #sidebar is overflow:hidden, so
+       an over-long menu would be silently clipped instead of scrolling. */
+    max-height: calc(100vh - 120px); overflow-y: auto;
 }
 .hdr-menu__item {
     display: flex; align-items: center; gap: 10px;
