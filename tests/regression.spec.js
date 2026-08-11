@@ -40,8 +40,9 @@ async function waitForLoginScreen(win) {
     null, { timeout: 30000 });
 }
 
-async function login(win, password = 'warden1') {
+async function login(win, password = 'warden1', username = 'warden1') {
   await waitForLoginScreen(win);
+  await win.fill('#login-user', username);
   await win.fill('#login-input', password);
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -287,11 +288,14 @@ test('login: wrong password is rejected, decrements attempts, locks after 5', as
   // assertions don't race the login-error text's 4-second auto-hide.
   async function failOnce(pw) {
     return await win.evaluate(async (p) => {
+      document.getElementById('login-user').value = 'warden1';
       document.getElementById('login-input').value = p;
       await checkLogin();
+      // Lockout is keyed on the typed username, not on CUR_ROLE — CUR_ROLE is
+      // only set once a login actually succeeds.
       return {
-        remaining: _remainingAttempts(CUR_ROLE),
-        locked: !!_isLockedOut(CUR_ROLE),
+        remaining: _remainingAttempts('warden1'),
+        locked: !!_isLockedOut('warden1'),
         loggedIn: document.getElementById('login-screen').style.display === 'none',
       };
     }, pw);

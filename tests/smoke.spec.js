@@ -51,7 +51,10 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-input', 'warden1'); // isolated fresh profile => default pw
+  // Login is username + password now; a fresh profile seeds warden1 with its
+  // username as the default password.
+  await win.fill('#login-user', 'warden1');
+  await win.fill('#login-input', 'warden1');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },

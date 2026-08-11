@@ -3,7 +3,8 @@
              _cdpClose/_cdpClear/_cdpPrev/_cdpNext/_cdpRender/_cdpPick,
              _showCameraPermBanner, statusBadge, pmBadge,
              showBackupRestoreModal, exportBackup, restoreBackup, restoreFromPaste,
-             _initDBFields, saveWardenInfo/showUserMgmt/handleWardenPhoto
+             _initDBFields, showUserMgmt/showUserEditor/saveUser/deleteUser,
+             handleWardenPhoto
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -74,6 +75,7 @@ function showConfirm(title, text, onConfirm, onCancel) {
 // BACKUP & RESTORE
 // ════════════════════════════════════════════════════════════════════════════
 async function showBackupRestoreModal() {
+  if (typeof requirePerm === 'function' && !requirePerm('backup')) return;
   const now = new Date();
   const ts = now.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' + now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
   const dataSize = (JSON.stringify(DB).length / 1024).toFixed(1);
@@ -630,44 +632,219 @@ function toast(msg, type='info', title='') {
 // LOGO UPLOAD
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT
+//
+// Was a fixed editor for exactly two wardens. It is now an open user list:
+// add, edit, deactivate and delete accounts, each with its own permission set.
+// Guarded by the 'users' permission — see requirePerm() in auth-nev.js.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Count users who can still manage users and are not deactivated. */
+function _adminCount() {
+  return Object.values(WARDENS).filter(function (u) {
+    return u && u.active !== false && u.perms && u.perms.users === true;
+  }).length;
+}
+
 function showUserMgmt() {
-  var rows = '';
-  var wList = ['warden1','warden2'];
-  wList.forEach(function(key){
-    var w = WARDENS[key];
-    var isActive = key===CUR_ROLE;
-    var photoSrc = w.photo || '';
-    var avatarHtml = photoSrc
-      ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
-      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
-    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(37,99,235,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
-    rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
-    rows += '<div style="position:relative;flex-shrink:0">';
-    rows += avatarHtml;
-    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--bg3);color:var(--bg)" title="Change photo">'+(typeof icon==='function'?icon('edit','xs'):'')+'</div>';
-    rows += '<input type="file" id="warden-photo-input-'+key+'" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\''+key+'\')">';
-    rows += '</div>';
-    rows += '<div style="flex:1">';
-    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--accent-dim);color:var(--accent-strong);padding:2px 8px;border-radius:20px;border:1px solid rgba(37,99,235,0.3)">● LOGGED IN</span>':'')+'</div>';
-    rows += '<div style="font-size:11px;color:var(--text3);margin-top:2px">Full access · Add, edit payments &amp; records</div>';
-    rows += (photoSrc ? '<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Profile photo set</div>' : '<div style="font-size:10px;color:var(--text3);margin-top:4px">Click avatar to upload a photo</div>');
-    rows += '</div></div>';
-    rows += '<div class="form-grid" style="gap:8px">';
-    rows += '<div class="field"><label style="font-size:11px">Display Name</label><input id="wn-'+key+'" class="form-control" value="'+escHtml(w.name)+'" placeholder="Warden Name"></div>';
-    rows += '<div class="field"><label style="font-size:11px">New Password</label><input id="wp-'+key+'" class="form-control" type="password" placeholder="Leave blank to keep current"></div>';
-    rows += '<div class="field col-full"><label style="font-size:11px;display:flex;align-items:center;gap:5px">'+MODAL_ICONS.smartphone+' WhatsApp Number <span style="font-weight:400;color:var(--text3)">(used as default WA reminder number)</span></label><input id="wwa-'+key+'" class="form-control" value="'+escHtml(w.phone||'')+'" placeholder="03XX-XXXXXXX"></div>';
-    rows += '</div>';
-    rows += '<div style="display:flex;gap:8px;margin-top:10px">';
-    rows += '<button class="btn btn-primary btn-sm" style="flex:1" onclick="saveWardenInfo(\''+key+'\')">&#x1F4BE; Save Changes</button>';
-    if(photoSrc) rows += '<button class="btn btn-danger btn-sm" onclick="removeWardenPhoto(\''+key+'\')" title="Remove profile photo">'+MODAL_ICONS.trash+' Photo</button>';
-    rows += '</div>';
-    rows += '</div>';
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var rows = Object.keys(WARDENS).map(function (id) {
+    var u = WARDENS[id] || {};
+    var isMe = id === CUR_ROLE;
+    var perms = u.perms || {};
+    var granted = PERM_KEYS.filter(function (k) { return perms[k] === true; }).length;
+    var initials = (u.name || u.username || '?').trim().charAt(0).toUpperCase();
+
+    var av = u.photo
+      ? '<img src="' + u.photo + '" style="width:40px;height:40px;border-radius:11px;object-fit:cover;flex-shrink:0">'
+      : '<div style="width:40px;height:40px;border-radius:11px;background:var(--bg4);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">' + escHtml(initials) + '</div>';
+
+    return '<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">'
+      + av
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:700;font-size:14px;color:var(--text)">' + escHtml(u.name || '(no name)')
+      + (isMe ? ' <span style="font-size:10px;font-weight:700;color:var(--text3)">&middot; you</span>' : '')
+      + (u.active === false ? ' <span class="badge badge-gray" style="font-size:10px">Inactive</span>' : '')
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-top:2px">'
+      + escHtml(u.username || id) + ' &middot; ' + granted + ' of ' + PERM_KEYS.length + ' permissions'
+      + '</div>'
+      + '</div>'
+      + '<button class="btn btn-secondary btn-sm" onclick="showUserEditor(\'' + id + '\')">Edit</button>'
+      + '</div>';
+  }).join('');
+
+  showModal('modal-md', 'User Management',
+    rows
+    + '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:6px" onclick="showUserEditor(null)">+ Add User</button>'
+    + '<div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">'
+    + 'Permissions control what each person can reach in this app. They are enforced '
+    + 'on this machine &mdash; anyone with the Windows account and the database file '
+    + 'can still read the data directly.'
+    + '</div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">Close</button>'
+    + '<button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>'
+  );
+}
+
+/** Add (id === null) or edit one user. */
+function showUserEditor(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var isNew = !id;
+  var u = isNew ? { username: '', name: '', phone: '', perms: {}, active: true } : (WARDENS[id] || {});
+  var perms = u.perms || {};
+  // A new account starts with the everyday permissions ticked and the dangerous
+  // ones clear, so a mis-click cannot hand out clear-all by default.
+  var defaultOn = { edit: true, payments: true, reports: true };
+
+  var permRows = PERMS.map(function (p) {
+    var on = isNew ? (defaultOn[p.key] === true) : (perms[p.key] === true);
+    return '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);margin-bottom:6px;cursor:pointer">'
+      + '<input type="checkbox" id="up-' + p.key + '"' + (on ? ' checked' : '') + ' style="margin-top:2px;flex-shrink:0">'
+      + '<span style="flex:1"><span style="display:block;font-size:13px;font-weight:600;color:var(--text)">' + escHtml(p.label) + '</span>'
+      + '<span style="display:block;font-size:11.5px;color:var(--text3);margin-top:1px">' + escHtml(p.hint) + '</span></span>'
+      + '</label>';
+  }).join('');
+
+  // Photo is offered only when editing: a new user has no storage key yet to
+  // attach the image to. It saves immediately, unlike the fields below it.
+  var avatarHtml = isNew ? '' :
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
+    + _userAvatarNode(id, u.photo || '')
+    + '<input type="file" id="u-photo-input" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\'' + id + '\')">'
+    + '<div style="flex:1">'
+    +   '<div style="font-size:12.5px;font-weight:600;color:var(--text)">Profile photo</div>'
+    +   '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">Saved as soon as you choose it</div>'
+    + '</div>'
+    + (u.photo ? '<button class="btn btn-secondary btn-sm" onclick="removeWardenPhoto(\'' + id + '\')">Remove</button>' : '')
+    + '</div>';
+
+  var body =
+    avatarHtml
+    + '<div class="form-grid" style="gap:10px">'
+    + '<div class="field"><label style="font-size:11px">Full Name</label>'
+    + '<input id="u-name" class="form-control" value="' + escHtml(u.name || '') + '" placeholder="e.g. Faheem Ullah"></div>'
+    + '<div class="field"><label style="font-size:11px">Username</label>'
+    + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="e.g. faheem"></div>'
+    + '<div class="field"><label style="font-size:11px">' + (isNew ? 'Password' : 'New Password') + '</label>'
+    + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least 4 characters' : 'Leave blank to keep current') + '"></div>'
+    + '<div class="field"><label style="font-size:11px">WhatsApp Number</label>'
+    + '<input id="u-phone" class="form-control" value="' + escHtml(u.phone || '') + '" placeholder="03XX-XXXXXXX"></div>'
+    + '</div>'
+    + '<label style="display:flex;gap:9px;align-items:center;margin:12px 0 4px;cursor:pointer">'
+    + '<input type="checkbox" id="u-active"' + (u.active !== false ? ' checked' : '') + '>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--text)">Account is active</span>'
+    + '<span style="font-size:11.5px;color:var(--text3)">&mdash; inactive accounts cannot sign in</span>'
+    + '</label>'
+    + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin:16px 0 8px">Permissions</div>'
+    + permRows;
+
+  var canDelete = !isNew && !(WARDENS[id] && WARDENS[id].builtin) && id !== CUR_ROLE;
+  var footer =
+    '<button class="btn btn-secondary" onclick="showUserMgmt()">Back</button>'
+    + (canDelete ? '<button class="btn btn-danger btn-sm" onclick="deleteUser(\'' + id + '\')">Delete</button>' : '')
+    + '<button class="btn btn-primary" onclick="saveUser(' + (isNew ? 'null' : '\'' + id + '\'') + ')">Save</button>';
+
+  showModal('modal-md', isNew ? 'Add User' : 'Edit User', body, footer);
+}
+
+async function saveUser(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var isNew = !id;
+  var name = (document.getElementById('u-name') || {}).value || '';
+  var username = (document.getElementById('u-username') || {}).value || '';
+  var pw = (document.getElementById('u-pw') || {}).value || '';
+  var phone = (document.getElementById('u-phone') || {}).value || '';
+  var active = !!(document.getElementById('u-active') || {}).checked;
+
+  name = name.trim();
+  username = username.trim().toLowerCase();
+  phone = phone.trim();
+
+  if (!name) { toast('Name cannot be empty', 'error'); return; }
+  if (!username) { toast('Username cannot be empty', 'error'); return; }
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    toast('Username can use letters, numbers, dot, dash and underscore only', 'error'); return;
+  }
+  var clash = findUserByUsername(username);
+  if (clash && clash !== id) { toast('That username is already taken', 'error'); return; }
+
+  var perms = {};
+  PERM_KEYS.forEach(function (k) {
+    var el = document.getElementById('up-' + k);
+    perms[k] = !!(el && el.checked);
   });
 
-  showModal('modal-md','&#x1F9D1;&#x200D;&#x1F4BC; Warden Management',
-    rows,
-    '<button class="btn btn-secondary" onclick="closeModal()">Close</button><button class="btn btn-danger btn-sm" onclick="logout()">&#x1F6AA; Logout</button>'
-  );
+  // Never let the last administrator be demoted or switched off — that would
+  // leave the install with no way to manage users at all.
+  if (!isNew) {
+    var was = WARDENS[id] || {};
+    var wasAdmin = was.active !== false && was.perms && was.perms.users === true;
+    var stillAdmin = active && perms.users === true;
+    if (wasAdmin && !stillAdmin && _adminCount() <= 1) {
+      toast('This is the only account that can manage users. Give another user that permission first.',
+        'error', 'Cannot remove');
+      return;
+    }
+  }
+
+  var newHash = null;
+  if (pw.trim()) {
+    try { newHash = await hashNewPassword(pw.trim()); }
+    catch (e) { toast(e.message || 'Invalid password', 'error'); return; }
+  } else if (isNew) {
+    toast('Set a password for the new user', 'error'); return;
+  }
+
+  if (isNew) {
+    // The storage key is independent of the username, so renaming a user later
+    // never orphans their session or their lockout record.
+    var newId = 'u' + Date.now().toString(36);
+    WARDENS[newId] = {
+      username: username, name: name, phone: phone,
+      perms: perms, active: active, pw: newHash, photo: ''
+    };
+  } else {
+    var t = WARDENS[id];
+    t.name = name; t.username = username; t.phone = phone;
+    t.perms = perms; t.active = active;
+    if (newHash) t.pw = newHash;
+    if (id === CUR_ROLE) {
+      CUR_USER = t;
+      if (typeof updateRoleBadge === 'function') updateRoleBadge();
+      if (typeof applyPermissionsToChrome === 'function') applyPermissionsToChrome();
+    }
+  }
+
+  saveWardenConfig();
+  if (typeof USERS !== 'undefined') USERS = WARDENS;
+  toast(name + (isNew ? ' added' : ' updated'), 'success');
+  showUserMgmt();
+}
+
+function deleteUser(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  var u = WARDENS[id];
+  if (!u) return;
+  if (id === CUR_ROLE) { toast('You cannot delete the account you are signed in as', 'error'); return; }
+  if (u.builtin) { toast('The built-in account cannot be deleted', 'error'); return; }
+  if (u.active !== false && u.perms && u.perms.users === true && _adminCount() <= 1) {
+    toast('This is the only account that can manage users', 'error', 'Cannot delete'); return;
+  }
+  showConfirm('Delete user?',
+    'Remove ' + (u.name || u.username) + '? They will no longer be able to sign in. '
+    + 'Records they already created are not affected.',
+    function () {
+      delete WARDENS[id];
+      saveWardenConfig();
+      if (typeof USERS !== 'undefined') USERS = WARDENS;
+      toast('User deleted', 'info');
+      showUserMgmt();
+    });
 }
 
 function handleWardenPhoto(event, key) {
@@ -686,18 +863,16 @@ function handleWardenPhoto(event, key) {
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      if(!WARDENS[key]) return;
       WARDENS[key].photo = dataUrl;
       saveWardenConfig();
-      // Live-update the avatar in the modal without closing it
-      var imgEl = document.getElementById('warden-avatar-img-'+key);
-      if(imgEl) {
-        imgEl.outerHTML = '<img src="'+dataUrl+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">';
-      }
-      // Update the role badge in header if it's the current user
       if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
-      // Update login screen avatar
-      updateLoginAvatar(key);
-      toast('Profile photo updated!','success');
+      toast('Profile photo updated','success');
+      // The editor is rebuilt rather than patched in place: it now carries
+      // unsaved field values, so re-rendering would discard them — instead only
+      // the avatar node is swapped.
+      var imgEl = document.getElementById('u-avatar');
+      if(imgEl) imgEl.outerHTML = _userAvatarNode(key, dataUrl);
     };
     img.src = e.target.result;
   };
@@ -705,67 +880,33 @@ function handleWardenPhoto(event, key) {
 }
 
 function removeWardenPhoto(key) {
+  if(!WARDENS[key]) return;
   WARDENS[key].photo = '';
   saveWardenConfig();
   if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
-  updateLoginAvatar(key);
   toast('Photo removed','info');
-  showUserMgmt(); // refresh modal
+  var imgEl = document.getElementById('u-avatar');
+  if(imgEl) imgEl.outerHTML = _userAvatarNode(key, '');
 }
 
-function updateLoginAvatar(key) {
-  // Update the warden selector card on the login screen (login v5).
-  // The avatar <img> and its fallback person icon both live in the markup, so
-  // this only sets or clears src — login.css does the rest:
-  //   .lg-card__av img:not([src])  -> hidden      (fallback icon shows)
-  //   .lg-card__av img[src] ~ svg  -> hidden      (photo shows)
-  // The previous version rewrote the avatar's innerHTML on removal, which with
-  // this markup would destroy the circle and the fallback icon with it.
-  var card = document.getElementById('rb-' + key);
-  if(!card) return;
-  var photoEl = card.querySelector('.warden-login-photo');
-  if(!photoEl) return;
-  var w = WARDENS[key];
-  if(w && w.photo) photoEl.setAttribute('src', w.photo);
-  else             photoEl.removeAttribute('src');
-}
-
-async function saveWardenInfo(key) {
-  var nameEl = document.getElementById('wn-'+key);
-  var pwEl   = document.getElementById('wp-'+key);
-  var wwaEl  = document.getElementById('wwa-'+key);
-  if(!nameEl||!nameEl.value.trim()){toast('Name cannot be empty','error');return;}
-  // CRITICAL FIX: hash the new password with PBKDF2 (auth-nev.js) BEFORE storing.
-  // Previously this stored the raw plaintext string, which verifyPassword() rejects
-  // (it only accepts a v2 {hash,salt,v} object or a 64-char SHA-256 hex string) — so
-  // after any password change, NEITHER the new password NOR the default would log in,
-  // and the default credential was destroyed. Validate + hash first; abort on bad input.
-  let _newPwHash = null;
-  if(pwEl && pwEl.value.trim()){
-    try { _newPwHash = await hashNewPassword(pwEl.value.trim()); }
-    catch(e){ toast(e.message || 'Invalid password','error'); return; }
+/**
+ * The avatar control inside the user editor. Clicking it opens the file picker.
+ * Kept as one function so handleWardenPhoto/removeWardenPhoto can swap the node
+ * without re-rendering the whole editor and losing unsaved input.
+ */
+function _userAvatarNode(key, photo) {
+  var open = 'document.getElementById(\'u-photo-input\').click()';
+  if (photo) {
+    return '<img id="u-avatar" src="' + photo + '" onclick="' + open + '" title="Click to change photo"'
+      + ' style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer">';
   }
-  WARDENS[key].name = nameEl.value.trim();
-  if(_newPwHash) WARDENS[key].pw = _newPwHash;
-  if(pwEl) pwEl.value='';
-  if(wwaEl) {
-    WARDENS[key].phone = wwaEl.value.trim();
-    // Auto-update default WA number to the current logged-in warden's number
-    if(key===CUR_ROLE && wwaEl.value.trim()) {
-      DB.settings.defaultWANumber = wwaEl.value.trim();
-      await saveDB();
-    }
-  }
-  saveWardenConfig();
-  // Update display name label on login screen
-  var lbl = document.getElementById('wb'+(key==='warden1'?'1':'2')+'-name');
-  if(lbl) lbl.textContent=WARDENS[key].name;
-  if(key===CUR_ROLE) { CUR_USER=WARDENS[key]; updateRoleBadge(); }
-  toast(WARDENS[key].name+' updated','success');
+  return '<div id="u-avatar" onclick="' + open + '" title="Click to upload a photo"'
+    + ' style="width:56px;height:56px;border-radius:14px;background:var(--bg4);color:var(--text3);display:flex;'
+    + 'align-items:center;justify-content:center;cursor:pointer;border:2px dashed var(--border2);font-size:22px">+</div>';
 }
 
 
-// saveUPW replaced by saveWardenInfo
+// saveUPW and saveWardenInfo were both superseded by saveUser() above.
 
 // ══════════════════════════════════════════════════════════════════
 // STUDENT DOCUMENTS UPLOAD

@@ -110,6 +110,7 @@ async function deleteExpense(id) {
 // CLEAR DATA FUNCTIONS
 // ════════════════════════════════════════════════════════════════════════════
 function showClearAllMenu() {
+  if (typeof requirePerm === 'function' && !requirePerm('clearall')) return;
   showModal('modal-md','🗑️ Clear Data',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.35);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--text2)">
       ⚠️ <strong style="color:var(--red)">Warning:</strong> This action is <strong>permanent and cannot be undone</strong>. Export a backup first!

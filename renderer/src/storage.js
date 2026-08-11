@@ -73,7 +73,7 @@ async function loadDB() {
           console.info('[HOSTIX] Migration complete.');
           setTimeout(function () {
             if (typeof toast === 'function')
-              toast('✅ Data migrated to SQLite — faster and safer!', 'success', 4000);
+              toast('Data migrated to SQLite — faster and safer.', 'success', 'Upgraded');
           }, 1500);
         } catch (e) {
           console.error('[HOSTIX] Migration failed:', e);
@@ -269,7 +269,7 @@ function _checkBackupReminder() {
     if (daysSince < 7) return;
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('💾 Over a week since last backup. Export one from Backup & Restore.', 'warning', 7000);
+        toast('Over a week since your last backup. Export one from Backup & Restore.', 'warning', 'Backup due');
     }, 4000);
   } catch (e) {}
 }
