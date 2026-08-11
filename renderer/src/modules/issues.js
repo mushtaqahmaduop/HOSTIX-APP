@@ -11,7 +11,7 @@
    it from the /maintenance and /complaints routes. It now also accepts 'all',
    which is the unified feed the reference design shows. */
 let issueFilter = { search:'', status:'All', priority:'All', room:'All',
-                    sort:'newest', page:1, pageSize:10 };
+                    sort:'newest', page:1, pageSize:30 };
 
 /* Display reference. Maintenance is MA-####, complaints CO-####, matching the
    reference. New records carry a persistent `seq`; anything created before
@@ -275,7 +275,7 @@ function issPager(pg) {
     <div class="lk-foot__size">
       Show
       <select onchange="issueFilter.pageSize=Number(this.value);issueFilter.page=1;renderPage('issues')">
-        ${[10,25,50,100].map(n=>`<option value="${n}" ${issueFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${issueFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
       </select>
       entries
     </div>
@@ -291,8 +291,8 @@ function issPager(pg) {
 }
 
 function showAddIssueModal() {
-  var rooms = DB.rooms.map(function(r){return '<option value="'+r.id+'">Room '+r.number+'</option>';}).join('');
-  var students = DB.students.filter(function(s){return s.status==='Active';}).map(function(s){return '<option value="'+s.id+'">'+escHtml(s.name)+'</option>';}).join('');
+  var rooms = roomsByNumber(DB.rooms).map(function(r){return '<option value="'+r.id+'">Room '+r.number+'</option>';}).join('');
+  var students = studentsByRoom(DB.students.filter(function(s){return s.status==='Active';})).map(function(s){return '<option value="'+s.id+'">'+escHtml(s.name)+'</option>';}).join('');
   showModal('modal-md','Add Complaint / Maintenance',
     '<div style="display:flex;gap:8px;margin-bottom:18px">'+
     '<button type="button" id="ib-maint" onclick="document.getElementById(\'if-maint\').style.display=\'block\';document.getElementById(\'if-comp\').style.display=\'none\';this.style.background=\'var(--accent-dim)\';this.style.color=\'var(--accent-strong)\';document.getElementById(\'ib-comp\').style.background=\'var(--bg3)\';document.getElementById(\'ib-comp\').style.color=\'var(--text2)\'" class="btn" style="flex:1;background:var(--accent-dim);color:var(--accent-strong);">&#x1F527; Maintenance</button>'+

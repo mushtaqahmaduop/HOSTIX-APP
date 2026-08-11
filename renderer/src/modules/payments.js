@@ -390,7 +390,7 @@ function payPager(pg) {
     <div class="pay-foot__size">
       Show
       <select onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')">
-        ${[10,25,50,100].map(n=>`<option value="${n}" ${payFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${payFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
       </select>
       entries
     </div>
@@ -590,9 +590,21 @@ async function deletePaymentFromStudentView(payId, studentId) {
 // ════════════════════════════════════════════════════════════════════════════
 function filterStudentDropdown(query) {
   const results = document.getElementById('student-search-results');
+
+  // Typing after a pick invalidates that pick — otherwise the hidden id keeps
+  // pointing at a student whose name is no longer in the box. (Programmatic
+  // writes in selectStudentForPayment() do not fire `input`, so this only ever
+  // runs for real edits.)
+  const hidden = document.getElementById('f-pstudent');
+  if (hidden && hidden.value) {
+    hidden.value = '';
+    const info = document.getElementById('selected-student-info');
+    if (info) { info.style.display = 'none'; info.innerHTML = ''; }
+  }
+
   if (!query.trim()) { results.style.display='none'; return; }
   const q = query.toLowerCase();
-  const matches = DB.students.filter(t => {
+  let matches = DB.students.filter(t => {
     if (t.status !== 'Active') return false;
     const room = DB.rooms.find(r => r.id === t.roomId);
     return t.name?.toLowerCase().includes(q) ||
@@ -600,7 +612,8 @@ function filterStudentDropdown(query) {
            String(room?.number||'').includes(q) ||
            t.cnic?.includes(q) ||
            t.phone?.includes(q);
-  }).slice(0, 10);
+  });
+  matches = studentsByRoom(matches).slice(0, 10);
   if (!matches.length) {
     results.innerHTML = `<div style="padding:12px 14px;color:var(--text3);font-size:13px;border-bottom:1px solid var(--border)">No registered student found</div>
       <div onclick="useManualNameEntry('${escHtml(query).replace(/'/g,"\\'")}');" style="padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--blue);font-size:13px;font-weight:600;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -625,8 +638,12 @@ function filterStudentDropdown(query) {
     </div>`;
   }).join('');
   results.style.display = 'block';
-  // Auto-select if there is exactly one match
-  if(matches.length===1 && (query.length>4)) selectStudentForPayment(matches[0].id);
+  // No auto-select while typing. It used to fire as soon as one student matched
+  // and the query passed 4 characters, overwriting the box mid-word with
+  // "Name — Room #N" — the rest of what was being typed then landed on the end
+  // ("Abid Ali — Room #2Ali"), and on deletion it rewrote the label faster than
+  // backspace could remove it. submitPayment() still resolves a typed name to a
+  // single matching student on submit, so nothing convenient was lost.
 }
 
 function useManualNameEntry(name) {
@@ -1393,7 +1410,7 @@ async function submitEditPayment(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSES
 // ════════════════════════════════════════════════════════════════════════════
-let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSize:12, sortKey:'date', sortDir:'desc'};
+let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSize:30, sortKey:'date', sortDir:'desc'};
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAYMENTS TABLE — DRAG TO PAN

@@ -13,8 +13,8 @@
     const navs = [
       ['dashboard', 'Dashboard', '🏠'], ['rooms', 'Rooms', '🚪'], ['students', 'Students', '🎓'],
       ['payments', 'Finance / Payments', '💳'], ['expenses', 'Expenses', '📉'],
-      ['cancellations', 'Cancellation List', '📋'], ['reports', 'Reports', '📊'],
-      ['issues', 'Complaints & Maintenance', '🛠'], ['activitylog', 'Activity Log', '🕑'],
+      ['cancellations', 'Cancellations', '📋'], ['reports', 'Reports', '📊'],
+      ['issues', 'Complaints', '🛠'], ['activitylog', 'Activity Log', '🕑'],
       ['settings', 'Settings', '⚙️'], ['archive', 'Annual Archive', '🗄']
     ];
     const cmds = navs.map(function (n) {

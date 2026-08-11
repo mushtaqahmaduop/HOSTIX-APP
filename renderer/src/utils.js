@@ -233,7 +233,7 @@ function debounce(fn, delay) {
 // ── Pagination ──────────────────────────────────────────────────────────────────
 // Large lists (students/payments/rooms) only render one page of rows at a time so
 // the browser isn't asked to build thousands of DOM nodes in one blocking pass.
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 // Slice a filtered array down to the current page. `filter` is the module's filter
 // state object (must have a numeric `.page`). Returns { slice, page, pages, total, from, to }.
@@ -483,6 +483,51 @@ function validateKeyChecksum(key, secret) {
   }
 }
 
+// ── Room ordering ────────────────────────────────────────────────────────────
+// Every dropdown and picker that lists rooms — or students, which a warden
+// thinks of by room — is ordered by room number ascending.
+//
+// A plain string sort puts "10" before "2", and Number() alone drops schemes
+// like "A1" or "1-B" to NaN and shuffles them arbitrarily. So: compare the
+// leading numeric part first, keep non-numeric room numbers after numeric ones,
+// and fall back to a natural-order string compare within each group.
+function cmpRoomNo(a, b) {
+  const sa = String(a == null ? '' : a).trim();
+  const sb = String(b == null ? '' : b).trim();
+  // Only a LEADING digit run counts as the room's number. Stripping letters
+  // instead would read "A1" as 1 and interleave a lettered wing through the
+  // numbered rooms — A1, 2, A2, 10.
+  const ma = sa.match(/^(\d+(?:\.\d+)?)/);
+  const mb = sb.match(/^(\d+(?:\.\d+)?)/);
+  const na = ma ? parseFloat(ma[1]) : NaN;
+  const nb = mb ? parseFloat(mb[1]) : NaN;
+  const aNum = !isNaN(na), bNum = !isNaN(nb);
+  if (aNum && bNum) {
+    if (na !== nb) return na - nb;
+  } else if (aNum !== bNum) {
+    return aNum ? -1 : 1;                       // numeric rooms first
+  }
+  return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// Room objects in ascending room-number order. Returns a NEW array — callers
+// pass DB.rooms straight in, and sorting that in place would reorder the
+// database itself.
+function roomsByNumber(list) {
+  return (list || DB.rooms || []).slice().sort((a, b) => cmpRoomNo(a && a.number, b && b.number));
+}
+
+// Students ordered by their room number, then by name inside a room.
+function studentsByRoom(list) {
+  const byId = new Map((DB.rooms || []).map(r => [r.id, r]));
+  return (list || DB.students || []).slice().sort((a, b) => {
+    const ra = byId.get(a && a.roomId), rb = byId.get(b && b.roomId);
+    const c = cmpRoomNo(ra && ra.number, rb && rb.number);
+    if (c !== 0) return c;
+    return String((a && a.name) || '').localeCompare(String((b && b.name) || ''));
+  });
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { validateKeyFormat, validateKeyChecksum };
+  module.exports = { validateKeyFormat, validateKeyChecksum, cmpRoomNo };
 }

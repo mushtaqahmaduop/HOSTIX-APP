@@ -273,7 +273,7 @@ function expPager(pg) {
     </div>
     <div class="exp-foot__size">
       <select onchange="expFilter.pageSize=Number(this.value);expFilter.page=1;renderPage('expenses')" title="Rows per page">
-        ${[12,25,50,100].map(n=>`<option value="${n}" ${expFilter.pageSize===n?'selected':''}>${n} / page</option>`).join('')}
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${expFilter.pageSize===n?'selected':''}>${n} / page</option>`).join('')}
       </select>
     </div>
   </div>`;

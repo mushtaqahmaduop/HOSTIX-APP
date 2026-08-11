@@ -289,7 +289,7 @@ function stuPager(pg) {
     <div class="stu-foot__size">
       Show
       <select onchange="studentFilter.pageSize=Number(this.value);studentFilter.page=1;renderPage('students')">
-        ${[10,25,50,100].map(n=>`<option value="${n}" ${studentFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${studentFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
       </select>
       entries
     </div>
@@ -387,7 +387,7 @@ function showAddStudentModal(presetRoomId='') {
 
 function renderAddStudent() {
   const presetRoomId = _addStudentPresetRoom || '';
-  const allRooms = DB.rooms;
+  const allRooms = roomsByNumber(DB.rooms);
   const preset = presetRoomId ? DB.rooms.find(r=>r.id===presetRoomId) : null;
   const presetType = preset ? getRoomType(preset) : null;
   const defaultRent = preset ? (parseFloat(preset.rent)||presetType?.defaultRent||16000)
@@ -1252,7 +1252,7 @@ function printStudentCard(id) {
 }
 function showEditStudentModal(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
-  const allRooms=DB.rooms.filter(r=>r.id===t.roomId||getRoomOccupancy(r)<getRoomType(r).capacity);
+  const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||getRoomOccupancy(r)<getRoomType(r).capacity));
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${m}</option>`).join('');
   const statOpts=['Active','Left','Blacklisted'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('');
   const curRoom=DB.rooms.find(r=>r.id===t.roomId);
@@ -1558,7 +1558,7 @@ async function submitRoomShift(studentId) {
 // toggle and a row-selection set. `status` now also accepts 'Partial' and
 // 'Overdue', which are derived states — see payStatusOf() / payIsOverdue().
 let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
-                 showAll:false, unpaidOnly:false, pageSize:10,
+                 showAll:false, unpaidOnly:false, pageSize:30,
                  page:1, sortKey:null, sortDir:'asc'};
 let paySelected = new Set();
 
@@ -1659,7 +1659,7 @@ function _getAvailableRooms() {
 
 function openRestoreStudentForm(studentId) {
   const t = DB.students.find(x=>x.id===studentId); if(!t) return;
-  const availRooms = _getAvailableRooms();
+  const availRooms = roomsByNumber(_getAvailableRooms());
   const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${r.number} — ${type?.name||''} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
   const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
   const today = new Date().toISOString().slice(0,10);

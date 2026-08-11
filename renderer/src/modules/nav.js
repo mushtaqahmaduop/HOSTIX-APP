@@ -57,14 +57,14 @@ const pageConfig = {
   students:      { title:'Students', sub:'', action:'Add Student' },
   payments:      { title:'Finance', sub:'', action:'Add Payment' },
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
-  cancellations: { title:'Cancellation List', sub:'', action:'Add Cancellation' },
+  cancellations: { title:'Cancellations', sub:'', action:'Add Cancellation' },
   reports:       { title:'Reports', sub:'', action:null },
-  issues:        { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
+  issues:        { title:'Complaints', sub:'', action:'Add Issue' },
   activitylog:   { title:'Activity Log', sub:'', action:null },
   settings:      { title:'Settings', sub:'', action:null },
   archive:       { title:'Annual Archive', sub:'', action:null },
-  maintenance:   { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
-  complaints:    { title:'Complaints & Maintenance', sub:'', action:'Add Issue' },
+  maintenance:   { title:'Complaints', sub:'', action:'Add Issue' },
+  complaints:    { title:'Complaints', sub:'', action:'Add Issue' },
   // v5: the add/edit student form is a page, not a modal. `nav` keeps the
   // Students rail item lit while it is open, and `back` shows the header's
   // Back button — the form is a detour, not a destination.

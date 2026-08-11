@@ -15,7 +15,7 @@
    the authority, and renderCancellations mirrors it into `status` below so the
    toolbar can re-render into the same view. */
 let cancelFilter = { status:'All', search:'', type:'All', room:'All', from:'', to:'',
-                     page:1, pageSize:10, sortKey:null, sortDir:'asc' };
+                     page:1, pageSize:30, sortKey:null, sortDir:'asc' };
 
 /* Display reference for a request.
    New records carry a persistent `seq` (assigned in saveCancellation). Records
@@ -286,7 +286,7 @@ function canPager(pg, status) {
     <div class="lk-foot__size">
       Show
       <select onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')">
-        ${[10,25,50,100].map(n=>`<option value="${n}" ${cancelFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${cancelFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
       </select>
       entries
     </div>

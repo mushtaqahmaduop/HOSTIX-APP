@@ -293,13 +293,14 @@
    118px ring inside a 170px container, leaving the centre label off-centre. */
 .rt-donut               { width:150px; height:150px; }
 
-/* ── Trend + Seat row height (owner request: taller top-to-bottom) ───────────
-   These two are the row that earns extra height — the trend line was cramped
-   at the density pass's 150px, and the room grid could only show two rows of
-   tiles before scrolling. The room grid grows to match the chart so the two
-   cards stay level. */
-#trend-chart-wrap { height:232px !important; }
-.dash-room-wrap   { max-height:172px; }
+/* ── Trend + Seat row height ─────────────────────────────────────────────────
+   These two earn more height than the density pass's 150px — the trend line was
+   cramped and the room grid could only show two rows of tiles before scrolling.
+   Trimmed from 232/172 on the owner's call so the row stops pushing the cards
+   below it off a 768px-tall screen. The room grid stays ~60px shorter than the
+   chart so the two cards still finish level. */
+#trend-chart-wrap { height:198px !important; }
+.dash-room-wrap   { max-height:140px; }
 
 /* Let the seat card's room grid absorb the leftover height instead of leaving
    a gap under it when the trend card next to it is the taller of the two. */

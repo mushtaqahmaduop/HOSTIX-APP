@@ -394,6 +394,55 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   await app.close();
 });
 
+// The payment form's student box auto-selected as soon as one student matched,
+// overwriting what was being typed and rewriting the label faster than
+// backspace could delete it — the field could not be cleared or typed into.
+test('payment student search: types cleanly, clears on backspace, orders by room', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  await win.evaluate(() => {
+    // Deliberately out of order, with a two-digit and a lettered room.
+    DB.rooms = [{ id:'r10', number:'10', floor:'1st',    typeId:'2s', rent:16000 },
+                { id:'rA1', number:'A1', floor:'1st',    typeId:'2s', rent:16000 },
+                { id:'r2',  number:'2',  floor:'Ground', typeId:'2s', rent:16000 }];
+    DB.students = [{ id:'s1', name:'Zed Khan', roomId:'r10', rent:16000, status:'Active' },
+                   { id:'s2', name:'Abid Ali', roomId:'r2',  rent:16000, status:'Active' },
+                   { id:'s3', name:'Mid Wing', roomId:'rA1', rent:16000, status:'Active' }];
+    navigate('payments');
+  });
+  await win.waitForTimeout(400);
+
+  // Numeric rooms in numeric order, lettered wings after them — not "1, 10, 2"
+  // and not "A1" interleaved as if it were 1.
+  expect(await win.evaluate(() => roomsByNumber(DB.rooms).map(r => r.number)))
+    .toEqual(['2', '10', 'A1']);
+  expect(await win.evaluate(() => studentsByRoom(DB.students).map(s => s.name)))
+    .toEqual(['Abid Ali', 'Zed Khan', 'Mid Wing']);
+
+  await win.evaluate(() => showAddPaymentModal());
+  await win.waitForSelector('#f-pstudent-search');
+  await win.click('#f-pstudent-search');
+  await win.type('#f-pstudent-search', 'Abid Ali');
+  await win.waitForTimeout(300);
+
+  // Typing must leave exactly what was typed. The old auto-select rewrote the
+  // box to "Abid Ali — Room #2" partway through, so the tail of the name landed
+  // on the end: "Abid Ali — Room #2Ali".
+  expect(await win.inputValue('#f-pstudent-search'),
+    'typing was overwritten by an auto-selection').toBe('Abid Ali');
+
+  for (let i = 0; i < 12; i++) { await win.keyboard.press('Backspace'); await win.waitForTimeout(30); }
+  expect(await win.inputValue('#f-pstudent-search'),
+    'backspace could not clear the search box').toBe('');
+  expect(await win.inputValue('#f-pstudent'),
+    'editing the text left the hidden student id pointing at the old pick').toBe('');
+
+  await app.close();
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Runs last: it drives repeated failures and ends with the account locked.
 test('login: wrong password is rejected, decrements attempts, locks after 5', async () => {
