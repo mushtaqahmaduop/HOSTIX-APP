@@ -276,6 +276,52 @@ test('archive page renders (regression: renderArchive was undefined → Render E
   await app.close();
 });
 
+// The Annual Archive was fully built — renderArchive(), pageConfig entry, router
+// branch, permission gate, stylesheet, icon — but had no sidebar item, so the
+// only way in was the Ctrl+K palette. This guards the way in, not the page.
+test('archive is reachable from the sidebar and hides with the reports permission', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  const railItem = win.locator('.nav-item[data-page="archive"]');
+  await expect(railItem, 'no Annual Archive item in the sidebar').toHaveCount(1);
+  await expect(railItem).toBeVisible();
+  await expect(railItem).toContainText('Annual Archive');
+
+  // Navigate by clicking the rail, not by calling navigate() directly.
+  await railItem.click();
+  await win.waitForTimeout(400);
+
+  expect(await win.evaluate(() => document.getElementById('hdr-title').textContent))
+    .toBe('Annual Archive');
+  expect(await win.evaluate(() => currentPage)).toBe('archive');
+  await expect(railItem, 'rail item did not light up').toHaveClass(/active/);
+
+  const html = await win.evaluate(() => document.getElementById('content').innerHTML);
+  expect(html, 'archive threw a render error when reached via the sidebar').not.toContain('Render Error');
+  expect(html).toContain('No archived records');
+
+  // The rail item and the page gate (nav.js renderPage) must agree: both key off
+  // 'reports'. If they drift, the rail offers a page that then refuses to render.
+  const hidden = await win.evaluate(() => {
+    const realCanDo = window.canDo;
+    window.canDo = p => (p === 'reports' ? false : realCanDo(p));
+    applyPermissionsToChrome();
+    const el = document.querySelector('.nav-item[data-page="archive"]');
+    const rep = document.querySelector('.nav-item[data-page="reports"]');
+    const out = { archive: el.style.display, reports: rep.style.display };
+    window.canDo = realCanDo;
+    applyPermissionsToChrome();
+    return out;
+  });
+  expect(hidden.archive, 'archive rail item stayed visible without reports permission').toBe('none');
+  expect(hidden.reports).toBe('none');
+
+  await app.close();
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Runs last: it drives repeated failures and ends with the account locked.
 test('login: wrong password is rejected, decrements attempts, locks after 5', async () => {

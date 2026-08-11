@@ -588,6 +588,10 @@ function applyPermissionsToChrome() {
   showNav('settings', canDo('settings'));
   showNav('backup',   canDo('backup'));
   showNav('reports',  canDo('reports'));
+  // Annual Archive is gated on 'reports' — same as the page-level check in
+  // nav.js renderPage(). Keep the two in step or the rail offers a page that
+  // then refuses to render.
+  showNav('archive',  canDo('reports'));
   showNav('clearall', canDo('clearall'));
   show('user-menu-manage',   canDo('users'));
   show('user-menu-settings', canDo('settings'));
