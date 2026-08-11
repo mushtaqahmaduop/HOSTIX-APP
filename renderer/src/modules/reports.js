@@ -190,7 +190,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
-        <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--accent-strong)">${DB.rooms.length-occ}</div></div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--accent-strong)">${DB.rooms.length-occ}</div></div>
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Total</div><div style="font-size:28px;font-weight:900;color:var(--blue)">${DB.rooms.length}</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Occupancy</th><th>Students</th><th>Status</th><th>Rent</th></tr></thead><tbody>
@@ -260,7 +260,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.35);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700;margin-bottom:4px">Total</div><div>${moneyValue(totalTr,{size:"section",color:"var(--blue)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.length} records</div></div>
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:4px">Cash</div><div>${moneyValue(cashTr,{size:"section",color:"var(--green)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method==='Cash').length} records</div></div>
         <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);font-weight:700;margin-bottom:4px">Bank</div><div>${moneyValue(bankTr,{size:"section",color:"var(--purple)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method!=='Cash').length} records</div></div>
-        <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">This Period</div><div>${moneyValue(moTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${moTr.length} transfers</div></div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">This Period</div><div>${moneyValue(moTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${moTr.length} transfers</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th><th>Received By</th><th>Notes</th><th>By Warden</th><th>Actions</th></tr></thead><tbody>
       ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers yet — click + New to add.</td></tr>'
@@ -285,14 +285,99 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 }
 
 
+/* ── Reports v5 — period selection ───────────────────────────────────────────
+   `reportPeriod` gains a third value, 'custom'. Rather than inventing a second
+   date-filtering path, a custom range is expressed as the LIST of YYYY-MM keys
+   it spans, and every figure is summed over those keys using the same
+   _payMatchesMonth / startsWith matching the month and year views already use.
+   That keeps one vetted matcher instead of two that can disagree. */
+let reportRange = { from:'', to:'' };
+
+function _rptMonthsBetween(from, to) {
+  const out = [];
+  if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to)) return out;
+  let [y, m] = from.split('-').map(Number);
+  const [ey, em] = to.split('-').map(Number);
+  if (y > ey || (y === ey && m > em)) return out;
+  for (let guard = 0; guard < 600; guard++) {
+    out.push(y + '-' + String(m).padStart(2, '0'));
+    if (y === ey && m === em) break;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+// The prefixes the current view covers.
+function _rptKeys() {
+  if (reportPeriod === 'year')   return [thisYear()];
+  if (reportPeriod === 'custom') return _rptMonthsBetween(reportRange.from, reportRange.to);
+  return [thisMonth()];
+}
+
+// The equivalent window immediately before it — what "vs last month" compares to.
+function _rptPrevKeys() {
+  const shift = (ym, n) => {
+    let [y, m] = ym.split('-').map(Number);
+    m -= n; while (m < 1) { m += 12; y--; }
+    return y + '-' + String(m).padStart(2, '0');
+  };
+  if (reportPeriod === 'year')  return [String(Number(thisYear()) - 1)];
+  if (reportPeriod === 'custom') {
+    const ks = _rptKeys(); if (!ks.length) return [];
+    return ks.map(k => shift(k, ks.length));
+  }
+  return [shift(thisMonth(), 1)];
+}
+function _rptPeriodWord() {
+  return reportPeriod === 'year' ? 'last year'
+       : reportPeriod === 'custom' ? 'previous range' : 'last month';
+}
+
+// Totals for an arbitrary set of period keys, so current and previous windows
+// are measured by exactly the same code.
+function _rptTotals(keys) {
+  const pays = DB.payments.filter(p => keys.some(k => _payMatchesMonth(p, k)));
+  const exps = DB.expenses.filter(e => keys.some(k => (e.date||'').startsWith(k)));
+  const rev  = keys.reduce((s, k) => s + calcRevenue(k), 0);
+  const pending = DB.payments
+    .filter(p => p.status === 'Pending' && keys.some(k => _payMatchesMonth(p, k)))
+    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount)), 0);
+  const totalExp = exps.reduce((s, e) => s + Number(e.amount), 0);
+  return { pays, exps, rev, pending, totalExp, net: rev - totalExp };
+}
+
+// Students whose join/leave dates fall inside the window — the only honest
+// "vs last period" the roster supports, since no historical headcount is kept.
+function _rptStudentDelta(keys) {
+  const inWin = d => !!d && keys.some(k => String(d).startsWith(k));
+  const joined = DB.students.filter(t => inWin(t.joinDate)).length;
+  const left   = DB.students.filter(t => inWin(t.leftDate)).length;
+  return joined - left;
+}
+
+/* Delta chip. `mode` 'pct' for money, 'abs' for counts. Returns '' when there
+   is no prior figure to compare against — a 0% next to a first month of data
+   would be a claim the data cannot support. */
+function _rptDelta(cur, prev, mode) {
+  if (mode === 'abs') {
+    if (!cur) return `<span class="rpt-delta rpt-delta--flat">No change</span>`;
+    const up = cur > 0;
+    return `<span class="rpt-delta rpt-delta--${up?'up':'down'}">${up?'↑':'↓'} ${Math.abs(cur)}</span>`;
+  }
+  if (!prev) return '';
+  const pct = Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
+  if (pct === 0) return `<span class="rpt-delta rpt-delta--flat">No change</span>`;
+  const up = pct > 0;
+  return `<span class="rpt-delta rpt-delta--${up?'up':'down'}">${up?'↑':'↓'} ${Math.abs(pct)}%</span>`;
+}
+
 function renderReports() {
-  const key=reportPeriod==='month'?thisMonth():thisYear();
-  const pays=DB.payments.filter(p=>_payMatchesMonth(p,key));
-  const exps=DB.expenses.filter(e=>e.date?.startsWith(key));
-  const rev=calcRevenue(key);
-  const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,key)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-  const totalExp=exps.reduce((s,e)=>s+Number(e.amount),0);
-  const net=rev-totalExp;
+  const keys = _rptKeys();
+  const key  = keys[0] || thisMonth();     // detail views still take a single prefix
+  const cur  = _rptTotals(keys);
+  const prev = _rptTotals(_rptPrevKeys());
+  const { pays, exps, rev, pending, totalExp, net } = cur;
+  const vs = _rptPeriodWord();
 
   // PERF: index active students by room ONCE so the per-room / per-type loops below are
   // O(students+rooms) instead of O(rooms×students). getRoomOccupancy() rescans ALL students
@@ -313,158 +398,352 @@ function renderReports() {
   const occ=DB.rooms.filter(r=>_roomOcc(r)>0).length;
   const occRate=DB.rooms.length?Math.round(occ/DB.rooms.length*100):0;
 
-  // Expense by category
-  let catRows='';
-  DB.settings.expenseCategories.forEach(cat=>{
-    const amt=exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);
-    if(!amt) return;
-    const pct=totalExp>0?Math.round(amt/totalExp*100):0;
-    catRows+=`<div class="progress-row"><div class="progress-label">${escHtml(cat)}</div><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:var(--red)"></div></div><div class="progress-value">${fmtPKR(amt)}</div></div>`;
-  });
+  // ── Expense by category ────────────────────────────────────────────────────
+  // Categories carry no colour in settings, so one is assigned by the category's
+  // fixed position in DB.settings.expenseCategories. Position-keyed rather than
+  // render-order-keyed, so a category keeps the same colour when another one
+  // drops out of the period.
+  const catCats = DB.settings.expenseCategories || [];
+  const cats = catCats.map((cat, i) => {
+    const amt = exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);
+    return { cat, amt, i, pct: totalExp>0 ? Math.round(amt/totalExp*100) : 0 };
+  }).filter(c=>c.amt>0).sort((a,b)=>b.amt-a.amt);
+  const catBars = cats.map(c => `
+    <div class="rpt-brow">
+      <span class="rpt-brow__d" style="background:${_RPT_HUES[c.i%_RPT_HUES.length]}"></span>
+      <span class="rpt-brow__n" title="${escHtml(c.cat)}">${escHtml(c.cat)}</span>
+      <span class="rpt-brow__t"><span class="rpt-brow__f" style="width:${c.pct}%;background:${_RPT_HUES[c.i%_RPT_HUES.length]}"></span></span>
+      <span class="rpt-brow__v">${fmtPKR(c.amt)}</span>
+      <span class="rpt-brow__p">${c.pct}%</span>
+    </div>`).join('');
 
-  // Method breakdown
-  let methodRows='';
-  DB.settings.paymentMethods.forEach(m=>{
-    const amt=pays.filter(p=>p.status==='Paid'&&p.method===m).reduce((s,p)=>s+Number(p.amount),0);
-    const cnt=pays.filter(p=>p.method===m).length;
-    if(!cnt) return;
-    const pct=rev>0?Math.round(amt/rev*100):0;
-    methodRows+=`<div class="progress-row"><div class="progress-label">${escHtml(m)}</div><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:var(--green)"></div></div><div class="progress-value">${fmtPKR(amt)}</div></div>`;
-  });
+  // ── Payment methods (donut + legend) ──────────────────────────────────────
+  const methods = (DB.settings.paymentMethods||[]).map((m,i) => {
+    const amt = pays.filter(p=>p.status==='Paid'&&p.method===m).reduce((s,p)=>s+Number(p.amount),0);
+    return { m, amt, color:_RPT_METHOD_HUES[i%_RPT_METHOD_HUES.length] };
+  }).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+  const methodTotal = methods.reduce((s,x)=>s+x.amt,0);
+  // Percentages are of the collected total the donut draws, not of `rev` —
+  // `rev` also carries partial payments this donut deliberately excludes, so
+  // dividing by it made the slices add up to less than 100%.
+  const methodLegend = methods.map(x => `
+    <div class="rpt-legend__r">
+      <span class="rpt-legend__d" style="background:${x.color}"></span>
+      <div>
+        <div class="rpt-legend__n">${escHtml(x.m)}</div>
+        <div class="rpt-legend__v">${fmtPKR(x.amt)} (${methodTotal?Math.round(x.amt/methodTotal*100):0}%)</div>
+      </div>
+    </div>`).join('');
+  _rptDonutData = methods.map(x=>({label:x.m, value:x.amt, color:x.color}));
 
-  // Room type table
+  // ── Room type table ───────────────────────────────────────────────────────
   const rtRows=DB.settings.roomTypes.map(type=>{
     const tRooms=DB.rooms.filter(r=>r.typeId===type.id);
     const tOcc=tRooms.filter(r=>_roomOcc(r)>0).length;
     const tIds=_activeIdsByType.get(type.id)||new Set();   // O(1) membership instead of per-student rooms.find
     const tRev=pays.filter(p=>p.status==='Paid'&&tIds.has(p.studentId)).reduce((s,p)=>s+Number(p.amount),0);
-    return `<tr><td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
-      <td class="fw-700">${tRooms.length}</td><td class="text-green fw-700">${tOcc}</td>
-      <td class="text-gold">${tRooms.length-tOcc}</td><td class="text-green fw-700">${fmtPKR(tRev)}</td></tr>`;
+    const vac=tRooms.length-tOcc;
+    return `<tr>
+      <td><span class="rpt-tbl__chip" style="background:${type.color}22;color:${type.color}">${escHtml(type.name)}</span></td>
+      <td>${tRooms.length}</td>
+      <td class="${tOcc?'':'rpt-tbl__z'}">${tOcc}</td>
+      <td class="${vac?'':'rpt-tbl__z'}">${vac}</td>
+      <td class="${tRev?'':'rpt-tbl__z'}">${fmtPKR(tRev)}</td></tr>`;
   }).join('');
 
-  // 12 months trend
-  let trendHTML='';
+  // ── Revenue vs expenses trend (drawn by drawReportTrend after paint) ──────
   const mCount=reportPeriod==='month'?6:12;
   const trendData=[];
-  for(let i=mCount-1;i>=0;i--){
-    const _now=new Date(); const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
-    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    const lbl=d.toLocaleString('default',{month:'short'});
-    const r2=calcRevenue(k);
-    const e2=DB.expenses.filter(x=>x.date?.startsWith(k)).reduce((s,x)=>s+Number(x.amount),0);
-    trendData.push({lbl,rev:r2,exp:e2});
+  if (reportPeriod==='custom' && keys.length) {
+    keys.forEach(k=>{
+      const d=new Date(Number(k.slice(0,4)), Number(k.slice(5,7))-1, 1);
+      trendData.push({ lbl:d.toLocaleString('default',{month:'short'}),
+                       rev:calcRevenue(k),
+                       exp:DB.expenses.filter(x=>(x.date||'').startsWith(k)).reduce((s,x)=>s+Number(x.amount),0) });
+    });
+  } else {
+    for(let i=mCount-1;i>=0;i--){
+      const _now=new Date(); const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
+      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      trendData.push({ lbl:d.toLocaleString('default',{month:'short'}),
+                       rev:calcRevenue(k),
+                       exp:DB.expenses.filter(x=>(x.date||'').startsWith(k)).reduce((s,x)=>s+Number(x.amount),0) });
+    }
   }
-  const maxT=Math.max(...trendData.map(m=>Math.max(m.rev,m.exp)),1);
-  trendData.forEach(m=>{
-    const rh=Math.max((m.rev/maxT)*100,m.rev?2:0);
-    const eh=Math.max((m.exp/maxT)*100,m.exp?2:0);
-    trendHTML+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-      <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:120px">
-        <div style="flex:1;background:var(--green);opacity:0.75;border-radius:3px 3px 0 0;height:${rh}%;min-height:${m.rev?2:0}px;transition:height 0.5s"></div>
-        <div style="flex:1;background:var(--red);opacity:0.65;border-radius:3px 3px 0 0;height:${eh}%;min-height:${m.exp?2:0}px;transition:height 0.5s"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text3)">${m.lbl}</div>
-    </div>`;
-  });
+  _rptTrendData = trendData;
 
-  // Build report cards data for clickable cards - removed per user request
+  // ── Student summary ───────────────────────────────────────────────────────
+  const nActiveS = DB.students.filter(t=>t.status==='Active').length;
+  const nLeftS   = DB.students.filter(t=>t.status==='Left').length;
+  const nBlackS  = DB.students.filter(t=>t.status==='Blacklisted').length;
+  const sDelta   = _rptStudentDelta(keys);
+
+  const stat = (id, hue, label, value, sub, svg, clickable) => `
+    <div class="rpt-stat ${hue}${clickable===false?' rpt-stat--flat':''}${reportDetail===id?' is-on':''}"
+         ${clickable===false?'':`onclick="reportDetail='${id}';renderPage('reports')"`}
+         ${clickable===false?'':`title="Open the ${label.toLowerCase()} detail"`}>
+      <div class="rpt-stat__top">
+        <div class="rpt-stat__chip"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
+        <div class="rpt-stat__label">${label}</div>
+      </div>
+      <div class="rpt-stat__val">${value}</div>
+      <div class="rpt-stat__sub">${sub}</div>
+    </div>`;
+
+  const tile = (label, value, sub, hue, det) => `
+    <div class="rpt-tile ${hue}" onclick="reportDetail='${det}';renderPage('reports')" title="Open detail">
+      <div class="rpt-tile__l">${label}</div>
+      <div class="rpt-tile__v">${value}</div>
+      <div class="rpt-tile__s">${sub}</div>
+    </div>`;
 
   return `
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-    <button class="btn ${reportPeriod==='month'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='month';reportDetail=null;renderPage('reports')">This Month</button>
-    <button class="btn ${reportPeriod==='year'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='year';reportDetail=null;renderPage('reports')">This Year</button>
-    ${reportDetail?`<button class="btn btn-secondary btn-sm" onclick="reportDetail=null;renderPage('reports')">← Back to Reports</button>`:''}
-    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" onclick="printReport()" style="display:flex;align-items:center;gap:4px">🖨️ Print / PDF</button>
-      <button class="btn btn-secondary btn-sm" onclick="downloadAllStudentsPDF()" style="color:var(--green);display:flex;align-items:center;gap:4px">📥 All Students PDF</button>
+  <div class="rpt-bar">
+    <div class="rpt-seg">
+      <button class="${reportPeriod==='month'?'is-on':''}"  onclick="rptSetPeriod('month')">This Month</button>
+      <button class="${reportPeriod==='year'?'is-on':''}"   onclick="rptSetPeriod('year')">This Year</button>
+      <button class="${reportPeriod==='custom'?'is-on':''}" onclick="rptSetPeriod('custom')">Custom Range</button>
+    </div>
+
+    ${reportPeriod==='custom'?`
+    <div class="rpt-range" title="Pick the first and last month to include">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+      <input type="month" value="${escHtml(reportRange.from)}" onchange="rptSetRange('from',this.value)" aria-label="From month">
+      <span>→</span>
+      <input type="month" value="${escHtml(reportRange.to)}"   onchange="rptSetRange('to',this.value)"   aria-label="To month">
+    </div>`:''}
+
+    ${reportDetail?`<button class="rpt-card__a" onclick="reportDetail=null;renderPage('reports')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      Back to Reports</button>`:''}
+
+    <div class="rpt-bar__end">
+      <button class="rpt-card__a" onclick="printReport()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3h12v6"/><rect width="12" height="8" x="6" y="14"/></svg>
+        Print / PDF</button>
+      <button class="rpt-card__a" onclick="downloadAllStudentsPDF()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        All Students PDF</button>
     </div>
   </div>
 
-  <!-- REPORTS: dashboard-style stat cards — each opens its own detail view -->
-  <div class="reports-stat-grid">
-    <div class="stat-card green" onclick="reportDetail='financial';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='financial'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='financial'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💵</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green)">Revenue</div><div class="stat-value" style="font-size:18px">${fmtPKR(rev)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='financial'?'▲ showing detail':'click for detail →'}</div></div>
-      </div>
-    </div>
-    <div class="stat-card gold" onclick="reportDetail='pending';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='pending'?';border-color:var(--amber)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='pending'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--amber)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏳</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--amber)">Pending</div><div class="stat-value" style="font-size:18px">${fmtPKR(pending)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='pending'?'▲ showing detail':'click for detail →'}</div></div>
-      </div>
-    </div>
-    <div class="stat-card red" onclick="reportDetail='expenses';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='expenses'?';border-color:var(--red)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='expenses'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📉</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--red)">Expenses</div><div class="stat-value" style="font-size:18px">${fmtPKR(totalExp)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='expenses'?'▲ showing detail':'click for detail →'}</div></div>
-      </div>
-    </div>
-    <div class="stat-card purple" onclick="reportDetail='netprofit';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='netprofit'?';border-color:var(--purple)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='netprofit'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--purple)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icon('chart')}</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple)">Available Fund</div><div class="stat-value" style="font-size:18px;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='netprofit'?'▲ showing detail':'click for detail →'}</div></div>
-      </div>
-    </div>
-    <div class="stat-card teal" onclick="reportDetail='rooms';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='rooms'?';border-color:var(--teal)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='rooms'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--teal)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏠</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Occupancy</div><div class="stat-value" style="font-size:18px">${occRate}%</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${occ}/${DB.rooms.length} rooms</div></div>
-      </div>
-    </div>
-    <div class="stat-card blue" onclick="reportDetail='transfers';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='transfers'?';border-color:var(--accent)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='transfers'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏦</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong)">Transfers</div><div class="stat-value" style="font-size:18px">${fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${(DB.transfers||[]).length} records</div></div>
-      </div>
-    </div>
-    <div class="stat-card blue" onclick="reportDetail='students';renderPage('reports')" style="padding:16px 14px;cursor:pointer;position:relative;overflow:hidden${reportDetail==='students'?';border-color:var(--blue)':''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-      ${reportDetail==='students'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)"></div>':''}
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="stat-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👥</div>
-        <div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue)">Students</div><div class="stat-value" style="font-size:18px">${DB.students.filter(t=>t.status==='Active').length}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${reportDetail==='students'?'▲ showing detail':DB.students.length+' total'}</div></div>
-      </div>
-    </div>
+  ${reportPeriod==='custom'&&!keys.length?`
+  <div class="rpt-card" style="margin-bottom:14px">
+    <div class="rpt-none">Pick a start and end month above to build the report.</div>
+  </div>`:''}
+
+  <!-- ══ STAT STRIP — each card opens its own detail view ══ -->
+  <div class="rpt-stats">
+    ${stat('financial','dh-green','Revenue',fmtPKR(rev),
+      `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
+      '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
+    ${stat('pending','dh-amber','Pending',fmtPKR(pending),
+      `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
+      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
+    ${stat('expenses','dh-red','Expenses',fmtPKR(totalExp),
+      `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
+      '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>')}
+    ${stat('netprofit','dh-violet','Available Fund',
+      `<span style="color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</span>`,
+      `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
+      '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>')}
+    ${stat('rooms','dh-blue','Occupancy',`${occRate}%`,
+      // No historical occupancy is stored, so this reports the standing figure
+      // rather than a change against a period the data cannot describe.
+      `${occ} of ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
+      '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>')}
+    ${stat('students','dh-blue','Students',nActiveS,
+      `${_rptDelta(sDelta,0,'abs')} joined vs left`,
+      '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
+    ${stat('transfers','dh-slate','Transfers',fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0)),
+      `${(DB.transfers||[]).length} record${(DB.transfers||[]).length!==1?'s':''}`,
+      '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>')}
   </div>
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
-  <div class="two-col" style="margin-bottom:20px">
-    <div class="card">
-      <div class="card-header"><div class="card-title">${icon('trendUp')} Revenue vs Expenses</div></div>
-      <div style="display:flex;gap:6px;align-items:flex-end;height:140px">${trendHTML}</div>
-      <div class="chart-legend mt-8"><div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--green)"></div>Revenue</div><div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--red)"></div>Expenses</div></div>
+  <div class="rpt-grid">
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        Revenue vs Expenses
+      </div>
+      ${trendData.some(m=>m.rev||m.exp)
+        ? `<div class="rpt-canvas"><canvas id="rpt-trend"></canvas></div>`
+        : `<div class="rpt-none">Nothing recorded in this period yet.</div>`}
     </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title">💳 Payment Methods</div></div>
-      ${methodRows||'<div class="text-muted" style="font-size:13px">No data for this period</div>'}
+
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+        Payment Methods
+      </div>
+      ${methods.length?`
+      <div class="rpt-donut">
+        <div class="rpt-donut__c">
+          <canvas id="rpt-methods"></canvas>
+          <div class="rpt-donut__mid"><span>Collected</span><b>${fmtPKR(methodTotal)}</b></div>
+        </div>
+        <div class="rpt-legend">${methodLegend}</div>
+      </div>`:`<div class="rpt-none">No payments collected in this period.</div>`}
     </div>
   </div>
-  <div class="two-col" style="margin-bottom:20px">
-    <div class="card">
-      <div class="card-header"><div class="card-title">📉 Expense Breakdown</div></div>
-      ${catRows||'<div class="text-muted" style="font-size:13px">No expenses for this period</div>'}
+
+  <div class="rpt-grid">
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
+        Expense Breakdown
+      </div>
+      ${cats.length?`
+        <div class="rpt-bars">${catBars}</div>
+        <div class="rpt-btot"><span>Total Expenses</span><b>${fmtPKR(totalExp)}</b></div>`
+      :`<div class="rpt-none">No expenses recorded in this period.</div>`}
     </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title">🏨 Room Type Performance</div></div>
-      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Total</th><th>Occupied</th><th>Vacant</th><th>Revenue</th></tr></thead><tbody>${rtRows}</tbody></table></div>
+
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/></svg>
+        Room Type Performance
+      </div>
+      ${rtRows?`<div class="rpt-tbl-wrap">
+        <table class="rpt-tbl">
+          <thead><tr><th>Type</th><th>Total</th><th>Occupied</th><th>Vacant</th><th>Revenue</th></tr></thead>
+          <tbody>${rtRows}</tbody>
+        </table></div>`:`<div class="rpt-none">No room types configured.</div>`}
     </div>
   </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">👥 Student Summary</div><div style="display:flex;gap:8px"><button class="btn btn-secondary btn-sm" onclick="reportDetail='students';renderPage('reports')" style="font-size:11px">👁 View All →</button></div></div>
-    <div class="three-col">
-      ${[['Active Students',DB.students.filter(t=>t.status==='Active').length,'var(--green)','students'],['Left',DB.students.filter(t=>t.status==='Left').length,'var(--text3)','students'],['Blacklisted',DB.students.filter(t=>t.status==='Blacklisted').length,'var(--red)','students'],['Total Registered',DB.students.length,'var(--accent)','students'],['Total Rooms',DB.rooms.length,'var(--blue)','rooms'],['Total Payments',DB.payments.length,'var(--teal)','financial']].map(([l,v,c,det])=>`<div class="card" style="padding:16px;text-align:center;cursor:pointer;transition:var(--transition)" onclick="reportDetail='${det}';renderPage('reports')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''"><div class="stat-label">${l}</div><div class="fw-800" style="font-size:28px;margin-top:6px;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">click for detail →</div></div>`).join('')}
+
+  <div class="rpt-card">
+    <div class="rpt-card__h">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Student Summary
+      <button class="rpt-card__a" onclick="reportDetail='students';renderPage('reports')">
+        View All Reports
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div class="rpt-sum">
+      ${tile('Active Students', nActiveS, 'On the roster now', 'dh-green', 'students')}
+      ${tile('Left',            nLeftS,   'Checked out',       'dh-slate', 'students')}
+      ${tile('Blacklisted',     nBlackS,  nBlackS?'Barred from return':'None on record', 'dh-red', 'students')}
+      ${tile('Total Registered',DB.students.length, 'All time', 'dh-violet', 'students')}
+      ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied`, 'dh-blue', 'rooms')}
+      ${tile('Total Payments',  DB.payments.length, 'All time', 'dh-amber', 'financial')}
     </div>
   </div>
   `}
 
   `;
+}
+
+/* ── Reports v5 — period controls + charts ───────────────────────────────── */
+// Chart series colours. Fixed order so a series keeps its colour between
+// periods; these identify a series, they are not status signals.
+// Expenses are money going out, so a warm ramp led by red reads correctly.
+const _RPT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
+                   '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
+// Payment methods are money coming IN — the same ramp painted Cash (first
+// method in settings) red, which reads as loss on a collections chart. This
+// ramp is led by green and carries no red at all.
+const _RPT_METHOD_HUES = ['#16a34a','#3b82f6','#8b5cf6','#f59e0b','#14b8a6',
+                          '#0ea5e9','#84cc16','#a855f7','#f97316','#64748b'];
+let _rptTrendData = [];
+let _rptDonutData = [];
+let _rptTrendChart = null;
+let _rptDonutChart = null;
+
+function rptSetPeriod(p) {
+  reportPeriod = p;
+  reportDetail = null;
+  if (p === 'custom' && !reportRange.from) {
+    // Default to the last six months so the view is never blank on arrival.
+    const d = new Date();
+    reportRange.to   = thisMonth();
+    const s = new Date(d.getFullYear(), d.getMonth() - 5, 1);
+    reportRange.from = s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0');
+  }
+  renderPage('reports');
+}
+function rptSetRange(which, val) {
+  reportRange[which] = val || '';
+  // Keep the pair ordered rather than silently returning nothing.
+  if (reportRange.from && reportRange.to && reportRange.from > reportRange.to) {
+    if (which === 'from') reportRange.to = reportRange.from;
+    else                  reportRange.from = reportRange.to;
+  }
+  renderPage('reports');
+}
+
+function _rptCss(name, fallback) {
+  const v = getComputedStyle(document.body).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function drawReportCharts() {
+  if (typeof Chart === 'undefined') return;
+  const grid = _rptCss('--border', 'rgba(255,255,255,.1)');
+  const ink  = _rptCss('--text3', '#909090');
+
+  // ── Revenue vs expenses ───────────────────────────────────────────────────
+  if (_rptTrendChart) { _rptTrendChart.destroy(); _rptTrendChart = null; }
+  const tc = document.getElementById('rpt-trend');
+  if (tc && _rptTrendData.length) {
+    const ctx  = tc.getContext('2d');
+    const fill = (hex) => {
+      const g = ctx.createLinearGradient(0, 0, 0, 250);
+      g.addColorStop(0, hex + '38'); g.addColorStop(1, hex + '00');
+      return g;
+    };
+    const series = (label, key, hex) => ({
+      label, data: _rptTrendData.map(m => m[key]),
+      borderColor: hex, backgroundColor: fill(hex),
+      borderWidth: 2.4, fill: true, tension: .38,
+      pointRadius: 3, pointBackgroundColor: hex, pointBorderWidth: 0, pointHoverRadius: 5
+    });
+    _rptTrendChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: _rptTrendData.map(m => m.lbl),
+              datasets: [series('Revenue','rev','#16a34a'), series('Expenses','exp','#ef4444')] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          datalabels: { display: false },
+          legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle',
+                    boxWidth: 7, padding: 16, color: ink, font: { size: 11 } } },
+          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtPKR(c.parsed.y) } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: ink, font: { size: 11 } } },
+          y: { beginAtZero: true, border: { display: false },
+               grid: { color: grid },
+               ticks: { color: ink, font: { size: 11 },
+                        callback: v => v >= 1000 ? (v/1000) + 'K' : v } }
+        }
+      }
+    });
+  }
+
+  // ── Payment methods ───────────────────────────────────────────────────────
+  if (_rptDonutChart) { _rptDonutChart.destroy(); _rptDonutChart = null; }
+  const dc = document.getElementById('rpt-methods');
+  if (dc && _rptDonutData.length) {
+    _rptDonutChart = new Chart(dc.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: _rptDonutData.map(d => d.label),
+              datasets: [{ data: _rptDonutData.map(d => d.value),
+                           backgroundColor: _rptDonutData.map(d => d.color),
+                           borderWidth: 0, hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        plugins: {
+          datalabels: { display: false },
+          legend: { display: false },   // the legend beside it carries the figures
+          tooltip: { callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } }
+        }
+      }
+    });
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
