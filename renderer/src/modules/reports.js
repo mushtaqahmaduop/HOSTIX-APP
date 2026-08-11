@@ -1180,10 +1180,14 @@ function downloadDetailCSV(type) {
 // implemented, so the page threw a ReferenceError (caught by TypeScript).
 // ════════════════════════════════════════════════════════════════════════════
 function _archiveClassify(r) {
-  // An expense record has a category and no student/month fields; everything
-  // else is treated as a payment record.
-  const isExpense = r && r.category !== undefined &&
-    r.studentName === undefined && r.studentId === undefined && r.month === undefined;
+  // Records archived by enforceDataRetention() carry `_src` naming the live
+  // table they came from — trust it. Legacy rows migrated from the v3
+  // localStorage archive have no `_src`, so fall back to shape sniffing: an
+  // expense has a category and no student/month fields.
+  const isExpense = (r && r._src)
+    ? r._src === 'expenses'
+    : !!(r && r.category !== undefined &&
+      r.studentName === undefined && r.studentId === undefined && r.month === undefined);
   const date  = (r && (r.date || r.paidDate || r.dueDate)) || '';
   const mYear = (r && r.month && String(r.month).match(/\d{4}/)) ? String(r.month).match(/\d{4}/)[0] : '';
   const year  = mYear || (date ? String(date).slice(0, 4) : '') || 'Undated';

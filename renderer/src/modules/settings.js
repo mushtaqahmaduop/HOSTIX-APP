@@ -1660,55 +1660,62 @@ function loadSavedLogo() {
 
 
 function enforceDataRetention() {
-  // Keep ALL data from the last 6 full months + current month (7 months total)
-  // Older records are archived to a separate localStorage key before pruning
-  // IMPORTANT: Pending payments are NEVER archived — they represent active unpaid debt
+  // Keep ALL data from the last 6 full months + current month (7 months total).
+  // Older records are MOVED into DB.archive — the SQLite `archive` table that
+  // backs the Annual Archive page — never deleted outright.
+  // IMPORTANT: Pending payments are NEVER archived — they represent active unpaid debt.
+  //
+  // History: the v3 build round-tripped these records through the
+  // `dbh2_archive` localStorage key. The v4 SQLite migration replaced the read
+  // with a hardcoded empty object and the write with a comment, but left the
+  // pruning intact — so every run silently destroyed the records it claimed to
+  // archive. This function is now fail-safe: a record is only ever removed from
+  // the live table once it is provably present in DB.archive.
   const now = new Date();
   const cutoff = new Date(now.getFullYear(), now.getMonth() - 6, 1); // 6 months ago start
   const cutoffKey = cutoff.toISOString().slice(0,7); // e.g. "2025-09"
 
-  // Archive old PAID payments before removing (Pending payments are never pruned)
-  const oldPayments = DB.payments.filter(p => {
+  // A record with no id cannot be persisted — saveDB() skips id-less rows on
+  // upsert — so archiving one would delete it from the live table and write it
+  // nowhere. Those stay put regardless of age.
+  const hasId = r => !!r && r.id != null && r.id !== '';
+
+  const isOldPayment = p => {
+    if (!hasId(p)) return false;
     if (p.status === 'Pending') return false; // never archive outstanding debt
     const d = p.paidDate||p.date||'';
-    return d && d.slice(0,7) < cutoffKey;
-  });
-  const oldExpenses = DB.expenses.filter(e => {
+    return !!d && d.slice(0,7) < cutoffKey;
+  };
+  const isOldExpense = e => {
+    if (!hasId(e)) return false;
     const d = e.date||'';
-    return d && d.slice(0,7) < cutoffKey;
+    return !!d && d.slice(0,7) < cutoffKey;
+  };
+
+  const oldPayments = (DB.payments||[]).filter(isOldPayment);
+  const oldExpenses = (DB.expenses||[]).filter(isOldExpense);
+  if (oldPayments.length === 0 && oldExpenses.length === 0) return;
+
+  if (!Array.isArray(DB.archive)) DB.archive = [];
+  // Deduplicate by id against what the archive already holds — repeated saves
+  // must not append the same record twice.
+  const archivedIds = new Set(DB.archive.filter(hasId).map(r => r.id));
+
+  // `_src` records which live table the row came from, so the Annual Archive
+  // classifies it deterministically instead of guessing from field shape.
+  oldPayments.forEach(p => {
+    if (!archivedIds.has(p.id)) DB.archive.push(Object.assign({}, p, { _src: 'payments' }));
+  });
+  oldExpenses.forEach(e => {
+    if (!archivedIds.has(e.id)) DB.archive.push(Object.assign({}, e, { _src: 'expenses' }));
   });
 
-  if(oldPayments.length > 0 || oldExpenses.length > 0) {
-    // Save to archive
-    try {
-      // Archive is now stored in SQLite — fetch via IPC if needed
-      const existingArchive = { payments: [], expenses: [] };
-      // FIX #8: Deduplicate by ID before appending — repeated saves previously caused duplicate archive entries
-      const existingPayIds = new Set((existingArchive.payments||[]).map(p => p.id));
-      const existingExpIds = new Set((existingArchive.expenses||[]).map(e => e.id));
-      existingArchive.payments = [
-        ...(existingArchive.payments||[]),
-        ...oldPayments.filter(p => !existingPayIds.has(p.id))
-      ];
-      existingArchive.expenses = [
-        ...(existingArchive.expenses||[]),
-        ...oldExpenses.filter(e => !existingExpIds.has(e.id))
-      ];
-      existingArchive.lastArchived = new Date().toISOString();
-      // Archive records are written to SQLite archive table via saveDB()
-    } catch(e) {}
-
-    // Remove from live DB — but keep all Pending payments regardless of age
-    DB.payments = DB.payments.filter(p => {
-      if (p.status === 'Pending') return true; // always keep unpaid records
-      const d = p.paidDate||p.date||'';
-      return !d || d.slice(0,7) >= cutoffKey;
-    });
-    DB.expenses = DB.expenses.filter(e => {
-      const d = e.date||'';
-      return !d || d.slice(0,7) >= cutoffKey;
-    });
-  }
+  // Remove from the live tables ONLY what is now sitting in the archive.
+  // If anything above failed to land, the record stays live and is retried on
+  // the next save rather than being lost.
+  const archivedNow = new Set(DB.archive.filter(hasId).map(r => r.id));
+  DB.payments = (DB.payments||[]).filter(p => !isOldPayment(p) || !archivedNow.has(p.id));
+  DB.expenses = (DB.expenses||[]).filter(e => !isOldExpense(e) || !archivedNow.has(e.id));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
