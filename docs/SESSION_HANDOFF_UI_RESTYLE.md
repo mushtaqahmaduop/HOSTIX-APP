@@ -1,9 +1,17 @@
-# Handoff — Stitch neutral restyle (branch `ui/preview-all`)
+# Handoff — UI v5 (branch `ui/preview-all`)
 
-**Last updated:** 2026-08-11 · **Branch:** `ui/preview-all` (15 commits ahead of `master`, **not pushed**)
+**Last updated:** 2026-08-11 (evening) · **Branch:** `ui/preview-all`
+(26 commits ahead of `master`, **not pushed**)
 
-Read this before touching UI on this branch. It is the working agreement the
-first 12 steps were built on — deviating from it produces an inconsistent screen.
+> ## ⚠️ The approach changed at commit `3e23099`
+>
+> Steps 1–12 below were a **neutral restyle**: keep each screen's markup, strip
+> decorative colour. From `3e23099` onward the work is a **rebuild against the
+> owner's reference designs** — new markup, and a dedicated stylesheet per
+> screen so the shared sheet stays untouched.
+>
+> Sections 1–3 are kept for the reasoning behind colour decisions, which still
+> holds. The step list in §3–4 is **done, not pending**. Current state is §7.
 
 ---
 
@@ -167,3 +175,73 @@ git push -u origin ui/preview-all
 - One commit per screen, with the reasoning for every *kept* colour written
   into the commit body, so the next session can tell a deliberate keep from a
   miss.
+
+---
+
+## 7. Current state — 2026-08-11 evening
+
+### Rebuilt to the owner reference designs
+
+| Screen | Stylesheet | Commit |
+|---|---|---|
+| Dashboard | `dashboard.css` | `3e23099`, `14b3672` |
+| Payments + app chrome | `payments.css`, `chrome.css` | `d8ecf99` |
+| Students (list + full-page add/edit form) | `students.css` | `b07b914` |
+| Rooms + payment modal | `rooms.css` | `9cff193` |
+| Login | `login.css` | `e683a4d` |
+| Reports | `reports.css` | `9b321b4` |
+| Complaints & Maintenance | `issues.css` | `3e89bd6` |
+| Cancellations | `listkit.css` | `d45c260` |
+
+`listkit.css` is shared: stat strip, toolbar, table and pager chrome. New list
+screens should build on it rather than restyling `style.css`.
+
+### Accent
+
+`--accent*` in `tokens.css` is **royal blue** (`#2563eb`), moved from violet on
+the owner's call. Token names are unchanged per CLAUDE.md rule 5. Every screen
+reads the accent through these tokens, so this block is the only place the
+app's accent is decided.
+
+The login reference sheet was drawn in **orange**; that was not adopted. Its
+three brand tokens mirror `--accent-500/600/50`. The illustration keeps a warm
+window glow deliberately — lit windows are naturalistic, not branding.
+
+### Brand
+
+The app is **HOSTYLLO** in UI text. The rename is confined to what the user
+reads. These are unchanged and **must stay unchanged**:
+
+| Key | Value | Why |
+|---|---|---|
+| `package.json` `"name"` | `hostix-app` | resolves `app.getPath('userData')` → `%APPDATA%\hostix-app`, which holds `hostix.db` and `license.enc` |
+| `appId` | `com.zeerak.hostix` | installer + licence identity |
+| db filename | `hostix.db` | 50+ live client databases |
+
+Renaming any of them points existing installs at an empty profile: data loss
+plus deactivation.
+
+**Known gap:** `DB.settings.appName` is read by receipts and PDF exports, and
+existing client databases already hold `'HOSTIX'`. The new `'HOSTYLLO'` default
+only applies to fresh installs, and the setting is not editable in the Settings
+UI, so existing clients keep printing HOSTIX on receipts. Closing that needs
+either a one-time migration on client DBs or a Settings field — an owner call,
+deliberately not made here.
+
+### Verification
+
+`npx playwright test` — 6/6 green (smoke + regression) against an isolated
+profile. Set `HOSTIX_TEST_PROFILE` to a throwaway dir holding a copy of
+`license.enc`; the spec refuses to write if the DB it finds is not empty.
+
+Every screen was captured in both themes and reviewed. A capture spec is not
+committed; recreate it by driving `navigate(page)` and `toggleTheme()` through
+Playwright if needed.
+
+### Still to do
+
+1. **Not yet rebuilt:** Settings, Activity Log, Annual Archive.
+2. `docs/ui-v5-preview.html` is untracked (~500 KB) — decide whether it belongs
+   in the repo.
+3. **Not pushed.** Branch off `master`, PR into `master`; `main` is retired.
+   Never push straight to `master` — 50+ paying hostels run it.
