@@ -829,7 +829,7 @@ function showViewStudentModal(id) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('student','sm')} Personal Information</div>
-        ${[['Father / Guardian',t.fatherName],['Occupation / Course',t.occupation],['CNIC / ID',t.cnic],['Phone Number',t.phone],['Email Address',t.email],['Emergency Contact',t.emergencyContact]].map(([k,v])=>`
+        ${[['Father / Guardian',t.fatherName],['Occupation / Course',t.occupation],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email Address',t.email],['Emergency Contact',t.emergencyContact]].map(([k,v])=>`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:11.5px;color:var(--text3);flex-shrink:0;width:130px">${k}</span>
           <span style="font-size:13px;font-weight:600;color:var(--text);text-align:right">${escHtml(v||'—')}</span>
@@ -1221,7 +1221,7 @@ function printStudentCard(id) {
     <div class="section">
       <div class="section-title">${icon('student','sm')} Personal Information</div>
       <div class="info-grid">
-        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v||'—'}</div></div>`).join('')}
+        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v||'—'}</div></div>`).join('')}
       </div>
     </div>
     <div class="section">
@@ -1396,6 +1396,7 @@ async function submitEditStudent(id) {
   await saveDB(); closeModal(); renderPage('students'); toast('Student updated','success');
 }
 async function confirmDeleteStudent(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   closeModal();
   showConfirm(`Remove ${t.name}?`,'This will permanently delete the student record.',(async ()=>{

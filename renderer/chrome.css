@@ -173,7 +173,16 @@ body.light-theme #sidebar {
 }
 #sidebar .nav-item.active .nav-badge { background: rgba(255,255,255,.28); }
 
-/* User card pinned under the nav */
+/* User card pinned under the nav.
+   The account menu moved here from the header, so it opens UPWARD off the
+   bottom of the sidebar. The wrapper is the positioning context. */
+.sb-user-wrap { position: relative; }
+.sb-user-menu {
+    position: absolute;
+    bottom: calc(100% - 4px); left: 12px; right: 12px;
+    top: auto;
+    z-index: 1200;
+}
 .sb-user {
     display: flex; align-items: center; gap: 11px;
     margin: 0 12px 14px; padding: 10px 12px;
@@ -228,23 +237,34 @@ body.light-theme #header {
     font-size: 12px; font-weight: 400; color: var(--text3); margin-top: 2px;
 }
 
-#sidebar-toggle {
-    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: none; border: none; color: var(--text2); cursor: pointer;
-    transition: var(--transition);
-}
-#sidebar-toggle:hover { background: var(--bg3); color: var(--text); }
+/* The hamburger (#sidebar-toggle) and the Back button (#hdr-back-btn) were
+   removed from the header on the owner's call, so their rules are gone too.
+   nav.js still guards both by id, and both lookups now return null harmlessly.
 
-/* Back button — shown on detour pages (the add-student form). The element
-   carries inline styles from the old palette, so these need !important. */
-#hdr-back-btn {
-    height: 38px !important; padding: 0 15px !important; border-radius: 10px !important;
-    background: var(--card) !important; border: 1px solid var(--border2) !important;
-    color: var(--text2) !important; font-size: 13px !important; font-weight: 600 !important;
-    gap: 7px !important; flex-shrink: 0;
+   Consequence that had to be handled: style.css @900px slid the sidebar
+   off-canvas (translateX(-100%)) and ONLY the hamburger could bring it back,
+   so below 900px navigation would have been unreachable. The sidebar now
+   stays on screen at every width and narrows instead. The in-sidebar collapse
+   button still gives an icons-only rail when space is tight. */
+@media (max-width: 900px) {
+    #sidebar {
+        position: sticky; transform: none !important;
+        width: 200px; min-width: 200px;
+    }
+    #sidebar-overlay { display: none !important; }
+    #main { margin-left: 0 !important; }
 }
-#hdr-back-btn:hover { background: var(--bg3) !important; color: var(--text) !important; }
+@media (max-width: 640px) {
+    #sidebar { width: 62px; min-width: 62px; }
+    #sidebar .sb-logo-text,
+    #sidebar .sb-section,
+    #sidebar .nav-label,
+    #sidebar .sb-user__id,
+    #sidebar .sb-user__caret { display: none; }
+    #sidebar .nav-item { justify-content: center; padding: 10px 0; }
+    .sb-user { justify-content: center; padding: 8px; }
+    .sb-user-menu { left: 6px; right: auto; width: 210px; }
+}
 
 /* Search pill */
 .hdr-find {
@@ -310,22 +330,9 @@ body.light-theme #header {
 }
 .hdr-month-picker .sb-month-picker__arrow:hover { background: var(--bg3); color: var(--text); }
 
-/* User chip + its menu */
-.hdr-user {
-    display: flex; align-items: center; gap: 9px; flex-shrink: 0;
-    height: 40px; padding: 0 10px 0 5px; border-radius: 11px;
-    background: var(--card); border: 1px solid var(--border2);
-    cursor: pointer; transition: var(--transition);
-}
-.hdr-user:hover { background: var(--bg3); }
-.hdr-user__av {
-    width: 29px; height: 29px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--sb-avatar); color: #fff; font-size: 11px; font-weight: 800;
-}
-.hdr-user__name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
-.hdr-user__caret { color: var(--text3); flex-shrink: 0; }
-
+/* The header account chip (.hdr-user) was removed — the account lives in the
+   sidebar card. .hdr-menu stays: the notifications menu still uses it, and so
+   does the account menu now anchored to .sb-user-wrap. */
 .hdr-menu {
     position: absolute; top: calc(100% + 8px); right: 0; z-index: 9999;
     min-width: 216px; padding: 6px;

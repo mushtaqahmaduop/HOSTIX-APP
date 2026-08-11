@@ -88,35 +88,13 @@
         <b id="login-hostel-name">your hostel</b> with ease.</p>
       <div class="lg-addr" id="login-address" style="display:none"></div>
 
-      <!-- Who is signing in -->
-      <div class="lg-who" role="group" aria-label="Choose warden">
-        <div class="lg-card selected" id="rb-warden1" tabindex="0" role="button" aria-pressed="true"
-             onclick="selectWarden('warden1')"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden1');}">
-          <span class="lg-card__tick" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </span>
-          <span class="lg-card__av" id="w1-photo">
-            <img class="warden-login-photo" alt="">
-            <svg class="warden-avatar-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-          </span>
-          <div class="lg-card__n" id="wb1-name">Warden 1</div>
-          <div class="lg-card__r">Full Access</div>
-        </div>
-
-        <div class="lg-card" id="rb-warden2" tabindex="0" role="button" aria-pressed="false"
-             onclick="selectWarden('warden2')"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden2');}">
-          <span class="lg-card__tick" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </span>
-          <span class="lg-card__av" id="w2-photo">
-            <img class="warden-login-photo" alt="">
-            <svg class="warden-avatar-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-          </span>
-          <div class="lg-card__n" id="wb2-name">Warden 2</div>
-          <div class="lg-card__r">Full Access</div>
-        </div>
+      <!-- Username. The two-card warden picker was removed: the app now has an
+           open user list, and a picker would have printed every staff name to
+           anyone who opened the app. -->
+      <div class="lg-field">
+        <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+        <input id="login-user" class="lg-in" type="text" placeholder="Username"
+               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username">
       </div>
 
       <!-- Password -->
@@ -311,31 +289,10 @@
       if (img)   { img.src = logo; img.style.display = 'block'; }
       if (emoji) emoji.style.display = 'none';
     }
-    // ── Warden names ──────────────────────────────────────────────────────
-    // Key fix: this read `warden_config_<hostel>` — a key NOTHING has written
-    // since auth-nev v2.0 moved warden config to `damam_auth_<hostel>_wardens`
-    // (auth-nev.js _key('wardens')). So this whole block was dead, and the
-    // login screen did flash "Warden 1 / Warden 2" and the blank avatar until
-    // _boot() resolved — exactly what this IIFE exists to prevent.
-    var wcfg = localStorage.getItem('damam_auth_' + activeHostel + '_wardens');
-    if (wcfg) {
-      var w = JSON.parse(wcfg);
-      var b1 = document.getElementById('wb1-name');
-      var b2 = document.getElementById('wb2-name');
-      if (b1 && w.warden1 && w.warden1.name) b1.textContent = w.warden1.name;
-      if (b2 && w.warden2 && w.warden2.name) b2.textContent = w.warden2.name;
-      ['warden1','warden2'].forEach(function(k) {
-        if (w[k] && w[k].photo) {
-          var card = document.getElementById('rb-' + k);
-          if (!card) return;
-          // The avatar <img> is already in the markup; setting src is all that
-          // is needed. login.css hides it while it has no src and hides the
-          // fallback person icon once it does.
-          var av = card.querySelector('.warden-login-photo');
-          if (av) av.setAttribute('src', w[k].photo);
-        }
-      });
-    }
+    // Warden names and avatars used to be pre-painted here to stop the login
+    // screen flashing placeholder names before _boot() resolved. The login
+    // screen no longer names anyone — it is a username field — so there is
+    // nothing left to pre-paint, and nothing to flash.
   } catch(e) {}
 })();
 </script>
@@ -469,7 +426,8 @@
     </div>
   </nav>
 
-  <!-- STICKY BOTTOM — Settings + Help only -->
+  <!-- STICKY BOTTOM — Settings only. Help & Support was removed: it opened an
+       external support URL, and this app is offline by design. -->
   <div class="sidebar__bottom">
     <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -478,39 +436,55 @@
       </svg>
       <span class="nav-label">Settings</span>
     </div>
-    <div class="nav-item" onclick="openExternalLink('https://hostyllo.com/support')" title="Help &amp; Support">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-        <path d="M12 17h.01"/>
-      </svg>
-      <span class="nav-label">Help &amp; Support</span>
-    </div>
   </div>
 
-  <!-- USER CARD — mirrors the header user chip; opens the same menu -->
-  <div class="sb-user" id="sb-user" onclick="toggleUserMenu(event)" title="Account">
-    <div class="sb-user__av" id="sb-user-av">MA</div>
-    <div class="sb-user__id">
-      <div class="sb-user__name" id="sb-user-name">Warden</div>
-      <div class="sb-user__role" id="sb-user-role">Admin</div>
+  <!-- USER CARD — the only account control in the app; the header chip that
+       used to mirror it was removed. The menu it opens lives here too, and
+       opens upward because the card sits at the bottom of the sidebar. -->
+  <div class="sb-user-wrap">
+    <div class="sb-user" id="sb-user" onclick="toggleUserMenu(event)" title="Account">
+      <div class="sb-user__av" id="sb-user-av">MA</div>
+      <div class="sb-user__id">
+        <div class="sb-user__name" id="sb-user-name">Warden</div>
+        <div class="sb-user__role" id="sb-user-role">Admin</div>
+      </div>
+      <svg class="sb-user__caret" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </div>
-    <svg class="sb-user__caret" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    <div class="hdr-menu sb-user-menu" id="user-menu" style="display:none">
+      <div class="hdr-menu__head">
+        <b id="user-menu-name">Warden</b>
+        <span id="user-menu-role">Admin</span>
+      </div>
+      <button class="hdr-menu__item" onclick="closeHdrMenus();showFormerStudentsModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        Former Students
+      </button>
+      <button class="hdr-menu__item" id="user-menu-manage" onclick="closeHdrMenus();showUserMgmt()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+        Manage Users
+      </button>
+      <button class="hdr-menu__item" id="user-menu-settings" onclick="closeHdrMenus();navigate('settings')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/></svg>
+        Settings
+      </button>
+      <div class="hdr-menu__sep"></div>
+      <button class="hdr-menu__item hdr-menu__item--danger" onclick="closeHdrMenus();logout()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>
+        Logout
+      </button>
+    </div>
   </div>
 </aside>
 
 <!-- MAIN -->
 <div id="main">
   <header id="header">
+    <!-- The hamburger and the Back button were removed on the owner's call.
+         Navigation is the sidebar; sub-pages carry their own exit (the student
+         form has Cancel, detail views are modals with a close). goBack() and
+         pageHistory are kept — the command palette and in-page controls still
+         call them. -->
     <div class="hdr-left" style="display:flex;align-items:center;gap:12px">
-      <!-- FIX #13: Hamburger button for mobile sidebar toggle -->
-      <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle menu" aria-label="Toggle navigation">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16" /> <path d="M4 12h16" /> <path d="M4 19h16" /></svg>
-      </button>
-      <!-- FIX #5: history.back is always truthy as a function; use pageHistory.length instead -->
-      <button id="hdr-back-btn" onclick="pageHistory.length > 1 ? goBack() : navigate('dashboard')" style="display:none;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:var(--transition);align-items:center;gap:6px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='var(--bg3)'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg> Back
-      </button>
       <div class="hdr-title-wrap">
         <div class="page-title" id="hdr-title">Dashboard</div>
         <div class="page-sub" id="hdr-sub" style="display:none"></div>
@@ -581,37 +555,9 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
       </button>
 
-      <!-- User chip — Former Students, Settings and Logout live in its menu -->
-      <div style="position:relative">
-        <div class="hdr-user" id="hdr-user" onclick="toggleUserMenu(event)" title="Account">
-          <div class="hdr-user__av" id="hdr-user-av">MA</div>
-          <span class="hdr-user__name" id="hdr-user-name">Warden</span>
-          <svg class="hdr-user__caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-        <div class="hdr-menu" id="user-menu" style="display:none">
-          <div class="hdr-menu__head">
-            <b id="user-menu-name">Warden</b>
-            <span id="user-menu-role">Admin</span>
-          </div>
-          <button class="hdr-menu__item" onclick="closeHdrMenus();showFormerStudentsModal()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-            Former Students
-          </button>
-          <button class="hdr-menu__item" onclick="closeHdrMenus();showUserMgmt()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
-            Manage Users
-          </button>
-          <button class="hdr-menu__item" onclick="closeHdrMenus();navigate('settings')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/></svg>
-            Settings
-          </button>
-          <div class="hdr-menu__sep"></div>
-          <button class="hdr-menu__item hdr-menu__item--danger" onclick="closeHdrMenus();logout()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>
-            Logout
-          </button>
-        </div>
-      </div>
+      <!-- The account chip that used to sit here was removed; the account
+           control is the user card at the bottom of the sidebar, and the menu
+           it opens moved there with it. -->
 
       <button class="btn btn-success btn-sm" id="hdr-action2" style="display:none" onclick="headerAction2()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>

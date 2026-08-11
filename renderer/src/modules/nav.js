@@ -109,8 +109,8 @@ function navigate(page, isBack=false) {
   // overview badges always show first instead of the last opened detail panel.
   if (page === 'reports') reportDetail = null;
   const cfg = pageConfig[page] || { title: page, sub: '', action: null };
-  const bb=document.getElementById('hdr-back-btn');
-  if(bb) bb.style.display = page!=='dashboard' ? 'flex' : 'none';
+  // The header Back button was removed; sub-pages carry their own exit.
+  // goBack()/pageHistory stay — the command palette and in-page controls use them.
   // A detour page (the add-student form) keeps its parent's rail item lit,
   // otherwise nothing in the sidebar is highlighted while the form is open.
   const navKey = cfg.nav || page;
@@ -196,6 +196,17 @@ function renderPage(p, resetScroll=false) {
   }
   setTimeout(()=>{
     try {
+      // Page-level permission gate. Hiding the sidebar item is not enough on
+      // its own — the command palette and direct navigate() calls reach a page
+      // without ever touching the rail.
+      const _needs = { settings:'settings', reports:'reports', archive:'reports' }[basePage];
+      if (_needs && typeof canDo === 'function' && !canDo(_needs)) {
+        el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'
+          + '<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px">Not permitted</div>'
+          + '<div style="font-size:13px">Your account does not have access to this page.<br>Ask an administrator to grant it.</div>'
+          + '</div>';
+        return;
+      }
       if(basePage==='dashboard') el.innerHTML = renderDashboard();
       else if(basePage==='rooms') el.innerHTML = renderRooms();
       else if(basePage==='students') el.innerHTML = renderStudents();
@@ -266,8 +277,7 @@ function refreshChromeUser() {
   const name = (u && u.name) || 'Warden';
   const role = (u && (u.role || u.title)) || 'Admin';
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('hdr-user-av',   _chromeInitials(name));
-  set('hdr-user-name', name);
+  // The header chip is gone; the sidebar card below is the only account UI.
   set('user-menu-name',name);
   set('user-menu-role',role);
   set('sb-user-av',    _chromeInitials(name));
@@ -363,7 +373,7 @@ function toggleNotifMenu(ev) {
 // One document-level listener closes both menus on any outside click.
 document.addEventListener('click', function (e) {
   if (e.target.closest && (e.target.closest('#user-menu') || e.target.closest('#notif-menu')
-      || e.target.closest('#hdr-user') || e.target.closest('#hdr-bell') || e.target.closest('#sb-user'))) return;
+      || e.target.closest('#hdr-bell') || e.target.closest('#sb-user'))) return;
   closeHdrMenus();
 });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHdrMenus(); });
