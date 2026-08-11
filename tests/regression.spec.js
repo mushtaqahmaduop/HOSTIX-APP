@@ -322,6 +322,78 @@ test('archive is reachable from the sidebar and hides with the reports permissio
   await app.close();
 });
 
+// The three secondary money columns sit past the right edge. They must be
+// reachable by dragging, and the CSV must list columns in the on-screen order.
+test('payments: table pans by dragging, and CSV column order matches the table', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  await win.evaluate(() => {
+    DB.rooms = [{ id: 'r1', number: '101', floor: 'Ground', typeId: '2s', rent: 16000 }];
+    DB.students = [{ id: 's1', name: 'Ali Khan', roomId: 'r1', rent: 16000, status: 'Active' }];
+    DB.payments = [{
+      id: 'p1', studentId: 's1', studentName: 'Ali Khan', roomNumber: '101',
+      month: thisMonthLabel(), monthlyRent: 16000, amount: 12000, unpaid: 4000,
+      method: 'Cash', status: 'Pending', admissionFee: 5000,
+      extraCharges: [{ label: 'Laundry', amount: 800 }], concession: 1000,
+      concessionDesc: 'Sibling', date: today(), paidDate: today(),
+    }];
+    navigate('payments');
+  });
+  await win.waitForTimeout(700);
+
+  // The secondary columns exist in the DOM — a display:none column could never
+  // be scrolled into view, which is the whole point of panning.
+  expect(await win.locator('.pay-table th.pay-col-x').count(),
+    'secondary columns missing from the table').toBe(3);
+
+  const wrap = win.locator('.pay-table-wrap');
+  const canPan = await wrap.evaluate(el => el.scrollWidth > el.clientWidth + 1);
+  expect(canPan, 'table does not overflow, so there is nothing to pan to').toBe(true);
+  expect(await wrap.evaluate(el => el.scrollLeft), 'should rest at the left edge').toBe(0);
+
+  // Drag leftwards across an inert part of a row.
+  const box = await wrap.boundingBox();
+  const y = box.y + box.height - 18;
+  await win.mouse.move(box.x + box.width * 0.55, y);
+  await win.mouse.down();
+  await win.mouse.move(box.x + box.width * 0.55 - 60, y, { steps: 6 });
+  await win.mouse.move(box.x + box.width * 0.55 - 200, y, { steps: 12 });
+  await win.mouse.up();
+  await win.waitForTimeout(200);
+
+  expect(await wrap.evaluate(el => el.scrollLeft),
+    'dragging did not pan the table').toBeGreaterThan(30);
+
+  // Dragging must not have triggered anything underneath it.
+  expect(await win.evaluate(() => document.querySelectorAll('.modal-overlay').length),
+    'the pan opened a modal — the trailing click was not swallowed').toBe(0);
+
+  // CSV header + row follow the table: money columns after Status, Date last.
+  const csv = await win.evaluate(() => {
+    let captured = null;
+    const real = window.downloadCSV;
+    window.downloadCSV = rows => { captured = rows; };
+    try { exportPaymentsCSV(); } finally { window.downloadCSV = real; }
+    return captured;
+  });
+  expect(csv, 'exportPaymentsCSV produced nothing').toBeTruthy();
+  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid',
+                          'Method','Status','Adm.Fee','Extra Charges','Concession','Date']);
+  // Values must have moved with their headers, not just the labels.
+  const row = csv[1];
+  expect(row[4], 'Amount Paid column').toBe(12000);
+  expect(row[5], 'Unpaid column').toBe(4000);
+  expect(row[6], 'Method column').toBe('Cash');
+  expect(row[8], 'Adm.Fee column').toBe(5000);
+  expect(String(row[9]), 'Extra Charges column').toContain('Laundry');
+  expect(row[10], 'Concession column').toBe(1000);
+
+  await app.close();
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Runs last: it drives repeated failures and ends with the account locked.
 test('login: wrong password is rejected, decrements attempts, locks after 5', async () => {

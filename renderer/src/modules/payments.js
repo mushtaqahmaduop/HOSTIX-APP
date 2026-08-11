@@ -471,14 +471,15 @@ async function payBulkMarkPaid() {
 
 function payBulkExport() {
   const ids = [...paySelected];
-  const rows = [['Student','Room','Month','Rent/Mo','Adm.Fee','Extra Charges','Concession','Amount Paid','Unpaid','Method','Status','Date']];
+  const rows = [['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
   payFiltered().filter(p => ids.includes(p.id)).forEach(p => {
     const admFee = Number(p.admissionFee||p.fee||0);
     const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const conc   = Number(p.concession||p.discount||0);
     rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
-      p.monthlyRent||p.totalRent||p.amount||0, admFee||'', extras||'', conc||'',
-      p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p), p.date||'']);
+      p.monthlyRent||p.totalRent||p.amount||0,
+      p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p),
+      admFee||'', extras||'', conc||'', p.date||'']);
   });
   downloadCSV(rows, 'Payments_Selected.csv');
 }
@@ -489,12 +490,12 @@ function exportPaymentsCSV() {
   const mo = thisMonth();
   // Reuses payFiltered() — the export and the table can no longer drift apart,
   // which they previously could since each kept its own copy of the filter.
-  const rows=[['Student','Room','Month','Rent/Mo','Adm.Fee','Extra Charges','Concession','Amount Paid','Unpaid','Method','Status','Date']];
+  const rows=[['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
   payFiltered().forEach(p=>{
     const _paf=Number(p.admissionFee||p.fee||0);
     const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const _pc=Number(p.concession||p.discount||0);
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,_paf||'',_pex||'',_pc||'',p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),p.date||'']);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
   });
   downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
 }
@@ -1393,3 +1394,66 @@ async function submitEditPayment(id) {
 // EXPENSES
 // ════════════════════════════════════════════════════════════════════════════
 let expFilter = {cat:'All', search:'', showAll: false};
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAYMENTS TABLE — DRAG TO PAN
+//
+// The three secondary money columns live past the right edge. Grab any empty
+// part of the table and drag to bring them in, instead of hunting for the
+// scrollbar. Everything is delegated off `document`, because renderPayments()
+// replaces #content wholesale on every save and re-render — a handler bound to
+// the wrapper itself would be thrown away with it.
+// ════════════════════════════════════════════════════════════════════════════
+(function initPayDragPan() {
+  const SLOP = 5;                 // px before a press counts as a drag, so clicks survive
+  let wrap = null, startX = 0, startLeft = 0, pressed = false, panned = false;
+  let swallowClick = false;
+
+  const overflows = el => el.scrollWidth > el.clientWidth + 1;
+  const closest = (t, sel) => (t && t.closest) ? t.closest(sel) : null;
+
+  // Only advertise the grab cursor when there is somewhere to go.
+  document.addEventListener('pointerover', e => {
+    const w = closest(e.target, '.pay-table-wrap');
+    if (w) w.classList.toggle('is-pannable', overflows(w));
+  });
+
+  document.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const w = closest(e.target, '.pay-table-wrap');
+    if (!w || !overflows(w)) return;
+    // Never start a pan on something the user is trying to operate.
+    if (closest(e.target, 'button, input, select, textarea, a, label')) return;
+    wrap = w; startX = e.clientX; startLeft = w.scrollLeft;
+    pressed = true; panned = false;
+  });
+
+  document.addEventListener('pointermove', e => {
+    if (!pressed || !wrap) return;
+    const dx = e.clientX - startX;
+    if (!panned) {
+      if (Math.abs(dx) < SLOP) return;
+      panned = true;
+      wrap.classList.add('is-dragging');
+    }
+    wrap.scrollLeft = startLeft - dx;
+    e.preventDefault();
+  });
+
+  function endPan() {
+    if (wrap) wrap.classList.remove('is-dragging');
+    // A pan ends with a click event on whatever was under the cursor. Swallow
+    // exactly that one, or letting go over a row would also activate it.
+    if (panned) swallowClick = true;
+    pressed = false; panned = false; wrap = null;
+  }
+  document.addEventListener('pointerup', endPan);
+  document.addEventListener('pointercancel', endPan);
+
+  document.addEventListener('click', e => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+})();
