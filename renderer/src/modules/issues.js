@@ -6,83 +6,288 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+/* ── Issues v5 — toolbar state ───────────────────────────────────────────────
+   `issuesTab` (app.js) still decides which kind is shown, because nav.js sets
+   it from the /maintenance and /complaints routes. It now also accepts 'all',
+   which is the unified feed the reference design shows. */
+let issueFilter = { search:'', status:'All', priority:'All', room:'All',
+                    sort:'newest', page:1, pageSize:10 };
+
+/* Display reference. Maintenance is MA-####, complaints CO-####, matching the
+   reference. New records carry a persistent `seq`; anything created before
+   that falls back to its position within its own collection. */
+function _issSeq(it) {
+  const pre  = it.kind === 'maintenance' ? 'MA' : 'CO';
+  const coll = it.kind === 'maintenance' ? (DB.maintenance||[]) : (DB.complaints||[]);
+  const n    = it.raw.seq || (coll.indexOf(it.raw) + 1);
+  return pre + '-' + String(n).padStart(4, '0');
+}
+function _issNextSeq(coll) {
+  return (coll || []).reduce((m, x) => Math.max(m, Number(x.seq) || 0), 0) + 1;
+}
+
+/* Both collections normalised onto one shape so the feed, the filters and the
+   counters all read from a single list instead of two parallel branches. */
+function _issAll() {
+  const rooms = DB.rooms || [];
+  const m = (DB.maintenance||[]).map(x => {
+    const room = rooms.find(r => r.id === x.roomId);
+    return { kind:'maintenance', raw:x, id:x.id, title:x.title||'',
+             desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
+             status:x.status||'Open', priority:x.priority||'Medium',
+             roomNo: room ? String(room.number) : '', by:'', response:'' };
+  });
+  const c = (DB.complaints||[]).map(x => {
+    const s = (DB.students||[]).find(t => t.id === x.studentId);
+    return { kind:'complaint', raw:x, id:x.id, title:x.subject||'',
+             desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
+             status:x.status||'Open', priority:'',
+             roomNo:'', by: s ? s.name : '', response:x.response||'' };
+  });
+  return m.concat(c);
+}
+
+// Open / working / done, collapsed across both collections. 'UnderReview' is a
+// complaint being worked on, which is the same state as maintenance
+// 'InProgress' — the reference shows one "In Progress" counter for both.
+function _issBucket(st) {
+  if (st === 'Resolved') return 'resolved';
+  if (st === 'InProgress' || st === 'UnderReview') return 'progress';
+  return 'open';
+}
+function _issStatusLabel(st) {
+  return st === 'InProgress' ? 'In Progress' : st === 'UnderReview' ? 'Under Review' : st;
+}
+
 function renderIssues() {
-  var mlist = DB.maintenance || [];
-  var clist = DB.complaints || [];
-  var mOpen = mlist.filter(function(m){return m.status==='Open';}).length;
-  var mIP   = mlist.filter(function(m){return m.status==='InProgress';}).length;
-  var mRes  = mlist.filter(function(m){return m.status==='Resolved';}).length;
-  var cOpen = clist.filter(function(c){return c.status==='Open';}).length;
-  var cRev  = clist.filter(function(c){return c.status==='UnderReview';}).length;
-  var cRes  = clist.filter(function(c){return c.status==='Resolved';}).length;
+  const all = _issAll();
+  const nOpen = all.filter(i=>_issBucket(i.status)==='open').length;
+  const nProg = all.filter(i=>_issBucket(i.status)==='progress').length;
+  const nDone = all.filter(i=>_issBucket(i.status)==='resolved').length;
 
-  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">';
-  html += '<div style="background:var(--card);border:1px solid rgba(224,82,82,0.3);border-radius:var(--radius);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:4px">&#x1F527; Open</div><div style="font-size:26px;font-weight:800;color:var(--red)">'+mOpen+'</div></div>';
-  html += '<div style="background:var(--card);border:1px solid rgba(240,160,48,0.3);border-radius:var(--radius);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:4px">In Progress</div><div style="font-size:26px;font-weight:800;color:var(--amber)">'+mIP+'</div></div>';
-  html += '<div style="background:var(--card);border:1px solid rgba(46,201,138,0.3);border-radius:var(--radius);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:4px">&#x1F4AC; Complaints</div><div style="font-size:26px;font-weight:800;color:var(--purple)">'+cOpen+'</div></div>';
-  html += '</div>';
+  const mActive = (DB.maintenance||[]).filter(x=>x.status!=='Resolved').length;
+  const cOpen   = (DB.complaints||[]).filter(x=>x.status!=='Resolved').length;
 
-  // Tab bar
-  var mActive = issuesTab==='maintenance';
-  html += '<div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px">';
-  html += '<button onclick="issuesTab=\'maintenance\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(mActive?'var(--accent-dim)':'var(--bg3)')+';color:'+(mActive?'var(--accent-strong)':'var(--text2)')+'">&#x1F527; Maintenance ('+(mlist.filter(function(x){return x.status!=='Resolved';}).length)+' active)</button>';
-  html += '<div style="width:1px;background:var(--border)"></div>';
-  var cActive = issuesTab==='complaints';
-  html += '<button onclick="issuesTab=\'complaints\';renderPage(\'issues\')" style="flex:1;padding:11px;border:none;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:'+(cActive?'var(--accent-dim)':'var(--bg3)')+';color:'+(cActive?'var(--accent-strong)':'var(--text2)')+'">&#x1F4AC; Complaints ('+(clist.filter(function(x){return x.status!=='Resolved';}).length)+' open)</button>';
-  html += '</div>';
+  const tab = (issuesTab==='maintenance'||issuesTab==='complaints') ? issuesTab : 'all';
+  // The tab is named for the collection ('complaints'); a row's kind is named
+  // for the record ('complaint'). Comparing the two directly matched nothing
+  // and emptied the complaints tab.
+  const wantKind = tab==='complaints' ? 'complaint' : tab==='maintenance' ? 'maintenance' : null;
+  const q   = issueFilter.search.trim().toLowerCase();
 
-  if(issuesTab==='maintenance') {
-    if(mlist.length===0) {
-      html += '<div style="text-align:center;padding:60px 20px;color:var(--text3)"><div style="font-size:48px;margin-bottom:12px">&#x1F527;</div><div style="font-size:15px">No maintenance requests yet</div><button class="btn btn-primary" style="margin-top:14px" onclick="showAddIssueModal()">+ Add Request</button></div>';
-    } else {
-      var sList = mlist.slice().reverse();
-      for(var i=0;i<sList.length;i++) {
-        var m = sList[i];
-        var room = DB.rooms.find(function(r){return r.id===m.roomId;});
-        var sc = m.status==='Open'?'var(--red)':m.status==='InProgress'?'var(--amber)':'var(--green)';
-        var pc = m.priority==='High'?'var(--red)':m.priority==='Low'?'var(--teal)':'var(--amber)';
-        html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px">';
-        html += '<div style="width:40px;height:40px;border-radius:9px;background:'+sc+'22;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">&#x1F527;</div>';
-        html += '<div style="flex:1;min-width:0">';
-        html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
-        html += '<span style="font-weight:700;font-size:14px">'+escHtml(m.title)+'</span>';
-        html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:'+sc+'22;color:'+sc+'">'+m.status+'</span>';
-        html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:'+pc+'22;color:'+pc+'">'+((m.priority||'Medium')+' Priority')+'</span>';
-        html += '</div>';
-        html += '<div style="font-size:12px;color:var(--text2);margin-bottom:4px">'+escHtml(m.description||'')+'</div>';
-        html += '<div style="font-size:11px;color:var(--text3)">Room '+(room?room.number:'N/A')+' &nbsp;·&nbsp; '+fmtDate(m.date)+(m.resolvedDate?' &nbsp;·&nbsp; &#x2705; '+fmtDate(m.resolvedDate):'')+'</div>';
-        html += '</div>';
-        html += '<div style="display:flex;gap:4px;flex-shrink:0">';
-        if(m.status!=='Resolved') html += '<button class="btn btn-sm" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(46,201,138,0.3)" onclick="resolveMaint(\''+m.id+'\')"><span class=\"micon\" style=\"font-size:14px\">check_circle</span></button>';
-        if(m.status==='Open') html += '<button class="btn btn-sm" style="background:var(--amber-dim);color:var(--amber);border:1px solid rgba(240,160,48,0.3)" onclick="progressMaint(\''+m.id+'\')">&#x23F3;</button>';
-        html += '<button class="btn btn-sm btn-danger" onclick="delMaint(\''+m.id+'\')"><span class=\"micon\" style=\"font-size:14px\">delete</span></button>';
-        html += '</div></div>';
-      }
-    }
-  } else {
-    if(clist.length===0) {
-      html += '<div style="text-align:center;padding:60px 20px;color:var(--text3)"><div style="font-size:48px;margin-bottom:12px">&#x1F4AC;</div><div>No complaints yet</div><button class="btn btn-primary" style="margin-top:14px" onclick="showAddIssueModal()">+ Add Complaint</button></div>';
-    } else {
-      var csl = clist.slice().reverse();
-      for(var j=0;j<csl.length;j++) {
-        var cc = csl[j];
-        var student = DB.students.find(function(s){return s.id===cc.studentId;});
-        var csc = cc.status==='Open'?'var(--red)':cc.status==='UnderReview'?'var(--amber)':'var(--green)';
-        html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">';
-        html += '<div><div style="font-weight:700;font-size:14px;margin-bottom:3px">'+escHtml(cc.subject)+'</div><div style="font-size:11px;color:var(--text3)">By: '+(student?escHtml(student.name):'Unknown')+' &nbsp;·&nbsp; '+fmtDate(cc.date)+'</div></div>';
-        html += '<div style="display:flex;gap:6px;align-items:center">';
-        html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:'+csc+'22;color:'+csc+'">'+((cc.status==='UnderReview'?'Under Review':cc.status))+'</span>';
-        if(cc.status!=='Resolved') html += '<button class="btn btn-sm" style="background:var(--green-dim);color:var(--green)" onclick="resolveComp(\''+cc.id+'\')">Resolve</button>';
-        html += '<button class="btn btn-sm btn-danger" onclick="delComp(\''+cc.id+'\')"><span class=\"micon\" style=\"font-size:14px\">delete</span></button>';
-        html += '</div></div>';
-        html += '<div style="font-size:13px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:10px">'+escHtml(cc.description||'')+'</div>';
-        if(cc.response) html += '<div style="font-size:12px;color:var(--teal);background:var(--teal-dim);border-radius:8px;padding:8px;margin-top:6px">Response: '+escHtml(cc.response)+'</div>';
-        html += '</div>';
-      }
-    }
-  }
-  return html;
+  let feed = all.filter(i => {
+    if (wantKind && i.kind !== wantKind) return false;
+    if (issueFilter.status   !== 'All' && _issBucket(i.status) !== issueFilter.status) return false;
+    if (issueFilter.priority !== 'All' && i.priority !== issueFilter.priority) return false;
+    if (issueFilter.room     !== 'All' && i.roomNo !== issueFilter.room) return false;
+    if (!q) return true;
+    return [i.title, i.desc, i.roomNo, i.by, _issStatusLabel(i.status), _issSeq(i)]
+      .some(v => String(v||'').toLowerCase().includes(q));
+  });
+
+  const prank = { High:0, Medium:1, Low:2, '':3 };
+  feed.sort((a,b) => issueFilter.sort==='oldest' ? String(a.date).localeCompare(String(b.date))
+                   : issueFilter.sort==='priority' ? (prank[a.priority]??3)-(prank[b.priority]??3)
+                   : String(b.date).localeCompare(String(a.date)));
+
+  const _pg = paginate(feed, issueFilter);
+  const roomNums = [...new Set(all.map(i=>i.roomNo).filter(Boolean))].sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const nActive  = [issueFilter.status!=='All', issueFilter.priority!=='All',
+                    issueFilter.room!=='All', !!q].filter(Boolean).length;
+
+  const SH = { open:'dh-red', progress:'dh-amber', resolved:'dh-green' };
+  const PH = { High:'dh-red', Medium:'dh-amber', Low:'dh-blue' };
+  const KIND = {
+    maintenance: { hue:'dh-violet', label:'Maintenance',
+      svg:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
+    complaint:   { hue:'dh-blue', label:'Complaint',
+      svg:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>' }
+  };
+
+  const card = (key, hue, label, sub, value, svg) => `
+    <div class="lk-stat lk-stat--click ${hue}${issueFilter.status===key?' is-on':''}" onclick="issSet('status','${issueFilter.status===key?'All':key}')" title="Show ${label.toLowerCase()} issues">
+      <div class="lk-stat__top">
+        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
+        <div class="lk-stat__label">${label}</div>
+      </div>
+      <div class="lk-stat__val">${value}</div>
+      <div class="lk-stat__sub">${issueFilter.status===key?'Showing these':sub}</div>
+    </div>`;
+
+  const mkRow = (i) => {
+    const k  = KIND[i.kind];
+    const bk = _issBucket(i.status);
+    return `<div class="iss-row">
+      <div class="iss-row__i ${SH[bk]}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${k.svg}</svg>
+      </div>
+      <div class="iss-row__m">
+        <div class="iss-row__top">
+          <span class="iss-row__t">${escHtml(i.title||'Untitled')}</span>
+          <span class="iss-pill ${SH[bk]}">${escHtml(_issStatusLabel(i.status))}</span>
+          ${i.priority?`<span class="iss-pill ${PH[i.priority]||'dh-amber'}">${escHtml(i.priority)} Priority</span>`:''}
+        </div>
+        <div class="iss-row__meta">
+          ${i.roomNo?`<b>Room ${escHtml(i.roomNo)}</b><i>•</i>`:''}
+          <span>${fmtDate(i.date)}</span>
+          ${i.resolved?`<i>•</i><span>Resolved on ${fmtDate(i.resolved)}</span>`:''}
+          ${i.by?`<i>•</i><span>By <b>${escHtml(i.by)}</b></span>`:''}
+        </div>
+        ${i.desc?`<div class="iss-row__d">${escHtml(i.desc)}</div>`:''}
+        ${i.response?`<div class="iss-row__r dh-green"><b>Response:</b> ${escHtml(i.response)}</div>`:''}
+      </div>
+      <div class="iss-row__e">
+        <div class="iss-row__acts">
+          <span class="lk-chip ${k.hue}">${k.label}</span>
+          ${i.status!=='Resolved'?`<button class="lk-act lk-act--icon lk-act--hue dh-green" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></button>`:''}
+          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="lk-act lk-act--icon lk-act--hue dh-amber" onclick="progressMaint('${i.id}')" title="Mark in progress">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></button>`:''}
+          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+        </div>
+        <div class="iss-row__id">Issue ID: <b>${_issSeq(i)}</b></div>
+      </div>
+    </div>`;
+  };
+
+  return `
+  <!-- ══ STAT STRIP ══ -->
+  <div class="lk-stats">
+    ${card('open','dh-red','Open','Needs attention',nOpen,'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>')}
+    ${card('progress','dh-amber','In Progress','Being worked on',nProg,'<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>')}
+    ${card('resolved','dh-green','Resolved','Completed',nDone,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
+    <div class="lk-stat dh-violet" title="Every complaint and maintenance request on record">
+      <div class="lk-stat__top">
+        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
+        <div class="lk-stat__label">Total</div>
+      </div>
+      <div class="lk-stat__val">${all.length}</div>
+      <div class="lk-stat__sub">All issues on record</div>
+    </div>
+  </div>
+
+  <!-- ══ TABS ══ -->
+  <div class="iss-tabs">
+    <button class="iss-tab${tab==='all'?' is-on':''}" onclick="issSetTab('all')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+      All Issues (${all.length})
+    </button>
+    <button class="iss-tab${tab==='maintenance'?' is-on':''}" onclick="issSetTab('maintenance')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${KIND.maintenance.svg}</svg>
+      Maintenance (${mActive} active)
+    </button>
+    <button class="iss-tab${tab==='complaints'?' is-on':''}" onclick="issSetTab('complaints')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${KIND.complaint.svg}</svg>
+      Complaints (${cOpen} open)
+    </button>
+  </div>
+
+  <!-- ══ TOOLBAR + FEED ══ -->
+  <div class="lk-panel">
+    <div class="lk-tools">
+      <div class="lk-search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        <input id="iss-search" placeholder="Search issues, rooms, reporters, issue ID…"
+               value="${escHtml(issueFilter.search)}" oninput="issSearch(this.value)">
+      </div>
+
+      <select class="lk-select${issueFilter.status!=='All'?' is-set':''}" onchange="issSet('status',this.value)" title="Filter by status">
+        <option value="All">All Status</option>
+        <option value="open"     ${issueFilter.status==='open'?'selected':''}>Open</option>
+        <option value="progress" ${issueFilter.status==='progress'?'selected':''}>In Progress</option>
+        <option value="resolved" ${issueFilter.status==='resolved'?'selected':''}>Resolved</option>
+      </select>
+
+      ${tab!=='complaints'?`
+      <select class="lk-select${issueFilter.priority!=='All'?' is-set':''}" onchange="issSet('priority',this.value)" title="Filter by priority — maintenance only">
+        <option value="All">All Priority</option>
+        ${['High','Medium','Low'].map(p=>`<option value="${p}" ${issueFilter.priority===p?'selected':''}>${p}</option>`).join('')}
+      </select>`:''}
+
+      ${roomNums.length?`
+      <select class="lk-select${issueFilter.room!=='All'?' is-set':''}" onchange="issSet('room',this.value)" title="Filter by room">
+        <option value="All">All Rooms</option>
+        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${issueFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
+      </select>`:''}
+
+      <div class="lk-tools__end">
+        ${nActive?`<button class="lk-btn lk-btn--on" onclick="issClearFilters()" title="Clear the toolbar filters">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          Clear<span class="lk-btn__count">${nActive}</span></button>`:''}
+        <select class="lk-select" onchange="issSet('sort',this.value)" title="Sort the feed">
+          <option value="newest"   ${issueFilter.sort==='newest'?'selected':''}>Newest First</option>
+          <option value="oldest"   ${issueFilter.sort==='oldest'?'selected':''}>Oldest First</option>
+          <option value="priority" ${issueFilter.sort==='priority'?'selected':''}>Priority</option>
+        </select>
+        <button class="lk-btn lk-btn--go" onclick="showAddIssueModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Add Issue</button>
+      </div>
+    </div>
+
+    ${_pg.total===0?`
+      <div class="lk-empty">
+        <div class="lk-empty__i"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KIND.maintenance.svg}</svg></div>
+        <div class="lk-empty__t">${all.length===0?'No issues logged yet':nActive?'Nothing matches those filters':'Nothing here'}</div>
+        <div class="lk-empty__s">${all.length===0?'Complaints and maintenance requests will appear here.':nActive?'Try clearing a filter or widening the search.':'This tab has no records.'}</div>
+        ${all.length===0
+          ? `<button class="lk-btn lk-btn--go" onclick="showAddIssueModal()">+ Add Issue</button>`
+          : nActive?`<button class="lk-btn" onclick="issClearFilters()">Clear filters</button>`:''}
+      </div>`
+    : `<div class="iss-list">${_pg.slice.map(mkRow).join('')}</div>
+       ${issPager(_pg)}`}
+  </div>`;
+}
+
+/* ── Issues v5 — toolbar behaviour ───────────────────────────────────────── */
+function issSet(key, val) { issueFilter[key] = val; issueFilter.page = 1; renderPage('issues'); }
+const issSearch = debounce(function (v) { issSet('search', v); }, 220);
+function issSetTab(t) {
+  issuesTab = t;
+  // Priority only exists on maintenance — leaving a stale one set would silently
+  // empty the complaints tab with no visible control to undo it.
+  if (t === 'complaints') issueFilter.priority = 'All';
+  issueFilter.page = 1;
+  renderPage('issues');
+}
+function issClearFilters() {
+  issueFilter.search = ''; issueFilter.status = 'All';
+  issueFilter.priority = 'All'; issueFilter.room = 'All';
+  issSet('page', 1);
+}
+function issPager(pg) {
+  const btn = (label, target, o) => {
+    o = o || {};
+    if (o.disabled) return `<button disabled>${label}</button>`;
+    if (o.active)   return `<button class="is-on">${label}</button>`;
+    return `<button onclick="gotoPage(issueFilter,'issues',${target})">${label}</button>`;
+  };
+  const { page, pages } = pg;
+  let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
+  lo = Math.max(1, hi-4);
+  let nums = '';
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="lk-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
+  if (hi < pages) nums += (hi<pages-1?'<span class="lk-pager__gap">…</span>':'') + btn(String(pages), pages);
+
+  return `<div class="lk-foot">
+    <div class="lk-foot__size">
+      Show
+      <select onchange="issueFilter.pageSize=Number(this.value);issueFilter.page=1;renderPage('issues')">
+        ${[10,25,50,100].map(n=>`<option value="${n}" ${issueFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      entries
+    </div>
+    <div class="lk-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} issue${pg.total!==1?'s':''}</div>
+    <div class="lk-pager">
+      ${btn('«',1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1})}
+      ${nums}
+      ${btn('›',page+1,{disabled:page>=pages})}
+      ${btn('»',pages,{disabled:page>=pages})}
+    </div>
+  </div>`;
 }
 
 function showAddIssueModal() {
@@ -117,7 +322,7 @@ async function saveIssue() {
     if(!title){toast('Enter a title','error');return;}
     if(!DB.maintenance) DB.maintenance=[];
     logActivity('Maintenance Added',title,'Maintenance');
-    DB.maintenance.push({id:'mt_'+uid(),title:title,roomId:(document.getElementById('mt-room')||{}).value||'',
+    DB.maintenance.push({id:'mt_'+uid(),seq:_issNextSeq(DB.maintenance),title:title,roomId:(document.getElementById('mt-room')||{}).value||'',
       priority:(document.getElementById('mt-priority')||{}).value||'Medium',
       description:((document.getElementById('mt-desc')||{}).value||'').trim(),
       date:(document.getElementById('mt-date')||{}).value||today(),status:'Open',resolvedDate:''});
@@ -126,7 +331,7 @@ async function saveIssue() {
     var subj = (document.getElementById('cp-subject')||{}).value||''; subj=subj.trim();
     if(!subj){toast('Enter a subject','error');return;}
     if(!DB.complaints) DB.complaints=[];
-    DB.complaints.push({id:'cp_'+uid(),subject:subj,
+    DB.complaints.push({id:'cp_'+uid(),seq:_issNextSeq(DB.complaints),subject:subj,resolvedDate:'',
       studentId:(document.getElementById('cp-student')||{}).value||'',
       description:((document.getElementById('cp-desc')||{}).value||'').trim(),
       date:(document.getElementById('cp-date')||{}).value||today(),status:'Open',response:''});
@@ -147,7 +352,7 @@ async function resolveComp(id) {
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
     '<button class="btn btn-success" onclick="(async function(){' +
       'var cc=DB.complaints.find(function(x){return x.id===\''+id+'\';});' +
-      'if(cc){cc.status=\'Resolved\';cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
+      'if(cc){cc.status=\'Resolved\';cc.resolvedDate=today();cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
       'await saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
     '})()">Mark Resolved</button>'
   );
