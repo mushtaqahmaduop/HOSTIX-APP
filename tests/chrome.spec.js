@@ -56,7 +56,7 @@ test('the sidebar account menu opens on screen with all of its items', async () 
     () => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 30000 });
   await win.fill('#login-user', 'warden1');
-  await win.fill('#login-input', 'warden1');
+  await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },

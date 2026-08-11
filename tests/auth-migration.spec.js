@@ -56,12 +56,32 @@ async function tryLogin(win, username, password) {
   }, [username, password]);
 }
 
-test.beforeAll(() => {
-  if (!PROFILE) throw new Error('HOSTIX_TEST_PROFILE env var is not set');
+// fs.rmSync(..., { force: true }) swallows EBUSY, so while a just-closed
+// Electron still holds leveldb's LOCK the wipe is a silent no-op. Retry until
+// the directory is really gone, and fail loudly if it never is — a test that
+// inherits the previous test's warden config asserts nothing.
+async function wipeProfileState() {
   for (const f of fs.readdirSync(PROFILE)) {
     if (f.startsWith('hostix.db')) fs.rmSync(path.join(PROFILE, f), { force: true });
   }
-  fs.rmSync(path.join(PROFILE, 'Local Storage'), { recursive: true, force: true });
+  const ls = path.join(PROFILE, 'Local Storage');
+  for (let i = 0; i < 25; i++) {
+    try { fs.rmSync(ls, { recursive: true, force: true }); } catch { /* retry */ }
+    if (!fs.existsSync(ls)) return;
+    await new Promise(r => setTimeout(r, 120));
+  }
+  throw new Error('could not clear ' + ls + ' — an Electron process is still holding it');
+}
+
+test.beforeAll(() => {
+  if (!PROFILE) throw new Error('HOSTIX_TEST_PROFILE env var is not set');
+});
+
+// Was beforeAll, which wiped once for the whole file — so the migration test's
+// legacy config leaked into the test after it. That went unnoticed only because
+// the legacy password and the fresh-install default were the same string.
+test.beforeEach(async () => {
+  await wipeProfileState();
 });
 
 test('an existing two-warden install migrates without losing access', async () => {
@@ -71,10 +91,12 @@ test('an existing two-warden install migrates without losing access', async () =
   await win.waitForLoadState('domcontentloaded');
   await waitForLogin(win);
 
-  // Take the genuine hash of the password 'warden1', then rewrite the stored
-  // config into the OLD shape — exactly what a live client machine holds.
-  const storageKey = await win.evaluate(() => {
-    const realHash = WARDENS.warden1.pw;
+  // Take the genuine hash of the OLD default password (the username), then
+  // rewrite the stored config into the OLD shape — exactly what a live client
+  // machine holds. Hash it explicitly rather than borrowing WARDENS.warden1.pw,
+  // which now hashes DEFAULT_PASSWORD and would make this test assert nothing.
+  const storageKey = await win.evaluate(async () => {
+    const realHash = await hashPassword('warden1');
     const key = Object.keys(localStorage).find(k => k.endsWith('_wardens'));
     const legacy = {
       warden1: { name: 'Faheem Ullah', phone: '0300-1111111',
@@ -132,7 +154,7 @@ test('added users can sign in, and inactive ones cannot', async () => {
   const win = await app.firstWindow();
   await win.waitForLoadState('domcontentloaded');
   await waitForLogin(win);
-  expect(await tryLogin(win, 'warden1', 'warden1')).toBe(true);
+  expect(await tryLogin(win, 'warden1', 'admin123')).toBe(true);
 
   // Add a restricted user through the real save path.
   await win.evaluate(async () => {

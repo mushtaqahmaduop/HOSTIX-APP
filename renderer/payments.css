@@ -152,6 +152,36 @@
               font-size:10.5px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
 .pay-pill svg { flex-shrink:0; }
 
+/* Actions stay pinned to the right edge. The table carries 13 columns and
+   scrolls horizontally, which used to push the row buttons off-screen entirely
+   — there was no way to open, print or delete a payment without scrolling.
+   The header cell needs the higher z-index because thead is already sticky on
+   the vertical axis, so the two sticky contexts overlap in that one corner. */
+.pay-table thead th.pay-col-act,
+.pay-table tbody td.pay-col-act {
+    position:sticky; right:0;
+    background:var(--card);
+    border-left:1px solid var(--border);
+}
+/* --dash-sunk, --dh-bg and the row states are all translucent (ui-kit.css:38
+   is rgba(255,255,255,.055)). Painting a pinned cell with one directly lets the
+   columns scrolling underneath show straight through it — the ACTIONS header
+   printed on top of EXTRA CHRGS. Layering the tint over an opaque --card via a
+   flat gradient keeps the exact same colour while making the cell opaque. */
+.pay-table thead th.pay-col-act {
+    z-index:3;
+    background:linear-gradient(var(--dash-sunk), var(--dash-sunk)) , var(--card);
+}
+.pay-table tbody td.pay-col-act { z-index:1; }
+/* Row states must still win over the pinned cell's own background, or the
+   pinned column stays flat while the rest of the row highlights. */
+.pay-table tbody tr:hover td.pay-col-act {
+    background:linear-gradient(var(--dash-sunk), var(--dash-sunk)) , var(--card);
+}
+.pay-table tbody tr.is-picked td.pay-col-act {
+    background:linear-gradient(var(--dh-bg), var(--dh-bg)) , var(--card);
+}
+
 .pay-acts     { display:flex; align-items:center; gap:5px; }
 .pay-act {
     width:28px; height:28px; border-radius:8px; flex-shrink:0; cursor:pointer;

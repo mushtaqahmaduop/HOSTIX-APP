@@ -146,10 +146,19 @@ const PERMS = [
 ];
 const PERM_KEYS = PERMS.map(p => p.key);
 
+/**
+ * Password a brand-new install seeds its built-in account with.
+ *
+ * Installs created before this was introduced seeded the account's own username
+ * as its password instead, so both count as "default" for the weak-password
+ * warning in checkDefaultPasswords().
+ */
+const DEFAULT_PASSWORD = 'admin123';
+
 /** A brand-new install starts with one full-access account. */
 const _DEFAULT_META = {
   warden1: {
-    username: 'warden1', name: 'Faheem Ullah', phone: '',
+    username: 'warden1', name: 'Hostyllo', phone: '',
     perms: Object.fromEntries(PERM_KEYS.map(k => [k, true])),
     active: true, builtin: true,
   },
@@ -210,7 +219,9 @@ function _migrateUsers(cfg) {
 
 /**
  * Load the user config from localStorage, or build it fresh on first run.
- * Default password on a fresh install = the username.
+ * Default password on a fresh install = DEFAULT_PASSWORD. Only fresh installs
+ * are affected — an existing install returns its stored config untouched above,
+ * so no client's current password ever changes.
  */
 async function _loadWardenConfig() {
   const existing = _getJSON(_key('wardens'));
@@ -222,7 +233,7 @@ async function _loadWardenConfig() {
   // First run — hash default passwords with PBKDF2
   const cfg = {};
   for (const [id, meta] of Object.entries(_DEFAULT_META)) {
-    cfg[id] = { ...meta, pw: await hashPassword(id) };
+    cfg[id] = { ...meta, pw: await hashPassword(DEFAULT_PASSWORD) };
   }
   _setJSON(_key('wardens'), cfg);
   return cfg;
@@ -348,11 +359,18 @@ async function _checkDefaultPasswords() {
   if (sessionStorage.getItem('pw_warned')) return;
   for (const [id, warden] of Object.entries(WARDENS)) {
     try {
-      // The weak default is the account's own username. Checking the storage id
-      // instead only worked while the two were the same string, which stopped
-      // being true once users could be added (their id is generated, e.g. u1a2b3c).
-      const weak = warden.username || id;
-      if (warden.active !== false && await verifyPassword(weak, warden.pw)) {
+      // Two passwords count as default: DEFAULT_PASSWORD (what fresh installs
+      // seed today) and the account's own username (what older installs seeded).
+      // Both populations exist in the field, so both must be warned about.
+      // Checking the storage id instead of the username only worked while the
+      // two were the same string, which stopped being true once users could be
+      // added (their id is generated, e.g. u1a2b3c).
+      const weak = [DEFAULT_PASSWORD, warden.username || id];
+      let isWeak = false;
+      for (const w of weak) {
+        if (await verifyPassword(w, warden.pw)) { isWeak = true; break; }
+      }
+      if (warden.active !== false && isWeak) {
         sessionStorage.setItem('pw_warned', '1');
         setTimeout(() => {
           if (typeof toast === 'function') {

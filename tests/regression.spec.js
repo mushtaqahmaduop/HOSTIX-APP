@@ -40,7 +40,7 @@ async function waitForLoginScreen(win) {
     null, { timeout: 30000 });
 }
 
-async function login(win, password = 'warden1', username = 'warden1') {
+async function login(win, password = 'admin123', username = 'warden1') {
   await waitForLoginScreen(win);
   await win.fill('#login-user', username);
   await win.fill('#login-input', password);
@@ -182,7 +182,7 @@ test('security: clear-all is blocked without the correct warden password', async
   // CORRECT password → the gate passes and clearAllData() opens its final
   // confirmation (proves the password check runs and gates the wipe).
   const afterCorrect = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'warden1';
+    document.getElementById('clear-all-pwd').value = 'admin123';
     await confirmClearAllWithPassword();
     return {
       confirmReached: typeof _pendingConfirmCb === 'function', // clearAllData() showed its confirm
