@@ -298,10 +298,11 @@ function renderPayments() {
           ${th('method','Method')}
           ${th('status','Status')}
           <!-- Secondary money columns sit after Status: they are usually "—", and
-               keeping them left of it pushed the columns that matter off-screen. -->
-          <th>Adm. Fee</th>
-          <th>Extra Chrgs</th>
-          <th>Concession</th>
+               keeping them left of it pushed the columns that matter off-screen.
+               They are hidden until the sidebar is collapsed — see payments.css. -->
+          <th class="pay-col-x">Adm. Fee</th>
+          <th class="pay-col-x">Extra Chrgs</th>
+          <th class="pay-col-x">Concession</th>
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
@@ -349,9 +350,9 @@ function renderPayments() {
               </span>
               ${payIsOverdue(p)?'<div style="font-size:10px;font-weight:700;color:var(--red);margin-top:3px">Overdue</div>':''}
             </td>
-            <td>${admFee>0?`<span class="pay-money">${fmtPKR(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
-            <td>${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtPKR(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
-            <td>${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtPKR(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${admFee>0?`<span class="pay-money">${fmtPKR(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtPKR(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtPKR(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
             <td class="pay-col-act">
               <div class="pay-acts">
                 <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="View / edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg></button>

@@ -215,9 +215,9 @@ function renderRooms() {
       <select class="rms-select${roomFilter.sortKey?' is-set':''}" onchange="setRoomSort(this.value)" title="Sort rooms">
         ${sortOpt('|asc','Sort: Default')}
         ${sortOpt('number|asc','Room # ↑')}
-        ${sortOpt('rent|asc','Rent: Low → High')}
-        ${sortOpt('rent|desc','Rent: High → Low')}
-        ${sortOpt('occupancy|desc','Occupancy: High → Low')}
+        ${sortOpt('rent|asc','Rent ↑')}
+        ${sortOpt('rent|desc','Rent ↓')}
+        ${sortOpt('occupancy|desc','Occupancy ↓')}
         ${sortOpt('floor|asc','Floor ↑')}
       </select>
 

@@ -34,7 +34,7 @@
 .rms-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 .rms-search {
-    display:flex; align-items:center; gap:8px; flex:1 1 200px; min-width:180px; max-width:280px;
+    display:flex; align-items:center; gap:8px; flex:1 1 170px; min-width:150px; max-width:200px;
     height:40px; padding:0 12px; border-radius:11px;
     background:var(--card); border:1px solid var(--border2);
     transition:border-color .15s ease, box-shadow .15s ease;
@@ -48,7 +48,7 @@
 .rms-seg { display:flex; align-items:center; gap:4px; padding:4px; border-radius:12px;
           background:var(--dash-sunk); border:1px solid var(--border); }
 .rms-seg button {
-    height:32px; padding:0 15px; border-radius:9px; cursor:pointer; white-space:nowrap;
+    height:32px; padding:0 12px; border-radius:9px; cursor:pointer; white-space:nowrap;
     background:none; border:none; color:var(--text2);
     font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
 }
@@ -56,7 +56,7 @@
 .rms-seg button.is-on     { background:var(--accent-dim); color:var(--accent-strong); }
 
 .rms-select {
-    height:40px; min-width:132px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
+    height:40px; min-width:118px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
     font-family:var(--font); font-size:13px; font-weight:500;
     appearance:none; -webkit-appearance:none;

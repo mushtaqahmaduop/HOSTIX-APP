@@ -163,6 +163,13 @@
     background:var(--card);
     border-left:1px solid var(--border);
 }
+/* Secondary money columns (Adm. Fee, Extra Chrgs, Concession). Hidden by
+   default so everything through Status fits without horizontal scrolling, then
+   revealed when the sidebar is collapsed via the arrow in its top-left corner —
+   that reclaims ~180px, which is enough for all twelve columns. */
+.pay-table .pay-col-x { display:none; }
+body.sidebar-collapsed .pay-table .pay-col-x { display:table-cell; }
+
 /* --dash-sunk, --dh-bg and the row states are all translucent (ui-kit.css:38
    is rgba(255,255,255,.055)). Painting a pinned cell with one directly lets the
    columns scrolling underneath show straight through it — the ACTIONS header

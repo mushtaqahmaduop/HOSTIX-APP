@@ -205,7 +205,15 @@ function renderDashboard() {
   const availSeats = totalSeats - filledSeats;
   const seatPct = totalSeats>0 ? Math.round(filledSeats/totalSeats*100) : 0;
 
-  // Per-room-type seat breakdown
+  // Per-room-type seat breakdown.
+  // type.color is DATA (owner-configured per room type), not styling — it stays
+  // the literal colour for the icon, the bar fill and the percentage.
+  // _rtTint() builds the pale chip background from it. Only 6-digit hex can take
+  // an alpha suffix; anything else (a stored rgb()/named colour) falls back to
+  // the neutral track colour rather than emitting a broken value.
+  const _rtTint = c => (/^#[0-9a-f]{6}$/i.test(String(c||'')) ? c + '22' : 'var(--dash-track)');
+  const _rtBed = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>`;
+
   let seatBreakdown = '';
   DB.settings.roomTypes.forEach(type => {
     const tRooms = DB.rooms.filter(r=>r.typeId===type.id);
@@ -213,15 +221,13 @@ function renderDashboard() {
     const typeFilledSeats = DB.students.filter(t=>t.status==='Active'&&!t.isForced&&tRooms.some(r=>r.id===t.roomId)).length;
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
-    // type.color is DATA (owner-configured per room type), not styling — it
-    // stays as the literal colour for the dot and the fill.
     seatBreakdown += `
-      <div class="dash-rt" title="${escHtml(type.name)} — ${typeFilledSeats}/${typeTotalSeats} seats filled, ${typeAvail} free">
-        <span class="dash-rt__dot" style="background:${escHtml(type.color)}"></span>
-        <span class="dash-rt__name">${escHtml(type.name)}</span>
-        <span class="dash-rt__meta">${tRooms.length} room${tRooms.length===1?'':'s'}</span>
-        <span class="dash-rt__bar"><i style="width:${typePct}%;background:${escHtml(type.color)}"></i></span>
-        <span class="dash-rt__pct">${typePct}%</span>
+      <div class="rt-row" title="${escHtml(type.name)} — ${typeFilledSeats}/${typeTotalSeats} seats filled, ${typeAvail} free">
+        <span class="rt-row__ic" style="background:${escHtml(_rtTint(type.color))};color:${escHtml(type.color)}">${_rtBed}</span>
+        <span class="rt-row__name">${escHtml(type.name)}</span>
+        <span class="rt-row__rooms">${tRooms.length} room${tRooms.length===1?'':'s'}</span>
+        <span class="rt-row__bar"><i style="width:${typePct}%;background:${escHtml(type.color)}"></i></span>
+        <span class="rt-row__pct" style="color:${typePct>0?escHtml(type.color):'var(--text)'}">${typePct}%</span>
       </div>`;
   });
 
@@ -461,18 +467,53 @@ function renderDashboard() {
   <div class="dash-split">
   <div class="dash-sec">
     <div class="dash-sec__head" style="margin-bottom:4px">
-      <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
-      <span class="dash-sec__title">By Room Type</span>
-      <span class="dash-pill dh-slate" style="margin-left:auto">${seatPct}% full</span>
-    </div>
-    <div style="display:grid;grid-template-columns:150px 1fr;gap:18px;padding:8px 0;align-items:center">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <canvas id="dash-roomtype-donut" width="280" height="280" style="width:140px;height:140px"></canvas>
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:8px">${filledSeats}<span style="color:var(--text3);font-weight:500">/${totalSeats}</span> <span style="font-size:10px;color:var(--text3);font-weight:500">seats</span></div>
+      <div class="dash-chip dh-blue" style="width:34px;height:34px;border-radius:10px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:17px;height:17px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+      <div style="min-width:0">
+        <div class="dash-sec__title">Occupancy by Room Type</div>
+        <div class="dash-sec__sub">Overview of seat occupancy by room type</div>
       </div>
-      <div>
+      <span class="rt-full ${seatPct>=90?'is-high':''}" style="margin-left:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
+        ${seatPct}% Full
+      </span>
+    </div>
+
+    <div class="rt-body">
+      <div class="rt-left">
+        <div class="rt-donut">
+          <!-- No width/height attributes: the chart is responsive:true, so
+               Chart.js sizes the backing store to this box and to the device
+               pixel ratio itself. Hard-coding them made it lay out against the
+               attribute size and draw the ring smaller than, and off-centre in,
+               its container. -->
+          <canvas id="dash-roomtype-donut"></canvas>
+          <div class="rt-donut__c">
+            <div class="rt-donut__n">${filledSeats}<span>/${totalSeats}</span></div>
+            <div class="rt-donut__l">Seats Occupied</div>
+          </div>
+        </div>
+        <div class="rt-stat">
+          <span class="rt-stat__ic dh-blue"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3-4-5-8-5Z"/></svg></span>
+          <div class="rt-stat__c"><b>${filledSeats}</b><span>Occupied</span></div>
+          <div class="rt-stat__sep"></div>
+          <div class="rt-stat__c"><b>${totalSeats}</b><span>Total Seats</span></div>
+        </div>
+        <div class="rt-avail"><i></i><b>${availSeats}</b> Seats Available</div>
+      </div>
+
+      <div class="rt-right">
+        <div class="rt-list__hd">
+          <span>Room Type</span>
+          <span class="rt-list__hd-rooms">Rooms</span>
+          <span class="rt-list__hd-occ">Occupancy</span>
+        </div>
         ${seatBreakdown}
       </div>
+    </div>
+
+    <div class="rt-note">
+      <span class="rt-note__ic"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 5a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7Zm1.5 10h-3a1 1 0 0 1 0-2h.5v-3h-.5a1 1 0 0 1 0-2H12a1 1 0 0 1 1 1v4h.5a1 1 0 0 1 0 2Z"/></svg></span>
+      Occupancy percentage is calculated based on available seats in each room type.
     </div>
   </div>
   <!-- PENDING PAYMENTS -->
@@ -1289,6 +1330,10 @@ function drawRoomDonut() {
     }
   });
 
+  // Separate the segments with the card colour rather than a fixed white, so the
+  // ring reads the same in both themes. theme.js already re-runs this on toggle.
+  var cardBg = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#161616';
+
   _dashDonutChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: {
@@ -1296,14 +1341,16 @@ function drawRoomDonut() {
       datasets: [{
         data: data,
         backgroundColor: colors,
-        borderWidth: 0,
+        borderWidth: 3,
+        borderColor: cardBg,
         hoverOffset: 5
       }]
     },
     options: {
-      cutout: '68%',
-      responsive: false,
+      cutout: '64%',
+      responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: 2 },
       animation: false,
       plugins: {
         legend: { display: false },

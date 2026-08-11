@@ -62,7 +62,7 @@
 .lk-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; }
 .lk-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .lk-search {
-    display:flex; align-items:center; gap:8px; flex:1 1 220px; min-width:190px; max-width:330px;
+    display:flex; align-items:center; gap:8px; flex:1 1 170px; min-width:150px; max-width:300px;
     height:40px; padding:0 12px; border-radius:11px;
     background:var(--card); border:1px solid var(--border2);
     transition:border-color .15s ease, box-shadow .15s ease;
@@ -73,7 +73,7 @@
 .lk-search input::placeholder { color:var(--text3); }
 
 .lk-select {
-    height:40px; min-width:132px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
+    height:40px; min-width:118px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
     font-family:var(--font); font-size:13px; font-weight:500;
     appearance:none; -webkit-appearance:none;
@@ -101,7 +101,7 @@
 .lk-range { display:flex; align-items:center; gap:8px; height:40px; padding:0 12px; border-radius:11px;
             background:var(--card); border:1px solid var(--border2); }
 .lk-range input {
-    width:84px; background:none; border:none; outline:none; cursor:pointer;
+    width:76px; background:none; border:none; outline:none; cursor:pointer;
     color:var(--text); font-family:var(--font); font-size:12.5px; font-variant-numeric:tabular-nums;
 }
 .lk-range svg  { color:var(--text3); flex-shrink:0; }
