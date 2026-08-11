@@ -730,7 +730,7 @@ function showUserEditor(id) {
     + '<div class="field"><label style="font-size:11px">Username</label>'
     + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="e.g. faheem"></div>'
     + '<div class="field"><label style="font-size:11px">' + (isNew ? 'Password' : 'New Password') + '</label>'
-    + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least 4 characters' : 'Leave blank to keep current') + '"></div>'
+    + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least ' + AUTH_CFG.minPwLen + ' characters' : 'Leave blank to keep current') + '"></div>'
     + '<div class="field"><label style="font-size:11px">WhatsApp Number</label>'
     + '<input id="u-phone" class="form-control" value="' + escHtml(u.phone || '') + '" placeholder="03XX-XXXXXXX"></div>'
     + '</div>'
