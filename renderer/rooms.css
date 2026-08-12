@@ -171,3 +171,145 @@
 
 .rms-empty { padding:52px 20px; text-align:center; color:var(--text3); font-size:13px; }
 .rms-empty svg { color:var(--text3); opacity:.5; margin-bottom:12px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADD / EDIT ROOM MODAL  ·  `arm-*`
+   Owner reference design: the "Add New Room" mockup.
+
+   The old markup reached for `.forms-grid` / `.forms-control`, which are not
+   defined anywhere in the app — a two-letter typo for `.form-grid` /
+   `.form-control`. That is why this modal rendered as a bare stack of browser
+   default controls. Rather than fix the typo and inherit the generic form
+   look, the modal gets its own scoped surface here.
+
+   `arm-` = Add Room Modal. No existing selector is redefined (rule 7).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Rich modal heading (icon tile + title + subtitle) ───────────────────── */
+.arm-head      { display:flex; align-items:center; gap:14px; }
+.arm-head__ico {
+    width:44px; height:44px; border-radius:13px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--accent-dim); color:var(--accent-strong);
+}
+.arm-head__t   { display:block; font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text); line-height:1.2; }
+.arm-head__s   { display:block; margin-top:2px; font-size:12.5px; font-weight:500; color:var(--text3);
+                 font-family:var(--font); letter-spacing:0; }
+
+/* ── Body layout ─────────────────────────────────────────────────────────── */
+.arm        { display:flex; flex-direction:column; gap:14px; }
+.arm-split  { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
+.arm-card   { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+
+.arm-label  { display:block; font-size:13px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.arm-label i { font-style:normal; color:#ef4444; margin-left:2px; }
+.arm-hint   { margin-top:7px; font-size:11.5px; color:var(--text3); line-height:1.45; }
+
+/* ── Guide banner ────────────────────────────────────────────────────────── */
+.arm-guide {
+    display:flex; gap:12px; align-items:flex-start;
+    padding:14px 16px; border-radius:14px;
+    background:var(--accent-dim); border:1px solid var(--border);
+}
+.arm-guide__ico { color:var(--accent-strong); flex-shrink:0; margin-top:1px; }
+.arm-guide__t   { font-size:13px; font-weight:700; color:var(--accent-strong); margin-bottom:3px; }
+.arm-guide__b   { font-size:12.5px; color:var(--text2); line-height:1.5; }
+
+/* ── Input shells ────────────────────────────────────────────────────────── */
+.arm-input {
+    display:flex; align-items:stretch; gap:0; min-width:0;
+    border:1px solid var(--border2); border-radius:12px; overflow:hidden;
+    background:var(--card); transition:border-color .15s ease, box-shadow .15s ease;
+}
+.arm-input:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.arm-input.is-area      { align-items:stretch; }
+
+.arm-input__ico {
+    width:44px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+    border-right:1px solid var(--border);
+}
+.arm-input.is-area .arm-input__ico { align-items:flex-start; padding-top:12px; }
+
+.arm-input > input,
+.arm-input > select,
+.arm-input > textarea {
+    flex:1; min-width:0; width:100%;
+    background:none; border:none; outline:none;
+    padding:0 13px; height:44px;
+    color:var(--text); font-family:var(--font); font-size:13.5px; font-weight:600;
+}
+.arm-input > input::placeholder,
+.arm-input > textarea::placeholder { color:var(--text3); font-weight:500; }
+.arm-input > textarea {
+    height:auto; min-height:82px; padding:12px 13px; resize:vertical;
+    font-weight:500; line-height:1.5;
+}
+.arm-input > select {
+    cursor:pointer; padding-right:34px; appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 13px center;
+}
+.arm-input > #f-rnum { letter-spacing:.5px; }
+
+/* Read-only preview of the value that will actually be saved. */
+.arm-input.is-readonly { background:var(--dash-sunk); }
+.arm-code {
+    display:flex; align-items:center; flex:1; min-width:0;
+    padding:0 13px; height:44px;
+    font-family:var(--font-mono, ui-monospace, monospace);
+    font-size:14px; font-weight:700; letter-spacing:.5px; color:var(--text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.arm-code.is-empty { color:var(--text3); font-weight:500; letter-spacing:0; }
+
+/* ── Amenity picker ──────────────────────────────────────────────────────── */
+.arm-amen-head { display:flex; align-items:baseline; gap:8px; margin-bottom:12px; }
+.arm-amen-head__t     { font-size:13px; font-weight:700; color:var(--text); }
+.arm-amen-head__hint  { font-size:11.5px; color:var(--text3); }
+.arm-amen-head__count { margin-left:auto; font-size:11.5px; font-weight:600; color:var(--accent-strong); }
+
+.arm-amen-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+
+.arm-amen {
+    position:relative; display:flex; align-items:center; gap:9px; min-width:0;
+    height:44px; padding:0 12px 0 10px; border-radius:12px; cursor:pointer;
+    background:var(--card); border:1px solid var(--border2);
+    transition:border-color .15s ease, background .15s ease;
+}
+.arm-amen:hover  { border-color:var(--border); background:var(--dash-sunk); }
+.arm-amen.is-on  { border-color:var(--accent); background:var(--accent-dim); }
+.arm-amen input[type=checkbox] { position:absolute; opacity:0; width:0; height:0; pointer-events:none; }
+
+.arm-amen__tick {
+    width:20px; height:20px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    border:1.5px solid var(--border2); background:var(--card);
+    color:transparent; transition:var(--transition);
+}
+.arm-amen.is-on .arm-amen__tick { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+.arm-amen__ico {
+    width:26px; height:26px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.arm-amen__txt {
+    flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--text2);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.arm-amen.is-on .arm-amen__txt { color:var(--text); }
+
+.arm-amen__free {
+    flex:1; min-width:0; background:none; border:none; outline:none;
+    color:var(--text); font-family:var(--font); font-size:12.5px; font-weight:600;
+    cursor:text;
+}
+.arm-amen__free::placeholder { color:var(--text3); font-weight:600; }
+
+/* ── Narrow windows ──────────────────────────────────────────────────────── */
+@media (max-width:900px) {
+    .arm-split     { grid-template-columns:1fr; }
+    .arm-amen-grid { grid-template-columns:repeat(2,1fr); }
+}

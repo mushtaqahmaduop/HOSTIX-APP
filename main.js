@@ -380,7 +380,9 @@ function openLicenseSettings() {
     return;
   }
   _settingsWin = new BrowserWindow({
-    width: 720, height: 700,
+    // Widened with the v6 redesign: the page is a 660px column plus padding,
+    // and the licence-facts strip is a 3-up grid that cramps below ~760.
+    width: 780, height: 760,
     parent: mainWindow,
     modal: false,
     title: 'License Settings — HOSTIX',

@@ -38,7 +38,6 @@ function studentsFiltered() {
     name:   t => t.name,
     room:   t => { const r = byId.get(t.roomId); return Number(r ? r.number : 0) || 0; },
     course: t => t.occupation || t.course || '',
-    rent:   t => Number(t.rent || 0),
     status: t => t.status
   });
 }
@@ -214,12 +213,11 @@ function renderStudents() {
           <th>Contact / Emergency</th>
           <th>CNIC</th>
           ${th('course','Course')}
-          ${th('rent','Rent/Mo')}
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="10"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="9"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -250,7 +248,6 @@ function renderStudents() {
             </td>
             <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
-            <td><div class="stu-money"><small>PKR</small>${fmtNum(t.rent)}</div></td>
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
             <td>
               <div class="stu-acts">
@@ -347,15 +344,13 @@ function _stuWriteCsv(list, filename) {
   const byId = _stuRoomMap();
   const rows = [['ID','Name','Father Name','Room','Floor','Phone','Emergency Contact',
                  'Emergency Phone','CNIC','Date of Birth','Gender','Nationality','Address',
-                 'Course','Session','Blood Group','Rent/Mo','Admission Fee','Security Deposit',
-                 'Discount','Join Date','Status']];
+                 'Course','Session','Blood Group','Join Date','Status']];
   list.forEach(t => {
     const r = byId.get(t.roomId);
     rows.push([t.id, t.name||'', t.fatherName||'', r?'#'+r.number:'', r?r.floor:'',
       t.phone||'', t.emergencyContact||'', t.emergencyPhone||'', t.cnic||'',
       t.dob||'', t.gender||'', t.nationality||'', t.address||'',
       t.occupation||t.course||'', t.session||'', t.bloodGroup||'',
-      t.rent||0, t.admissionFee||0, t.deposit||0, t.discount||0,
       t.joinDate||'', t.status||'Active']);
   });
   downloadCSV(rows, filename);
@@ -390,8 +385,6 @@ function renderAddStudent() {
   const allRooms = roomsByNumber(DB.rooms);
   const preset = presetRoomId ? DB.rooms.find(r=>r.id===presetRoomId) : null;
   const presetType = preset ? getRoomType(preset) : null;
-  const defaultRent = preset ? (parseFloat(preset.rent)||presetType?.defaultRent||16000)
-                             : (DB.settings.roomTypes[0]?.defaultRent||16000);
   const presetLabel = preset ? 'Room #'+preset.number+' · '+(presetType?presetType.name:'')+' · '+(preset.floor||'')+' Floor' : '';
 
   const sel = (id, label, opts, cur, req) => `
@@ -545,13 +538,17 @@ function renderAddStudent() {
                 const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
                 const isFull = occ>=rt.capacity;
                 const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
-                return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+(parseFloat(r.rent)||16000)+'"'
+                // Show the monthly charge on each room so the warden sees the
+                // price from Settings while picking, not first at the payment step.
+                const rc=resolveCharges({roomId:r.id});
+                return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+rc.rent+'"'
                   +' data-label="'+escHtml(lbl)+'"'
-                  +' onmousedown="pickRoomSearch(\''+r.id+'\','+(parseFloat(r.rent)||16000)+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
+                  +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
                   +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
                   +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
                   +occ+'/'+rt.capacity+(isFull?' · FULL':' · '+free+' free')+'</span>'
-                  +'<div><span>'+fmtPKR(parseFloat(r.rent)||0)+'/mo</span></div></div></div>';
+                  +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
+                  +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
               }).join('')}
               ${allRooms.length===0?'<div class="sf-drop-item"><span>No rooms configured</span></div>':''}
             </div>
@@ -568,22 +565,6 @@ function renderAddStudent() {
           <input class="sf-in" id="f-texpstay" type="date"></div>
       </div>
 
-      <div class="sf-grid sf-grid--5" style="margin-top:14px">
-        <div class="sf-f"><label for="f-tadmfee">Admission Fee</label>
-          <div style="display:flex"><span class="sf-prefix">PKR</span>
-            <input class="sf-in" id="f-tadmfee" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
-        <div class="sf-f"><label for="f-tdeposit">Security Deposit</label>
-          <div style="display:flex"><span class="sf-prefix">PKR</span>
-            <input class="sf-in" id="f-tdeposit" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
-        <div class="sf-f"><label for="f-trent">Monthly Rent<span class="req">*</span></label>
-          <div style="display:flex"><span class="sf-prefix">PKR</span>
-            <input class="sf-in" id="f-trent" type="number" min="0" value="${defaultRent}" oninput="sfRecalcTotal()"></div></div>
-        <div class="sf-f"><label for="f-tdiscount">Discount</label>
-          <div style="display:flex"><span class="sf-prefix">PKR</span>
-            <input class="sf-in" id="f-tdiscount" type="number" min="0" value="0" oninput="sfRecalcTotal()"></div></div>
-        <div class="sf-f"><label>Total Payable</label>
-          <div class="sf-total" id="f-ttotal">PKR ${fmtNum(defaultRent)}</div></div>
-      </div>
       <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">
     </div>
 
@@ -633,14 +614,6 @@ function sfBedOptions(room) {
   return out;
 }
 
-// Total payable = rent + admission + deposit − discount. Never below zero.
-function sfRecalcTotal() {
-  const n = id => parseFloat(document.getElementById(id)?.value) || 0;
-  const total = Math.max(0, n('f-trent') + n('f-tadmfee') + n('f-tdeposit') - n('f-tdiscount'));
-  const el = document.getElementById('f-ttotal');
-  if (el) el.textContent = 'PKR ' + fmtNum(total);
-}
-
 function sfCount() {
   const ta = document.getElementById('f-tnotes'), el = document.getElementById('f-tnotes-count');
   if (ta && el) el.textContent = ta.value.length + '/250';
@@ -670,12 +643,17 @@ function sfDropPhoto(ev) {
 async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   const name=document.getElementById('f-tname').value.trim();
   const roomId=document.getElementById('f-troom').value;
-  // Derive rent from selected room if hidden input not yet updated
+  // Rent is a property of the room, not of the student form — the form no
+  // longer asks for it. resolveCharges() walks room → room type → Settings.
+  // Payments owns money; admission only records which room was taken.
   const selectedRoomForRent = DB.rooms.find(r=>r.id===roomId);
-  const rentFromRoom = selectedRoomForRent ? (parseFloat(selectedRoomForRent.rent)||DB.settings.roomTypes[0]?.defaultRent||16000) : (DB.settings.roomTypes[0]?.defaultRent||16000);
-  const rentEl = document.getElementById('f-trent');
-  const rent = parseFloat(rentEl?.value) || rentFromRoom;
-  if(!name||!roomId||!rent){toast('Fill all required fields','error');return;}
+  const admitCharges = resolveCharges({ roomId });
+  const rent = admitCharges.rent;
+  if(!name||!roomId){toast('Fill all required fields','error');return;}
+  if(!admitCharges.configured){
+    toast('That room has no rent configured — set it in Settings → Rent & Mess first','error');
+    return;
+  }
   const joinDate = document.getElementById('f-tjoin').value || today();
   const payMethod = document.getElementById('f-tpm').value;
   // Small readers so a field the form does not currently render (or a partly
@@ -689,6 +667,12 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
     phone:_v('f-tphone'), email:getEmailValue(),
     occupation: _v('f-tocc'),
     roomId, rent,
+    // Mess starts from the room type's configured food charge and is on by
+    // default; Settings → Rent & Mess is where it gets turned off for a
+    // student who takes the room only. 0 on a hostel that has not split its
+    // charge, so admissions behave exactly as before until it is configured.
+    mess: admitCharges.mess,
+    messOptIn: true,
     deposit: _n('f-tdeposit'),
     admissionFee: _n('f-tadmfee'),
     discount: _n('f-tdiscount'),
@@ -756,10 +740,9 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
   }
 }
 
-// Opens the Add Payment modal and pre-selects the newly added student
+// Opens the Add Payment page with the newly added student already selected.
 function openPaymentForNewStudent(studentId) {
-  showAddPaymentModal();
-  setTimeout(function(){ selectStudentForPayment(studentId); }, 120);
+  openAddPayment(studentId);
 }
 // ── Student-view modal return helpers ────────────────────────────────────
 // _returnStudentId — defined in src/receipt.js
@@ -783,153 +766,166 @@ function showViewStudentModal(id) {
   // Due = only actual unpaid remainder
   const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const av=t.name?t.name[0].toUpperCase():'?';
+  const paidCount=payHistory.filter(p=>p.status==='Paid').length;
+  // Admission fee is stored on the payment that collected it, under either key
+  // depending on the app version that wrote the row.
+  const admPaid=payHistory.reduce((s,p)=>s+Number(p.admissionFee||p.fee||0),0);
+
+  // One row of the Personal Information / Room & Accommodation lists. `act`
+  // is an optional trailing affordance (call / mail) shown only when there is
+  // a value to act on.
+  const infoRow=(k,v,act)=>`<div class="svw-row">
+      <span class="svw-row__k">${escHtml(k)}</span>
+      <span class="svw-row__v${(v===null||v===undefined||v==='')?' is-empty':''}">${(v===null||v===undefined||v==='')?'—':escHtml(String(v))}</span>
+      ${act&&v?`<span class="svw-row__act">${act}</span>`:''}
+    </div>`;
+
   showModal('modal-xl',``,`
-    <!-- PROFILE HEADER -->
-    <div style="background:linear-gradient(135deg,var(--bg3),var(--bg4));border-radius:12px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;border:1px solid var(--border2)">
-      <div style="width:72px;height:72px;border-radius:18px;background:var(--bg2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;color:var(--accent);flex-shrink:0;overflow:hidden">
-        ${t.docs?.photo ? `<img src="${t.docs.photo}" style="width:100%;height:100%;object-fit:cover">` : av}
-      </div>
-      <div style="flex:1">
-        <div style="font-size:22px;font-weight:800;color:var(--text);line-height:1.2">${escHtml(t.name)}</div>
-        <div style="font-size:12px;color:var(--text3);font-family:var(--font-mono);margin-top:3px">#${escHtml(t.id)}</div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          ${statusBadge(t.status||'Active')}
-          ${room?`<span class="badge badge-gold">Room #${room.number} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
-          <span class="badge badge-blue">${escHtml(t.paymentMethod||'Cash')}</span>
+    <div class="svw">
+
+      <!-- PROFILE HEADER -->
+      <div class="svw-hero">
+        <div class="svw-hero__av">
+          ${t.docs?.photo ? `<img src="${t.docs.photo}" alt="">` : escHtml(av)}
+        </div>
+        <div class="svw-hero__id">
+          <div class="svw-hero__name">${escHtml(t.name)}</div>
+          <div class="svw-hero__no">#${escHtml(t.id)}</div>
+          <div class="svw-hero__tags">
+            ${statusBadge(t.status||'Active')}
+            ${room?`<span class="badge badge-blue">Room #${escHtml(String(room.number))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
+            <span class="badge badge-gray">${escHtml(t.paymentMethod||'Cash')}</span>
+          </div>
+        </div>
+        <div class="svw-hero__rent">
+          <div class="svw-hero__rentk">Monthly Rent</div>
+          <div class="svw-hero__rentv">${fmtPKR(t.rent||0)}</div>
+          <div class="svw-hero__rents">Admission paid: ${fmtPKR(admPaid)}</div>
         </div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Monthly Rent</div>
-        <div>${moneyValue(t.rent,{size:"display",color:"var(--green)"})}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Adm. Paid: ${fmtPKR(t.deposit||0)}</div>
-      </div>
-    </div>
 
-    <!-- STATS ROW -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Paid</div>
-        <div style="font-size:20px;font-weight:800;color:var(--green)">${fmtPKR(totalPaid)}</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Outstanding</div>
-        <div style="font-size:20px;font-weight:800;color:${totalDue>0?'var(--red)':'var(--green)'}">${fmtPKR(totalDue)}</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Join Date</div>
-        <div style="font-size:15px;font-weight:700;color:var(--text)">${fmtDate(t.joinDate)}</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Payments Made</div>
-        <div style="font-size:20px;font-weight:800;color:var(--blue)">${payHistory.filter(p=>p.status==='Paid').length}</div>
-      </div>
-    </div>
-
-    <!-- PERSONAL INFO GRID -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('student','sm')} Personal Information</div>
-        ${[['Father / Guardian',t.fatherName],['Occupation / Course',t.occupation],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email Address',t.email],['Emergency Contact',t.emergencyContact]].map(([k,v])=>`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:11.5px;color:var(--text3);flex-shrink:0;width:130px">${k}</span>
-          <span style="font-size:13px;font-weight:600;color:var(--text);text-align:right">${escHtml(v||'—')}</span>
-        </div>`).join('')}
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:14px;display:flex;align-items:center;gap:6px">🏠 Room & Accommodation</div>
-        ${room?[['Room Number','#'+room.number],['Room Type',rtype?.name||'—'],['Floor',room.floor||'—'],['Capacity',rtype?.capacity+' beds'||'—'],['Amenities',(room.amenities||[]).join(', ')||'—'],['Room Notes',room.notes||'None']].map(([k,v])=>`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:11.5px;color:var(--text3);flex-shrink:0;width:130px">${k}</span>
-          <span style="font-size:13px;font-weight:600;color:var(--text);text-align:right">${escHtml(String(v))}</span>
-        </div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No room assigned</div>'}
-      </div>
-    </div>
-
-    ${t.notes?`<div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.25);border-radius:10px;padding:14px;margin-bottom:20px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:6px">📝 Notes</div><div style="font-size:13px;color:var(--text2)">${escHtml(t.notes)}</div></div>`:''}
-
-    <!-- PAYMENT HISTORY TABLE -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue)">💳 Full Payment History (${payHistory.length} records)</div>
-        <div style="display:flex;gap:6px">
-          <span style="font-size:12px;color:var(--green)">Paid: ${fmtPKR(totalPaid)}</span>
-          ${totalDue>0?`<span style="font-size:12px;color:var(--red)">Due: ${fmtPKR(totalDue)}</span>`:''}
+      <!-- STATS ROW -->
+      <div class="svw-stats">
+        <div class="svw-stat dh-green">
+          <span class="svw-stat__ico">${icon('wallet','sm')}</span>
+          <span><span class="svw-stat__k">Total Paid</span><span class="svw-stat__v">${fmtPKR(totalPaid)}</span></span>
+        </div>
+        <div class="svw-stat ${totalDue>0?'dh-red':'dh-green'}">
+          <span class="svw-stat__ico">${icon('receipt','sm')}</span>
+          <span><span class="svw-stat__k">Outstanding</span><span class="svw-stat__v">${fmtPKR(totalDue)}</span></span>
+        </div>
+        <div class="svw-stat dh-blue">
+          <span class="svw-stat__ico">${icon('calendar','sm')}</span>
+          <span><span class="svw-stat__k">Join Date</span><span class="svw-stat__v is-text">${fmtDate(t.joinDate)||'—'}</span></span>
+        </div>
+        <div class="svw-stat dh-violet">
+          <span class="svw-stat__ico">${icon('card','sm')}</span>
+          <span><span class="svw-stat__k">Payments Made</span><span class="svw-stat__v">${paidCount}</span></span>
         </div>
       </div>
-      ${payHistory.length?(()=>{
-        const _st=DB.students.find(s=>s.id===id);
-        const rows=payHistory.map((p,i)=>{
-          const mRent=p.monthlyRent||p.totalRent||_st?.rent||0;
-          const admFee=Number(p.admissionFee||p.fee||0);
-          const extras=p.extraCharges||[];
-          const conc=Number(p.concession||p.discount||0);
-          let paidCell='<span style="font-weight:800;color:var(--green)">'+fmtPKR(p.amount)+'</span>';
-          if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--blue);font-weight:700;margin-top:2px">🎓 +'+fmtPKR(admFee)+' adm.</div>';
-          extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--amber);font-weight:700;margin-top:1px">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
-          if(conc>0) paidCell+='<div style="font-size:10px;color:var(--red);font-weight:700;margin-top:1px">−'+fmtPKR(conc)+' concession</div>';
-          return '<tr style="border-top:1px solid var(--border);background:'+(i%2?'var(--bg3)':'transparent')+'">'
-          +'<td style="padding:10px 14px;font-weight:600">'+escHtml(p.month||'—')+'</td>'
-          +'<td style="padding:10px 14px;font-weight:800;color:var(--text)">'+(mRent>0?fmtPKR(mRent):'<span style="color:var(--text3)">—</span>')+'</td>'
-          +'<td style="padding:10px 14px;font-weight:700;color:var(--teal)">'+(conc>0?'−'+fmtPKR(conc):'<span style="color:var(--text3)">—</span>')+'</td>'
-          +'<td style="padding:10px 14px">'+paidCell+'</td>'
-          +'<td style="padding:10px 14px;font-weight:700;color:'+((p.unpaid||0)>0?'var(--red)':'var(--text3)')+'">'+((p.unpaid||0)>0?fmtPKR(p.unpaid||0):'—')+'</td>'
-          +'<td style="padding:10px 14px">'+pmBadge(p.method)+'</td>'
-          +'<td style="padding:10px 14px">'+statusBadge(p.status)+'</td>'
-          +'<td style="padding:10px 14px;font-size:12px;color:var(--text3)">'+(fmtDate(p.date)||'—')+'</td>'
-          +'<td style="padding:10px 14px"><div style="display:flex;gap:4px">'
-          +(p.status!=='Paid'?`<button class="btn btn-success btn-icon btn-sm" onclick="markPaymentPaidFromStudentView('${p.id}','${id}')" title="Mark Paid" style="font-size:13px">✓</button>`:'')
-          +`<button class="btn btn-secondary btn-icon btn-sm" onclick="printReceiptFromStudentView('${p.id}','${id}')" title="Print Receipt" style="font-size:13px">🧾</button>`
-          +`<button class="btn btn-secondary btn-icon btn-sm" onclick="editPaymentFromStudentView('${p.id}','${id}')" title="Edit Payment" style="font-size:13px">✏️</button>`
-          +`<button class="btn btn-danger btn-icon btn-sm" onclick="deletePaymentFromStudentView('${p.id}','${id}')" title="Delete" style="font-size:13px">🗑</button>`
-          +'</div></td></tr>';
-        }).join('');
-        return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-          +'<thead><tr style="background:var(--bg4)">'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Month</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Monthly Rent</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Concession</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Paid (+Extras)</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Unpaid</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Method</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Status</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Date</th>'
-          +'<th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Actions</th>'
-          +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
-      })():
-      '<div style="padding:24px;text-align:center;color:var(--text3)">No payment records yet</div>'}
-    </div>
 
-    <!-- ROOM SHIFT HISTORY -->
-    ${(()=>{
-      const shifts = (DB.roomShifts||[]).filter(s=>s.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-      if(!shifts.length) return '';
-      return `<div style="background:var(--bg3);border:1px solid rgba(74,156,240,0.3);border-radius:10px;overflow:hidden;margin-top:16px">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue)">🔀 Room Shift History (${shifts.length})</div>
-        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:var(--bg4)">
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Date</th>
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">From Room</th>
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">To Room</th>
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Old Rent</th>
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">New Rent</th>
-          <th style="padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Reason</th>
-        </tr></thead>
-        <tbody>${shifts.map((s,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}">
-          <td style="padding:9px 14px;font-size:12px;color:var(--text3)">${fmtDate(s.date)}</td>
-          <td style="padding:9px 14px"><span class="badge badge-gold">Rm #${s.fromRoomNumber}</span></td>
-          <td style="padding:9px 14px"><span class="badge badge-blue">Rm #${s.toRoomNumber}</span></td>
-          <td style="padding:9px 14px;color:var(--text3);font-size:12px">${fmtPKR(s.oldRent)}</td>
-          <td style="padding:9px 14px;font-weight:700;color:var(--green);font-size:12px">${fmtPKR(s.newRent)}</td>
-          <td style="padding:9px 14px;font-size:12px;color:var(--text2)">${escHtml(s.reason||'—')}</td>
-        </tr>`).join('')}</tbody>
-        </table></div>
-      </div>`;
-    })()}
+      <!-- PERSONAL INFO GRID -->
+      <div class="svw-split">
+        <div class="svw-card">
+          <div class="svw-card__head dh-violet"><span class="svw-card__ico">${icon('student','sm')}</span> Personal Information</div>
+          ${infoRow('Father / Guardian',t.fatherName)}
+          ${infoRow('Occupation / Course',t.occupation)}
+          ${infoRow('CNIC / ID',t.cnic)}
+          ${infoRow('Nationality',t.nationality)}
+          ${infoRow('Phone Number',t.phone,icon('phone','xs'))}
+          ${infoRow('Email Address',t.email,icon('mail','xs'))}
+          ${infoRow('Emergency Contact',t.emergencyContact,icon('phone','xs'))}
+        </div>
+        <div class="svw-card">
+          <div class="svw-card__head dh-blue"><span class="svw-card__ico">${icon('home','sm')}</span> Room &amp; Accommodation</div>
+          ${room?[
+            infoRow('Room Number','#'+room.number),
+            infoRow('Room Type',rtype?.name),
+            infoRow('Floor',room.floor),
+            infoRow('Capacity',rtype?.capacity?rtype.capacity+' bed'+(rtype.capacity===1?'':'s'):''),
+            infoRow('Amenities',(room.amenities||[]).join(', ')),
+            infoRow('Room Notes',room.notes)
+          ].join('') : '<div class="svw-none">No room assigned</div>'}
+        </div>
+      </div>
+
+      ${t.notes?`<div class="svw-note">
+        <span class="svw-note__ico">${icon('fileText','sm')}</span>
+        <div><div class="svw-note__k">Notes</div><div class="svw-note__v">${escHtml(t.notes)}</div></div>
+      </div>`:''}
+
+      <!-- PAYMENT HISTORY TABLE -->
+      <div class="svw-card svw-card--flush">
+        <div class="svw-card__head dh-blue svw-card__head--bar">
+          <span class="svw-card__ico">${icon('card','sm')}</span>
+          <span>Full Payment History (${payHistory.length} record${payHistory.length===1?'':'s'})</span>
+          <span class="svw-card__meta">Total paid: <b>${fmtPKR(totalPaid)}</b>${totalDue>0?` · <b class="is-due">Due ${fmtPKR(totalDue)}</b>`:''}</span>
+        </div>
+        ${payHistory.length?(()=>{
+          const rows=payHistory.map(p=>{
+            const mRent=p.monthlyRent||p.totalRent||t.rent||0;
+            const admFee=Number(p.admissionFee||p.fee||0);
+            const extras=p.extraCharges||[];
+            const conc=Number(p.concession||p.discount||0);
+            let paidCell='<span class="svw-paid">'+fmtPKR(p.amount)+'</span>';
+            if(admFee>0) paidCell+='<span class="svw-sub is-adm">+'+fmtPKR(admFee)+' admission</span>';
+            extras.forEach(c=>{paidCell+='<span class="svw-sub is-extra">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</span>';});
+            if(conc>0) paidCell+='<span class="svw-sub is-conc">−'+fmtPKR(conc)+' concession</span>';
+            return '<tr>'
+            +'<td class="svw-t__month">'+escHtml(p.month||'—')+'</td>'
+            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+'</td>'
+            +'<td class="svw-t__conc">'+(conc>0?'−'+fmtPKR(conc):'<span class="is-empty">—</span>')+'</td>'
+            +'<td>'+paidCell+'</td>'
+            +'<td class="svw-t__unpaid'+((p.unpaid||0)>0?' is-due':'')+'">'+((p.unpaid||0)>0?fmtPKR(p.unpaid||0):'<span class="is-empty">—</span>')+'</td>'
+            +'<td>'+pmBadge(p.method)+'</td>'
+            +'<td>'+statusBadge(p.status)+'</td>'
+            +'<td class="svw-t__date">'+(fmtDate(p.date)||'—')+'</td>'
+            +'<td><div class="svw-t__acts">'
+            +(p.status!=='Paid'?`<button class="svw-ia is-ok" onclick="markPaymentPaidFromStudentView('${p.id}','${id}')" title="Mark Paid">${icon('checkmark','xs')}</button>`:'')
+            +`<button class="svw-ia" onclick="printReceiptFromStudentView('${p.id}','${id}')" title="Print Receipt">${icon('receipt','xs')}</button>`
+            +`<button class="svw-ia" onclick="editPaymentFromStudentView('${p.id}','${id}')" title="Edit Payment">${icon('edit','xs')}</button>`
+            +`<button class="svw-ia is-danger" onclick="deletePaymentFromStudentView('${p.id}','${id}')" title="Delete">${icon('trash','xs')}</button>`
+            +'</div></td></tr>';
+          }).join('');
+          return `<div class="svw-tw"><table class="svw-t">
+            <thead><tr>
+              <th>Month</th><th>Monthly Rent</th><th>Concession</th><th>Paid (+Extras)</th>
+              <th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th>
+            </tr></thead>
+            <tbody>${rows}</tbody></table></div>
+            <div class="svw-tfoot">Showing ${payHistory.length} of ${payHistory.length} record${payHistory.length===1?'':'s'}</div>`;
+        })():
+        '<div class="svw-none">No payment records yet</div>'}
+      </div>
+
+      <!-- ROOM SHIFT HISTORY -->
+      ${(()=>{
+        const shifts = (DB.roomShifts||[]).filter(s=>s.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+        if(!shifts.length) return '';
+        return `<div class="svw-card svw-card--flush">
+          <div class="svw-card__head dh-amber svw-card__head--bar">
+            <span class="svw-card__ico">${icon('transfer','sm')}</span>
+            <span>Room Shift History (${shifts.length})</span>
+          </div>
+          <div class="svw-tw"><table class="svw-t">
+          <thead><tr><th>Date</th><th>From Room</th><th>To Room</th><th>Old Rent</th><th>New Rent</th><th>Reason</th></tr></thead>
+          <tbody>${shifts.map(s=>`<tr>
+            <td class="svw-t__date">${fmtDate(s.date)}</td>
+            <td><span class="badge badge-gray">Rm #${escHtml(String(s.fromRoomNumber))}</span></td>
+            <td><span class="badge badge-blue">Rm #${escHtml(String(s.toRoomNumber))}</span></td>
+            <td class="svw-t__num is-muted">${fmtPKR(s.oldRent)}</td>
+            <td class="svw-t__num">${fmtPKR(s.newRent)}</td>
+            <td class="svw-t__reason">${escHtml(s.reason||'—')}</td>
+          </tr>`).join('')}</tbody>
+          </table></div>
+        </div>`;
+      })()}
+    </div>
   `,`
-    <button class="btn btn-secondary" onclick="printStudentCard('${id}')">&#x1F5A8; Print</button>
-    <button class="btn btn-secondary" style="background:var(--blue-dim);border-color:rgba(74,156,240,0.35);color:var(--blue)" onclick="closeModal();showRoomShiftModal('${id}')">🔀 Shift Room</button>
-    <button class="btn btn-secondary" onclick="closeModal();showEditStudentModal('${id}')">&#x270F; Edit</button>
-    ${t.status==='Active'?`<button class="btn btn-danger" onclick="closeModal();quickCancelStudent('${id}')">🚫 Cancel Seat</button>`:''}
+    <button class="btn btn-secondary" onclick="printStudentCard('${id}')">${icon('print','sm')} Print</button>
+    <button class="btn btn-secondary" onclick="closeModal();showRoomShiftModal('${id}')">${icon('transfer','sm')} Shift Room</button>
+    <button class="btn btn-secondary" onclick="closeModal();showEditStudentModal('${id}')">${icon('edit','sm')} Edit</button>
+    ${t.status==='Active'?`<button class="btn btn-danger" onclick="closeModal();quickCancelStudent('${id}')">${icon('error','sm')} Cancel Seat</button>`:''}
     <button class="btn btn-primary" onclick="closeModal()">Close</button>
   `);
 }
@@ -1206,10 +1202,6 @@ function printStudentCard(id) {
         ${room?`<span class="badge badge-gold">Room #${room.number} · ${rtype?.name||''}</span>`:''}
       </div>
     </div>
-    <div style="margin-left:auto;text-align:right">
-      <div style="font-size:11px;opacity:0.6">Monthly Rent</div>
-      <div style="font-size:26px;font-weight:900;color:#2ec98a">${fmtPKR(t.rent)}</div>
-    </div>
   </div>
   <div class="stats-row">
     <div class="stat-box"><div class="lbl">Total Paid</div><div class="val" style="color:#16a34a;font-size:15px">${fmtPKR(totalPaid)}</div></div>
@@ -1227,7 +1219,7 @@ function printStudentCard(id) {
     <div class="section">
       <div class="section-title">🏠 Room & Accommodation</div>
       <div class="info-grid">
-        ${room?[['Room Number','#'+room.number],['Room Type',rtype?.name||'—'],['Floor',room.floor||'—'],['Capacity',rtype?.capacity+' beds'||'—'],['Monthly Rent',fmtPKR(t.rent)],['Amenities',(room.amenities||[]).join(', ')||'—']].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v}</div></div>`).join(''):'<p style="color:#94a3b8">No room assigned</p>'}
+        ${room?[['Room Number','#'+room.number],['Room Type',rtype?.name||'—'],['Floor',room.floor||'—'],['Capacity',rtype?.capacity+' beds'||'—'],['Amenities',(room.amenities||[]).join(', ')||'—']].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v}</div></div>`).join(''):'<p style="color:#94a3b8">No room assigned</p>'}
       </div>
     </div>
   </div>
@@ -1379,17 +1371,13 @@ async function submitEditStudent(id) {
   t.address         = _newAddr;
   t.notes           = _newNotes;
 
-  // FIX 21: if room changed, update pending payment records
-  if (_newRoomId && _newRoomId !== _originalRoomId) {
-    const _newRoom = DB.rooms.find(r=>r.id===_newRoomId);
-    DB.payments.forEach(p=>{
-      if(p.studentId===t.id && p.status==='Pending') {
-        p.roomId     = _newRoomId;
-        p.roomNumber = _newRoom ? _newRoom.number : p.roomNumber;
-      }
-    });
-  }
   t.roomId = _newRoomId;
+
+  // Push the corrected name — and the new room, on still-open records — down
+  // onto this student's payments and cancellations. Without this the dashboard
+  // reads the live student while every report and PDF reads the stale snapshot
+  // frozen into each payment, and the two disagree.
+  if (typeof syncStudentSnapshots === 'function') syncStudentSnapshots(t);
 
   if(_photoData !== undefined) { if(!t.docs) t.docs={}; t.docs.photo = _photoData; }
 
@@ -1429,7 +1417,7 @@ function showRoomShiftModal(studentId) {
   const roomOpts = available.map(r => {
     const type = getRoomType(r);
     const occ  = getRoomOccupancy(r);
-    return `<option value="${r.id}" data-rent="${r.rent}">#${r.number} — ${type.name} · ${r.floor} Floor (${occ}/${type.capacity} occupied) · ${fmtPKR(r.rent)}/mo</option>`;
+    return `<option value="${r.id}">#${r.number} — ${type.name} · ${r.floor} Floor (${occ}/${type.capacity} occupied)</option>`;
   }).join('');
 
   showModal('modal-md', '🔀 Shift Student to Another Room', `
@@ -1438,26 +1426,16 @@ function showRoomShiftModal(studentId) {
       <div style="font-size:24px">🧑‍🎓</div>
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--text)">${escHtml(t.name)}</div>
-        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${fromRoom ? fromRoom.number : '?'}</strong> · Rent: <strong style="color:var(--green)">${fmtPKR(t.rent)}/mo</strong></div>
+        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${fromRoom ? fromRoom.number : '?'}</strong></div>
       </div>
     </div>
 
     <div class="form-grid">
       <div class="field col-full">
         <label>New Room *</label>
-        <select class="form-control" id="shift-new-room" onchange="
-          const opt = this.options[this.selectedIndex];
-          const rent = opt.getAttribute('data-rent')||'';
-          const el = document.getElementById('shift-new-rent');
-          if(el && rent) { el.value = rent; }
-        ">
+        <select class="form-control" id="shift-new-room">
           <option value="">— Select Room —</option>${roomOpts}
         </select>
-      </div>
-      <div class="field">
-        <label>New Monthly Rent (PKR)</label>
-        <input class="form-control" id="shift-new-rent" type="number" value="${t.rent}" placeholder="Auto-filled from room">
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">Leave as-is or adjust for the new room</div>
       </div>
       <div class="field">
         <label>Shift Date</label>
@@ -1483,7 +1461,6 @@ async function submitRoomShift(studentId) {
   if (!t) return;
 
   const newRoomId  = document.getElementById('shift-new-room')?.value;
-  const newRent    = parseFloat(document.getElementById('shift-new-rent')?.value) || t.rent;
   const shiftDate  = document.getElementById('shift-date')?.value  || today();
   const reason     = document.getElementById('shift-reason')?.value?.trim() || '';
 
@@ -1494,6 +1471,10 @@ async function submitRoomShift(studentId) {
   const fromRoom = DB.rooms.find(r => r.id === t.roomId);
   const toRoom   = DB.rooms.find(r => r.id === newRoomId);
   if (!toRoom)   { toast('Selected room not found', 'error'); return; }
+
+  // Rent follows the destination room's rate — the shift form no longer offers
+  // a manual override. Rates are set once in Settings → Rent & Mess.
+  const newRent = parseFloat(toRoom.rent) || t.rent || 0;
 
   // Check capacity again at submission time
   const type = getRoomType(toRoom);
@@ -1557,8 +1538,11 @@ async function submitRoomShift(studentId) {
 // Payments v5 adds room / month selects, a page-size picker, an "unpaid only"
 // toggle and a row-selection set. `status` now also accepts 'Partial' and
 // 'Overdue', which are derived states — see payStatusOf() / payIsOverdue().
+// `arrears` keeps still-unpaid records from EARLIER months visible while the
+// current month is on screen, so last month's balance can be collected from
+// this month instead of forcing the warden to switch back to find it.
 let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
-                 showAll:false, unpaidOnly:false, pageSize:30,
+                 showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
                  page:1, sortKey:null, sortDir:'asc'};
 let paySelected = new Set();
 
@@ -1630,7 +1614,6 @@ function formerStudentSearch(query) {
             ${s.occupation?`<div style="font-size:11px;color:var(--text3)">💼 ${escHtml(s.occupation)}</div>`:''}
             ${(s.lastRoom||s.roomNumber)?`<div style="font-size:11px;color:var(--accent-strong);font-weight:600">🏠 Former Rm #${escHtml(String(s.lastRoom||s.roomNumber||'—'))}</div>`:''}
             ${s.leftDate?`<div style="font-size:11px;color:var(--red)">📅 Left: ${fmtDate(s.leftDate)}</div>`:''}
-            ${s.rent?`<div style="font-size:11px;color:var(--green);font-weight:600">💰 ${fmtPKR(s.rent)}/mo</div>`:''}
           </div>
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
@@ -1671,7 +1654,7 @@ function openRestoreStudentForm(studentId) {
   const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${(p.unpaid||0)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?icon('checkmark','xs'):'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
 
   showModal('modal-lg', `<span style="color:var(--green)">🔄 Restore — ${escHtml(t.name)}</span>`,
-    `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;background:var(--green-dim);border:1px solid rgba(46,201,138,0.25);border-radius:8px;padding:10px 14px">All previous details are pre-filled. Update room, rent, and payment details.</div>
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;background:var(--green-dim);border:1px solid rgba(46,201,138,0.25);border-radius:8px;padding:10px 14px">All previous details are pre-filled. Update the room and payment details.</div>
     ${payHistory.length?`<div style="margin-bottom:16px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
       <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div style="font-size:12px;font-weight:700;color:var(--blue)">📋 Past Payment History</div>
@@ -1687,6 +1670,7 @@ function openRestoreStudentForm(studentId) {
       ${payHistory.length>6?`<div style="padding:7px 14px;font-size:10px;color:var(--text3);border-top:1px solid var(--border)">Showing 6 of ${payHistory.length} records</div>`:''}
     </div>`:''}
     <div class="form-grid">
+      <input type="hidden" id="rs-studentId" value="${escHtml(t.id)}">
       <div class="field"><label>Full Name</label><input class="form-control" id="rs-name" value="${escHtml(t.name||'')}" style="text-transform:capitalize" oninput="autoCapName(this)"></div>
       <div class="field"><label>Father Name</label><input class="form-control" id="rs-fname" value="${escHtml(t.fatherName||'')}" style="text-transform:capitalize" oninput="autoCapName(this)"></div>
       <div class="field"><label>CNIC</label><input class="form-control" id="rs-cnic" value="${escHtml(t.cnic||'')}" placeholder="XXXXX-XXXXXXX-X" maxlength="15" oninput="fmtCnic(this)"></div>
@@ -1697,8 +1681,7 @@ function openRestoreStudentForm(studentId) {
       <div class="field"><label>Emergency Contact</label><input class="form-control" id="rs-emerg" value="${escHtml(t.emergencyContact||'')}"></div>
       <div class="field"><label>Re-join Date</label><input class="form-control cdp-trigger" id="rs-join" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today}"></div>
       <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">🏠 New Room Assignment</div></div>
-      <div class="field"><label>Assign Room *</label><select class="form-control" id="rs-room"><option value="">— Select available room —</option>${roomOpts}</select></div>
-      <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="rs-rent" type="number" value="${t.rent||''}" placeholder="e.g. 16000" oninput="rsRecalc()"></div>
+      <div class="field col-full"><label>Assign Room *</label><select class="form-control" id="rs-room" onchange="rsRecalc()"><option value="">— Select available room —</option>${roomOpts}</select><div style="font-size:11px;color:var(--text3);margin-top:4px">Monthly charge (room rent + mess) is taken from the room's configured rate in Settings.</div></div>
       <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:10px">${icon('money')} First Month Payment</div></div>
       <div class="field"><label>Payment Month</label><input class="form-control" id="rs-month" type="text" value="${thisMonthLabel()}" oninput="rsCheckMonthDuplicate('${t.id}',this.value)" placeholder="e.g. March 2026"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="rs-pm">${pmOpts}</select></div>
@@ -1716,7 +1699,7 @@ function openRestoreStudentForm(studentId) {
       <!-- Net Payable summary -->
       <div class="field col-full">
         <div id="rs-total-box" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Rent</div><div id="rs-tot-rent">${moneyValue(0,{size:"body",color:"var(--blue)"})}</div></div>
+          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Monthly Charge</div><div id="rs-tot-rent">${moneyValue(0,{size:"body",color:"var(--blue)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">+</div>
           <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Extra Charges</div><div id="rs-tot-extra">${moneyValue(0,{size:"body",color:"var(--red)"})}</div></div>
           <div style="color:var(--border2);font-size:20px">−</div>
@@ -1790,8 +1773,21 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
   rsRecalc();
 }
 
+// The monthly charge is read off the room being assigned — the restore form no
+// longer asks for it. Returns the full charge (rent + mess): restore used to
+// bill rent only, so a restored student's first month was short by the mess.
+function _rsChargesFromRoom() {
+  const roomId = document.getElementById('rs-room')?.value;
+  if (!roomId) return { rent: 0, mess: 0, messBilled: 0, total: 0, configured: false };
+  // Carry the student's own mess arrangement across the restore so someone who
+  // was rent-only before does not come back on the mess.
+  const sid = document.getElementById('rs-studentId')?.value || '';
+  const st  = sid ? DB.students.find(x=>x.id===sid) : null;
+  return resolveCharges({ roomId, mess: st ? st.mess : undefined, messOptIn: st ? st.messOptIn : undefined });
+}
+
 function rsRecalc() {
-  const rent=parseFloat(document.getElementById('rs-rent')?.value)||0;
+  const rent =_rsChargesFromRoom().total;
   const paid=parseFloat(document.getElementById('rs-amount')?.value)||0;
   const conc=parseFloat(document.getElementById('rs-concession')?.value)||0;
   let extra=0; document.querySelectorAll('.rs-extra-amt').forEach(el=>{extra+=parseFloat(el.value)||0;});
@@ -1812,10 +1808,11 @@ function rsRecalc() {
 async function submitRestoreStudent(studentId) {
   const t=DB.students.find(x=>x.id===studentId); if(!t) return;
   const roomId=document.getElementById('rs-room').value;
-  const rent  =parseFloat(document.getElementById('rs-rent').value)||0;
   if(!roomId){toast('Please select a room','error');return;}
-  if(!rent)  {toast('Please enter monthly rent','error');return;}
   const room=DB.rooms.find(r=>r.id===roomId);
+  const rsCharges=resolveCharges({ roomId, mess:t.mess, messOptIn:t.messOptIn });
+  const rent=rsCharges.rent;
+  if(!rsCharges.configured) {toast('That room has no rent configured — set it in Settings → Rent & Mess','error');return;}
   const type=getRoomType(room);
   if(getRoomOccupancy(room)>=(type?.capacity||1)){toast('That room is full — pick another','error');return;}
   t.name            =document.getElementById('rs-name').value.trim()||t.name;
@@ -1827,7 +1824,7 @@ async function submitRestoreStudent(studentId) {
   t.address         =document.getElementById('rs-address').value.trim();
   t.emergencyContact=document.getElementById('rs-emerg').value.trim();
   t.joinDate        =document.getElementById('rs-join').value;
-  t.roomId=roomId; t.roomNumber=room?.number||''; t.rent=rent;
+  t.roomId=roomId; t.roomNumber=room?.number||''; t.rent=rent; t.mess=rsCharges.mess;
   t.paymentMethod=document.getElementById('rs-pm').value;
   t.status='Active'; t.restoredAt=new Date().toISOString().slice(0,10); t.leftDate='';
   const extraCharges=[];
@@ -1849,13 +1846,13 @@ async function submitRestoreStudent(studentId) {
   if (existingPaid) {
     toast(`ℹ️ Skipped payment — ${monthVal} is already marked Paid for ${t.name}.`, 'info');
   } else if(amount>0||extraTotal>0){
-    const netAmount=rent+extraTotal-concession;
+    const netAmount=rsCharges.total+extraTotal-concession;
     const unpaid=pendingAmt>0?pendingAmt:(pStatus==='Pending'?netAmount:undefined);
     const notesParts=['First payment after restore'];
     if(extraCharges.length) notesParts.push('Charges: '+extraCharges.map(c=>`${c.label} ${fmtPKR(c.amount)}`).join(', '));
     if(concession>0) notesParts.push(`Concession: ${fmtPKR(concession)}${concReason?' ('+concReason+')':''}`);
     if(extraNotes) notesParts.push(extraNotes);
-    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
+    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,messCharge:rsCharges.messBilled,messIncluded:rsCharges.messOptIn,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
   }
   if(!DB.activityLog) DB.activityLog=[];
   DB.activityLog.unshift({id:uid(),type:'restore',icon:'🔄',text:`${t.name} restored to Room #${room?.number||''}`,date:new Date().toISOString()});
@@ -2168,9 +2165,11 @@ function filterRoomSearch(q) {
   });
   drop.style.display = 'block';
 }
+// `rent` is still accepted so older callers keep working, but the student form
+// no longer carries a rent field — rent is a property of the room and is read
+// from it at save time. Money lives in Payments.
 function pickRoomSearch(roomId, rent, label) {
   document.getElementById('f-troom').value = roomId;
-  document.getElementById('f-trent').value = parseFloat(rent)||DB.settings.roomTypes[0]?.defaultRent||16000;
   const inp = document.getElementById('f-troom-search');
   if(inp) inp.value = label;
   const lbl = document.getElementById('f-troom-selected-label');
@@ -2188,9 +2187,13 @@ function pickRoomSearch(roomId, rent, label) {
   if (bedEl && typeof sfBedOptions === 'function') bedEl.innerHTML = sfBedOptions(room);
 
   recalcStudentUnpaid();
-  if (typeof sfRecalcTotal === 'function') sfRecalcTotal();
-}function recalcStudentUnpaid() {
-  const r = parseFloat(document.getElementById('f-trent')?.value)||0;
+}
+function recalcStudentUnpaid() {
+  // The v5 form dropped its rent input (f-trent), so this used to read 0 and
+  // every admission showed the wrong paid/pending verdict. Read the charge off
+  // the room being picked instead — the same source submitAddStudent uses.
+  const roomId = document.getElementById('f-troom')?.value || '';
+  const r = roomId ? resolveCharges({ roomId }).total : 0;
   const a = parseFloat(document.getElementById('f-tdeposit')?.value)||0;
   const admFee = parseFloat(document.getElementById('f-tadmfee')?.value)||0;
   const extra = getStudentExtraChargesTotal();

@@ -144,13 +144,18 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
   // ── STUDENTS ───────────────────────────────────────────────────────────────
   if (id === 'students') {
+    // Scoped to the period the report header names. This table used to read the
+    // whole roster, so a student admitted in August was listed inside a July
+    // report — the same month-mixing the fee figures had.
+    const _keys = _rptKeys();
+    const inPeriod = DB.students.filter(t => _keys.some(k => _studentInPeriod(t, k)));
     const badges = [
-      {label:'All',       count:DB.students.length,                              color:'var(--blue)',  dim:'var(--blue-dim)',  border:'rgba(74,156,240,0.4)'},
-      {label:'Active',    count:DB.students.filter(t=>t.status==='Active').length,  color:'var(--green)', dim:'var(--green-dim)', border:'rgba(46,201,138,0.4)'},
-      {label:'Left',      count:DB.students.filter(t=>t.status==='Left').length,    color:'var(--amber)', dim:'var(--amber-dim)', border:'rgba(240,160,48,0.4)'},
-      {label:'Blacklisted',count:DB.students.filter(t=>t.status==='Blacklisted').length,color:'var(--red)',dim:'var(--red-dim)',border:'rgba(224,82,82,0.4)'},
+      {label:'All',       count:inPeriod.length,                              color:'var(--blue)',  dim:'var(--blue-dim)',  border:'rgba(74,156,240,0.4)'},
+      {label:'Active',    count:inPeriod.filter(t=>t.status==='Active').length,  color:'var(--green)', dim:'var(--green-dim)', border:'rgba(46,201,138,0.4)'},
+      {label:'Left',      count:inPeriod.filter(t=>t.status==='Left').length,    color:'var(--amber)', dim:'var(--amber-dim)', border:'rgba(240,160,48,0.4)'},
+      {label:'Blacklisted',count:inPeriod.filter(t=>t.status==='Blacklisted').length,color:'var(--red)',dim:'var(--red-dim)',border:'rgba(224,82,82,0.4)'},
     ];
-    const filtered = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
+    const filtered = studentReportFilter==='All' ? inPeriod : inPeriod.filter(t=>t.status===studentReportFilter);
     const _pg = paginate(filtered, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
@@ -244,26 +249,30 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
   // ── TRANSFERS ──────────────────────────────────────────────────────────────
   if (id === 'transfers') {
-    const allTr = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+    // Scoped to the report period like every other detail card. It previously
+    // listed every transfer ever recorded under a header naming one month, so
+    // August's transfers showed inside July's report.
+    const allTr = _periodTransfers().slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
     const totalTr = allTr.reduce((s,t)=>s+Number(t.amount),0);
     const cashTr  = allTr.filter(t=>t.method==='Cash').reduce((s,t)=>s+Number(t.amount),0);
     const bankTr  = allTr.filter(t=>t.method!=='Cash').reduce((s,t)=>s+Number(t.amount),0);
-    const moKey   = periodLabel.slice(0,7);
-    const moTr    = allTr.filter(t=>(t.date||'').startsWith(moKey));
-    const moTotal = moTr.reduce((s,t)=>s+Number(t.amount),0);
+    // The fourth card used to read "This Period", which is now what the other
+    // three already are. Lifetime is the figure the period view cannot give.
+    const lifeTr    = (DB.transfers||[]);
+    const lifeTotal = lifeTr.reduce((s,t)=>s+Number(t.amount),0);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">🏦 Funds Transfer — All Records</div>
+        <div class="card-title">🏦 Funds Transfer — ${escHtml(periodLabel)}</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('transfers','var(--blue)')}<button class="btn btn-primary btn-sm" onclick="showAddTransferModal()">+ New</button>${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.35);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700;margin-bottom:4px">Total</div><div>${moneyValue(totalTr,{size:"section",color:"var(--blue)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.length} records</div></div>
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:4px">Cash</div><div>${moneyValue(cashTr,{size:"section",color:"var(--green)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method==='Cash').length} records</div></div>
         <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);font-weight:700;margin-bottom:4px">Bank</div><div>${moneyValue(bankTr,{size:"section",color:"var(--purple)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method!=='Cash').length} records</div></div>
-        <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">This Period</div><div>${moneyValue(moTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${moTr.length} transfers</div></div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">All Time</div><div>${moneyValue(lifeTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${lifeTr.length} transfers</div></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th><th>Received By</th><th>Notes</th><th>By Warden</th><th>Actions</th></tr></thead><tbody>
-      ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers yet — click + New to add.</td></tr>'
+      ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers in this period — click + New to add.</td></tr>'
         :paginate(allTr, reportDetailFilter).slice.map(tr=>`<tr>
           <td class="text-muted" style="font-size:12px;white-space:nowrap">${fmtDate(tr.date)}</td>
           <td class="fw-700">${escHtml(tr.description||'Transfer')}</td>
@@ -307,7 +316,25 @@ function _rptMonthsBetween(from, to) {
   return out;
 }
 
+// Transfers inside the report's current period. Every transfer figure on the
+// Reports page goes through this, so the overview card, the detail table and
+// the CSV export can no longer describe three different windows.
+function _periodTransfers() {
+  const keys = _rptKeys();
+  return (DB.transfers || []).filter(t => keys.some(k => String(t.date||'').startsWith(k)));
+}
+
 // The prefixes the current view covers.
+/** 'YYYY-MM' → 'Aug 2026'. Parses the key by hand rather than through
+ *  new Date('YYYY-MM'), which UTC-parses and can slip to the previous month
+ *  in Pakistan's timezone. */
+function _rptMonthName(key) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+  if (!m) return String(key || '');
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1)
+    .toLocaleString('default', { month: 'short', year: 'numeric' });
+}
+
 function _rptKeys() {
   if (reportPeriod === 'year')   return [thisYear()];
   if (reportPeriod === 'custom') return _rptMonthsBetween(reportRange.from, reportRange.to);
@@ -378,6 +405,22 @@ function renderReports() {
   const prev = _rptTotals(_rptPrevKeys());
   const { pays, exps, rev, pending, totalExp, net } = cur;
   const vs = _rptPeriodWord();
+
+  // Human label for the window the page is showing, used by the Monthly
+  // Overview header and its margin tile.
+  const periodLabel = reportPeriod === 'month' ? 'This Month'
+    : reportPeriod === 'year' ? 'This Year'
+    : (reportRange.from && reportRange.to)
+      ? _rptMonthName(reportRange.from) + ' – ' + _rptMonthName(reportRange.to)
+      : 'Custom Range';
+
+  // "Last updated" means the newest record the report is built from — not the
+  // clock. If nothing has been entered, say so rather than showing a date.
+  const _latest = [...DB.payments, ...DB.expenses]
+    .map(r => r.date).filter(Boolean).sort().pop();
+  const withDataNote = _latest
+    ? 'Latest record: ' + fmtDate(_latest)
+    : 'No records entered yet';
 
   // PERF: index active students by room ONCE so the per-room / per-type loops below are
   // O(students+rooms) instead of O(rooms×students). getRoomOccupancy() rescans ALL students
@@ -555,23 +598,73 @@ function renderReports() {
     ${stat('students','dh-blue','Students',nActiveS,
       `${_rptDelta(sDelta,0,'abs')} joined vs left`,
       '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
-    ${stat('transfers','dh-slate','Transfers',fmtPKR((DB.transfers||[]).reduce((s,t)=>s+Number(t.amount),0)),
-      `${(DB.transfers||[]).length} record${(DB.transfers||[]).length!==1?'s':''}`,
+    ${stat('transfers','dh-slate','Transfers',fmtPKR(_periodTransfers().reduce((s,t)=>s+Number(t.amount),0)),
+      `${_periodTransfers().length} record${_periodTransfers().length!==1?'s':''}`,
       '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>')}
   </div>
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
-  <div class="rpt-grid">
-    <div class="rpt-card">
-      <div class="rpt-card__h">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        Revenue vs Expenses
+  <!-- ══ MONTHLY OVERVIEW ══ -->
+  <div class="mov">
+    <div class="mov__head">
+      <span class="mov__ico">${icon('chart','sm')}</span>
+      <div>
+        <div class="mov__t">Monthly Overview</div>
+        <div class="mov__s">Track collection, expenses and profit month by month</div>
+      </div>
+      <span class="mov__period">${icon('calendar','xs')} ${escHtml(periodLabel)}</span>
+    </div>
+
+    <div class="mov__chart">
+      <div class="mov__bar">
+        <span class="mov__bart">Revenue Trend</span>
+        <div class="mov__legend">
+          <span class="mov__k" style="--k:#8b5cf6"><i></i>Collection</span>
+          <span class="mov__k" style="--k:#ef4444"><i></i>Expenses</span>
+          <span class="mov__k" style="--k:#16a34a"><i></i>Profit</span>
+        </div>
       </div>
       ${trendData.some(m=>m.rev||m.exp)
         ? `<div class="rpt-canvas"><canvas id="rpt-trend"></canvas></div>`
         : `<div class="rpt-none">Nothing recorded in this period yet.</div>`}
     </div>
 
+    ${(()=>{
+      // Peaks and margin, all derived from the same trendData the chart draws —
+      // no separate query, so the strip can never disagree with the line above it.
+      const withProfit = trendData.map(m => ({...m, profit: m.rev - m.exp}));
+      if (!withProfit.length) return '';
+      const peak = (key) => withProfit.reduce((b,m) => m[key] > b[key] ? m : b, withProfit[0]);
+      const topRev = peak('rev'), topProfit = peak('profit'), topExp = peak('exp');
+      const sumRev = withProfit.reduce((s,m)=>s+m.rev,0);
+      const sumProfit = withProfit.reduce((s,m)=>s+m.profit,0);
+      // Margin is only meaningful once something was actually collected.
+      const margin = sumRev > 0 ? (sumProfit / sumRev * 100) : null;
+      const cell = (hue,ico,label,sub,val) => `
+        <div class="mov__cell ${hue}">
+          <span class="mov__cico">${icon(ico,'sm')}</span>
+          <div>
+            <div class="mov__cl">${label}</div>
+            <div class="mov__cs">${escHtml(sub)}</div>
+            <div class="mov__cv">${val}</div>
+          </div>
+        </div>`;
+      return `<div class="mov__strip">
+        ${cell('dh-violet','trendUp','Highest Collection',topRev.lbl,fmtPKR(topRev.rev))}
+        ${cell('dh-green','chart','Highest Profit',topProfit.lbl,fmtPKR(topProfit.profit))}
+        ${cell('dh-red','arrowDownCircle','Highest Expense',topExp.lbl,fmtPKR(topExp.exp))}
+        ${cell('dh-blue','pieChart','Average Profit Margin',periodLabel,
+          margin===null ? '<span class="is-na">—</span>' : margin.toFixed(1)+'%')}
+      </div>`;
+    })()}
+
+    <div class="mov__foot">
+      <span>${icon('info','xs')} All amounts are in PKR</span>
+      <span>${icon('clock','xs')} ${withDataNote}</span>
+    </div>
+  </div>
+
+  <div class="rpt-grid">
     <div class="rpt-card">
       <div class="rpt-card__h">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
@@ -694,31 +787,51 @@ function drawReportCharts() {
       g.addColorStop(0, hex + '38'); g.addColorStop(1, hex + '00');
       return g;
     };
-    const series = (label, key, hex) => ({
-      label, data: _rptTrendData.map(m => m[key]),
+    // `values` is passed explicitly so Profit — which has no key on the row —
+    // can be plotted from the same array without inventing a stored field.
+    // tension 0 — straight point-to-point segments, per the owner's reference
+    // design. Curve smoothing invents intermediate values the ledger never
+    // recorded: a bowed line between two months implies a mid-month figure,
+    // and it can dip below zero between two positive points.
+    const series = (label, values, hex) => ({
+      label, data: values,
       borderColor: hex, backgroundColor: fill(hex),
-      borderWidth: 2.4, fill: true, tension: .38,
-      pointRadius: 3, pointBackgroundColor: hex, pointBorderWidth: 0, pointHoverRadius: 5
+      borderWidth: 2.4, fill: true, tension: 0,
+      pointRadius: 3.5, pointBackgroundColor: hex, pointBorderColor: '#fff',
+      pointBorderWidth: 1.5, pointHoverRadius: 6
     });
+    const revVals = _rptTrendData.map(m => m.rev);
+    const expVals = _rptTrendData.map(m => m.exp);
     _rptTrendChart = new Chart(ctx, {
       type: 'line',
       data: { labels: _rptTrendData.map(m => m.lbl),
-              datasets: [series('Revenue','rev','#16a34a'), series('Expenses','exp','#ef4444')] },
+              datasets: [
+                series('Collection', revVals, '#8b5cf6'),
+                series('Expenses',   expVals, '#ef4444'),
+                // Profit is revenue minus expenses for that month — the figure the
+                // owner actually reads the chart for, and previously had to do in
+                // their head from two lines.
+                series('Profit', revVals.map((v,i) => v - expVals[i]), '#16a34a')
+              ] },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           datalabels: { display: false },
-          legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle',
-                    boxWidth: 7, padding: 16, color: ink, font: { size: 11 } } },
-          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtPKR(c.parsed.y) } }
+          legend: { display: false },   // the legend in the card header carries it
+          tooltip: {
+            usePointStyle: true, padding: 12, boxPadding: 5, cornerRadius: 10,
+            titleFont: { size: 12, weight: '700' }, bodyFont: { size: 12 },
+            callbacks: { label: c => '  ' + c.dataset.label + ':  ' + fmtPKR(c.parsed.y) }
+          }
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: ink, font: { size: 11 } } },
           y: { beginAtZero: true, border: { display: false },
                grid: { color: grid },
                ticks: { color: ink, font: { size: 11 },
-                        callback: v => v >= 1000 ? (v/1000) + 'K' : v } }
+                        callback: v => Math.abs(v) >= 1000000 ? (v/1000000) + 'M'
+                                     : Math.abs(v) >= 1000 ? (v/1000) + 'K' : v } }
         }
       }
     });
@@ -1124,13 +1237,17 @@ function downloadDetailCSV(type) {
   } else if (type === 'transfers') {
     filename = 'Funds_Transfer.csv';
     rows.push(['Date','Description','Method','Amount','Received By','Notes']);
-    (DB.transfers||[]).forEach(t=>{
+    _periodTransfers().forEach(t=>{
       rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);
     });
   } else if (type === 'students') {
     filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
     rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
-    const list = studentReportFilter==='All' ? DB.students : DB.students.filter(t=>t.status===studentReportFilter);
+    // Same period scoping as the on-screen table, so the export and the table
+    // can never report different rosters for the same period.
+    const _sKeys = _rptKeys();
+    const _inPeriod = DB.students.filter(t => _sKeys.some(k => _studentInPeriod(t, k)));
+    const list = studentReportFilter==='All' ? _inPeriod : _inPeriod.filter(t=>t.status===studentReportFilter);
     const _idx=_buildRoomStudentIndex();
     list.forEach(t=>{
       const r = _idx.roomById.get(t.roomId);

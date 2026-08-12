@@ -3,354 +3,561 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>License Settings — HOSTYLLO</title>
+  <title>License Settings — HOSTIX</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;">
   <link rel="stylesheet" href="vendor/fonts.css">
+  <!-- Shared Lucide set. This window loads no other app script, so icons.js is
+       included on its own; it declares only icon()/ICONS and has no deps. -->
+  <script src="src/icons.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ════════════════════════════════════════════════════════════════════════
+       This window is opened standalone by main.js, so it cannot read the app's
+       tokens.css or its light/dark body class. The palette below mirrors the
+       token *names* used elsewhere (--surface / --text / --accent / semantic)
+       so the vocabulary matches, and follows the OS via prefers-color-scheme.
+       Dark is the default because main.js paints the window #1a1c1e before
+       first paint — a light default would flash.
+       ════════════════════════════════════════════════════════════════════════ */
     :root {
-      --accent:   #7c3aed; --accent-light:  #a78bfa;
-      --red:    #e05252; --red2:   #ff6b6b;
-      --green:  #2ec98a; --blue:   #1e5fd4;
-      --orange: #e07b30;
-      --bg:     #060c18; --bg2:    #071428; --bg3:   #0d1f38;
-      --border: #1e3050; --border2:#1e4080;
-      --text:   #e8eef8; --text2:  #a0b4cc; --text3: #4d6a90;
+      --surface:      #141414;
+      --surface-2:    #1c1c1c;
+      --surface-sunk: #0f0f0f;
+      --border:       #2a2a2a;
+      --border2:      #3a3a3a;
+      --text:         #e5e5e5;
+      --text2:        #a3a3a3;
+      --text3:        #737373;
+
+      --accent:       #60a5fa;
+      --accent-ink:   #93c5fd;
+      --accent-dim:   rgba(96,165,250,0.14);
+
+      --success:      #34d399;  --success-bg: rgba(52,211,153,0.12);  --success-bd: rgba(52,211,153,0.28);
+      --warning:      #fbbf24;  --warning-bg: rgba(251,191,36,0.12);  --warning-bd: rgba(251,191,36,0.28);
+      --danger:       #f87171;  --danger-bg:  rgba(248,113,113,0.12); --danger-bd:  rgba(248,113,113,0.28);
+      --info-bg:      rgba(96,165,250,0.10);
+      --info-bd:      rgba(96,165,250,0.24);
+      --shadow:       0 4px 16px rgba(0,0,0,0.45);
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --surface:      #ffffff;
+        --surface-2:    #fafafa;
+        --surface-sunk: #f5f5f5;
+        --border:       #e5e5e5;
+        --border2:      #d4d4d4;
+        --text:         #171717;
+        --text2:        #525252;
+        --text3:        #a3a3a3;
+
+        --accent:       #2563eb;
+        --accent-ink:   #1d4ed8;
+        --accent-dim:   #eff6ff;
+
+        --success:      #047857;  --success-bg: #ecfdf5;  --success-bd: #a7f3d0;
+        --warning:      #b45309;  --warning-bg: #fffbeb;  --warning-bd: #fde68a;
+        --danger:       #b91c1c;  --danger-bg:  #fef2f2;  --danger-bd:  #fecaca;
+        --info-bg:      #eff6ff;
+        --info-bd:      #bfdbfe;
+        --shadow:       0 4px 12px rgba(0,0,0,0.07);
+      }
+    }
+
+    /* icons.js emits <svg class="icon">; these are its sizing rules. */
+    svg.icon    { width:20px; height:20px; flex-shrink:0; }
+    svg.icon-xs { width:14px; height:14px; }
+    svg.icon-sm { width:16px; height:16px; }
+    svg.icon-lg { width:24px; height:24px; }
 
     body {
       font-family: 'Outfit', 'Segoe UI', sans-serif;
-      background: var(--bg); color: var(--text);
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 28px 20px 36px; overflow-y: auto;
+      background: var(--surface-sunk); color: var(--text);
+      min-height: 100vh; padding: 22px 24px 30px; overflow-y: auto;
     }
+    .wrap { max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 
-    .header {
-      width: 100%; max-width: 480px;
-      display: flex; align-items: center; gap: 12px;
-      margin-bottom: 22px;
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    .topbar { display: flex; align-items: center; gap: 10px; }
+    .back {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 38px; padding: 0 14px; border-radius: 11px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border2); color: var(--text2);
+      font-family: inherit; font-size: 13px; font-weight: 600; transition: all .15s;
     }
-    .header-icon {
-      width: 42px; height: 42px; border-radius: 11px;
-      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(124,58,237,0.06));
-      border: 1px solid rgba(124,58,237,0.3);
+    .back:hover { background: var(--surface-2); color: var(--text); }
+
+    /* ── Page heading ────────────────────────────────────────────────────── */
+    .head { display: flex; align-items: center; gap: 14px; }
+    .head__ico {
+      width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; flex-shrink: 0;
+      background: var(--accent-dim); color: var(--accent);
     }
-    .header-text h1 { font-size: 18px; font-weight: 800; color: var(--accent-light); }
-    .header-text p  { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: 0.3px; }
+    .head__t { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: var(--text); line-height: 1.2; }
+    .head__s { margin-top: 2px; font-size: 12.5px; color: var(--text3); }
 
-    /* Cards */
-    .card {
-      width: 100%; max-width: 480px;
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 16px; padding: 20px 22px;
-      margin-bottom: 14px; position: relative;
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+    .card__h {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface-2);
     }
-    .card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0;
-      height: 2px; border-radius: 16px 16px 0 0;
-    }
-    .card.card-info::before   { background: linear-gradient(90deg, #1e5fd4, #7c3aed); }
-    .card.card-danger::before { background: linear-gradient(90deg, #e05252, #7c3aed); }
-    .card-title {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 1.5px; color: var(--text3); margin-bottom: 14px;
-    }
-
-    /* Status badge */
-    .status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 12px; border-radius: 20px;
-      font-size: 12px; font-weight: 700;
-    }
-    .status-badge.active   { background: rgba(46,201,138,0.15); border: 1px solid rgba(46,201,138,0.4); color: var(--green); }
-    .status-badge.expired  { background: rgba(224,82,82,0.15);  border: 1px solid rgba(224,82,82,0.4);  color: var(--red); }
-    .status-badge.inactive { background: rgba(160,180,204,0.1); border: 1px solid rgba(160,180,204,0.2); color: var(--text3); }
-
-    /* Info rows */
-    .info-row {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      padding: 9px 0; border-bottom: 1px solid rgba(30,48,80,0.6); gap: 12px;
-    }
-    .info-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .info-label { font-size: 11px; color: var(--text3); font-weight: 600; flex-shrink: 0; padding-top: 1px; }
-    .info-value { font-size: 12px; color: var(--text2); text-align: right; word-break: break-all; }
-    .info-value.mono  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-light); letter-spacing: 1px; }
-    .info-value.green { color: var(--green); font-weight: 700; }
-    .info-value.red   { color: var(--red);  font-weight: 700; }
-
-    /* Action buttons */
-    .action-btn {
-      width: 100%;
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 16px; border-radius: 11px; border: 1px solid;
-      background: transparent; font-family: inherit; font-size: 14px; font-weight: 700;
-      cursor: pointer; transition: all 0.18s; text-align: left; margin-bottom: 10px;
-    }
-    .action-btn:last-child { margin-bottom: 0; }
-    .action-btn .btn-icon {
-      width: 36px; height: 36px; border-radius: 9px;
+    .card__ico {
+      width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 17px; flex-shrink: 0;
+      background: var(--accent-dim); color: var(--accent);
     }
-    .action-btn .btn-text { flex: 1; }
-    .action-btn .btn-title { display: block; font-size: 13px; font-weight: 700; }
-    .action-btn .btn-desc  { display: block; font-size: 11px; font-weight: 400; margin-top: 2px; opacity: 0.75; }
+    .card__t    { font-size: 14px; font-weight: 700; color: var(--text); }
+    .card__body { padding: 6px 18px 14px; }
 
-    .btn-deactivate { border-color: rgba(224,123,48,0.4); color: var(--amber); }
-    .btn-deactivate .btn-icon { background: rgba(224,123,48,0.12); }
-    .btn-deactivate:hover { background: rgba(224,123,48,0.08); border-color: rgba(224,123,48,0.7); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(224,123,48,0.15); }
-
-    .btn-reset { border-color: rgba(224,82,82,0.4); color: var(--red); }
-    .btn-reset .btn-icon { background: rgba(224,82,82,0.12); }
-    .btn-reset:hover { background: rgba(224,82,82,0.08); border-color: rgba(224,82,82,0.7); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(224,82,82,0.15); }
-
-    .btn-uninstall { border-color: rgba(77,106,144,0.5); color: var(--text3); }
-    .btn-uninstall .btn-icon { background: rgba(77,106,144,0.12); }
-    .btn-uninstall:hover { background: rgba(77,106,144,0.08); border-color: rgba(77,106,144,0.8); transform: translateY(-1px); }
-
-    .action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-
-    /* Fingerprint note */
-    .fp-note {
-      background: rgba(30,95,212,0.07); border: 1px solid rgba(30,95,212,0.2);
-      border-radius: 10px; padding: 11px 14px;
-      font-size: 11px; color: var(--text3); line-height: 1.65;
+    /* ── Status badge ────────────────────────────────────────────────────── */
+    .badge {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap;
     }
-    .fp-note strong { color: var(--text2); }
+    .badge.active   { background: var(--success-bg); border: 1px solid var(--success-bd); color: var(--success); }
+    .badge.expired  { background: var(--danger-bg);  border: 1px solid var(--danger-bd);  color: var(--danger); }
+    .badge.inactive { background: var(--surface-sunk); border: 1px solid var(--border2); color: var(--text3); }
 
-    /* Toast */
+    /* ── Info rows ───────────────────────────────────────────────────────── */
+    .row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .row:last-child { border-bottom: none; }
+    .row__k { flex-shrink: 0; width: 130px; font-size: 12.5px; color: var(--text3); font-weight: 500; }
+    .row__v { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--text); word-break: break-all; }
+    .row__v.mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11.5px;
+                    letter-spacing: .6px; color: var(--accent-ink); }
+    .row__v.green { color: var(--success); font-weight: 700; }
+    .row__v.red   { color: var(--danger);  font-weight: 700; }
+    .row__v.dim   { color: var(--text3); }
+
+    /* Copy affordance — the machine ID is what support asks for, and it used
+       to be un-selectable text the owner had to read down the phone. */
+    .copy {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface); border: 1px solid var(--border2); color: var(--text3);
+      transition: all .15s;
+    }
+    .copy:hover      { background: var(--surface-2); color: var(--text); }
+    .copy:disabled   { opacity: .35; cursor: not-allowed; }
+
+    /* ── Callout ─────────────────────────────────────────────────────────── */
+    .note {
+      display: flex; gap: 11px; align-items: flex-start;
+      background: var(--info-bg); border: 1px solid var(--info-bd);
+      border-radius: 12px; padding: 12px 14px; margin-top: 12px;
+      font-size: 12.5px; color: var(--text2); line-height: 1.55;
+    }
+    .note__ico { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+    .note b    { color: var(--text); font-weight: 700; }
+
+    /* ── Action rows ─────────────────────────────────────────────────────── */
+    .act {
+      display: flex; align-items: center; gap: 13px;
+      padding: 14px 16px; border: 1px solid var(--border); border-radius: 13px;
+      margin-bottom: 10px; background: var(--surface);
+    }
+    .act:last-child { margin-bottom: 0; }
+    .act__ico {
+      width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .act__t { font-size: 13.5px; font-weight: 700; color: var(--text); }
+    .act__d { margin-top: 3px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
+    .act__b { flex: 1; min-width: 0; }
+
+    .btn {
+      flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+      height: 38px; padding: 0 15px; border-radius: 10px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border2); color: var(--text2);
+      font-family: inherit; font-size: 13px; font-weight: 700; transition: all .15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--surface-2); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .act.warn .act__ico { background: var(--warning-bg); color: var(--warning); }
+    .act.warn .btn      { border-color: var(--warning-bd); color: var(--warning); }
+    .act.warn .btn:hover:not(:disabled) { background: var(--warning-bg); }
+
+    .act.danger .act__ico { background: var(--danger-bg); color: var(--danger); }
+    .act.danger .act__t   { color: var(--danger); }
+    .act.danger .btn      { border-color: var(--danger-bd); color: var(--danger); }
+    .act.danger .btn:hover:not(:disabled) { background: var(--danger-bg); }
+
+    .act.plain .act__ico { background: var(--accent-dim); color: var(--accent); }
+    .act.plain .act__t   { color: var(--accent-ink); }
+    .act.plain .btn      { border-color: var(--info-bd); color: var(--accent-ink); }
+    .act.plain .btn:hover:not(:disabled) { background: var(--info-bg); }
+
+    /* ── Facts strip ─────────────────────────────────────────────────────────
+       Every cell here is read straight off the license file. The app stores no
+       plan tier and enforces no student/room caps, so no such cells exist —
+       showing "Professional · Unlimited" would be inventing an entitlement
+       system this build does not have. */
+    .facts {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    }
+    .fact {
+      display: flex; align-items: center; gap: 11px; min-width: 0;
+      padding: 14px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .fact:nth-child(3n)     { border-right: none; }
+    .fact:nth-last-child(-n+3) { border-bottom: none; }
+    .fact__ico {
+      width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-dim); color: var(--accent);
+    }
+    .fact__k { font-size: 11px; color: var(--text3); font-weight: 600; }
+    .fact__v { margin-top: 2px; font-size: 13px; font-weight: 700; color: var(--text);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────── */
     .toast {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px);
-      background: var(--bg3); border: 1px solid var(--border2);
-      border-radius: 10px; padding: 10px 18px;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 11px; padding: 11px 18px;
       font-size: 13px; font-weight: 600; color: var(--text);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s;
-      opacity: 0; z-index: 99; white-space: nowrap;
+      box-shadow: var(--shadow);
+      transition: transform .3s cubic-bezier(0.22,1,0.36,1), opacity .3s;
+      opacity: 0; z-index: 99; max-width: 90vw;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-    /* Skeleton loader */
+    /* ── Skeleton loader ─────────────────────────────────────────────────── */
     .skeleton {
-      background: linear-gradient(90deg, var(--bg3) 25%, rgba(30,64,128,0.3) 50%, var(--bg3) 75%);
+      display: inline-block;
+      background: linear-gradient(90deg, var(--surface-sunk) 25%, var(--border) 50%, var(--surface-sunk) 75%);
       background-size: 200% 100%; animation: shimmer 1.2s infinite;
       border-radius: 4px; height: 13px;
     }
     @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+    @media (max-width: 620px) {
+      .facts { grid-template-columns: repeat(2, 1fr); }
+      .fact:nth-child(3n)  { border-right: 1px solid var(--border); }
+      .fact:nth-child(2n)  { border-right: none; }
+      .act { flex-wrap: wrap; }
+      .act .btn { width: 100%; justify-content: center; }
+    }
   </style>
 </head>
 <body>
+<div class="wrap">
 
-  <!-- Header -->
-  <div class="header">
-    <button onclick="window.history.back()" style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);color:#7c3aed;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">← Back</button>
-    <div class="header-icon">⚙️</div>
-    <div class="header-text">
-      <h1>License Settings</h1>
-      <p>Manage activation, deactivation &amp; reset</p>
+  <!-- Top bar -->
+  <div class="topbar">
+    <button class="back" onclick="window.history.back()">
+      <span data-ico="arrowLeft" data-ico-size="sm"></span> Back to Settings
+    </button>
+  </div>
+
+  <!-- Page heading -->
+  <div class="head">
+    <span class="head__ico" data-ico="settings"></span>
+    <div>
+      <div class="head__t">License Settings</div>
+      <div class="head__s">Manage your software license, activation and machine binding</div>
     </div>
   </div>
 
-  <!-- License Status Card -->
-  <div class="card card-info" id="status-card">
-    <div class="card-title">🔐 License Status</div>
+  <!-- License Status -->
+  <div class="card" id="status-card">
+    <div class="card__h">
+      <span class="card__ico" data-ico="award" data-ico-size="sm"></span>
+      <span class="card__t">License Status</span>
+      <span class="badge inactive" id="status-badge">Loading…</span>
+    </div>
+    <div class="card__body">
+      <div class="row">
+        <span class="row__k">Machine ID</span>
+        <span class="row__v mono" id="val-machine"><span class="skeleton" style="width:220px"></span></span>
+        <button class="copy" id="copy-machine" title="Copy machine ID" onclick="copyVal('val-machine')" disabled
+                data-ico="copy" data-ico-size="xs"></button>
+      </div>
+      <div class="row">
+        <span class="row__k">License Key</span>
+        <span class="row__v mono" id="val-key">—</span>
+        <button class="copy" id="copy-key" title="Copy license key" onclick="copyVal('val-key')" disabled
+                data-ico="copy" data-ico-size="xs"></button>
+      </div>
+      <div class="row">
+        <span class="row__k">Expires On</span>
+        <span class="row__v" id="val-expiry">—</span>
+      </div>
+      <div class="row">
+        <span class="row__k">Activated On</span>
+        <span class="row__v" id="val-activated">—</span>
+      </div>
 
-    <div class="status-row">
-      <span class="info-label">Status</span>
-      <span class="status-badge inactive" id="status-badge">Loading…</span>
-    </div>
-
-    <div class="info-row">
-      <span class="info-label">Machine ID</span>
-      <span class="info-value mono" id="val-machine"><span class="skeleton" style="width:240px;display:inline-block"></span></span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">License Key</span>
-      <span class="info-value mono" id="val-key">—</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">Expires</span>
-      <span class="info-value" id="val-expiry">—</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">Activated On</span>
-      <span class="info-value" id="val-activated">—</span>
+      <div class="note">
+        <span class="note__ico" data-ico="info" data-ico-size="sm"></span>
+        <span id="status-note">Checking this machine’s license…</span>
+      </div>
     </div>
   </div>
 
-  <!-- Actions Card -->
-  <div class="card card-danger">
-    <div class="card-title">⚠️ License Actions</div>
-    <!-- FIX: Password gate removed per request — actions are available directly -->
+  <!-- License Actions -->
+  <div class="card">
+    <div class="card__h">
+      <span class="card__ico" data-ico="zap" data-ico-size="sm"></span>
+      <span class="card__t">License Actions</span>
+    </div>
+    <div class="card__body" style="padding-top:14px">
+      <div id="actions-wrap">
 
-    <!-- Action Buttons -->
-    <div id="actions-wrap">
-
-      <!-- Deactivate -->
-      <button class="action-btn btn-deactivate" id="btn-deactivate" onclick="doDeactivate()">
-        <div class="btn-icon">🔓</div>
-        <div class="btn-text">
-          <span class="btn-title">Deactivate License</span>
-          <span class="btn-desc">Remove this license from the computer. You'll need a new key to continue.</span>
+        <div class="act warn">
+          <span class="act__ico" data-ico="lock" data-ico-size="sm"></span>
+          <div class="act__b">
+            <div class="act__t">Deactivate License</div>
+            <div class="act__d">Remove this license from the computer. You’ll need a new key to continue.</div>
+          </div>
+          <button class="btn" id="btn-deactivate" onclick="doDeactivate()">
+            <span data-ico="lock" data-ico-size="xs"></span> Deactivate
+          </button>
         </div>
-      </button>
 
-      <!-- Full Reset -->
-      <button class="action-btn btn-reset" id="btn-reset" onclick="doReset()">
-        <div class="btn-icon">🔄</div>
-        <div class="btn-text">
-          <span class="btn-title">Full Reset</span>
-          <span class="btn-desc">Delete license file + clear all stored timestamps. Wipes activation state completely.</span>
+        <div class="act danger">
+          <span class="act__ico" data-ico="refreshCw" data-ico-size="sm"></span>
+          <div class="act__b">
+            <div class="act__t">Full Reset</div>
+            <div class="act__d">Delete the license file and clear all stored timestamps. Wipes activation state completely.</div>
+          </div>
+          <button class="btn" id="btn-reset" onclick="doReset()">
+            <span data-ico="trash" data-ico-size="xs"></span> Full Reset
+          </button>
         </div>
-      </button>
 
-      <!-- Prepare Uninstall -->
-      <button class="action-btn btn-uninstall" onclick="doUninstall()">
-        <div class="btn-icon">🗑️</div>
-        <div class="btn-text">
-          <span class="btn-title">Prepare for Uninstall</span>
-          <span class="btn-desc">Clean up all license data before removing the app from Windows.</span>
+        <div class="act plain">
+          <span class="act__ico" data-ico="trash" data-ico-size="sm"></span>
+          <div class="act__b">
+            <div class="act__t">Prepare for Uninstall</div>
+            <div class="act__d">Clean up all license data before removing the app from Windows.</div>
+          </div>
+          <button class="btn" onclick="doUninstall()">
+            <span data-ico="trash" data-ico-size="xs"></span> Prepare Uninstall
+          </button>
         </div>
-      </button>
+
+      </div>
     </div>
   </div>
 
-  <!-- Note -->
-  <div class="fp-note" style="width:100%;max-width:480px">
-    <strong>About the Machine Fingerprint:</strong> The hardware fingerprint is computed live from your
-    CPU, hostname, platform and Windows MachineGuid — it is never stored separately.
-    Deleting the license file removes all binding to this machine. The fingerprint changes if you
-    reinstall Windows or replace key hardware — contact support in that case.
+  <!-- Facts strip — license file values only -->
+  <div class="facts">
+    <div class="fact">
+      <span class="fact__ico" data-ico="shieldCheck" data-ico-size="sm"></span>
+      <div><div class="fact__k">Status</div><div class="fact__v" id="fact-status">—</div></div>
+    </div>
+    <div class="fact">
+      <span class="fact__ico" data-ico="calendar" data-ico-size="sm"></span>
+      <div><div class="fact__k">Activated On</div><div class="fact__v" id="fact-activated">—</div></div>
+    </div>
+    <div class="fact">
+      <span class="fact__ico" data-ico="clock" data-ico-size="sm"></span>
+      <div><div class="fact__k">Valid Until</div><div class="fact__v" id="fact-expiry">—</div></div>
+    </div>
+    <div class="fact">
+      <span class="fact__ico" data-ico="chart" data-ico-size="sm"></span>
+      <div><div class="fact__k">Days Remaining</div><div class="fact__v" id="fact-days">—</div></div>
+    </div>
+    <div class="fact">
+      <span class="fact__ico" data-ico="key" data-ico-size="sm"></span>
+      <div><div class="fact__k">License Key</div><div class="fact__v" id="fact-key">—</div></div>
+    </div>
+    <div class="fact">
+      <span class="fact__ico" data-ico="code" data-ico-size="sm"></span>
+      <div><div class="fact__k">Bound To Machine</div><div class="fact__v" id="fact-machine">—</div></div>
+    </div>
   </div>
 
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <!-- Fingerprint note -->
+  <div class="note" style="margin-top:0">
+    <span class="note__ico" data-ico="shield" data-ico-size="sm"></span>
+    <span><b>About the machine fingerprint:</b> it is computed live from your CPU, hostname, platform
+      and Windows MachineGuid — never stored separately. Deleting the license file removes all binding
+      to this machine. The fingerprint changes if you reinstall Windows or replace key hardware —
+      contact support in that case.</span>
+  </div>
 
-  <script>
-    // FIX: Password gate removed — _gateUnlocked always true
-    var _gateUnlocked = true;
+</div>
 
-    function gateCheck() { return true; } // kept for safety — no-op
+<div class="toast" id="toast"></div>
 
-    // ── Load license info on open ─────────────────────────────────────────────
-    (async function init() {
-      if (!window.licenseAPI) {
-        document.getElementById('status-badge').textContent = '⚠️ API unavailable';
-        document.getElementById('status-badge').className = 'status-badge expired';
-        document.getElementById('val-machine').textContent = 'Reload the app and try again.';
-        return;
+<script>
+  // FIX: Password gate removed — _gateUnlocked always true
+  var _gateUnlocked = true;
+  function gateCheck() { return true; } // kept for safety — no-op
+
+  // Paint every data-ico placeholder from the shared Lucide set.
+  document.querySelectorAll('[data-ico]').forEach(function (el) {
+    el.innerHTML = icon(el.dataset.ico, el.dataset.icoSize || 'md');
+  });
+
+  // Raw values kept aside so the copy buttons hand over the real string, not
+  // the grouped/masked text the rows display.
+  var _rawMachine = '';
+  var _rawKey = '';
+
+  function setBadge(text, cls) {
+    var b = document.getElementById('status-badge');
+    b.textContent = text;
+    b.className = 'badge ' + cls;
+    document.getElementById('fact-status').textContent = text;
+  }
+
+  // ── Load license info on open ─────────────────────────────────────────────
+  (async function init() {
+    if (!window.licenseAPI) {
+      setBadge('API unavailable', 'expired');
+      document.getElementById('val-machine').textContent = 'Reload the app and try again.';
+      document.getElementById('status-note').textContent =
+        'The license bridge did not load. Close this window and reopen it from Settings.';
+      return;
+    }
+
+    try {
+      const [machineId, license] = await Promise.all([
+        window.licenseAPI.getMachineId(),
+        window.licenseAPI.checkLicense()
+      ]);
+
+      // Machine ID: display as groups for readability
+      _rawMachine = machineId || '';
+      const grouped = machineId ? machineId.match(/.{1,8}/g).join('-') : 'Unknown';
+      document.getElementById('val-machine').textContent = grouped;
+      document.getElementById('fact-machine').textContent = machineId ? machineId.slice(0, 8) + '…' : '—';
+      document.getElementById('copy-machine').disabled = !machineId;
+
+      if (license.valid) {
+        setBadge('Active', 'active');
+        document.getElementById('status-note').textContent =
+          'Your license is valid and all features are enabled. Thank you for choosing HOSTIX.';
+      } else if (license.reason === 'expired') {
+        setBadge('Expired', 'expired');
+        document.getElementById('status-note').textContent =
+          'This license has expired. Contact support for a renewal key.';
+      } else {
+        setBadge('Not Activated', 'inactive');
+        document.getElementById('status-note').textContent =
+          'No active license was found on this machine. Enter a key in the main window to activate.';
+        document.getElementById('btn-deactivate').disabled = true;
+        document.getElementById('btn-reset').disabled = true;
       }
 
-      try {
-        const [machineId, license] = await Promise.all([
-          window.licenseAPI.getMachineId(),
-          window.licenseAPI.checkLicense()
-        ]);
-
-        // Machine ID: display as groups for readability
-        document.getElementById('val-machine').textContent =
-          machineId ? machineId.match(/.{8}/g).join('-') : 'Unknown';
-
-        const badge = document.getElementById('status-badge');
-        if (license.valid) {
-          badge.textContent = '✅ Active';
-          badge.className = 'status-badge active';
-        } else if (license.reason === 'expired') {
-          badge.textContent = '⏰ Expired';
-          badge.className = 'status-badge expired';
-        } else {
-          badge.textContent = '❌ Not Activated';
-          badge.className = 'status-badge inactive';
-          document.getElementById('btn-deactivate').disabled = true;
-          document.getElementById('btn-reset').disabled = true;
-        }
-
-        const keyEl = document.getElementById('val-key');
-        if (license.key) {
-          // Show partial key: first segment + masked middle + last segment
-          const parts = license.key.split('-');
-          if (parts.length === 4) {
-            keyEl.textContent = parts[0] + '-' + parts[1] + '-····-' + parts[3];
-          } else {
-            keyEl.textContent = license.key;
-          }
-        } else {
-          keyEl.textContent = 'No license found';
-          keyEl.style.color = 'var(--text3)';
-        }
-
-        const expiryEl = document.getElementById('val-expiry');
-        if (license.expiry) {
-          const expDate = new Date(license.expiry);
-          const now     = new Date();
-          const daysLeft = Math.ceil((expDate - now) / 86400000);
-          expiryEl.textContent = expDate.toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' })
-            + (daysLeft > 0 ? ' (' + daysLeft + ' days remaining)' : ' (expired)');
-          expiryEl.classList.add(daysLeft > 0 ? 'green' : 'red');
-        } else {
-          expiryEl.textContent = '—';
-        }
-
-        document.getElementById('val-activated').textContent =
-          license.activatedAt
-            ? new Date(license.activatedAt).toLocaleDateString('en-PK', { day:'numeric', month:'long', year:'numeric' })
-            : '—';
-
-      } catch (e) {
-        showToast('⚠️ Could not load license info: ' + e.message);
+      const keyEl = document.getElementById('val-key');
+      if (license.key) {
+        _rawKey = license.key;
+        // Show partial key: first segments + masked middle + last segment
+        const parts = license.key.split('-');
+        const shown = parts.length === 4
+          ? parts[0] + '-' + parts[1] + '-····-' + parts[3]
+          : license.key;
+        keyEl.textContent = shown;
+        document.getElementById('fact-key').textContent = shown;
+        document.getElementById('copy-key').disabled = false;
+      } else {
+        keyEl.textContent = 'No license found';
+        keyEl.classList.add('dim');
       }
-    })();
 
-    // ── Actions ───────────────────────────────────────────────────────────────
-    async function doDeactivate() {
-      if (!gateCheck()) return;
-      const btn = document.getElementById('btn-deactivate');
-      btn.disabled = true;
-      try {
-        const result = await window.licenseAPI.deactivateLicense();
-        if (result && result.cancelled) { btn.disabled = false; return; }
-        if (result && !result.success) {
-          showToast('❌ ' + (result.reason || result.message || 'Deactivation failed'));
-          btn.disabled = false;
-        }
-        // Main window will have navigated away; settings window auto-closes
-      } catch (e) { showToast('❌ Error: ' + e.message); btn.disabled = false; }
-    }
+      const expiryEl = document.getElementById('val-expiry');
+      if (license.expiry) {
+        const expDate  = new Date(license.expiry);
+        const daysLeft = Math.ceil((expDate - new Date()) / 86400000);
+        const dateTxt  = expDate.toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' });
+        expiryEl.textContent = dateTxt + (daysLeft > 0 ? ' (' + daysLeft + ' days remaining)' : ' (expired)');
+        expiryEl.classList.add(daysLeft > 0 ? 'green' : 'red');
+        document.getElementById('fact-expiry').textContent = dateTxt;
+        document.getElementById('fact-days').textContent =
+          daysLeft > 0 ? daysLeft.toLocaleString('en-PK') + ' days' : 'Expired';
+      } else {
+        expiryEl.textContent = '—';
+      }
 
-    async function doReset() {
-      if (!gateCheck()) return;
-      const btn = document.getElementById('btn-reset');
-      btn.disabled = true;
-      try {
-        const result = await window.licenseAPI.resetLicense();
-        if (result && result.cancelled) { btn.disabled = false; return; }
-        if (result && !result.success) {
-          showToast('❌ ' + (result.reason || result.message || 'Reset failed'));
-          btn.disabled = false;
-        }
-      } catch (e) { showToast('❌ Error: ' + e.message); btn.disabled = false; }
-    }
+      const actTxt = license.activatedAt
+        ? new Date(license.activatedAt).toLocaleDateString('en-PK', { day:'numeric', month:'long', year:'numeric' })
+        : '—';
+      document.getElementById('val-activated').textContent = actTxt;
+      document.getElementById('fact-activated').textContent = actTxt;
 
-    async function doUninstall() {
-      if (!gateCheck()) return;
-      try { await window.licenseAPI.prepareUninstall(); }
-      catch (e) { showToast('❌ Error: ' + e.message); }
+    } catch (e) {
+      showToast('Could not load license info: ' + e.message);
     }
+  })();
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    var _toastTimer;
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3500);
+  // ── Copy ──────────────────────────────────────────────────────────────────
+  // navigator.clipboard needs a secure context and this page is loaded over
+  // file://, so the execCommand path is the one that actually runs here.
+  async function copyVal(which) {
+    const text = which === 'val-machine' ? _rawMachine : _rawKey;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied to clipboard');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(ok ? 'Copied to clipboard' : 'Copy failed — select the text manually');
     }
-  </script>
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  async function doDeactivate() {
+    if (!gateCheck()) return;
+    const btn = document.getElementById('btn-deactivate');
+    btn.disabled = true;
+    try {
+      const result = await window.licenseAPI.deactivateLicense();
+      if (result && result.cancelled) { btn.disabled = false; return; }
+      if (result && !result.success) {
+        showToast(result.reason || result.message || 'Deactivation failed');
+        btn.disabled = false;
+      }
+      // Main window will have navigated away; settings window auto-closes
+    } catch (e) { showToast('Error: ' + e.message); btn.disabled = false; }
+  }
+
+  async function doReset() {
+    if (!gateCheck()) return;
+    const btn = document.getElementById('btn-reset');
+    btn.disabled = true;
+    try {
+      const result = await window.licenseAPI.resetLicense();
+      if (result && result.cancelled) { btn.disabled = false; return; }
+      if (result && !result.success) {
+        showToast(result.reason || result.message || 'Reset failed');
+        btn.disabled = false;
+      }
+    } catch (e) { showToast('Error: ' + e.message); btn.disabled = false; }
+  }
+
+  async function doUninstall() {
+    if (!gateCheck()) return;
+    try { await window.licenseAPI.prepareUninstall(); }
+    catch (e) { showToast('Error: ' + e.message); }
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  var _toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3500);
+  }
+</script>
 </body>
 </html>

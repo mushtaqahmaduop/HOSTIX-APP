@@ -27,30 +27,66 @@ function calcRevenue(datePrefix) {
 // Single source of truth for "does payment p belong to monthKey (YYYY-MM)?".
 // Fixes the core data-mixing bug: p.month stores "April 2026" while thisMonth()
 // returns "2026-04" — .startsWith() never matched, hiding all month-label payments.
+// Parse any month-ish string ("2026-04", "2026-04-17", "April 2026") to YYYY-MM.
+// Returns null when the string carries no usable month.
+function _toMonthKey(str) {
+  if (!str || typeof str !== 'string') return null;
+  var s = str.trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
+  try {
+    // "April 2026" has no day; appending one makes it parseable in every engine.
+    var d = new Date(s + ' 1');
+    if (!isNaN(d.getTime()))
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  } catch (e) {}
+  return null;
+}
+
+// THE month a payment belongs to — exactly one, never several.
+//
+// `p.month` is the billing month the warden chose and is authoritative. The
+// date fields are only ever a fallback for records written before a month
+// label was stored, because they describe WHEN money moved, not WHAT PERIOD
+// it settles: July's rent handed over on 3 August is still July's rent.
+function _payMonthKey(p) {
+  if (!p) return null;
+  return _toMonthKey(p.month)
+      || _toMonthKey(p.date)
+      || _toMonthKey(p.dueDate)
+      || _toMonthKey(p.paidDate);
+}
+
+// Does payment p fall inside period `mk`? `mk` is a prefix, so it accepts both
+// a month ("2026-04") and a whole year ("2026") — the Reports year view relies
+// on the latter.
+//
+// This used to return true if ANY of month/date/dueDate/paidDate fell in the
+// period, which meant one record could be counted in up to four different
+// months at once. That was the cause of revenue appearing in two months and of
+// records showing up under a month they do not belong to.
 function _payMatchesMonth(p, mk) {
-  if (!mk) return false;
-  // Fast path: date fields are YYYY-MM-DD
-  if ((p.date||'').startsWith(mk))     return true;
-  if ((p.paidDate||'').startsWith(mk)) return true;
-  if ((p.dueDate||'').startsWith(mk))  return true;
-  // FIX-B3: Slow path — parse ANY date/month field that is not already YYYY-MM-DD.
-  // Fixes silent failure when dueDate/date/paidDate is stored as "April 2026" or
-  // "Apr 2026" instead of "2026-04-xx", causing payments to vanish from reports.
-  function _toYM(str) {
-    if (!str || typeof str !== 'string') return null;
-    if (/^\d{4}-\d{2}/.test(str)) return null; // fast-path already handled these
-    try {
-      var d = new Date(str.trim() + ' 1');
-      if (!isNaN(d.getTime()))
-        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    } catch (e) {}
-    return null;
-  }
-  var fields = [p.month, p.dueDate, p.date, p.paidDate];
-  for (var i = 0; i < fields.length; i++) {
-    if (_toYM(fields[i]) === mk) return true;
-  }
-  return false;
+  if (!p || !mk) return false;
+  var k = _payMonthKey(p);
+  return !!k && k.indexOf(String(mk)) === 0;
+}
+
+// Was this student on the roster during period `mk` (a YYYY-MM month or a YYYY
+// year)? Used by every historical view, which previously listed whoever is
+// Active *today* — so a student admitted in August appeared inside July's
+// figures as though they had been living there all along.
+function _studentInPeriod(s, mk) {
+  if (!s || !mk) return false;
+  var key   = String(mk);
+  var last  = key.length === 4 ? key + '-12' : key;   // a year ends in December
+  var first = key.length === 4 ? key + '-01' : key;
+  var join = _toMonthKey(s.joinDate);
+  if (join && join > last) return false;              // not admitted yet
+  var left = _toMonthKey(s.leftDate || s.leaveDate);
+  if (left && left < first) return false;             // already moved out
+  // No join date on record: the only honest signal left is the current status.
+  if (!join) return s.status === 'Active';
+  return true;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,7 +109,7 @@ function generateRooms(roomTypes) {
       const type = rtypes.find(t=>t.id===typeId);
       rooms.push({
         id:'room_'+uid(), number:num, floor:f.name, typeId,
-        rent:type?.defaultRent||16000, studentIds:[], amenities:['Fan','Bed','Wardrobe'], notes:''
+        rent:Number(type?.defaultRent)||0, studentIds:[], amenities:['Fan','Bed','Wardrobe'], notes:''
       });
       idx++;
     });
@@ -562,7 +598,7 @@ function renderDashboard() {
     </div>
     ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
     '<div class="table-wrap" style="border:none">'
-    +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Monthly Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
+    +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Room Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
     +recentPay.map(p=>{
       const st2 = DB.students.find(s=>s.id===p.studentId);
       const mRent = p.monthlyRent||p.totalRent||st2?.rent||0;
@@ -675,7 +711,8 @@ function printSeatAvailability() {
 
   floors.forEach(floor => {
     const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor).sort((a,b)=>a.number-b.number);
-    body += `<div class="floor-label">${floor} Floor</div><div class="room-grid">`;
+    body += `<div class="floor-label">${icon('doorOpen','xs')}<span>${escHtml(String(floor))} Floor</span>
+      <span class="floor-count">${floorRooms.length} room${floorRooms.length===1?'':'s'}</span></div><div class="room-grid">`;
 
     floorRooms.forEach(r => {
       const rtype = DB.settings.roomTypes.find(t=>t.id===r.typeId);
@@ -683,22 +720,27 @@ function printSeatAvailability() {
       const students = DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
       const occ = students.length;
       const free = cap - occ;
-      const isFull = free === 0;
       const hasBath = (r.amenities||[]).some(a=>/bath|attach/i.test(a));
+      // Three states, not two: over capacity is its own case and used to render
+      // as "-1 free" in the same amber as a genuinely free seat.
+      const seatCls = free === 0 ? 'seats-full' : free < 0 ? 'seats-over' : 'seats-free';
+      const seatTxt = free === 0 ? 'Full' : free + ' free';
 
       const labelStyle = r.roomLabelFont ? `font-family:${r.roomLabelFont};` : '';
-      body += `<div class="room-box ${isFull?'full':'partial'}">
+      body += `<div class="room-box">
         <div class="room-top">
-          <span class="rnum" style="${labelStyle}">${r.roomLabel ? r.roomLabel+' · ' : ''}Rm #${r.number}</span>
-          <span class="rtype">${rtype?rtype.name:'—'}</span>
-          ${hasBath?'<span class="bath">'+ICONS.bath+' Bath</span>':''}
-          <span class="seats ${isFull?'seats-full':'seats-free'}">${isFull?'Full':free+' free'}</span>
+          <span class="rnum" style="${labelStyle}">${r.roomLabel ? escHtml(r.roomLabel)+' · ' : ''}Rm #${escHtml(String(r.number))}</span>
+          <span class="rtype">${rtype?escHtml(rtype.name):'—'}</span>
+          ${hasBath?'<span class="bath">'+icon('bath','xs')+' Bath</span>':''}
+          <span class="seats ${seatCls}">${seatTxt}</span>
         </div>
-        <div class="occ-bar"><div style="width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--red)'};height:100%;border-radius:2px"></div></div>`;
+        <div class="room-rows">`;
 
       if (students.length) {
         students.forEach((s,i) => {
-          body += `<div class="student-row"><span class="snum">${i+1}</span><span class="sname">${escHtml(s.name)}</span><span class="scourse">${escHtml(s.occupation||'—')}</span></div>`;
+          const course = (s.occupation||'').trim();
+          body += `<div class="student-row"><span class="snum">${i+1}</span><span class="sname">${escHtml(s.name)}</span>${
+            course ? `<span class="scourse">${escHtml(course)}</span>` : `<span class="scourse is-none">—</span>`}</div>`;
         });
       } else {
         body += `<div class="empty-row">— Vacant —</div>`;
@@ -707,12 +749,17 @@ function printSeatAvailability() {
       const outgoing = (DB.cancellations||[]).filter(c=>c.roomId===r.id&&(c.status==='Pending'||c.status==='Confirmed'));
       outgoing.forEach(c => {
         const vacDate = c.vacateDate ? new Date(c.vacateDate+'T00:00:00').toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : 'TBD';
-        body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname" style="text-decoration:line-through;color:#999">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
+        body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
       });
+      body += `</div>`;
 
-      // Empty seat slots
-      for(let i=occ;i<cap;i++){
-        body += `<div class="seat-slot">Seat ${i+1} <span style="color:#bbb">— available —</span></div>`;
+      // Empty seat slots — the line the warden ticks against during the walk.
+      if (free > 0) {
+        body += `<div class="slot-list">`;
+        for(let i=occ;i<cap;i++) body += `<div class="seat-slot">Seat ${i+1} <span>— available</span></div>`;
+        body += `</div>`;
+      } else if (free < 0) {
+        body += `<div class="slot-list"><div class="seat-slot is-over">${Math.abs(free)} seat${Math.abs(free)===1?'':'s'} over capacity</div></div>`;
       }
       body += `</div>`;
     });
@@ -724,53 +771,113 @@ function printSeatAvailability() {
     @page { size: A4; margin: 10mm 10mm; }
     @media print { .no-print{display:none!important} }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:#fff;padding:10px}
-    .header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}
-    .header h1{font-size:18px;font-weight:900;color:#0f1a2e}
-    .header .sub{font-size:10px;color:#666;margin-top:2px}
-    .header .date{font-size:11px;font-weight:700;text-align:right;color:#333}
-    .summary{display:flex;gap:8px;margin-bottom:12px}
-    .sbox{flex:1;border:1.5px solid #ddd;border-radius:5px;padding:6px 10px;text-align:center}
-    .sbox .v{font-size:20px;font-weight:900}
-    .sbox .l{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#888}
-    .floor-label{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#fff;background:#0f1a2e;padding:5px 10px;border-radius:4px;margin:10px 0 6px}
-    .room-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:4px}
-    .room-box{border:1.5px solid #ccc;border-radius:6px;padding:7px 9px;page-break-inside:avoid}
-    .room-box.full{border-color:#16a34a;background:#f0fff5}
-    .room-box.partial{border-color:#d97706;background:#fffdf0}
-    .room-top{display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap}
-    .rnum{font-size:13px;font-weight:900;color:#0f1a2e}
-    .rtype{font-size:9px;background:#eee;border-radius:20px;padding:1px 6px;color:#555}
-    .bath{font-size:9px;background:#e0f2fe;color:#0369a1;border-radius:20px;padding:1px 6px;font-weight:700}
-    .seats{font-size:9px;font-weight:800;margin-left:auto;padding:1px 7px;border-radius:20px}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#0f172a;background:#fff;padding:10px}
+
+    /* icons.js emits <svg class="icon">, and this print document has none of the
+       app stylesheets — without these rules the SVGs fall back to the replaced
+       element default (300×150) and blow the layout apart. */
+    svg.icon{width:14px;height:14px;flex-shrink:0;vertical-align:-2px}
+    svg.icon-xs{width:11px;height:11px}
+    svg.icon-sm{width:13px;height:13px}
+    svg.icon-lg{width:18px;height:18px}
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header{display:flex;justify-content:space-between;align-items:flex-end;
+            border-bottom:2px solid #1e293b;padding-bottom:9px;margin-bottom:12px}
+    .header h1{font-size:21px;font-weight:900;color:#0f172a;letter-spacing:-.02em}
+    .header .sub{display:flex;align-items:center;gap:4px;font-size:10px;color:#64748b;margin-top:3px}
+    .header .kicker{margin-top:5px;font-size:9.5px;font-weight:800;color:#475569;
+                    text-transform:uppercase;letter-spacing:1.6px}
+    .header .date{text-align:right}
+    .header .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;
+                     font-size:12px;font-weight:800;color:#1e293b}
+    .header .date .h{font-size:9px;color:#94a3b8;margin-top:3px}
+
+    /* ── Summary tiles ──────────────────────────────────────────────────── */
+    .summary{display:flex;gap:8px;margin-bottom:14px}
+    .sbox{flex:1;display:flex;align-items:center;gap:9px;
+          border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px}
+    .sbox .ico{width:32px;height:32px;border-radius:9px;flex-shrink:0;
+               display:flex;align-items:center;justify-content:center}
+    .sbox .v{display:block;font-size:21px;font-weight:900;line-height:1.1;color:#0f172a}
+    .sbox .l{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:1.1px;
+             color:#94a3b8;font-weight:700;margin-top:1px}
+    .sbox.t-rooms .ico{background:#ede9fe;color:#7c3aed}
+    .sbox.t-seats .ico{background:#dbeafe;color:#2563eb}
+    .sbox.t-occ   .ico{background:#fee2e2;color:#dc2626}
+    .sbox.t-free  .ico{background:#dcfce7;color:#16a34a}
+
+    /* ── Floor band ─────────────────────────────────────────────────────── */
+    .floor-label{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;
+                 text-transform:uppercase;letter-spacing:2px;color:#fff;background:#0f172a;
+                 padding:7px 12px;border-radius:7px;margin:12px 0 8px}
+    .floor-count{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.6px;
+                 color:#cbd5e1;text-transform:none}
+
+    /* ── Room cards ─────────────────────────────────────────────────────────
+       Cards used to be tinted green when full and yellow when partial, which
+       put a full-bleed colour behind every room and left the status badge
+       saying the same thing twice. The card is neutral now; the badge carries
+       the state. Prints far cleaner on a mono office printer too. */
+    .room-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+    .room-box{border:1px solid #e2e8f0;border-radius:9px;padding:9px 11px;
+              page-break-inside:avoid;background:#fff}
+    .room-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+              padding-bottom:7px;border-bottom:1px solid #f1f5f9}
+    .rnum{font-size:14px;font-weight:900;color:#0f172a;letter-spacing:-.01em}
+    .rtype{font-size:9px;background:#f1f5f9;border-radius:20px;padding:2px 7px;
+           color:#475569;font-weight:700}
+    .bath{display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#e0f2fe;
+          color:#0369a1;border-radius:20px;padding:2px 7px;font-weight:700}
+    .seats{font-size:9px;font-weight:800;margin-left:auto;padding:2px 8px;border-radius:20px}
     .seats-full{background:#dcfce7;color:#15803d}
     .seats-free{background:#fef3c7;color:#b45309}
-    .occ-bar{height:3px;background:#eee;border-radius:2px;margin-bottom:5px;overflow:hidden}
-    .student-row{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px dashed #eee;font-size:10px}
-    .snum{width:14px;color:#aaa;font-weight:700;flex-shrink:0}
-    .sname{font-weight:700;flex:1;color:#111}
-    .scourse{color:#0369a1;font-size:9px;font-weight:700;background:#e0f2fe;border-radius:20px;padding:1px 6px;white-space:nowrap}
-    .empty-row{font-size:10px;color:#aaa;font-style:italic;padding:2px 0}
-    .seat-slot{font-size:10px;color:#bbb;padding:2px 0;border-bottom:1px dashed #f0f0f0}
-    .outgoing-row{opacity:0.75}
-    .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;border-radius:20px;padding:1px 6px;white-space:nowrap;margin-left:auto}
-    .footer{margin-top:12px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:6px}
-    .print-btn{display:block;margin:0 auto 12px;padding:8px 24px;background:#0f1a2e;color:#a78bfa;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer}
+    .seats-over{background:#fee2e2;color:#dc2626}
+
+    .room-rows{padding-top:2px}
+    .student-row{display:flex;align-items:center;gap:6px;padding:3px 0;
+                 border-bottom:1px solid #f8fafc;font-size:10px}
+    .student-row:last-child{border-bottom:none}
+    .snum{width:13px;color:#cbd5e1;font-weight:700;flex-shrink:0;text-align:center}
+    .sname{font-weight:700;flex:1;color:#0f172a;min-width:0;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .scourse{color:#1d4ed8;font-size:8.5px;font-weight:700;background:#eff6ff;
+             border-radius:20px;padding:2px 7px;white-space:nowrap}
+    .scourse.is-none{color:#cbd5e1;background:#f8fafc}
+    .empty-row{font-size:10px;color:#94a3b8;font-style:italic;padding:5px 0}
+    .outgoing-row .sname{text-decoration:line-through;color:#94a3b8}
+    .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;
+               border-radius:20px;padding:2px 7px;white-space:nowrap}
+
+    .slot-list{margin-top:6px;padding-top:6px;border-top:1px dashed #e2e8f0}
+    .seat-slot{font-size:9.5px;color:#94a3b8;padding:1.5px 0}
+    .seat-slot span{color:#cbd5e1}
+    .seat-slot.is-over{color:#dc2626;font-weight:700}
+
+    .footer{margin-top:14px;text-align:center;font-size:9px;color:#94a3b8;
+            border-top:1px solid #e2e8f0;padding-top:7px}
+    .print-btn{display:inline-flex;align-items:center;gap:7px;margin:0 auto 14px;
+               padding:9px 22px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;
+               font-size:13px;font-weight:700;cursor:pointer}
+    .print-bar{display:flex;justify-content:center}
   </style></head><body>
-  <button class="print-btn no-print" onclick="window.print()">${ICONS.print} Print Visit Sheet</button>
+  <div class="print-bar no-print"><button class="print-btn" onclick="window.print()">${icon('print','sm')} Print Visit Sheet</button></div>
   <div class="header">
     <div>
       <h1>${escHtml(hostel)}</h1>
-      <div class="sub">${escHtml(location)}</div>
-      <div class="sub" style="margin-top:2px;font-weight:700">ROOM VISIT SHEET</div>
+      ${location?`<div class="sub">${icon('pin','xs')}<span>${escHtml(location)}</span></div>`:''}
+      <div class="kicker">Room Visit Sheet</div>
     </div>
-    <div class="date">${now2}<br><span style="font-size:9px;color:#aaa">Carry this during room visits</span></div>
+    <div class="date">
+      <div class="d">${icon('calendar','xs')}<span>${now2}</span></div>
+      <div class="h">Carry this during room visits</div>
+    </div>
   </div>
   <div class="summary">
-    <div class="sbox"><div class="v">${DB.rooms.length}</div><div class="l">Rooms</div></div>
-    <div class="sbox"><div class="v" style="color:#111">${totalSeats}</div><div class="l">Total Seats</div></div>
-    <div class="sbox"><div class="v" style="color:#dc2626">${allActiveSeats2}</div><div class="l">Occupied</div></div>
-    <div class="sbox"><div class="v" style="color:#16a34a">${freeSeats}</div><div class="l">Available</div></div>
+    <div class="sbox t-rooms"><span class="ico">${icon('doorOpen','sm')}</span><span><span class="v">${DB.rooms.length}</span><span class="l">Rooms</span></span></div>
+    <div class="sbox t-seats"><span class="ico">${icon('users','sm')}</span><span><span class="v">${totalSeats}</span><span class="l">Total Seats</span></span></div>
+    <div class="sbox t-occ"><span class="ico">${icon('userCheck','sm')}</span><span><span class="v">${allActiveSeats2}</span><span class="l">Occupied</span></span></div>
+    <div class="sbox t-free"><span class="ico">${icon('armchair','sm')}</span><span><span class="v">${freeSeats}</span><span class="l">Available</span></span></div>
   </div>
   ${body}
   <div class="footer">${escHtml(hostel)} · Room Visit Sheet · ${now2}</div>
@@ -1001,9 +1108,12 @@ function renderMonthModal(monthKey, monthLabel) {
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
   const netProfit = rev - expTotal;
-  // Active students (those registered and active with a room this month)
-  // Show Active students + students who joined this month regardless of current status (historical view)
-  const activeStudents = DB.students.filter(s=>s.status==='Active'||(s.joinDate?.startsWith(monthKey)&&DB.payments.some(p=>p.studentId===s.id&&_payMatchesMonth(p,monthKey))));
+  // The roster AS IT STOOD in this month — not whoever happens to be Active
+  // today. Anyone with a fee record for the month is included regardless, so a
+  // student who has since left still appears against the money they paid.
+  const activeStudents = DB.students.filter(s =>
+    _studentInPeriod(s, monthKey) ||
+    DB.payments.some(p => p.studentId === s.id && _payMatchesMonth(p, monthKey)));
 
   const studentRows = activeStudents.map(s=>{
     const room = DB.rooms.find(r=>r.id===s.roomId);
@@ -1095,7 +1205,7 @@ function renderMonthModal(monthKey, monthLabel) {
   <!-- STUDENTS TAB -->
   <div id="mpanel-students">
     <div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>Monthly Rent</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Student</th><th>Room</th><th>Room Rent</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
       <tbody>${studentRows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">No students found</td></tr>'}</tbody>
       </table>
     </div>
@@ -1230,7 +1340,7 @@ async function deleteMonthExpense(expId, monthKey, monthLabel) {
 
 function addMonthPaymentFromModal(monthKey, monthLabel) {
   closeModal();
-  showAddPaymentModal();
+  openAddPayment();
 }
 
 function addMonthExpenseFromModal(monthKey, monthLabel) {
@@ -1457,7 +1567,11 @@ function drawTrendChart() {
         borderWidth:2.5,
         pointBackgroundColor:ptColors, pointBorderColor:ptColors,
         pointRadius:function(c){return real[c.dataIndex]?5:3;}, pointHoverRadius:8,
-        tension:0.35,
+        // Straight point-to-point, matching the Reports trend. Smoothing bows
+        // the line between months and implies figures the ledger never held —
+        // doubly wrong here, where `real[]` already marks some points as
+        // months with nothing recorded.
+        tension:0,
         // Soft area wash under the revenue line (owner reference design).
         // chartArea is undefined on the very first layout pass — bail to
         // transparent then, Chart.js re-invokes this once the area is known.
@@ -1554,10 +1668,15 @@ async function checkAutoMonthAdvance() {
     active.forEach(t => {
       if (!DB.payments.some(p => p.studentId === t.id && p.month === mo)) {
         const room = DB.rooms.find(r => r.id === t.roomId);
+        // Rent plus mess, and mess only for students who take it.
+        const messOn = t.messOptIn !== false;
+        const mess   = messOn ? (Number(t.mess) || 0) : 0;
         DB.payments.push({
           id: 'p_' + uid(), studentId: t.id, studentName: t.name,
           roomId: t.roomId, roomNumber: room?.number || '',
-          amount: 0, monthlyRent: t.rent, totalRent: t.rent, unpaid: t.rent,
+          amount: 0, monthlyRent: t.rent, totalRent: t.rent,
+          messCharge: mess, messIncluded: messOn,
+          unpaid: (Number(t.rent) || 0) + mess,
           method: t.paymentMethod || 'Cash', month: mo,
           date: startDate.toISOString().split('T')[0],
           dueDate: '', status: 'Pending',

@@ -45,7 +45,6 @@ function renderRooms() {
 
   rooms = applySort(rooms, roomFilter, {
     number:    r => r.number,
-    rent:      r => Number(r.rent || 0),
     occupancy: r => _occOf(r.id),
     floor:     r => r.floor,
     type:      r => getRoomType(r).name
@@ -90,10 +89,6 @@ function renderRooms() {
           <span class="k">Floor</span><span class="v">${escHtml(r.floor||'—')} Floor</span>
         </div>
         <div class="rms-row">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15 9.5a2.5 2.5 0 0 0-2.5-1.5h-1a2 2 0 0 0 0 4h1a2 2 0 0 1 0 4h-1A2.5 2.5 0 0 1 9 14.5"/></svg>
-          <span class="k">Rent / Month</span><span class="v">${fmtPKR(r.rent)}</span>
-        </div>
-        <div class="rms-row">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
           <span class="k">Type</span><span class="v">${cap} bed${cap===1?'':'s'}</span>
         </div>
@@ -126,7 +121,6 @@ function renderRooms() {
       <td><span class="num">#${escHtml(String(r.number))}</span></td>
       <td>${escHtml(type.name)}</td>
       <td>${escHtml(r.floor||'—')} Floor</td>
-      <td>${fmtPKR(r.rent)}</td>
       <td>${occ}/${cap}</td>
       <td><span class="rms-card__state ${occ>0?'dh-green':'dh-violet'}" style="position:static">${occ>0?'Occupied':'Vacant'}</span></td>
       <td>${names.length?escHtml(names.join(', ')):'<span style="color:var(--text3)">—</span>'}</td>
@@ -215,8 +209,6 @@ function renderRooms() {
       <select class="rms-select${roomFilter.sortKey?' is-set':''}" onchange="setRoomSort(this.value)" title="Sort rooms">
         ${sortOpt('|asc','Sort: Default')}
         ${sortOpt('number|asc','Room # ↑')}
-        ${sortOpt('rent|asc','Rent ↑')}
-        ${sortOpt('rent|desc','Rent ↓')}
         ${sortOpt('occupancy|desc','Occupancy ↓')}
         ${sortOpt('floor|asc','Floor ↑')}
       </select>
@@ -256,7 +248,7 @@ function renderRooms() {
          </div>`
       : roomFilter.view === 'list'
         ? `<div class="rms-list"><table>
-             <thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Rent</th><th>Beds</th><th>Status</th><th>Occupants</th><th>Actions</th></tr></thead>
+             <thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Beds</th><th>Status</th><th>Occupants</th><th>Actions</th></tr></thead>
              <tbody>${listRows}</tbody>
            </table></div>`
         : `<div class="rms-grid">${cards}</div>`}
@@ -284,14 +276,14 @@ function exportRoomsCSV() {
     return true;
   });
   rooms = applySort(rooms, roomFilter, {
-    number:r=>r.number, rent:r=>Number(r.rent||0), occupancy:r=>occ(r.id),
+    number:r=>r.number, occupancy:r=>occ(r.id),
     floor:r=>r.floor, type:r=>getRoomType(r).name
   });
-  const rows=[['Room','Type','Floor','Capacity','Occupied','Vacant','Rent/Mo','Status','Students']];
+  const rows=[['Room','Type','Floor','Capacity','Occupied','Vacant','Status','Students']];
   rooms.forEach(r=>{
     const t=getRoomType(r); const o=occ(r.id);
     const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name).join('; ');
-    rows.push(['#'+r.number,t.name,r.floor,t.capacity,o,Math.max(0,t.capacity-o),r.rent||0,o>0?'Occupied':'Vacant',names]);
+    rows.push(['#'+r.number,t.name,r.floor,t.capacity,o,Math.max(0,t.capacity-o),o>0?'Occupied':'Vacant',names]);
   });
   downloadCSV(rows, 'Rooms_'+today()+'.csv');
 }
@@ -306,38 +298,182 @@ function showRoomDetail(id) {
       <div class="card" style="padding:14px"><div class="stat-label">Type</div><div style="font-weight:700;color:var(--text)">${escHtml(type.name)}</div></div>
       <div class="card" style="padding:14px"><div class="stat-label">Floor</div><div style="font-weight:700">${r.floor}</div></div>
       <div class="card" style="padding:14px"><div class="stat-label">Capacity</div><div style="font-weight:700">${occ}/${type.capacity} occupied</div></div>
-      <div class="card" style="padding:14px"><div class="stat-label">Monthly Rent</div><div style="font-weight:700;color:var(--text)">${fmtPKR(r.rent)}</div></div>
     </div>
     <div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Amenities</div><div class="tag-list">${(r.amenities||[]).map(a=>`<div class="tag-item">${escHtml(a)}</div>`).join('')||'<span class="text-muted">None listed</span>'}</div></div>
-    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${t.name[0]}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div><div class="ml-auto fw-700">${fmtPKR(t.rent)}</div></div>`).join('')}</div>`:''}
+    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${t.name[0]}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div></div>`).join('')}</div>`:''}
     ${r.notes?`<div style="margin-top:14px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px"><div class="stat-label" style="margin-bottom:4px">Notes</div><div style="font-size:13px;color:var(--text2)">${escHtml(r.notes)}</div></div>`:''}
   `,`<button class="btn btn-secondary" onclick="closeModal();showEditRoomModal('${r.id}')">Edit Room</button><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
+}
+
+/* ── Amenity picker ────────────────────────────────────────────────────────────
+   The add/edit room forms used to take amenities as one comma-separated text
+   box, so every hostel spelled "Attached Bath" a different way and the room
+   card chips never matched between rooms. The picker below offers the known
+   set as toggles and keeps a free-text "Other" for anything site-specific.
+
+   It writes back into a hidden #f-ramen input in exactly the comma-separated
+   shape submitAddRoom/submitEditRoom already parse, so the save path and the
+   stored data are unchanged — only the way the user picks them is new. */
+const ROOM_AMENITIES = [
+  { label:'Fan',           icon:'fan',       hue:'dh-slate'  },
+  { label:'Bed',           icon:'bed',       hue:'dh-slate'  },
+  { label:'Wardrobe',      icon:'wardrobe',  hue:'dh-blue'   },
+  { label:'Attached Bath', icon:'bath',      hue:'dh-green'  },
+  { label:'Study Table',   icon:'desk',      hue:'dh-slate'  },
+  { label:'Chair',         icon:'armchair',  hue:'dh-slate'  },
+  { label:'AC',            icon:'snowflake', hue:'dh-blue'   },
+  { label:'Heater',        icon:'flame',     hue:'dh-red'    },
+  { label:'Wi-Fi',         icon:'wifi',      hue:'dh-blue'   },
+  { label:'TV',            icon:'tv',        hue:'dh-violet' },
+  { label:'Refrigerator',  icon:'fridge',    hue:'dh-blue'   },
+  { label:'Balcony',       icon:'balcony',   hue:'dh-blue'   },
+  { label:'Water Cooler',  icon:'droplet',   hue:'dh-blue'   },
+  { label:'Geyser',        icon:'flame',     hue:'dh-amber'  },
+  { label:'Curtains',      icon:'blinds',    hue:'dh-amber'  },
+];
+const ROOM_AMENITY_DEFAULTS = ['Fan','Bed','Wardrobe','Attached Bath'];
+
+/** Renders the amenity toggle grid + the hidden #f-ramen the submitters read. */
+function roomAmenityGrid(selected) {
+  const chosen = (selected || []).map(a => String(a).trim()).filter(Boolean);
+  const known  = ROOM_AMENITIES.map(a => a.label.toLowerCase());
+  // Anything stored that isn't one of the known toggles becomes the "Other" text.
+  const other  = chosen.filter(a => !known.includes(a.toLowerCase()));
+  const isOn   = label => chosen.some(a => a.toLowerCase() === label.toLowerCase());
+
+  const cells = ROOM_AMENITIES.map(a => `
+    <label class="arm-amen ${a.hue}${isOn(a.label) ? ' is-on' : ''}">
+      <input type="checkbox" value="${escHtml(a.label)}" ${isOn(a.label) ? 'checked' : ''}
+             onchange="this.closest('.arm-amen').classList.toggle('is-on',this.checked);syncRoomAmenities()">
+      <span class="arm-amen__tick">${icon('checkmark','xs')}</span>
+      <span class="arm-amen__ico">${icon(a.icon,'sm')}</span>
+      <span class="arm-amen__txt">${escHtml(a.label)}</span>
+    </label>`).join('');
+
+  return `
+    <div class="arm-amen-head">
+      <span class="arm-amen-head__t">Amenities</span>
+      <span class="arm-amen-head__hint">Select all that apply</span>
+      <span class="arm-amen-head__count" id="f-ramen-count">0 selected</span>
+    </div>
+    <div class="arm-amen-grid" id="f-ramen-grid">
+      ${cells}
+      <label class="arm-amen dh-slate arm-amen--other${other.length ? ' is-on' : ''}">
+        <input type="checkbox" id="f-ramen-other-on" ${other.length ? 'checked' : ''}
+               onchange="this.closest('.arm-amen').classList.toggle('is-on',this.checked);syncRoomAmenities()">
+        <span class="arm-amen__tick">${icon('checkmark','xs')}</span>
+        <span class="arm-amen__ico">${icon('ellipsis','sm')}</span>
+        <input class="arm-amen__free" id="f-ramen-other" placeholder="Other (specify)"
+               value="${escHtml(other.join(', '))}" autocomplete="off"
+               onclick="event.preventDefault();event.stopPropagation()"
+               oninput="syncRoomAmenities()">
+      </label>
+    </div>
+    <input type="hidden" id="f-ramen" value="${escHtml(chosen.join(', '))}">`;
+}
+
+/** Collects the toggles + free text back into #f-ramen. */
+function syncRoomAmenities() {
+  const grid = document.getElementById('f-ramen-grid');
+  const out  = document.getElementById('f-ramen');
+  if (!grid || !out) return;
+  const picked = [...grid.querySelectorAll('.arm-amen:not(.arm-amen--other) input:checked')]
+    .map(i => i.value);
+  if (document.getElementById('f-ramen-other-on')?.checked) {
+    (document.getElementById('f-ramen-other')?.value || '')
+      .split(',').map(s => s.trim()).filter(Boolean).forEach(s => picked.push(s));
+  }
+  out.value = picked.join(', ');
+  const count = document.getElementById('f-ramen-count');
+  if (count) count.textContent = picked.length + ' selected';
+}
+
+/** Live preview of the room exactly as it will be stored (no invented values). */
+function syncRoomPreview() {
+  const name = (document.getElementById('f-rnum')?.value || '').trim();
+  const code = document.getElementById('f-rcode');
+  if (code) {
+    code.textContent = name ? '#' + name : '—';
+    code.classList.toggle('is-empty', !name);
+  }
+  const typeId = document.getElementById('f-rtype')?.value;
+  const type   = DB.settings.roomTypes.find(t => t.id === typeId);
+  const meta   = document.getElementById('f-rcode-meta');
+  if (meta) {
+    meta.textContent = type
+      ? `${document.getElementById('f-rfloor')?.value || ''} Floor · ${type.capacity} bed${type.capacity === 1 ? '' : 's'} · rent ${fmtPKR(type.defaultRent || 0)}/month`
+      : 'Pick a floor and room type';
+  }
 }
 
 function showAddRoomModal(presetId='') {
   const typeOpts = DB.settings.roomTypes.map(t=>`<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
   const floorOpts = DB.settings.floors.map(f=>`<option value="${f}">${f} Floor</option>`).join('');
-  showModal('modal-lg','Add New Room',`
-    <div class="forms-grid">
-      <div class="field"><label>Room Name / Number *</label>
-        <input class="forms-control" id="f-rnum" placeholder="e.g. A 01, B 02-a, B 02-b" maxlength="12" autocomplete="off"
-          oninput="formatRoomNumber(this)"
-          style="font-weight:700;letter-spacing:1px">
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">First letter AUTO-capitals · numbers · suffix in small (a, b…)</div>
+  showModal('modal-lg', roomModalTitle('doorOpen','Add New Room','Register a new room or unit in your hostel'), `
+    <div class="arm">
+      <div class="arm-guide">
+        <span class="arm-guide__ico">${icon('info','sm')}</span>
+        <div>
+          <div class="arm-guide__t">Room Naming Guide</div>
+          <div class="arm-guide__b">Use letters and numbers (e.g. A 01, B 02-a, B 02-b). The first letter is
+            auto-capitalised; keep numbers and the suffix in small letters (a, b…).</div>
+        </div>
       </div>
-      <div class="field"><label>Floor *</label><select class="forms-control" id="f-rfloor">${floorOpts}</select></div>
-      <div class="field"><label>Room Type *</label><select class="forms-control" id="f-rtype">${typeOpts}</select></div>
 
-      <div class="field col-full"><label>Amenities (comma separated)</label><input class="forms-control" id="f-ramen" value="Fan, Bed, Wardrobe, Attached Bath"></div>
-      <div class="field col-full"><label>Notes</label><textarea class="forms-control" id="f-rnotes"></textarea></div>
+      <div class="arm-card">
+        <label class="arm-label" for="f-rnum">Room Name / Number <i>*</i></label>
+        <div class="arm-input dh-violet">
+          <span class="arm-input__ico">${icon('doorOpen','sm')}</span>
+          <input id="f-rnum" placeholder="e.g. A 01, B 02-a, B 02-b" maxlength="12" autocomplete="off"
+                 oninput="formatRoomNumber(this);syncRoomPreview()">
+        </div>
+        <div class="arm-hint">First letter auto-capitalised, numbers and suffix in small letters (a, b…).</div>
+      </div>
+
+      <div class="arm-split">
+        <div class="arm-card">
+          <label class="arm-label" for="f-rfloor">Floor <i>*</i></label>
+          <div class="arm-input dh-blue">
+            <span class="arm-input__ico">${icon('building','sm')}</span>
+            <select id="f-rfloor" onchange="syncRoomPreview()">${floorOpts}</select>
+          </div>
+          <label class="arm-label" for="f-rtype" style="margin-top:16px">Room Type <i>*</i></label>
+          <div class="arm-input dh-violet">
+            <span class="arm-input__ico">${icon('bed','sm')}</span>
+            <select id="f-rtype" onchange="syncRoomPreview()">${typeOpts}</select>
+          </div>
+        </div>
+
+        <div class="arm-card">
+          <label class="arm-label">Room Preview</label>
+          <div class="arm-input dh-amber is-readonly">
+            <span class="arm-input__ico">${icon('code','sm')}</span>
+            <span class="arm-code is-empty" id="f-rcode">—</span>
+          </div>
+          <div class="arm-hint" id="f-rcode-meta">Pick a floor and room type</div>
+          <label class="arm-label" for="f-rnotes" style="margin-top:16px">Notes</label>
+          <div class="arm-input dh-amber is-area">
+            <span class="arm-input__ico">${icon('fileText','sm')}</span>
+            <textarea id="f-rnotes" rows="3" placeholder="Add any additional notes about this room…"></textarea>
+          </div>
+          <div class="arm-hint">Optional notes or special instructions</div>
+        </div>
+      </div>
+
+      <div class="arm-card">${roomAmenityGrid(ROOM_AMENITY_DEFAULTS)}</div>
     </div>`,
-    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitAddRoom()">Add Room</button>`);
-  // Live preview: update when number changes
-  setTimeout(()=>{
-    const ni=document.getElementById('f-rnum');
-    const pr=document.getElementById('f-rnum-preview');
-    if(ni&&pr){ ni.addEventListener('input',()=>{ pr.textContent=ni.value||'Preview'; }); }
-  },100);
+    `<button class="btn btn-secondary" onclick="closeModal()">${icon('close','sm')} Cancel</button>
+     <button class="btn btn-primary" onclick="submitAddRoom()">${icon('plus','sm')} Add Room</button>`);
+  syncRoomAmenities();
+  syncRoomPreview();
+}
+
+/** Shared rich modal heading — icon tile, title, one-line subtitle. */
+function roomModalTitle(ico, title, sub) {
+  return `<span class="arm-head">
+    <span class="arm-head__ico">${icon(ico,'sm')}</span>
+    <span><span class="arm-head__t">${escHtml(title)}</span><span class="arm-head__s">${escHtml(sub)}</span></span>
+  </span>`;
 }
 async function submitAddRoom() {
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
@@ -360,18 +496,55 @@ function showEditRoomModal(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const typeOpts=DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${r.typeId===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
   const floorOpts=DB.settings.floors.map(f=>`<option value="${f}" ${r.floor===f?'selected':''}>${f} Floor</option>`).join('');
-  showModal('modal-md',`Edit Room #${r.number}`,`
-    <div class="forms-grid">
-      <div class="field"><label>Room Name / Number</label>
-        <input class="forms-control" id="f-rnum" maxlength="12" value="${r.number}"
-          oninput="formatRoomNumber(this)"
-          style="font-weight:700;letter-spacing:1px"></div>
-      <div class="field"><label>Floor</label><select class="forms-control" id="f-rfloor">${floorOpts}</select></div>
-      <div class="field"><label>Room Type</label><select class="forms-control" id="f-rtype">${typeOpts}</select></div>
-      <div class="field col-full"><label>Amenities (comma separated)</label><input class="forms-control" id="f-ramen" value="${escHtml((r.amenities||[]).join(', '))}"></div>
-      <div class="field col-full"><label>Notes</label><textarea class="forms-control" id="f-rnotes">${escHtml(r.notes||'')}</textarea></div>
+  showModal('modal-lg', roomModalTitle('edit',`Edit Room #${r.number}`,'Update this room’s details, type and amenities'), `
+    <div class="arm">
+      <div class="arm-card">
+        <label class="arm-label" for="f-rnum">Room Name / Number</label>
+        <div class="arm-input dh-violet">
+          <span class="arm-input__ico">${icon('doorOpen','sm')}</span>
+          <input id="f-rnum" maxlength="12" value="${escHtml(String(r.number))}" autocomplete="off"
+                 oninput="formatRoomNumber(this);syncRoomPreview()">
+        </div>
+        <div class="arm-hint">First letter auto-capitalised, numbers and suffix in small letters (a, b…).</div>
+      </div>
+
+      <div class="arm-split">
+        <div class="arm-card">
+          <label class="arm-label" for="f-rfloor">Floor</label>
+          <div class="arm-input dh-blue">
+            <span class="arm-input__ico">${icon('building','sm')}</span>
+            <select id="f-rfloor" onchange="syncRoomPreview()">${floorOpts}</select>
+          </div>
+          <label class="arm-label" for="f-rtype" style="margin-top:16px">Room Type</label>
+          <div class="arm-input dh-violet">
+            <span class="arm-input__ico">${icon('bed','sm')}</span>
+            <select id="f-rtype" onchange="syncRoomPreview()">${typeOpts}</select>
+          </div>
+        </div>
+
+        <div class="arm-card">
+          <label class="arm-label">Room Preview</label>
+          <div class="arm-input dh-amber is-readonly">
+            <span class="arm-input__ico">${icon('code','sm')}</span>
+            <span class="arm-code" id="f-rcode">—</span>
+          </div>
+          <div class="arm-hint" id="f-rcode-meta">Pick a floor and room type</div>
+          <label class="arm-label" for="f-rnotes" style="margin-top:16px">Notes</label>
+          <div class="arm-input dh-amber is-area">
+            <span class="arm-input__ico">${icon('fileText','sm')}</span>
+            <textarea id="f-rnotes" rows="3" placeholder="Add any additional notes about this room…">${escHtml(r.notes||'')}</textarea>
+          </div>
+          <div class="arm-hint">Optional notes or special instructions</div>
+        </div>
+      </div>
+
+      <div class="arm-card">${roomAmenityGrid(r.amenities||[])}</div>
     </div>`,
-  `<button class="btn btn-danger" onclick="confirmDeleteRoom('${id}')">Delete Room</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditRoom('${id}')">Save Changes</button>`);
+  `<button class="btn btn-danger" onclick="confirmDeleteRoom('${id}')">${icon('trash','sm')} Delete Room</button>
+   <button class="btn btn-secondary" onclick="closeModal()">${icon('close','sm')} Cancel</button>
+   <button class="btn btn-primary" onclick="submitEditRoom('${id}')">${icon('checkmark','sm')} Save Changes</button>`);
+  syncRoomAmenities();
+  syncRoomPreview();
 }
 async function submitEditRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;

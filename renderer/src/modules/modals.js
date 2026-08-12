@@ -76,85 +76,113 @@ function showConfirm(title, text, onConfirm, onCancel) {
 // ════════════════════════════════════════════════════════════════════════════
 async function showBackupRestoreModal() {
   if (typeof requirePerm === 'function' && !requirePerm('backup')) return;
-  const now = new Date();
-  const ts = now.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' + now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
   const dataSize = (JSON.stringify(DB).length / 1024).toFixed(1);
   const studentCount = DB.students.length;
   const paymentCount = DB.payments.length;
   const roomCount = DB.rooms.length;
+  // This line used to read "Last snapshot: <now>" — it formatted the current
+  // clock, so it always claimed a fresh backup existed no matter how long it
+  // had actually been. It now reports the real last export, recorded by
+  // exportBackup(), and says so plainly when there has never been one.
+  const lastExport = DB.settings?.lastBackupExport ? new Date(DB.settings.lastBackupExport) : null;
+  const lastExportTxt = lastExport
+    ? lastExport.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' +
+      lastExport.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'})
+    : null;
 
-  showModal('modal-md',`${MODAL_ICONS.shieldCheck} Backup & Restore Data`,`
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
-      <div>${MODAL_ICONS.lock}</div>
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text)">Your data is safe in this browser</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Export a backup file to your PC/phone to protect against browser data loss</div>
+  showModal('modal-md', `<span class="bkp-head">
+      <span class="bkp-head__ico">${icon('shieldCheck','sm')}</span>
+      <span><span class="bkp-head__t">Backup &amp; Restore Data</span>
+      <span class="bkp-head__s">Secure your hostel data with export, backup and restore options</span></span>
+    </span>`, `
+    <div class="bkp">
+
+      <div class="bkp-safe">
+        <span class="bkp-safe__ico">${icon('lock','sm')}</span>
+        <div>
+          <div class="bkp-safe__t">Your data is stored on this computer</div>
+          <div class="bkp-safe__s">HOSTIX runs offline — nothing leaves this machine. Export a backup file to
+            a USB or cloud drive so a disk failure can’t take the hostel’s records with it.</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="bkp-stats">
+        <div class="bkp-stat dh-blue">
+          <span class="bkp-stat__ico">${icon('users','sm')}</span>
+          <span><span class="bkp-stat__v">${studentCount}</span><span class="bkp-stat__k">Students</span></span>
+        </div>
+        <div class="bkp-stat dh-red">
+          <span class="bkp-stat__ico">${icon('bed','sm')}</span>
+          <span><span class="bkp-stat__v">${roomCount}</span><span class="bkp-stat__k">Rooms</span></span>
+        </div>
+        <div class="bkp-stat dh-amber">
+          <span class="bkp-stat__ico">${icon('receipt','sm')}</span>
+          <span><span class="bkp-stat__v">${paymentCount}</span><span class="bkp-stat__k">Payments</span></span>
+        </div>
+        <div class="bkp-stat dh-violet">
+          <span class="bkp-stat__ico">${icon('database','sm')}</span>
+          <span><span class="bkp-stat__v">${dataSize} KB</span><span class="bkp-stat__k">Data Size</span></span>
+        </div>
+      </div>
+
+      <!-- Export section -->
+      <div class="bkp-sec">
+        <div class="bkp-sec__head dh-blue">
+          <span class="bkp-sec__ico">${icon('download','sm')}</span> Export / Download Backup
+        </div>
+        <div class="bkp-sec__body">
+          <p class="bkp-p">Download a <b>.json</b> backup file containing all your hostel data.
+            Store it on your PC, a USB stick, or a cloud drive.</p>
+          <div class="bkp-acts">
+            <button class="btn btn-primary" onclick="exportBackup('json')">
+              ${icon('download','sm')} Download JSON Backup
+            </button>
+            <button class="btn btn-secondary" onclick="exportBackup('copy')">
+              ${icon('copy','sm')} Copy to Clipboard
+            </button>
+          </div>
+          <div class="bkp-last${lastExportTxt ? '' : ' is-never'}">
+            ${icon('clock','xs')}
+            <span>${lastExportTxt ? 'Last exported: ' + lastExportTxt : 'No backup has been exported yet'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Restore section -->
+      <div class="bkp-sec">
+        <div class="bkp-sec__head dh-amber">
+          <span class="bkp-sec__ico">${icon('refreshCw','sm')}</span> Restore from Backup
+        </div>
+        <div class="bkp-sec__body">
+          <div class="bkp-warn">
+            <span class="bkp-warn__ico">${icon('warning','sm')}</span>
+            <span>Restoring <b>replaces ALL current data</b>. Export a backup first — this cannot be undone.</span>
+          </div>
+
+          <label class="bkp-label" for="restore-file-input">Select backup file (.json)</label>
+          <input type="file" id="restore-file-input" accept=".json" class="bkp-file">
+          <button class="btn btn-danger bkp-wide" onclick="restoreBackup()">
+            ${icon('upload','sm')} Restore Data from File
+          </button>
+
+          <div class="bkp-or">
+            <label class="bkp-label" for="restore-json-paste">Or paste JSON directly</label>
+            <textarea id="restore-json-paste" class="bkp-ta" rows="3" placeholder="Paste JSON backup data here…"></textarea>
+            <button class="btn btn-secondary bkp-wide" onclick="restoreFromPaste()">
+              ${icon('clipboard','sm')} Restore from Pasted JSON
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Stats row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--text)">${studentCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Students</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--text)">${roomCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Rooms</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--text)">${paymentCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Payments</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--text)">${dataSize}KB</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Data Size</div>
-      </div>
-    </div>
-
-    <!-- Export section -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.download} Export / Download Backup</div>
-      <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">Download a <strong style="color:var(--text)">.json</strong> backup file containing all your hostel data. Store it on your PC, USB, or Google Drive.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="exportBackup('json')" style="flex:1">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /> <path d="m7 10 5 5 5-5" /></svg>
-          Download JSON Backup
-        </button>
-        <button class="btn btn-secondary" onclick="exportBackup('copy')">
-          ${MODAL_ICONS.clipboardCopy} Copy to Clipboard
-        </button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Last snapshot: ${ts}</div>
-    </div>
-
-    <!-- Restore section -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
-      <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
-        <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.alertTriangle}</span> <strong>Warning:</strong> Restoring will <strong style="color:var(--red)">replace ALL current data</strong>. Make sure to export a backup first!
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11.5px;color:var(--text3);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px">Select Backup File (.json)</label>
-        <input type="file" id="restore-file-input" accept=".json" class="form-control" style="font-size:12px">
-      </div>
-      <button class="btn btn-danger" onclick="restoreBackup()" style="width:100%">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /> <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-        Restore Data from File
-      </button>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="font-size:11.5px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Or Paste JSON directly</div>
-        <textarea id="restore-json-paste" class="form-control" rows="3" placeholder="Paste JSON backup data here…" style="font-family:var(--font-mono);font-size:11px"></textarea>
-        <button class="btn btn-secondary" onclick="restoreFromPaste()" style="width:100%;margin-top:8px">${MODAL_ICONS.clipboardPaste} Restore from Pasted JSON</button>
-      </div>
-    </div>
-  `, `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
+  `, `<button class="btn btn-secondary" onclick="closeModal()">${icon('close','sm')} Close</button>`);
 }
 
-function exportBackup(mode) {
+async function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'HOSTYLLO_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -164,11 +192,19 @@ function exportBackup(mode) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     toast('Backup downloaded: ' + filename, 'success');
   } else {
-    navigator.clipboard.writeText(json).then(()=>{
+    try {
+      await navigator.clipboard.writeText(json);
       toast('Data copied to clipboard!', 'success');
-    }).catch(()=>{
+    } catch {
       toast('Copy failed — try the Download button instead', 'error');
-    });
+      return;   // nothing left the app, so don't stamp it as an export
+    }
+  }
+  // Stamp the export so the modal can report when a backup was last taken,
+  // instead of formatting the current clock and calling it a snapshot.
+  if (DB.settings) {
+    DB.settings.lastBackupExport = now.toISOString();
+    await saveDB();
   }
 }
 
@@ -228,6 +264,19 @@ function _initDBFields(d) {
     { id:'4s', name:'4-Seater', capacity:4, defaultRent:16000, color:'#7c3aed' },
     { id:'5s', name:'5-Seater', capacity:5, defaultRent:16000, color:'#f0a030' }
   ];
+  /* RENT + MESS SPLIT.
+     A hostel's monthly charge is really two charges — the bed and the food —
+     and a student may take the bed only. Existing installs stored the two
+     added together in defaultRent, so mess starts at 0 everywhere: the split
+     is opt-in from Settings → Rent & Mess and nobody's totals move until the
+     owner enters one. */
+  (d.settings.roomTypes || []).forEach(function (t) {
+    if (t.defaultMess == null) t.defaultMess = 0;
+  });
+  (d.students || []).forEach(function (s) {
+    if (s.mess == null)      s.mess = 0;
+    if (s.messOptIn == null) s.messOptIn = true;
+  });
   if (!d.settings.paymentMethods) d.settings.paymentMethods = ['Cash','JazzCash','EasyPaisa','Bank Transfer','Cheque'];
   if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Other'];
   if (!d.settings.floors) d.settings.floors = ['Ground','1st','2nd','3rd'];
