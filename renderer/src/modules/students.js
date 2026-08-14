@@ -1045,7 +1045,7 @@ function loadEditStudentPhoto(input) {
 }
 function clearEditStudentPhoto() {
   const prev = document.getElementById('edit-student-photo-preview');
-  if(prev) prev.innerHTML = '🧑‍🎓';
+  if(prev) prev.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>';
   const data = document.getElementById('edit-student-photo-data'); if(data) data.value='';
   const clr = document.getElementById('edit-student-clear-btn'); if(clr) clr.style.display='none';
 }
@@ -1250,78 +1250,161 @@ function showEditStudentModal(id) {
   const curRoom=DB.rooms.find(r=>r.id===t.roomId);
   const curRt=curRoom?getRoomType(curRoom):null;
   const presetLabel=curRoom?`Room #${curRoom.number} · ${curRt?.name||''} · ${curRoom.floor||''} Floor`:'';
-  showModal('modal-lg',`✏️ Edit Student — ${escHtml(t.name)}`,`
-  <style>
-  .as-section{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-  .as-section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-strong);margin-bottom:12px;display:flex;align-items:center;gap:6px}
-  </style>
-  <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,var(--bg3),var(--bg4));border:1px solid var(--border2);border-radius:12px">
-    <div id="edit-student-photo-preview" style="width:72px;height:86px;border-radius:12px;border:2px dashed rgba(37,99,235,0.5);background:rgba(37,99,235,0.07);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden">
-      ${t.docs?.photo?`<img src="${t.docs.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`:'🧑‍🎓'}
-    </div>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:800;color:var(--accent-strong);margin-bottom:8px">📸 Student Photo <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('edit-student-photo-file').click()" style="font-size:11px">📁 Upload</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="openEditStudentCamera()" style="font-size:11px">📷 Camera</button>
-        <button type="button" class="btn btn-danger btn-sm" onclick="clearEditStudentPhoto()" style="font-size:11px;display:${t.docs?.photo?'block':'none'}" id="edit-student-clear-btn">✕ Remove</button>
-      </div>
-      <input type="file" id="edit-student-photo-file" accept="image/*" style="display:none" onchange="loadEditStudentPhoto(this)">
-      <div id="edit-student-cam-box" style="display:none;margin-top:8px">
-        <video id="edit-student-cam-video" autoplay playsinline style="width:100%;max-height:140px;border-radius:8px;background:#000"></video>
-        <canvas id="edit-student-cam-canvas" style="display:none"></canvas>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button type="button" class="btn btn-primary btn-sm" style="flex:1;font-size:11px" onclick="captureEditStudentPhoto()">📸 Capture</button>
-          <button type="button" class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="closeEditStudentCamera()">✕ Close</button>
+  const statSel = ['Active','Left','Blacklisted'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('');
+  showModal('modal-lg',`Edit Student — ${escHtml(t.name)}`,`
+  <div class="sf-wrap sf-wrap--modal">
+
+    <!-- ══ PHOTO + STUDENT ID ══ -->
+    <div class="sf-head">
+      <div class="sf-photo-block">
+        <div>
+          <div style="font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px">Student Photo</div>
+          <div class="sf-photo" id="edit-student-photo-preview" onclick="document.getElementById('edit-student-photo-file').click()" title="Click to upload a photo">
+            ${t.docs?.photo
+              ? `<img src="${t.docs.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`
+              : `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>`}
+          </div>
+        </div>
+        <div class="sf-photo-acts" style="margin-top:22px">
+          <div class="sf-drop" onclick="document.getElementById('edit-student-photo-file').click()"
+               ondragover="event.preventDefault();this.classList.add('is-over')"
+               ondragleave="this.classList.remove('is-over')"
+               ondrop="event.preventDefault();this.classList.remove('is-over');var f=event.dataTransfer.files[0];if(f){var i=document.getElementById('edit-student-photo-file');i.files=event.dataTransfer.files;loadEditStudentPhoto(i);}">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
+            <b>Upload Photo</b><span>or drag and drop</span>
+          </div>
+          <button type="button" class="sf-btn sf-btn--ghost" style="width:190px;justify-content:center" onclick="openEditStudentCamera()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
+            Take Photo
+          </button>
+          <button type="button" class="sf-btn" id="edit-student-clear-btn" style="width:190px;justify-content:center;color:var(--red);display:${t.docs?.photo?'flex':'none'}" onclick="clearEditStudentPhoto()">Remove photo</button>
+          <input type="file" id="edit-student-photo-file" accept="image/*" style="display:none" onchange="loadEditStudentPhoto(this)">
+          <input type="hidden" id="edit-student-photo-data" value="${escHtml(t.docs?.photo||'')}">
+          <div id="edit-student-cam-box" style="display:none;width:190px">
+            <video id="edit-student-cam-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000"></video>
+            <canvas id="edit-student-cam-canvas" style="display:none"></canvas>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center;padding:0 10px" onclick="captureEditStudentPhoto()">Capture</button>
+              <button type="button" class="sf-btn" style="flex:1;justify-content:center;padding:0 10px" onclick="closeEditStudentCamera()">Close</button>
+            </div>
+          </div>
         </div>
       </div>
-      <input type="hidden" id="edit-student-photo-data" value="${escHtml(t.docs?.photo||'')}">
-    </div>
-  </div>
-  <div class="as-section">
-    <div class="as-section-title">${icon('student','sm')} Student Identity</div>
-    <div class="form-grid" style="gap:12px">
-      <div class="field"><label>Full Name *</label><input class="form-control" id="f-tname" value="${escHtml(t.name)}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-      <div class="field"><label>Father Name</label><input class="form-control" id="f-tfname" value="${escHtml(t.fatherName||'')}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-      <div class="field"><label>CNIC</label><input class="form-control" id="f-tcnic" value="${escHtml(t.cnic||'')}" placeholder="XXXXX-XXXXXXX-X" maxlength="15" oninput="fmtCnic(this)"></div>
-      <div class="field"><label>Course / Study Field</label><input class="form-control" id="f-tocc" value="${escHtml(t.occupation||t.course||'')}" placeholder="e.g. BS Computer Science, MBBS…"></div>
-      <div class="field"><label>Status</label><select class="form-control" id="f-tstat">${statOpts}</select></div>
-      <div class="field"><label>Join Date</label><input class="form-control cdp-trigger" id="f-tjoin" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${t.joinDate||''}"></div>
-    </div>
-  </div>
-  <div class="as-section">
-    <div class="as-section-title">📞 Contact Information</div>
-    <div class="form-grid" style="gap:12px">
-      <div class="field"><label>Phone Number</label><input class="form-control" id="f-tphone" value="${escHtml(t.phone||'')}" placeholder="03XX-XXXXXXX" maxlength="12" oninput="fmtPhone(this)"></div>
-      <div class="field"><label>Emergency Contact</label><input class="form-control" id="f-temerg" value="${escHtml(t.emergencyContact||'')}" placeholder="Guardian/Family phone"></div>
-      <div class="field"><label>Email</label><input class="form-control" id="f-temail" value="${escHtml(t.email||'')}" placeholder="email@gmail.com"></div>
-      <div class="field col-full"><label>Home Address</label>
-        <input class="form-control" id="f-taddress" value="${escHtml(t.address||'')}" placeholder="e.g. House #12, Street 4, Peshawar" autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()" list="">
-        <div id="f-taddress-suggestions" class="city-suggestions"></div>
-      </div>
-    </div>
-  </div>
-  <div class="as-section">
-    <div class="as-section-title" style="justify-content:space-between">
-      <span>🏠 Assign Room *</span>
-      <span id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700">${escHtml(presetLabel)}</span>
-    </div>
-    <input type="hidden" id="f-troom" value="${escHtml(t.roomId||'')}">
-    <div style="position:relative">
-      <input class="form-control" id="f-troom-search" placeholder="🔍 Search by room number, type, floor…" autocomplete="off"
-        value="${escHtml(presetLabel)}"
-        oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)" onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
-      <div id="room-search-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:500;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px">
-        ${allRooms.map(r=>{const rt=getRoomType(r);const occ=getRoomOccupancy(r);const free=rt.capacity-occ;const lbl=`Room #${r.number} · ${rt.name} · ${r.floor} Floor`;return `<div class="room-search-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''" onmousedown="pickRoomSearch('${r.id}',${parseFloat(r.rent)||0},'${lbl}')"><div><span style="font-size:15px;font-weight:900;color:var(--accent-strong)">Room #${r.number}</span><span style="font-size:11px;color:var(--text3);margin-left:8px">${rt.name} · ${r.floor} Floor</span></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;color:${free>0?'var(--green)':'var(--red)'}">${occ}/${rt.capacity} occ</div><div style="font-size:11px;color:var(--text3)">${fmtPKR(parseFloat(r.rent)||0)}/mo</div></div></div>`;}).join('')}
-      </div>
-    </div>
-  </div>
 
-  <div class="as-section" style="margin-bottom:0">
-    <div class="as-section-title">📝 Notes</div>
-    <textarea class="form-control" id="f-tnotes" rows="2" placeholder="Additional notes…">${escHtml(t.notes||'')}</textarea>
+      <div class="sf-idcard">
+        <span class="sf-idcard__note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4"/><circle cx="16" cy="10" r="2"/></svg>
+          Existing student
+        </span>
+        <div class="sf-idcard__l">Student ID</div>
+        <div class="sf-idcard__v">#${escHtml(String(t.id))}</div>
+      </div>
+    </div>
+
+    <!-- ══ STUDENT IDENTITY ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+        Student Identity
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f"><label for="f-tname">Full Name<span class="req">*</span></label>
+          <input class="sf-in" id="f-tname" value="${escHtml(t.name)}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+        <div class="sf-f"><label for="f-tfname">Father's Name</label>
+          <input class="sf-in" id="f-tfname" value="${escHtml(t.fatherName||'')}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+        <div class="sf-f"><label for="f-tcnic">CNIC</label>
+          <input class="sf-in" id="f-tcnic" value="${escHtml(t.cnic||'')}" placeholder="35202-1234567-1" maxlength="15" oninput="fmtCnic(this)"></div>
+      </div>
+      <div class="sf-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr 1fr">
+        <div class="sf-f"><label for="f-tocc">Course / Study Field</label>
+          <input class="sf-in" id="f-tocc" value="${escHtml(t.occupation||t.course||'')}" placeholder="BS Computer Science"></div>
+        <div class="sf-f"><label for="f-tstat">Status</label>
+          <select class="sf-sel" id="f-tstat">${statSel}</select></div>
+        <div class="sf-f"><label for="f-tjoin">Join Date</label>
+          <input class="sf-in" id="f-tjoin" type="date" value="${escHtml(t.joinDate||'')}"></div>
+      </div>
+    </div>
+
+    <!-- ══ CONTACT INFORMATION ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>
+        Contact Information
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f"><label for="f-tphone">Phone Number</label>
+          <input class="sf-in" id="f-tphone" value="${escHtml(t.phone||'')}" placeholder="03XX XXXXXXX" maxlength="12" oninput="fmtPhone(this)"></div>
+        <div class="sf-f"><label for="f-temerg">Emergency Contact</label>
+          <input class="sf-in" id="f-temerg" value="${escHtml(t.emergencyContact||'')}" placeholder="Guardian / family phone"></div>
+        <div class="sf-f"><label for="f-temail">Email Address</label>
+          <input class="sf-in" id="f-temail" value="${escHtml(t.email||'')}" placeholder="email@gmail.com"></div>
+      </div>
+      <div class="sf-grid" style="margin-top:14px">
+        <div class="sf-f sf-f--wide"><label for="f-taddress">Home Address</label>
+          <div class="sf-wrapin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+            <input class="sf-in" id="f-taddress" value="${escHtml(t.address||'')}" placeholder="House # 25, Street 4, Peshawar, KPK"
+              autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">
+          </div>
+          <div id="f-taddress-suggestions" class="city-suggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ HOSTEL INFORMATION ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h" style="justify-content:space-between">
+        <span style="display:inline-flex;align-items:center;gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg>
+          Assign Room<span class="req">*</span>
+        </span>
+        <span id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700">${escHtml(presetLabel)}</span>
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f sf-f--wide"><label for="f-troom-search">Room</label>
+          <div style="position:relative">
+            <input type="hidden" id="f-troom" value="${escHtml(t.roomId||'')}">
+            <input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor…" autocomplete="off"
+              value="${escHtml(presetLabel)}"
+              oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)"
+              onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
+            <div id="room-search-drop" class="sf-drop-list">
+              ${allRooms.map(r=>{
+                const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
+                const isFull=occ>=rt.capacity;
+                const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
+                const rc=resolveCharges({roomId:r.id});
+                return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+rc.rent+'"'
+                  +' data-label="'+escHtml(lbl)+'"'
+                  +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
+                  +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
+                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
+                  +occ+'/'+rt.capacity+(isFull?' · FULL':' · '+free+' free')+'</span>'
+                  +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
+                  +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
+              }).join('')}
+              ${allRooms.length===0?'<div class="sf-drop-item"><span>No rooms configured</span></div>':''}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ NOTES ══ -->
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        Notes
+      </div>
+      <div class="sf-grid">
+        <div class="sf-f sf-f--wide">
+          <textarea class="sf-ta" id="f-tnotes" rows="3" placeholder="Anything the warden should know about this student…">${escHtml(t.notes||'')}</textarea>
+        </div>
+      </div>
+    </div>
+
   </div>`,
-  `<button class="btn btn-danger" onclick="confirmDeleteStudent('${id}')">🗑 Delete</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditStudent('${id}')">💾 Save Changes</button>`);
+  `<button class="btn btn-danger" onclick="confirmDeleteStudent('${id}')">Delete</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditStudent('${id}')">Save Changes</button>`);
 }
 
 async function submitEditStudent(id) {
@@ -1336,7 +1419,7 @@ async function submitEditStudent(id) {
   const _newCnic   = document.getElementById('f-tcnic')?.value.trim()  || '';
   const _newPhone  = document.getElementById('f-tphone')?.value.trim() || '';
   const _newEmail  = document.getElementById('f-temail')?.value.trim() || '';
-  const _newOccup  = document.getElementById('f-toccup')?.value.trim() || t.occupation || '';
+  const _newOccup  = document.getElementById('f-tocc')?.value.trim() || t.occupation || '';
   const _newRoomId = document.getElementById('f-troom')?.value || t.roomId;
   const _newJoin   = document.getElementById('f-tjoin')?.value  || t.joinDate || '';
   const _newStatus = document.getElementById('f-tstat')?.value  || t.status;

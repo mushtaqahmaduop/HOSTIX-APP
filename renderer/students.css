@@ -200,6 +200,9 @@
 /* ═══════════════════════════ ADD / EDIT FORM PAGE ═══════════════════════ */
 
 .sf-wrap { max-width:1180px; margin:0 auto; padding-bottom:8px; }
+/* Same form inside the Edit-Student modal: the modal supplies the width and
+   padding, so drop the page centring/cap. */
+.sf-wrap--modal { max-width:none; padding-bottom:0; }
 
 /* Photo + student-ID header strip */
 .sf-head { display:flex; align-items:flex-start; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
