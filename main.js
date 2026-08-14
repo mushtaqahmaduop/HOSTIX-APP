@@ -121,8 +121,16 @@ function initDatabase() {
 let autoUpdater = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
-  autoUpdater.autoDownload    = true;   // download silently in background
-  autoUpdater.autoInstallOnAppQuit = true; // install when user quits
+  // [D-2] Unattended install is OFF. There is no code-signing certificate
+  // (signAndEditExecutable/verifyUpdateCodeSignature are both false in
+  // package.json), so silently downloading and installing a release on 50+
+  // production machines has no publisher authenticity behind it — the one
+  // check that would catch a substituted installer is disabled. Spec §20
+  // requires signed artifacts; until a certificate exists, updates are
+  // announced and the owner installs deliberately.
+  // Re-enable both ONLY together with real code signing.
+  autoUpdater.autoDownload         = false;
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = require('electron').app ? null : console; // silent in prod
 } catch (e) {
   console.warn('[DAMAM] electron-updater not available:', e.message);
@@ -972,15 +980,25 @@ ipcMain.on('write-file', (_e, filePath, data) => {
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
-  // Update available — ask user if they want to download
+  // [D-2] Update available — announce only. Nothing downloads or installs by
+  // itself; the owner opens the release page and installs deliberately.
   autoUpdater.on('update-available', (info) => {
     if (!mainWindow) return;
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Available',
-      message: `HOSTIX v${info.version} is available`,
-      detail: 'A new version is downloading in the background.\nThe app will update automatically when you close it.',
-      buttons: ['OK']
+      message: `Hostyllo v${info.version} is available`,
+      detail: 'Your current version keeps working normally.\n\n'
+            + 'Choose "Get Update" to open the download page in your browser, '
+            + 'then close Hostyllo and run the installer. Your data and licence '
+            + 'are not affected.',
+      buttons: ['Get Update', 'Later'],
+      defaultId: 0,
+      cancelId: 1
+    }).then(({ response }) => {
+      if (response === 0) {
+        shell.openExternal('https://github.com/mushtaqahmaduop/HOSTIX-APP/releases/latest');
+      }
     });
   });
 

@@ -21,9 +21,16 @@ Build config (`package.json`), forced by better-sqlite3's new layout — see §4
 
 - `asarUnpack` — dropped `node_modules/bindings/**/*` and `node_modules/file-uri-to-path/**/*`.
   Both were better-sqlite3 9's loader dependencies and **no longer exist in the tree** at v13.
-- `extraResources` — repointed from `node_modules/better-sqlite3/build/Release` to
-  `node_modules/better-sqlite3/prebuilds`. The old path is now an empty directory, so
-  that block was silently copying nothing.
+- `extraResources` — repointed to `node_modules/better-sqlite3/prebuilds` (x64/arm64) and
+  kept `build/Release` for the ia32 binary (see R1). The old single `build/Release` entry
+  was silently copying nothing.
+- New script `rebuild:ia32` → `scripts/rebuild-ia32.js` (see R1).
+
+**This branch also carries the D-2 remediation** — unattended install of unsigned
+updates is now off (`autoDownload` / `autoInstallOnAppQuit` = `false`, and
+`update-available` offers *Get Update* / *Later* instead of claiming a background
+download). That is a separate concern from the runtime upgrade; rationale and scope are
+in `docs/ENTERPRISE_UPGRADE_DECISIONS.md` §D-2.
 
 ## 2. The documented blocker is gone
 
@@ -155,16 +162,57 @@ electron-rebuild detects the existing prebuild set and does nothing, while still
 reporting success. **A packaged ia32 build would therefore ship a broken app and the
 build logs would look clean.**
 
-Spec §43 forbids silently dropping supported Windows versions. **Owner decision needed:**
+### ✅ RESOLVED — 32-bit is kept (owner: "decide for me", 2026-08-15)
 
-- **(a) Keep 32-bit** — pin better-sqlite3 to a 9.x/11.x line that has an ia32 prebuild,
-  or get a real x86 source compile working (VS Build Tools with the x86 toolchain,
-  forcing node-gyp past the prebuild short-circuit). More toolchain, more fragility.
-- **(b) Drop 32-bit** — build x64 only. Needs confirmation that no hostel among the 50+
-  runs 32-bit Windows, plus §43's required documentation: why, who is affected, migration
-  path, and customer communication.
+Decision: **keep 32-bit.** Silently breaking a paying hostel is worse than carrying a
+build step. Spec §43 forbids dropping supported Windows versions silently, and there was
+no evidence that no hostel runs 32-bit.
 
-Nothing else in this upgrade is blocked by R1 — the x64 path is clean.
+**Root cause of the silent no-op.** better-sqlite3's `binding.gyp` asks `lib/binding.js`
+whether a prebuild exists, and that check reads the **host** process's arch — never the
+`--arch` target. On an x64 build machine it always answers "yes", so the ia32 compile is
+skipped while node-gyp still reports `gyp info ok`.
+
+**Fix.** Hide `prebuilds/` for the duration of the ia32 compile so detection answers "no".
+Verified end to end:
+
+```
+better_sqlite3.node   1,682,432 bytes
+PE machine header     0x14c → i386 (32-bit)      ← genuinely 32-bit
+built against         Electron 43.4.0 headers
+```
+
+Reverting better-sqlite3 to 9.x was tried first and is **not** an option: 9.6.0 fails to
+compile at all under Node 24 (MSBuild exit 1).
+
+**Shipped as `npm run rebuild:ia32`** (`scripts/rebuild-ia32.js`). The script hides
+`prebuilds/`, forces the source build against the installed Electron's headers, restores
+`prebuilds/` in a `finally`, and then **asserts on the PE header** rather than trusting
+node-gyp's exit code — precisely the failure mode that made this invisible.
+
+`extraResources` now covers both layouts (`prebuilds/` for x64, `build/Release/` for
+ia32); `asarUnpack` already covered both.
+
+Requires Visual Studio Build Tools with the C++ **x86** toolchain on the build machine
+(present here — VS 18 BuildTools).
+
+**Release ordering matters.** `rebuild:ia32` leaves a 32-bit binary in `build/Release`.
+The x64 runtime ignores it (the loader always prefers `prebuilds/`), so it is not a
+correctness risk — but building x64 *after* it would pack a stray 1.6 MB ia32 binary into
+the x64 installer. Build in this order:
+
+```
+npm run rebuild        # restore the clean x64 state
+npm run build:x64      # x64 installer + portable
+npm run rebuild:ia32   # produce the 32-bit binary
+npm run build:ia32     # ia32 installer + portable
+```
+
+The combined `npm run build` (`--x64 --ia32` in one pass) cannot satisfy both arches,
+because a single `build/Release` cannot hold two architectures at once. Use the two-pass
+sequence above for releases until the pipeline of §44 exists.
+
+**Still to prove:** a packaged ia32 installer launching on a real 32-bit machine. See R2.
 
 **R2 — packaged build not yet produced or launched.** Everything above ran from source
 via `npm start`/Playwright. The `asarUnpack`/`extraResources` fixes in §1 are reasoned

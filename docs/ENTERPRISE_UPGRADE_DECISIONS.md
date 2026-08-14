@@ -55,14 +55,19 @@ this is not arbitrary-code-execution — but there is no publisher authenticity,
 one check that would catch a substituted installer is switched off.
 
 **Descoping Upgrade B leaves that live.** It is a build-forward decision, not a
-remediation. Recommended follow-up (owner's call, raised not assumed):
+remediation.
 
-- Set `autoDownload = false` and `autoInstallOnAppQuit = false`.
-- Keep `update:check` as a *manual, user-initiated* check that reports "a new version is
-  available, download it from …" and opens the release page via `shell.openExternal`.
-- Revisit if a certificate is bought later; the electron-updater wiring stays in place.
+### ✅ Remediated on `chore/electron-43` (owner: "decide for me", 2026-08-15)
 
-This keeps customers informed about updates without an unattended unsigned install path.
+- `autoDownload = false`, `autoInstallOnAppQuit = false` (`main.js:121–131`).
+- `update-available` no longer claims "downloading in the background". It now offers
+  **Get Update** / **Later**; Get Update opens the GitHub releases page via
+  `shell.openExternal` and the owner installs deliberately.
+- The manual `doCheckUpdates()` path and the `update:check` / `update:install` IPC are
+  untouched, so nothing is lost and re-enabling is a two-line change.
+
+Customers stay informed about new versions; nothing installs itself. **Re-enable both
+flags only together with real code signing.**
 
 ---
 
@@ -135,10 +140,25 @@ Reordered from the audit's table to reflect D-2 (Upgrade B out) and D-4 (Electro
 
 ---
 
+## D-6 — 32-bit Windows: **keep it**
+
+better-sqlite3 13 has no ia32 prebuild and its build system silently skips the ia32
+source compile, so Electron 43 would have shipped a dead 32-bit app with clean build
+logs. Rather than drop 32-bit, the compile was forced and verified (genuine i386 PE
+binary against Electron 43 headers) and wrapped in `npm run rebuild:ia32`.
+
+Reasoning: dropping 32-bit silently breaks paying hostels, spec §43 forbids it without
+documented migration and communication, and there was no evidence that no hostel runs
+32-bit Windows. A build step is the cheaper price. Full detail in
+`docs/PHASE_0.5_ELECTRON_43_REPORT.md` §R1.
+
+---
+
 ## Still open
 
 - **`C:\hostyllo` integration shape** — not yet inspected (D-1). Blocks Phase 2, not Phase 1.
-- **D-2 follow-up** — whether to actively disable `autoDownload` / `autoInstallOnAppQuit`
-  now, rather than leave the current unsigned auto-install path running.
+- **Packaged installers** — neither x64 nor ia32 has been built and launched yet. The
+  packaging config changes are reasoned from loader source, not proven.
+- **Manual GUI QA** — print/PDF, charts, Excel, menus, About, License Info. Needs a human.
 - **H1 clock trust** — the entitlement design in the audit §7 fixes it; unchanged by these
   decisions.
