@@ -29,9 +29,7 @@
     "copyright": "Copyright © 2025 Zeerak Hostix — MUSHTAQ AHMAD",
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
+      "node_modules/better-sqlite3/**/*"
     ],
     "directories": {
       "output": "dist",
@@ -57,8 +55,8 @@
     ],
     "extraResources": [
       {
-        "from": "node_modules/better-sqlite3/build/Release",
-        "to": "app/node_modules/better-sqlite3/build/Release",
+        "from": "node_modules/better-sqlite3/prebuilds",
+        "to": "app/node_modules/better-sqlite3/prebuilds",
         "filter": [
           "**/*.node"
         ]
@@ -119,13 +117,12 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.61.1",
-    "electron": "^22.3.27",
+    "electron": "^43.4.0",
     "electron-builder": "^26.8.1",
-    "electron-rebuild": "^3.2.9",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.3",
     "lucide-static": "^1.21.0"
   }
