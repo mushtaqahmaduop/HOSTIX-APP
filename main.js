@@ -543,6 +543,9 @@ function createWindow() {
     // set below, so every keyboard accelerator (Ctrl+S/O/Q, F11, zoom, dev
     // reload/devtools) keeps working even though the bar itself is not drawn.
     frame: false,
+    // Belt-and-suspenders: keep the native menu bar hidden so it can never
+    // stack on top of the custom bar even in a framed fallback.
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
