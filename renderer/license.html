@@ -273,8 +273,19 @@
     .check-svg { animation: checkPop 0.3s cubic-bezier(0.22,1,0.36,1); }
     @keyframes checkPop { from { transform: scale(0); } to { transform: scale(1); } }
   </style>
+  <!-- Custom frameless title bar. This page has its own palette and does not
+       load tokens.css, so map the handful of tokens titlebar.css needs onto it. -->
+  <link rel="stylesheet" href="titlebar.css">
+  <style>
+    #hz-titlebar {
+      --card: var(--bg2); --dash-sunk: rgba(255,255,255,.06);
+      --accent-strong: var(--accent-light); --accent-dim: rgba(124,58,237,.20);
+      --font: 'Outfit','Segoe UI',sans-serif;
+    }
+    body.has-titlebar { padding-top: var(--titlebar-h); }
+  </style>
 </head>
-<body>
+<body data-titlebar="minimal">
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
 
@@ -468,5 +479,7 @@
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   </script>
+  <!-- Custom title bar (Help + window controls only, via data-titlebar) -->
+  <script src="src/titlebar.js"></script>
 </body>
 </html>

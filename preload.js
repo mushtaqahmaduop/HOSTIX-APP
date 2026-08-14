@@ -109,6 +109,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }
 });
 
+// ── Custom title bar API (used by index.html AND license.html) ─────────────
+// Frameless window controls + the File/View/Help actions, routed to the same
+// main-process handlers the native accelerators use.
+contextBridge.exposeInMainWorld('titlebar', {
+  minimize:         () => ipcRenderer.send('window:minimize'),
+  toggleMaximize:   () => ipcRenderer.send('window:toggleMaximize'),
+  close:            () => ipcRenderer.send('window:close'),
+  isMaximized:      () => ipcRenderer.invoke('window:isMaximized'),
+  onMaximizeChange: (cb) => {
+    if (typeof cb === 'function') ipcRenderer.on('window:maximized', (_e, v) => cb(!!v));
+  },
+  isDev:            () => ipcRenderer.invoke('app:isDev'),
+  menu:             (action) => {
+    if (typeof action === 'string') ipcRenderer.send('titlebar:menu', action);
+  }
+});
+
 // ── License page & settings window API ────────────────────────────────────
 contextBridge.exposeInMainWorld('licenseAPI', {
   getMachineId:    ()    => ipcRenderer.invoke('license:machineId'),

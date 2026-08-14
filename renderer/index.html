@@ -35,6 +35,8 @@
   <link rel="stylesheet" href="settings.css">
   <!-- App chrome v5 (sidebar + header) — loads last so it wins on ties -->
   <link rel="stylesheet" href="chrome.css">
+  <!-- Custom frameless title bar (loads after chrome so its offsets win) -->
+  <link rel="stylesheet" href="titlebar.css">
   <!-- Login v5 — fully scoped under #login-screen, so load order is moot -->
   <link rel="stylesheet" href="login.css">
 </head>
@@ -634,6 +636,8 @@
   <script src="src/modules/sidebar_calendar.js"></script>
   <script src="src/modules/issues.js"></script>
   <script src="src/modules/command-palette.js"></script>
+  <!-- Custom title bar (self-contained; mounts the frameless window chrome) -->
+  <script src="src/titlebar.js"></script>
   <!-- Boot & misc -->
   <script src="app.js" defer></script>
 </body>

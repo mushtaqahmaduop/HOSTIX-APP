@@ -404,11 +404,145 @@ function openLicenseSettings() {
 // ════════════════════════════════════════════════════════════════════════════
 // WINDOW
 // ════════════════════════════════════════════════════════════════════════════
+// ── Menu / title-bar actions ────────────────────────────────────────────────
+// Extracted so the native accelerators (application menu) and the custom title
+// bar (IPC → titlebar:menu) run one implementation, never two that can drift.
+async function doExportBackup() {
+  if (!mainWindow) return;
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Backup',
+    defaultPath: `Hostyllo_Backup_${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'JSON Backup', extensions: ['json'] }]
+  });
+  if (filePath) mainWindow.webContents.send('export-backup', filePath);
+}
+
+async function doImportBackup() {
+  if (!mainWindow) return;
+  const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Backup',
+    filters: [{ name: 'JSON Backup', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (filePaths && filePaths[0]) {
+    try {
+      // [FIX-08] Limit file size to 50MB to prevent memory exhaustion
+      const stat = fs.statSync(filePaths[0]);
+      if (stat.size > 50 * 1024 * 1024) {
+        dialog.showErrorBox('Import Failed', 'Backup file is too large (maximum 50MB).');
+        return;
+      }
+      const data = fs.readFileSync(filePaths[0], 'utf8');
+      mainWindow.webContents.send('import-backup', data);
+    } catch (e) {
+      dialog.showErrorBox('Import Failed', 'Could not read the backup file.');
+    }
+  }
+}
+
+function doAbout() {
+  if (!mainWindow) return;
+  dialog.showMessageBox(mainWindow, {
+    type: 'info', title: 'About',
+    message: 'Hostyllo — Hostel Management System',
+    detail: 'Version 3.0 (Security Patched)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
+  });
+}
+
+async function doCheckUpdates() {
+  if (!mainWindow) return;
+  if (!autoUpdater || !IS_PROD) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info', title: 'Updates',
+      message: 'Update checking is only available in production builds.'
+    });
+    return;
+  }
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    if (!result || !result.updateInfo) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info', title: 'Up to Date',
+        message: '✅ You have the latest version of Hostyllo.'
+      });
+    }
+  } catch (e) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'warning', title: 'Update Check Failed',
+      message: 'Could not check for updates.',
+      detail: 'Please check your internet connection and try again.'
+    });
+  }
+}
+
+function doLicenseInfo() {
+  if (!mainWindow) return;
+  const result    = checkLicenseValidity();
+  const machineId = getMachineId();
+  dialog.showMessageBox(mainWindow, {
+    type: result.valid ? 'info' : 'warning',
+    title: 'License Information',
+    message: result.valid ? '✅ License Active' : '❌ License Problem',
+    detail: [
+      `Status   : ${result.valid ? 'Active' : 'INVALID'}`,
+      `Reason   : ${result.valid ? 'All checks passed' : result.reason}`,
+      `Expiry   : ${result.expiry ? new Date(result.expiry).toLocaleDateString('en-PK') : '—'}`,
+      `Machine  : ${machineId.slice(0, 16)}…`,
+      `Activated: ${result.activatedAt ? new Date(result.activatedAt).toLocaleDateString('en-PK') : '—'}`
+    ].join('\n')
+  });
+}
+
+// View actions — used by the custom title bar. The application menu keeps its
+// own role-based items (below) for the keyboard accelerators.
+function doZoom(delta) {
+  if (!mainWindow) return;
+  const wc = mainWindow.webContents;
+  if (delta === 0) { wc.setZoomLevel(0); return; }
+  wc.setZoomLevel(wc.getZoomLevel() + delta);
+}
+function doToggleFullScreen() {
+  if (!mainWindow) return;
+  mainWindow.setFullScreen(!mainWindow.isFullScreen());
+}
+function doReload(ignoreCache) {
+  if (!mainWindow || IS_PROD) return;   // reload is a dev affordance only
+  if (ignoreCache) mainWindow.webContents.reloadIgnoringCache();
+  else mainWindow.webContents.reload();
+}
+function doToggleDevTools() {
+  if (!mainWindow || IS_PROD) return;
+  mainWindow.webContents.toggleDevTools();
+}
+
+// Dispatch table for the custom title bar's menu clicks (preload → 'titlebar:menu').
+const TITLEBAR_ACTIONS = {
+  exportBackup:  doExportBackup,
+  importBackup:  doImportBackup,
+  quit:          () => app.quit(),
+  about:         doAbout,
+  licenseSettings: () => openLicenseSettings(),
+  checkUpdates:  doCheckUpdates,
+  licenseInfo:   doLicenseInfo,
+  resetZoom:     () => doZoom(0),
+  zoomIn:        () => doZoom(0.5),
+  zoomOut:       () => doZoom(-0.5),
+  fullScreen:    doToggleFullScreen,
+  reload:        () => doReload(false),
+  forceReload:   () => doReload(true),
+  devTools:      doToggleDevTools
+};
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    title: 'HOSTIX — Hostel Management System',
+    title: 'Hostyllo — Hostel Management System',
+    // Frameless: the native title bar and menu bar are replaced by the custom
+    // in-app title bar (renderer/src/titlebar.js). The application menu is still
+    // set below, so every keyboard accelerator (Ctrl+S/O/Q, F11, zoom, dev
+    // reload/devtools) keeps working even though the bar itself is not drawn.
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -420,6 +554,15 @@ function createWindow() {
     backgroundColor: '#1a1c1e',
     show: false
   });
+
+  // Tell the custom title bar when to swap its maximize/restore glyph.
+  const _sendMaxState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:maximized', mainWindow.isMaximized());
+    }
+  };
+  mainWindow.on('maximize', _sendMaxState);
+  mainWindow.on('unmaximize', _sendMaxState);
 
   const lic = checkLicenseValidity();
 
@@ -471,45 +614,8 @@ function createWindow() {
     {
       label: 'File',
       submenu: [
-        {
-          label: 'Export Backup…',
-          accelerator: 'CmdOrCtrl+S',
-          click: async () => {
-            if (!mainWindow) return;
-            const { filePath } = await dialog.showSaveDialog(mainWindow, {
-              title: 'Export Backup',
-              defaultPath: `HOSTIX_Backup_${new Date().toISOString().slice(0, 10)}.json`,
-              filters: [{ name: 'JSON Backup', extensions: ['json'] }]
-            });
-            if (filePath) mainWindow.webContents.send('export-backup', filePath);
-          }
-        },
-        {
-          label: 'Import Backup…',
-          accelerator: 'CmdOrCtrl+O',
-          click: async () => {
-            if (!mainWindow) return;
-            const { filePaths } = await dialog.showOpenDialog(mainWindow, {
-              title: 'Import Backup',
-              filters: [{ name: 'JSON Backup', extensions: ['json'] }],
-              properties: ['openFile']
-            });
-            if (filePaths && filePaths[0]) {
-              try {
-                // [FIX-08] Limit file size to 50MB to prevent memory exhaustion
-                const stat = fs.statSync(filePaths[0]);
-                if (stat.size > 50 * 1024 * 1024) {
-                  dialog.showErrorBox('Import Failed', 'Backup file is too large (maximum 50MB).');
-                  return;
-                }
-                const data = fs.readFileSync(filePaths[0], 'utf8');
-                mainWindow.webContents.send('import-backup', data);
-              } catch (e) {
-                dialog.showErrorBox('Import Failed', 'Could not read the backup file.');
-              }
-            }
-          }
-        },
+        { label: 'Export Backup…', accelerator: 'CmdOrCtrl+S', click: doExportBackup },
+        { label: 'Import Backup…', accelerator: 'CmdOrCtrl+O', click: doImportBackup },
         { type: 'separator' },
         { label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() }
       ]
@@ -518,66 +624,10 @@ function createWindow() {
     {
       label: 'Help',
       submenu: [
-        {
-          label: 'About HOSTIX',
-          click: () => {
-            if (!mainWindow) return;
-            dialog.showMessageBox(mainWindow, {
-              type: 'info', title: 'About',
-              message: 'HOSTIX — Hostel Management System',
-              detail: 'Version 3.0 (Security Patched)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
-            });
-          }
-        },
+        { label: 'About Hostyllo', click: doAbout },
         { label: 'License Settings', click: () => openLicenseSettings() },
-        {
-          label: 'Check for Updates',
-          click: async () => {
-            if (!mainWindow) return;
-            if (!autoUpdater || !IS_PROD) {
-              dialog.showMessageBox(mainWindow, {
-                type: 'info', title: 'Updates',
-                message: 'Update checking is only available in production builds.'
-              });
-              return;
-            }
-            try {
-              const result = await autoUpdater.checkForUpdates();
-              if (!result || !result.updateInfo) {
-                dialog.showMessageBox(mainWindow, {
-                  type: 'info', title: 'Up to Date',
-                  message: '✅ You have the latest version of HOSTIX.'
-                });
-              }
-            } catch (e) {
-              dialog.showMessageBox(mainWindow, {
-                type: 'warning', title: 'Update Check Failed',
-                message: 'Could not check for updates.',
-                detail: 'Please check your internet connection and try again.'
-              });
-            }
-          }
-        },
-        {
-          label: 'License Info',
-          click: () => {
-            if (!mainWindow) return;
-            const result    = checkLicenseValidity();
-            const machineId = getMachineId();
-            dialog.showMessageBox(mainWindow, {
-              type: result.valid ? 'info' : 'warning',
-              title: 'License Information',
-              message: result.valid ? '✅ License Active' : '❌ License Problem',
-              detail: [
-                `Status   : ${result.valid ? 'Active' : 'INVALID'}`,
-                `Reason   : ${result.valid ? 'All checks passed' : result.reason}`,
-                `Expiry   : ${result.expiry ? new Date(result.expiry).toLocaleDateString('en-PK') : '—'}`,
-                `Machine  : ${machineId.slice(0, 16)}…`,
-                `Activated: ${result.activatedAt ? new Date(result.activatedAt).toLocaleDateString('en-PK') : '—'}`
-              ].join('\n')
-            });
-          }
-        }
+        { label: 'Check for Updates', click: doCheckUpdates },
+        { label: 'License Info', click: doLicenseInfo }
       ]
     }
   ]);
@@ -589,6 +639,35 @@ function createWindow() {
 // ════════════════════════════════════════════════════════════════════════════
 // IPC HANDLERS
 // ════════════════════════════════════════════════════════════════════════════
+
+// ── Custom title bar: frameless window controls + menu actions ───────────────
+// Controls act on the window that sent the message, so they are correct on both
+// the licensed app and the licence screen (both load into mainWindow).
+ipcMain.on('window:minimize', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender); if (w) w.minimize();
+});
+ipcMain.on('window:toggleMaximize', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
+  if (w.isMaximized()) w.unmaximize(); else w.maximize();
+});
+ipcMain.on('window:close', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender); if (w) w.close();
+});
+ipcMain.handle('window:isMaximized', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  return !!(w && w.isMaximized());
+});
+// Menu clicks from the custom bar run the exact same actions as the native
+// accelerators, via the dispatch table. Unknown ids are ignored.
+ipcMain.on('titlebar:menu', (_e, action) => {
+  const fn = (typeof action === 'string' &&
+    Object.prototype.hasOwnProperty.call(TITLEBAR_ACTIONS, action))
+    ? TITLEBAR_ACTIONS[action] : null;
+  if (fn) fn();
+});
+// Lets the title bar show the dev-only View items (reload / devtools) exactly
+// when the native menu does.
+ipcMain.handle('app:isDev', () => !IS_PROD);
 
 ipcMain.handle('license:check', () => {
   const result = checkLicenseValidity();

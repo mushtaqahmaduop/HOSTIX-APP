@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — CUSTOM TITLE BAR
+   Replaces the native OS title bar + menu bar (main window is frame:false).
+   Built on tokens.css so it lives in the same design language as the app and
+   adapts to light/dark. Everything is prefixed hz-tb / hz- and scoped so it
+   touches no existing selector (CLAUDE.md rule 7). Layout offsets apply only
+   under body.has-titlebar, which titlebar.js sets ONLY when the desktop bridge
+   is present — so a stray browser load degrades to the old layout, not a gap.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root { --titlebar-h: 40px; }
+
+#hz-titlebar {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--titlebar-h);
+    display: flex; align-items: stretch;
+    background: var(--card); border-bottom: 1px solid var(--border);
+    z-index: 100000;                 /* above the sidebar (100) and modals (9999) */
+    font-family: var(--font, 'Inter', 'Segoe UI', system-ui, sans-serif);
+    -webkit-app-region: drag;        /* the bar itself drags the window …        */
+    user-select: none;
+}
+/* … but every interactive element must be clickable, not a drag handle. */
+#hz-titlebar button,
+#hz-titlebar .hz-menu { -webkit-app-region: no-drag; }
+
+/* ── Brand ───────────────────────────────────────────────────────────────── */
+.hz-tb-brand { display: flex; align-items: center; gap: 9px; padding: 0 16px 0 12px; }
+.hz-tb-logo  {
+    width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-dim); color: var(--accent-strong);
+}
+.hz-tb-logo svg { width: 13px; height: 13px; }
+.hz-tb-word  { font-size: 13px; font-weight: 700; letter-spacing: -.01em; color: var(--text); }
+
+/* ── Menu buttons ────────────────────────────────────────────────────────── */
+.hz-tb-menus { display: flex; align-items: stretch; }
+.hz-menu     { position: relative; display: flex; }
+.hz-menu > button {
+    border: none; background: none; color: var(--text2);
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    padding: 0 12px; height: 100%; cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+}
+.hz-menu > button:hover     { background: var(--dash-sunk); color: var(--text); }
+.hz-menu.hz-open > button   { background: var(--accent-dim); color: var(--accent-strong); }
+
+/* ── Dropdown panels ─────────────────────────────────────────────────────── */
+.hz-drop {
+    position: absolute; top: 100%; left: 0; min-width: 224px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+    padding: 6px; z-index: 100001; display: none;
+}
+.hz-menu.hz-open .hz-drop { display: block; }
+.hz-drop button {
+    display: flex; align-items: center; justify-content: space-between; gap: 28px;
+    width: 100%; border: none; background: none; color: var(--text);
+    font: inherit; font-size: 12.5px; text-align: left;
+    padding: 8px 10px; border-radius: 7px; cursor: pointer;
+}
+.hz-drop button:hover { background: var(--dash-sunk); }
+.hz-drop .hz-acc      { color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.hz-drop hr           { border: none; border-top: 1px solid var(--border); margin: 5px 4px; }
+
+/* ── Spacer + window controls ────────────────────────────────────────────── */
+.hz-tb-spacer { flex: 1; }
+.hz-tb-win    { display: flex; align-items: stretch; }
+.hz-tb-win button {
+    width: 46px; border: none; background: none; color: var(--text2); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .12s ease, color .12s ease;
+}
+.hz-tb-win button:hover           { background: var(--dash-sunk); color: var(--text); }
+.hz-tb-win button.hz-close:hover  { background: #e81123; color: #fff; }   /* the one OS convention worth keeping */
+.hz-tb-win svg { width: 12px; height: 12px; }
+
+/* ── Push the app chrome below the bar (only when the bar is really there) ─── */
+body.has-titlebar #sidebar      { top: var(--titlebar-h); }
+body.has-titlebar #main         { margin-top: var(--titlebar-h); height: calc(100vh - var(--titlebar-h)); }
+body.has-titlebar #login-screen { top: var(--titlebar-h); }
