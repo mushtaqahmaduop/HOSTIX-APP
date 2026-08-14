@@ -19,14 +19,14 @@
     min-width:0;
     container-type:inline-size;   /* the figure sizes off the card, not the viewport */
     overflow:hidden;
-    background:var(--card); border:1px solid var(--border); border-radius:16px; padding:15px 16px;
+    background:var(--card); border:1px solid var(--border); border-radius:16px; padding:9px 16px;
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .stu-stat--click { cursor:pointer; }
 .stu-stat--click:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
-.stu-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:9px; }
+.stu-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:5px; }
 .stu-stat__chip  {
-    width:38px; height:38px; border-radius:11px; flex-shrink:0;
+    width:32px; height:32px; border-radius:10px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
@@ -37,7 +37,7 @@
 @container (min-width:190px) { .stu-stat__val { font-size:24px; } }
 @container (min-width:220px) { .stu-stat__val { font-size:28px; } }
 .stu-stat__val small { font-size:.62em; font-weight:700; color:var(--text3); }
-.stu-stat__sub   { font-size:11px; color:var(--text3); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-stat__sub   { font-size:11px; color:var(--text3); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Below this the row would crush the cards past reading — fall back to wrapping. */
 @media (max-width:900px) {

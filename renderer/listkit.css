@@ -19,7 +19,7 @@
 .lk-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(206px,1fr)); gap:12px; margin-bottom:12px; }
 .lk-stat {
     position:relative; overflow:hidden;
-    background:var(--card); border:1px solid var(--border); border-radius:16px; padding:15px 16px;
+    background:var(--card); border:1px solid var(--border); border-radius:16px; padding:9px 16px;
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .lk-stat--click { cursor:pointer; }
@@ -28,9 +28,9 @@
    the card counts, the accent says which one you are filtered to. */
 .lk-stat.is-on  { border-color:var(--accent); }
 .lk-stat.is-on::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent); }
-.lk-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:9px; }
+.lk-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:5px; }
 .lk-stat__chip  {
-    width:38px; height:38px; border-radius:11px; flex-shrink:0;
+    width:32px; height:32px; border-radius:10px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
@@ -38,7 +38,7 @@
 .lk-stat.is-on .lk-stat__label { color:var(--accent-strong); }
 .lk-stat__val   { font-size:28px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-variant-numeric:tabular-nums; line-height:1.1; }
 .lk-stat__val small { font-size:17px; font-weight:700; color:var(--text3); }
-.lk-stat__sub   { font-size:11px; color:var(--text3); margin-top:4px; }
+.lk-stat__sub   { font-size:11px; color:var(--text3); margin-top:2px; }
 
 /* ── Banner (a single wide callout above the toolbar) ────────────────────── */
 .lk-banner {

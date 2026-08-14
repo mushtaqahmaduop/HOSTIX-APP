@@ -18,14 +18,14 @@
     min-width:0;
     container-type:inline-size;   /* the figure sizes off the card, not the viewport */
     position:relative; overflow:hidden; background:var(--card); border:1px solid var(--border);
-    border-radius:16px; padding:15px 16px;
+    border-radius:16px; padding:9px 16px;
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .pay-stat--click { cursor:pointer; }
 .pay-stat--click:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
-.pay-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:11px; }
+.pay-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:6px; }
 .pay-stat__chip  {
-    width:38px; height:38px; border-radius:11px; flex-shrink:0;
+    width:32px; height:32px; border-radius:10px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
@@ -37,7 +37,7 @@
 @container (min-width:190px) { .pay-stat__val { font-size:22px; } }
 @container (min-width:220px) { .pay-stat__val { font-size:26px; } }
 .pay-stat__val .cur { font-size:13px; font-weight:600; color:var(--text3); font-family:var(--font); margin-right:5px; }
-.pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:6px; flex-wrap:wrap; }
+.pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:4px; flex-wrap:wrap; }
 .pay-stat__sub   { font-size:11px; color:var(--text3); }
 .pay-stat__delta { font-size:11px; font-weight:700; color:var(--dh); display:inline-flex; align-items:center; gap:3px; white-space:nowrap; }
 

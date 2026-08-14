@@ -11,11 +11,11 @@
 }
 .exp-stat {
     display:flex; align-items:center; gap:12px;
-    padding:14px 15px; border-radius:14px;
+    padding:9px 15px; border-radius:14px;
     background:var(--card); border:1px solid var(--border);
 }
 .exp-stat__ic {
-    width:38px; height:38px; border-radius:12px; flex-shrink:0;
+    width:34px; height:34px; border-radius:11px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
@@ -23,10 +23,10 @@
 .exp-stat__c { min-width:0; flex:1; }
 .exp-stat__l { font-size:11px; font-weight:600; color:var(--text3); white-space:nowrap; }
 .exp-stat__v {
-    margin-top:3px; font-size:19px; font-weight:800; color:var(--text);
+    margin-top:2px; font-size:19px; font-weight:800; color:var(--text);
     font-variant-numeric:tabular-nums; white-space:nowrap;
 }
-.exp-stat__s { margin-top:2px; font-size:10.5px; color:var(--text3); white-space:nowrap; }
+.exp-stat__s { margin-top:1px; font-size:10.5px; color:var(--text3); white-space:nowrap; }
 .exp-spark   { flex-shrink:0; color:var(--dh); opacity:.85; align-self:center; }
 
 @media (max-width:1180px) { .exp-stats { grid-template-columns:repeat(2, 1fr); } }
