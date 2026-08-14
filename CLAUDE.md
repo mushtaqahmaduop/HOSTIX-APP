@@ -1,7 +1,11 @@
-# HOSTIX-APP — Claude Code Context
+# Hostyllo — Offline Edition — Claude Code Context
 
 ## What this is
-Offline Electron desktop app for hostel management. Deployed to 50+ Pakistani hostels under Zeerak Hostix brand. Vanilla JS/HTML/CSS — NO build step, NO framework, NO bundler. SQLite via better-sqlite3.
+Offline Electron desktop app for hostel management. Deployed to 50+ Pakistani hostels under the Hostyllo brand (formerly Zeerak Hostix). Vanilla JS/HTML/CSS — NO build step, NO framework, NO bundler. SQLite via better-sqlite3.
+
+User-visible branding is **HOSTYLLO** — set by `appName` in `renderer/src/config.js`. Do not reintroduce "HOSTIX" in any user-facing string. The repo folder and remote are still named `HOSTIX-APP`; that is expected, leave paths alone.
+
+This is the offline desktop product. The separate cloud SaaS lives at `C:\hostyllo` — different repo, different rules. Nothing here depends on it.
 
 ## Code structure
 - `app.js` was a 9,270-line monolith — now split into 13 modular feature files.
