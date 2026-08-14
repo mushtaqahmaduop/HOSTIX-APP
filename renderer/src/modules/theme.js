@@ -15,8 +15,15 @@ function toggleTheme() {
       document.body.classList.remove('no-transition');
     });
   });
-  if (typeof drawTrendChart === 'function') setTimeout(drawTrendChart, 50);
-  if (typeof drawRoomDonut === 'function') setTimeout(drawRoomDonut, 50);
+  // The light-theme class is already toggled above, so the CSS tokens the
+  // charts read (--border for the grid lines, --green etc.) are live now. A
+  // 50ms setTimeout left the canvas grid painted in the old theme for a beat
+  // after everything else had switched — redraw on the next frame instead so
+  // the grid recolours in step with the rest of the UI.
+  requestAnimationFrame(function() {
+    if (typeof drawTrendChart === 'function') drawTrendChart();
+    if (typeof drawRoomDonut === 'function') drawRoomDonut();
+  });
 }
 function updateThemeUI(isLight) {
   const icon = document.getElementById('theme-icon');

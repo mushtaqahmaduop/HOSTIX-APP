@@ -370,7 +370,13 @@ function _rptTotals(keys) {
     .filter(p => p.status === 'Pending' && keys.some(k => _payMatchesMonth(p, k)))
     .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount)), 0);
   const totalExp = exps.reduce((s, e) => s + Number(e.amount), 0);
-  return { pays, exps, rev, pending, totalExp, net: rev - totalExp };
+  // Fund transfers are an outgoing too — the Available Fund must net them out,
+  // exactly as the dashboard card (netProfit) and the student ledger PDF do.
+  // Omitting them here was why the reports PDF disagreed with the dashboard.
+  const totalTransfers = (DB.transfers || [])
+    .filter(t => keys.some(k => String(t.date || '').startsWith(k)))
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  return { pays, exps, rev, pending, totalExp, totalTransfers, net: rev - totalExp - totalTransfers };
 }
 
 // Students whose join/leave dates fall inside the window — the only honest
@@ -604,7 +610,8 @@ function renderReports() {
   </div>
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
-  <!-- ══ MONTHLY OVERVIEW ══ -->
+  <!-- ══ MONTHLY OVERVIEW + PAYMENT METHODS — one row ══ -->
+  <div class="rpt-toprow">
   <div class="mov">
     <div class="mov__head">
       <span class="mov__ico">${icon('chart','sm')}</span>
@@ -664,7 +671,6 @@ function renderReports() {
     </div>
   </div>
 
-  <div class="rpt-grid">
     <div class="rpt-card">
       <div class="rpt-card__h">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
@@ -1032,7 +1038,9 @@ function downloadDetailPDF(type) {
   const exps = DB.expenses.filter(e=>e.date?.startsWith(key));
   const rev = calcRevenue(key);
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
-  const net = rev - totalExp;
+  // Available Fund nets out transfers too, matching the dashboard card.
+  const totalTransfers = (DB.transfers||[]).filter(t=>String(t.date||'').startsWith(key)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const net = rev - totalExp - totalTransfers;
   const css = printDocStyles();
   let body = `<div class="hdr"><div><div class="ht">${DB.settings.hostelName}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
@@ -1044,7 +1052,7 @@ function downloadDetailPDF(type) {
     body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pend.length}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${totalUnpaid.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pend.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</div></div></div>`;
     body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td class="go">#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${(p.unpaid!=null?p.unpaid:p.amount).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
   } else if(type==='netprofit'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
+    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Funds Transfer</span><div class="kv re">PKR ${totalTransfers.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
     body+=`<table><thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th></tr></thead><tbody>${DB.settings.expenseCategories.map(cat=>{const amt=exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);const pct=totalExp>0?Math.round(amt/totalExp*100):0;return amt>0?`<tr><td>${cat}</td><td class="re">PKR ${amt.toLocaleString()}</td><td>${pct}%</td></tr>`:'';}).join('')||'<tr><td colspan="3" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
   } else if(type==='expenses'){
     body+=`<div class="kc" style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:18px"><span class="kl">Total Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div>`;
@@ -1067,7 +1075,11 @@ function downloadReportDetailPDF(detailId) {
   const exps = DB.expenses.filter(e=>e.date?.startsWith(mo));
   const rev = calcRevenue(mo);
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
-  const net = rev - totalExp;
+  // Available Fund nets out transfers too, matching the dashboard card. The
+  // netprofit breakdown below already subtracted them from its own tile; net
+  // now carries that deduction so the header KPI and the breakdown agree.
+  const totalTransfers = (DB.transfers||[]).filter(t=>String(t.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const net = rev - totalExp - totalTransfers;
   const hostel = DB.settings.hostelName || 'DAMAM Hostel';
   const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expense Breakdown',payments:'Payment Transactions'};
   const title = titles[detailId] || 'Report';
@@ -1095,7 +1107,7 @@ function downloadReportDetailPDF(detailId) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
           <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#16a34a;font-weight:700;margin-bottom:4px">Revenue</div><div style="font-size:22px;font-weight:900;color:#16a34a">${fmtPKR(rev)}</div></div>
           <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#dc2626;font-weight:700;margin-bottom:4px">Total Outgoing</div><div style="font-size:22px;font-weight:900;color:#dc2626">${fmtPKR(totalExp + trTotal)}</div><div style="font-size:10px;color:#666">Expenses ${fmtPKR(totalExp)}${trTotal>0?' + Transfers '+fmtPKR(trTotal):''}</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${net>=0?'#16a34a':'#dc2626'};font-weight:700;margin-bottom:4px">Available Fund</div><div style="font-size:22px;font-weight:900;color:${net>=0?'#16a34a':'#dc2626'}">${fmtPKR(net - trTotal)}</div></div>
+          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${net>=0?'#16a34a':'#dc2626'};font-weight:700;margin-bottom:4px">Available Fund</div><div style="font-size:22px;font-weight:900;color:${net>=0?'#16a34a':'#dc2626'}">${fmtPKR(net)}</div></div>
         </div>
       </div>
       <h3>💰 Revenue — Paid Transactions</h3>
@@ -1142,6 +1154,8 @@ function printReport() {
   const exps=DB.expenses.filter(e=>e.date?.startsWith(mo));
   const rev=calcRevenue(mo);
   const expTotal=exps.reduce((s,e)=>s+Number(e.amount),0);
+  // Available Fund nets out transfers too, matching the dashboard card.
+  const moTransfers=(DB.transfers||[]).filter(tr=>String(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount||0),0);
   const _printKey=reportPeriod==='month'?thisMonth():thisYear();
   const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const _occIdx=_buildRoomStudentIndex();
@@ -1176,7 +1190,7 @@ function printReport() {
   <div class="kpi-grid">
     <div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
     <div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(expTotal)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
+    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal-moTransfers>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal-moTransfers)}</div></div>
     <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pending)}</div></div>
     <div class="kpi"><label>Rooms Occupied</label><div class="val">${occ}/${DB.rooms.length}</div></div>
     <div class="kpi"><label>Active Students</label><div class="val">${DB.students.filter(t=>t.status==='Active').length}</div></div>

@@ -12,7 +12,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Stat strip ──────────────────────────────────────────────────────────── */
-.rms-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:12px; margin-bottom:12px; }
+.rms-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:12px; margin-bottom:10px; }
 .rms-stat  { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:10px 16px; }
 .rms-stat__top   { display:flex; align-items:center; gap:12px; margin-bottom:3px; }
 .rms-stat__chip  {
@@ -30,7 +30,7 @@
                     background:linear-gradient(90deg,var(--dh-2),var(--dh)); transition:width .5s ease; }
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
-.rms-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+.rms-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:12px 16px; margin-bottom:10px; }
 .rms-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 .rms-search {
@@ -101,7 +101,7 @@
 .rms-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
 
 .rms-card__pic {
-    position:relative; height:132px; flex-shrink:0; cursor:pointer;
+    position:relative; height:112px; flex-shrink:0; cursor:pointer;
     background:var(--dash-sunk); border-bottom:1px solid var(--border);
     display:flex; align-items:center; justify-content:center; color:var(--text3);
 }

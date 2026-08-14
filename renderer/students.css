@@ -153,6 +153,22 @@
 }
 .stu-act:hover { background:var(--dh-bg); border-color:var(--dh); }
 
+/* Pin the actions column to the right edge. With nine columns the table scrolls
+   horizontally on smaller screens and the last button (Delete) was ending up
+   off-screen / half-clipped. Pinning keeps View/Edit/Delete visible however far
+   the table is scrolled. Backgrounds mirror the row states so nothing shows
+   through the sticky cell; width:1% shrinks the column to exactly the buttons. */
+.stu-table thead th:last-child,
+.stu-table tbody td:last-child {
+    position:sticky; right:0;
+    width:1%; white-space:nowrap;
+    box-shadow:-8px 0 8px -8px rgba(0,0,0,.18);
+}
+.stu-table thead th:last-child { z-index:3; background:var(--dash-sunk); }
+.stu-table tbody td:last-child { z-index:1; background:var(--card); }
+.stu-table tbody tr:hover td:last-child     { background:var(--dash-sunk); }
+.stu-table tbody tr.is-picked td:last-child { background:var(--dh-bg); }
+
 .stu-empty { padding:44px 20px; text-align:center; color:var(--text3); font-size:13px; }
 
 /* ── Footer / pager ──────────────────────────────────────────────────────── */

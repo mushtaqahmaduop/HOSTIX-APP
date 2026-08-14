@@ -1519,6 +1519,12 @@ async function submitRoomShift(studentId) {
     }
   });
 
+  // Catch anything the Pending-only loop above missed — a partially-paid record
+  // still shows this student in the room, and the same room stamp belongs on it.
+  // Idempotent, and touches only name/room (never amounts), so it will not
+  // disturb the rent/unpaid recalculation just applied to the open records.
+  if (typeof syncStudentSnapshots === 'function') syncStudentSnapshots(t);
+
   logActivity(
     'Room Shift',
     `${t.name}: Room #${fromRoom?.number||'?'} → Room #${toRoom.number}` + (reason ? ` · ${reason}` : ''),

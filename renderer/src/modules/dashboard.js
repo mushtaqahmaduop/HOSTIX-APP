@@ -1107,7 +1107,10 @@ function renderMonthModal(monthKey, monthLabel) {
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
-  const netProfit = rev - expTotal;
+  // Transfers are an outgoing — net them out so this modal, its exports and the
+  // dashboard Available Fund card all report the same figure.
+  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const netProfit = rev - expTotal - moTransfers;
   // The roster AS IT STOOD in this month — not whoever happens to be Active
   // today. Anyone with a fee record for the month is included regardless, so a
   // student who has since left still appears against the money they paid.
@@ -1186,7 +1189,7 @@ function renderMonthModal(monthKey, monthLabel) {
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
       <div>${moneyValue(netProfit,{size:"section"})}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp − Transfers</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
@@ -1353,8 +1356,10 @@ function exportMonthCSV(monthKey, monthLabel) {
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  // Available Fund nets out transfers too, matching the dashboard card.
+  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
+  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nFunds Transfer,${moTransfers}\nAvailable Fund,${rev-expTotal-moTransfers}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
   csv += `\nExpenses\nDate,Category,Description,Amount\n`;
@@ -1373,6 +1378,8 @@ function printMonthReport(monthKey, monthLabel) {
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
   const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  // Available Fund nets out transfers too, matching the dashboard card.
+  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
@@ -1385,7 +1392,7 @@ function printMonthReport(monthKey, monthLabel) {
   <div class="kpi-grid">
     <div class="kpi"><label>Total Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
     <div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(expTotal)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
+    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal-moTransfers>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal-moTransfers)}</div></div>
     <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pend)}</div></div>
   </div>
   <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>

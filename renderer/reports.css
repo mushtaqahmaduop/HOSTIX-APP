@@ -83,6 +83,13 @@
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .rpt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; margin-bottom:14px; }
+
+/* Monthly Overview beside Payment Methods on one row. The trend chart takes the
+   wider column, the donut the narrower; minmax(0,…) lets both shrink instead of
+   forcing a horizontal overflow. Stacks below 1000px so neither gets crushed. */
+.rpt-toprow { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:14px; margin-bottom:14px; align-items:start; }
+.rpt-toprow > .mov { margin-bottom:0; }
+@media (max-width:1000px) { .rpt-toprow { grid-template-columns:1fr; } }
 .rpt-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 18px; min-width:0; }
 .rpt-card__h {
     display:flex; align-items:center; gap:9px; margin-bottom:15px;
