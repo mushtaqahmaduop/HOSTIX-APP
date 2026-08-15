@@ -1,9 +1,32 @@
 # Phase 1 §5.1 — Electron Upgrade Prep Note
 
-**Status:** BLOCKED on a build-machine prerequisite (see below), then a focused
-GUI session. Everything below is groundwork so the upgrade is a clean task.
+**Status:** BLOCKED — the Node ≥ 22.12 build-machine prerequisite is now satisfied
+(this container runs Node 22.22.2), but a **new, higher-priority blocker** was found
+on 2026-08-15: client OS support. See below before touching the Electron version.
 
-## ⚠️ BLOCKER FOUND (2026-07-17) — build machine needs Node ≥ 22.12
+## ⚠️ NEW BLOCKER (2026-08-15) — Windows 8 clients vs. Electron EOL
+
+Client base was confirmed to include **Windows 8 through 10** machines, plus Mac
+users. Electron 22.3.27 (current) is the **last** major version that supports
+Windows 7/8/8.1 — Electron 23+ (Feb 2023, Chromium 110) requires Windows 10 or
+later. Upgrading Electron and keeping Windows 8 clients working are mutually
+exclusive; the original audit recommendation ("upgrade to latest supported major")
+did not account for this.
+
+**Needs a decision from Mushtaq before any upgrade work resumes:**
+1. How many/which live clients are actually still on Windows 8 (vs. 8.1/10)?
+2. Is dropping Windows 8 support acceptable going forward (new builds only —
+   existing installs keep running their current version either way)?
+3. If Windows 8 must stay supported indefinitely, the Electron 22 EOL/Chromium-108
+   security debt from the audit is accepted as a permanent constraint, not a
+   deferred task.
+
+Do not bump the `electron` devDependency past `^22.x` until this is answered.
+
+## Node-version blocker (RESOLVED 2026-08-15)
+
+The prerequisite below (Node ≥ 22.12 on the build machine) is no longer a
+blocker in this environment — noted here for history, not as an active gate.
 
 An upgrade attempt to Electron 43 + better-sqlite3 12 failed at the native
 build. Root cause is the **build machine's Node version**, not the code:

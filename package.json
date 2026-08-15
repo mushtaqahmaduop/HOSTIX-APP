@@ -17,6 +17,7 @@
     "build:portable": "electron-builder --win portable --x64 --ia32",
     "build:installer": "electron-builder --win nsis --x64 --ia32",
     "build:all": "electron-builder --win --x64 --ia32",
+    "build:mac": "electron-builder --mac",
     "test:license": "node test-license.js",
     "test:e2e": "playwright test",
     "test:migrate": "node migrations/001-relational-schema.test.js",
@@ -84,6 +85,24 @@
       "requestedExecutionLevel": "asInvoker",
       "verifyUpdateCodeSignature": false,
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        },
+        {
+          "target": "zip",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.business",
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "HOSTIX-${version}.dmg"
     },
     "nsis": {
       "oneClick": false,
