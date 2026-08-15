@@ -80,9 +80,10 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">⏳ Pending Payments — All Unpaid</div>
+        <div class="card-title">⏳ Pending Payments — All Unpaid <span style="font-size:10px;font-weight:700;color:var(--amber);background:var(--amber-dim);border:1px solid rgba(240,160,48,0.35);border-radius:20px;padding:2px 9px;margin-left:6px;vertical-align:middle">ALL MONTHS</span></div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('pending','var(--amber)')}${pdfBtn}</div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">The <strong>Pending</strong> stat card above shows ${escHtml(thisMonthLabel())} only — this list is every unpaid record across all months.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
         <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:16px;text-align:center">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--amber);font-weight:700">Total Outstanding</div>
@@ -372,8 +373,10 @@ function renderReports() {
 
   return `
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-    <button class="btn ${reportPeriod==='month'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='month';reportDetail=null;renderPage('reports')">This Month</button>
-    <button class="btn ${reportPeriod==='year'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='year';reportDetail=null;renderPage('reports')">This Year</button>
+    <!-- Labels name the ACTUAL period. "This Month" was misleading once the header
+         month picker moved off the real current month. -->
+    <button class="btn ${reportPeriod==='month'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='month';reportDetail=null;renderPage('reports')" title="Report figures for ${escHtml(thisMonthLabel())}">📅 ${escHtml(thisMonthLabel())}</button>
+    <button class="btn ${reportPeriod==='year'?'btn-primary':'btn-secondary'}" onclick="reportPeriod='year';reportDetail=null;renderPage('reports')" title="Report figures for ${escHtml(thisYear())}">📅 ${escHtml(thisYear())}</button>
     ${reportDetail?`<button class="btn btn-secondary btn-sm" onclick="reportDetail=null;renderPage('reports')">← Back to Reports</button>`:''}
     <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" onclick="printReport()" style="display:flex;align-items:center;gap:4px">🖨️ Print / PDF</button>
@@ -473,7 +476,10 @@ function renderReports() {
 function showTransferRecordsModal() {
   const transfers = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totalAll = transfers.reduce((s,t)=>s+Number(t.amount),0);
-  const mo = new Date().toISOString().slice(0,7);
+  // MONTH-SCOPE FIX: was new Date() (real current month), which ignored the header
+  // month picker — selecting March still showed August's transfers in this card.
+  const mo = thisMonth();
+  const moLabel = thisMonthLabel();
   const moTransfers = transfers.filter(t=>t.date?.startsWith(mo));
   const moTotal = moTransfers.reduce((s,t)=>s+Number(t.amount),0);
 
@@ -501,10 +507,10 @@ function showTransferRecordsModal() {
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px">🏦 Total Funds Transferred</div>
         <div style="font-size:28px;font-weight:900;color:var(--blue)">${fmtPKR(totalAll)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${transfers.length} record${transfers.length!==1?'s':''} total</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">${transfers.length} record${transfers.length!==1?'s':''} · all months</div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px">📅 This Month</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px">📅 ${escHtml(moLabel)}</div>
         <div style="font-size:28px;font-weight:900;color:var(--green)">${fmtPKR(moTotal)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${moTransfers.length} transfer${moTransfers.length!==1?'s':''}</div>
       </div>
@@ -516,8 +522,10 @@ function showTransferRecordsModal() {
           <span style="color:var(--blue)">${fmtPKR(transfers.filter(t=>t.method!=='Cash').reduce((s,t)=>s+Number(t.amount),0))}</span>
           <span style="color:var(--text3);font-size:12px"> bank</span>
         </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">all months</div>
       </div>
     </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Table below lists <strong>all months</strong> — only the ${escHtml(moLabel)} card is month-scoped.</div>
     ${rows}`,
   `<button class="btn btn-secondary" onclick="closeModal()">Close</button>
    <button class="btn btn-primary" onclick="closeModal();navigate('reports')">+ New Transfer (Reports)</button>`);
@@ -642,7 +650,17 @@ function downloadDetailPDF(type) {
   const totalExp = exps.reduce((s,e)=>s+Number(e.amount),0);
   const net = rev - totalExp;
   const css = printDocStyles();
-  let body = `<div class="hdr"><div><div class="ht">${DB.settings.hostelName}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
+  // MONTH-STAMP FIX: the header previously showed only the generation date, so two
+  // PDFs for different months were indistinguishable once printed. Each type also
+  // declares its own scope, because not every section is month-filtered:
+  //   financial / netprofit / expenses → the selected period
+  //   pending / students / rooms       → deliberately all-months (see _scopeNote)
+  const _periodLabel = reportPeriod==='month' ? thisMonthLabel() : thisYear();
+  const _allMonthTypes = ['pending','students','rooms'];
+  const _scopeNote = _allMonthTypes.includes(type)
+    ? 'ALL MONTHS (not limited to '+escHtml(_periodLabel)+')'
+    : escHtml(_periodLabel);
+  let body = `<div class="hdr"><div><div class="ht">${DB.settings.hostelName}</div><div class="hs">${_allMonthTypes.includes(type)?'':label+' '}${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':type==='students'?'Student Directory':type==='rooms'?'Room Occupancy':'Expense'} Report · <strong>${_scopeNote}</strong> · Generated ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
     body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
     body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td class="go">#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${p.method||'—'}</td><td class="${p.status==='Paid'?'gr':'re'}">${p.status}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
@@ -664,9 +682,12 @@ function downloadDetailPDF(type) {
     const _idx=_buildRoomStudentIndex();
     body+=`<table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>${DB.rooms.map(r=>{const t=getRoomType(r);const _sts=_idx.activeStudentsByRoom.get(r.id)||[];const oc=_sts.length;const names=_sts.map(s=>s.name);return `<tr><td class="go">#${r.number}</td><td>${r.floor}</td><td>${t.name}</td><td>${t.capacity} beds</td><td class="${oc>0?'gr':''}">${oc}/${t.capacity}</td><td class="gr">PKR ${Number(r.rent||0).toLocaleString()}</td><td class="${oc>0?'gr':'go'}">${oc>0?'Occupied':'Vacant'}</td><td>${names.join(', ')||'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No rooms</td></tr>'}</tbody></table>`;
   }
-  body += `<div class="ft">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>`;
-  _electronPDF(`<!DOCTYPE html><html><head><title>${type} detail</title>${css}</head><body>${body}</body></html>`,
-    (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+type+'_'+key+'.pdf', {pageSize:'A4'});
+  body += `<div class="ft">${_scopeNote} · Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>`;
+  // Filename carries the same scope as the content — an all-months report must not
+  // be filed under a single month key, or saved PDFs collide in the download folder.
+  const _fileScope = _allMonthTypes.includes(type) ? 'AllMonths' : key;
+  _electronPDF(`<!DOCTYPE html><html><head><title>${type} detail — ${_scopeNote}</title>${css}</head><body>${body}</body></html>`,
+    (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+type+'_'+_fileScope+'.pdf', {pageSize:'A4'});
 }
 
 function downloadReportDetailPDF(detailId) {
@@ -679,6 +700,11 @@ function downloadReportDetailPDF(detailId) {
   const hostel = DB.settings.hostelName || 'DAMAM Hostel';
   const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expense Breakdown',payments:'Payment Transactions'};
   const title = titles[detailId] || 'Report';
+  // Same scope contract as downloadDetailPDF: these sections are NOT month-filtered,
+  // so they must not be presented under the selected month's heading.
+  const _dPeriodLabel = reportPeriod==='month' ? thisMonthLabel() : thisYear();
+  const _dAllMonths   = ['pending','students','rooms'].includes(detailId);
+  const _dScope       = _dAllMonths ? 'ALL MONTHS (not limited to '+_dPeriodLabel+')' : _dPeriodLabel;
   let tableHTML = '';
   if(detailId==='financial'||detailId==='payments') {
     const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
@@ -739,8 +765,8 @@ function downloadReportDetailPDF(detailId) {
       <tr style="background:#f8fafc;font-weight:700"><td colspan="5" style="text-align:right;padding:8px 12px">Grand Total</td><td class="red">${fmtPKR(trTotal2)}</td></tr>
       </tbody></table>`;
   }
-  _electronPDF(`<!DOCTYPE html><html><head><title>${title} — ${hostel}</title>${printDocStyles()}</head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px">${mo} · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${tableHTML}<div class="footer">Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`,
-    hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + title.replace(/\s+/g,'-') + '_' + mo + '.pdf',
+  _electronPDF(`<!DOCTYPE html><html><head><title>${title} — ${_dScope} — ${hostel}</title>${printDocStyles()}</head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px"><strong>${escHtml(_dScope)}</strong> · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${_dAllMonths?`<div style="font-size:11px;color:#b45309;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 10px;margin-bottom:12px">The three figures above are for <strong>${escHtml(_dPeriodLabel)}</strong>. The table below covers <strong>all months</strong>.</div>`:''}${tableHTML}<div class="footer">${escHtml(_dScope)} · Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`,
+    hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + title.replace(/\s+/g,'-') + '_' + (_dAllMonths?'AllMonths':mo) + '.pdf',
     { pageSize: 'A4' });
 }
 
@@ -754,7 +780,10 @@ function printReport() {
   const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const _occIdx=_buildRoomStudentIndex();
   const occ=DB.rooms.filter(r=>_occIdx.occ(r)>0).length;
-  const _rptHtml = `<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
+  // MONTH-STAMP FIX: header/badge/title previously said only "Monthly Report", so a
+  // March printout and an August printout were identical on paper.
+  const _rptPeriodLabel = reportPeriod==='month' ? thisMonthLabel() : thisYear();
+  const _rptHtml = `<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report ${_rptPeriodLabel} — ${DB.settings.hostelName}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
@@ -778,8 +807,8 @@ function printReport() {
     @media print{body{padding:16px}}
   </style></head><body>
   <div class="header">
-    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${reportPeriod==='month'?'Monthly':'Annual'} Report · ${DB.settings.location||''} · Generated ${new Date().toLocaleDateString()}</div></div>
-    <div class="badge">${reportPeriod==='month'?'Monthly':'Annual'} Report</div>
+    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${reportPeriod==='month'?'Monthly':'Annual'} Report · <strong>${escHtml(_rptPeriodLabel)}</strong> · ${DB.settings.location||''} · Generated ${new Date().toLocaleDateString()}</div></div>
+    <div class="badge">${escHtml(_rptPeriodLabel)}</div>
   </div>
   <div class="kpi-grid">
     <div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
@@ -810,7 +839,7 @@ function printReport() {
     </tbody></table>
     ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#5b21b6">Total Funds Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
+  <div class="footer">${escHtml(_rptPeriodLabel)} · Rooms Occupied and Active Students are current totals, not ${escHtml(_rptPeriodLabel)} figures · Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
   </body></html>`;
   _electronPDF(_rptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Report_'+(reportPeriod==='month'?thisMonth():thisYear())+'.pdf', {pageSize:'A4'});
 }
@@ -829,7 +858,9 @@ function downloadDetailCSV(type) {
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
     });
   } else if (type === 'pending') {
-    filename = 'Pending_Payments.csv';
+    // All-months by design — filename says so, so it can't be mistaken for a
+    // single-month export sitting next to Revenue_2026-03.csv in the same folder.
+    filename = 'Pending_Payments_AllMonths.csv';
     rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
     DB.payments.filter(p=>p.status==='Pending').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
@@ -843,7 +874,7 @@ function downloadDetailCSV(type) {
       rows.push([e.date||'—',e.category||'—',e.description||'—',e.amount]);
     });
   } else if (type === 'transfers') {
-    filename = 'Funds_Transfer.csv';
+    filename = 'Funds_Transfer_AllMonths.csv';
     rows.push(['Date','Description','Method','Amount','Received By','Notes']);
     (DB.transfers||[]).forEach(t=>{
       rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);

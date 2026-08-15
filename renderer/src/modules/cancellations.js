@@ -395,9 +395,19 @@ function downloadCancellationReport() {
   const list = DB.cancellations || [];
   if(!list.length){ toast('No cancellation records to export','error'); return; }
 
-  // Get last 2 months date range
-  const now = new Date();
-  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth()-2, 1);
+  // Payment-history window: the 2 months before the month selected in the header
+  // picker (thisMonth()), not the real calendar month. Anchoring to new Date() meant
+  // a report printed for an older month still carried today's payment history.
+  const _anchorKey = thisMonth();                       // 'YYYY-MM'
+  const _aY = Number(_anchorKey.slice(0,4));
+  const _aM = Number(_anchorKey.slice(5,7)) - 1;        // 0-based
+  // End of the anchor month at 23:59:59.999 — NOT local midnight. 'YYYY-MM-DD' date
+  // strings parse as UTC midnight, which in PKT (UTC+5) lands at 05:00 local, so a
+  // midnight upper bound silently dropped every payment dated on the last day.
+  const now = new Date(_aY, _aM + 1, 0, 23, 59, 59, 999);
+  const twoMonthsAgo = new Date(_aY, _aM - 2, 1);
+  const _fmtMY = d => d.toLocaleString('default',{month:'long',year:'numeric'});
+  const _rangeLabel = _fmtMY(twoMonthsAgo) + ' – ' + _fmtMY(new Date(_aY, _aM, 1));
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Cancellation Report — ${DB.settings.hostelName||'Hostel'}</title>
@@ -426,15 +436,19 @@ function downloadCancellationReport() {
     <button onclick="window.close()">✕ Close</button>
   </div>
   <h1>📋 Cancellation Report</h1>
-  <div class="sub">${DB.settings.hostelName||'Hostel'} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
+  <div class="sub">${DB.settings.hostelName||'Hostel'} · Generated: ${new Date().toLocaleString('en-PK')} · Payment history window: <strong>${escHtml(_rangeLabel)}</strong></div>`;
 
   list.forEach(c => {
     const student = DB.students.find(s=>s.id===c.studentId);
-    // Get last 2 months of payments for this student
+    // Payments inside the 2-month window ending with the selected month.
+    // MONTH-COLLISION FIX: the filter had only a lower bound (d >= twoMonthsAgo), so
+    // payments from every month AFTER the window leaked into the report — printing a
+    // March report in August listed April–August rows under a "last 2 months" heading.
     const payments = (DB.payments||[]).filter(p=>{
       if(p.studentId !== c.studentId) return false;
       const d = new Date(p.date||p.dueDate||'');
-      return d >= twoMonthsAgo;
+      if (isNaN(d.getTime())) return false;
+      return d >= twoMonthsAgo && d <= now;
     }).sort((a,b)=>new Date(b.date||b.dueDate||0)-new Date(a.date||a.dueDate||0)).slice(0,6);
 
     // BUG FIX: 'Confirmed' incorrectly mapped to badge-red (same as Pending).
@@ -459,7 +473,7 @@ function downloadCancellationReport() {
         <tr><td>Reason</td><td>${c.reason||'—'}</td></tr>
         <tr><td>Notes</td><td>${c.notes||'—'}</td></tr>
       </table>
-      <div class="section-title">💰 Payment History (Last 2 Months)</div>`;
+      <div class="section-title">💰 Payment History (${escHtml(_rangeLabel)})</div>`;
 
     if(payments.length) {
       html += `<table><tr><th>Month</th><th>Rent</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Date</th><th>Status</th></tr>`;
@@ -477,13 +491,15 @@ function downloadCancellationReport() {
       });
       html += `</table>`;
     } else {
-      html += `<div style="color:#aaa;font-size:11px;padding:8px 0">No payment records in last 2 months</div>`;
+      html += `<div style="color:#aaa;font-size:11px;padding:8px 0">No payment records in ${escHtml(_rangeLabel)}</div>`;
     }
     html += `</div>`;
   });
 
   html += `</body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
+  // Filename carries the anchor month, so summaries for different months don't
+  // overwrite each other when saved on the same day.
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+_anchorKey+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────

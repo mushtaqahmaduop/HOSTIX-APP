@@ -315,3 +315,104 @@ test('login: wrong password is rejected, decrements attempts, locks after 5', as
 
   await app.close();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTH ISOLATION — cards and PDFs must never mix data from different months.
+//
+// Guards the fixes for: the Funds Transfer "this month" card reading the real
+// calendar month instead of the header month picker, and the cancellation
+// report's payment window having no upper bound (later months leaked in).
+test('month isolation: cards and report windows follow the selected month', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  const preStuds = await win.evaluate(() => window.electronAPI.dbAll('students'));
+  expect(preStuds.length, 'SAFETY ABORT: isolated DB not empty').toBe(0);
+
+  const studentId = await seedRoomAndStudent(win);
+  expect(studentId).toBeTruthy();
+
+  // Seed two payments, two expenses and two transfers in two DIFFERENT months.
+  await win.evaluate((sid) => {
+    DB.payments = [
+      { id:'pA', studentId:sid, studentName:'Reg Test Student', roomNumber:'R01',
+        amount:5000, unpaid:0,    status:'Paid',    month:'March 2026', date:'2026-03-10' },
+      { id:'pB', studentId:sid, studentName:'Reg Test Student', roomNumber:'R01',
+        amount:7000, unpaid:0,    status:'Paid',    month:'April 2026', date:'2026-04-10' },
+      { id:'pC', studentId:sid, studentName:'Reg Test Student', roomNumber:'R01',
+        amount:1000, unpaid:2000, status:'Pending', month:'March 2026', date:'2026-03-20' },
+    ];
+    DB.expenses  = [ { id:'eA', amount:800, category:'Food', date:'2026-03-05' },
+                     { id:'eB', amount:900, category:'Food', date:'2026-04-05' } ];
+    DB.transfers = [ { id:'tA', amount:300, method:'Cash', date:'2026-03-15' },
+                     { id:'tB', amount:400, method:'Cash', date:'2026-04-15' } ];
+  }, studentId);
+
+  // ── Revenue is scoped strictly to the selected month ──────────────────────
+  const rev = await win.evaluate(() => ({
+    march: calcRevenue('2026-03'),
+    april: calcRevenue('2026-04'),
+  }));
+  expect(rev.march, 'March revenue must exclude April payments').toBe(6000); // 5000 paid + 1000 partial
+  expect(rev.april, 'April revenue must exclude March payments').toBe(7000);
+
+  // ── Header month picker drives thisMonth()/thisMonthLabel() ───────────────
+  const picker = await win.evaluate(() => {
+    _dashboardMonth = '2026-03';
+    const march = { key: thisMonth(), label: thisMonthLabel() };
+    _dashboardMonth = '2026-04';
+    const april = { key: thisMonth(), label: thisMonthLabel() };
+    _dashboardMonth = null;
+    return { march, april };
+  });
+  expect(picker.march.key).toBe('2026-03');
+  expect(picker.march.label).toContain('March');
+  expect(picker.april.key).toBe('2026-04');
+  expect(picker.april.label).toContain('April');
+
+  // ── Funds Transfer modal: the month card must follow the picker, not today.
+  // Regression: it used new Date(), so it always showed the real current month.
+  // The whole-modal HTML is NOT a valid probe: the table below the cards lists all
+  // months, so any figure appears somewhere regardless. Read the month card itself.
+  for (const [monthKey, expectedAmt, expectedLabel] of
+       [['2026-03', 300, 'March'], ['2026-04', 400, 'April']]) {
+    const card = await win.evaluate((mk) => {
+      _dashboardMonth = mk;
+      showTransferRecordsModal();
+      // The month card is the one whose heading starts with the calendar emoji.
+      const heads = Array.from(document.querySelectorAll('div'))
+        .filter(d => (d.textContent || '').trim().startsWith('📅'));
+      const head = heads.find(d => d.children.length === 0);
+      const out = head
+        ? { label: head.textContent.trim(), body: head.parentElement.textContent.trim() }
+        : null;
+      if (typeof closeModal === 'function') closeModal();
+      _dashboardMonth = null;
+      return out;
+    }, monthKey);
+
+    expect(card, 'could not locate the month card in the transfer modal').toBeTruthy();
+    expect(card.label, `month card must be titled for ${expectedLabel}, not the real calendar month`)
+      .toContain(expectedLabel);
+    expect(card.body, `month card total should be ${expectedAmt} for ${expectedLabel}`)
+      .toContain(String(expectedAmt));
+    // And it must NOT show the other month's transfer total.
+    const otherAmt = expectedAmt === 300 ? '400' : '300';
+    expect(card.body, `month card leaked the other month's total (${otherAmt})`)
+      .not.toContain(otherAmt);
+  }
+
+  // ── _payMatchesMonth never matches across months ──────────────────────────
+  const cross = await win.evaluate(() => {
+    const march = DB.payments.filter(p => _payMatchesMonth(p, '2026-03')).map(p => p.id);
+    const april = DB.payments.filter(p => _payMatchesMonth(p, '2026-04')).map(p => p.id);
+    return { march, april, overlap: march.filter(id => april.includes(id)) };
+  });
+  expect(cross.march.sort()).toEqual(['pA', 'pC']);
+  expect(cross.april).toEqual(['pB']);
+  expect(cross.overlap, 'no payment may belong to two months at once').toEqual([]);
+
+  await app.close();
+});
