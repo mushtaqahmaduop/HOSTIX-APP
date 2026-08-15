@@ -431,6 +431,13 @@ function renderRoomTypesPanel() {
           </div>
         </td>
         <td>
+          <div class="set-money">
+            <input class="set-in" type="number" min="0" value="${Number(t.defaultMess) || 0}"
+                   onchange="updateRoomType('${t.id}','defaultMess',this.value)" aria-label="Default mess charge">
+            <span class="set-money__cur">${escHtml(DB.settings.currency || 'PKR')}</span>
+          </div>
+        </td>
+        <td>
           <label class="set-color" title="Pick the colour this type shows in across the app">
             <span class="set-color__sw" id="rt-csw-${t.id}" style="background:${escHtml(t.color)}"></span>
             <span class="set-color__hex" id="rt-hex-${t.id}">${escHtml(t.color)}</span>
@@ -482,6 +489,7 @@ function renderRoomTypesPanel() {
           <thead><tr>
             <th style="width:1%">Color</th><th>Type Name</th><th style="width:1%">Capacity (Beds)</th>
             <th style="width:1%">Default Rent (${escHtml(DB.settings.currency || 'PKR')})</th>
+            <th style="width:1%">Default Mess (${escHtml(DB.settings.currency || 'PKR')})</th>
             <th style="width:1%">Pick Color</th><th style="width:1%">Actions</th>
           </tr></thead>
           <tbody id="room-types-list">${rows}</tbody>
@@ -504,6 +512,219 @@ function renderRoomTypesPanel() {
     </div>
 
     <div class="set-strip">${strip}</div>`;
+}
+
+/* ── RENT & MESS ──────────────────────────────────────────────────────────────
+   A hostel's monthly charge is two charges. A 17,000 room is 10,000 for the bed
+   plus 7,000 for the food, and a student may take the bed alone. Storing them
+   separately is what makes "rent only" answerable; storing the sum was not.
+
+   Existing data has the two already added together in rent, with mess at 0, so
+   nothing moves until the owner splits a type here. */
+function _messTotal(s) {
+  return Number(s && s.rent || 0) + (s && s.messOptIn !== false ? Number(s && s.mess || 0) : 0);
+}
+
+function renderRentMessPanel() {
+  const types  = DB.settings.roomTypes || [];
+  const active = DB.students.filter(s => s.status === 'Active');
+  const cur    = escHtml(DB.settings.currency || 'PKR');
+
+  const onMess  = active.filter(s => s.messOptIn !== false && Number(s.mess||0) > 0).length;
+  const billed  = active.reduce((n, s) => n + _messTotal(s), 0);
+
+  const typeCards = types.map(type => {
+    const cnt = active.filter(s => {
+      const r = DB.rooms.find(x => x.id === s.roomId);
+      return r && r.typeId === type.id;
+    }).length;
+    const rent = Number(type.defaultRent) || 0;
+    const mess = Number(type.defaultMess) || 0;
+    return `
+      <div class="rm-type">
+        <div class="rm-type__h">
+          <span class="rm-type__dot" style="background:${escHtml(type.color)}"></span>
+          <span class="rm-type__n">${escHtml(type.name)}</span>
+          <span class="rm-type__c">${cnt} student${cnt===1?'':'s'}</span>
+        </div>
+        <div class="rm-type__row">
+          <label>Rent<input class="form-control" type="number" min="0" id="qr-${type.id}" value="${rent}"
+                 oninput="rmPreview('${type.id}')"></label>
+          <label>Mess<input class="form-control" type="number" min="0" id="qm-${type.id}" value="${mess}"
+                 oninput="rmPreview('${type.id}')"></label>
+        </div>
+        <div class="rm-type__f">
+          <span class="rm-type__t">Total <b id="qt-${type.id}">${fmtPKR(rent + mess)}</b></span>
+          <button class="btn btn-primary btn-sm" onclick="applyRentByType('${type.id}')">Apply</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Rooms whose stored rent has drifted from their type. Billing no longer
+  // reads room.rent — the charge comes from Settings — so this is now a
+  // tidiness warning about the figure shown on the Rooms page, not a money bug.
+  const drift    = _roomsOutOfSync();
+  const driftAll = drift.filter(d => d.allIn);
+  const driftBanner = drift.length ? `
+      <div class="set-note dh-amber" style="margin:0 0 16px;align-items:flex-start;border-color:var(--dh);background:var(--dh-bg)">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span style="flex:1;min-width:0">
+          <b>${drift.length} room${drift.length===1?'':'s'} still show${drift.length===1?'s':''} an old rent figure.</b>
+          ${driftAll.length ? `<br>${driftAll.length} of them hold the pre-split <b>all-in</b> amount
+          (${fmtPKR(driftAll[0].have)} = rent + mess added together) instead of the ${fmtPKR(driftAll[0].want)} room rent.` : ''}
+          <br><span style="color:var(--text3);font-size:11px">Nobody is billed from this — every charge comes from the rates above. It only affects the rent shown on the Rooms page.</span>
+        </span>
+        <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="syncAllRoomsToDefault()">Tidy up rooms</button>
+      </div>` : '';
+
+  // Students on a deliberate custom rate — the only ones who do not follow the
+  // rates set above.
+  const pinnedCount = active.filter(s => s._rentManuallySet === true).length;
+
+  const rows = active.map((s, i) => {
+    const room  = DB.rooms.find(r => r.id === s.roomId);
+    const rtype = room ? types.find(t => t.id === room.typeId) : null;
+    const on    = s.messOptIn !== false;
+    const wantTotal = rtype ? (Number(rtype.defaultRent)||0) + (on ? (Number(rtype.defaultMess)||0) : 0) : null;
+    // Only a pinned student can sit off the hostel default now.
+    const offDefault = s._rentManuallySet === true && wantTotal != null
+      && Number(rtype.defaultRent) > 0 && _messTotal(s) !== wantTotal;
+    return `
+      <tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}">
+        <td style="padding:10px 12px">
+          <div style="font-weight:700;color:var(--text)">${escHtml(s.name)}</div>
+          <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'—')}</div>
+        </td>
+        <td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">#${room?escHtml(String(room.number)):'—'}</td>
+        <td style="padding:10px 12px"><span style="font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2)">${rtype?escHtml(rtype.name):'—'}</span></td>
+        <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sr-${s.id}" value="${Number(s.rent)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')"></td>
+        <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sm-${s.id}" value="${Number(s.mess)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')" ${on?'':'disabled'}></td>
+        <td style="padding:10px 12px;text-align:center">
+          <label class="rm-check" title="Untick for a student who takes the room but not the mess">
+            <input type="checkbox" ${on?'checked':''} onchange="rmToggleMess('${s.id}',this.checked)">
+            <span>Mess</span>
+          </label>
+        </td>
+        <td style="padding:10px 12px;font-weight:800;color:var(--green);white-space:nowrap" id="st-${s.id}">${fmtPKR(_messTotal(s))}${
+          offDefault ? `<div style="font-size:10px;font-weight:700;color:var(--amber)" title="This student is on a custom rate. The hostel default for ${escHtml(rtype.name)} is ${fmtPKR(wantTotal)} — press Reset to put them back on it.">custom · default ${fmtPKR(wantTotal)}</div>` : ''}</td>
+        <td style="padding:10px 12px;text-align:center;white-space:nowrap">
+          <button class="btn btn-success btn-sm" onclick="applyRentToStudent('${s.id}')">Save</button>
+          ${rtype && Number(rtype.defaultRent) > 0 ? `<button class="btn btn-secondary btn-sm" style="margin-left:5px"
+            onclick="resetStudentToDefault('${s.id}')"
+            title="Put ${escHtml(s.name)} back on the hostel default (${fmtPKR(wantTotal)}/mo) and let Settings changes reach them again">Reset</button>` : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="set-card">
+      <div class="set-head">
+        <div class="set-head__ico dh-amber">${setIco(SET_ICO.coins, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Rent &amp; Mess</div>
+          <div class="set-head__s">Set the bed charge and the food charge separately. A student who takes the room without the mess is billed rent only.</div>
+        </div>
+      </div>
+
+      <div class="set-strip" style="margin:0 0 18px">
+        <div class="set-strip__c dh-blue"><div class="set-strip__i">${setIco(SET_ICO.users,18)}</div>
+          <div style="min-width:0"><div class="set-strip__l">Active Students</div><div class="set-strip__v">${active.length}</div></div></div>
+        <div class="set-strip__c dh-green"><div class="set-strip__i">${setIco(SET_ICO.check,18)}</div>
+          <div style="min-width:0"><div class="set-strip__l">On Mess</div><div class="set-strip__v">${onMess}</div></div></div>
+        <div class="set-strip__c dh-slate"><div class="set-strip__i">${setIco(SET_ICO.bed,18)}</div>
+          <div style="min-width:0"><div class="set-strip__l">Rent Only</div><div class="set-strip__v">${active.length - onMess}</div></div></div>
+        <div class="set-strip__c dh-amber"><div class="set-strip__i">${setIco(SET_ICO.coins,18)}</div>
+          <div style="min-width:0"><div class="set-strip__l">Billed / Month</div><div class="set-strip__v"><small>${cur}</small>${fmtNum(billed)}</div></div></div>
+      </div>
+
+      ${driftBanner}
+
+      <div class="rm-sub">Quick set by room type</div>
+      ${types.length ? `<div class="rm-types">${typeCards}</div>` : `
+      <div class="set-empty"><div class="set-empty__t">No room types yet</div>
+        <div class="set-empty__s">Add one under Room Types first.</div></div>`}
+
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--text3)">Rent for ALL
+          <input class="form-control" type="number" min="0" id="qr-all" placeholder="e.g. 10000" style="max-width:170px"></label>
+        <label style="font-size:11px;font-weight:700;color:var(--text3)">Mess for ALL
+          <input class="form-control" type="number" min="0" id="qm-all" placeholder="e.g. 7000" style="max-width:170px"></label>
+        <button class="btn btn-primary" onclick="applyRentToAll()">Apply to All Students</button>
+      </div>
+
+      <div class="set-note dh-blue" style="margin-top:16px">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span>Applying a change updates the student and every <b>still-unpaid</b> payment record. Records already marked Paid are receipts of what was actually charged and are never rewritten.</span>
+      </div>
+    </div>
+
+    <div class="set-card" style="margin-top:16px">
+      <div class="set-head">
+        <div class="set-head__ico dh-violet">${setIco(SET_ICO.users, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Individual Override</div>
+          <div class="set-head__s">Per-student rent, mess amount, and whether they are on the mess at all</div>
+        </div>
+        <div class="set-head__end">
+          <button class="set-btn" onclick="resetAllStudentsToDefault()"
+            title="Put every student back on their room type's rent and let hostel-wide changes reach them again">
+            ${setIco(SET_ICO.coins, 16)}Reset all to hostel default</button>
+        </div>
+      </div>
+      <div class="set-note dh-blue" style="margin-bottom:14px">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span>Everyone is charged the rates set above unless you give them a custom one here.
+        <b>Save</b> puts a student on a custom rate and later hostel-wide changes will skip them;
+        <b>Reset</b> puts them back on the hostel default.
+        ${pinnedCount ? `<b>${pinnedCount} student${pinnedCount===1?' is':'s are'}</b> currently on a custom rate.`
+                      : 'No one is on a custom rate right now.'}</span>
+      </div>
+      ${active.length ? `
+      <div class="set-table-wrap">
+        <table class="set-table">
+          <thead><tr>
+            <th>Student</th><th style="width:1%">Room</th><th style="width:1%">Type</th>
+            <th style="width:1%">Rent (${cur})</th><th style="width:1%">Mess (${cur})</th>
+            <th style="width:1%">On Mess</th><th style="width:1%">Total</th><th style="width:1%">Save</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>` : `
+      <div class="set-empty"><div class="set-empty__t">No active students</div>
+        <div class="set-empty__s">Admit a student and their charges will be editable here.</div></div>`}
+    </div>`;
+}
+
+/* Live total under a room-type card — typed values, before Apply is pressed. */
+function rmPreview(typeId) {
+  const r = parseFloat(document.getElementById('qr-' + typeId)?.value) || 0;
+  const m = parseFloat(document.getElementById('qm-' + typeId)?.value) || 0;
+  const el = document.getElementById('qt-' + typeId);
+  if (el) el.textContent = fmtPKR(r + m);
+}
+
+/* Same, for a student row. Mirrors the mess tick so the total shown is the
+   total that would actually be billed. */
+function rmRowPreview(id) {
+  const s = DB.students.find(x => x.id === id); if (!s) return;
+  const r  = parseFloat(document.getElementById('sr-' + id)?.value) || 0;
+  const mi = document.getElementById('sm-' + id);
+  const m  = parseFloat(mi?.value) || 0;
+  const on = !(mi && mi.disabled);
+  const el = document.getElementById('st-' + id);
+  if (el) el.textContent = fmtPKR(r + (on ? m : 0));
+}
+
+async function rmToggleMess(id, on) {
+  const s = DB.students.find(x => x.id === id); if (!s) return;
+  s.messOptIn = !!on;
+  const mi = document.getElementById('sm-' + id);
+  if (mi) mi.disabled = !on;
+  _applyChargesToStudent(s, Number(s.rent)||0, Number(s.mess)||0, s.messOptIn);
+  logActivity('Mess Updated', s.name + ' — mess ' + (on ? 'ON' : 'OFF'), 'Finance');
+  await saveDB();
+  rmRowPreview(id);
+  toast(s.name + (on ? ' is now on the mess' : ' is now rent only'), 'success');
 }
 
 /* Every room-type edit persists on change, so the strip is the only part of
@@ -693,7 +914,7 @@ function renderDataManagementPanel() {
 
           <div class="set-cols">
             <div class="set-cols__h">Required columns:</div>
-            Name, Father Name, CNIC, Phone, Room Number, Monthly Rent,<br>
+            Name, Father Name, CNIC, Phone, Room Number, Room Rent,<br>
             Join Date, Payment Method, Status, Amount Paid
             <div class="set-cols__div"></div>
             <div class="set-cols__h" style="color:var(--text3)">Optional columns:</div>
@@ -739,6 +960,9 @@ function renderSettings() {
   const tabs = [
     {id:'hostel',   label:'Hostel Info',        svg:SET_ICO.hostel},
     {id:'rooms',    label:'Room Types',         svg:SET_ICO.bed},
+    // This panel has existed in the markup all along but was never listed here,
+    // so nothing could reach it. It is also where the rent/mess split is set.
+    {id:'rentupdate', label:'Rent & Mess',      svg:SET_ICO.coins},
     {id:'payments', label:'Payment Methods',    svg:SET_ICO.card},
     {id:'expenses', label:'Expense Categories', svg:SET_ICO.receipt},
     {id:'floors',   label:'Floors',             svg:SET_ICO.layers},
@@ -878,70 +1102,9 @@ function renderSettings() {
         ${settingsTab==='data' ? renderDataManagementPanel() : ''}
       </div>
 
-      <!-- RENT UPDATE -->
+      <!-- RENT & MESS -->
       <div class="settings-panel ${settingsTab==='rentupdate'?'active':''}">
-        <div class="card">
-          <div class="card-header" style="padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:16px">
-            <div class="card-title" style="font-size:16px;display:flex;align-items:center;gap:8px"><span class="micon" style="font-size:20px;color:var(--accent-strong)">payments</span>Bulk Rent Update</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px">Update monthly rent for all or selected students. Changes apply to all future pending payments automatically.</div>
-          </div>
-
-          <!-- By Room Type quick-set -->
-          <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:16px;margin-bottom:18px">
-            <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);margin-bottom:12px">⚡ Quick Set by Room Type</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-              ${DB.settings.roomTypes.map(function(type){
-                var cnt=DB.students.filter(function(s){return s.status==='Active'&&DB.rooms.find(function(r){return r.id===s.roomId&&r.typeId===type.id;});}).length;
-                return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px">'
-                  +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-                  +'<div style="width:10px;height:10px;border-radius:3px;background:'+type.color+';flex-shrink:0"></div>'
-                  +'<span style="font-size:13px;font-weight:700;color:var(--text)">'+escHtml(type.name)+'</span>'
-                  +'<span style="margin-left:auto;font-size:10px;color:var(--text3)">'+cnt+' students</span>'
-                  +'</div>'
-                  +'<div style="display:flex;gap:6px;align-items:center">'
-                  +'<input class="form-control" type="number" id="qr-'+type.id+'" value="'+type.defaultRent+'" style="flex:1;font-size:13px" placeholder="New rent">'
-                  +'<button class="btn btn-primary btn-sm" onclick="applyRentByType(\''+type.id+'\')" style="white-space:nowrap;display:flex;align-items:center;gap:4px"><span class="micon" style="font-size:13px">check</span>Apply</button>'
-                  +'</div></div>';
-              }).join('')}
-            </div>
-            <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <input class="form-control" type="number" id="qr-all" placeholder="New rent for ALL students" style="max-width:240px">
-              <button class="btn btn-primary" onclick="applyRentToAll()" style="display:flex;align-items:center;gap:6px"><span class="micon" style="font-size:15px">group</span>Apply to All Students</button>
-            </div>
-          </div>
-
-          <!-- Per-student table -->
-          <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Individual Override</div>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:13px">
-              <thead>
-                <tr style="background:var(--bg3)">
-                  <th style="padding:10px 12px;text-align:left;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">Student</th>
-                  <th style="padding:10px 12px;text-align:left;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">Room</th>
-                  <th style="padding:10px 12px;text-align:left;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">Type</th>
-                  <th style="padding:10px 12px;text-align:left;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">Current Rent</th>
-                  <th style="padding:10px 12px;text-align:left;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">New Rent</th>
-                  <th style="padding:10px 12px;text-align:center;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase">Save</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${DB.students.filter(function(s){return s.status==='Active';}).map(function(s,i){
-                  var room=DB.rooms.find(function(r){return r.id===s.roomId;});
-                  var rtype=room?DB.settings.roomTypes.find(function(t){return t.id===room.typeId;}):null;
-                  return '<tr style="border-top:1px solid var(--border);background:'+(i%2?'var(--bg3)':'transparent')+'">'
-                    +'<td style="padding:10px 12px"><div style="font-weight:700;color:var(--text)">'+escHtml(s.name)+'</div><div style="font-size:11px;color:var(--text3)">'+escHtml(s.phone||'—')+'</div></td>'
-                    +'<td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">#'+(room?room.number:'—')+'</td>'
-                    +'<td style="padding:10px 12px"><span style="font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2)">'+(rtype?escHtml(rtype.name):'—')+'</span></td>'
-                    +'<td style="padding:10px 12px;font-weight:700;color:var(--green)">'+fmtPKR(s.rent)+'</td>'
-                    +'<td style="padding:10px 12px"><input class="form-control" type="number" id="sr-'+s.id+'" value="'+s.rent+'" style="width:120px;font-size:13px" placeholder="New rent"></td>'
-                    +'<td style="padding:10px 12px;text-align:center"><button class="btn btn-success btn-sm" onclick="applyRentToStudent(\''+s.id+'\')" style="display:flex;align-items:center;gap:4px;margin:0 auto"><span class="micon" style="font-size:13px">check_circle</span>Save</button></td>'
-                    +'</tr>';
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-          ${DB.students.filter(function(s){return s.status==='Active';}).length===0?'<div style="text-align:center;padding:40px;color:var(--text3)">No active students found</div>':''}
-        </div>
+        ${settingsTab==='rentupdate' ? renderRentMessPanel() : ''}
       </div>
 
       <!-- LICENSE -->
@@ -1057,78 +1220,255 @@ async function applyHostelFont(fontFamily) {
 async function saveSettings() {
   await saveDB(); toast('Settings saved successfully','success');
 }
-// ── BULK RENT UPDATE ─────────────────────────────────────────────────────────
-function _applyRentToStudentCore(student, newRent) {
-  // Update student rent
+// ── BULK RENT + MESS UPDATE ──────────────────────────────────────────────────
+/* Writes the two charges onto the student and re-bases every payment record
+   that still has money owing on it.
+
+   Paid records are deliberately left alone: they are a receipt of what the
+   student was actually charged at the time, and rewriting them would silently
+   restate collected history — the same class of bug as the month mixing. */
+function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
   student.rent = newRent;
-  // Update all PENDING payment records for this student so future dues are correct
-  DB.payments.forEach(function(p) {
-    if (p.studentId === student.id && p.status === 'Pending') {
-      const oldUnpaid = p.unpaid != null ? Number(p.unpaid) : Number(p.amount);
-      p.monthlyRent = newRent;
-      // Recalculate unpaid based on new rent minus what was already paid
-      const alreadyPaid = Number(p.amount) || 0;
-      p.unpaid = Math.max(0, newRent - alreadyPaid - (p.discount || 0));
-    }
+  student.mess = newMess;
+  if (messOptIn != null) student.messOptIn = !!messOptIn;
+  const mess = student.messOptIn !== false ? Number(newMess) || 0 : 0;
+  const due  = (Number(newRent) || 0) + mess;
+
+  DB.payments.forEach(function (p) {
+    if (p.studentId !== student.id || p.status === 'Paid') return;
+    p.monthlyRent  = newRent;
+    p.totalRent    = newRent;
+    p.messCharge   = mess;
+    p.messIncluded = student.messOptIn !== false;
+    const alreadyPaid = Number(p.amount) || 0;
+    const extras = Number(p.extraTotal || 0) + Number(p.admissionFee || p.fee || 0);
+    p.unpaid = Math.max(0, due + extras - alreadyPaid - (Number(p.concession || p.discount) || 0));
   });
+}
+
+// Kept for older call sites that only know about rent.
+function _applyRentToStudentCore(student, newRent) {
+  _applyChargesToStudent(student, newRent, Number(student.mess) || 0, student.messOptIn);
+}
+
+/* ── ROOM RENT WRITE-THROUGH ──────────────────────────────────────────────────
+   Rooms are the third copy of the price and were the one nothing wrote to:
+   applyRentByType()/applyRentToAll() updated the room TYPE and the STUDENTS but
+   left room.rent frozen at whatever it held when the room was created.
+
+   On installs that predate the rent/mess split that frozen value is the ALL-IN
+   figure (rent + mess added together). Admission reads rent off the room and
+   mess off the room type, so a new student was charged the all-in rent PLUS the
+   mess again — the food billed twice. Every existing student in the same room
+   paid the correct total, which is exactly the contradiction that surfaced.
+
+   Anything that changes a type's rent now writes it to that type's rooms too. */
+function _syncRoomsToType(typeId, newRent) {
+  let n = 0;
+  DB.rooms.forEach(function (r) {
+    if (r.typeId === typeId && Number(r.rent) !== Number(newRent)) { r.rent = newRent; n++; }
+  });
+  return n;
+}
+
+/* Rooms whose rent no longer matches their type's configured Room Rent.
+   `allIn` marks the specific pre-split signature — room.rent equals
+   defaultRent + defaultMess — which is the one we can repair with confidence
+   rather than guess at. */
+function _roomsOutOfSync() {
+  const out = [];
+  (DB.rooms || []).forEach(function (r) {
+    const t = (DB.settings.roomTypes || []).find(x => x.id === r.typeId);
+    if (!t) return;
+    const want = Number(t.defaultRent) || 0;
+    const have = Number(r.rent) || 0;
+    if (!want || have === want) return;
+    out.push({
+      number: r.number, id: r.id, type: t.name, have, want,
+      allIn: Number(t.defaultMess) > 0 && have === want + Number(t.defaultMess)
+    });
+  });
+  return out;
+}
+
+// Reads a rent/mess pair out of a form. Rent must be a real amount; mess may
+// legitimately be 0 (a hostel with no mess, or a rent-only student).
+function _readCharges(rentId, messId) {
+  const rent = parseFloat(document.getElementById(rentId)?.value);
+  const messRaw = document.getElementById(messId)?.value;
+  const mess = messRaw === '' || messRaw == null ? 0 : parseFloat(messRaw);
+  if (!rent || rent <= 0 || isNaN(rent)) { toast('Enter a valid rent amount', 'error'); return null; }
+  if (isNaN(mess) || mess < 0)           { toast('Enter a valid mess amount', 'error'); return null; }
+  return { rent, mess };
 }
 
 async function applyRentToStudent(studentId) {
   const s = DB.students.find(x => x.id === studentId); if (!s) return;
-  const inp = document.getElementById('sr-' + studentId); if (!inp) return;
-  const newRent = parseFloat(inp.value);
-  if (!newRent || newRent <= 0) { toast('Enter a valid rent amount', 'error'); return; }
-  if (newRent === s.rent) { toast('Rent unchanged', 'info'); return; }
-  const old = s.rent;
-  _applyRentToStudentCore(s, newRent);
+  const c = _readCharges('sr-' + studentId, 'sm-' + studentId); if (!c) return;
+  if (c.rent === Number(s.rent) && c.mess === Number(s.mess || 0)) { toast('Charges unchanged', 'info'); return; }
+  const oldTotal = _messTotal(s);
+  _applyChargesToStudent(s, c.rent, c.mess, s.messOptIn);
   s._rentManuallySet = true; // Fix #14: flag so auto defaultRent changes don't override this
-  logActivity('Rent Updated', s.name + ' — ' + fmtPKR(old) + ' → ' + fmtPKR(newRent), 'Finance');
+  logActivity('Charges Updated',
+    s.name + ' — ' + fmtPKR(oldTotal) + ' → ' + fmtPKR(_messTotal(s))
+    + ' (rent ' + fmtPKR(c.rent) + (c.mess ? ' + mess ' + fmtPKR(c.mess) : '') + ')', 'Finance');
   await saveDB();
   renderPage('settings');
-  toast('Rent updated for ' + s.name + ' → ' + fmtPKR(newRent), 'success');
+  toast('Updated ' + s.name + ' → ' + fmtPKR(_messTotal(s)) + '/mo', 'success');
 }
 
 async function applyRentByType(typeId) {
-  const inp = document.getElementById('qr-' + typeId); if (!inp) return;
-  const newRent = parseFloat(inp.value);
-  if (!newRent || newRent <= 0) { toast('Enter a valid rent amount', 'error'); return; }
   const type = DB.settings.roomTypes.find(t => t.id === typeId); if (!type) return;
-  // Update defaultRent for this room type
-  type.defaultRent = newRent;
-  // Apply to all active students in rooms of this type
+  const c = _readCharges('qr-' + typeId, 'qm-' + typeId); if (!c) return;
+  type.defaultRent = c.rent;
+  type.defaultMess = c.mess;
+  // Write through to the rooms of this type, or admission keeps reading a stale
+  // room.rent and double-counts the mess.
+  const roomsHit = _syncRoomsToType(typeId, c.rent);
   let count = 0;
-  DB.students.filter(s => s.status === 'Active').forEach(function(s) {
+  DB.students.filter(s => s.status === 'Active').forEach(function (s) {
     const room = DB.rooms.find(r => r.id === s.roomId);
-    if (room && room.typeId === typeId) {
-      _applyRentToStudentCore(s, newRent);
-      count++;
-    }
+    if (room && room.typeId === typeId) { _applyChargesToStudent(s, c.rent, c.mess, s.messOptIn); count++; }
   });
-  logActivity('Bulk Rent Update', type.name + ' — all ' + count + ' students → ' + fmtPKR(newRent), 'Finance');
+  _rtTouch();
+  logActivity('Bulk Charges Update',
+    type.name + ' — ' + count + ' student(s), ' + roomsHit + ' room(s) → rent ' + fmtPKR(c.rent) + ' + mess ' + fmtPKR(c.mess), 'Finance');
   await saveDB();
   renderPage('settings');
-  toast(count + ' student(s) updated to ' + fmtPKR(newRent), 'success');
+  toast(count + ' student(s) set to ' + fmtPKR(c.rent + c.mess) + '/mo', 'success');
 }
 
 async function applyRentToAll() {
-  const inp = document.getElementById('qr-all'); if (!inp) return;
-  const newRent = parseFloat(inp.value);
-  if (!newRent || newRent <= 0) { toast('Enter a valid rent amount', 'error'); return; }
+  const c = _readCharges('qr-all', 'qm-all'); if (!c) return;
   showConfirm(
-    'Update ALL students rent?',
-    'This will set ' + fmtPKR(newRent) + ' as the new monthly rent for every active student and update all pending payments.',
-    async function() {
+    'Update rent & mess for ALL students?',
+    'Every active student will be set to <b>' + fmtPKR(c.rent) + '</b> rent'
+    + (c.mess ? ' + <b>' + fmtPKR(c.mess) + '</b> mess' : '')
+    + ' — <b>' + fmtPKR(c.rent + c.mess) + '</b>/month. Unpaid payment records are re-based; paid ones are left as they are.'
+    + '<br><small style="color:var(--text3)">Students who are off the mess stay rent only.</small>',
+    async function () {
       let count = 0;
-      DB.students.filter(s => s.status === 'Active').forEach(function(s) {
-        _applyRentToStudentCore(s, newRent);
-        count++;
+      DB.students.filter(s => s.status === 'Active').forEach(function (s) {
+        _applyChargesToStudent(s, c.rent, c.mess, s.messOptIn); count++;
       });
-      // Also update all room type defaults
-      DB.settings.roomTypes.forEach(function(t) { t.defaultRent = newRent; });
-      logActivity('Global Rent Update', 'All ' + count + ' students → ' + fmtPKR(newRent), 'Finance');
+      DB.settings.roomTypes.forEach(function (t) { t.defaultRent = c.rent; t.defaultMess = c.mess; });
+      // Rooms too — see _syncRoomsToType().
+      let roomsHit = 0;
+      DB.settings.roomTypes.forEach(function (t) { roomsHit += _syncRoomsToType(t.id, c.rent); });
+      _rtTouch();
+      logActivity('Global Charges Update',
+        'All ' + count + ' students, ' + roomsHit + ' room(s) → rent ' + fmtPKR(c.rent) + ' + mess ' + fmtPKR(c.mess), 'Finance');
       await saveDB();
       renderPage('settings');
-      toast('All ' + count + ' students updated to ' + fmtPKR(newRent), 'success');
+      toast('All ' + count + ' students set to ' + fmtPKR(c.rent + c.mess) + '/mo', 'success');
+    }
+  );
+}
+/* ── SYNC ROOMS TO THE HOSTEL DEFAULT ─────────────────────────────────────────
+   Repairs rooms whose stored rent has drifted from their type's Room Rent —
+   in practice the pre-split all-in figure. Students are not touched: their own
+   rent/mess are already correct and are what the bills are built from. This
+   only stops the NEXT admission inheriting a wrong number. */
+async function syncAllRoomsToDefault() {
+  const drift = _roomsOutOfSync();
+  if (!drift.length) { toast('All rooms already match the hostel default', 'info'); return; }
+  const allIn = drift.filter(d => d.allIn);
+  const rows = drift.slice(0, 8).map(d =>
+    '<tr><td style="padding:3px 10px 3px 0">Room #' + escHtml(String(d.number)) + '</td>'
+    + '<td style="padding:3px 10px 3px 0;color:var(--red)">' + fmtPKR(d.have) + '</td>'
+    + '<td style="padding:3px 10px 3px 0">→</td>'
+    + '<td style="padding:3px 0;color:var(--green);font-weight:700">' + fmtPKR(d.want) + '</td></tr>').join('');
+  showConfirm(
+    'Sync ' + drift.length + ' room' + (drift.length === 1 ? '' : 's') + ' to the hostel default?',
+    (allIn.length
+      ? '<div style="background:var(--amber-dim,rgba(240,160,48,0.12));border:1px solid rgba(240,160,48,0.35);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px">'
+        + '<b>' + allIn.length + ' room' + (allIn.length === 1 ? ' is' : 's are') + ' carrying the old all-in figure</b>'
+        + ' — rent and mess added together, from before the two were split. Admitting into '
+        + (allIn.length === 1 ? 'it' : 'them') + ' charges the mess twice.</div>'
+      : '')
+    + '<table style="font-size:12px;margin-bottom:8px">' + rows + '</table>'
+    + (drift.length > 8 ? '<div style="font-size:11px;color:var(--text3)">…and ' + (drift.length - 8) + ' more</div>' : '')
+    + '<div style="font-size:11px;color:var(--text3);margin-top:8px">Only the rooms change. No student\'s rent, no mess amount, and no payment record is touched.</div>',
+    async function () {
+      let n = 0;
+      DB.settings.roomTypes.forEach(function (t) { n += _syncRoomsToType(t.id, Number(t.defaultRent) || 0); });
+      _rtTouch();
+      logActivity('Rooms Synced', n + ' room(s) reset to their room type\'s Room Rent', 'Finance');
+      await saveDB();
+      renderPage('settings');
+      toast(n + ' room' + (n === 1 ? '' : 's') + ' synced to the hostel default', 'success');
+    }
+  );
+}
+
+/* ── RESET A STUDENT TO THE HOSTEL DEFAULT ────────────────────────────────────
+   Clears a hand-edited override so the student follows Settings again.
+   applyRentToStudent() sets _rentManuallySet, which permanently deafens that
+   student to later hostel-wide changes; this is the way back. */
+async function resetStudentToDefault(studentId) {
+  const s = DB.students.find(x => x.id === studentId); if (!s) return;
+  const room = DB.rooms.find(r => r.id === s.roomId);
+  const type = room ? DB.settings.roomTypes.find(t => t.id === room.typeId) : null;
+  if (!type || !(Number(type.defaultRent) > 0)) {
+    toast('That room type has no rent configured yet', 'error'); return;
+  }
+  const rent = Number(type.defaultRent) || 0;
+  const mess = Number(type.defaultMess) || 0;
+  const before = _messTotal(s);
+  const after  = rent + (s.messOptIn !== false ? mess : 0);
+  if (before === after && !s._rentManuallySet) { toast(s.name + ' already matches the default', 'info'); return; }
+  showConfirm(
+    'Reset ' + escHtml(s.name) + ' to the hostel default?',
+    '<div style="font-size:13px;line-height:1.9">'
+    + 'Now: <b>' + fmtPKR(before) + '</b>/month<br>'
+    + 'After: <b style="color:var(--green)">' + fmtPKR(after) + '</b>/month'
+    + ' <span style="color:var(--text3)">(' + fmtPKR(rent) + ' rent'
+    + (mess ? ' + ' + fmtPKR(mess) + ' mess' : '') + ' — ' + escHtml(type.name) + ')</span></div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:8px">Unpaid records are re-based. Records already marked Paid are receipts and stay as they are.'
+    + (s.messOptIn === false ? '<br>They stay off the mess.' : '') + '</div>',
+    async function () {
+      _applyChargesToStudent(s, rent, mess, s.messOptIn);
+      delete s._rentManuallySet;   // follows Settings again from here on
+      logActivity('Charges Reset', s.name + ' → hostel default ' + fmtPKR(after) + '/mo', 'Finance');
+      await saveDB();
+      renderPage('settings');
+      toast(s.name + ' reset to ' + fmtPKR(after) + '/mo', 'success');
+    }
+  );
+}
+
+/* Same, for every active student carrying a manual override. */
+async function resetAllStudentsToDefault() {
+  const overridden = DB.students.filter(function (s) {
+    if (s.status !== 'Active') return false;
+    const room = DB.rooms.find(r => r.id === s.roomId);
+    const type = room ? DB.settings.roomTypes.find(t => t.id === room.typeId) : null;
+    if (!type || !(Number(type.defaultRent) > 0)) return false;
+    const want = (Number(type.defaultRent) || 0) + (s.messOptIn !== false ? (Number(type.defaultMess) || 0) : 0);
+    return s._rentManuallySet || _messTotal(s) !== want;
+  });
+  if (!overridden.length) { toast('Every student already matches the hostel default', 'info'); return; }
+  showConfirm(
+    'Reset ' + overridden.length + ' student' + (overridden.length === 1 ? '' : 's') + ' to the hostel default?',
+    '<div style="font-size:12px;margin-bottom:8px">These students carry a rent that differs from their room type:</div>'
+    + '<div style="font-size:12px;line-height:1.8;max-height:180px;overflow:auto">'
+    + overridden.slice(0, 12).map(s => '• ' + escHtml(s.name) + ' — ' + fmtPKR(_messTotal(s))).join('<br>')
+    + (overridden.length > 12 ? '<br><span style="color:var(--text3)">…and ' + (overridden.length - 12) + ' more</span>' : '')
+    + '</div><div style="font-size:11px;color:var(--text3);margin-top:8px">Unpaid records are re-based; paid ones are left alone. Anyone off the mess stays off it.</div>',
+    async function () {
+      let n = 0;
+      overridden.forEach(function (s) {
+        const room = DB.rooms.find(r => r.id === s.roomId);
+        const type = room ? DB.settings.roomTypes.find(t => t.id === room.typeId) : null;
+        if (!type) return;
+        _applyChargesToStudent(s, Number(type.defaultRent) || 0, Number(type.defaultMess) || 0, s.messOptIn);
+        delete s._rentManuallySet;
+        n++;
+      });
+      logActivity('Charges Reset', n + ' student(s) reset to the hostel default', 'Finance');
+      await saveDB();
+      renderPage('settings');
+      toast(n + ' student' + (n === 1 ? '' : 's') + ' reset to the hostel default', 'success');
     }
   );
 }
@@ -1151,6 +1491,15 @@ async function updateRoomType(id, field, val) {
   else if(field==='defaultRent') {
     const n = parseFloat(val);
     t.defaultRent = (!n || n < 0) ? t.defaultRent : n;
+  }
+  /* Unlike rent, 0 is a legitimate mess charge — a hostel that serves no food,
+     or one that has not split its combined figure yet. Only NaN and negatives
+     are rejected. Mess is not cascaded onto students from here; that is what
+     Rent & Mess → Apply is for, so a bulk food-price change is always a
+     deliberate act rather than a side effect of typing in this table. */
+  else if(field==='defaultMess') {
+    const n = parseFloat(val);
+    t.defaultMess = (isNaN(n) || n < 0) ? (Number(t.defaultMess) || 0) : n;
   }
   else t[field]=val;
   // Fix #14: When defaultRent changes, update all rooms of this type AND their active students
@@ -1181,7 +1530,9 @@ async function updateRoomType(id, field, val) {
 }
 async function addRoomType() {
   const id='rt_'+uid();
-  DB.settings.roomTypes.push({id,name:'New Type',capacity:1,defaultRent:16000,color:'#4a9cf0'});
+  // Rent starts at 0 so the warden must enter a real figure — a seeded 16,000
+  // reads as a configured price and silently becomes a bill.
+  DB.settings.roomTypes.push({id,name:'New Type',capacity:1,defaultRent:0,defaultMess:0,color:'#4a9cf0'});
   _rtTouch();
   await saveDB(); renderPage('settings'); toast('Room type added','success');
 }
@@ -1255,7 +1606,7 @@ async function importData(input) {
 
 function _excelTemplateRows() {
   return [
-    ['Name*','Father Name*','CNIC','Phone','Email','Occupation / Course','Room Number*','Monthly Rent*','Join Date (YYYY-MM-DD)*','Payment Method','Status','Amount Paid','Emergency Contact','Notes'],
+    ['Name*','Father Name*','CNIC','Phone','Email','Occupation / Course','Room Number*','Room Rent*','Join Date (YYYY-MM-DD)*','Payment Method','Status','Amount Paid','Emergency Contact','Notes'],
     ['Muhammad Ali','Muhammad Khan','35201-1234567-1','03001234567','m.ali@example.com','BS Computer Science','A 01','16000',today(),'Cash','Active','0','Guardian — 0300000000','Demo student'],
     ['Ahmed Hassan','Hassan Ali','35202-9876543-2','03119876543','','Teacher','A 02','18000',today(),'JazzCash','Active','18000','','Full first month paid'],
   ];
@@ -1329,11 +1680,13 @@ function importFromExcel(input) {
         const lineNo = idx + 2; // row 1 = header
         const name   = getCol(row,'Name','Full Name','Student Name','Student');
         const roomNo = getCol(row,'Room Number','Room No','Room','RoomNo','Room Name','RoomNumber','Room#','Rm');
-        const rent   = parseFloat(getCol(row,'Monthly Rent','Rent','Fee','MonthlyRent')) || 0;
+        // 'Room Rent' is the current column name; the older 'Monthly Rent' and
+        // friends stay accepted so sheets built against the old template import.
+        const rent   = parseFloat(getCol(row,'Room Rent','Monthly Rent','Rent','Fee','MonthlyRent','RoomRent')) || 0;
 
         if (!name)   { errors.push(`Row ${lineNo}: Name is required`); return; }
         if (!roomNo) { errors.push(`Row ${lineNo}: Room Number is required for ${name}`); return; }
-        if (!rent)   { errors.push(`Row ${lineNo}: Monthly Rent is required for ${name}`); return; }
+        if (!rent)   { errors.push(`Row ${lineNo}: Room Rent is required for ${name}`); return; }
 
         // Find matching room by number — normalize both sides (strip spaces, lowercase)
         const _normRm = s => String(s).replace(/\s+/g,'').toLowerCase();

@@ -90,6 +90,101 @@ function today() { return new Date().toISOString().split('T')[0]; }
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
 function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
+/* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
+   Settings is the writer of price; every screen that shows or bills a monthly
+   charge is a reader, and reads it through here.
+
+   The vocabulary, used verbatim in every label from here on:
+     Room Rent  — the bed
+     Mess       — the food, billed on top, and only for a student on the mess
+     Monthly Charge — rent + mess. What the student actually owes.
+
+   SETTINGS IS THE SOURCE, NOT THE FALLBACK.
+
+   The price a student is charged comes from Settings → Rent & Mess, via the
+   room type of the room they occupy. student.rent and room.rent are stored
+   copies kept for history and display — they are NOT consulted for the live
+   charge, because a stale copy is exactly how the same room came to bill two
+   different amounts (a room left on the old all-in figure billed the mess
+   twice on every new admission).
+
+   Resolution order:
+     rent  =  student override (only when the warden explicitly pinned it)
+              →  roomType.defaultRent   ← Settings, the normal path
+              →  room.rent              ← legacy last resort, type unpriced
+     mess  =  student override (same pin)  →  roomType.defaultMess
+
+   A student is "pinned" only by _rentManuallySet, which Settings → Rent & Mess
+   → Individual Override → Save sets deliberately. Reset clears it and the
+   student follows the hostel default again. Nothing else creates a pin, so a
+   number that merely got copied onto the student record long ago no longer
+   outranks what the warden has configured.
+
+   messOptIn is NOT a price and is always the student's own: a pinned or
+   unpinned student who is off the mess is never billed for food.
+
+   `configured` is false when nothing has a rent set. Callers must show
+   "not configured — set it in Settings" rather than inventing a number: a real
+   amount on a screen must always trace back to something the warden typed. */
+function resolveCharges(student, opts) {
+  opts = opts || {};
+  const s     = student || {};
+  const room  = s.roomId ? (DB.rooms || []).find(r => r.id === s.roomId) : null;
+  const rtype = room && room.typeId
+    ? (DB.settings.roomTypes || []).find(x => x.id === room.typeId) : null;
+
+  // An explicit, deliberate per-student price beats the hostel default.
+  const pinned = s._rentManuallySet === true;
+
+  const rentFrom =
+    pinned && Number(s.rent) > 0  ? { v: Number(s.rent),            src: 'override' } :
+    Number(rtype && rtype.defaultRent) > 0
+                                  ? { v: Number(rtype.defaultRent), src: 'settings' } :
+    Number(room && room.rent) > 0 ? { v: Number(room.rent),         src: 'room'     } :
+                                    { v: 0,                         src: 'none'     };
+
+  // 0 is a legitimate mess charge (a hostel that serves no food, or a student
+  // taken off it), so mess falls through on null/undefined — never on 0.
+  const messFrom =
+    pinned && s.mess != null       ? { v: Number(s.mess) || 0,            src: 'override' } :
+    rtype && rtype.defaultMess != null
+                                   ? { v: Number(rtype.defaultMess) || 0, src: 'settings' } :
+    s.mess != null                 ? { v: Number(s.mess) || 0,            src: 'student'  } :
+                                     { v: 0,                              src: 'none'     };
+
+  // Off the mess → the food charge is not billed, but the amount is kept so
+  // turning it back on restores what it was.
+  const messOptIn = s.messOptIn !== false;
+  const messBilled = messOptIn ? messFrom.v : 0;
+
+  return {
+    rent:       rentFrom.v,
+    mess:       messFrom.v,      // the configured amount, billed or not
+    messBilled,                  // what actually goes into the total
+    messOptIn,
+    total:      rentFrom.v + messBilled,   // the Monthly Charge
+    rentSource: rentFrom.src,
+    messSource: messFrom.src,
+    pinned,
+    configured: rentFrom.src !== 'none',
+    room, roomType: rtype
+  };
+}
+
+/* One-line summary for the info strips: "PKR 16,000 rent + PKR 2,000 mess".
+   Kept next to the resolver so the phrasing cannot drift between screens. */
+function chargesBreakdown(c) {
+  if (!c.configured) return 'No rent configured — set it in Settings → Rent &amp; Mess';
+  let out = fmtPKR(c.rent) + ' rent';
+  if (c.messOptIn && c.mess > 0)  out += ' + ' + fmtPKR(c.mess) + ' mess';
+  else if (c.mess > 0)            out += ' · mess off';
+  // Say where the price came from — the whole bug was not being able to tell.
+  out += c.rentSource === 'override' ? ' · custom rate for this student'
+       : c.rentSource === 'room'     ? ' · from room (type has no rent set)'
+       : ' · hostel default';
+  return out;
+}
+
 // ── MONEYVALUE — single reusable renderer for ALL currency display ───────────
 // Currency code renders small & muted, the amount renders large & bold.
 // Never produces a duplicated "PKR PKR" prefix — always use this instead of
