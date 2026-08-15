@@ -26,3 +26,6 @@ test-results/
 playwright-report/
 blob-report/
 .last-run.json
+
+# Dev-mode app data — never the real client database
+.devdata/

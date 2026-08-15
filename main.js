@@ -136,6 +136,25 @@ const _SECRET = Buffer.from(
   '44344d344d5f483053543333545f5333435233545f5334344c545f7631', 'hex'
 ).toString();
 
+// ── DEV DATA ISOLATION ────────────────────────────────────────────────────────
+// The packaged app and `npm start` both identify as "hostix-app", so Electron
+// hands them the SAME userData folder — meaning a development run opens the
+// real client database. On 2026-08-15 a dev build was found running live
+// against 55 students / 98 payments of production data.
+//
+// In dev, redirect userData to `.devdata` inside the repo. Must run BEFORE the
+// two constants below, which resolve userData at module load.
+//
+// An explicit --user-data-dir always wins: the Playwright suite passes its own
+// isolated profile and must keep it.
+if (process.argv.includes('--dev') &&
+    !process.argv.some(a => a.startsWith('--user-data-dir'))) {
+  const devData = path.join(__dirname, '.devdata');
+  fs.mkdirSync(devData, { recursive: true });
+  app.setPath('userData', devData);
+  console.log('[HOSTYLLO] DEV MODE — data isolated at:', devData);
+}
+
 const LICENSE_PATH  = path.join(app.getPath('userData'), 'license.enc');
 const LAST_RUN_PATH = path.join(app.getPath('userData'), 'last_run.dat');
 
