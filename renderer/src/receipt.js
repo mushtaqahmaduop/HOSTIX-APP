@@ -142,13 +142,22 @@ function buildReceiptHTML(payId) {
     ? p.extraCharges.reduce(function(s, c){ return s + Number(c.amount||0); }, 0) : 0;
   var rcptDiscount = Number(p.concession || p.discount || 0);
   var rcptConcDesc = (p.concessionDesc || p.discountDesc || '').trim();
+  // Mess is billed alongside the rent but itemised separately, so a student can
+  // see what they paid for the room and what they paid for the food. Records
+  // written before the split carry no messCharge and print exactly as before.
+  var rcptMess     = Number(p.messIncluded === false ? 0 : (p.messCharge || 0));
   var rcptMonthly  = Number(p.monthlyRent || p.totalRent || 0)
-    || (rcptDiscount > 0 || rcptAdmFee > 0 || rcptExtra > 0 ? 0 : Number(p.amount || 0));
-  var rcptTotalDue = Math.max(0, rcptMonthly + rcptAdmFee + rcptExtra - rcptDiscount);
+    || (rcptDiscount > 0 || rcptAdmFee > 0 || rcptExtra > 0 || rcptMess > 0 ? 0 : Number(p.amount || 0));
+  var rcptTotalDue = Math.max(0, rcptMonthly + rcptMess + rcptAdmFee + rcptExtra - rcptDiscount);
 
   html += '<div style="padding:4px 22px 10px">';
   html += secLabel('Fee Breakdown');
-  html += dotRow('Monthly Rent', fmtPKR(rcptMonthly));
+  // Always "Room Rent" — the label used to flip to "Monthly Rent" when mess was
+  // 0, which made the same line mean the bed on one receipt and the whole
+  // charge on another. Rent is the bed; mess is its own line; the total below
+  // is the monthly charge.
+  html += dotRow('Room Rent', fmtPKR(rcptMonthly));
+  if (rcptMess > 0) html += dotRow('Mess Charges', fmtPKR(rcptMess));
   if (rcptAdmFee > 0) html += dotRow('Admission Fee', fmtPKR(rcptAdmFee));
   if (p.extraCharges && p.extraCharges.length) {
     p.extraCharges.forEach(function(ch) {
@@ -160,7 +169,7 @@ function buildReceiptHTML(payId) {
   }
   if (rcptDiscount > 0)
     html += dotRow('Concession' + (rcptConcDesc ? ' (' + escHtml(rcptConcDesc) + ')' : ''), '− ' + fmtPKR(rcptDiscount));
-  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0) {
+  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0 || rcptMess > 0) {
     html += sep('dashed');
     html += dotRow('TOTAL DUE', fmtPKR(rcptTotalDue), true);
   }
@@ -173,6 +182,26 @@ function buildReceiptHTML(payId) {
   }
   html += dotRow('Method', escHtml(p.method || 'Cash'));
   html += dotRow('Status', p.status === 'Paid' ? '✅ PAID' : '⏳ PENDING');
+
+  // ── Arrears taken in the same visit ───────────────────────────────────────
+  // This money belongs to earlier months and is posted to THEIR records, so it
+  // is not part of AMOUNT PAID above. It was still handed over at this counter,
+  // and a receipt that omits it is short of the cash the student gave.
+  var rcptArrears = (p.arrearsCollected && p.arrearsCollected.length)
+    ? p.arrearsCollected.filter(function (a) { return Number(a.amount) > 0; }) : [];
+  var rcptArrTotal = rcptArrears.reduce(function (s, a) { return s + Number(a.amount || 0); }, 0);
+  if (rcptArrTotal > 0) {
+    html += sep('dashed');
+    html += secLabel('Arrears Received (earlier months)');
+    rcptArrears.forEach(function (a) {
+      html += dotRow(escHtml(a.month || '—'), fmtPKR(a.amount));
+    });
+    html += sep('dashed');
+    html += dotRow('TOTAL RECEIVED', fmtPKR(Number(p.amount || 0) + rcptArrTotal), true);
+    html += '<div style="font-family:monospace;font-size:8.5px;color:#666;margin-top:2px">'
+      + 'Arrears are credited to the months listed above, not to '
+      + escHtml(p.month || 'this month') + '.</div>';
+  }
   html += '</div>';
 
   var history   = (p.partialPayments && p.partialPayments.length) ? p.partialPayments : [];

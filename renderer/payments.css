@@ -130,6 +130,17 @@
 .pay-table tbody tr.is-picked{ background:var(--dh-bg); }
 .pay-table input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
 
+/* Arrears — a still-unpaid record from an earlier month, shown alongside the
+   current one so the balance can be collected here. The left rule marks it as
+   belonging to a different period without recolouring the whole row, which
+   would fight the selection and hover states above. */
+.pay-table tbody tr.is-arrear td:first-child { box-shadow:inset 3px 0 0 var(--amber); }
+.pay-arrear-tag {
+  display:inline-block; margin-top:3px; padding:1px 7px; border-radius:20px;
+  font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+  color:var(--amber); background:var(--amber-dim); border:1px solid rgba(240,160,48,.35);
+}
+
 .pay-who       { display:flex; align-items:center; gap:10px; min-width:0; }
 .pay-who__av   { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
                  font-size:11.5px; font-weight:800; background:var(--dh-bg); color:var(--dh); }
@@ -243,29 +254,31 @@
 .pf-head b { font-size:17px; font-weight:800; letter-spacing:-.01em; color:var(--text); }
 .pf-head s { font-size:12px; font-weight:400; color:var(--text3); text-decoration:none; }
 
-/* Numbered section card */
-.pf-sec   { background:var(--card); border:1px solid var(--border); border-radius:13px;
-            padding:15px 16px; margin-bottom:12px; }
+/* Numbered section card. The type scale across this form was taken down about
+   one step (owner's request) — small enough to gain real height on a laptop,
+   not so small that the figures stop being readable across a desk. */
+.pf-sec   { background:var(--card); border:1px solid var(--border); border-radius:11px;
+            padding:10px 12px; margin-bottom:8px; }
 .pf-sec:last-child { margin-bottom:0; }
 .pf-sec__h {
-    display:flex; align-items:center; gap:8px; margin-bottom:14px;
-    font-size:12.5px; font-weight:700; color:var(--accent-strong);
+    display:flex; align-items:center; gap:7px; margin-bottom:8px;
+    font-size:11.5px; font-weight:700; color:var(--accent-strong);
 }
 .pf-sec__h svg { flex-shrink:0; }
 
-.pf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:13px 14px; }
+.pf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px 10px; }
 .pf-f    { min-width:0; }
 .pf-f--wide { grid-column:1 / -1; }
-.pf-f > label { display:block; font-size:11.5px; font-weight:600; color:var(--text2); margin-bottom:6px; }
+.pf-f > label { display:block; font-size:10.5px; font-weight:600; color:var(--text2); margin-bottom:3px; }
 .pf-f > label .req  { color:var(--red); margin-left:2px; }
 .pf-f > label .opt  { color:var(--text3); font-weight:400; }
 
 /* Inputs — these override .form-control for elements inside the payment modal
    only, so the shared form styling elsewhere is untouched. */
 .pf-in, .pf-sel {
-    width:100%; min-width:0; height:42px; padding:0 12px; border-radius:10px;
+    width:100%; min-width:0; height:34px; padding:0 11px; border-radius:9px;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:13px; outline:none;
+    font-family:var(--font); font-size:12.5px; outline:none;
     transition:border-color .15s ease, box-shadow .15s ease;
 }
 .pf-in::placeholder { color:var(--text3); }
@@ -290,14 +303,272 @@
     background:var(--card); border:1px solid var(--border2); border-radius:11px; box-shadow:var(--shadow);
 }
 .pf-picked {
-    display:none; margin-top:10px; padding:11px 13px; border-radius:11px;
-    background:var(--dash-sunk); border:1px solid var(--border); font-size:13px;
+    display:none; margin-top:7px; padding:7px 10px; border-radius:9px;
+    background:var(--dash-sunk); border:1px solid var(--border); font-size:12px;
+}
+.pf-picked__row {
+    display:grid; grid-template-columns:1.2fr repeat(4,1fr); gap:10px; align-items:center;
+}
+.pf-picked__who { display:flex; align-items:center; gap:8px; min-width:0; }
+.pf-picked__av {
+    width:30px; height:30px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:800; background:var(--dh-bg); color:var(--dh);
+}
+.pf-picked__n { font-size:12.5px; font-weight:800; color:var(--text);
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-picked__r { font-size:10.5px; color:var(--text3); }
+.pf-picked__f { min-width:0; border-left:1px solid var(--border); padding-left:10px; }
+.pf-picked__l { display:block; font-size:9px; color:var(--text3);
+                text-transform:uppercase; letter-spacing:.5px; margin-bottom:1px; }
+.pf-picked__v { font-size:12px; font-weight:700; color:var(--text);
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-picked__s { font-size:10px; color:var(--text3);
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:1100px) {
+    .pf-picked__row { grid-template-columns:1fr 1fr; }
+    .pf-picked__f   { border-left:none; padding-left:0; }
+}
+
+/* ══ ADD PAYMENT — full page ═════════════════════════════════════════════════
+   The form used to be a modal. As a page it can carry the live Payment Summary
+   and the student's recent history beside it. */
+/* The page is never scaled. An earlier build measured itself and shrank the
+   whole form with a transform so it would fit a 1366×768 laptop without
+   scrolling; on that laptop it landed at 0.73, which cost a quarter of every
+   letter and still left the short column with a 200px hole under it. The
+   density below is tuned instead, and what does not fit scrolls. */
+.ap-wrap  { max-width:1420px; margin:0 auto; padding:0 0 10px; }
+
+/* Title block: breadcrumb, page name, strapline — Back sits opposite. */
+.ap-head    { display:flex; align-items:flex-start; gap:14px; margin-bottom:9px; }
+.ap-head__l { min-width:0; }
+.ap-crumb   { display:flex; align-items:center; gap:5px; margin-bottom:3px;
+              font-size:11px; font-weight:600; color:var(--text3); }
+.ap-crumb svg { opacity:.5; flex-shrink:0; }
+.ap-crumb a   { cursor:pointer; }
+.ap-crumb a:hover { color:var(--accent-strong); }
+.ap-crumb b   { color:var(--accent-strong); font-weight:700; }
+.ap-title   { margin:0; font-size:19px; font-weight:800; letter-spacing:-.02em;
+              color:var(--text); line-height:1.2; }
+.ap-sub     { margin-top:2px; font-size:11.5px; color:var(--text3); }
+.ap-back  {
+    display:inline-flex; align-items:center; gap:7px; flex-shrink:0;
+    margin-left:auto; align-self:center;
+    padding:7px 12px; border-radius:8px; cursor:pointer;
+    background:var(--card); border:1px solid var(--border);
+    font-size:12px; font-weight:600; color:var(--text2);
+}
+.ap-back:hover { background:var(--dash-sunk); color:var(--text); border-color:var(--accent); }
+
+/* 400px, not 330: Payment Information lives in this column, and at 330 its four
+   date/method fields stack one per row and the column overshoots the left one —
+   the opposite of the point. At 400 they sit 2×2. */
+.ap-cols { display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:12px; align-items:start; }
+.ap-main { min-width:0; }
+/* Not sticky. The rail carries a form section now, so pinning it would put the
+   bottom of Payment Information out of reach on a short window. */
+.ap-side { display:flex; flex-direction:column; gap:8px; min-width:0; }
+@media (max-width:1150px) {
+    .ap-cols { grid-template-columns:1fr; }
+}
+
+/* ── DENSITY ─────────────────────────────────────────────────────────────────
+   These rules used to be a compact mode switched on only when the window was
+   too short. They are the page's one and only density now: they cost nothing
+   in legibility — the type is untouched, the height comes out of the gaps —
+   and applying them always means the form reads the same on every machine
+   rather than reshuffling itself as the window is dragged.                    */
+
+/* The strapline repeats what the title and the breadcrumb already say, and it
+   is the cheapest line on the page to lose. */
+.ap-sub { display:none; }
+
+/* Payment Summary reads two terms per row. The separator, the totals and the
+   balance still span the full width so the equation stays legible. */
+#ap-summary { display:grid; grid-template-columns:1fr 1fr; }
+#ap-summary .ap-sum__sep,
+#ap-summary .ap-sum__bal { grid-column:1 / -1; }
+
+/* A student with a long history must not push Payment Information off the
+   bottom of the rail — the list scrolls inside its own card instead. */
+#ap-recent { max-height:132px; overflow-y:auto; }
+
+/* :not(.ap-card) is load-bearing — .ap-card zeroes the section padding so its
+   header can sit flush against the card edge, and this selector outweighs it. */
+.ap-wrap .pf-sec:not(.ap-card) { padding:8px 12px; }
+.ap-wrap .pf-sec__h  { margin-bottom:6px; }
+.ap-wrap .ap-foot    { margin-top:7px; padding-top:7px; }
+.ap-wrap .pf-ta      { min-height:48px; }
+.ap-wrap             { padding-bottom:0; }
+.ap-wrap .ap-head    { margin-bottom:6px; }
+
+.ap-card { padding:0; }
+.ap-card__h {
+    display:flex; align-items:center; gap:7px; padding:9px 12px;
+    border-bottom:1px solid var(--border);
+    font-size:12.5px; font-weight:800; color:var(--text);
+}
+.ap-card__h > svg { color:var(--accent-strong); flex-shrink:0; }
+.ap-card__h .pf-extra__add { margin-left:auto; }
+.ap-empty { padding:16px 13px; text-align:center; font-size:11.5px; color:var(--text3); }
+
+/* Payment Summary — the same equation the form computes, itemised. */
+.ap-sum__r {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:5px 12px; font-size:11.5px; color:var(--text2);
+}
+.ap-sum__r b { font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ap-sum__r.is-minus b { color:var(--green); }
+.ap-sum__r.is-paid  b { color:var(--red); }
+.ap-sum__r.is-total   { font-weight:700; color:var(--text); }
+.ap-sum__r.is-total b { font-size:14px; font-weight:800; }
+.ap-sum__sep { height:1px; background:var(--border); margin:4px 12px; }
+.ap-sum__bal {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    margin:5px 10px 10px; padding:9px 11px; border-radius:9px;
+    font-size:12px; font-weight:700;
+}
+.ap-sum__bal b { font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ap-sum__bal.is-due   { background:rgba(224,82,82,.10); border:1px solid rgba(224,82,82,.30); color:var(--red); }
+.ap-sum__bal.is-clear { background:rgba(46,201,138,.10); border:1px solid rgba(46,201,138,.30); color:var(--green); }
+
+/* Recent payments list */
+.ap-rec {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:7px 12px; border-bottom:1px solid var(--border);
+}
+.ap-rec:last-child { border-bottom:none; }
+.ap-rec__m    { font-size:12.5px; font-weight:700; color:var(--text); }
+.ap-rec__meth { font-size:10.5px; color:var(--text3); }
+.ap-rec__amt  { font-size:12.5px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.ap-rec__st   { font-size:10px; }
+.ap-rec__st.is-paid { color:var(--green); }
+.ap-rec__st.is-due  { color:var(--red); }
+
+/* Footer actions */
+.ap-foot {
+    display:flex; align-items:center; justify-content:flex-end; gap:9px;
+    margin-top:9px; padding-top:9px; border-top:1px solid var(--border); flex-wrap:wrap;
+}
+
+/* Mess — the food half of the monthly charge, billed on top of the room rent.
+   Sits directly under the rent row so the two read as one figure split in two. */
+.pf-mess {
+    display:grid; grid-template-columns:auto minmax(150px,200px) 1fr; align-items:center;
+    gap:10px 14px; margin-top:13px; padding:11px 13px; border-radius:11px;
+    background:var(--dash-sunk); border:1px solid var(--border);
+}
+.pf-mess__on {
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font-size:12.5px; font-weight:600; color:var(--text2); white-space:nowrap;
+}
+.pf-mess__on input { width:16px; height:16px; cursor:pointer; accent-color:var(--accent); }
+.pf-mess__amt label { white-space:nowrap; }
+.pf-mess__note { font-size:11px; color:var(--text3); }
+.pf-mess input:disabled { opacity:.5; cursor:not-allowed; }
+@media (max-width:640px) { .pf-mess { grid-template-columns:1fr; } }
+
+/* Summary — the picked student's ledger, beside their details in section 1. */
+.pf-ledger {
+    margin-top:10px; padding:11px 13px; border-radius:11px;
+    background:var(--dash-sunk); border:1px solid var(--border);
+}
+.pf-ledger__t {
+    font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.7px;
+    color:var(--text3); margin-bottom:9px;
+}
+.pf-ledger__row {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:9px;
+}
+.pf-ledger__c {
+    padding:8px 10px; border-radius:9px; min-width:0;
+    background:var(--card); border:1px solid var(--border);
+}
+.pf-ledger__l { font-size:10px; color:var(--text3); white-space:nowrap; }
+.pf-ledger__v {
+    font-size:14px; font-weight:800; color:var(--dh); margin-top:2px;
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+}
+@media (max-width:640px) { .pf-ledger__row { grid-template-columns:repeat(2,1fr); } }
+
+/* Monthly Charge — one derived figure; the tick is the only control. */
+.pf-charge {
+    display:grid; grid-template-columns:minmax(180px,1fr) auto; align-items:center;
+    gap:8px 12px; padding:9px 10px; border-radius:9px;
+    background:var(--dash-sunk); border:1px solid var(--border);
+}
+.pf-charge__main > label {
+    display:block; font-size:10.5px; font-weight:600; color:var(--text2); margin-bottom:3px;
+}
+.pf-charge__main > label .req { color:var(--red); margin-left:2px; }
+.pf-charge__v {
+    height:34px; font-size:16px; font-weight:800; color:var(--green);
+    font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+}
+.pf-charge__note { font-size:10px; color:var(--text3); margin-top:3px; }
+.pf-charge__tick {
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+    font-size:11.5px; font-weight:600; color:var(--text2); white-space:nowrap;
+    padding:7px 10px; border-radius:8px; align-self:center;
+    background:var(--card); border:1px solid var(--border);
+}
+.pf-charge__tick input { width:16px; height:16px; cursor:pointer; accent-color:var(--accent); }
+@media (max-width:640px) { .pf-charge { grid-template-columns:1fr; } }
+
+/* Receive outstandings — arrears collected now, posted to their own month. */
+/* RECEIVE OUTSTANDING — arrears from earlier months, collectable here.
+   The amber wash marks the whole block as money that does NOT belong to the
+   month being recorded; each arrear then sits on its own raised row so the
+   figure the warden types is visibly attached to one month and not to the
+   form around it. */
+.pf-out {
+    margin-top:10px; padding:9px 10px; border-radius:9px;
+    background:var(--amber-dim); border:1px solid var(--amber, #f0a030);
+}
+.pf-out__h {
+    display:flex; align-items:center; gap:7px; margin-bottom:4px;
+    font-size:11px; font-weight:700; color:var(--amber, #f0a030);
+}
+.pf-out__h svg { flex-shrink:0; }
+.pf-out__tot { margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums; }
+.pf-out__note { font-size:10.5px; color:var(--text3); margin-bottom:7px; }
+.pf-out__row {
+    display:grid; grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) 110px auto;
+    align-items:center; gap:9px; margin-bottom:6px; padding:7px 9px;
+    background:var(--card); border:1px solid var(--border); border-radius:8px;
+}
+.pf-out__row:last-of-type { margin-bottom:0; }
+.pf-out__m { font-size:12.5px; font-weight:700; color:var(--text); }
+.pf-out__d { font-size:12px; color:var(--text3); }
+.pf-out__d b { color:var(--red); font-variant-numeric:tabular-nums; }
+.pf-out__in { text-align:right; }
+/* Sits on the amber panel, so it takes the amber outline rather than the
+   accent one .pf-extra__add carries. */
+.pf-out__btn {
+    height:30px; padding:0 12px; border-radius:8px; cursor:pointer; white-space:nowrap;
+    font-family:inherit; font-size:11.5px; font-weight:700;
+    background:transparent; color:var(--amber, #f0a030);
+    border:1px solid var(--amber, #f0a030);
+    transition:var(--transition);
+}
+.pf-out__h .pf-out__btn { height:26px; padding:0 10px; font-size:11px; }
+.pf-out__btn:hover { background:var(--amber, #f0a030); color:var(--bg); }
+.pf-out__sum {
+    margin-top:9px; padding-top:9px; border-top:1px solid var(--border);
+    font-size:12px; color:var(--text2); text-align:right;
+}
+.pf-out__sum b { font-size:13px; font-weight:800; color:var(--green); font-variant-numeric:tabular-nums; }
+@media (max-width:640px) {
+    .pf-out__row { grid-template-columns:1fr 1fr; }
+    .pf-out__btn { grid-column:1 / -1; }
 }
 
 /* Extra charges / add-ons panel */
-.pf-extra { background:var(--dash-sunk); border:1px solid var(--border); border-radius:11px; padding:12px 13px; }
-.pf-extra__h { display:flex; align-items:center; gap:8px; margin-bottom:10px;
-               font-size:11.5px; font-weight:600; color:var(--text2); }
+.pf-extra { background:var(--dash-sunk); border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
+.pf-extra__h { display:flex; align-items:center; gap:7px; margin-bottom:8px;
+               font-size:11px; font-weight:600; color:var(--text2); }
 .pf-extra__h svg { color:var(--accent-strong); flex-shrink:0; }
 .pf-extra__add {
     margin-left:auto; height:28px; padding:0 11px; border-radius:8px; cursor:pointer;
@@ -313,9 +584,9 @@
 .pf-extra__total b { font-size:13px; font-weight:800; color:var(--accent-strong); font-variant-numeric:tabular-nums; }
 
 .pf-ta {
-    width:100%; min-height:86px; padding:11px 12px; border-radius:10px; resize:vertical;
+    width:100%; min-height:58px; padding:9px 11px; border-radius:10px; resize:vertical;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:13px; line-height:1.55; outline:none;
+    font-family:var(--font); font-size:12.5px; line-height:1.5; outline:none;
 }
 .pf-ta:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .pf-count { font-size:10.5px; color:var(--text3); text-align:right; margin-top:4px; }
@@ -338,10 +609,10 @@
 
 /* Footer actions */
 .pf-btn {
-    height:42px; padding:0 17px; border-radius:11px; cursor:pointer; white-space:nowrap;
+    height:36px; padding:0 15px; border-radius:10px; cursor:pointer; white-space:nowrap;
     display:inline-flex; align-items:center; gap:8px;
     background:var(--card); border:1px solid var(--border2); color:var(--text2);
-    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
+    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
 }
 .pf-btn:hover       { background:var(--dash-sunk); color:var(--text); }
 .pf-btn--go         { background:var(--accent); border-color:var(--accent); color:#fff; }
@@ -363,8 +634,8 @@
    shared .rm-btn class — only the inputs are restyled, scoped to this list. */
 #extra-charges-list .extra-charge-row { display:flex; gap:7px; align-items:center; margin-bottom:7px; }
 #extra-charges-list input {
-    height:36px; padding:0 11px; border-radius:9px; min-width:0;
+    height:32px; padding:0 10px; border-radius:9px; min-width:0;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:12.5px; outline:none;
+    font-family:var(--font); font-size:12px; outline:none;
 }
 #extra-charges-list input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }

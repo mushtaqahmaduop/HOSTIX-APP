@@ -25,7 +25,7 @@
     };
     act('Add Student', '➕', 'showAddStudentModal');
     act('Add Room', '➕', 'showAddRoomModal');
-    act('Add Payment', '➕', 'showAddPaymentModal');
+    act('Add Payment', '➕', 'openAddPayment');
     act('Add Expense', '➕', 'showAddExpenseModal');
     act('Add Cancellation', '➕', 'showAddCancellationModal');
     act('Add Issue / Complaint', '➕', 'showAddIssueModal');

@@ -69,7 +69,13 @@ const pageConfig = {
   // Students rail item lit while it is open, and `back` shows the header's
   // Back button — the form is a detour, not a destination.
   addstudent:    { title:'Add / Edit Student', sub:'Add new student or update existing details',
-                   action:null, nav:'students', back:true }
+                   action:null, nav:'students', back:true },
+  // Add/Edit Payment is a page too, for the same reason: it carries a live
+  // summary and the student's recent history alongside the form, which a modal
+  // has no room for.
+  // Chrome shows the section; the page itself carries the "Add New Payment"
+  // heading and breadcrumb, so repeating it in the header just reads as a stutter.
+  addpayment:    { title:'Finance', sub:'', action:null, nav:'payments', back:true }
 };
 
 function navigate(page, isBack=false) {
@@ -135,14 +141,14 @@ function headerAction() {
   if(currentPage==='dashboard') showAddStudentModal();
   else if(currentPage==='rooms') showAddRoomModal();
   else if(currentPage==='students') showAddStudentModal();
-  else if(currentPage==='payments') showAddPaymentModal();
+  else if(currentPage==='payments') openAddPayment();
   else if(currentPage==='expenses') showAddExpenseModal();
   else if(currentPage==='cancellations') showAddCancellationModal();
   else if(currentPage==='issues') showAddIssueModal();
 }
 function headerAction2() {
   // "Add Payment" button shown on Dashboard and Students page
-  if(currentPage==='students' || currentPage==='dashboard') showAddPaymentModal();
+  if(currentPage==='students' || currentPage==='dashboard') openAddPayment();
 }
 
 // debounce() — defined in src/utils.js
@@ -218,6 +224,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='complaints') { issuesTab='complaints'; el.innerHTML = renderIssues(); }
       else if(basePage==='issues') el.innerHTML = renderIssues();
       else if(basePage==='addstudent') el.innerHTML = renderAddStudent();
+      else if(basePage==='addpayment') el.innerHTML = renderAddPayment();
       else if(basePage==='activitylog') el.innerHTML = renderActivityLog();
       else if(basePage==='settings') el.innerHTML = renderSettings();
       else if(basePage==='archive') el.innerHTML = renderArchive();

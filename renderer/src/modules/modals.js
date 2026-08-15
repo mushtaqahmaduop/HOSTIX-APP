@@ -254,7 +254,11 @@ function _initDBFields(d) {
   if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
   if (!d.settings.currency) d.settings.currency = 'PKR';
-  if (d.settings.autoMonthGenerate === undefined) d.settings.autoMonthGenerate = true;
+  // autoMonthGenerate is no longer read by anything: nothing generates payment
+  // records on its own. Kept off, and kept at all, only so an older database
+  // that has it stored is not silently rewritten. Rent rows come from the
+  // warden — Auto-Generate Month on the Payments screen, or a recorded payment.
+  d.settings.autoMonthGenerate = false;
   if (!d.settings.defaultWANumber) d.settings.defaultWANumber = '';
   // Collections
   if (!d.settings.roomTypes || !d.settings.roomTypes.length) d.settings.roomTypes = [

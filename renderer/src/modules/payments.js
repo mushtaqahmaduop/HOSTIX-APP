@@ -1,7 +1,7 @@
 /* ─── HOSTIX — PAYMENTS MODULE ─────────────────────────────────────────────
    Contains: renderPayments, generateMonthlyRents, markPaymentPaid,
              deletePayment, filterStudentDropdown, selectStudentForPayment,
-             recalcUnpaid, showAddPaymentModal, submitAddPayment,
+             recalcUnpaid, renderAddPayment, openAddPayment, submitAddPayment,
              showAddPaymentForStudent, showEditPaymentModal, submitEditPayment,
              extra charges helpers, print+submit helpers
    ─────────────────────────────────────────────────────────────────────────── */
@@ -27,6 +27,54 @@ function payStatusOf(p) {
   if (!p) return 'Pending';
   if (p.status === 'Paid') return 'Paid';
   return Number(p.amount || 0) > 0 ? 'Partial' : 'Pending';
+}
+
+/* ── STUDENT SNAPSHOT SYNC ────────────────────────────────────────────────────
+   A payment stores the student's name and room number at the moment it is
+   written, so receipts and archived records stay readable after a student is
+   deleted. The cost is that correcting a student's name left every existing
+   payment — and therefore the payments table, the CSVs, the reports and every
+   PDF built from them — showing the old one forever. Editing a student now
+   pushes the correction down onto their records, and the same pass runs once
+   at boot so history already on disk is repaired too.
+
+   Records typed in manually carry no studentId; those keep the name as typed. */
+function syncStudentSnapshots(t) {
+  if (!t || !t.id) return 0;
+  const room = (DB.rooms || []).find(r => r.id === t.roomId);
+  const roomNo = room ? room.number : null;
+  let touched = 0;
+  const apply = (rec, nameField) => {
+    if (!rec || rec.studentId !== t.id) return;
+    if (t.name && rec[nameField] !== t.name) { rec[nameField] = t.name; touched++; }
+    // The room is only stamped forward while the debt is still open. A settled
+    // record is a receipt of what happened, and the student did live in that
+    // room when they paid.
+    if (roomNo != null && rec.status !== 'Paid' && String(rec.roomNumber||'') !== String(roomNo)) {
+      rec.roomId = t.roomId; rec.roomNumber = roomNo; touched++;
+    }
+  };
+  (DB.payments      || []).forEach(p => apply(p, 'studentName'));
+  (DB.cancellations || []).forEach(c => apply(c, 'studentName'));
+  return touched;
+}
+
+/* Boot-time repair for data written before syncStudentSnapshots() existed.
+   Indexed by id so it stays O(payments) rather than O(payments × students). */
+function repairStudentSnapshots() {
+  const byId = new Map((DB.students || []).map(s => [s.id, s]));
+  let touched = 0;
+  (DB.payments || []).forEach(p => {
+    const t = p.studentId ? byId.get(p.studentId) : null;
+    if (!t) return;                                   // manual entry or deleted student
+    if (t.name && p.studentName !== t.name) { p.studentName = t.name; touched++; }
+  });
+  (DB.cancellations || []).forEach(c => {
+    const t = c.studentId ? byId.get(c.studentId) : null;
+    if (!t) return;
+    if (t.name && c.studentName !== t.name) { c.studentName = t.name; touched++; }
+  });
+  return touched;
 }
 
 function payStatusHue(s) {
@@ -64,13 +112,27 @@ function payMonthOptions() {
 
 // Single source of truth for the filtered+sorted list. Used by the table, the
 // CSV export and the stat strip so the three can never disagree.
+// A record from a month EARLIER than `mo` that still has money owing on it.
+// These are the balances a warden would otherwise have to go back a month to
+// find, which is why they are shown alongside the current month by default.
+function payIsArrear(p, mo) {
+  if (Number(p.unpaid || 0) <= 0) return false;
+  if (payStatusOf(p) === 'Paid') return false;
+  const k = _payMonthKey(p);
+  return !!k && k < mo;
+}
+
 function payFiltered() {
   const mo = thisMonth();
   let pays = DB.payments.filter(p => {
     // Month: an explicit pick wins; otherwise fall back to the this-month /
-    // all-months scope toggle in the Filters popover.
+    // all-months scope toggle in the Filters popover. In the this-month scope
+    // an older record that is still unpaid rides along as an arrear, so it can
+    // be collected here instead of only in the month it was raised.
     if (payFilter.month !== 'All') { if (String(p.month || '') !== payFilter.month) return false; }
-    else if (!payFilter.showAll)   { if (!_payMatchesMonth(p, mo)) return false; }
+    else if (!payFilter.showAll) {
+      if (!_payMatchesMonth(p, mo) && !(payFilter.arrears && payIsArrear(p, mo))) return false;
+    }
 
     if (payFilter.room !== 'All' && String(p.roomNumber || '') !== payFilter.room) return false;
     if (payFilter.method !== 'All' && p.method !== payFilter.method) return false;
@@ -111,10 +173,21 @@ function renderPayments() {
   const _pg = paginate(pays, payFilter);
 
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${m}" ${payFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
-  const total=pays.reduce((s,p)=>s+Number(p.amount),0);
+
+  // Which of the visible rows are carried-over debt rather than this month's
+  // billing. Only meaningful in the default this-month scope; an explicit month
+  // pick or "all months" has no separate arrears notion.
+  const _arrearScope = payFilter.month === 'All' && !payFilter.showAll && payFilter.arrears;
+  const isArrear = p => _arrearScope && payIsArrear(p, mo);
+  const nArrears = pays.filter(isArrear).length;
+  const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+Number(p.unpaid||0),0);
 
   // ── Stat strip figures — all computed from the CURRENT filtered list, so the
   //    cards always describe exactly what the table below is showing.
+  //    "Total Collected" is the one exception: money banked against an older
+  //    month was collected in that month, and adding it here would re-create
+  //    the cross-month mixing that arrears rows exist to expose, not hide.
+  const total=pays.filter(p=>!isArrear(p)).reduce((s,p)=>s+Number(p.amount),0);
   const nPaid    = pays.filter(p=>payStatusOf(p)==='Paid').length;
   const nPending = pays.filter(p=>payStatusOf(p)!=='Paid').length;
   const nOverdue = pays.filter(p=>payIsOverdue(p)).length;
@@ -203,7 +276,10 @@ function renderPayments() {
         <div class="pay-stat__label">Unpaid Amount</div>
       </div>
       <div class="pay-stat__val"><span class="cur">PKR</span>${fmtNum(outstanding)}</div>
-      <div class="pay-stat__foot"><span class="pay-stat__sub">Total outstanding</span></div>
+      <div class="pay-stat__foot">
+        <span class="pay-stat__sub">Total outstanding</span>
+        ${nArrears>0?`<span class="pay-stat__delta dh-red" title="${nArrears} unpaid record${nArrears>1?'s':''} carried over from earlier months">incl. ${fmtPKR(arrearsAmt)} arrears</span>`:''}
+      </div>
     </div>
   </div>
 
@@ -243,6 +319,9 @@ function renderPayments() {
           <div class="pay-pop__t">Scope</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.showAll?'checked':''}
             onchange="payFilter.showAll=this.checked;payFilter.page=1;renderPage('payments')"> Include every month</label>
+          <label class="pay-pop__row"><input type="checkbox" ${payFilter.arrears?'checked':''}
+            onchange="payFilter.arrears=this.checked;payFilter.page=1;renderPage('payments')"
+            title="Show unpaid balances from earlier months alongside this month, so they can be collected here"> Carry forward unpaid earlier months</label>
           <div class="pay-pop__t" style="margin-top:10px">Balance</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.unpaidOnly?'checked':''}
             onchange="payFilter.unpaidOnly=this.checked;payFilter.page=1;renderPage('payments')"> Only rows with an unpaid balance</label>
@@ -319,9 +398,10 @@ function renderPayments() {
           const sLabel = payStatusOf(p);
           const sHue   = payStatusHue(sLabel);
           const picked = paySelected.has(p.id);
+          const arrear = isArrear(p);
           const nm     = String(p.studentName||'?');
           const ini    = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
-          return `<tr class="${picked?'is-picked dh-blue':''}">
+          return `<tr class="${picked?'is-picked dh-blue':''}${arrear?' is-arrear':''}">
             <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="payToggleRow('${p.id}')"></td>
             <td>
               <div class="pay-who">
@@ -338,7 +418,10 @@ function renderPayments() {
               ${rtype?`<div class="pay-room__t">${escHtml(rtype.name)}</div>`:''}
               ${room&&room.floor?`<div class="pay-room__t">${escHtml(room.floor)} Floor</div>`:''}
             </td>
-            <td>${escHtml(p.month||'—')}</td>
+            <td>
+              ${escHtml(p.month||'—')}
+              ${arrear?'<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>':''}
+            </td>
             <td class="pay-money">${fmtPKR(p.monthlyRent||p.totalRent||p.amount)}</td>
             <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
             <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
@@ -415,6 +498,7 @@ function paySetStatus(s) {
 function payResetFilters() {
   payFilter.status='All'; payFilter.method='All'; payFilter.room='All'; payFilter.month='All';
   payFilter.search=''; payFilter.showAll=false; payFilter.unpaidOnly=false; payFilter.page=1;
+  payFilter.arrears=true;   // carrying unpaid balances forward is the default, not a filter to clear
   paySelected.clear();
   renderPage('payments');
 }
@@ -510,7 +594,12 @@ async function generateMonthlyRents() {
   active.forEach(t=>{
     if(!DB.payments.some(p=>p.studentId===t.id&&_payMatchesMonth(p,thisMonth()))){
       const room=DB.rooms.find(r=>r.id===t.roomId);
-      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,unpaid:t.rent,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
+      // The month's bill is rent plus mess, and mess only for students who are
+      // actually on it — a rent-only student must not be raised a mess charge.
+      const messOn = t.messOptIn !== false;
+      const mess   = messOn ? (Number(t.mess)||0) : 0;
+      const due    = (Number(t.rent)||0) + mess;
+      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
       added++;
     }
   });
@@ -664,16 +753,31 @@ function useManualNameEntry(name) {
 function selectStudentForPayment(studentId) {
   const t = DB.students.find(x => x.id === studentId);
   if (!t) return;
-  const room = DB.rooms.find(r => r.id === t.roomId);
-  const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
-  // BUG FIX: Derive the most current rent. t.rent is updated by settings changes.
-  // Additionally fall back to rtype.defaultRent so even edge-cases (e.g. _rentManuallySet
-  // blocked a settings propagation) still show the latest room-type fee in the modal.
-  const currentRent = t.rent || rtype?.defaultRent || 16000;
+  // Every screen reads the monthly charge through resolveCharges() — student →
+  // room → Settings. Nothing here invents a fallback amount.
+  const c     = resolveCharges(t);
+  const room  = c.room;
+  const rtype = c.roomType;
+  const currentRent = c.rent;
+  const currentMess = c.mess;
+  const messOn      = c.messOptIn;
   document.getElementById('f-pstudent').value = studentId;
   document.getElementById('f-pstudent-search').value = t.name + ' — Room #' + (room?.number||'?');
   document.getElementById('student-search-results').style.display = 'none';
-  if (document.getElementById('f-pamt')) { document.getElementById('f-pamt').value = currentRent; }
+  // f-prent is the redesigned modal's hidden half; f-pamt is the older visible
+  // Room Rent box. Fill whichever this modal has.
+  const rentEl = document.getElementById('f-prent') || document.getElementById('f-pamt');
+  if (rentEl) rentEl.value = currentRent;
+  const messAmtEl = document.getElementById('f-pmess');
+  const messOnEl  = document.getElementById('f-pmess-on');
+  if (messAmtEl) messAmtEl.value = currentMess;
+  if (messOnEl)  messOnEl.checked = messOn;
+  if (messOnEl || messAmtEl) pfMessToggle();
+  pfPaintCharge();
+  pfRenderLedger(t);
+  pfRenderRecent(t);
+  pfRefreshMonthOptions(studentId);   // their own arrear months join the picker
+  pfReloadOutstandings();
   if (document.getElementById('f-pconcession') && t.concession) {
     document.getElementById('f-pconcession').value = t.concession;
     if(t.concessionDesc && document.getElementById('f-pconcession-desc'))
@@ -682,21 +786,308 @@ function selectStudentForPayment(studentId) {
   recalcUnpaid();
   const info = document.getElementById('selected-student-info');
   info.style.display = 'block';
-  info.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap">
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Student ID</span><div style="font-weight:700;color:var(--text);font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Room</span><div style="font-weight:700;color:var(--accent-strong)">#${room?.number||'?'} · ${rtype?.name||''} · ${room?.floor||''} Floor</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Phone</span><div style="font-weight:600">${escHtml(t.phone||'—')}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Monthly Rent</span><div style="font-weight:700;color:var(--green)">${fmtPKR(currentRent)}</div></div>
-    <div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Address</span><div style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div></div>
+  const _nm  = String(t.name || '?');
+  const _ini = _nm.trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+  const fld = (label, body) =>
+    `<div class="pf-picked__f"><span class="pf-picked__l">${label}</span>${body}</div>`;
+  info.innerHTML = `<div class="pf-picked__row">
+    <div class="pf-picked__who">
+      <div class="pf-picked__av ${payAvatarHue(_nm)}">${escHtml(_ini)}</div>
+      <div style="min-width:0">
+        <div class="pf-picked__n">${escHtml(_nm)}</div>
+        <div class="pf-picked__r">Room #${escHtml(String(room?.number || '?'))}</div>
+      </div>
+    </div>
+    ${fld('Student ID', `<div class="pf-picked__v" style="font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div>`)}
+    ${fld('Room', `<div class="pf-picked__v" style="color:var(--accent-strong)">#${escHtml(String(room?.number||'?'))} · ${escHtml(rtype?.name||'')}</div><div class="pf-picked__s">${escHtml(room?.floor||'')} Floor</div>`)}
+    ${fld('Monthly Charge', `<div class="pf-picked__v" style="color:${c.configured?'var(--green)':'var(--red)'}">${c.configured?fmtPKR(c.total):'Not configured'}</div><div class="pf-picked__s">${chargesBreakdown(c)}</div>`)}
+    ${fld('Address', `<div class="pf-picked__v" style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div>`)}
   </div>`;
 }
 
+/* ── SUMMARY ──────────────────────────────────────────────────────────────────
+   The student's ledger at a glance: what they are charged, and what has
+   actually been collected against it. Room Rent / Mess come from Settings;
+   Extra, Paid and Pending are read off their payment records. */
+function pfRenderLedger(t) {
+  const box = document.getElementById('pf-ledger');
+  if (!box) return;
+  // Arrears owed for OTHER months — shown beside this payment so the warden can
+  // see at a glance that there is older money outstanding.
+  const arrears = t ? DB.payments
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0)
+    .reduce((s, p) => s + Number(p.unpaid || 0), 0) : 0;
+
+  const cell = (label, id, hue, hint) =>
+    `<div class="pf-ledger__c ${hue}"><div class="pf-ledger__l"${hint?` title="${hint}"`:''}>${label}</div>
+       <div class="pf-ledger__v" id="${id}">PKR 0</div></div>`;
+
+  box.style.display = '';
+  box.innerHTML =
+    `<div class="pf-ledger__t">Summary${arrears > 0
+        ? ` <span style="color:var(--red);font-weight:800">· ${fmtPKR(arrears)} outstanding from earlier months</span>` : ''}</div>
+     <div class="pf-ledger__row">
+       ${cell('Room Rent', 'pf-sum-rent',  'dh-blue')}
+       ${cell('Mess',      'pf-sum-mess',  'dh-amber')}
+       ${cell('Extra',     'pf-sum-extra', 'dh-violet')}
+       ${cell('Paid',      'pf-sum-paid',  'dh-green')}
+       ${cell('Pending',   'pf-sum-due',   'dh-red', 'Remaining on this month after what has been paid')}
+     </div>`;
+  recalcUnpaid();
+}
+
+/* ── RECEIVE OUTSTANDINGS ─────────────────────────────────────────────────────
+   Arrears from earlier months can be collected during any later month, but the
+   money is posted back to the month it belongs to — the older record is the one
+   that moves toward Paid. The current month's record is built from the Monthly
+   Charge above and is not touched by anything entered here. */
+function pfOutstandingRecords(studentId, excludeMonthLabel) {
+  const norm = m => _normPayMonthLabel(m);
+  const skip = norm(excludeMonthLabel);
+  return DB.payments
+    .filter(p => p.studentId === studentId && p.status === 'Pending'
+      && Number(p.unpaid) > 0 && norm(p.month) !== skip)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+// Month labels are stored as free text ("August 2026"); compare them loosely so
+// a stray case or space does not make the same month look like two.
+function _normPayMonthLabel(m) {
+  return String(m || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/* ── MONTH PICKER ─────────────────────────────────────────────────────────────
+   p.month is the key everything cross-month is matched on: the arrears panel,
+   the month filter on the payments list, the dashboard. It used to be typed by
+   hand, so one slip ("Augst 2026") created a month that nothing would ever line
+   up with again — the arrear stayed invisible and the payment landed in a month
+   that does not exist. The warden picks from a list instead.
+
+   The list is a year back through next month, PLUS every month the student
+   already has a record for. That second half matters: an arrear older than the
+   window still has to be selectable or it could never be settled from here, and
+   a label typed before this change is kept verbatim rather than silently
+   rewritten into something the old records would no longer match.            */
+const _PAY_MONTH_NAMES = ['january','february','march','april','may','june',
+                          'july','august','september','october','november','december'];
+
+function _payMonthLabelOf(d) {
+  return d.toLocaleString('default', { month: 'long', year: 'numeric' });
+}
+
+// Sortable integer for a label. -1 for anything not in "<Month> <Year>" form,
+// which keeps unrecognised labels in the list rather than dropping them.
+function _payMonthOrder(label) {
+  const m = _normPayMonthLabel(label).match(/^([a-z]+) (\d{4})$/);
+  if (!m) return -1;
+  const i = _PAY_MONTH_NAMES.indexOf(m[1]);
+  return i < 0 ? -1 : Number(m[2]) * 12 + i;
+}
+
+/* Named apart from payMonthOptions() above on purpose: that one lists the months
+   already IN the data to filter the payments table by, this one lists the months
+   a payment may be RECORDED against — including ones with nothing behind them
+   yet, which is most of the point. */
+function payMonthPickerOptions(selected, studentId) {
+  const now = new Date();
+  const labels = [];
+  for (let back = 12; back >= -1; back--) {
+    labels.push(_payMonthLabelOf(new Date(now.getFullYear(), now.getMonth() - back, 1)));
+  }
+  if (studentId) {
+    DB.payments.forEach(p => { if (p.studentId === studentId && p.month) labels.push(String(p.month)); });
+  }
+  if (selected) labels.push(String(selected));
+
+  const seen = new Set(), list = [];
+  labels.forEach(l => {
+    const k = _normPayMonthLabel(l);
+    if (k && !seen.has(k)) { seen.add(k); list.push(l); }
+  });
+  list.sort((a, b) => _payMonthOrder(b) - _payMonthOrder(a));   // newest first
+
+  const sel = _normPayMonthLabel(selected);
+  return list.map(l =>
+    `<option value="${escHtml(l)}"${_normPayMonthLabel(l) === sel ? ' selected' : ''}>${escHtml(l)}</option>`
+  ).join('');
+}
+
+/* The student's own arrear months are only known once a student is picked, so
+   the page's picker is rebuilt then — keeping whatever month is already chosen. */
+function pfRefreshMonthOptions(studentId) {
+  const sel = document.getElementById('f-pmonth');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  const keep = sel.value || thisMonthLabel();
+  sel.innerHTML = payMonthPickerOptions(keep, studentId);
+  sel.value = keep;
+}
+
+function pfReloadOutstandings() {
+  const box = document.getElementById('pf-out');
+  if (!box) return;
+  const sid = document.getElementById('f-pstudent')?.value || '';
+  if (!sid || sid === '__manual__') { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const month = document.getElementById('f-pmonth')?.value || '';
+  const arrears = pfOutstandingRecords(sid, month);
+  if (!arrears.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const total = arrears.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  // One arrear is the common case and the one the owner's reference draws: the
+  // row carries its own "Collect All" and the header needs no button. With
+  // several months the per-row button fills that row alone, so the header gets
+  // back the one that fills them all.
+  const many = arrears.length > 1;
+  box.style.display = '';
+  box.innerHTML =
+    `<div class="pf-out__h">
+       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+       Receive Outstanding
+       <span class="pf-out__tot">${fmtPKR(total)} owed</span>
+       ${many ? `<button type="button" class="pf-out__btn" onclick="pfFillAllOutstandings()">Collect all</button>` : ''}
+     </div>
+     <div class="pf-out__note">From earlier months. What you enter here is posted to that month's record — not to ${escHtml(month || 'this month')}.</div>
+     ${arrears.map(p => `
+       <div class="pf-out__row">
+         <div class="pf-out__m">${escHtml(p.month || '—')}</div>
+         <div class="pf-out__d">owes <b>${fmtPKR(p.unpaid)}</b></div>
+         <input class="pf-in pf-out__in" type="number" min="0" max="${Number(p.unpaid)}"
+                id="f-pout-${p.id}" data-payid="${p.id}" data-max="${Number(p.unpaid)}"
+                placeholder="0" value="" oninput="pfOutstandingInput(this)">
+         <button type="button" class="pf-out__btn" title="Collect the whole ${escHtml(p.month || 'month')} balance"
+                 onclick="pfFillOutstandingRow('${p.id}')">${many ? 'Collect' : 'Collect All'}</button>
+       </div>`).join('')}
+     <div class="pf-out__sum" id="pf-out-sumline" style="display:none">Collecting now: <b id="pf-out-sum">PKR 0</b></div>`;
+}
+
+// Never let an arrear collection exceed what that month actually owes.
+function pfOutstandingInput(el) {
+  const max = Number(el.dataset.max) || 0;
+  let v = parseFloat(el.value) || 0;
+  if (v > max) { v = max; el.value = max; }
+  pfOutstandingTotal();
+}
+
+function pfFillAllOutstandings() {
+  document.querySelectorAll('.pf-out__in').forEach(el => { el.value = Number(el.dataset.max) || 0; });
+  pfOutstandingTotal();
+}
+
+// Fills one month's row with everything that month still owes.
+function pfFillOutstandingRow(payId) {
+  const el = document.getElementById('f-pout-' + payId);
+  if (!el) return;
+  el.value = Number(el.dataset.max) || 0;
+  pfOutstandingTotal();
+}
+
+function pfOutstandingTotal() {
+  let n = 0;
+  document.querySelectorAll('.pf-out__in').forEach(el => { n += parseFloat(el.value) || 0; });
+  const el = document.getElementById('pf-out-sum');
+  if (el) el.textContent = fmtPKR(n);
+  // The running total is an answer to something the warden has typed, so it
+  // stays out of the way until there is something to total.
+  const line = document.getElementById('pf-out-sumline');
+  if (line) line.style.display = n > 0 ? '' : 'none';
+  return n;
+}
+
+// [{payment, amount}] for every arrear the warden entered something against.
+function pfOutstandingAllocations() {
+  const out = [];
+  document.querySelectorAll('.pf-out__in').forEach(el => {
+    const amt = parseFloat(el.value) || 0;
+    if (amt <= 0) return;
+    const p = DB.payments.find(x => x.id === el.dataset.payid);
+    if (p) out.push({ payment: p, amount: Math.min(amt, Number(p.unpaid) || 0) });
+  });
+  return out;
+}
+
+/* Posts arrear collections back to the months they belong to. Returns a short
+   description for the activity log. */
+function pfApplyOutstandings(allocations, method, date) {
+  const done = [];
+  allocations.forEach(({ payment: p, amount }) => {
+    p.amount  = (Number(p.amount) || 0) + amount;
+    p.unpaid  = Math.max(0, (Number(p.unpaid) || 0) - amount);
+    if (!p.partialPayments) p.partialPayments = [];
+    p.partialPayments.push({
+      date, amount, method,
+      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
+      note: 'Arrears collected'
+    });
+    if (p.unpaid === 0) { p.status = 'Paid'; p.paidDate = date; }
+    done.push((p.month || '—') + ' ' + fmtPKR(amount));
+  });
+  return done.join(', ');
+}
+
+// The mess charge currently on the form — 0 when the tick is off, so the total
+// follows the checkbox without the resolved amount being lost.
+function pfMessAmount() {
+  const on = document.getElementById('f-pmess-on');
+  if (on && !on.checked) return 0;
+  return parseFloat(document.getElementById('f-pmess')?.value) || 0;
+}
+
+// The room rent on the form. The redesigned Add/Edit Payment modal keeps the
+// two halves in hidden f-prent/f-pmess and shows only their sum; the older
+// Edit Payment modal still types into a visible f-pamt. Read whichever exists.
+function pfRentAmount() {
+  const r = document.getElementById('f-prent');
+  if (r) return parseFloat(r.value) || 0;
+  return parseFloat(document.getElementById('f-pamt')?.value) || 0;
+}
+
+function pfMessToggle() {
+  const on   = document.getElementById('f-pmess-on');
+  const amt  = document.getElementById('f-pmess');
+  const note = document.getElementById('f-pmess-note');
+  const isOn = !on || on.checked;
+  // Only disable a mess box the warden can actually type in (the old modal).
+  if (amt && amt.type !== 'hidden') amt.disabled = !isOn;
+  if (note) note.textContent = isOn ? 'Rent + mess = total monthly charge'
+                                    : 'Room only — mess not charged this month';
+  recalcUnpaid();
+}
+
+/* Repaints the Monthly Charge box. One number: the room rent, plus the mess
+   when the tick is on. Both halves come from Settings via resolveCharges(), so
+   ticking the box moves the figure from 8,000 to 14,500 immediately. */
+function pfPaintCharge() {
+  const box  = document.getElementById('f-pcharge');
+  if (!box) return;                       // older modals have no charge box
+  const note = document.getElementById('f-pcharge-note');
+  const rent = pfRentAmount();
+  const mess = pfMessAmount();
+  const messConfigured = parseFloat(document.getElementById('f-pmess')?.value) || 0;
+  const on   = document.getElementById('f-pmess-on');
+  const isOn = !on || on.checked;
+
+  if (!rent && !messConfigured) {
+    box.value = '—';
+    if (note) note.textContent = 'Pick a student to load the charge';
+    return;
+  }
+  box.value = fmtNum(rent + mess);
+  if (note) {
+    note.textContent = isOn && messConfigured
+      ? 'mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
+      : messConfigured
+        ? 'rent only — mess (' + fmtPKR(messConfigured) + ') not charged this month'
+        : 'rent only — no mess charge configured';
+  }
+}
+
 function recalcUnpaid() {
-  const mr      = parseFloat(document.getElementById('f-pamt')?.value)||0;
+  const mr      = pfRentAmount();
+  const mess    = pfMessAmount();
+  pfPaintCharge();
   const extra   = getExtraChargesTotal();
   const admFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const conc    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
-  const total   = Math.max(0, mr + extra + admFee - conc);
+  const total   = Math.max(0, mr + mess + extra + admFee - conc);
   // Cap paid amount — prevent accidental overpayment (e.g. 1600000 instead of 16000)
   const paidEl  = document.getElementById('f-ppaid');
   let pa = parseFloat(paidEl?.value)||0;
@@ -728,9 +1119,16 @@ function recalcUnpaid() {
   // so the older forms that also call recalcUnpaid() are unaffected.
   const setSum = (id, val) => { const n = document.getElementById(id); if (n) n.textContent = fmtPKR(val); };
   setSum('pf-sum-rent',  mr);
+  setSum('pf-sum-mess',  mess);
   setSum('pf-sum-extra', extra);
   setSum('pf-sum-paid',  pa);
   setSum('pf-sum-due',   u);
+
+  // The Add Payment page's right-hand summary is the same arithmetic, itemised.
+  pfRenderSummary({
+    charge: mr + mess, admFee: admFee, extra: extra,
+    concession: conc, total: total, paid: pa, unpaid: u
+  });
 }
 
 function getExtraChargesTotal() {
@@ -760,9 +1158,11 @@ function addExtraChargeRow(descOrLabel='', amount='') {
   div.className = 'extra-charge-row';
   div.id = rowId;
   div.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  // Description first, then the amount (owner reference). getExtraChargesData()
+  // reads both by class, not by position, so the swap is presentation only.
   div.innerHTML = `
-    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" style="width:120px;flex-shrink:0" oninput="recalcUnpaid()">
-    <input class="form-control extra-charge-desc-input" type="text" placeholder="Description (e.g. Cooler Fee)" value="${escHtml(descOrLabel)}" style="flex:1" oninput="recalcUnpaid()">
+    <input class="form-control extra-charge-desc-input" type="text" placeholder="Description (e.g. Cooler Fee)" value="${escHtml(descOrLabel)}" style="flex:1;min-width:0" oninput="recalcUnpaid()">
+    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" style="width:110px;flex-shrink:0" oninput="recalcUnpaid()">
     <button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcUnpaid()" title="Remove" style="flex-shrink:0">✕</button>
   `;
   list.appendChild(div);
@@ -772,7 +1172,8 @@ function addExtraChargeRow(descOrLabel='', amount='') {
 function showAddPaymentForStudent(studentId) {
   const t = DB.students.find(s => s.id === studentId);
   if (!t) return;
-  const room = DB.rooms.find(r => r.id === t.roomId);
+  const c = resolveCharges(t);
+  const room = c.room;
   const pmOpts = DB.settings.paymentMethods.map(m => `<option ${m===t.paymentMethod?'selected':''}>${m}</option>`).join('');
   showModal('modal-md', `💳 Add Payment — ${escHtml(t.name)}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
@@ -782,13 +1183,23 @@ function showAddPaymentForStudent(studentId) {
         <div style="font-size:11px;color:var(--text3)">Room #${room ? room.number : '—'} · ${room ? getRoomType(room).name : '—'} · ${escHtml(t.phone || '—')}</div>
       </div>
       <div style="margin-left:auto;text-align:right">
-        <div style="font-size:13px;font-weight:800;color:var(--green)">${fmtPKR(t.rent)}</div>
-        <div style="font-size:10px;color:var(--text3)">Monthly Rent</div>
+        <div style="font-size:13px;font-weight:800;color:${c.configured?'var(--green)':'var(--red)'}">${c.configured?fmtPKR(c.total):'Not configured'}</div>
+        <div style="font-size:10px;color:var(--text3)">Monthly Charge</div>
       </div>
     </div>
     <input type="hidden" id="f-ps-studentId" value="${t.id}">
     <div class="form-grid">
-      <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${t.rent||16000}" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${c.rent||''}" placeholder="Set in Settings → Rent &amp; Mess" oninput="recalcUnpaidPS()"></div>
+      <!-- MESS — the food half of the monthly charge. This screen used to omit
+           it entirely, so the same student was billed a different amount here
+           than in the main Add Payment modal. -->
+      <div class="field"><label>Mess Charges (PKR)</label>
+        <input class="form-control" id="f-ps-mess" type="number" min="0" value="${c.mess||''}" placeholder="0" ${c.messOptIn?'':'disabled'} oninput="recalcUnpaidPS()">
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer" title="Untick for a student who takes the room but not the mess">
+          <input type="checkbox" id="f-ps-mess-on" ${c.messOptIn?'checked':''} onchange="psMessToggle()">
+          <span id="f-ps-mess-note">${c.messOptIn?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
+        </label>
+      </div>
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
@@ -815,9 +1226,9 @@ function showAddPaymentForStudent(studentId) {
           </div>
         </div>
       </div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-ps-unpaid" type="number" value="${t.rent||16000}" readonly style="color:var(--red);font-weight:700;background:var(--bg3)" title="Auto-calculated: Rent + Extra − Concession − Paid"></div>
+      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-ps-unpaid" type="number" value="${c.total}" readonly style="color:var(--red);font-weight:700;background:var(--bg3)" title="Auto-calculated: Room Rent + Mess + Admission Fee + Extra − Concession − Paid"></div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="f-ps-method">${pmOpts}</select></div>
-      <div class="field"><label>Month</label><input class="form-control" id="f-ps-month" value="${thisMonthLabel()}"></div>
+      <div class="field"><label>Month</label><select class="form-control" id="f-ps-month">${payMonthPickerOptions(thisMonthLabel(), t.id)}</select></div>
       <div class="field"><label>Status</label>
         <select class="form-control" id="f-ps-stat">
           <option value="Paid">✓ Paid</option>
@@ -856,20 +1267,44 @@ function showAddPaymentForStudent(studentId) {
     const unpaidEl= document.getElementById('f-ps-unpaid');
     const statEl  = document.getElementById('f-ps-stat');
     const notesEl = document.getElementById('f-ps-notes');
-    // BUG FIX: Always use the student's CURRENT rent (t.rent) as the authoritative value.
-    // existingPending.monthlyRent may be stale if the warden updated fees in Settings after
-    // this pending record was created. t.rent is always kept in sync by updateRoomType/applyRent.
-    const currentRentPS = t.rent || existingPending.monthlyRent || existingPending.amount || 16000;
+    // Always use the CURRENT resolved charge, not the amount frozen into the
+    // pending record — that one may predate a fee change in Settings.
+    const currentRentPS = c.rent || existingPending.monthlyRent || 0;
+    const messEl  = document.getElementById('f-ps-mess');
+    const messOnEl= document.getElementById('f-ps-mess-on');
     if (rentEl)   rentEl.value   = currentRentPS;
+    if (messEl)   messEl.value   = c.mess || 0;
+    if (messOnEl) messOnEl.checked = c.messOptIn;
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
-    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : (currentRentPS - (existingPending.amount||0));
+    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : Math.max(0, c.total - (existingPending.amount||0));
     if (statEl)   statEl.value   = existingPending.status;
     if (notesEl)  notesEl.value  = existingPending.notes || '';
+    psMessToggle();
     toast('Loaded existing pending payment data', 'info');
   }
 }
+// The mess charge currently on this form — 0 when the tick is off, so the total
+// follows the checkbox without the typed amount being lost. Mirrors pfMessAmount().
+function psMessAmount() {
+  const on = document.getElementById('f-ps-mess-on');
+  if (on && !on.checked) return 0;
+  return parseFloat(document.getElementById('f-ps-mess')?.value) || 0;
+}
+
+function psMessToggle() {
+  const on   = document.getElementById('f-ps-mess-on');
+  const amt  = document.getElementById('f-ps-mess');
+  const note = document.getElementById('f-ps-mess-note');
+  const isOn = !on || on.checked;
+  if (amt)  amt.disabled = !isOn;
+  if (note) note.textContent = isOn ? 'Rent + mess = total monthly charge'
+                                    : 'Room only — mess not charged';
+  recalcUnpaidPS();
+}
+
 function recalcUnpaidPS() {
   const rent  = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const mess  = psMessAmount();
   const admFee = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paid  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const conc  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
@@ -877,7 +1312,7 @@ function recalcUnpaidPS() {
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
-  const unpaid = Math.max(0, rent + extra + admFee - conc - paid);
+  const unpaid = Math.max(0, rent + mess + extra + admFee - conc - paid);
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
@@ -949,17 +1384,21 @@ async function submitPaymentForStudent() {
   window._updatePendingPS = false;
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const messIncludedPS = document.getElementById('f-ps-mess-on')?.checked !== false;
+  const messChargePS   = psMessAmount();
   const admissionFeePS = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
   const concessionPS = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
   const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
   const extraChargesPS = getExtraChargesData();
   const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
-  const totalDuePS  = Math.max(0, monthlyRent + extraTotalPS + admissionFeePS - concessionPS);
+  const totalDuePS  = Math.max(0, monthlyRent + messChargePS + extraTotalPS + admissionFeePS - concessionPS);
   const unpaid      = Math.max(0, totalDuePS - paidAmount);
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
-  // FIX 8a: persist rent change on student record
-  if (monthlyRent > 0 && t.rent !== monthlyRent) { t.rent = monthlyRent; }
+  // Collecting a payment does NOT change what the student is charged. Price is
+  // set in Settings → Rent & Mess; this form only records what was taken. It
+  // used to write the typed amount back into t.rent, which let a one-off
+  // adjustment here silently become the student's standing rent.
   const _newPayIdPS = 'p_' + uid();
   DB.payments.push({
     id: _newPayIdPS,
@@ -970,6 +1409,7 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
+    messCharge: messChargePS, messIncluded: messIncludedPS,
     admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
     concession: concessionPS, concessionDesc: concessionDescPS,
@@ -989,142 +1429,273 @@ async function submitPaymentForStudent() {
   logActivity('Payment Added', `${t.name} — ${document.getElementById('f-ps-month')?.value}`, 'Finance');
   if (window._printAfterSave) { window._printAfterSave = false; setTimeout(()=>printReceipt(_newPayIdPS), 350); }
 }
-function showAddPaymentModal() {
-  const activeStudents=DB.students.filter(t=>t.status==='Active');
-  const pmOpts=DB.settings.paymentMethods.map(m=>`<option>${m}</option>`).join('');
+/* ═══ ADD / EDIT PAYMENT — PAGE ══════════════════════════════════════════════
+   Was a modal. It is a page now because it carries three things a dialog has no
+   room for: the form, a live Payment Summary, and the student's recent history.
 
-  // Summary stats for header
-  const totalPaid=DB.payments.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  const totalPending=DB.payments.filter(p=>p.status==='Pending').reduce((s,p)=>s+Number(p.amount),0);
+   Everything money-related still resolves through resolveCharges(), so the
+   Monthly Charge shown here is the rate configured in Settings → Rent & Mess —
+   never a stale copy off the student or the room.                            */
 
-  showModal('modal-md',
-  `<span class="pf-head"><b>Add / Edit Payment</b><s>Record a new payment or update existing payment details.</s></span>`,
-  `
-    <!-- 1. SEARCH STUDENT -->
-    <div class="pf-sec">
-      <div class="pf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
-        1. Search Student
-      </div>
-      <div style="position:relative;min-width:0">
-        <div class="pf-wrapin">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-          <input class="pf-in" id="f-pstudent-search" placeholder="Type student name, room number or phone…" oninput="filterStudentDropdown(this.value)" autocomplete="off">
-          <svg class="pf-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-        <input type="hidden" id="f-pstudent" value="">
-        <div class="pf-results" id="student-search-results"></div>
-      </div>
-      <div class="pf-picked" id="selected-student-info"></div>
-    </div>
+// Preselects a student when the page opens (set by openAddPayment).
+let _apPreselect = '';
 
-    <!-- 2. PAYMENT DETAILS -->
-    <div class="pf-sec">
-      <div class="pf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-        2. Payment Details
-      </div>
-      <div class="pf-grid">
-        <div class="pf-f"><label for="f-pamt">Monthly Rent (PKR)<span class="req">*</span></label>
-          <input class="pf-in" id="f-pamt" type="number" placeholder="Enter monthly rent" value="" oninput="recalcUnpaid()"></div>
-        <div class="pf-f"><label for="f-ppaid">Amount Paid (PKR)<span class="req">*</span></label>
-          <input class="pf-in" id="f-ppaid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaid()"></div>
-        <div class="pf-f"><label for="f-padmfee">Admission Fee (PKR)</label>
-          <input class="pf-in" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
-      </div>
-
-      <div class="pf-grid" style="margin-top:13px;grid-template-columns:1fr 1fr;align-items:start">
-        <div>
-          <div class="pf-f"><label for="f-pconcession">Concession / Discount (PKR)</label>
-            <input class="pf-in" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
-          <div class="pf-f" style="margin-top:13px"><label for="f-pconcession-desc">Concession Description <span class="opt">(optional)</span></label>
-            <input class="pf-in" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship, Early payment…"></div>
-        </div>
-        <div class="pf-extra">
-          <div class="pf-extra__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></svg>
-            Extra Charges / Add-ons
-            <button type="button" class="pf-extra__add" onclick="addExtraChargeRow()">+ Add</button>
-          </div>
-          <div id="extra-charges-list"></div>
-          <div class="pf-extra__total"><span>Total Extra:</span><b id="extra-charges-total">PKR 0</b></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. PAYMENT INFORMATION -->
-    <div class="pf-sec">
-      <div class="pf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
-        3. Payment Information
-      </div>
-      <div class="pf-grid">
-        <div class="pf-f"><label for="f-punpaid">Unpaid / Remaining (PKR)</label>
-          <input class="pf-in pf-in--due" id="f-punpaid" type="number" value="0" readonly
-            title="Auto-calculated: Rent + Admission Fee + Extra Charges − Concession − Paid"></div>
-        <div class="pf-f"><label for="f-pmethod">Payment Method<span class="req">*</span></label>
-          <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
-        <div class="pf-f"><label for="f-pmonth">Month<span class="req">*</span></label>
-          <input class="pf-in" id="f-pmonth" value="${escHtml(thisMonthLabel())}"></div>
-      </div>
-      <div class="pf-grid" style="margin-top:13px">
-        <div class="pf-f"><label for="f-pdate">Payment Date<span class="req">*</span></label>
-          <div class="pf-wrapin">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-            <input class="pf-in cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}">
-          </div></div>
-        <div class="pf-f"><label for="f-pdue">Due Date</label>
-          <div class="pf-wrapin">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-            <input class="pf-in cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}">
-          </div></div>
-        <div class="pf-f"><label for="f-pstat">Status<span class="req">*</span></label>
-          <select class="pf-sel" id="f-pstat">
-            <option value="Paid">Paid</option>
-            <option value="Pending" selected>Unpaid / Pending</option>
-          </select></div>
-      </div>
-    </div>
-
-    <!-- 4. NOTES -->
-    <div class="pf-sec">
-      <div class="pf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-        4. Notes
-      </div>
-      <textarea class="pf-ta" id="f-pnotes-main" maxlength="250" placeholder="Add any notes about this payment…" oninput="pfCount()"></textarea>
-      <div class="pf-count" id="f-pnotes-count">0/250</div>
-    </div>
-
-    <!-- RUNNING TOTALS — kept in sync by recalcUnpaid() -->
-    <div class="pf-sum">
-      <div class="pf-sum__c dh-blue">
-        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/></svg></span>
-        <div><div class="pf-sum__l">Monthly Rent</div><div class="pf-sum__v" id="pf-sum-rent">PKR 0</div></div>
-      </div>
-      <div class="pf-sum__c dh-violet">
-        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
-        <div><div class="pf-sum__l">Total Extra</div><div class="pf-sum__v" id="pf-sum-extra">PKR 0</div></div>
-      </div>
-      <div class="pf-sum__c dh-green">
-        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></span>
-        <div><div class="pf-sum__l">Total Paid</div><div class="pf-sum__v" id="pf-sum-paid">PKR 0</div></div>
-      </div>
-      <div class="pf-sum__c dh-red">
-        <span class="pf-sum__i"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-        <div><div class="pf-sum__l">Remaining</div><div class="pf-sum__v" id="pf-sum-due">PKR 0</div></div>
-      </div>
-    </div>`,
-  `<button class="pf-btn" onclick="closeModal()">Cancel</button>
-   <button class="pf-btn" onclick="printAndSubmitAddPayment()">
-     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-     Print &amp; Add Payment</button>
-   <button class="pf-btn pf-btn--go" onclick="submitAddPayment()">
-     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-     Add Payment</button>`);
-  recalcUnpaid();   // paint the running totals from the initial (empty) state
+function openAddPayment(studentId) {
+  _apPreselect = studentId || '';
+  navigate('addpayment');
 }
 
+function renderAddPayment() {
+  const pmOpts = DB.settings.paymentMethods.map(m => `<option>${escHtml(m)}</option>`).join('');
+  const dueDefault = (() => { const d = new Date(); d.setDate(6); return d.toISOString().split('T')[0]; })();
+
+  // Fill the form once the markup is in the DOM. renderPage() assigns
+  // innerHTML inside a setTimeout, so defer past it.
+  setTimeout(function () {
+    recalcUnpaid();
+    if (_apPreselect) {
+      const sid = _apPreselect; _apPreselect = '';
+      if (DB.students.some(s => s.id === sid)) selectStudentForPayment(sid);
+    }
+  }, 60);
+
+  return `
+  <div class="ap-wrap" id="ap-wrap">
+    <!-- The title block is back (owner reference). Nothing on this page is
+         scaled: the type stays the size it was designed at and the page
+         scrolls on a short window, which costs a flick of the wheel instead of
+         a quarter of the letter height. -->
+    <div class="ap-head">
+      <div class="ap-head__l">
+        <nav class="ap-crumb">
+          <span>Finance</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          <a onclick="navigate('payments')">Payments</a>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          <b>Add Payment</b>
+        </nav>
+        <h2 class="ap-title">Add New Payment</h2>
+        <div class="ap-sub">Record a new payment or update existing payment details.</div>
+      </div>
+      <button class="ap-back" onclick="navigate('payments')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Back to Payments
+      </button>
+    </div>
+
+    <div class="ap-cols">
+      <!-- ══════════ LEFT: THE FORM ══════════ -->
+      <div class="ap-main">
+
+        <!-- 1. STUDENT & ROOM -->
+        <div class="pf-sec">
+          <div class="pf-sec__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            1. Student &amp; Room Information
+          </div>
+          <div style="position:relative;min-width:0">
+            <div class="pf-wrapin">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+              <input class="pf-in" id="f-pstudent-search" placeholder="Search and select student"
+                     oninput="filterStudentDropdown(this.value)" autocomplete="off">
+              <svg class="pf-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <input type="hidden" id="f-pstudent" value="">
+            <div class="pf-results" id="student-search-results"></div>
+          </div>
+          <!-- The picked student's readout. selectStudentForPayment() and
+               useManualNameEntry() both write straight into this element, so it
+               has to exist on the page — without it picking a student threw
+               and the card never appeared. -->
+          <div class="pf-picked" id="selected-student-info"></div>
+        </div>
+
+        <!-- 2. PAYMENT DETAILS -->
+        <div class="pf-sec">
+          <div class="pf-sec__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+            2. Payment Details
+          </div>
+
+          <!-- MONTHLY CHARGE — one derived figure; the tick is the only control. -->
+          <div class="pf-charge">
+            <div class="pf-charge__main">
+              <label for="f-pcharge">Monthly Charge (PKR)<span class="req">*</span></label>
+              <input class="pf-in pf-charge__v" id="f-pcharge" type="text" readonly value="—"
+                     title="Room rent, plus mess when included. Set in Settings → Rent &amp; Mess.">
+              <div class="pf-charge__note" id="f-pcharge-note">Pick a student to load the charge</div>
+            </div>
+            <label class="pf-charge__tick" title="Untick for a student who takes the room but not the mess">
+              <input type="checkbox" id="f-pmess-on" checked onchange="pfMessToggle()">
+              <span>Include mess charges</span>
+            </label>
+            <input type="hidden" id="f-prent" value="">
+            <input type="hidden" id="f-pmess" value="">
+          </div>
+
+          <div class="pf-grid" style="margin-top:13px">
+            <div class="pf-f"><label for="f-padmfee">Admission Fees (PKR)</label>
+              <input class="pf-in" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
+            <div class="pf-f"><label for="f-ppaid">To Pay / Amount Paid (PKR)<span class="req">*</span></label>
+              <input class="pf-in" id="f-ppaid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaid()"></div>
+            <div class="pf-f"><label for="f-punpaid">Unpaid / Remaining (PKR)</label>
+              <input class="pf-in pf-in--due" id="f-punpaid" type="number" value="0" readonly
+                title="Monthly Charge + Admission Fees + Extra Charges − Concession − Paid"></div>
+          </div>
+
+          <!-- RECEIVE OUTSTANDINGS — arrears posted back to their own month. -->
+          <div class="pf-out" id="pf-out" style="display:none"></div>
+
+          <div class="pf-grid" style="margin-top:13px;grid-template-columns:1fr 1fr;align-items:start">
+            <div>
+              <div class="pf-f"><label for="f-pconcession">Concession / Discount (PKR)</label>
+                <input class="pf-in" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
+              <div class="pf-f" style="margin-top:13px"><label for="f-pconcession-desc">Concession Description <span class="opt">(optional)</span></label>
+                <input class="pf-in" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship, Early payment…"></div>
+            </div>
+            <div class="pf-extra">
+              <div class="pf-extra__h">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></svg>
+                Extra Charges / Add-ons
+                <button type="button" class="pf-extra__add" onclick="addExtraChargeRow()">+ Add</button>
+              </div>
+              <div id="extra-charges-list"></div>
+              <div class="pf-extra__total"><span>Total Extras:</span><b id="extra-charges-total">PKR 0</b></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. NOTES -->
+        <div class="pf-sec" id="ap-sec-notes">
+          <div class="pf-sec__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            4. Notes
+          </div>
+          <textarea class="pf-ta" id="f-pnotes-main" maxlength="250" placeholder="Add any notes about this payment…" oninput="pfCount()"></textarea>
+          <div class="pf-count" id="f-pnotes-count">0/250</div>
+        </div>
+      </div>
+
+      <!-- ══════════ RIGHT: SUMMARY + HISTORY ══════════ -->
+      <aside class="ap-side" id="ap-side">
+        <div class="pf-sec ap-card">
+          <div class="ap-card__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+            Payment Summary
+          </div>
+          <div id="ap-summary"></div>
+        </div>
+        <div class="pf-sec ap-card">
+          <div class="ap-card__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
+            Recent Payments
+            <button class="pf-extra__add" onclick="navigate('payments')">View all</button>
+          </div>
+          <div id="ap-recent"><div class="ap-empty">Pick a student to see their history</div></div>
+        </div>
+
+        <!-- 3. PAYMENT INFORMATION — how the money arrived, not what is owed.
+             It lives in this column permanently. The left column holds the two
+             long sections; putting the four short date/method fields here is
+             what keeps the two columns roughly the same height, instead of the
+             form ending halfway up the page with a hole under it. -->
+        <div class="pf-sec" id="ap-sec-info">
+          <div class="pf-sec__h">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
+            3. Payment Information
+          </div>
+          <div class="pf-grid">
+            <div class="pf-f"><label for="f-pmethod">Payment Method<span class="req">*</span></label>
+              <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
+            <div class="pf-f"><label for="f-pmonth">Payment Month<span class="req">*</span></label>
+              <select class="pf-sel" id="f-pmonth" onchange="pfReloadOutstandings()">${payMonthPickerOptions(thisMonthLabel(), '')}</select></div>
+            <div class="pf-f"><label for="f-pdate">Payment Date<span class="req">*</span></label>
+              <div class="pf-wrapin">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                <input class="pf-in cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}">
+              </div></div>
+            <div class="pf-f"><label for="f-pdue">Due Date</label>
+              <div class="pf-wrapin">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                <input class="pf-in cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${dueDefault}">
+              </div></div>
+            <div class="pf-f"><label for="f-pstat">Status<span class="req">*</span></label>
+              <select class="pf-sel" id="f-pstat">
+                <option value="Paid">Paid</option>
+                <option value="Pending" selected>Unpaid / Pending</option>
+              </select></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- FOOTER ACTIONS -->
+    <div class="ap-foot">
+      <button class="pf-btn" onclick="navigate('payments')">Cancel</button>
+      <button class="pf-btn" onclick="printAndSubmitAddPayment()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        Print &amp; Save</button>
+      <button class="pf-btn pf-btn--go" onclick="submitAddPayment()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        Save Payment</button>
+    </div>
+  </div>`;
+}
+
+/* The right-hand Payment Summary. Every line is a term of the same equation the
+   form computes, laid out so the arithmetic is checkable by eye:
+     Monthly Charge + Admission Fees + Extra − Discount = Total Payable
+     Total Payable − Amount Paid = Remaining Balance                          */
+function pfRenderSummary(vals) {
+  const box = document.getElementById('ap-summary');
+  if (!box) return;
+  const row = (label, val, cls, sign) =>
+    `<div class="ap-sum__r ${cls || ''}"><span>${label}</span>
+       <b>${sign || ''}${fmtPKR(val)}</b></div>`;
+
+  // Every term is listed even at zero (owner reference). A row that appears and
+  // disappears as figures are typed makes the panel jump under the cursor, and
+  // a missing line reads as "not counted" rather than "counted as nothing".
+  box.innerHTML =
+      row('Monthly Charge', vals.charge)
+    + row('Admission Fees', vals.admFee)
+    + row('Concession / Discount', vals.concession, 'is-minus', '- ')
+    + row('Extra Charges', vals.extra, '', '+ ')
+    + `<div class="ap-sum__sep"></div>`
+    + row('Total Payable', vals.total, 'is-total')
+    + row('Amount Paid', vals.paid, 'is-paid', '- ')
+    + `<div class="ap-sum__bal ${vals.unpaid > 0 ? 'is-due' : 'is-clear'}">
+         <span>Remaining Balance</span><b>${fmtPKR(vals.unpaid)}</b>
+       </div>`;
+}
+
+/* The student's last few payments, so the warden can see what has already been
+   collected without leaving the form. */
+function pfRenderRecent(t) {
+  const box = document.getElementById('ap-recent');
+  if (!box) return;
+  if (!t) { box.innerHTML = '<div class="ap-empty">Pick a student to see their history</div>'; return; }
+  const rows = DB.payments
+    .filter(p => p.studentId === t.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
+  if (!rows.length) { box.innerHTML = '<div class="ap-empty">No payments recorded yet</div>'; return; }
+  box.innerHTML = rows.map(p => {
+    const paid = p.status === 'Paid';
+    return `<div class="ap-rec">
+      <div style="min-width:0">
+        <div class="ap-rec__m">${escHtml(p.month || '—')}</div>
+        <div class="ap-rec__meth">${escHtml(p.method || '—')}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="ap-rec__amt">${fmtPKR(p.amount)}</div>
+        <div class="ap-rec__st ${paid ? 'is-paid' : 'is-due'}">${
+          paid ? 'Paid on ' + escHtml(p.paidDate || p.date || '—')
+               : fmtPKR(p.unpaid || 0) + ' pending'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 // Notes counter for the payment modal.
 function pfCount() {
   const ta = document.getElementById('f-pnotes-main'), el = document.getElementById('f-pnotes-count');
@@ -1181,11 +1752,18 @@ async function submitAddPayment() {
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
-          const newMonthlyRent = parseFloat(document.getElementById('f-pamt')?.value)  || alreadyPending2.monthlyRent || 0;
+          const newMonthlyRent = pfRentAmount() || alreadyPending2.monthlyRent || 0;
+          const newMessOn      = document.getElementById('f-pmess-on')?.checked !== false;
+          const newMess        = pfMessAmount();
           const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
           const newExtraCharges= getExtraChargesData();
           const newExtraTotal  = newExtraCharges.reduce((s,c)=>s+c.amount,0);
-          const newTotalDue    = newMonthlyRent + newExtraTotal;
+          // Admission fee and concession were missing here too, so merging into
+          // an existing pending record produced a different total than creating
+          // a fresh one from the identical form.
+          const newAdmFee      = parseFloat(document.getElementById('f-padmfee')?.value)||0;
+          const newConcession  = parseFloat(document.getElementById('f-pconcession')?.value)||0;
+          const newTotalDue    = Math.max(0, newMonthlyRent + newMess + newExtraTotal + newAdmFee - newConcession);
           const newUnpaid      = Math.max(0, newTotalDue - newPaid);
           const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
@@ -1195,10 +1773,15 @@ async function submitAddPayment() {
           // Merge into the existing record
           alreadyPending2.monthlyRent  = newMonthlyRent;
           alreadyPending2.totalRent    = newMonthlyRent;
+          alreadyPending2.messCharge   = newMess;
+          alreadyPending2.messIncluded = newMessOn;
           alreadyPending2.amount       = newPaid;
           alreadyPending2.unpaid       = newUnpaid;
           alreadyPending2.extraCharges = newExtraCharges;
           alreadyPending2.extraTotal   = newExtraTotal;
+          alreadyPending2.admissionFee = newAdmFee;
+          alreadyPending2.concession   = newConcession;
+          alreadyPending2.discount     = newConcession;
           alreadyPending2.method       = newMethod;
           alreadyPending2.status       = newStatus;
           alreadyPending2.date         = newDate;
@@ -1206,9 +1789,22 @@ async function submitAddPayment() {
           alreadyPending2.collectedBy  = CUR_USER?.name || alreadyPending2.collectedBy || '';
           if (newNotes) alreadyPending2.notes = newNotes;
 
+          // Arrears entered alongside this update still post to their own months.
+          const arrearsU = pfOutstandingAllocations();
+          if (arrearsU.length) {
+            // Appended, not replaced: a second visit against the same month is
+            // more cash through the same record, and the receipt lists the lot.
+            alreadyPending2.arrearsCollected = (alreadyPending2.arrearsCollected || []).concat(
+              arrearsU.map(a => ({ month: a.payment.month || '—', amount: a.amount, date: newDate })));
+          }
+          const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate) : '';
+
           logActivity('Payment Updated', `${escHtml(tName)} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
+          if (arrearsUDesc) logActivity('Arrears Collected', `${escHtml(tName)} — ${arrearsUDesc}`, 'Finance');
           await saveDB(); closeModal(); renderPage('payments');
-          toast(`Payment updated for ${tName} — no duplicate created`, 'success');
+          toast(arrearsUDesc
+            ? `Payment updated for ${tName} · arrears posted to ${arrearsU.length} earlier month(s)`
+            : `Payment updated for ${tName} — no duplicate created`, 'success');
           window._updatePendingAP = false;
         },
         function() { window._updatePendingAP = false; }
@@ -1218,14 +1814,16 @@ async function submitAddPayment() {
     window._updatePendingAP = false;
   }
   window._forcePayAP = false;
-  const monthlyRent = parseFloat(document.getElementById('f-pamt')?.value)||0;
+  const monthlyRent = pfRentAmount();
+  const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
+  const messCharge   = pfMessAmount();
   const paidAmount  = parseFloat(document.getElementById('f-ppaid')?.value)||0;
   const extraCharges = getExtraChargesData();
   const extraTotal  = extraCharges.reduce((s,c)=>s+c.amount,0);
   const admissionFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc= (document.getElementById('f-pconcession-desc')?.value||'').trim();
-  const totalDue    = Math.max(0, monthlyRent + extraTotal + admissionFee - concession);
+  const totalDue    = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
   const totalRent   = monthlyRent;                // display rent = base only
   const unpaid      = Math.max(0, totalDue - paidAmount);
   const status      = document.getElementById('f-pstat')?.value || 'Pending';
@@ -1233,6 +1831,10 @@ async function submitAddPayment() {
   const room = t ? DB.rooms.find(r=>r.id===t?.roomId) : null;
   const finalName = isManual ? manualName : (t?.name||'');
   const _newPayId = 'p_'+uid();
+  // Read the arrears BEFORE the record is built: the receipt printed for this
+  // visit has to name the cash that went to earlier months, or the slip in the
+  // student's hand disagrees with what they handed over.
+  const arrears = pfOutstandingAllocations();
   DB.payments.push({
     id: _newPayId,
     collectedBy: CUR_USER?.name || '',  // BUG FIX: guard against null CUR_USER
@@ -1242,6 +1844,7 @@ async function submitAddPayment() {
     roomNumber: room?.number||'',
     amount: paidAmount,
     monthlyRent, unpaid,
+    messCharge, messIncluded,
     extraCharges, extraTotal,
     admissionFee, concession, concessionDesc,
     totalRent,
@@ -1252,10 +1855,27 @@ async function submitAddPayment() {
     dueDate: document.getElementById('f-pdue')?.value||'',
     paidDate: status==='Paid'?document.getElementById('f-pdate')?.value||today():'',
     notes: document.getElementById('f-pnotes-main')?.value || document.getElementById('f-pnotes')?.value || '',
+    // A record of the cash, not of the debt — the debt itself moves onto the
+    // earlier month's own record in pfApplyOutstandings() below.
+    arrearsCollected: arrears.map(a => ({
+      month: a.payment.month || '—', amount: a.amount,
+      date: document.getElementById('f-pdate')?.value || today(),
+    })),
   });
+  // Arrears collected on this visit are posted to the months they belong to,
+  // never folded into the record just created for the selected month.
+  const arrearsDesc = arrears.length
+    ? pfApplyOutstandings(arrears,
+        document.getElementById('f-pmethod')?.value || 'Cash',
+        document.getElementById('f-pdate')?.value || today())
+    : '';
+
   logActivity('Payment Added', `${finalName||'student'} — ${document.getElementById('f-pmonth')?.value||''}`, 'Finance');
+  if (arrearsDesc) logActivity('Arrears Collected', `${finalName||'student'} — ${arrearsDesc}`, 'Finance');
   await saveDB(); closeModal(); renderPage('payments');
-  toast(`Payment recorded for ${finalName||'student'}`,'success');
+  toast(arrearsDesc
+    ? `Payment recorded for ${finalName||'student'} · arrears posted to ${arrears.length} earlier month(s)`
+    : `Payment recorded for ${finalName||'student'}`, 'success');
   if (window._printAfterSave) { window._printAfterSave = false; setTimeout(()=>printReceipt(_newPayId), 350); }
 }
 function printAndSubmitAddPayment() {
@@ -1275,12 +1895,17 @@ function showEditPaymentModal(id) {
   // BUG FIX: Use the student's CURRENT rent (t.rent) as the primary value.
   // p.monthlyRent is the rent at the time the payment was recorded and may be stale
   // if the warden has since updated fees in Settings. t.rent is always kept in sync.
-  const monthlyRent  = t?.rent || p.monthlyRent || p.totalRent || 0;
+  const c = t ? resolveCharges(t) : null;
+  const monthlyRent  = (c && c.rent) || p.monthlyRent || p.totalRent || 0;
+  // Mess follows the same rule as rent above: the current configured charge
+  // wins, falling back to what was recorded on this payment.
+  const messCharge   = c && c.mess != null ? c.mess : Number(p.messCharge || 0);
+  const messIncluded = p.messIncluded != null ? p.messIncluded !== false : (c ? c.messOptIn : true);
   const paidAmount   = p.amount || 0;
   const admissionFee = p.admissionFee || p.fee || 0;
   const concession   = p.concession || p.discount || 0;
   const concessionDesc = p.concessionDesc || p.discountDesc || '';
-  const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + admissionFee - concession - paidAmount);
+  const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + (messIncluded?messCharge:0) + admissionFee - concession - paidAmount);
   showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${(p.studentName||'?')[0].toUpperCase()}</div>
@@ -1289,12 +1914,22 @@ function showEditPaymentModal(id) {
         <div style="font-size:11px;color:var(--text3);margin-top:1px">Room <span style="color:var(--accent-strong);font-weight:700">#${room?.number||'?'}</span>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:13px;font-weight:900;color:var(--green)">${fmtPKR(t?.rent||monthlyRent)}</div>
-        <div style="font-size:9px;color:var(--text3)">Monthly Rent</div>
+        <div style="font-size:13px;font-weight:900;color:var(--green)">${fmtPKR(monthlyRent + (messIncluded?messCharge:0))}</div>
+        <div style="font-size:9px;color:var(--text3)">Monthly Charge</div>
       </div>
     </div>
     <div class="form-grid">
-      <div class="field"><label>Monthly Rent (PKR) *</label><input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()"></div>
+      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()"></div>
+      <!-- MESS — this modal used to omit it, so saving an edit recomputed the
+           total without the food charge while leaving p.messCharge on the
+           record: the balance and the printed receipt disagreed. -->
+      <div class="field"><label>Mess Charges (PKR)</label>
+        <input class="form-control" id="f-pmess" type="number" min="0" value="${messCharge||''}" placeholder="0" ${messIncluded?'':'disabled'} oninput="recalcUnpaid()">
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer">
+          <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
+          <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
+        </label>
+      </div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()"></div>
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-padmfee" type="number" placeholder="0" min="0" value="${admissionFee||0}" oninput="recalcUnpaid()"></div>
       <!-- Concession + Extra Charges side by side -->
@@ -1331,7 +1966,7 @@ function showEditPaymentModal(id) {
         </select>
       </div>
       <div class="field"><label>Payment Method</label><select class="form-control" id="f-pmethod">${pmOpts}</select></div>
-      <div class="field"><label>Month</label><input class="form-control" id="f-pmonth" value="${escHtml(p.month||'')}"></div>
+      <div class="field"><label>Month</label><select class="form-control" id="f-pmonth">${payMonthPickerOptions(p.month || '', p.studentId || '')}</select></div>
       <div class="field"><label>Payment Date</label><input class="form-control cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${p.date||''}"></div>
       <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${p.dueDate||''}"></div>
       <div class="field col-full"><label>Notes</label><textarea class="form-control" id="f-pnotes" rows="2">${escHtml(p.notes||'')}</textarea></div>
@@ -1351,13 +1986,15 @@ function showEditPaymentModal(id) {
 async function submitEditPayment(id) {
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
+  const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
+  const messCharge   = pfMessAmount();
   const paidAmount   = parseFloat(document.getElementById('f-ppaid')?.value)||0;
   const admissionFee = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession   = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc = (document.getElementById('f-pconcession-desc')?.value||'').trim();
   const extraCharges = getExtraChargesData();
   const extraTotal   = extraCharges.reduce((s,c)=>s+c.amount, 0);
-  const totalDue     = Math.max(0, monthlyRent + extraTotal + admissionFee - concession);
+  const totalDue     = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
   const unpaid       = Math.max(0, totalDue - paidAmount);
   const prevPaid     = Number(p.amount) || 0;
   if (!p.partialPayments) p.partialPayments = [];
@@ -1372,6 +2009,8 @@ async function submitEditPayment(id) {
   }
   p.monthlyRent    = monthlyRent;
   p.totalRent      = monthlyRent;
+  p.messCharge     = messCharge;
+  p.messIncluded   = messIncluded;
   p.amount         = paidAmount;
   p.admissionFee   = admissionFee;
   p.concession     = concession;
@@ -1387,14 +2026,10 @@ async function submitEditPayment(id) {
   p.dueDate        = document.getElementById('f-pdue')?.value    || p.dueDate;
   p.paidDate       = p.status==='Paid' ? p.date : '';
   p.notes          = document.getElementById('f-pnotes')?.value  || '';
-  // FIX 8a: If warden changed monthly rent, persist it on the student record
-  // so all future auto-generated payments use the new rent.
-  if (p.studentId) {
-    const _st = DB.students.find(s => s.id === p.studentId);
-    if (_st && monthlyRent > 0 && _st.rent !== monthlyRent) {
-      _st.rent = monthlyRent;
-    }
-  }
+  // Editing one month's record does NOT re-price the student. It used to write
+  // monthlyRent back to _st.rent, so correcting a single historical bill
+  // silently changed every future one. Price changes belong in
+  // Settings → Rent & Mess, which propagates deliberately.
   logActivity('Payment Updated', `${p.studentName||''} — ${p.month||''}`, 'Finance');
   await saveDB();
   toast('Payment updated','success');

@@ -102,6 +102,20 @@ async function processAutoCancellations() {
 applySavedSidebar();
 loadSavedLogo();
 updateSidebar(); // shows zeros/defaults until boot() completes
+
+// #main must never scroll. `overflow:hidden` stops the user scrolling it but
+// NOT the browser: focusing a control low in a long page makes Chromium scroll
+// every ancestor that can move, hidden or not, and #main sliding up takes the
+// header with it — under the fixed title bar, which is opaque and sits above
+// everything. #content is the real scroller, so anything #main does is spurious.
+(function pinMain() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  main.addEventListener('scroll', function () {
+    if (main.scrollTop) main.scrollTop = 0;
+    if (main.scrollLeft) main.scrollLeft = 0;
+  }, { passive: true });
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -110,6 +124,16 @@ updateSidebar(); // shows zeros/defaults until boot() completes
   await loadDB();
   // After DB loads: migrate IDs, run auto-cancellations, refresh all UI
   if (typeof migrateStudentIdsToNumeric === 'function') migrateStudentIdsToNumeric();
+  // One-off repair of student-name snapshots frozen into payment/cancellation
+  // rows before an edit could push the correction down. Writes only when it
+  // actually found something stale, so a healthy database costs one scan.
+  if (typeof repairStudentSnapshots === 'function') {
+    const _fixed = repairStudentSnapshots();
+    if (_fixed > 0) {
+      await saveDB();
+      console.info('[HOSTIX] Re-synced ' + _fixed + ' stale student name(s) on payment records.');
+    }
+  }
   await processAutoCancellations();
   // Sync login screen hostel name now that DB is loaded
   const loginNameEl = document.getElementById('login-hostel-name');
@@ -125,8 +149,14 @@ updateSidebar(); // shows zeros/defaults until boot() completes
   // Refresh sidebar counts and calendar now that data is loaded
   if (typeof updateSidebar         === 'function') updateSidebar();
   if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
-  // Run scheduled checks
-  if (typeof checkAutoMonthAdvance    === 'function') checkAutoMonthAdvance();
+  // Run scheduled checks.
+  //
+  // Payment records are NOT among them. Booting the app used to raise a Pending
+  // row against every active student for any month that had rolled over since
+  // the last launch — money the warden had never entered, appearing in the
+  // ledger and in every total that reads it. Rent records are now created only
+  // when the warden asks for them, with Auto-Generate Month on the Payments
+  // screen (generateMonthlyRents) or by recording a payment.
   if (typeof checkAutoBackupSchedule  === 'function') checkAutoBackupSchedule();
   // Navigate to dashboard last (after all data is ready)
   if (typeof navigate === 'function') navigate('dashboard');
