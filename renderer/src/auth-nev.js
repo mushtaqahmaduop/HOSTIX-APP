@@ -612,7 +612,8 @@ function applyPermissionsToChrome() {
   showNav('archive',  canDo('reports'));
   showNav('clearall', canDo('clearall'));
   show('user-menu-manage',   canDo('users'));
-  show('user-menu-settings', canDo('settings'));
+  // Settings is no longer in the account menu — showNav('settings') above is
+  // the only gate it needs now that the rail item is the single entry point.
 }
  
 // ─────────────────────────────────────────────────────────────────────────────

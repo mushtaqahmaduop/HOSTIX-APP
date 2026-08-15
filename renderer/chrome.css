@@ -178,14 +178,22 @@ body.light-theme #sidebar {
    flips it upward lives with .hdr-menu further down — it has to win on
    specificity, and at equal weight .hdr-menu would win on source order. */
 .sb-user-wrap { position: relative; }
+/* The card is deliberately translucent: the nav list scrolls underneath it and
+   a solid panel made the rail look like it simply ended there. Letting the
+   content beneath show through faintly keeps the card reading as a layer on
+   top of the sidebar rather than the bottom edge of it. The blur is what keeps
+   the name legible over whatever happens to be behind it; browsers without
+   backdrop-filter still get a readable card from the tint alone. */
 .sb-user {
     display: flex; align-items: center; gap: 11px;
     margin: 0 12px 14px; padding: 10px 12px;
-    background: var(--sb-hover); border: 1px solid var(--sb-divider);
+    background: rgba(255,255,255,.055); border: 1px solid var(--sb-divider);
     border-radius: 12px; cursor: pointer;
+    -webkit-backdrop-filter: blur(7px) saturate(120%);
+    backdrop-filter: blur(7px) saturate(120%);
     transition: background .15s ease, border-color .15s ease;
 }
-.sb-user:hover { background: rgba(255,255,255,.12); border-color: var(--sb-active); }
+.sb-user:hover { background: rgba(255,255,255,.11); border-color: var(--sb-active); }
 .sb-user__av {
     width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
