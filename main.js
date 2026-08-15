@@ -33,6 +33,13 @@ const migration001 = require('./migrations/001-relational-schema');
 let db = null;
 let _schemaMigrated = false;
 
+// ── Online services (Phase 1) ─────────────────────────────────────────────────
+// Connectivity, API client, durable queue, structured logging. Inert until a
+// control plane URL is configured — see services/config.js.
+const onlineServices = require('./services');
+const appLogger = require('./services/logger');
+let online = null;
+
 // Insert/replace a row, populating the promoted typed columns for the tables that
 // have them (post-migration) and falling back to (id, data) otherwise — so writes
 // work identically before and after the relational-schema migration.
@@ -173,6 +180,23 @@ if (IS_PROD && process.argv.some(a => /^--inspect(-brk)?/.test(a))) {
   process.stderr.write('[DAMAM] Debugger attachment not permitted in production.\n');
   process.exit(1);
 }
+
+// ── Crash logging (Phase 1, §40 / audit H5) ───────────────────────────────────
+// Installed here rather than in the services bootstrap so a crash during
+// database init or window creation is still captured.
+//
+// CRASH BEHAVIOUR IS UNCHANGED. The handler writes a log line and then does
+// exactly what Node does with no handler installed: stack to stderr, exit(1).
+// Swallowing crashes would alter how the app fails on 50+ production machines,
+// which is not this phase's business.
+try {
+  appLogger.init({
+    dir: path.join(app.getPath('userData'), 'logs'),
+    level: IS_PROD ? 'INFO' : 'DEBUG',
+    console: !IS_PROD
+  });
+  appLogger.installCrashHandlers();
+} catch (_) { /* logging must never be the reason the app fails to start */ }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // [FIX-04 + FIX-05] Machine Fingerprint
@@ -701,6 +725,12 @@ ipcMain.handle('app:isDev', () => !IS_PROD);
 
 ipcMain.handle('license:check', () => {
   const result = checkLicenseValidity();
+  // [Phase 1] Feed the ConnectivityService's LICENSE_VALID state (§7) from a
+  // check the app was already performing. It must never call
+  // checkLicenseValidity() itself: that function writes last_run.dat as a side
+  // effect, and polling it would rewrite the anti-clock-rollback watermark all
+  // day on machines that depend on it.
+  if (online) online.noteLicenseResult(result);
   return { ...result, valid: result.valid };
 });
 
@@ -1065,9 +1095,20 @@ ipcMain.handle('update:install', () => {
 // parameterised with ?, so we validate against a known-safe set instead.
 const _ALLOWED_WHERE_COLS = new Set(['id', 'status', 'roomId', 'studentId']);
 
+// [Phase 1] The generic db:* bridge stays as it is — it is the application's
+// core architecture and audit M1 says freeze, don't rewrite. But `online_queue`
+// matches its /^[a-z_]+$/ table check, so without this guard renderer code
+// could read or `db:bulkReplace` away the machine's own pending uploads.
+// New online features get their own narrow channels; this bridge is not
+// extended to reach them.
+function _assertRendererTable(table) {
+  if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+  if (onlineServices.INTERNAL_TABLES.has(table)) throw new Error('Reserved table');
+}
+
 ipcMain.handle('db:all', (_e, table, where) => {
   try {
-    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    _assertRendererTable(table);
     if (where) {
       const [col, val] = where;
       if (!_ALLOWED_WHERE_COLS.has(col)) throw new Error('Invalid column: ' + col);
@@ -1081,7 +1122,7 @@ ipcMain.handle('db:all', (_e, table, where) => {
 
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
-    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    _assertRendererTable(table);
     _dbInsert(table, id, record);
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
@@ -1089,7 +1130,7 @@ ipcMain.handle('db:upsert', (_e, table, id, record) => {
 
 ipcMain.handle('db:delete', (_e, table, id) => {
   try {
-    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    _assertRendererTable(table);
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
@@ -1097,7 +1138,7 @@ ipcMain.handle('db:delete', (_e, table, id) => {
 
 ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   try {
-    if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
+    _assertRendererTable(table);
     const transaction = db.transaction((rows) => {
       db.prepare(`DELETE FROM ${table}`).run();
       for (const r of rows) _dbInsert(table, r.id, r);
@@ -1195,6 +1236,22 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     return ALLOWED_PERMS.includes(permission);
   });
   initDatabase();
+
+  // ── Online services (Phase 1) ─────────────────────────────────────────────
+  // After initDatabase (the queue needs the handle), before createWindow (so
+  // the `online:*` IPC handlers exist before any renderer can call them).
+  // A failure here must never stop the app booting — the whole product works
+  // offline, and these services are additive.
+  try {
+    online = onlineServices.start({
+      db,
+      userDataDir: app.getPath('userData'),
+      isDev: !IS_PROD
+    });
+  } catch (e) {
+    console.error('[HOSTYLLO] Online services failed to start:', e.message);
+  }
+
   createWindow();
 
   // ── Auto Update (runs silently after window is ready) ─────────────────────
@@ -1211,6 +1268,12 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+// [Phase 1] Stop the pollers and flush the log stream on the way out.
+app.on('will-quit', () => {
+  try { if (online) online.stop(); } catch (_) {}
+  online = null;
 });
 
 app.on('activate', () => {

@@ -144,3 +144,30 @@ contextBridge.exposeInMainWorld('licenseAPI', {
   resetLicense:      ()    => ipcRenderer.invoke('license:reset'),
   prepareUninstall:  ()    => ipcRenderer.invoke('license:prepareUninstall')
 });
+
+// ── Online status API (Phase 1 — spec §3.5, §7, §29) ──────────────────────
+// Read-only and deliberately tiny. The renderer cannot supply a URL, a method,
+// a header or a payload; it can ask what the connection looks like and
+// subscribe to changes. All outbound HTTP stays in the main process, behind
+// the renderer's `connect-src 'self'` CSP.
+//
+// Shape returned by getStatus():
+//   { networkAvailable, apiReachable, authenticated, licenseValid,
+//     mode: 'unconfigured'|'offline'|'degraded'|'online',
+//     reason, lastCheckedAt, lastSuccessAt, consecutiveFailures, configured }
+contextBridge.exposeInMainWorld('online', {
+  getStatus:  () => ipcRenderer.invoke('online:getStatus'),
+  checkNow:   () => ipcRenderer.invoke('online:checkNow'),
+  queueStats: () => ipcRenderer.invoke('online:queueStats'),
+  getLastSuccessfulConnection: () => ipcRenderer.invoke('online:lastSuccess'),
+
+  /** @param {(status:object)=>void} cb @returns {()=>void} unsubscribe */
+  onStatusChanged: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    // The IpcRendererEvent is never handed to the renderer — it carries a
+    // `sender` that would widen this bridge well past a status snapshot.
+    const listener = (_e, status) => { try { cb(status); } catch (_) {} };
+    ipcRenderer.on('online:statusChanged', listener);
+    return () => ipcRenderer.removeListener('online:statusChanged', listener);
+  }
+});

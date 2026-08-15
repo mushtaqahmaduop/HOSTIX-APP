@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "test:migrate": "node migrations/001-relational-schema.test.js",
     "test:retention": "node tests/retention.test.js",
+    "test:services": "node tests/services.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {
@@ -40,6 +41,7 @@
       "renderer/**/*",
       "main.js",
       "preload.js",
+      "services/**/*",
       "migrations/001-relational-schema.js",
       "assets/**/*",
       "package.json",
