@@ -422,7 +422,7 @@ test('payment student search: types cleanly, clears on backspace, orders by room
   expect(await win.evaluate(() => studentsByRoom(DB.students).map(s => s.name)))
     .toEqual(['Abid Ali', 'Zed Khan', 'Mid Wing']);
 
-  await win.evaluate(() => showAddPaymentModal());
+  await win.evaluate(() => openAddPayment());
   await win.waitForSelector('#f-pstudent-search');
   await win.click('#f-pstudent-search');
   await win.type('#f-pstudent-search', 'Abid Ali');

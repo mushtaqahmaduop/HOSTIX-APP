@@ -88,6 +88,9 @@ test('the sidebar account menu opens on screen with all of its items', async () 
       items: Array.from(m.querySelectorAll('.hdr-menu__item'))
         .filter(b => getComputedStyle(b).display !== 'none')
         .map(b => b.textContent.trim()),
+      // Settings moved out of this menu into the sidebar's System group.
+      settingsInRail: Array.from(document.querySelectorAll('.nav-item[data-page="settings"]'))
+        .some(el => getComputedStyle(el).display !== 'none'),
     };
   });
 
@@ -101,8 +104,11 @@ test('the sidebar account menu opens on screen with all of its items', async () 
   expect(info.rect.h, 'menu collapsed to a sliver').toBeGreaterThan(120);
   expect(info.rect.w).toBeGreaterThan(150);
 
-  // A full-access account sees every entry.
-  expect(info.items).toEqual(['Former Students', 'Manage Users', 'Settings', 'Logout']);
+  // A full-access account sees every entry. Settings is deliberately NOT one of
+  // them any more — it configures the hostel, not the signed-in account, so it
+  // lives in the sidebar's System group with the other configuration items.
+  expect(info.items).toEqual(['Former Students', 'Manage Users', 'Logout']);
+  expect(info.settingsInRail, 'Settings must be reachable from the sidebar').toBe(true);
 
   await app.close();
 });

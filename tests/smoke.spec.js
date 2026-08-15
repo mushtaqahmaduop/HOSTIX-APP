@@ -135,12 +135,16 @@ test('HOSTIX smoke: login → all pages render → add room+student → persist 
   expect(dbStuds.some(s => s.name === 'Test Student QA'),
     'student not persisted to SQLite').toBeTruthy();
 
-  // Add Payment modal opens (UI path; submission deferred to Phase 2).
+  // Add Payment opens (UI path; submission deferred to Phase 2).
+  // It is a PAGE now, not a modal: openAddPayment() navigates to 'addpayment'.
+  // #f-pcharge is its Monthly Charge box (was #f-pamt "Room Rent" before the
+  // charge became one derived figure driven by the mess tick).
   await win.evaluate(() => navigate('payments'));
   await win.waitForTimeout(300);
-  await win.evaluate(() => showAddPaymentModal());
-  await win.waitForSelector('#f-pamt', { timeout: 8000 });
-  await win.evaluate(() => { if (typeof closeModal === 'function') closeModal(); });
+  await win.evaluate(() => openAddPayment());
+  await win.waitForSelector('#f-pcharge', { timeout: 8000 });
+  await win.evaluate(() => navigate('payments'));
+  await win.waitForTimeout(300);
 
   // Backup export data path.
   const exp = await win.evaluate(() => window.electronAPI.dbExportFull());

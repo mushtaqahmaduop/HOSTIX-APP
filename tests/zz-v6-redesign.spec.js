@@ -180,6 +180,21 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
     renderError: document.body.innerText.includes('Render Error'),
     tension: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
                ? _dashTrendChart.data.datasets.map(d => d.tension) : null,
+    // The legend advertises four series; the chart must actually draw four.
+    series: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
+               ? _dashTrendChart.data.datasets.map(d => d.label) : null,
+    legend: [...document.querySelectorAll('.dash-legend__k')].map(e => e.textContent.trim()),
+    // Months that have not happened must be null (line stops), not 0 (line
+    // runs flat along the axis claiming a year of zero revenue).
+    futureNulls: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
+      ? (() => {
+          const m = new Date().getMonth();          // 0-based; months after it are future
+          return _dashTrendChart.data.datasets.map(d => ({
+            past:   d.data.slice(0, m + 1).every(v => v !== null),
+            future: d.data.slice(m + 1).every(v => v === null),
+          }));
+        })()
+      : null,
   }));
   console.log('DASHTREND ' + JSON.stringify(dash));
 
@@ -256,7 +271,13 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   expect(reports.series, 'profit series missing').toEqual(['Collection', 'Expenses', 'Profit']);
   expect(reports.tension, 'trend line must be straight, not curved').toEqual([0, 0, 0]);
   expect(dash.renderError, 'dashboard render error').toBe(false);
-  expect(dash.tension, 'dashboard trend line must be straight too').toEqual([0]);
+  expect(dash.tension, 'dashboard trend lines must be straight too').toEqual([0, 0, 0, 0]);
+  expect(dash.series, 'dashboard must draw every series its legend claims')
+    .toEqual(['Revenue', 'Expenses', 'Transfers', 'Pending']);
+  expect(dash.legend, 'legend must match the drawn series').toEqual(dash.series);
+  expect(dash.futureNulls, 'past months must plot, future months must be null')
+    .toEqual([{ past: true, future: true }, { past: true, future: true },
+              { past: true, future: true }, { past: true, future: true }]);
   expect(backup.stats).toBe(4);
   expect(student && student.stats, 'student profile stat tiles').toBe(4);
   expect(student && student.emoji, 'student profile still contains emoji').toBe(false);
