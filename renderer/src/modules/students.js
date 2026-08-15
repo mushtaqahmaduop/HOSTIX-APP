@@ -213,11 +213,12 @@ function renderStudents() {
           <th>Contact / Emergency</th>
           <th>CNIC</th>
           ${th('course','Course')}
+          <th>Nationality</th>
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="9"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="10"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -248,6 +249,7 @@ function renderStudents() {
             </td>
             <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
+            <td>${t.nationality?escHtml(t.nationality):'<span class="stu-dash">—</span>'}</td>
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
             <td>
               <div class="stu-acts">
@@ -2010,15 +2012,19 @@ function doGenerateStudentsPDF(monthKey) {
   });
   var _roomById = new Map((DB.rooms||[]).map(function(r){return [r.id, r];}));
 
-  // FIX #4: Exclude Left/Cancelling students who left BEFORE the selected month.
-  // Exception: always include if they have an actual payment record for that month.
+  // The roster AS IT STOOD in the selected month — not whoever is on the books
+  // today. This filter used to look only at leftDate, so it dropped students who
+  // had moved out but kept every student who had not moved IN yet: a July report
+  // listed nine students admitted in August, and their rent inflated July's
+  // Rent/mo total by PKR 111,000. _studentInPeriod() checks both ends of the
+  // tenancy and is the same helper the dashboard and the on-screen reports use,
+  // so all three now agree on who was resident in a given month.
+  //
+  // Anyone with a fee record for the month is included regardless of dates — a
+  // student who has since left must still appear against the money they paid.
   var students = allStudents.filter(function(s) {
-    if (s.status !== 'Left' && s.status !== 'Cancelling') return true;
-    // If they have a payment record for this month, include them regardless
     if ((_payByStudent.get(s.id)||[]).some(function(p){ return _payMatchesMonth(p, monthKey); })) return true;
-    // Exclude if leftDate is before the first day of selected month
-    if (s.leftDate && s.leftDate < monthKey+'-01') return false;
-    return true;
+    return _studentInPeriod(s, monthKey);
   });
 
   var total  = students.length;

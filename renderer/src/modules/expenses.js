@@ -102,7 +102,16 @@ function renderExpenses() {
   const _pg   = paginate(exps, expFilter);
 
   // ── Stat strip ────────────────────────────────────────────────────────────
-  const scopedTotal = scoped.reduce((s, e) => s + Number(e.amount || 0), 0);
+  // The table below is the register of expense RECORDS, so it stays as it is —
+  // a transfer is not editable here. The headline figure is the one every other
+  // screen quotes, though, and that one counts transfers, so it is stated in
+  // full with the transfer share spelled out underneath. Without this the
+  // Expenses page and the dashboard's Expenses card read differently for the
+  // same month, which is the disagreement this strip exists to prevent.
+  const recordsTotal  = scoped.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const scopedTrf     = (DB.transfers || []).filter(inScope)
+                          .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const scopedTotal   = recordsTotal + scopedTrf;
   // Average per day across the days actually elapsed in the scope, not the
   // calendar month — dividing August's spend by 31 on the 8th reads far too low.
   const now = new Date();
@@ -138,7 +147,9 @@ function renderExpenses() {
   const stats = `
   <div class="exp-stats">
     ${stat('dh-violet','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
-          'Total Expenses', fmtPKR(scopedTotal), scopeLabel, daySeries)}
+          'Total Expenses', fmtPKR(scopedTotal),
+          scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
+          daySeries)}
     ${stat('dh-blue','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
           'Average Daily', fmtPKR(avgDaily), 'Avg per day', daySeries)}
     ${stat('dh-green','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',

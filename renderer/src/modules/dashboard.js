@@ -21,6 +21,33 @@ function calcRevenue(datePrefix) {
     .reduce((s,p) => s + Number(p.amount||0), 0);
   return paid + partial;
 }
+
+// ══ SINGLE SOURCE OF TRUTH FOR EXPENSES ═════════════════════════════════════
+// A funds transfer is an expense. It is money that leaves the hostel's cash the
+// same way a gas bill does; it is only stored in its own array because it is
+// entered on its own screen. Every "total expenses" figure in the app goes
+// through here, so the Expenses card, the reports strip, the PDFs and the CSVs
+// cannot drift apart — and profit is revenue minus THIS, with no separate
+// transfer deduction bolted on afterwards.
+//
+// `key` is a YYYY-MM month or a YYYY year, matched as a date prefix.
+function calcExpenses(key) {
+  return calcExpensesOnly(key) + calcTransfers(key);
+}
+function calcExpensesOnly(key) {
+  return (DB.expenses || [])
+    .filter(e => String(e.date || '').startsWith(key))
+    .reduce((s, e) => s + Number(e.amount || 0), 0);
+}
+function calcTransfers(key) {
+  return (DB.transfers || [])
+    .filter(t => String(t.date || '').startsWith(key))
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+}
+// Profit / Available Fund, stated once so nothing can compute it a second way.
+function calcProfit(key) {
+  return calcRevenue(key) - calcExpenses(key);
+}
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── PAYMENT MONTH MATCHER ────────────────────────────────────────────────────
@@ -133,10 +160,8 @@ function _dashSeries() {
   for (let i = 0; i <= cur; i++) {
     const k = yr + '-' + String(i+1).padStart(2,'0');
     out.rev.push(calcRevenue(k));
-    out.exp.push((DB.expenses||[]).filter(e=>(e.date||'').startsWith(k))
-      .reduce((s,e)=>s+Number(e.amount||0),0));
-    out.trf.push((DB.transfers||[]).filter(t=>(t.date||'').startsWith(k))
-      .reduce((s,t)=>s+Number(t.amount||0),0));
+    out.exp.push(calcExpenses(k));    // transfers included
+    out.trf.push(calcTransfers(k));   // …and itemised here for the transfer card
     out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
       .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
   }
@@ -222,17 +247,18 @@ function renderDashboard() {
   const seatsRemainingInOccupiedRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0).reduce((s,r)=>{const cap=getRoomType(r)?.capacity||1;return s+(cap-getRoomOccupancy(r));},0);
   const activeStudents = DB.students.filter(t=>t.status==='Active').length;
   const mo = thisMonth();
-  const moTransferDeduct = (DB.transfers||[]).filter(t=>t.date?.startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0);
+  const moTransferDeduct = calcTransfers(mo);   // itemised on its own card
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
   // Pending — only for the selected month
   const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
   const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
-  const moExp = DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
+  // Expenses INCLUDE funds transfers — a transfer is money out of the same till.
+  // The Funds Transfer card below still shows its own share of this figure.
+  const moExp = calcExpenses(mo);
   const totalExpected = collected + pending;
-  // Funds transfer is also an outgoing — include in net calculation
-  const netProfit = collected - moExp - moTransferDeduct;
+  const netProfit = collected - moExp;
 
   // Seat calculations
   const totalSeats = DB.rooms.reduce((s,r)=>{ const t=DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); }, 0);
@@ -436,10 +462,12 @@ function renderDashboard() {
       <span class="dash-sec__title">Revenue Trend</span>
       <span class="dash-sec__sub">Jan – Dec</span>
       <div class="dash-legend" style="margin-left:auto">
+        <!-- Pending was dh-violet here while both the line and the hover badge
+             draw it in --accent; the chip is dh-blue so all three agree. -->
         <span class="dash-legend__k dh-green"><i></i>Revenue</span>
         <span class="dash-legend__k dh-red"><i></i>Expenses</span>
         <span class="dash-legend__k dh-amber"><i></i>Transfers</span>
-        <span class="dash-legend__k dh-violet"><i></i>Pending</span>
+        <span class="dash-legend__k dh-blue"><i></i>Pending</span>
       </div>
     </div>
     <!-- This-month figures -->
@@ -1105,12 +1133,12 @@ function renderMonthModal(monthKey, monthLabel) {
   const pendPays = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey));
   const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  // A transfer is an expense, so expTotal carries both and Available Fund is
+  // revenue minus it. moTransfers stays for the line that itemises the transfers.
+  const expTotal = calcExpenses(monthKey);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
-  // Transfers are an outgoing — net them out so this modal, its exports and the
-  // dashboard Available Fund card all report the same figure.
-  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
-  const netProfit = rev - expTotal - moTransfers;
+  const moTransfers = calcTransfers(monthKey);
+  const netProfit = rev - expTotal;
   // The roster AS IT STOOD in this month — not whoever happens to be Active
   // today. Anyone with a fee record for the month is included regardless, so a
   // student who has since left still appears against the money they paid.
@@ -1353,13 +1381,14 @@ function addMonthExpenseFromModal(monthKey, monthLabel) {
 
 function exportMonthCSV(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // The Expenses section lists transfers too, under their own category, so the
+  // rows add up to the Expenses figure in the summary block above them.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
-  // Available Fund nets out transfers too, matching the dashboard card.
-  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const expTotal = calcExpenses(monthKey);
+  const moTransfers = calcTransfers(monthKey);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nFunds Transfer,${moTransfers}\nAvailable Fund,${rev-expTotal-moTransfers}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
+  csv += `Summary\nTotal Revenue,${rev}\nExpenses (incl. funds transfer),${expTotal}\nof which Funds Transfer,${moTransfers}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
   csv += `\nExpenses\nDate,Category,Description,Amount\n`;
@@ -1375,11 +1404,11 @@ function exportMonthCSV(monthKey, monthLabel) {
 
 function printMonthReport(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // Transfers print as expense rows under their own category, so the Expenses
+  // table adds up to the Expenses KPI above it.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
-  // Available Fund nets out transfers too, matching the dashboard card.
-  const moTransfers = (DB.transfers||[]).filter(t=>t.date?.startsWith(monthKey)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const expTotal = calcExpenses(monthKey);
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
@@ -1392,7 +1421,7 @@ function printMonthReport(monthKey, monthLabel) {
   <div class="kpi-grid">
     <div class="kpi"><label>Total Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
     <div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(expTotal)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal-moTransfers>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal-moTransfers)}</div></div>
+    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
     <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pend)}</div></div>
   </div>
   <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>
@@ -1510,14 +1539,20 @@ function drawTrendChart() {
     var k = yr+'-'+String(i+1).padStart(2,'0');
     var isPast = k <= curKey;
     var rev = isPast ? calcRevenue(k) : 0;
-    var exp = isPast ? (DB.expenses||[]).filter(e=>(e.date||'').startsWith(k)).reduce((s,e)=>s+Number(e.amount||0),0) : 0;
-    var trf = isPast ? (DB.transfers||[]).filter(t=>(t.date||'').startsWith(k)).reduce((s,t)=>s+Number(t.amount||0),0) : 0;
+    var exp = isPast ? calcExpenses(k)  : 0;   // transfers included
+    var trf = isPast ? calcTransfers(k) : 0;   // …plotted separately as its own line
     var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
-    revD.push(isPast&&rev>0?rev:null);
-    expD.push(isPast&&exp>0?exp:null);
-    trfD.push(isPast&&trf>0?trf:null);
-    pendD.push(isPast&&pend>0?pend:null);
+    // null means "this month has not happened", NOT "this month was zero".
+    // These used to collapse both cases to null and then map null→0, so every
+    // line ran flat along the axis out to December — a chart of a year that is
+    // half over claimed eight months of zero revenue. A month that is past and
+    // genuinely zero still plots 0; a future month plots null and the line
+    // simply stops (Chart.js spanGaps defaults to false).
+    revD.push(isPast?rev:null);
+    expD.push(isPast?exp:null);
+    trfD.push(isPast?trf:null);
+    pendD.push(isPast?pend:null);
     real.push(isPast&&rev>0);
   }
 
@@ -1532,7 +1567,8 @@ function drawTrendChart() {
   var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
   var cBorder = _cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
 
-  var plotRev = revD.map(function(v){return v!==null?v:0;});
+  // Plotted as-is: the nulls are meaningful and must reach Chart.js intact.
+  var plotRev = revD;
   var ptColors = plotRev.map(function(v,i){
     if(!real[i]) return cGreen+'26';
     if(i===0) return cGreen;
@@ -1562,6 +1598,23 @@ function drawTrendChart() {
     badge.style.left=left+'px'; badge.style.top=top+'px'; badge.style.display='block';
   }
 
+  // Supporting series. Nulls pass through exactly as they do for revenue, so
+  // all four lines stop at the current month; datalabels are off so only the
+  // revenue figures are called out.
+  function secondary(label, arr, hex) {
+    return {
+      label: label,
+      data: arr,
+      borderColor: hex,
+      borderWidth: 1.8,
+      pointBackgroundColor: hex, pointBorderColor: hex,
+      pointRadius: 2.5, pointHoverRadius: 5,
+      tension: 0,
+      fill: false,
+      datalabels: { display: false }
+    };
+  }
+
   if(_dashTrendChart){_dashTrendChart.destroy();_dashTrendChart=null;}
 
   _dashTrendChart = new Chart(canvas.getContext('2d'),{
@@ -1569,6 +1622,7 @@ function drawTrendChart() {
     data:{
       labels:months.map(function(m){return m.label;}),
       datasets:[{
+        label:'Revenue',
         data:plotRev,
         borderColor:cGreen,
         borderWidth:2.5,
@@ -1604,7 +1658,20 @@ function drawTrendChart() {
             return'PKR '+v.toLocaleString()+'\n'+(parseFloat(p)>=0?'▲':'▼')+' '+Math.abs(p)+'%';
           }
         }
-      }]
+      },
+      // The legend above this chart has always advertised four series, but
+      // only the revenue line was ever drawn — expD/trfD/pendD were computed
+      // for all twelve months and then used by nothing but the hover badge.
+      // They are plotted here so the legend describes what is on screen.
+      //
+      // Revenue stays the headline: it keeps the area wash, the per-month
+      // datalabels and the rise/fall point colouring. The other three are
+      // deliberately quieter — thinner stroke, no fill, no labels — because
+      // this panel is 178px tall and four equally-weighted filled lines in
+      // that space is noise, not a comparison.
+      secondary('Expenses',  expD,  cRed),
+      secondary('Transfers', trfD,  cAmber),
+      secondary('Pending',   pendD, cAccent)]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -1654,58 +1721,12 @@ function calPopSelect(key, label) {
 }
 
 
-// ════════════════════════════════════════════════════════════════════════════
-async function checkAutoMonthAdvance() {
-  if (DB.settings.autoMonthGenerate === false) return;
-  const now = new Date();
-  const currentMonthKey = now.toISOString().slice(0, 7);
-  const lastGenKey = DB.settings.lastAutoGenMonth || null;
-  if (lastGenKey === currentMonthKey) return;
-
-  const startDate = lastGenKey ? new Date(lastGenKey + '-01') : new Date(now.getFullYear(), now.getMonth(), 1);
-  if (lastGenKey) startDate.setMonth(startDate.getMonth() + 1);
-
-  let totalAdded = 0;
-  let monthsGenerated = [];
-
-  while (startDate <= now) {
-    const mo = startDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const active = DB.students.filter(t => t.status === 'Active');
-    let added = 0;
-    active.forEach(t => {
-      if (!DB.payments.some(p => p.studentId === t.id && p.month === mo)) {
-        const room = DB.rooms.find(r => r.id === t.roomId);
-        // Rent plus mess, and mess only for students who take it.
-        const messOn = t.messOptIn !== false;
-        const mess   = messOn ? (Number(t.mess) || 0) : 0;
-        DB.payments.push({
-          id: 'p_' + uid(), studentId: t.id, studentName: t.name,
-          roomId: t.roomId, roomNumber: room?.number || '',
-          amount: 0, monthlyRent: t.rent, totalRent: t.rent,
-          messCharge: mess, messIncluded: messOn,
-          unpaid: (Number(t.rent) || 0) + mess,
-          method: t.paymentMethod || 'Cash', month: mo,
-          date: startDate.toISOString().split('T')[0],
-          dueDate: '', status: 'Pending',
-          notes: 'Auto-generated', paidDate: ''
-        });
-        added++;
-      }
-    });
-    if (added > 0) { totalAdded += added; monthsGenerated.push(mo); }
-    startDate.setMonth(startDate.getMonth() + 1);
-  }
-
-  DB.settings.lastAutoGenMonth = currentMonthKey;
-  await saveDB();
-
-  if (totalAdded > 0) {
-    const msg = monthsGenerated.length === 1
-      ? ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated[0]
-      : ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated.length + ' months';
-    toast(msg, 'success');
-  }
-}
+// checkAutoMonthAdvance() lived here. It ran at boot and raised a Pending
+// payment row against every active student for each month that had rolled
+// over since the last launch. Records the warden never entered were landing
+// in the ledger and in every figure derived from it, so the automatic path is
+// gone; Auto-Generate Month on the Payments screen is now the only way to
+// create a month of rent records in bulk.
 
 async function quickDashTransfer() {
   const amt = parseFloat(document.getElementById('dash-transfer-amt')?.value)||0;
