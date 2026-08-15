@@ -202,66 +202,6 @@ function moneyValue(amount, opts) {
        + `</span>`;
 }
 
-/* ── CHARGE RESOLVER ────────────────────────────────────────────────────────
-   [chore/electron-43] Imported to repair commit 6bbf45c, which ships eight
-   call sites for resolveCharges() in students.js but no definition — the
-   function existed only in the owner's uncommitted working tree, so a fresh
-   checkout of feature/custom-titlebar has a broken Add/Edit Student form.
-   Copied verbatim from C:\HOSTIX-APP working tree (utils.js:129) so the
-   Electron 43 upgrade can be validated against functional code.
-   NOTE: this is the owner's in-progress work. When their branch is committed,
-   this block will collide — keep theirs, drop this.
-
-   Resolution order:
-     rent  =  student override (only when the warden explicitly pinned it)
-              →  roomType.defaultRent   ← Settings, the normal path
-              →  room.rent              ← legacy last resort, type unpriced
-     mess  =  student override (same pin)  →  roomType.defaultMess
-
-   `configured` is false when nothing has a rent set. Callers must show
-   "not configured — set it in Settings" rather than inventing a number. */
-function resolveCharges(student, opts) {
-  opts = opts || {};
-  const s     = student || {};
-  const room  = s.roomId ? (DB.rooms || []).find(r => r.id === s.roomId) : null;
-  const rtype = room && room.typeId
-    ? (DB.settings.roomTypes || []).find(x => x.id === room.typeId) : null;
-
-  // An explicit, deliberate per-student price beats the hostel default.
-  const pinned = s._rentManuallySet === true;
-
-  const rentFrom =
-    pinned && Number(s.rent) > 0  ? { v: Number(s.rent),            src: 'override' } :
-    Number(rtype && rtype.defaultRent) > 0
-                                  ? { v: Number(rtype.defaultRent), src: 'settings' } :
-    Number(room && room.rent) > 0 ? { v: Number(room.rent),         src: 'room'     } :
-                                    { v: 0,                         src: 'none'     };
-
-  // 0 is a legitimate mess charge, so mess falls through on null/undefined.
-  const messFrom =
-    pinned && s.mess != null       ? { v: Number(s.mess) || 0,            src: 'override' } :
-    rtype && rtype.defaultMess != null
-                                   ? { v: Number(rtype.defaultMess) || 0, src: 'settings' } :
-    s.mess != null                 ? { v: Number(s.mess) || 0,            src: 'student'  } :
-                                     { v: 0,                              src: 'none'     };
-
-  const messOptIn  = s.messOptIn !== false;
-  const messBilled = messOptIn ? messFrom.v : 0;
-
-  return {
-    rent:       rentFrom.v,
-    mess:       messFrom.v,
-    messBilled,
-    messOptIn,
-    total:      rentFrom.v + messBilled,
-    rentSource: rentFrom.src,
-    messSource: messFrom.src,
-    pinned,
-    configured: rentFrom.src !== 'none',
-    room, roomType: rtype
-  };
-}
-
 // ── PRINT / PDF STYLESHEET — single source of truth for ALL printed reports ──
 // Printed documents are always white/black-on-paper regardless of the app's
 // dark/light theme (correct for print), but every report generator used to
