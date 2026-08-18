@@ -549,13 +549,25 @@ function showEditRoomModal(id) {
 async function submitEditRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;
+  // Read BEFORE the write. oldNumber used to be captured on the line after
+  // r.number was already overwritten, so it always equalled the new number, the
+  // "did it change" test below was never true, and the sync never ran once:
+  // renaming a room left every payment and cancellation stamped with the old
+  // number forever, and the room filter on the Payments page then matched
+  // nothing at all for that room.
+  const oldNumber = r.number;
+  // Two rooms answering to the same number make every lookup by number
+  // ambiguous — Add Room has always refused it, Edit Room never checked.
+  if (DB.rooms.some(x => x.id !== id && String(x.number).toUpperCase() === newNum)) {
+    toast('Room '+newNum+' already exists — pick another number', 'error');
+    return;
+  }
   r.floor=document.getElementById('f-rfloor').value;
   r.typeId=document.getElementById('f-rtype').value;
   // Sync rent from room type — keeps rent consistent with Settings
   const _editedType = DB.settings.roomTypes.find(t=>t.id===r.typeId);
   if (_editedType) r.rent = _editedType.defaultRent;
   r.number=newNum;
-  const oldNumber = r.number;
   r.amenities=document.getElementById('f-ramen').value.split(',').map(s=>s.trim()).filter(Boolean);
   r.notes=document.getElementById('f-rnotes').value;
   // Sync room number in payments and cancellations if changed
@@ -568,7 +580,11 @@ async function submitEditRoom(id) {
 }
 async function confirmDeleteRoom(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
-  if(getRoomOccupancy(r)>0){toast('Cannot delete occupied room','error');return;}
+  // Occupancy counts Active only. A student on the cancellation list is still
+  // sleeping in the room until their vacate date, so the room they are in must
+  // not be deletable out from under them either.
+  const _living = DB.students.filter(t => t.roomId === r.id && isResident(t)).length;
+  if(_living>0){toast('Cannot delete Room #'+r.number+' — '+_living+' student(s) still assigned to it','error');return;}
   closeModal();
   showConfirm(`Delete Room #${r.number}?`,'This cannot be undone.',(async ()=>{
     DB.rooms=DB.rooms.filter(x=>x.id!==id);

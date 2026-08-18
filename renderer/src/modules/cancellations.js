@@ -338,6 +338,17 @@ function showEditCancellationModal(cancId) {
    <button class="btn btn-primary" onclick="submitEditCancellation('${cancId}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
 }
 
+/* The room a student is leaving, read from the roster rather than from a field
+   students do not have. `student.roomNumber` is only ever written by the
+   restore flow, so for everyone who left the ordinary way lastRoom was set to
+   '' — and the Former Students list, whose whole job is to say which room a
+   past student had, showed nothing for any of them. */
+function _cancRoomNumberOf(student) {
+  if (!student) return '';
+  const r = DB.rooms.find(x => x.id === student.roomId);
+  return r ? String(r.number) : String(student.roomNumber || '');
+}
+
 async function submitEditCancellation(cancId) {
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
@@ -351,8 +362,12 @@ async function submitEditCancellation(cancId) {
   if(student) {
     if(newStatus==='Confirmed') {
       student.status='Left';
-      student.leftDate = new Date().toISOString().slice(0,10);
-      student.lastRoom = student.roomNumber || '';
+      // The vacate date is when they actually go. Stamping today() meant a
+      // cancellation processed on the 20th for a 31st move-out recorded the
+      // student as having left eleven days before they did — and that is the
+      // date every historical report reads afterwards.
+      student.leftDate = c.vacateDate || today();
+      student.lastRoom = _cancRoomNumberOf(student);
     }
     else if(newStatus==='Restored') student.status='Active';
     else if(newStatus==='Pending') student.status='Cancelling';
@@ -386,7 +401,7 @@ function showAddCancellationModal() {
     return;
   }
 
-  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return d.toISOString().split('T')[0]; })();
+  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return ymd(d); })();
 
   showModal('modal-md','🚫 Add Cancellation Request',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--text2)">
@@ -545,8 +560,8 @@ async function confirmCancellation(cancId) {
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){
       student.status='Left';
-      student.leftDate = new Date().toISOString().slice(0,10);
-      student.lastRoom = student.roomNumber || '';
+      student.leftDate = c.vacateDate || today();
+      student.lastRoom = _cancRoomNumberOf(student);
     }
     await saveDB();
     toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
@@ -667,6 +682,6 @@ function downloadCancellationReport() {
 
   html += `</body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+today()+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────

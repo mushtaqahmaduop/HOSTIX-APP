@@ -364,6 +364,51 @@
 /* 400px, not 330: Payment Information lives in this column, and at 330 its four
    date/method fields stack one per row and the column overshoots the left one —
    the opposite of the point. At 400 they sit 2×2. */
+/* ── PROGRESS ROW ────────────────────────────────────────────────────────────
+   One bordered strip, three segments, chevrons between. The step the form is
+   actually on takes the accent wash; the ones behind it go quiet but keep their
+   number, so the row reads as a path rather than as three buttons. */
+.ap-steps {
+    display:flex; align-items:stretch; gap:2px; margin-bottom:9px;
+    padding:5px; border-radius:11px;
+    background:var(--card); border:1px solid var(--border);
+}
+.ap-step {
+    flex:1; min-width:0; display:flex; align-items:center; gap:9px;
+    padding:7px 11px; border-radius:8px;
+    transition:var(--transition);
+}
+.ap-step__n {
+    flex-shrink:0; width:23px; height:23px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11.5px; font-weight:800;
+    background:var(--dash-sunk); color:var(--text3);
+    border:1px solid var(--border2);
+    transition:var(--transition);
+}
+.ap-step__t   { min-width:0; display:flex; flex-direction:column; line-height:1.3; }
+.ap-step__t b { font-size:12px; font-weight:700; color:var(--text2);
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ap-step__t i { font-style:normal; font-size:10px; color:var(--text3);
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ap-step__sep { flex-shrink:0; align-self:center; color:var(--text3); opacity:.45; }
+
+.ap-step.is-on            { background:var(--accent-dim); }
+.ap-step.is-on .ap-step__n{ background:var(--accent); color:#fff; border-color:var(--accent); }
+.ap-step.is-on .ap-step__t b { color:var(--accent-strong); }
+
+.ap-step.is-done .ap-step__n { background:var(--green-dim); color:var(--green);
+                               border-color:rgba(69,223,164,.45); }
+.ap-step.is-done .ap-step__t b { color:var(--text2); }
+
+@media (max-width:900px) {
+    .ap-step__t i { display:none; }
+}
+@media (max-width:640px) {
+    .ap-steps { flex-wrap:wrap; }
+    .ap-step__sep { display:none; }
+}
+
 .ap-cols { display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:12px; align-items:start; }
 .ap-main { min-width:0; }
 /* Not sticky. The rail carries a form section now, so pinning it would put the
@@ -380,15 +425,17 @@
    and applying them always means the form reads the same on every machine
    rather than reshuffling itself as the window is dragged.                    */
 
-/* The strapline repeats what the title and the breadcrumb already say, and it
-   is the cheapest line on the page to lose. */
-.ap-sub { display:none; }
+/* The strapline is back — it is in the owner's reference, and the progress row
+   underneath it is what the eye lands on first now, so the title block reads as
+   a heading rather than as the start of the form. */
 
-/* Payment Summary reads two terms per row. The separator, the totals and the
-   balance still span the full width so the equation stays legible. */
-#ap-summary { display:grid; grid-template-columns:1fr 1fr; }
-#ap-summary .ap-sum__sep,
-#ap-summary .ap-sum__bal { grid-column:1 / -1; }
+/* Payment Summary is one term per row. It was two, to save vertical space, but
+   the equation it is showing runs top to bottom — charge, fees, discount,
+   extras, rule, total, paid, balance — and folding it into two columns put
+   "Total Payable" beside "Amount Paid" as though they were a pair, and wrapped
+   the longer labels onto two lines. The reference reads down a single column
+   and so does this. */
+#ap-summary .ap-sum__r { padding:6px 12px; }
 
 /* A student with a long history must not push Payment Information off the
    bottom of the rail — the list scrolls inside its own card instead. */
@@ -407,9 +454,16 @@
 .ap-card__h {
     display:flex; align-items:center; gap:7px; padding:9px 12px;
     border-bottom:1px solid var(--border);
-    font-size:12.5px; font-weight:800; color:var(--text);
+    font-size:12.5px; font-weight:800; color:var(--accent-strong);
 }
 .ap-card__h > svg { color:var(--accent-strong); flex-shrink:0; }
+/* Payment Summary alone wears the solid bar — it is the one card on the rail
+   that answers rather than asks, and the reference marks it that way. */
+.ap-card__h--fill {
+    background:var(--accent); color:#fff; border-bottom-color:transparent;
+    border-radius:10px 10px 0 0; margin:-1px -1px 0;
+}
+.ap-card__h--fill > svg { color:#fff; }
 .ap-card__h .pf-extra__add { margin-left:auto; }
 .ap-empty { padding:16px 13px; text-align:center; font-size:11.5px; color:var(--text3); }
 
@@ -430,8 +484,12 @@
     font-size:12px; font-weight:700;
 }
 .ap-sum__bal b { font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.ap-sum__bal.is-due   { background:rgba(224,82,82,.10); border:1px solid rgba(224,82,82,.30); color:var(--red); }
-.ap-sum__bal.is-clear { background:rgba(46,201,138,.10); border:1px solid rgba(46,201,138,.30); color:var(--green); }
+/* Solid, per the reference — this is the figure the warden is looking for.
+   The hue still carries the meaning the fill would otherwise flatten: accent
+   while something is owed, green once the month is clear. */
+.ap-sum__bal.is-due   { background:var(--accent); border:1px solid var(--accent); color:#fff; }
+.ap-sum__bal.is-clear { background:var(--green);  border:1px solid var(--green);  color:var(--bg); }
+.ap-sum__bal.is-due b, .ap-sum__bal.is-clear b { color:inherit; }
 
 /* Recent payments list */
 .ap-rec {
@@ -519,17 +577,18 @@
 
 /* Receive outstandings — arrears collected now, posted to their own month. */
 /* RECEIVE OUTSTANDING — arrears from earlier months, collectable here.
-   The amber wash marks the whole block as money that does NOT belong to the
-   month being recorded; each arrear then sits on its own raised row so the
-   figure the warden types is visibly attached to one month and not to the
-   form around it. */
+   The accent wash lifts the whole block off the form; each arrear then sits on
+   its own raised card so the figure the warden types is visibly attached to one
+   month and not to the form around it. The panel used to be amber, reading as a
+   warning — but nothing here is wrong, it is simply money belonging to another
+   month, and the note under the heading says so in words. */
 .pf-out {
     margin-top:10px; padding:9px 10px; border-radius:9px;
-    background:var(--amber-dim); border:1px solid var(--amber, #f0a030);
+    background:var(--accent-dim); border:1px solid var(--accent);
 }
 .pf-out__h {
     display:flex; align-items:center; gap:7px; margin-bottom:4px;
-    font-size:11px; font-weight:700; color:var(--amber, #f0a030);
+    font-size:11px; font-weight:700; color:var(--accent-strong);
 }
 .pf-out__h svg { flex-shrink:0; }
 .pf-out__tot { margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums; }
@@ -544,17 +603,17 @@
 .pf-out__d { font-size:12px; color:var(--text3); }
 .pf-out__d b { color:var(--red); font-variant-numeric:tabular-nums; }
 .pf-out__in { text-align:right; }
-/* Sits on the amber panel, so it takes the amber outline rather than the
-   accent one .pf-extra__add carries. */
+/* Solid, per the reference. It is the one control in the panel that does
+   something, and an outline button beside a filled input row disappeared. */
 .pf-out__btn {
-    height:30px; padding:0 12px; border-radius:8px; cursor:pointer; white-space:nowrap;
+    height:30px; padding:0 13px; border-radius:8px; cursor:pointer; white-space:nowrap;
     font-family:inherit; font-size:11.5px; font-weight:700;
-    background:transparent; color:var(--amber, #f0a030);
-    border:1px solid var(--amber, #f0a030);
+    background:var(--accent); color:#fff;
+    border:1px solid var(--accent);
     transition:var(--transition);
 }
-.pf-out__h .pf-out__btn { height:26px; padding:0 10px; font-size:11px; }
-.pf-out__btn:hover { background:var(--amber, #f0a030); color:var(--bg); }
+.pf-out__h .pf-out__btn { height:26px; padding:0 11px; font-size:11px; }
+.pf-out__btn:hover { background:var(--accent-strong); border-color:var(--accent-strong); }
 .pf-out__sum {
     margin-top:9px; padding-top:9px; border-top:1px solid var(--border);
     font-size:12px; color:var(--text2); text-align:right;
@@ -639,3 +698,25 @@
     font-family:var(--font); font-size:12px; outline:none;
 }
 #extra-charges-list input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+
+/* MONTH STATE — what the selected month already holds.
+   Two readings, and the colour answers the question before the words do:
+   accent, this is information about a month still in progress; green, it is
+   settled and anything collected today belongs to an earlier one. */
+.pf-mstate {
+    display:flex; align-items:flex-start; gap:8px;
+    margin-top:11px; padding:9px 11px; border-radius:9px;
+    font-size:11.5px; line-height:1.55; color:var(--text2);
+}
+.pf-mstate > svg { flex-shrink:0; margin-top:1px; }
+.pf-mstate b { color:var(--text); font-variant-numeric:tabular-nums; }
+.pf-mstate.is-partial {
+    background:var(--accent-dim); border:1px solid var(--accent);
+}
+.pf-mstate.is-partial > svg,
+.pf-mstate.is-partial b:first-of-type { color:var(--accent-strong); }
+.pf-mstate.is-paid {
+    background:var(--green-dim); border:1px solid rgba(69,223,164,.40);
+}
+.pf-mstate.is-paid > svg,
+.pf-mstate.is-paid b:first-of-type { color:var(--green); }

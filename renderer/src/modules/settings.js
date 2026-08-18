@@ -1551,7 +1551,16 @@ async function addPaymentMethod() {
 }
 async function removePaymentMethod(m) {
   if(DB.settings.paymentMethods.length<=1){toast('Must keep at least one method','error');return;}
+  // Room types and floors have always refused to be removed while something is
+  // using them; payment methods and expense categories did not, and the records
+  // left behind became unreachable — the method filter on the Payments page is
+  // built from this list, so those payments could no longer be filtered for,
+  // and opening one in Edit Payment found no matching option, selected the
+  // first, and rewrote the record's method on save.
+  const _inUse = (DB.payments||[]).filter(p=>p.method===m).length;
+  if(_inUse){toast('Cannot remove "'+m+'" — '+_inUse+' payment(s) were taken by it','error');return;}
   DB.settings.paymentMethods=DB.settings.paymentMethods.filter(x=>x!==m);
+  logActivity('Payment Method Removed', m, 'Settings');
   await saveDB(); renderPage('settings');
 }
 async function addExpenseCategory() {
@@ -1562,7 +1571,10 @@ async function addExpenseCategory() {
 }
 async function removeExpenseCategory(c) {
   if(DB.settings.expenseCategories.length<=1){toast('Must keep at least one category','error');return;}
+  const _inUse = (DB.expenses||[]).filter(e=>e.category===c).length;
+  if(_inUse){toast('Cannot remove "'+c+'" — '+_inUse+' expense(s) are filed under it','error');return;}
   DB.settings.expenseCategories=DB.settings.expenseCategories.filter(x=>x!==c);
+  logActivity('Expense Category Removed', c, 'Settings');
   await saveDB(); renderPage('settings');
 }
 async function addFloor() {
@@ -1706,7 +1718,7 @@ function importFromExcel(input) {
         if (joinDateRaw) {
           // SheetJS sometimes gives Date objects formatted as strings already
           const d = new Date(joinDateRaw);
-          if (!isNaN(d.getTime())) joinDate = d.toISOString().split('T')[0];
+          if (!isNaN(d.getTime())) joinDate = ymd(d);
           else joinDate = today();
         }
 
@@ -1951,7 +1963,7 @@ function enforceDataRetention() {
   // the live table once it is provably present in DB.archive.
   const now = new Date();
   const cutoff = new Date(now.getFullYear(), now.getMonth() - 6, 1); // 6 months ago start
-  const cutoffKey = cutoff.toISOString().slice(0,7); // e.g. "2025-09"
+  const cutoffKey = ym(cutoff);                      // e.g. "2025-09"
 
   // A record with no id cannot be persisted — saveDB() skips id-less rows on
   // upsert — so archiving one would delete it from the live table and write it

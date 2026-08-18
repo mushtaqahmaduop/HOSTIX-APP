@@ -77,6 +77,122 @@ function repairStudentSnapshots() {
   return touched;
 }
 
+/* ── BOOT REPAIR: PAYMENT COMPOSITION ────────────────────────────────────────
+   Records already on disk that describe themselves wrongly. Nothing here moves
+   money: `amount` and `unpaid` are what the warden collected and what the
+   student owes, and they are treated as fact throughout. Only the description
+   of how a total was made up is corrected, and only where the record's own
+   numbers prove what the right description is.
+
+   Three things are repaired.
+
+   1. RENT DRIFT. Records raised before rent and mess were split carry the
+      all-in figure in `monthlyRent` (8,000 + 6,500 = 14,500) AND a separate
+      `messCharge` of 6,500 beside it. Add those up and the month reads 21,000
+      while the student was only ever billed 14,500 — the mess is counted twice.
+      Now that the Add Payment form loads a month's existing record and
+      recomputes the total from it, that phantom 6,500 shows up on screen as a
+      balance nobody owes. Detected by the exact pre-split signature
+      (monthlyRent === rent + mess) plus a booked total that matches the all-in
+      composition, and repaired by putting the split rent back in `monthlyRent`.
+
+   2. MESS FLAGGED ON A RENT-ONLY MONTH. The mirror image: the rent half is
+      already correct, the record carries a mess line and says it is included,
+      but the total booked is rent alone. The tick is what is wrong, so it is
+      turned off — the amount stays as the configured-but-unbilled figure, which
+      is the same convention resolveCharges() uses. Where EVERY mess-carrying
+      record a student has is booked rent-only, the student is taken off the
+      mess too, since that is what their whole history says.
+
+   3. INSTALMENT TRAILS THAT NEVER HAPPENED. `partialPayments` is the receipt's
+      payment history. Two bugs wrote into it: a clear-the-balance action that
+      could fire twice, and the Add Payment merge that REPLACED `amount`
+      instead of adding to it — leaving records that claim two full collections
+      on a month where nothing was collected at all. Only what is provably
+      false is removed: byte-identical duplicate entries, and every entry on a
+      record where nothing has ever been collected. A trail that merely
+      disagrees is left alone — it cannot be reconstructed, and the receipt is
+      what stops printing a contradiction (see buildReceiptHTML).            */
+function repairPaymentComposition() {
+  const fixed = { drift: 0, messFlag: 0, students: 0, dupEntries: 0, ghostTrails: 0 };
+  const byId = new Map((DB.students || []).map(s => [s.id, s]));
+  const num  = v => Number(v || 0);
+
+  // What the record says was billed, mess included as its own line.
+  const bookedOf   = p => num(p.amount) + num(p.unpaid);
+  const withoutMess = p => num(p.monthlyRent) + num(p.extraTotal) + num(p.admissionFee)
+                         - num(p.concession != null ? p.concession : p.discount);
+
+  const rentOnlyMonths = new Map();   // studentId -> {mess:0, rentOnly:0}
+
+  (DB.payments || []).forEach(p => {
+    if (!p) return;
+    const mess = num(p.messCharge);
+    const carriesMess = mess > 0 && p.messIncluded !== false;
+
+    if (carriesMess && p.studentId) {
+      const tally = rentOnlyMonths.get(p.studentId) || { mess: 0, rentOnly: 0 };
+      tally.mess++;
+      // A month can be rent-only in two ways, and both are in the live data:
+      // the tick is off, or the mess is billed and then cancelled by a
+      // concession of exactly the same amount. Net contribution of the mess to
+      // what the student owed is zero either way, so both count.
+      if (num(p.concession != null ? p.concession : p.discount) === mess) tally.rentOnly++;
+      rentOnlyMonths.set(p.studentId, tally);
+    }
+
+    if (carriesMess && bookedOf(p) === withoutMess(p) && bookedOf(p) > 0) {
+      const t = p.studentId ? byId.get(p.studentId) : null;
+      const c = t ? resolveCharges(t) : null;
+      // 1 — the pre-split all-in signature: the mess is already inside the rent.
+      if (c && c.rent > 0 && num(p.monthlyRent) === c.rent + mess) {
+        p.monthlyRent = c.rent;
+        p.totalRent   = c.rent;
+        fixed.drift++;
+      } else {
+        // 2 — the rent half is right and the month was billed without mess.
+        p.messIncluded = false;
+        fixed.messFlag++;
+        if (p.studentId) {
+          const tally = rentOnlyMonths.get(p.studentId);
+          if (tally) tally.rentOnly++;
+        }
+      }
+    }
+
+    // 3 — trails that cannot be true.
+    const hist = p.partialPayments;
+    if (Array.isArray(hist) && hist.length) {
+      if (num(p.amount) === 0 && p.status !== 'Paid') {
+        fixed.ghostTrails += hist.length;
+        p.partialPayments = [];
+      } else {
+        const seen = new Set(), kept = [];
+        hist.forEach(x => {
+          const k = [x && x.date, num(x && x.amount), x && x.method,
+                     x && x.note, x && x.collectedBy].join('|');
+          if (seen.has(k)) return;
+          seen.add(k); kept.push(x);
+        });
+        if (kept.length !== hist.length) {
+          fixed.dupEntries += hist.length - kept.length;
+          p.partialPayments = kept;
+        }
+      }
+    }
+  });
+
+  // A student every one of whose mess-carrying months was billed rent-only is
+  // not on the mess, whatever their record says.
+  rentOnlyMonths.forEach((tally, sid) => {
+    if (!tally.mess || tally.rentOnly !== tally.mess) return;
+    const t = byId.get(sid);
+    if (t && t.messOptIn !== false) { t.messOptIn = false; fixed.students++; }
+  });
+
+  return fixed;
+}
+
 function payStatusHue(s) {
   return s === 'Paid' ? 'dh-green' : s === 'Partial' ? 'dh-amber' : 'dh-slate';
 }
@@ -589,22 +705,40 @@ async function generateMonthlyRents() {
   // Previously used toLocaleString('default',…) which can return different formats per device locale,
   // breaking the duplicate-guard check and generating duplicate entries on non-en-US systems.
   const mo=thisMonthLabel();
-  const active=DB.students.filter(t=>t.status==='Active');
-  let added=0;
+  // Everyone still living here — including a student leaving at month end, who
+  // owes this month like anyone else.
+  const active=DB.students.filter(isResident);
+  let added=0, skipped=0;
   active.forEach(t=>{
     if(!DB.payments.some(p=>p.studentId===t.id&&_payMatchesMonth(p,thisMonth()))){
       const room=DB.rooms.find(r=>r.id===t.roomId);
-      // The month's bill is rent plus mess, and mess only for students who are
-      // actually on it — a rent-only student must not be raised a mess charge.
-      const messOn = t.messOptIn !== false;
-      const mess   = messOn ? (Number(t.mess)||0) : 0;
-      const due    = (Number(t.rent)||0) + mess;
-      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:t.rent,totalRent:t.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
+      // Price comes from resolveCharges() — the student's own override, else
+      // the room type's rate in Settings. Reading t.rent/t.mess straight off
+      // the student made this the one screen that billed from a stale copy: a
+      // rent rise in Settings reached the Add Payment form at once, while the
+      // button the warden presses on the 1st for all 50 students carried on
+      // raising the old figure, and a student with no pinned rent was billed 0.
+      const c      = resolveCharges(t);
+      const messOn = c.messOptIn;
+      const mess   = c.messBilled;
+      const due    = c.rent + mess;
+      // A bill of nothing is not a bill. Raising one hides the real problem —
+      // an unpriced room type — behind a row that reads as settled.
+      if (!c.configured || due <= 0) { skipped++; return; }
+      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
       added++;
     }
   });
   await saveDB(); renderPage('payments');
-  toast(added>0?`Generated ${added} payment records`:'All students already have records for this month', added>0?'success':'info');
+  if (added) logActivity('Monthly Rents Generated', `${added} record(s) for ${mo}`
+    + (skipped ? ` · ${skipped} student(s) skipped — no charge configured` : ''), 'Finance');
+  toast(added>0
+      ? `Generated ${added} payment records for ${mo}`
+        + (skipped ? ` · ${skipped} skipped, no rent configured for their room type` : '')
+      : skipped>0
+        ? `Nothing generated — ${skipped} student(s) have no rent configured. Set it in Settings → Rent & Mess.`
+        : 'All students already have records for this month',
+    added>0 ? 'success' : skipped>0 ? 'warning' : 'info');
 }
 async function markPaymentPaid(id) {
   const p = DB.payments.find(x => x.id === id); if (!p) return;
@@ -628,6 +762,8 @@ async function markPaymentPaid(id) {
       note: 'Pending cleared'
     });
   }
+  if (prevUnpaid > 0) logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
   await saveDB();
   renderPage(currentPage);
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
@@ -655,18 +791,30 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
       note: 'Pending cleared'
     });
   }
+  if (prevUnpaid > 0) logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
   await saveDB();
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
   showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
 }
 async function deletePayment(id) {
+  const _dp = DB.payments.find(x => x.id === id);
   showConfirm('Delete payment record?','This cannot be undone.',async ()=>{
+    // Logged before the record goes. Every other money action writes to the
+    // activity log; the one that destroys money was the only one that did not,
+    // so a receipt could be removed from a shared warden screen with nothing
+    // left to say it had ever existed.
+    if (_dp) logActivity('Payment Deleted',
+      `${_dp.studentName||'—'} — ${_dp.month||'—'} · ${fmtPKR(_dp.amount)} collected, ${fmtPKR(_dp.unpaid)} outstanding`, 'Finance');
     DB.payments=DB.payments.filter(x=>x.id!==id);
     await saveDB(); renderPage('payments'); toast('Payment deleted','info');
   });
 }
 async function deletePaymentFromStudentView(payId, studentId) {
+  const _dpv = DB.payments.find(x => x.id === payId);
   showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',async ()=>{
+    if (_dpv) logActivity('Payment Deleted',
+      `${_dpv.studentName||'—'} — ${_dpv.month||'—'} · ${fmtPKR(_dpv.amount)} collected, ${fmtPKR(_dpv.unpaid)} outstanding`, 'Finance');
     DB.payments=DB.payments.filter(x=>x.id!==payId);
     await saveDB();
     toast('Payment record deleted','info');
@@ -694,7 +842,7 @@ function filterStudentDropdown(query) {
   if (!query.trim()) { results.style.display='none'; return; }
   const q = query.toLowerCase();
   let matches = DB.students.filter(t => {
-    if (t.status !== 'Active') return false;
+    if (!isResident(t)) return false;   // a student on notice still owes rent
     const room = DB.rooms.find(r => r.id === t.roomId);
     return t.name?.toLowerCase().includes(q) ||
            t.id?.toLowerCase().includes(q) ||
@@ -723,7 +871,14 @@ function filterStudentDropdown(query) {
         <div class="pf-hit__name">${escHtml(nm)}</div>
         <div class="pf-hit__sub">Room #${escHtml(String(room?.number||'?'))} · ${escHtml(rtype?.name||'')} · ${escHtml(t.phone||'No phone')}</div>
       </div>
-      <div class="pf-hit__rent">${fmtPKR(t.rent)}</div>
+      <div class="pf-hit__rent">${(() => {
+        // t.rent is the per-student override and is empty for everyone priced
+        // from Settings — which is nearly everyone — so this column read
+        // "PKR 0" beside students who are charged 14,500 a month. Same resolver
+        // as every other screen.
+        const _c = resolveCharges(t);
+        return _c.configured ? fmtPKR(_c.total) : '<span style="color:var(--red)">Not set</span>';
+      })()}</div>
     </div>`;
   }).join('');
   results.style.display = 'block';
@@ -783,6 +938,9 @@ function selectStudentForPayment(studentId) {
     if(t.concessionDesc && document.getElementById('f-pconcession-desc'))
       document.getElementById('f-pconcession-desc').value = t.concessionDesc;
   }
+  // Last, so a record already on file for this month overrides the student's
+  // standing defaults rather than the other way round.
+  pfLoadMonthContext();
   recalcUnpaid();
   const info = document.getElementById('selected-student-info');
   info.style.display = 'block';
@@ -814,8 +972,13 @@ function pfRenderLedger(t) {
   if (!box) return;
   // Arrears owed for OTHER months — shown beside this payment so the warden can
   // see at a glance that there is older money outstanding.
+  // The month being collected is not an arrear of itself — it was counted here,
+  // so a part paid current month was announced as "outstanding from earlier
+  // months" and the same balance appeared twice on one screen.
+  const _lmNow = document.getElementById('f-pmonth')?.value || '';
   const arrears = t ? DB.payments
-    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0)
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+              && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_lmNow))
     .reduce((s, p) => s + Number(p.unpaid || 0), 0) : 0;
 
   const cell = (label, id, hue, hint) =>
@@ -959,6 +1122,102 @@ function pfReloadOutstandings() {
      <div class="pf-out__sum" id="pf-out-sumline" style="display:none">Collecting now: <b id="pf-out-sum">PKR 0</b></div>`;
 }
 
+/* ── THE MONTH ALREADY ON FILE ───────────────────────────────────────
+   A month a student has part paid is not a blank slate, and this form opened on
+   one as though it were: the Amount Paid box was empty, the summary charged the
+   whole month again, and saving REPLACED the collected figure instead of adding
+   to it. A student who had paid 4,000 of 10,000 and then handed over the
+   remaining 6,000 ended the day still owing 4,000, with the first 4,000 gone.
+
+   The record for the selected month is loaded when a student is picked and
+   again whenever the month changes, so what it already holds — collected so
+   far, admission fee, concession, extras — is on screen and is what gets
+   saved back.                                                                */
+function pfExistingForMonth(studentId, monthLabel) {
+  if (!studentId || studentId === '__manual__') return null;
+  const key = _normPayMonthLabel(monthLabel);
+  if (!key) return null;
+  const all = DB.payments.filter(p => p.studentId === studentId && _normPayMonthLabel(p.month) === key);
+  if (!all.length) return null;
+  // An open balance is what the warden is here to settle; a settled record only
+  // matters when there is no open one left for that month.
+  return all.find(p => p.status !== 'Paid') || all[0];
+}
+
+/* The record this form was last filled from. Changing the month has to undo a
+   fill — otherwise last month's collected figure sits in the Amount Paid box
+   and is written against a month nobody collected it for — but it must NOT wipe
+   figures the warden typed themselves, so only a fill is ever reversed. */
+let _pfFilledFrom = '';
+
+function pfLoadMonthContext() {
+  const box = document.getElementById('pf-month-state');
+  if (!box) return;                          // older forms carry no banner
+  const sid   = document.getElementById('f-pstudent')?.value || '';
+  const month = document.getElementById('f-pmonth')?.value   || '';
+  const rec   = pfExistingForMonth(sid, month);
+
+  const paidEl = document.getElementById('f-ppaid');
+  const admEl  = document.getElementById('f-padmfee');
+  const concEl = document.getElementById('f-pconcession');
+  const cdEl   = document.getElementById('f-pconcession-desc');
+  const list   = document.getElementById('extra-charges-list');
+
+  if (!rec) {
+    box.style.display = 'none'; box.innerHTML = '';
+    if (_pfFilledFrom) {                       // undo the previous month's fill
+      _pfFilledFrom = '';
+      if (paidEl) paidEl.value = '';
+      if (admEl)  admEl.value  = '';
+      if (concEl) concEl.value = '';
+      if (cdEl)   cdEl.value   = '';
+      if (list)   list.innerHTML = '';
+    }
+    recalcUnpaid();
+    return;
+  }
+  _pfFilledFrom = rec.id || '';
+
+  const already = Number(rec.amount || 0);
+  const owing   = Number(rec.unpaid || 0);
+  const settled = rec.status === 'Paid' || owing <= 0;
+
+  // The record's own charges go back on the form. Without this the merge on
+  // save read empty boxes and wiped the admission fee, the concession and every
+  // extra line the record already carried.
+  if (admEl)  admEl.value  = Number(rec.admissionFee || 0) || '';
+  if (concEl) concEl.value = Number(rec.concession || rec.discount || 0) || '';
+  if (cdEl)   cdEl.value   = rec.concessionDesc || '';
+  if (list) {
+    list.innerHTML = '';
+    (rec.extraCharges || []).forEach(c => addExtraChargeRow(c.description || c.label || '', c.amount || 0));
+  }
+  // The box is the running total for the month, not today's instalment. Seeding
+  // it with what has already been taken means the warden edits a figure they
+  // can see instead of overwriting one they cannot.
+  if (paidEl) paidEl.value = already || '';
+
+  box.style.display = '';
+  box.className = 'pf-mstate ' + (settled ? 'is-paid' : 'is-partial');
+  const _ico = settled
+    ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/></svg>`
+    : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`;
+  box.innerHTML = _ico + (settled
+    ? `<div><b>${escHtml(month)} is already settled.</b> ${fmtPKR(already)} was collected${
+        rec.paidDate ? ' on ' + escHtml(rec.paidDate) : ''}. Nothing more is owed for this month — use
+       <b>Receive Outstanding</b> below to take money for an earlier month.</div>`
+    : `<div><b>${escHtml(month)} is part paid.</b> ${fmtPKR(already)} collected so far,
+       <b>${fmtPKR(owing)}</b> still owing.<br>Amount Paid below is the <b>total for this
+       month</b> and already holds what was taken — raise it by whatever is being handed over now.</div>`);
+  recalcUnpaid();
+}
+
+// The month select drives both the arrears panel and the banner above it.
+function pfMonthChanged() {
+  pfReloadOutstandings();
+  pfLoadMonthContext();
+}
+
 // Never let an arrear collection exceed what that month actually owes.
 function pfOutstandingInput(el) {
   const max = Number(el.dataset.max) || 0;
@@ -989,6 +1248,7 @@ function pfOutstandingTotal() {
   // stays out of the way until there is something to total.
   const line = document.getElementById('pf-out-sumline');
   if (line) line.style.display = n > 0 ? '' : 'none';
+  apUpdateSteps();
   return n;
 }
 
@@ -1073,10 +1333,10 @@ function pfPaintCharge() {
   box.value = fmtNum(rent + mess);
   if (note) {
     note.textContent = isOn && messConfigured
-      ? 'mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
+      ? 'Mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
       : messConfigured
-        ? 'rent only — mess (' + fmtPKR(messConfigured) + ') not charged this month'
-        : 'rent only — no mess charge configured';
+        ? 'Rent only — mess (' + fmtPKR(messConfigured) + ') not charged this month'
+        : 'Rent only — no mess charge configured';
   }
 }
 
@@ -1129,6 +1389,7 @@ function recalcUnpaid() {
     charge: mr + mess, admFee: admFee, extra: extra,
     concession: conc, total: total, paid: pa, unpaid: u
   });
+  apUpdateSteps();
 }
 
 function getExtraChargesTotal() {
@@ -1150,10 +1411,14 @@ function getExtraChargesData() {
   return items;
 }
 
+let _ecrSeq = 0;
 function addExtraChargeRow(descOrLabel='', amount='') {
   const list = document.getElementById('extra-charges-list');
   if(!list) return;
-  const rowId = 'ecr_' + Date.now();
+  // Date.now() collides when rows are added in a loop (restoring a saved
+  // record adds all of them inside one millisecond), and two rows sharing an id
+  // meant the remove button on the second deleted the first.
+  const rowId = 'ecr_' + (++_ecrSeq);
   const div = document.createElement('div');
   div.className = 'extra-charge-row';
   div.id = rowId;
@@ -1236,7 +1501,7 @@ function showAddPaymentForStudent(studentId) {
         </select>
       </div>
       <div class="field"><label>Payment Date</label><input class="form-control cdp-trigger" id="f-ps-date" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-ps-due" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return d.toISOString().split('T')[0];})()}"></div>
+      <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-ps-due" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return ymd(d);})()}"></div>
       <div class="field col-full"><label>Notes</label><input class="form-control" id="f-ps-notes" placeholder="Optional notes…"></div>
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
@@ -1447,7 +1712,7 @@ function openAddPayment(studentId) {
 
 function renderAddPayment() {
   const pmOpts = DB.settings.paymentMethods.map(m => `<option>${escHtml(m)}</option>`).join('');
-  const dueDefault = (() => { const d = new Date(); d.setDate(6); return d.toISOString().split('T')[0]; })();
+  const dueDefault = (() => { const d = new Date(); d.setDate(6); return ymd(d); })();
 
   // Fill the form once the markup is in the DOM. renderPage() assigns
   // innerHTML inside a setTimeout, so defer past it.
@@ -1475,12 +1740,34 @@ function renderAddPayment() {
           <b>Add Payment</b>
         </nav>
         <h2 class="ap-title">Add New Payment</h2>
-        <div class="ap-sub">Record a new payment or update existing payment details.</div>
+        <div class="ap-sub">Record a new payment and update student outstanding balance</div>
       </div>
       <button class="ap-back" onclick="navigate('payments')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
         Back to Payments
       </button>
+    </div>
+
+    <!-- ══════════ PROGRESS ══════════
+         Driven by the form, not by the page. A stepper that always reads
+         "step 2" is decoration pretending to be information; this one answers
+         a question the warden actually has — is there a student on this form
+         yet, and has an amount been entered. apUpdateSteps() moves it. -->
+    <div class="ap-steps" id="ap-steps">
+      <div class="ap-step is-on" data-step="1">
+        <span class="ap-step__n">1</span>
+        <span class="ap-step__t"><b>Student &amp; Room</b><i>Select student &amp; room</i></span>
+      </div>
+      <svg class="ap-step__sep" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      <div class="ap-step" data-step="2">
+        <span class="ap-step__n">2</span>
+        <span class="ap-step__t"><b>Payment Details</b><i>Enter payment information</i></span>
+      </div>
+      <svg class="ap-step__sep" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      <div class="ap-step" data-step="3">
+        <span class="ap-step__n">3</span>
+        <span class="ap-step__t"><b>Payment Information</b><i>Review &amp; confirm</i></span>
+      </div>
     </div>
 
     <div class="ap-cols">
@@ -1491,7 +1778,7 @@ function renderAddPayment() {
         <div class="pf-sec">
           <div class="pf-sec__h">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            1. Student &amp; Room Information
+            Student &amp; Room Information
           </div>
           <div style="position:relative;min-width:0">
             <div class="pf-wrapin">
@@ -1514,7 +1801,7 @@ function renderAddPayment() {
         <div class="pf-sec">
           <div class="pf-sec__h">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-            2. Payment Details
+            Payment Details
           </div>
 
           <!-- MONTHLY CHARGE — one derived figure; the tick is the only control. -->
@@ -1532,6 +1819,10 @@ function renderAddPayment() {
             <input type="hidden" id="f-prent" value="">
             <input type="hidden" id="f-pmess" value="">
           </div>
+
+          <!-- What the selected month already holds. Stays hidden until there
+               is a record behind it. -->
+          <div class="pf-mstate" id="pf-month-state" style="display:none"></div>
 
           <div class="pf-grid" style="margin-top:13px">
             <div class="pf-f"><label for="f-padmfee">Admission Fees (PKR)</label>
@@ -1569,7 +1860,7 @@ function renderAddPayment() {
         <div class="pf-sec" id="ap-sec-notes">
           <div class="pf-sec__h">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-            4. Notes
+            Notes
           </div>
           <textarea class="pf-ta" id="f-pnotes-main" maxlength="250" placeholder="Add any notes about this payment…" oninput="pfCount()"></textarea>
           <div class="pf-count" id="f-pnotes-count">0/250</div>
@@ -1579,8 +1870,8 @@ function renderAddPayment() {
       <!-- ══════════ RIGHT: SUMMARY + HISTORY ══════════ -->
       <aside class="ap-side" id="ap-side">
         <div class="pf-sec ap-card">
-          <div class="ap-card__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+          <div class="ap-card__h ap-card__h--fill">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
             Payment Summary
           </div>
           <div id="ap-summary"></div>
@@ -1602,13 +1893,13 @@ function renderAddPayment() {
         <div class="pf-sec" id="ap-sec-info">
           <div class="pf-sec__h">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
-            3. Payment Information
+            Payment Information
           </div>
           <div class="pf-grid">
             <div class="pf-f"><label for="f-pmethod">Payment Method<span class="req">*</span></label>
               <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
             <div class="pf-f"><label for="f-pmonth">Payment Month<span class="req">*</span></label>
-              <select class="pf-sel" id="f-pmonth" onchange="pfReloadOutstandings()">${payMonthPickerOptions(thisMonthLabel(), '')}</select></div>
+              <select class="pf-sel" id="f-pmonth" onchange="pfMonthChanged()">${payMonthPickerOptions(thisMonthLabel(), '')}</select></div>
             <div class="pf-f"><label for="f-pdate">Payment Date<span class="req">*</span></label>
               <div class="pf-wrapin">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
@@ -1697,6 +1988,30 @@ function pfRenderRecent(t) {
   }).join('');
 }
 // Notes counter for the payment modal.
+/* ── PROGRESS ────────────────────────────────────────────────────────────────
+   Reads the form and marks how far it has got: a student picked closes step 1,
+   an amount entered closes step 2. Called from recalcUnpaid(), so it follows
+   every keystroke that changes either. */
+function apUpdateSteps() {
+  const box = document.getElementById('ap-steps');
+  if (!box) return;
+  const picked = !!(document.getElementById('f-pstudent')?.value);
+  const amount = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
+  const arrears = (() => {
+    let n = 0;
+    document.querySelectorAll('.pf-out__in').forEach(el => { n += parseFloat(el.value) || 0; });
+    return n;
+  })();
+  // Step 3 is only reached once there is money on the form — either against
+  // this month or against an earlier one.
+  const at = !picked ? 1 : (amount > 0 || arrears > 0) ? 3 : 2;
+  box.querySelectorAll('.ap-step').forEach(el => {
+    const n = Number(el.dataset.step);
+    el.classList.toggle('is-on',   n === at);
+    el.classList.toggle('is-done', n <  at);
+  });
+}
+
 function pfCount() {
   const ta = document.getElementById('f-pnotes-main'), el = document.getElementById('f-pnotes-count');
   if (ta && el) el.textContent = ta.value.length + '/250';
@@ -1707,7 +2022,7 @@ async function submitAddPayment() {
   const hiddenEl = document.getElementById('f-pstudent');
   if(hiddenEl && !hiddenEl.value && searchEl && searchEl.value.trim()) {
     const q = searchEl.value.trim().toLowerCase();
-    const matches = DB.students.filter(t => t.status==='Active' && (
+    const matches = DB.students.filter(t => isResident(t) && (
       t.name?.toLowerCase().includes(q) || t.id?.toLowerCase().includes(q) ||
       String(DB.rooms.find(r=>r.id===t.roomId)?.number||'').includes(q) ||
       t.cnic?.includes(q) || t.phone?.includes(q)
@@ -1727,11 +2042,36 @@ async function submitAddPayment() {
     const enteredMonth2 = document.getElementById('f-pmonth')?.value || '';
     const tName = DB.students.find(s=>s.id===studentIdRaw)?.name || 'This student';
 
-    // Case 1 — already fully Paid for this month (HARD BLOCK — no override)
-    const alreadyPaid2 = DB.payments.find(p => p.studentId === studentIdRaw && p.status === 'Paid' && p.month === enteredMonth2);
+    // Case 1 — this month is already settled. That is a reason not to charge it
+    // a second time. It is NOT a reason to refuse the money in the warden's
+    // hand: arrears entered under Receive Outstanding are posted to the months
+    // they belong to, so July's balance can still be taken in August after
+    // August itself is paid. The old hard block returned before any of that ran
+    // and the cash could not be recorded at all until the next month began.
+    const alreadyPaid2 = DB.payments.find(p => p.studentId === studentIdRaw && p.status === 'Paid'
+      && _normPayMonthLabel(p.month) === _normPayMonthLabel(enteredMonth2));
     if (alreadyPaid2) {
       window._forcePayAP = false;
-      toast(escHtml(tName) + ' has ALREADY PAID for ' + escHtml(enteredMonth2) + ' (' + fmtPKR(alreadyPaid2.amount) + '). No duplicate allowed.', 'error');
+      const arrearsOnly = pfOutstandingAllocations();
+      if (arrearsOnly.length) {
+        const aMethod = document.getElementById('f-pmethod')?.value || 'Cash';
+        const aDate   = document.getElementById('f-pdate')?.value   || today();
+        const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate);
+        logActivity('Arrears Collected', `${escHtml(tName)} — ${aDesc}`, 'Finance');
+        await saveDB(); closeModal(); renderPage('payments');
+        toast(`Arrears posted to ${arrearsOnly.length} earlier month(s) for ${tName} · `
+            + `${enteredMonth2} was already settled and was not charged again`, 'success');
+        // The slip in the student's hand has to name the cash they handed over,
+        // and that cash now sits on the earlier month's record.
+        if (window._printAfterSave) {
+          window._printAfterSave = false;
+          const _firstArrear = arrearsOnly[0].payment.id;
+          setTimeout(() => printReceipt(_firstArrear), 350);
+        }
+        return;
+      }
+      toast(escHtml(tName) + ' has ALREADY PAID for ' + escHtml(enteredMonth2) + ' ('
+        + fmtPKR(alreadyPaid2.amount) + '). To take money for an earlier month, enter it under "Receive Outstanding".', 'error');
       return;
     }
 
@@ -1752,6 +2092,7 @@ async function submitAddPayment() {
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
+          const prevPaid       = Number(alreadyPending2.amount || 0);
           const newMonthlyRent = pfRentAmount() || alreadyPending2.monthlyRent || 0;
           const newMessOn      = document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
@@ -1777,6 +2118,18 @@ async function submitAddPayment() {
           alreadyPending2.messIncluded = newMessOn;
           alreadyPending2.amount       = newPaid;
           alreadyPending2.unpaid       = newUnpaid;
+          // Amount Paid is the running total for the month, so today's cash is
+          // the difference. Recording it leaves a per-instalment trail instead
+          // of one figure that quietly changes shape between visits.
+          const instalment = newPaid - prevPaid;
+          if (instalment > 0) {
+            if (!alreadyPending2.partialPayments) alreadyPending2.partialPayments = [];
+            alreadyPending2.partialPayments.push({
+              date: newDate, amount: instalment, method: newMethod,
+              collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
+              note: 'Instalment'
+            });
+          }
           alreadyPending2.extraCharges = newExtraCharges;
           alreadyPending2.extraTotal   = newExtraTotal;
           alreadyPending2.admissionFee = newAdmFee;
@@ -1891,7 +2244,12 @@ function showEditPaymentModal(id) {
   const t = DB.students.find(s=>s.id===p.studentId);
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
   const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;
-  const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${p.method===m?'selected':''}>${m}</option>`).join('');
+  // The record's own method is always offered, even if it has since been
+  // removed from Settings — otherwise editing anything else on an older payment
+  // silently rewrote how the money came in.
+  const _pmList = DB.settings.paymentMethods.slice();
+  if (p.method && _pmList.indexOf(p.method) === -1) _pmList.unshift(p.method);
+  const pmOpts = _pmList.map(m=>`<option ${p.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
   // BUG FIX: Use the student's CURRENT rent (t.rent) as the primary value.
   // p.monthlyRent is the rent at the time the payment was recorded and may be stale
   // if the warden has since updated fees in Settings. t.rent is always kept in sync.

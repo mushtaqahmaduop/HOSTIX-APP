@@ -247,7 +247,7 @@ function logActivity(action, details, category) {
   const _logNow = new Date();
   DB.activityLog.unshift({
     id: 'al_' + uid(), action, details, category, by: byName,
-    date: _logNow.toISOString().split('T')[0],
+    date: ymd(_logNow),
     time: _logNow.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })
   });
   if (DB.activityLog.length >= 180 && DB.activityLog.length < 200) {

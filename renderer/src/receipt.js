@@ -28,8 +28,21 @@ function printReceiptFromStudentView(payId, studentId) {
 // ── [FIX-R1 + FIX-R5] Assign receipt number ──────────────────────────────────
 // Only called when receipt is FINALIZED (print or PDF save).
 // If payment already has a receiptNo, reuse it (reprinting same receipt).
+/* ── FINDING A PAYMENT, INCLUDING AN OLD ONE ─────────────────────────────────
+   enforceDataRetention() moves settled payments older than seven months out of
+   DB.payments and into DB.archive. Everything about receipts looked in
+   DB.payments alone, so the moment a record crossed that line the Print button
+   found nothing, returned early, and did nothing at all — no receipt, no
+   message. A student asking for a duplicate of last year's receipt, which is
+   the whole reason a receipt is kept, got a dead button.                     */
+function _findPaymentAnywhere(payId) {
+  return (DB.payments || []).find(function (x) { return x.id === payId; })
+      || (DB.archive  || []).find(function (x) { return x.id === payId && x._src !== 'expenses'; })
+      || null;
+}
+
 function _assignReceiptNo(payId) {
-  const p = DB.payments.find(function(x){ return x.id === payId; });
+  const p = _findPaymentAnywhere(payId);
   if (!p) return 'RCP-??????';
 
   // [FIX-R5] Reuse existing receipt number on reprint
@@ -52,7 +65,7 @@ function _assignReceiptNo(payId) {
 // receiptNo is now passed in (or uses p.receiptNo if already assigned).
 // Does NOT increment the counter — that happens in _assignReceiptNo().
 function buildReceiptHTML(payId) {
-  var p = DB.payments.find(function(x){ return x.id === payId; });
+  var p = _findPaymentAnywhere(payId);
   if (!p) return null;
 
   var student   = DB.students.find(function(s){ return s.id === p.studentId; });
@@ -205,18 +218,26 @@ function buildReceiptHTML(payId) {
   html += '</div>';
 
   var history   = (p.partialPayments && p.partialPayments.length) ? p.partialPayments : [];
+  var histSum   = history.reduce(function(s, x){ return s + Number(x.amount || 0); }, 0);
   var initEntry = {
     date: p.date || p.dueDate || '',
-    amount: p.amount - history.reduce(function(s, x){ return s + Number(x.amount); }, 0),
+    amount: Number(p.amount || 0) - histSum,
     method: p.method || 'Cash',
     collectedBy: p.collectedBy || 'Warden',
     note: 'Initial payment'
   };
-  var allHistory = initEntry.amount > 0 ? [initEntry].concat(history) : history;
+  /* The trail is meant to add up to the figure printed above it. Two old bugs
+     could leave it claiming more than was ever collected, and the section then
+     printed — on a slip in a student's hand — a list of instalments totalling
+     twice the receipt's own TOTAL RECEIVED. The boot repair removes what is
+     provably false; what survives cannot be reconstructed, so the receipt owns
+     up to it instead of quietly presenting it as the breakdown. */
+  var histReconciles = histSum <= Number(p.amount || 0) + 1;
+  var allHistory = (histReconciles && initEntry.amount > 0) ? [initEntry].concat(history) : history;
   if (allHistory.length) {
     html += sep();
     html += '<div style="padding:4px 22px 10px">';
-    html += secLabel('Payment History');
+    html += secLabel(histReconciles ? 'Payment History' : 'Recorded Instalments');
     allHistory.forEach(function(h, idx) {
       html += '<div style="font-family:monospace;font-size:11px;color:#000;margin:5px 0;border-left:3px solid #333;padding-left:8px">';
       html += '<div style="display:flex;justify-content:space-between;font-weight:800">';
@@ -227,6 +248,14 @@ function buildReceiptHTML(payId) {
       html += (fmtDate(h.date) || '—') + ' · ' + escHtml(h.method || 'Cash') + ' · by ' + escHtml(h.collectedBy || 'Warden');
       html += '</div></div>';
     });
+    if (!histReconciles) {
+      html += '<div style="font-family:monospace;font-size:8.5px;color:#666;margin-top:6px;'
+        + 'border-top:1px dashed #999;padding-top:4px">'
+        + 'These entries total ' + fmtPKR(histSum) + ' and do not reconcile with the '
+        + fmtPKR(Number(p.amount || 0)) + ' recorded as collected for this month. '
+        + 'The collected figure above is the authoritative one.'
+        + '</div>';
+    }
     html += '</div>';
   }
 
@@ -270,7 +299,13 @@ function buildReceiptHTML(payId) {
 // ── MAIN RECEIPT ENTRY POINT ──────────────────────────────────────────────────
 function printReceipt(payId) {
   var html = buildReceiptHTML(payId);
-  if (!html) return;
+  // Silence was the worst possible answer here: the warden pressed Print and
+  // could not tell the difference between "nothing happened" and "it printed".
+  if (!html) {
+    if (typeof toast === 'function')
+      toast('That payment record could not be found — it may have been deleted.', 'error');
+    return;
+  }
 
   // [FIX-R3] Pass _clearReturnStudentId to close handlers
   var backBtn = _returnStudentId

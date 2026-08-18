@@ -162,7 +162,15 @@ function renderStudents() {
       </select>
 
       <select class="stu-select${studentFilter.status!=='All'?' is-set':''}" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')" title="Filter by status">
-        ${['All','Active','Left','Blacklisted'].map(s=>`<option value="${s}" ${studentFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
+        ${(() => {
+          // 'Cancelling' only appears once somebody is on notice — an empty
+          // status in the list is a dead end, but a resident the filter cannot
+          // reach is worse.
+          const opts = ['All','Active','Left','Blacklisted'];
+          if (DB.students.some(t=>t.status==='Cancelling')) opts.splice(2,0,'Cancelling');
+          if (studentFilter.status!=='All' && opts.indexOf(studentFilter.status)===-1) opts.push(studentFilter.status);
+          return opts.map(s=>`<option value="${escHtml(s)}" ${studentFilter.status===s?'selected':''}>${s==='All'?'All Status':escHtml(s)}</option>`).join('');
+        })()}
       </select>
 
       <div style="position:relative">
@@ -1129,7 +1137,7 @@ async function quickCancelStudent(studentId) {
   if(existing){ toast(`${student.name} is already in the cancellation list`,'error'); return; }
   const room = DB.rooms.find(r=>r.id===student.roomId);
   const type = room?getRoomType(room):null;
-  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return d.toISOString().split('T')[0]; })();
+  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return ymd(d); })();
   if(!DB.cancellations) DB.cancellations=[];
   DB.cancellations.push({
     id: uid(),
@@ -1241,18 +1249,25 @@ function printStudentCard(id) {
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · ${DB.settings.location||''}</div>
   </body></html>`;
-  var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+  var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + today() + '.pdf';
   _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||getRoomOccupancy(r)<getRoomType(r).capacity));
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${m}</option>`).join('');
-  const statOpts=['Active','Left','Blacklisted'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('');
+  // The student's own status is always in the list. It used to be built from
+  // three fixed values, so a student on the cancellation list ('Cancelling')
+  // matched none of them, the browser selected the first — Active — and merely
+  // opening this form and pressing Save quietly reversed their cancellation
+  // while the cancellation record itself stayed Pending.
+  const _statuses = ['Active','Left','Blacklisted'];
+  if (t.status && _statuses.indexOf(t.status) === -1) _statuses.unshift(t.status);
+  const statOpts=_statuses.map(s=>`<option ${t.status===s?'selected':''}>${escHtml(s)}</option>`).join('');
   const curRoom=DB.rooms.find(r=>r.id===t.roomId);
   const curRt=curRoom?getRoomType(curRoom):null;
   const presetLabel=curRoom?`Room #${curRoom.number} · ${curRt?.name||''} · ${curRoom.floor||''} Floor`:'';
-  const statSel = ['Active','Left','Blacklisted'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('');
+  const statSel = _statuses.map(s=>`<option value="${escHtml(s)}" ${t.status===s?'selected':''}>${escHtml(s)}</option>`).join('');
   showModal('modal-lg',`Edit Student — ${escHtml(t.name)}`,`
   <div class="sf-wrap sf-wrap--modal">
 
@@ -1472,7 +1487,34 @@ async function confirmDeleteStudent(id) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   closeModal();
-  showConfirm(`Remove ${t.name}?`,'This will permanently delete the student record.',(async ()=>{
+
+  /* The dialog now says what actually happens. Removing a student also removes
+     every payment they ever made, which rewrites months that were closed and
+     reconciled: last quarter's collected total drops, and the receipts already
+     in students' hands stop matching the books. That was happening behind the
+     words "delete the student record", with no entry in the activity log to
+     say a figure had moved.
+
+     The cascade itself is left alone — this is the deliberate "erase them"
+     path, and the app already has a softer one (mark the student Left, which
+     keeps the history). What changes is that the warden is told the size of
+     what they are about to erase, and that it is written down. */
+  const _pays   = DB.payments.filter(p => p.studentId === id);
+  const _paid   = _pays.reduce((s,p) => s + Number(p.amount || 0), 0);
+  const _owed   = _pays.reduce((s,p) => s + Number(p.unpaid || 0), 0);
+  const _detail = _pays.length
+    ? `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.75">`
+      + `This also deletes <strong>${_pays.length}</strong> payment record(s) —`
+      + ` <strong>${fmtPKR(_paid)}</strong> already collected and`
+      + ` <strong style="color:var(--red)">${fmtPKR(_owed)}</strong> still outstanding —`
+      + ` and removes that money from every past month's totals.</div>`
+      + `<small style="color:var(--text3)">To keep the history, cancel this and set their status to <em>Left</em> instead.</small>`
+    : 'This will permanently delete the student record.';
+
+  showConfirm(`Remove ${escHtml(t.name)}?`, _detail, (async ()=>{
+    logActivity('Student Deleted',
+      `${t.name} — ${_pays.length} payment record(s) removed · ${fmtPKR(_paid)} collected, ${fmtPKR(_owed)} outstanding`,
+      'Students');
     DB.students=DB.students.filter(x=>x.id!==id);
     DB.payments=DB.payments.filter(p=>p.studentId!==id);
     await saveDB(); renderPage('students'); toast('Student removed','info');
@@ -1736,7 +1778,7 @@ function openRestoreStudentForm(studentId) {
   const availRooms = roomsByNumber(_getAvailableRooms());
   const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${r.number} — ${type?.name||''} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
   const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
-  const today = new Date().toISOString().slice(0,10);
+  const today = ymd(new Date());
   const thisMonthKey = today.slice(0,7);
   const payHistory = DB.payments.filter(p=>p.studentId===t.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totalPaid = payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount||0),0);
@@ -1917,7 +1959,7 @@ async function submitRestoreStudent(studentId) {
   t.joinDate        =document.getElementById('rs-join').value;
   t.roomId=roomId; t.roomNumber=room?.number||''; t.rent=rent; t.mess=rsCharges.mess;
   t.paymentMethod=document.getElementById('rs-pm').value;
-  t.status='Active'; t.restoredAt=new Date().toISOString().slice(0,10); t.leftDate='';
+  t.status='Active'; t.restoredAt=today(); t.leftDate='';
   const extraCharges=[];
   document.querySelectorAll('#rs-extra-list > div').forEach(row=>{
     const lbl=row.querySelector('.rs-extra-label')?.value?.trim();
@@ -1943,7 +1985,7 @@ async function submitRestoreStudent(studentId) {
     if(extraCharges.length) notesParts.push('Charges: '+extraCharges.map(c=>`${c.label} ${fmtPKR(c.amount)}`).join(', '));
     if(concession>0) notesParts.push(`Concession: ${fmtPKR(concession)}${concReason?' ('+concReason+')':''}`);
     if(extraNotes) notesParts.push(extraNotes);
-    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,messCharge:rsCharges.messBilled,messIncluded:rsCharges.messOptIn,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||new Date().toISOString().slice(0,10),notes:notesParts.join(' | ')});
+    DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,messCharge:rsCharges.messBilled,messIncluded:rsCharges.messOptIn,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||today(),notes:notesParts.join(' | ')});
   }
   if(!DB.activityLog) DB.activityLog=[];
   DB.activityLog.unshift({id:uid(),type:'restore',icon:'🔄',text:`${t.name} restored to Room #${room?.number||''}`,date:new Date().toISOString()});
@@ -1958,7 +2000,7 @@ function downloadAllStudentsPDF() {
   var monthOpts = '';
   for(var i=0;i<24;i++){
     var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-i);
-    var val=d.toISOString().slice(0,7);
+    var val=ym(d);
     var lbl=d.toLocaleString('default',{month:'long',year:'numeric'});
     monthOpts += '<option value="'+val+'"'+(i===0?' selected':'')+'>'+lbl+'</option>';
   }

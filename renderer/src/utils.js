@@ -37,21 +37,68 @@ function nextStudentId() {
   return String(maxNum + 1).padStart(3, '0');
 }
 
+// A student code is a plain number, zero-padded to at least three digits —
+// '001', '042', '1204'. That is what is printed on the ID card.
+function _isStudentCode(sid) {
+  var n = parseInt(String(sid), 10);
+  return !isNaN(n) && String(sid) === String(n).padStart(3, '0');
+}
+
+/* ── STUDENT CODES ───────────────────────────────────────────────────────────
+   Runs at boot to give every student a numeric code. Two things were wrong with
+   how it did that, and both only bite on a real hostel's data:
+
+   1. It renumbered EVERYONE by array position the moment a single id looked
+      wrong — and one is enough, so an Excel import, a restored backup or one
+      legacy record re-issued all 120 students' codes in list order. The number
+      on a student's ID card, on their receipts and in the warden's head became
+      someone else's. Valid codes are now left exactly as they are; only ids
+      that are not codes, or that collide with one already taken, are assigned —
+      and they get the next free number rather than a position.
+
+   2. It rewrote the studentId on payments, cancellations, room shifts, check-in
+      and fines, but not on DB.archive or DB.complaints. The archive is where
+      every payment older than seven months lives, so a renumbering pointed the
+      whole of last year's money at whoever now holds that code. The list below
+      is every table that stores a studentId.                                 */
 function migrateStudentIdsToNumeric() {
-  var needsMigration = DB.students.some(function (s) {
+  var students = DB.students || [];
+  var taken = {}, idMap = {}, maxNum = 0;
+  var keeps = [];                       // the students that keep the id they have
+
+  // Pass 1 — claim every code that is already valid, first student to hold it
+  // wins. A second student on the same code is a duplicate, not an owner, and
+  // falls through to pass 2.
+  students.forEach(function (s) {
     var sid = String(s.id);
-    var n   = parseInt(sid, 10);
-    return isNaN(n) || sid !== String(n).padStart(3, '0');
+    if (_isStudentCode(sid) && !taken[sid]) {
+      taken[sid] = true;
+      keeps.push(s);
+      var n = parseInt(sid, 10);
+      if (n > maxNum) maxNum = n;
+    }
   });
-  if (!needsMigration) return;
 
-  var idMap = {};
-  DB.students.forEach(function (s, i) { idMap[s.id] = String(i + 1).padStart(3, '0'); });
-  DB.students.forEach(function (s) { s.id = idMap[s.id]; });
+  // Pass 2 — everyone else takes the next free number, in roster order.
+  students.forEach(function (s) {
+    if (keeps.indexOf(s) !== -1) return;
+    var sid = String(s.id);
+    var next;
+    do { next = String(++maxNum).padStart(3, '0'); } while (taken[next]);
+    taken[next] = true;
+    if (!(sid in idMap)) idMap[sid] = next;   // first claimant of an ambiguous old id
+    s.id = next;
+  });
 
-  ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines'].forEach(function (col) {
+  if (!Object.keys(idMap).length) return;
+
+  // Every table that stores a studentId. DB.archive holds the payments that
+  // retention moved out of DB.payments — miss it and the older half of the
+  // ledger is re-pointed at the wrong people.
+  ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
+   'archive', 'complaints', 'issues', 'billSplits'].forEach(function (col) {
     (DB[col] || []).forEach(function (r) {
-      if (r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      if (r && r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
     });
   });
 
@@ -61,7 +108,7 @@ function migrateStudentIdsToNumeric() {
     }
   });
 
-  saveDB();
+  return saveDB();
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -86,7 +133,37 @@ function safeOpenWindow(width, height) {
 }
 
 // ── Date & money formatters ───────────────────────────────────────────────────
-function today() { return new Date().toISOString().split('T')[0]; }
+/* ── CALENDAR DATES ARE LOCAL, NEVER UTC ─────────────────────────────────────
+   toISOString() converts to UTC first. Pakistan is UTC+5, so from 7pm every
+   evening the "date" it produced was YESTERDAY — and rent is collected in the
+   evening. Receipts, payment dates, leaving dates and the activity log were all
+   stamped a day early for the last five hours of every day; a due date built as
+   "the 6th" came out as the 5th, and on the 1st of a month before 5am the
+   month selectors still read the month that had just ended.
+
+   ymd() reads the calendar the warden is looking at: the local one.          */
+function ymd(d) {
+  const x = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(x.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
+}
+function ym(d) { return ymd(d).slice(0, 7); }
+function today() { return ymd(new Date()); }
+
+/* ── WHO IS STILL LIVING HERE ────────────────────────────────────────────────
+   A student put on the cancellation list gets status 'Cancelling' and keeps it
+   until they actually leave at the end of the month. Nothing read that status,
+   so for three or four weeks they fell through every Active-only filter at
+   once: Generate Monthly Rents skipped their last month, the Add Payment search
+   could not find them to take it, and their bed read as free while they were
+   still sleeping in it.
+
+   'Cancelling' is a leaving date, not a departure. They are resident until it
+   arrives, and every screen that asks "is this student still with us" asks
+   here.                                                                      */
+const RESIDENT_STATUSES = ['Active', 'Cancelling'];
+function isResident(t) { return !!t && RESIDENT_STATUSES.indexOf(t.status) !== -1; }
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
 function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
@@ -272,7 +349,7 @@ function fmtDate(d) {
 // Dashboard month selector (null = real current month, 'YYYY-MM' = selected)
 let _dashboardMonth = null;
 function thisMonth() {
-  return _dashboardMonth || new Date().toISOString().slice(0, 7);
+  return _dashboardMonth || ym(new Date());
 }
 function thisMonthLabel() {
   const [y, m] = thisMonth().split('-').map(Number);

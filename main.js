@@ -174,6 +174,15 @@ if (IS_PROD && process.argv.some(a => /^--inspect(-brk)?/.test(a))) {
 // ─────────────────────────────────────────────────────────────────────────────
 let _cachedMachineId = null;
 
+/* Local calendar date. toISOString() is UTC, and at UTC+5 that names yesterday
+   from 7pm onward — a backup taken after the evening rent round was filed under
+   the previous day's date. Mirrors ymd() in the renderer. */
+function _ymdLocal(d) {
+  const x = d || new Date();
+  const p = n => String(n).padStart(2, '0');
+  return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
+}
+
 function _getWinMachineGuid() {
   if (os.platform() !== 'win32') return '';
   try {
@@ -430,7 +439,7 @@ async function doExportBackup() {
   if (!mainWindow) return;
   const { filePath } = await dialog.showSaveDialog(mainWindow, {
     title: 'Export Backup',
-    defaultPath: `Hostyllo_Backup_${new Date().toISOString().slice(0, 10)}.json`,
+    defaultPath: `Hostyllo_Backup_${_ymdLocal()}.json`,
     filters: [{ name: 'JSON Backup', extensions: ['json'] }]
   });
   if (filePath) mainWindow.webContents.send('export-backup', filePath);
@@ -841,7 +850,7 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
 
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
     title: 'Save PDF',
-    defaultPath: suggestedName || `Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+    defaultPath: suggestedName || `Report_${_ymdLocal()}.pdf`,
     filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
   });
   if (canceled || !filePath) return { success: false, reason: 'cancelled' };

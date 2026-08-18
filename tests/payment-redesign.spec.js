@@ -110,7 +110,9 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   }));
   console.log('\n[mess ticked]   ' + JSON.stringify(ticked));
   expect(ticked.charge.replace(/,/g, ''), 'ticked charge').toBe(String(FULL));
-  expect(ticked.note).toContain('mess included');
+  // Case-insensitive on purpose: the note's wording is the assertion, its
+  // sentence casing is presentation and has changed once already.
+  expect(ticked.note.toLowerCase()).toContain('mess included');
   expect(Number(ticked.unpaid)).toBe(FULL);
   expect(ticked.summary, 'summary should carry the monthly charge').toContain('14,500');
   expect(ticked.summary, 'summary should show the remaining balance').toContain('Remaining Balance');
@@ -125,7 +127,7 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   }));
   console.log('[mess unticked] ' + JSON.stringify(unticked));
   expect(unticked.charge.replace(/,/g, ''), 'unticked charge is rent only').toBe(String(RENT));
-  expect(unticked.note).toContain('rent only');
+  expect(unticked.note.toLowerCase()).toContain('rent only');
   expect(Number(unticked.unpaid)).toBe(RENT);
 
   // Re-tick → back to the full charge.

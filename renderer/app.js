@@ -134,6 +134,19 @@ updateSidebar(); // shows zeros/defaults until boot() completes
       console.info('[HOSTIX] Re-synced ' + _fixed + ' stale student name(s) on payment records.');
     }
   }
+  // Records that describe themselves wrongly — mess counted twice inside a
+  // pre-split rent, a mess tick left on a month billed rent-only, and instalment
+  // trails claiming collections that never happened. Money is never moved; see
+  // repairPaymentComposition() for what each case proves before it touches
+  // anything. Silent on a healthy database.
+  if (typeof repairPaymentComposition === 'function') {
+    const _rp = repairPaymentComposition();
+    const _rpTotal = _rp.drift + _rp.messFlag + _rp.students + _rp.dupEntries + _rp.ghostTrails;
+    if (_rpTotal > 0) {
+      await saveDB();
+      console.info('[HOSTIX] Repaired payment composition: ' + JSON.stringify(_rp));
+    }
+  }
   await processAutoCancellations();
   // Sync login screen hostel name now that DB is loaded
   const loginNameEl = document.getElementById('login-hostel-name');

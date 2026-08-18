@@ -911,7 +911,7 @@ function printSeatAvailability() {
   <div class="footer">${escHtml(hostel)} · Room Visit Sheet · ${now2}</div>
   </body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+today()+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────
 function showSeatDetailModal(type) {
@@ -1695,7 +1695,7 @@ function drawTrendChart() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function navigateToMonth(monthKey) {
-  const realMonth = new Date().toISOString().slice(0,7);
+  const realMonth = ym(new Date());
   _dashboardMonth = (monthKey === realMonth) ? null : monthKey;
   const resetBtn = document.getElementById('sb-cal-reset-btn');
   if(resetBtn) resetBtn.style.display = _dashboardMonth ? 'inline-block' : 'none';

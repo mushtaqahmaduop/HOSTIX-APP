@@ -303,14 +303,24 @@ function showAddExpenseModal() {
 async function submitAddExpense() {
   const cat=document.getElementById('f-ecat').value;
   const amount=parseFloat(document.getElementById('f-eamt').value);
-  if(!cat||!amount){toast('Fill required fields','error');return;}
+  if(!cat){toast('Pick a category','error');return;}
+  // > 0, not merely truthy. A minus sign in front of the figure passed the old
+  // check and wrote a negative expense, which does not reduce what was spent —
+  // it quietly adds to the month's profit.
+  if(!isFinite(amount)||amount<=0){
+    toast('Enter an amount greater than zero','error');
+    document.getElementById('f-eamt')?.focus();
+    return;
+  }
   DB.expenses.push({id:'e_'+uid(),category:cat,amount,date:document.getElementById('f-edate').value,description:document.getElementById('f-edesc').value.trim()});
   logActivity('Expense Added', cat+' — PKR '+amount, 'Finance');
   await saveDB(); closeModal(); renderPage('expenses'); toast('Expense recorded','success');
 }
 function showEditExpenseModal(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join('');
+  const _catList = DB.settings.expenseCategories.slice();
+  if (e.category && _catList.indexOf(e.category) === -1) _catList.unshift(e.category);
+  const catOpts=_catList.map(c=>`<option ${e.category===c?'selected':''}>${escHtml(c)}</option>`).join('');
   showModal('modal-sm',`Edit Expense`,`
     <div class="form-grid">
       <div class="field"><label>Category</label><select class="form-control" id="f-ecat">${catOpts}</select></div>
@@ -322,8 +332,16 @@ function showEditExpenseModal(id) {
 }
 async function submitEditExpense(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
+  const _newAmt=parseFloat(document.getElementById('f-eamt').value);
+  // `|| e.amount` kept the old figure whenever the new one was 0 or negative,
+  // so a correction to zero looked accepted and changed nothing.
+  if(!isFinite(_newAmt)||_newAmt<=0){
+    toast('Enter an amount greater than zero','error');
+    document.getElementById('f-eamt')?.focus();
+    return;
+  }
   e.category=document.getElementById('f-ecat').value;
-  e.amount=parseFloat(document.getElementById('f-eamt').value)||e.amount;
+  e.amount=_newAmt;
   e.date=document.getElementById('f-edate').value;
   e.description=document.getElementById('f-edesc').value.trim();
   logActivity('Expense Updated', e.category+' — PKR '+e.amount, 'Finance');
