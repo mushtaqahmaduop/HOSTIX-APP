@@ -305,3 +305,143 @@ Checked in light and dark. Screenshots: `.scratch-addpayment-redesign.png`,
 test on synthetic data asserting the no-money-moves contract directly.
 `payment-redesign.spec.js` had one assertion made case-insensitive — it pinned
 the sentence casing of the charge note rather than its wording.
+
+---
+
+# Part 3 — Phase 1 merged, and the backlog worked down
+
+Done unattended overnight on 19 Aug, after the owner asked for the Phase 1 merge
+and for the outstanding work to continue. Every item below is committed and
+tested; the four things still needing an owner decision are listed at the end.
+
+## Phase 1 is on this branch
+
+`feature/phase-1-foundation` merged into `feature/custom-titlebar` (`7bb812a`).
+It sits on `chore/electron-43`, so **the Electron upgrade came with it**:
+
+- Electron 22 → 43, better-sqlite3 9 → 13, 32-bit rebuild support.
+- `services/` — four-state connectivity, API client with bounded retries and
+  idempotency keys, SQLite-backed durable queue, JSONL logging, redaction.
+
+`main.js` auto-merged cleanly; the local-date helper from Part 1 and the services
+bootstrap both survive. Before merging, every uncommitted file was backed up as a
+patch plus copies, and `pre-phase1-merge` tags the commit before it.
+
+The dependency swap needed a hand: `postinstall` calls `electron-rebuild`, whose
+`.bin` shim does not exist until the install that is running it completes, so the
+hook fails on a cold upgrade. Running `@electron/rebuild`'s CLI directly, then
+`npm install` again, resolves it. Worth knowing before the next clean checkout.
+
+**Both standing Phase 1 risks are now closed by evidence, not reasoning:**
+
+- *"No packaged build has been produced or launched."* One has:
+  `electron-builder --win --x64 --dir` succeeds, `HOSTIX.exe` boots past the
+  licence gate on an isolated profile.
+- *"`services/**/*` in the files allowlist is reasoned from allowlist semantics,
+  not proven by unpacking an asar."* The asar header lists
+  `services/` with all seven files, and the packaged app's own log proves they
+  load and run:
+
+  ```
+  {"service":"boot","event":"online_services_starting","meta":{"configured":false,"apiBaseSource":"none"}}
+  {"service":"connectivity","event":"not_configured","meta":{"apiBaseSource":"none"}}
+  ```
+
+  So the packaged build makes no network calls either — the offline gate holds
+  in production, not just in dev.
+
+## Settings → Connection (§29)
+
+The one Phase 1 deliverable that was never built. Four states shown as four,
+because collapsing them is what the service exists to prevent:
+
+```
+Internet        Connected
+Hostyllo API    Not configured
+License         Checked on this device
+Application     Offline edition
+```
+
+Put in Settings rather than the chrome deliberately: this build makes no network
+calls, so a status chip in front of every warden would report on a service that
+does not exist. In Settings it answers what support actually asks. When nothing
+is configured it says so in words instead of showing four red crosses.
+
+Also fixed: the settings tab strip reset its scroll on every re-render, so a tab
+at the far end sat half off the edge — underlined but unreadable. A ninth tab is
+what made that visible.
+
+## A failed save no longer looks like a save  ⚠️ was the top open risk
+
+`saveDB()` returned `false` on failure while all ~92 call sites toasted success
+and closed the modal. A failed write now raises a bar across the top of the app
+that does not time out and clears only when a write actually lands, so the
+success toast fired a moment later cannot bury it. It offers a retry and a
+download-from-memory (`exportData()` serialises the in-memory DB, so it still
+works when the database write is the broken thing).
+
+Tested with a real failure rather than a stub — `contextBridge` freezes
+`electronAPI`, so the test breaks the write with a circular record that neither
+the surgical path nor the full-rewrite fallback can serialise.
+
+## The suite can be trusted in one command
+
+Seven specs never reset the profile, and Playwright runs this suite
+single-worker in file order — so they inherited the previous file's fixtures.
+`month-name-mess.spec.js` asserted August revenue was 0 and got 17,000: a student
+admitted by `admit-to-payment.spec.js` three files earlier. It passed alone and
+failed in the suite, which is the worst way for a test to be wrong.
+
+`tests/_profile.js` now owns the reset. `settings-is-source.spec.js` skips when
+its opt-in env var is unset instead of failing. **`npx playwright test` is now
+35 passed / 1 skipped in a single invocation** — it previously needed a per-file
+loop with manual wipes to give a true answer.
+
+## Smaller things
+
+- **The `undefined/` directory is gone, and so is its cause.**
+  `tests/diag.spec.js` built its screenshot path as
+  `process.env.HOSTIX_SHOT_DIR + '/menu-fixed.png'` with no default, so an unset
+  variable made the path the literal string `undefined/menu-fixed.png`. Both
+  screenshot-writing specs now default to the gitignored `test-results/`. The
+  removed file is still in history at `452724d`.
+- **The accent is royal blue, and the docs now say so.** `tokens.css`'s own
+  header and `CLAUDE.md` both described it as violet, three screens above an
+  `ACCENT` block that says "repointed to royal blue on the owner's call". Two
+  summaries disagreeing with the values they summarise is how a redesign gets
+  built in the wrong colour.
+- `zz-boot-diag.spec.js` repointed at `f-prent` — it had been failing on a null
+  `f-pamt` since the Add Payment redesign. Kept rather than deleted as its own
+  header invited: it is the only coverage the Rent & Mess panel has.
+
+## Deliberately not done
+
+- **The HTML-escaping sweep (audit H4).** The scan finds 223 interpolations of
+  user-controlled fields, but the great majority are hardcoded labels and helper
+  arguments, and `pmBadge()` already escapes. More to the point the blast radius
+  today is small: `nodeIntegration: false` and `contextIsolation: true` on every
+  window, so injected script reaches no Node API, and the only person who can
+  type a room-type name is the warden. The audit scopes it correctly — *before
+  any server-supplied content is rendered*, i.e. Phase 2. A 223-site sweep
+  tonight would risk visual regressions across every screen for no present gain.
+- Four items still need an owner decision and are unchanged from Part 1:
+  Cancelling frees the bed immediately; the Students page cards no longer sum to
+  Total; there is no cash-basis figure to reconcile the cash box against; and
+  deleting a student still deletes their payment history.
+
+## Where the branch stands
+
+```
+228dd6a test: make the suite order-independent
+39fffa2 fix(tests,docs): kill the `undefined/` directory at its source
+a07a568 feat(settings): the §29 connection readout
+191f32d fix(storage,dashboard): a failed save says so; row 2 lines up with row 1
+7bb812a merge: Phase 1 online foundation
+6dd7415 test: keep the trend-chart sizing probe
+7c1ddf3 fix(payments): collect arrears on a settled month
+```
+
+Nothing is pushed. The 2026-08-17 renderer work is still uncommitted and
+untouched, except that `annual-archive.spec.js` and
+`fund-transfer-and-category-register.spec.js` had to be committed whole in order
+to give them the profile reset.
