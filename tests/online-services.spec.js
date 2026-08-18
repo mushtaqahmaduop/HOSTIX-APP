@@ -26,6 +26,11 @@ const os = require('os');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const ELECTRON = require('electron');
+const { resetProfile } = require('./_profile');
+
+// Each spec starts from a cold database, so running the suite in one go gives
+// the same answer as running this file alone. See _profile.js.
+test.beforeAll(() => { resetProfile(); });
 
 // Falls back to a throwaway profile so this spec runs even without a licensed
 // HOSTIX_TEST_PROFILE — it never needs to get past the licence screen.

@@ -23,6 +23,7 @@ const path = require('path');
 const REPO_ROOT = path.join(__dirname, '..');
 const PROFILE = process.env.HOSTIX_TEST_PROFILE;
 const ELECTRON = require('electron');
+const { resetProfile } = require('./_profile');
 
 function launchOpts() {
   const env = { ...process.env };
@@ -50,6 +51,7 @@ async function loginAndReady(win) {
 }
 
 test.beforeAll(() => {
+  resetProfile();   // suite-order independence — see _profile.js
   if (!PROFILE) throw new Error('HOSTIX_TEST_PROFILE env var is not set');
 });
 

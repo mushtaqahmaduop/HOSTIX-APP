@@ -4,6 +4,11 @@ const path = require('path');
 const REPO_ROOT = path.join(__dirname, '..');
 const PROFILE = process.env.HOSTIX_TEST_PROFILE;
 const ELECTRON = require('electron');
+const { resetProfile } = require('./_profile');
+
+// Each spec starts from a cold database, so running the suite in one go gives
+// the same answer as running this file alone. See _profile.js.
+test.beforeAll(() => { resetProfile(); });
 const OUT = process.env.SHOT_DIR || process.env.HOSTIX_SHOT_DIR || 'test-results';
 
 const probe = () => ({

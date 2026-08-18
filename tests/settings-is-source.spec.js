@@ -10,8 +10,15 @@ const REPO_ROOT = path.join(__dirname, '..');
 const PROFILE = process.env.HOSTIX_REAL_PROFILE;
 const ELECTRON = require('electron');
 
+// This one runs against the owner's REAL hostel database, which is why it takes
+// its own env var rather than HOSTIX_TEST_PROFILE. Unset is the normal case —
+// skip, do not fail. Throwing made a full-suite run report a failure for a spec
+// that was never meant to run unattended, and a red suite that is red on purpose
+// trains you to ignore red suites.
+test.skip(!PROFILE, 'HOSTIX_REAL_PROFILE is not set — deliberately opt-in');
+
 test.beforeAll(() => {
-  if (!PROFILE) throw new Error('HOSTIX_REAL_PROFILE env var is not set');
+  if (!PROFILE) return;
   const pristine = process.env.HOSTIX_REAL_DB_PRISTINE;
   if (pristine && fs.existsSync(pristine)) {
     for (const f of fs.readdirSync(PROFILE)) {
