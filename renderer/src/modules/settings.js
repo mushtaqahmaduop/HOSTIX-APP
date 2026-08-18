@@ -350,6 +350,7 @@ const SET_ICO = {
   trend:   '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
   drive:   '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>',
   clock:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  wifi:    '<path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M1.4 9.4a15 15 0 0 1 21.2 0"/>',
   stack:   '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>'
 };
 function setIco(path, size, stroke) {
@@ -957,6 +958,16 @@ function renderDataManagementPanel() {
 let settingsTab = 'hostel';
 function renderSettings() {
   const s = DB.settings;
+  /* The tab strip scrolls horizontally once the labels stop fitting, and it
+     always reset to the left on re-render — so selecting one of the tabs at the
+     far end left it half off the edge, underlined but unreadable. renderPage()
+     assigns the markup inside a setTimeout, so this defers past it. */
+  setTimeout(function () {
+    const on = document.querySelector('.set-tabs .set-tab.is-on');
+    if (on && on.scrollIntoView) {
+      on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, 60);
   const tabs = [
     {id:'hostel',   label:'Hostel Info',        svg:SET_ICO.hostel},
     {id:'rooms',    label:'Room Types',         svg:SET_ICO.bed},
@@ -967,7 +978,12 @@ function renderSettings() {
     {id:'expenses', label:'Expense Categories', svg:SET_ICO.receipt},
     {id:'floors',   label:'Floors',             svg:SET_ICO.layers},
     {id:'data',     label:'Data Management',    svg:SET_ICO.database},
-    {id:'license',  label:'License',            svg:SET_ICO.key}
+    {id:'license',  label:'License',            svg:SET_ICO.key},
+    // Diagnostic, not decoration. This build makes no network calls, so a
+    // status chip in the chrome would sit in front of every warden reporting
+    // on a service that does not exist yet. Here it answers the one question
+    // support actually needs: "what does your Connection tab say?"
+    {id:'connection', label:'Connection',       svg:SET_ICO.wifi}
   ];
 
   const pmList = (s.paymentMethods||[]).map(m=>`<div class="tag-item" id="pm-${escHtml(m)}">${escHtml(m)}<button class="tag-remove" onclick="removePaymentMethod('${escHtml(m)}')">×</button></div>`).join('');
@@ -1112,12 +1128,144 @@ function renderSettings() {
         ${renderLicenseSettingsPanel()}
       </div>
 
+      <!-- CONNECTION -->
+      <div class="settings-panel ${settingsTab==='connection'?'active':''}">
+        ${settingsTab==='connection' ? renderConnectionPanel() : ''}
+      </div>
+
   </div>`;
 }
 
 function bindSettingsEvents() {}
 
 // ── License Settings Panel (rendered inside Settings page) ────────────────────
+/* ── CONNECTION (spec 29) ────────────────────────────────────────────────────
+   The four states the connectivity service keeps separate, shown separately.
+   Collapsing them into one "online/offline" light is the thing the service was
+   written to avoid: a hostel on working WiFi whose control plane is down, still
+   holding a valid cached licence, is a different situation from a hostel with
+   no internet, and only one of the two is anybody's problem to fix.
+
+   Everything here is read-only. The renderer cannot reach the network at all
+   (CSP connect-src 'self'); it asks the main process for a snapshot over the
+   five read-only window.online channels and renders what it is told.
+
+   On this build the answer is "not configured", and the panel says so in plain
+   words rather than showing four red crosses. An unconfigured offline product
+   is not a broken one.                                                       */
+function renderConnectionPanel() {
+  // The status arrives over IPC, so paint the frame now and fill it in.
+  setTimeout(connRefresh, 40);
+  return `
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title" style="display:flex;align-items:center;gap:8px">
+        ${setIco(SET_ICO.wifi, 16)} Connection
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:4px">
+      Where this installation stands with Hostyllo's online services. Nothing here
+      changes anything — it is what to read out when you call support.
+    </div>
+    <div id="conn-body" style="margin-top:10px">
+      <div style="font-size:12px;color:var(--text3);padding:14px 0">Checking…</div>
+    </div>
+  </div>`;
+}
+
+// One row of the §29 readout.
+function _connRow(label, value, hue, note) {
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--border)">
+      <div style="flex:0 0 150px;font-size:11.5px;font-weight:600;color:var(--text2)">${escHtml(label)}</div>
+      <div style="flex:1;min-width:0">
+        <span class="dash-pill ${hue}">${escHtml(value)}</span>
+        ${note ? `<span style="font-size:11px;color:var(--text3);margin-left:9px">${escHtml(note)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+function _connWhen(ms) {
+  if (!ms) return 'never';
+  const d = new Date(Number(ms));
+  if (isNaN(d.getTime())) return 'never';
+  return fmtDate(ymd(d)) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function connRefresh() {
+  const box = document.getElementById('conn-body');
+  if (!box) return;
+
+  // window.online only exists in a packaged/dev Electron run with the services
+  // layer present. Say which of the two is missing rather than "error".
+  if (typeof window === 'undefined' || !window.online || !window.online.getStatus) {
+    box.innerHTML = `<div class="set-note">Online services are not available in this build.
+      The application is running fully offline.</div>`;
+    return;
+  }
+
+  let st = null, q = null;
+  try {
+    st = await window.online.getStatus();
+    q  = await window.online.queueStats();
+  } catch (e) {
+    box.innerHTML = `<div class="set-note">Could not read the connection status.</div>`;
+    return;
+  }
+  if (!st) { box.innerHTML = `<div class="set-note">No status reported.</div>`; return; }
+
+  const unconfigured = st.configured === false || st.mode === 'unconfigured';
+
+  // §29's four lines, in its order.
+  const rows =
+      _connRow('Internet', st.networkAvailable ? 'Connected' : 'Not detected',
+               st.networkAvailable ? 'dh-green' : 'dh-slate')
+    + _connRow('Hostyllo API',
+               unconfigured ? 'Not configured' : (st.apiReachable ? 'Reachable' : 'Unreachable'),
+               unconfigured ? 'dh-slate' : (st.apiReachable ? 'dh-green' : 'dh-amber'),
+               unconfigured ? 'no control plane set for this build' : (st.reason || ''))
+    + _connRow('License',
+               st.licenseValid ? 'Valid' : 'Checked on this device',
+               st.licenseValid ? 'dh-green' : 'dh-slate',
+               'activation is local — see the License tab')
+    + _connRow('Application',
+               unconfigured ? 'Offline edition' :
+                 st.mode === 'online' ? 'Online' :
+                 st.mode === 'degraded' ? 'Degraded — working from cached data' : 'Offline mode',
+               unconfigured ? 'dh-blue' :
+                 st.mode === 'online' ? 'dh-green' :
+                 st.mode === 'degraded' ? 'dh-amber' : 'dh-slate');
+
+  const queued = q ? (Number(q.pending || 0) + Number(q.inflight || 0)) : 0;
+  const failed = q ? Number(q.failed || 0) : 0;
+
+  box.innerHTML =
+      (unconfigured
+        ? `<div class="set-note">This installation runs entirely on this computer. No online
+             services are configured, so the app makes no internet requests at all — the rows
+             below are here so support can confirm that.</div>`
+        : '')
+    + `<div style="margin-top:10px">${rows}</div>`
+    + `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;
+                   padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text3)">
+         <span>Last checked: <b style="color:var(--text2)">${escHtml(_connWhen(st.lastCheckedAt))}</b></span>
+         <span>Last reached: <b style="color:var(--text2)">${escHtml(_connWhen(st.lastSuccessAt))}</b></span>
+         <span>Waiting to send: <b style="color:var(--text2)">${queued}</b></span>
+         ${failed ? `<span style="color:var(--red)">Gave up on: <b>${failed}</b></span>` : ''}
+         <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="connCheckNow(this)">Check again</button>
+       </div>`;
+}
+
+async function connCheckNow(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  try {
+    // Rate-limited main-process side, and concurrent callers share one probe —
+    // holding this button down cannot turn the UI into a request amplifier.
+    if (window.online && window.online.checkNow) await window.online.checkNow();
+  } catch (_) {}
+  await connRefresh();
+}
+
 function renderLicenseSettingsPanel() {
   const licCache = window._damam_license_cache;
   const hasLic   = licCache && licCache.valid;
