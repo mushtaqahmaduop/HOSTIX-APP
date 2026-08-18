@@ -429,3 +429,56 @@ test('the boot repair fixes how records describe themselves without moving money
   expect(pageErrors).toEqual([]);
   await app.close();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+test('a write that fails says so, and keeps saying so until one succeeds', async () => {
+  const { app, win, pageErrors } = await boot();
+  await seed(win);
+
+  // A genuine failure, not a stub: contextBridge freezes electronAPI, so the
+  // write is broken by giving a record something that cannot be serialised or
+  // structured-cloned. Both the surgical path and the full-rewrite fallback
+  // fail on it, which is exactly the state the bar exists for.
+  const failed = await win.evaluate(async () => {
+    const bad = { id: 'p_circular', studentId: '901', studentName: 'Audit Student',
+      month: 'March 2026', amount: 1, unpaid: 0, status: 'Paid', date: '2026-03-01' };
+    bad.self = bad;                                  // circular
+    DB.payments.push(bad);
+    const ok = await saveDB();
+    const bar = document.getElementById('save-failed-bar');
+    return {
+      ok,
+      barShown: !!bar,
+      text: bar ? bar.innerText.replace(/\s+/g, ' ') : '',
+      hasRetry:  !!document.getElementById('save-failed-retry'),
+      hasExport: !!document.getElementById('save-failed-export'),
+    };
+  });
+  console.log('\n[save failed] ' + JSON.stringify(failed));
+
+  expect(failed.ok, 'saveDB reports the failure').toBe(false);
+  expect(failed.barShown, 'and the app says so where it cannot be missed').toBe(true);
+  expect(failed.text).toContain('Not saved to disk');
+  expect(failed.hasRetry, 'with a way to try again').toBe(true);
+  expect(failed.hasExport, 'and a way to get the data out while it exists').toBe(true);
+
+  // A success toast fired by a call site must not bury it.
+  const survives = await win.evaluate(() => {
+    if (typeof toast === 'function') toast('Payment recorded', 'success');
+    return !!document.getElementById('save-failed-bar');
+  });
+  expect(survives, 'a later success toast does not clear the warning').toBe(true);
+
+  // It clears only when a write actually lands.
+  const recovered = await win.evaluate(async () => {
+    DB.payments = DB.payments.filter(p => p.id !== 'p_circular');
+    const ok = await saveDB();
+    return { ok, barShown: !!document.getElementById('save-failed-bar') };
+  });
+  console.log('[save recovered] ' + JSON.stringify(recovered));
+  expect(recovered.ok, 'the next write succeeds').toBe(true);
+  expect(recovered.barShown, 'and only then does the warning go').toBe(false);
+
+  expect(pageErrors).toEqual([]);
+  await app.close();
+});

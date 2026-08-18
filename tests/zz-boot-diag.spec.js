@@ -1,5 +1,8 @@
-// Temporary UI check for the new Rent & Mess tab and the mess row in the
-// payment modal. Delete after use.
+// Boot diagnostic: the Settings > Rent & Mess panel and the Room Types table
+// render without a Render Error, and the mess tick on Add Payment moves the
+// total. Written as a throwaway during the Rent & Mess build; kept because it
+// is the only coverage the Rent & Mess panel has, and repointed at f-prent
+// after the Add Payment redesign removed f-pamt.
 'use strict';
 const { test, expect, _electron: electron } = require('@playwright/test');
 const path = require('path');
@@ -69,7 +72,10 @@ test('new UI renders', async () => {
     const on = document.getElementById('f-pmess-on');
     const amt = document.getElementById('f-pmess');
     // Type a rent + mess and confirm the total follows the tick.
-    document.getElementById('f-pamt').value = 10000;
+    // The Add Payment page keeps rent and mess in hidden f-prent / f-pmess and
+    // shows only their sum; f-pamt was the OLD modal's visible rent box and no
+    // longer exists, so this threw on null and the spec died here.
+    (document.getElementById('f-prent') || document.getElementById('f-pamt')).value = 10000;
     amt.value = 7000;
     recalcUnpaid();
     const dueOn = document.getElementById('f-punpaid').value;

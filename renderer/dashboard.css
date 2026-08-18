@@ -305,3 +305,29 @@
 /* Let the seat card's room grid absorb the leftover height instead of leaving
    a gap under it when the trend card next to it is the taller of the two. */
 .dash-split > .dash-sec > .dash-room-wrap { flex:1 1 auto; align-content:flex-start; }
+
+/* ── ROW 2 IS MEASURED AGAINST ROW 1 ─────────────────────────────────────────
+   The five KPI cards are the ruler. The three tiles beneath them span 2 / 1 / 2
+   of the same five tracks, so their edges land on the card edges above rather
+   than a third of the way across them:
+
+     Total Residents │ Total Revenue │ Expenses │ Available Fund │ Pending
+     Occupied Rooms                  │ Vacant   │ Active Students
+
+   Occupied Rooms therefore ends exactly where Total Revenue ends, Active
+   Students begins exactly where Available Fund begins, and Vacant Rooms — the
+   one tile that is a plain count with nothing to unpack — takes the single
+   middle track instead of a third of the row.
+
+   Both grids keep their own auto-fit wrapping below this width. Aligning them
+   costs nothing while five tracks fit; forcing five onto a narrow window would
+   squeeze Vacant Rooms under its own icon, and the two rows are free to wrap
+   independently once they can no longer line up anyway. The threshold is where
+   five KPI columns still clear the 196px the density block asks for. */
+@media (min-width:1330px) {
+    .dash-kpi-grid  { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .dash-tile-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .dash-tile-grid > :nth-child(1) { grid-column:span 2; }   /* Occupied Rooms */
+    .dash-tile-grid > :nth-child(2) { grid-column:span 1; }   /* Vacant Rooms   */
+    .dash-tile-grid > :nth-child(3) { grid-column:span 2; }   /* Active Students */
+}
