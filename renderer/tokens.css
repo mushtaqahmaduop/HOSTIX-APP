@@ -226,3 +226,55 @@ body.light-theme {
      One value works on both themes (subtle accent wash on any surface). */
   --accent-dim:       rgba(59, 130, 246, 0.12);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHASE 1 ADDITIONS — spec §31
+
+   §31's conceptual list was already almost entirely covered by the blocks
+   above, so this is ADDITIVE ONLY: it introduces the names §31 asks for that
+   had no token, and adds the connectivity palette §29's indicator will need.
+
+   NOTHING ABOVE IS REDEFINED. No existing token changes value, so no rendered
+   pixel changes. Adding a custom property that nothing reads yet cannot alter
+   layout or colour — that is the point of landing them before the screens
+   that consume them, so no page invents its own (§31: "Do not hardcode colors
+   independently across pages").
+
+   CLAUDE.md rule 5 still holds: the accent set is `--accent*`. The names below
+   alias it; they do not introduce a second accent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Brand — §31 names the dark and soft steps explicitly. */
+  --brand-primary:       var(--accent-600);
+  --brand-primary-hover: var(--accent-700);
+  --brand-primary-soft:  var(--accent-100);
+  --brand-primary-dark:  var(--accent-800);
+
+  /* Border — §31 asks for three; only default/divider existed. */
+  --border-default: var(--surface-border);
+  --border-strong:  var(--gray-400);
+  --border-focus:   var(--accent-600);
+
+  /* Text — §31's fourth step. */
+  --text-disabled: var(--gray-400);
+
+  /* Connectivity (§29). Four states, never collapsed into online/offline:
+       online        control plane answering
+       degraded      network up, control plane unreachable — local data safe
+       offline       no network at all
+       unconfigured  no control plane exists yet (Phase 1 default)
+
+     Deliberately reusing the semantic ramp: connectivity is status, and §31
+     says status colour comes from the semantic set, not from new hues.
+     Degraded is WARNING, never DANGER — an unreachable API while the licence
+     is cached is a normal, non-alarming state (§7, §39), and colouring it red
+     would tell 50+ hostels something is broken when nothing is. */
+  --conn-online-fg:       var(--success-fg);
+  --conn-online-bg:       var(--success-bg);
+  --conn-degraded-fg:     var(--warning-fg);
+  --conn-degraded-bg:     var(--warning-bg);
+  --conn-offline-fg:      var(--text-secondary);
+  --conn-offline-bg:      var(--surface-sunken);
+  --conn-unconfigured-fg: var(--text-tertiary);
+  --conn-unconfigured-bg: var(--surface-muted);
+}
