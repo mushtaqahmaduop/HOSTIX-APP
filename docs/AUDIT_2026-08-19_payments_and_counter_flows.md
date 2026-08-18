@@ -429,9 +429,47 @@ loop with manual wipes to give a true answer.
   Total; there is no cash-basis figure to reconcile the cash box against; and
   deleting a student still deletes their payment history.
 
+## Two more, found by running the suites Playwright does not
+
+`npm run test:*` covers four plain-Node suites that Playwright never touches,
+because they are `*.test.js` rather than `*.spec.js`. Running them turned up:
+
+- **A regression I introduced in Part 1 and missed.** The local-date fix made
+  `enforceDataRetention()` call `ym()`, a renderer global from `utils.js` — but
+  `tests/retention.test.js` builds that function with `DB` as its only free
+  variable, so all 13 cases died on "ym is not defined". The app itself was
+  fine, so this was a harness gap rather than a production bug; it is also
+  exactly the kind of gap that hides the next real one. The harness now extracts
+  `ymd()`/`ym()` from `utils.js` by the same brace-matching it already used, so
+  the cutoff under test cannot drift from the one the app computes.
+
+- **`globals.d.ts` was lying about `toast()`,** declaring its third parameter as
+  `ms: number` when the implementation takes a title string and derives its own
+  delay from `type`. So it flagged every correct caller — the two "pre-existing"
+  typecheck errors were never real — while hiding the one caller that genuinely
+  was passing a number:
+
+  ```js
+  toast('Activity log is almost full …', 'warning', 5000)
+  ```
+
+  meaning "show it for five seconds", and rendering a toast whose heading was
+  the literal text **5000**. With the signature corrected, typecheck is clean:
+  **0 errors**, down from the 2 the Phase 1 report recorded as permanent.
+
+  `'warning'` also turned out to be a toast type the component never supported —
+  no icon, no colour, title "Info" — despite several callers using it. It is now
+  real: amber rule and progress bar, its own glyph, a "Heads up" default, and an
+  error's dwell time, because a warning is read rather than glanced at.
+
+**Full sweep:** 35 Playwright + 60 services + 13 retention + 6 migrate + 23
+license = **137 tests, all passing, typecheck clean.**
+
 ## Where the branch stands
 
 ```
+001215e fix(toast,tests): the .d.ts was lying about toast(), and it hid a real bug
+3933e96 docs: record the Phase 1 merge and the backlog work
 228dd6a test: make the suite order-independent
 39fffa2 fix(tests,docs): kill the `undefined/` directory at its source
 a07a568 feat(settings): the §29 connection readout
