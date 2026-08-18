@@ -58,6 +58,11 @@ test('diagnose account menu', async () => {
   });
   console.log('DIAG ' + JSON.stringify(info.rect));
   await win.waitForTimeout(300);
-  await win.screenshot({ path: process.env.HOSTIX_SHOT_DIR + '/menu-fixed.png' });
+  // HOSTIX_SHOT_DIR was concatenated with no default, so an unset variable made
+  // the path the literal string "undefined/menu-fixed.png" — which is where the
+  // committed `undefined/` directory at the repo root came from, and why it
+  // reappeared on every run. test-results/ is already gitignored.
+  const SHOT_DIR = process.env.HOSTIX_SHOT_DIR || process.env.SHOT_DIR || 'test-results';
+  await win.screenshot({ path: SHOT_DIR + '/menu-fixed.png' });
   await app.close();
 });

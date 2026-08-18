@@ -4,7 +4,7 @@ const path = require('path');
 const REPO_ROOT = path.join(__dirname, '..');
 const PROFILE = process.env.HOSTIX_TEST_PROFILE;
 const ELECTRON = require('electron');
-const OUT = process.env.SHOT_DIR || '.';
+const OUT = process.env.SHOT_DIR || process.env.HOSTIX_SHOT_DIR || 'test-results';
 
 const probe = () => ({
   wrap: (() => { const w = document.getElementById('trend-chart-wrap');

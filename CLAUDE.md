@@ -10,7 +10,7 @@ This is the offline desktop product. The separate cloud SaaS lives at `C:\hostyl
 ## Code structure
 - `app.js` was a 9,270-line monolith — now split into 13 modular feature files.
 - All DB writes go through async `saveDB()`. Never call it without await.
-- CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. Violet scheme.
+- CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. **Royal blue** (`--accent-600` = `#2563eb`), set in `renderer/tokens.css`. It was violet once; both this line and that file's own header still said so long after it changed.
 
 ## HARD RULES — read before touching code
 ## RULE 0 — BRANCH CHECK BEFORE ANY EDIT

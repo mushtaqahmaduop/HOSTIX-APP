@@ -1,9 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    HOSTIX — Enterprise Design Tokens (Phase 1)
 
-   This file loads BEFORE style.css and defines the canonical violet
-   --accent token set. The old orange --gold/--royal tokens were removed
-   in Phase 1 §5.5b and re-pointed here; --accent is now the single accent.
+   This file loads BEFORE style.css and defines the canonical --accent token
+   set, which is ROYAL BLUE — see the ACCENT block below, which was repointed
+   from violet on the owner's call. This header said "violet" long after that
+   happened and is the reason to distrust a summary over the values. The old
+   orange --gold/--royal tokens were removed in Phase 1 §5.5b and re-pointed
+   here; --accent is now the single accent.
 
    Rule: Color = meaning. If a color isn't telling the user something,
    it shouldn't be there.
