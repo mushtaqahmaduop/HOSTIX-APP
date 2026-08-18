@@ -4835,3 +4835,10 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 }
 /* keep the frozen cell opaque (not see-through) when its row is hovered */
 .table-wrap tbody tr:hover td.col-actions { background: var(--card); }
+
+/* A warning toast. The type has been passed by callers for a long time with no
+   rule to match, so it rendered as a plain bordered box — the one toast state
+   that most needs to look different was the one that looked like nothing. */
+.toast.warning { border-left: 3px solid var(--amber); }
+.toast.warning .toast-icon { background: rgba(251,191,36,0.15); color: var(--amber); }
+.toast.warning .toast-progress { background: var(--amber); }

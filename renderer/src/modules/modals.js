@@ -653,9 +653,13 @@ function toast(msg, type='info', title='') {
     success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>',
     error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></svg>',
     info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></svg>',
+    // 'warning' has been passed by callers for a long time without existing
+    // here, so those toasts came out with no icon and the title "Info".
+    warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
   };
-  const defaultTitles = { success: 'Success', error: 'Error', info: 'Info' };
-  const delay = type === 'error' ? 4500 : 3000;
+  const defaultTitles = { success: 'Success', error: 'Error', info: 'Info', warning: 'Heads up' };
+  // A warning is read, not glanced at, so it stays up as long as an error.
+  const delay = (type === 'error' || type === 'warning') ? 4500 : 3000;
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.style.cssText = 'position:relative;overflow:hidden;';

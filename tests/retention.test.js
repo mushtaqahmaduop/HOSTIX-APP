@@ -26,22 +26,41 @@ function ok(name, fn) {
   catch (e) { fail++; console.log('  FAIL ' + name + '\n       ' + e.message); }
 }
 
-// ── Extract enforceDataRetention() from settings.js ──────────────────────────
-const SETTINGS = path.join(__dirname, '..', 'renderer', 'src', 'modules', 'settings.js');
-const src = fs.readFileSync(SETTINGS, 'utf8');
-const start = src.indexOf('function enforceDataRetention');
-assert.notStrictEqual(start, -1, 'could not find enforceDataRetention() in settings.js');
-
-let depth = 0, end = -1, seenBrace = false;
-for (let i = start; i < src.length; i++) {
-  if (src[i] === '{') { depth++; seenBrace = true; }
-  else if (src[i] === '}') { depth--; if (seenBrace && depth === 0) { end = i + 1; break; } }
+// ── Extract a named function's source by brace-matching ──────────────────────
+function extract(file, name) {
+  const text = fs.readFileSync(file, 'utf8');
+  // The paren matters: indexOf('function ym') matches `function ymd(` first,
+  // which silently returned the wrong function and left ym undefined.
+  const start = text.indexOf('function ' + name + '(');
+  assert.notStrictEqual(start, -1, 'could not find ' + name + '() in ' + path.basename(file));
+  let depth = 0, end = -1, seenBrace = false;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') { depth++; seenBrace = true; }
+    else if (text[i] === '}') { depth--; if (seenBrace && depth === 0) { end = i + 1; break; } }
+  }
+  assert.notStrictEqual(end, -1, 'could not brace-match ' + name + '() body');
+  return text.slice(start, end);
 }
-assert.notStrictEqual(end, -1, 'could not brace-match enforceDataRetention() body');
-const fnSource = src.slice(start, end);
 
-// Build the function in an isolated scope with `DB` as its only free variable.
-const makeFn = new Function('DB', fnSource + '\nreturn enforceDataRetention;');
+const SETTINGS = path.join(__dirname, '..', 'renderer', 'src', 'modules', 'settings.js');
+const UTILS    = path.join(__dirname, '..', 'renderer', 'src', 'utils.js');
+
+const fnSource = extract(SETTINGS, 'enforceDataRetention');
+
+/* enforceDataRetention() derives its cutoff month through ym(), the app's local
+   calendar helper. It used to call toISOString().slice(0,7), which is UTC and
+   therefore named the previous month for the first five hours of every 1st.
+   ym() is a global in the renderer — utils.js loads before settings.js — so the
+   dependency is real rather than a leak, and this harness has to supply it.
+
+   Extracted from utils.js rather than reimplemented here, so the cutoff this
+   test exercises cannot drift from the one the app computes. ym() calls ymd(),
+   so both come across. */
+const helperSource = extract(UTILS, 'ymd') + '\n' + extract(UTILS, 'ym') + '\n';
+
+// Build the function in an isolated scope: `DB` is still its only free variable,
+// with the date helpers defined alongside it exactly as they are in the app.
+const makeFn = new Function('DB', helperSource + fnSource + '\nreturn enforceDataRetention;');
 function run(DB) { makeFn(DB)(); return DB; }
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────

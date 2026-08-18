@@ -201,7 +201,7 @@ function _showSaveFailure(detail) {
     + '<button id="save-failed-retry" style="' + btn + '">Try saving again</button>'
     + '<button id="save-failed-export" style="' + btn + '">Download a copy now</button>';
 
-  const retry = document.getElementById('save-failed-retry');
+  const retry = /** @type {HTMLButtonElement|null} */ (document.getElementById('save-failed-retry'));
   if (retry) retry.onclick = async function () {
     retry.disabled = true; retry.textContent = 'Saving…';
     const ok = await saveDB();
@@ -320,7 +320,7 @@ function logActivity(action, details, category) {
   if (DB.activityLog.length >= 180 && DB.activityLog.length < 200) {
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Export before it auto-trims.', 'warning', 5000);
+        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Export before it auto-trims.', 'warning', 'Activity log');
     }, 500);
   }
   if (DB.activityLog.length > 200) DB.activityLog = DB.activityLog.slice(0, 200);

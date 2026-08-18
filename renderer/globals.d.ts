@@ -16,7 +16,10 @@ declare function enforceDataRetention(): void;
 declare function uid(): string;
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
-declare function toast(message: string, type?: string, ms?: number): void;
+// Third argument is the TITLE, not a duration — toast() derives its own delay
+// from `type`. Declared as `ms: number` for a long time, which flagged every
+// correct caller and hid the one that really was passing a number.
+declare function toast(message: string, type?: string, title?: string): void;
 declare function renderPage(page: string, resetScroll?: boolean): void;
 declare function updateSidebar(): void;
 declare function renderSidebarCalendar(): void;
@@ -33,6 +36,15 @@ declare function fmtPKR(n: any): string;
 declare function fmtNum(n: any): string;
 declare function fmtDate(d?: any): string;
 declare function today(): string;
+// Local calendar date / month — NOT toISOString(), which is UTC and names the
+// previous day from 7pm at UTC+5. See the CALENDAR DATES block in utils.js.
+declare function ymd(d?: any): string;
+declare function ym(d?: any): string;
+// Active or Cancelling: a student on notice is still living here and still owes.
+declare function isResident(t: any): boolean;
+// settings.js — serialises the in-memory DB to a download, so it still works
+// when the database write is the thing that has failed.
+declare function exportData(): void;
 declare function moneyValue(amount: any, opts?: any): string;
 declare function openExternalLink(url: string): void;
 
