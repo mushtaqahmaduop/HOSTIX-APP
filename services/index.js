@@ -24,6 +24,7 @@ const api    = require('./api-client');
 const { ConnectivityService, MODE } = require('./connectivity');
 const { OnlineQueue, STATUS } = require('./online-queue');
 const { EntitlementService } = require('./entitlement');
+const { DeviceService } = require('./device');
 
 // Tables owned by the online services. The legacy `db:*` bridge is generic by
 // design (audit M1 — freeze, don't rewrite), but it must not be a way for
@@ -78,14 +79,13 @@ function start(opts) {
   queue.attachConnectivity(() => connectivity.isOnline());
 
   // ── Entitlements (Phase 2) ────────────────────────────────────────────────
-  // Loaded, but NOT wired into `connectivity`'s licenseProvider and NOT
-  // gating anything. There is no device registration yet, so no machine in
-  // the field can hold an entitlement — this reports NONE everywhere, which
-  // is the correct answer and the reason behaviour is unchanged.
+  // Verifies and caches the control plane's signed statement about this
+  // device. services/enforcement.js consults it: a fresh entitlement outranks
+  // the local licence file, because it is the only thing that can know about a
+  // suspension, revocation or renewal decided after this machine activated.
   //
-  // Rewiring licenseProvider to this before registration exists would flip
-  // the §29 connection readout from "Valid" to "not wired" on 50+ machines
-  // in exchange for nothing. The cutover belongs with the register endpoint.
+  // With no apiBase it reports NONE and the licence file decides everything,
+  // which is the state every machine in the field is in until the URL is set.
   const entitlement = new EntitlementService({
     cfg,
     userDataDir: o.userDataDir,
@@ -95,17 +95,39 @@ function start(opts) {
     log.warn('entitlement_load_failed', { message: e.message });
   }
 
+  // ── The client that fetches one ───────────────────────────────────────────
+  // Everything above could verify and cache an entitlement; nothing fetched
+  // one. This closes the chain: register the machine, exchange its secret for
+  // a token, pull the entitlement, hand it to the enforcement decision.
+  //
+  // Inert with no apiBase, like everything else here.
+  const device = new DeviceService({
+    cfg,
+    userDataDir: o.userDataDir,
+    machineIdProvider: o.machineIdProvider,
+    licenceProvider: o.licenceProvider,
+    entitlement,
+    onChanged: o.onEntitlementChanged || (() => {})
+  });
+
+  device.start();
   connectivity.start();
   // Drain on every transition into a reachable control plane, not just on the
   // timer — a ticket queued offline should go out seconds after reconnect,
   // not up to 30s later.
   connectivity.onStatusChanged((s) => {
-    if (s.apiReachable) queue.drain().catch(() => {});
+    if (s.apiReachable) {
+      queue.drain().catch(() => {});
+      // A hostel that has been offline for a week should learn about a
+      // suspension seconds after their internet returns, not at the next
+      // six-hourly tick.
+      device.sync().catch(() => {});
+    }
   });
   if (config.isConfigured()) queue.start();
 
   _services = {
-    config, logger, api, connectivity, queue, entitlement, MODE, STATUS,
+    config, logger, api, connectivity, queue, entitlement, device, MODE, STATUS,
 
     /** Called by main.js's existing license:check handler. No extra I/O. */
     noteLicenseResult(result) {
@@ -119,6 +141,7 @@ function start(opts) {
     isInternalTable: (t) => INTERNAL_TABLES.has(String(t)),
 
     stop() {
+      try { device.stop(); } catch (_) {}
       try { connectivity.stop(); } catch (_) {}
       try { queue.stop(); } catch (_) {}
       try { logger.close(); } catch (_) {}
@@ -148,7 +171,20 @@ function registerIpc(services, electron) {
   ipcMain.handle('online:checkNow', async () => {
     // Rate-limiting lives in the service, so a renderer loop cannot turn this
     // into an outbound request amplifier.
-    return services.connectivity.checkNow();
+    await services.connectivity.checkNow();
+    // Read the state from getStatus() rather than from checkNow()'s return —
+    // that one resolves to whatever the internal probe hands back, and this
+    // handler should not be coupled to its shape.
+    const status = services.connectivity.getStatus();
+    // Refresh the entitlement as well. Syncing only on a connectivity
+    // TRANSITION meant a machine with a stable connection never re-synced
+    // between six-hourly ticks — so a suspension applied at 10am did not reach
+    // the hostel until 4pm, and pressing "check connection" did nothing about
+    // it. Someone asking the app to check is asking about all of it.
+    if (status && status.apiReachable) {
+      try { await services.device.sync(); } catch (_) {}
+    }
+    return services.connectivity.getStatus();
   });
 
   // Counts only — never the payloads, which are queued work items, not the
@@ -165,8 +201,10 @@ function registerIpc(services, electron) {
   // own channel rather than folded into `online:getStatus`, so the payload the
   // Settings page already reads keeps exactly the shape it has today.
   ipcMain.handle('online:entitlement', () => {
-    try { return services.entitlement.getStatus(); }
-    catch (_) { return null; }
+    try {
+      return Object.assign({}, services.entitlement.getStatus(),
+        { device: services.device.getStatus() });
+    } catch (_) { return null; }
   });
 
   // Push transitions to every open window.

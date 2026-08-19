@@ -42,6 +42,14 @@ const DEFAULTS = {
   queueMaxAttempts:     8,     // then dead-lettered, never retried forever
   queueBatchSize:       5,
 
+  // ── DeviceService (Phase 2) ───────────────────────────────────────────────
+  // How often the app re-reads its entitlement. This is the latency on a
+  // suspension, a revocation or a renewal reaching a hostel with a stable
+  // connection, so it is a support-call length rather than a tuning knob: an
+  // hour is a customer noticing after lunch, six hours is a customer noticing
+  // tomorrow. The request is tiny and there are ~50 of them.
+  entitlementSyncIntervalMs: 3600000,
+
   // ── Telemetry (§38) ───────────────────────────────────────────────────────
   // Off by default and stays off until there is something to send it to and a
   // documented list of what it contains. §38: no invasive analytics by default.

@@ -490,6 +490,12 @@ function activateLicense(key) {
     // The cached decision is now stale by definition — a moment ago this
     // machine was unlicensed.
     refreshEnforcement();
+    // And register with the control plane NOW. The device service schedules its
+    // first sync shortly after boot, which on a new install is before the
+    // customer has typed their key — so without this a freshly activated
+    // machine would not appear in the portal, or receive its entitlement, until
+    // the next connectivity transition or the six-hourly tick.
+    try { if (online && online.device) online.device.sync().catch(() => {}); } catch (_) {}
     return {
       success: true,
       message: 'License activated successfully!',
@@ -1394,7 +1400,17 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       // and the services layer must not reach back into main.js for it. Note
       // this is getMachineId(), NOT checkLicenseValidity() — that one writes
       // last_run.dat as a side effect (see the Phase 1 report §4a).
-      machineIdProvider: getMachineId
+      machineIdProvider: getMachineId,
+
+      // Registration needs the licence key the customer activated with.
+      // _licenceSnapshot() reads the file and writes nothing, so calling it
+      // from a background service cannot advance the anti-rollback watermark.
+      licenceProvider: () => { try { return _licenceSnapshot(); } catch (_) { return null; } },
+
+      // A suspension arriving mid-session must take effect now — recompute the
+      // decision and push it to every open window, rather than leaving the
+      // warden to discover it when a save fails with no explanation.
+      onEntitlementChanged: () => { try { refreshEnforcement(); } catch (_) {} }
     });
   } catch (e) {
     console.error('[HOSTYLLO] Online services failed to start:', e.message);
