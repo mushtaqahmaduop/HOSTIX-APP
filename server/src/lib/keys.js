@@ -1,28 +1,35 @@
 // ════════════════════════════════════════════════════════════════════════════
-// Licence keys — SHARED with the app, not ported from it
+// Licence keys — one implementation, shared with the app
 //
-// This module deliberately contains almost no logic. It re-exports the
-// canonical implementation in `renderer/src/utils.js`, which is the same file
-// `main.js`, `keygen.js` and `test-license.js` use.
+// This module contains almost no logic of its own. The key format lives in
+// `renderer/src/utils.js`, the same file `main.js`, `keygen.js` and
+// `test-license.js` use, and that single source is the whole reason the control
+// plane lives in this repository. When the server was going to sit in the SaaS
+// repo the format had to be written twice — once in JavaScript for the app,
+// once in TypeScript for the server — and held in step by committed fixtures,
+// because drift means a customer whose key works in their app and is rejected
+// on registration, or worse the reverse.
 //
-// That is the whole reason the control plane lives in this repository. When the
-// server was going to sit in the SaaS repo, the key format had to be
-// implemented twice — once in JavaScript for the app, once in TypeScript for
-// the server — and kept in step by fixture tests, because drift there means a
-// customer whose key works in their app and is rejected on registration, or
-// worse the reverse. One `require` removes the entire class of bug: there is
-// only ever one implementation to be wrong.
+// It is reached through a VENDORED copy rather than a relative require, because
+// a deployment platform builds a service from one directory and the app's
+// source tree is not inside it. The copy is generated and committed by
+// `scripts/sync-shared.js`; `test/run.js` fails if it has drifted, so it is an
+// artifact rather than a fork.
 //
-// Do not "tidy" this by copying the functions in.
+// Do not hand-edit the vendored file, and do not reimplement these functions
+// here. Change `renderer/src/utils.js` and run `npm run sync-shared`.
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
 
 const crypto = require('crypto');
-const path   = require('path');
 
-// ../../../ from server/src/lib is the repo root.
-const shared = require(path.join(__dirname, '..', '..', '..', 'renderer', 'src', 'utils.js'));
+// A VENDORED copy of renderer/src/utils.js, refreshed by scripts/sync-shared.js
+// and committed so that server/ is a self-contained deployable unit — a build
+// platform gives a service one directory, and the app's source tree is not in
+// it. The copy is a generated artifact, not a second implementation: test/run.js
+// fails if it has drifted, so it cannot quietly become a fork.
+const shared = require('./vendor/app-utils.js');
 
 const {
   parseLicenseKey,

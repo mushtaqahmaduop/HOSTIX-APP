@@ -13,7 +13,10 @@
     "migrate": "node --env-file-if-exists=.env src/migrate.js",
     "migrate:status": "node --env-file-if-exists=.env src/migrate.js --status",
     "test": "node test/run.js && node test/http.js",
-    "create-admin": "node --env-file-if-exists=.env src/scripts/create-admin.js"
+    "create-admin": "node --env-file-if-exists=.env src/scripts/create-admin.js",
+    "sync-shared": "node scripts/sync-shared.js",
+    "prestart": "node scripts/sync-shared.js",
+    "pretest": "node scripts/sync-shared.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

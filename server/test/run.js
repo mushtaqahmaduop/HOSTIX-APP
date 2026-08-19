@@ -54,10 +54,33 @@ function licence(over) {
 console.log('\nkeys.js — shared with the app, not ported from it');
 // ══════════════════════════════════════════════════════════════════════════
 
-ok('uses the SAME module the app and keygen use', () => {
+ok('the vendored copy is IDENTICAL to the app source', () => {
+  // The copy exists so server/ deploys as one directory. It is an artifact, not
+  // a fork — if renderer/src/utils.js changes and nobody runs sync-shared, the
+  // control plane would validate keys by an older rule than the app that issued
+  // them. That is the failure this catches. Vacuous in a deployed build, where
+  // the original is not present and the committed copy is all there is.
+  const sync = require('../scripts/sync-shared');
+  if (!sync.sourceExists()) return;
+  assert.ok(sync.isCurrent(),
+    'server/src/lib/vendor/app-utils.js is STALE — run: npm run sync-shared');
+});
+
+ok('the vendored copy exposes the same functions the app does', () => {
   const shared = require('../../renderer/src/utils.js');
-  assert.strictEqual(keys.parseLicenseKey, shared.parseLicenseKey);
-  assert.strictEqual(keys.licenseKeyExpiry, shared.licenseKeyExpiry);
+  for (const fn of ['parseLicenseKey', 'licenseKeyExpiry', 'validateKeyChecksum',
+                    'buildLicenseKey', 'buildLegacyLicenseKey']) {
+    assert.strictEqual(typeof keys[fn], 'function', fn + ' missing');
+    assert.strictEqual(typeof shared[fn], 'function', fn + ' missing from the app');
+  }
+  // Same input, same output — the property that actually matters.
+  const key = keys.buildLicenseKey(2027, 3, 15, 'parity-secret');
+  assert.ok(shared.validateKeyChecksum(key, 'parity-secret'),
+    'a key minted by the server does not validate in the app');
+  assert.strictEqual(
+    keys.licenseKeyExpiry(key).getTime(),
+    shared.licenseKeyExpiry(key).getTime(),
+    'the two disagree about when a licence expires');
 });
 
 ok('round-trips a v4 key it just minted', () => {
