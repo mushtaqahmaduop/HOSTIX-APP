@@ -8,12 +8,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "migrate": "node src/migrate.js",
-    "migrate:status": "node src/migrate.js --status",
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "migrate": "node --env-file-if-exists=.env src/migrate.js",
+    "migrate:status": "node --env-file-if-exists=.env src/migrate.js --status",
     "test": "node test/run.js && node test/http.js",
-    "create-admin": "node src/scripts/create-admin.js"
+    "create-admin": "node --env-file-if-exists=.env src/scripts/create-admin.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
