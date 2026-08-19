@@ -12,7 +12,7 @@
     "dev": "node --watch src/server.js",
     "migrate": "node src/migrate.js",
     "migrate:status": "node src/migrate.js --status",
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/http.js",
     "create-admin": "node src/scripts/create-admin.js"
   },
   "dependencies": {

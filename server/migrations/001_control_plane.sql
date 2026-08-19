@@ -39,7 +39,20 @@ CREATE TABLE IF NOT EXISTS licenses (
   -- problem the max_devices note below exists to handle.
   serial            TEXT,
 
-  -- Decoded from the key, in UTC, so it never depends on where the server runs.
+  -- TWO expiry dates, and the distinction matters operationally.
+  --
+  -- key_expires_at is what the customer's KEY encodes. Immutable, decoded once at registration
+  -- in UTC so it never depends on where the server runs. It is what the app enforces locally
+  -- when it has never reached the control plane — so for a hostel that stays offline, this is
+  -- the only date that exists.
+  --
+  -- expires_at is what the CONTROL PLANE says, and it is authoritative for any device that syncs.
+  -- Renewing in the portal moves this one; the key keeps its original date forever.
+  --
+  -- The consequence the portal has to surface: extending expires_at only reaches a customer whose
+  -- app connects. For an offline hostel, renewal means issuing them a NEW KEY to type in. Both
+  -- paths must stay available, and the portal shows last_seen so the admin knows which applies.
+  key_expires_at    TIMESTAMPTZ NOT NULL,
   expires_at        TIMESTAMPTZ NOT NULL,
 
   status            TEXT NOT NULL DEFAULT 'active'
@@ -195,6 +208,29 @@ CREATE TABLE IF NOT EXISTS admin_users (
 DROP TRIGGER IF EXISTS admin_users_updated_at ON admin_users;
 CREATE TRIGGER admin_users_updated_at BEFORE UPDATE ON admin_users
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =====================
+-- ADMIN SESSIONS
+-- =====================
+-- Server-side sessions, hashed, so a deploy does not sign the owner out and so a session can be
+-- revoked without waiting for it to expire. Same reasoning as device_tokens: a session is an
+-- admin session because it is in THIS table, which is why an admin cookie can never be mistaken
+-- for a device token and vice versa.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash      TEXT PRIMARY KEY,
+  admin_user_id   UUID NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+  -- Double-submit CSRF token. The cookie is SameSite=Strict, which stops the ordinary
+  -- cross-site POST; this is the second lock, because the actions behind it switch off paying
+  -- customers' software.
+  csrf_token      TEXT NOT NULL,
+  ip              TEXT,
+  user_agent      TEXT,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_user    ON admin_sessions(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
 
 -- =====================
 -- AUDIT LOG

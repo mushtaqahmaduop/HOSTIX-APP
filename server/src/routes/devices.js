@@ -164,9 +164,14 @@ async function deviceRoutes(app) {
       // same v3 key in the same second would otherwise race to INSERT and one
       // would take a unique violation.
       const lic = await client.query(
+        // key_expires_at is written once and never touched again; expires_at is what the
+        // portal moves on renewal. On a re-registration the ON CONFLICT deliberately leaves
+        // BOTH alone — a customer re-typing their original key must not silently undo an
+        // extension the owner granted.
         `INSERT INTO licenses
-           (key_fingerprint, key_version, key_expiry_part, serial, expires_at, max_devices)
-         VALUES ($1, $2, $3, $4, $5, $6)
+           (key_fingerprint, key_version, key_expiry_part, serial,
+            key_expires_at, expires_at, max_devices)
+         VALUES ($1, $2, $3, $4, $5, $5, $6)
          ON CONFLICT (key_fingerprint) DO UPDATE SET updated_at = NOW()
          RETURNING id, status, verification, max_devices, expires_at`,
         [
