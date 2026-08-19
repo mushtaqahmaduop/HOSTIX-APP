@@ -9,10 +9,17 @@
 # Nothing to compile. Plain CommonJS, no bundler, matching the desktop app.
 buildCommand = "npm ci --omit=dev"
 
-# Only rebuild when this service's own files change. Without it, every commit
-# touching the Electron app — which is most of them — redeploys the control
-# plane for no reason.
-watchPatterns = ["server/**"]
+# NO watchPatterns here, and that is deliberate.
+#
+# Paths in this file are relative to the SERVICE's root, not the repository's.
+# `server/**` looked right and matched nothing — with `railway up` the upload
+# context is this directory, so its contents sit at the top level, and a deploy
+# silently reported "no changes detected in watch paths, build will skip" while
+# appearing to succeed.
+#
+# It is also unnecessary: the service's root directory already scopes what
+# triggers a rebuild. If a pattern is ever wanted, write it relative to this
+# file — `src/**`, not `server/src/**`.
 
 [deploy]
 startCommand = "npm start"
