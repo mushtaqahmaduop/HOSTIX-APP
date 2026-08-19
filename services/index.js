@@ -23,6 +23,7 @@ const logger = require('./logger');
 const api    = require('./api-client');
 const { ConnectivityService, MODE } = require('./connectivity');
 const { OnlineQueue, STATUS } = require('./online-queue');
+const { EntitlementService } = require('./entitlement');
 
 // Tables owned by the online services. The legacy `db:*` bridge is generic by
 // design (audit M1 — freeze, don't rewrite), but it must not be a way for
@@ -76,6 +77,24 @@ function start(opts) {
   const queue = new OnlineQueue({ db: o.db, cfg });
   queue.attachConnectivity(() => connectivity.isOnline());
 
+  // ── Entitlements (Phase 2) ────────────────────────────────────────────────
+  // Loaded, but NOT wired into `connectivity`'s licenseProvider and NOT
+  // gating anything. There is no device registration yet, so no machine in
+  // the field can hold an entitlement — this reports NONE everywhere, which
+  // is the correct answer and the reason behaviour is unchanged.
+  //
+  // Rewiring licenseProvider to this before registration exists would flip
+  // the §29 connection readout from "Valid" to "not wired" on 50+ machines
+  // in exchange for nothing. The cutover belongs with the register endpoint.
+  const entitlement = new EntitlementService({
+    cfg,
+    userDataDir: o.userDataDir,
+    machineIdProvider: o.machineIdProvider
+  });
+  try { entitlement.load(); } catch (e) {
+    log.warn('entitlement_load_failed', { message: e.message });
+  }
+
   connectivity.start();
   // Drain on every transition into a reachable control plane, not just on the
   // timer — a ticket queued offline should go out seconds after reconnect,
@@ -86,7 +105,7 @@ function start(opts) {
   if (config.isConfigured()) queue.start();
 
   _services = {
-    config, logger, api, connectivity, queue, MODE, STATUS,
+    config, logger, api, connectivity, queue, entitlement, MODE, STATUS,
 
     /** Called by main.js's existing license:check handler. No extra I/O. */
     noteLicenseResult(result) {
@@ -140,6 +159,15 @@ function registerIpc(services, electron) {
   });
 
   ipcMain.handle('online:lastSuccess', () => services.connectivity.getLastSuccessfulConnection());
+
+  // Diagnostics only. A snapshot of what this machine's entitlement says —
+  // no token, no signed blob, nothing the renderer could replay. Added as its
+  // own channel rather than folded into `online:getStatus`, so the payload the
+  // Settings page already reads keeps exactly the shape it has today.
+  ipcMain.handle('online:entitlement', () => {
+    try { return services.entitlement.getStatus(); }
+    catch (_) { return null; }
+  });
 
   // Push transitions to every open window.
   services.connectivity.onStatusChanged((status) => {

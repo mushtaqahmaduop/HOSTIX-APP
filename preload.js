@@ -161,6 +161,12 @@ contextBridge.exposeInMainWorld('online', {
   queueStats: () => ipcRenderer.invoke('online:queueStats'),
   getLastSuccessfulConnection: () => ipcRenderer.invoke('online:lastSuccess'),
 
+  // Phase 2 diagnostics. A description of this machine's entitlement —
+  // state, expiry, which key signed it — and never the signed token itself,
+  // which is a credential and has no business in the renderer.
+  // `enforced: false` until device registration exists; nothing gates on this.
+  entitlement: () => ipcRenderer.invoke('online:entitlement'),
+
   /** @param {(status:object)=>void} cb @returns {()=>void} unsubscribe */
   onStatusChanged: (cb) => {
     if (typeof cb !== 'function') return () => {};

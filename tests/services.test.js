@@ -20,6 +20,7 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs     = require('fs');
 const os     = require('os');
 const path   = require('path');
@@ -814,6 +815,261 @@ await okAsync('an unhandled rejection crashes exactly once, and is logged', asyn
   // once as a rejection and once as the exception it becomes — not looping.
   const lines = raw.trim().split(/\r?\n/).filter(Boolean);
   assert.ok(lines.length <= 3, 'crash handling looped: ' + lines.length + ' lines');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\nentitlement.js — §10 licence states, §11 trust root (audit C2/H1)');
+// ══════════════════════════════════════════════════════════════════════════
+
+// Signed with an EPHEMERAL keypair generated right here, and injected through
+// the service's `keys` option. The suite therefore does not depend on the real
+// private key, which lives in the control plane's secret store and is not on
+// this machine — a test that needed it could only ever be run by one person.
+const ent = require('../services/entitlement');
+const TEST_KID = 'test-kid';
+const _entPair = crypto.generateKeyPairSync('ed25519');
+const TEST_KEYS = { [TEST_KID]: _entPair.publicKey.export({ type: 'spki', format: 'pem' }) };
+
+const b64u = (buf) => Buffer.from(buf).toString('base64url');
+
+/** Mint a compact JWS the way the control plane will. */
+function signEnt(claims, opts) {
+  const o = opts || {};
+  const header = Object.assign({ alg: 'EdDSA', typ: 'JWT', kid: TEST_KID }, o.header || {});
+  const h = b64u(JSON.stringify(header));
+  const c = b64u(JSON.stringify(claims));
+  const input = Buffer.from(h + '.' + c, 'ascii');
+  const sig = o.badSignature
+    ? Buffer.alloc(64, 7)
+    : crypto.sign(null, input, o.key || _entPair.privateKey);
+  return h + '.' + c + '.' + b64u(sig);
+}
+
+const DAY = 86400000;
+function claimsFor(over) {
+  const now = Date.now();
+  return Object.assign({
+    ver: 1,
+    deviceId:  'dev_1',
+    licenseId: 'lic_1',
+    machineId: 'MACHINE_A',
+    status:    'ACTIVE',
+    issuedAt:  new Date(now).toISOString(),
+    expiresAt: new Date(now + 30 * DAY).toISOString(),
+    notAfter:  new Date(now + 7 * DAY).toISOString(),
+    policy:    { graceDays: 14, readOnlyOnExpiry: true }
+  }, over || {});
+}
+
+const entOpts = { keys: TEST_KEYS, machineId: 'MACHINE_A' };
+
+ok('a well-formed entitlement verifies', () => {
+  const r = ent.verifyEntitlement(signEnt(claimsFor()), entOpts);
+  assert.strictEqual(r.valid, true, r.reason);
+  assert.strictEqual(r.claims.status, 'ACTIVE');
+  assert.strictEqual(r.kid, TEST_KID);
+});
+
+ok('a tampered payload is rejected', () => {
+  const jws = signEnt(claimsFor());
+  const parts = jws.split('.');
+  parts[1] = b64u(JSON.stringify(claimsFor({ expiresAt: new Date(Date.now() + 3650 * DAY).toISOString() })));
+  const r = ent.verifyEntitlement(parts.join('.'), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.reason, ent.E.BAD_SIGNATURE);
+});
+
+ok('alg:none is rejected — the classic JWT break', () => {
+  const h = b64u(JSON.stringify({ alg: 'none', typ: 'JWT', kid: TEST_KID }));
+  const c = b64u(JSON.stringify(claimsFor()));
+  const r = ent.verifyEntitlement(h + '.' + c + '.', entOpts);
+  assert.strictEqual(r.valid, false);
+  // An empty third segment trips the structural check before alg is read;
+  // either refusal is correct, neither may pass.
+  assert.ok(r.reason === ent.E.ALG || r.reason === ent.E.MALFORMED, r.reason);
+});
+
+ok('an HMAC alg is rejected even with a correct-looking signature', () => {
+  // Algorithm confusion: sign with HS256 using the PUBLIC key as the shared
+  // secret. A verifier that trusts the header's alg accepts this.
+  const h = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: TEST_KID }));
+  const c = b64u(JSON.stringify(claimsFor()));
+  const mac = crypto.createHmac('sha256', TEST_KEYS[TEST_KID]).update(h + '.' + c).digest();
+  const r = ent.verifyEntitlement(h + '.' + c + '.' + b64u(mac), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.reason, ent.E.ALG);
+});
+
+ok('a signature from the wrong key is rejected', () => {
+  const other = crypto.generateKeyPairSync('ed25519');
+  const r = ent.verifyEntitlement(signEnt(claimsFor(), { key: other.privateKey }), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.reason, ent.E.BAD_SIGNATURE);
+});
+
+ok('an unknown kid is rejected', () => {
+  const r = ent.verifyEntitlement(signEnt(claimsFor(), { header: { kid: 'nope' } }), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.reason, ent.E.UNKNOWN_KID);
+});
+
+ok('an entitlement for another machine is rejected', () => {
+  const r = ent.verifyEntitlement(signEnt(claimsFor({ machineId: 'MACHINE_B' })), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.reason, ent.E.WRONG_MACHINE);
+});
+
+ok('claims are validated strictly, not plausibly', () => {
+  const bad = [
+    claimsFor({ ver: 2 }),
+    claimsFor({ status: 'TOTALLY_FINE' }),
+    claimsFor({ status: undefined }),
+    claimsFor({ expiresAt: 'soon' }),
+    claimsFor({ policy: undefined }),
+    claimsFor({ policy: { graceDays: -1, readOnlyOnExpiry: true } }),
+    claimsFor({ policy: { graceDays: 14, readOnlyOnExpiry: 'yes' } }),
+    claimsFor({ machineId: '' })
+  ];
+  for (const c of bad) {
+    const r = ent.verifyEntitlement(signEnt(c), entOpts);
+    assert.strictEqual(r.valid, false, 'accepted: ' + JSON.stringify(c));
+  }
+});
+
+ok('garbage input never throws', () => {
+  for (const bad of [null, undefined, '', 'x', 'a.b', 'a.b.c.d', '...', 42, {}]) {
+    const r = ent.verifyEntitlement(bad, entOpts);
+    assert.strictEqual(r.valid, false);
+  }
+});
+
+ok('past notAfter → stale, with claims preserved for the UI', () => {
+  const c = claimsFor({ notAfter: new Date(Date.now() - DAY).toISOString() });
+  const r = ent.verifyEntitlement(signEnt(c), entOpts);
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.stale, true);
+  assert.strictEqual(r.reason, ent.E.STALE);
+  assert.strictEqual(r.claims.licenseId, 'lic_1', 'a stale token must still explain itself');
+});
+
+ok('the shipped public key map parses and is addressed by kid', () => {
+  const keys = require('../services/entitlement-keys');
+  assert.ok(Object.keys(keys.KEYS).length >= 1);
+  assert.ok(keys.KEYS[keys.ACTIVE_KID], 'ACTIVE_KID is not in the map');
+  const parsed = crypto.createPublicKey(keys.KEYS[keys.ACTIVE_KID]);
+  assert.strictEqual(parsed.asymmetricKeyType, 'ed25519');
+});
+
+// ── The service: cache, staleness, clock watermark ────────────────────────
+
+function newEntService(dir, over) {
+  return new ent.EntitlementService(Object.assign({
+    userDataDir: dir,
+    keys: TEST_KEYS,
+    machineIdProvider: () => 'MACHINE_A'
+  }, over || {}));
+}
+
+ok('with no cache the state is NONE — which is every machine today', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const st = newEntService(dir).load();
+  assert.strictEqual(st.state, ent.LOCAL.NONE);
+  assert.strictEqual(st.enforced, false, 'this phase must enforce nothing');
+});
+
+ok('a verified entitlement is cached and survives a restart', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const a = newEntService(dir);
+  a.store(signEnt(claimsFor()));
+  assert.strictEqual(a.getStatus().state, 'ACTIVE');
+
+  // A genuinely new instance reading only what is on disk.
+  const b = newEntService(dir);
+  const st = b.load();
+  assert.strictEqual(st.state, 'ACTIVE');
+  assert.strictEqual(st.deviceId, 'dev_1');
+});
+
+ok('an entitlement that does not verify is never written to disk', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const svc = newEntService(dir);
+  svc.store(signEnt(claimsFor(), { badSignature: true }));
+  assert.strictEqual(svc.getStatus().state, ent.LOCAL.NONE);
+  assert.strictEqual(fs.existsSync(path.join(dir, ent.CACHE_FILE)), false,
+    'a rejected entitlement reached the cache');
+});
+
+ok('a corrupt cache file degrades to NONE rather than throwing', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  fs.writeFileSync(path.join(dir, ent.CACHE_FILE), '{not json');
+  assert.strictEqual(newEntService(dir).load().state, ent.LOCAL.NONE);
+});
+
+ok('a cached entitlement goes STALE once notAfter passes', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  newEntService(dir).store(signEnt(claimsFor()));
+  // The same bytes on disk, read 8 days later.
+  const later = Date.now() + 8 * DAY;
+  const st = newEntService(dir, { now: () => later }).load();
+  assert.strictEqual(st.state, ent.LOCAL.STALE);
+  assert.strictEqual(st.licenseId, 'lic_1');
+});
+
+ok('a copied entitlement is refused on a different machine', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  newEntService(dir).store(signEnt(claimsFor()));
+  const other = newEntService(dir, { machineIdProvider: () => 'MACHINE_B' });
+  assert.strictEqual(other.load().state, ent.LOCAL.NONE);
+});
+
+ok('a clock wound back behind server time is detectable (audit H1)', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const issuedAt = new Date().toISOString();
+  newEntService(dir).store(signEnt(claimsFor({ issuedAt })));
+
+  const rolledBack = Date.parse(issuedAt) - 30 * DAY;
+  const svc = newEntService(dir, { now: () => rolledBack });
+  svc.load();
+  assert.strictEqual(svc.clockSuspect(), true,
+    'a clock behind a time the server already asserted must be detectable');
+});
+
+ok('the server-time watermark only ever moves forward', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const svc = newEntService(dir);
+  const newer = new Date(Date.now()).toISOString();
+  const older = new Date(Date.now() - 10 * DAY).toISOString();
+  svc.store(signEnt(claimsFor({ issuedAt: newer })));
+  svc.store(signEnt(claimsFor({ issuedAt: older })));
+  assert.strictEqual(svc.getStatus().serverTimeSeen, newer,
+    'an older entitlement lowered the watermark');
+});
+
+ok('clear() drops the cache but not the watermark', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  const svc = newEntService(dir);
+  svc.store(signEnt(claimsFor()));
+  const seen = svc.getStatus().serverTimeSeen;
+  const st = svc.clear();
+  assert.strictEqual(st.state, ent.LOCAL.NONE);
+  assert.strictEqual(fs.existsSync(path.join(dir, ent.CACHE_FILE)), false);
+  assert.strictEqual(svc.getStatus().serverTimeSeen, seen,
+    'deactivation must not be a way to launder a wound-back clock');
+});
+
+await okAsync('refresh() makes ZERO network calls while unconfigured', async () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ent-'));
+  let called = 0;
+  api._setFetch(() => { called++; throw new Error('the wire must not be touched'); });
+  try {
+    config.load({ overrides: { apiBase: null } });
+    const r = await newEntService(dir).refresh('tok');
+    assert.strictEqual(r.errorCode, 'E_NOT_CONFIGURED');
+    assert.strictEqual(called, 0, 'an unconfigured install reached the network');
+  } finally {
+    api._setFetch(null);
+    config.load({});
+  }
 });
 
 // ── Summary ────────────────────────────────────────────────────────────────

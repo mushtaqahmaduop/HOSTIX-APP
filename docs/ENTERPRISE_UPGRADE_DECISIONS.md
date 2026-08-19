@@ -154,9 +154,72 @@ documented migration and communication, and there was no evidence that no hostel
 
 ---
 
+## D-7 — Desktop identity: **`desktop_licenses` + `desktop_devices`, with a nullable `hostel_id`**
+
+Decided 2026-08-19, after the inspection in `docs/PHASE_2_INTEGRATION_SHAPE.md`.
+
+A desktop install is **not** a `hostels` row. It gets its own two tables, so
+nothing touches live SaaS tenancy or RLS on day one. `desktop_licenses` carries a
+**nullable** `hostel_id` FK, filled in if and when that customer also buys the
+SaaS — one row to link later, rather than two identity systems to merge.
+
+Rejected: making every desktop install a tenant row (drags in RLS and the
+`plan` CHECK constraint for ~50 rows that hold no hostel data), and fully
+separate tables with no link (a permanent fork; every "who are our customers"
+question would have to union two tables forever).
+
+---
+
+## D-8 — Unknown keys at registration: **admit, but flag `unverified`**
+
+An unrecognised licence key registers and the app keeps working — grace or
+read-only per D-3 — but the licence lands in the admin console as
+`unverified`, carrying its machine id, first-seen time and app version. The
+owner confirms it to `ACTIVE` or rejects it to `REVOKED`.
+
+**Why not trust-on-first-use:** the HMAC secret ships inside `app.asar` (C2), so
+accepting any key that passes the HMAC would let anyone who unpacked the app
+register unlimited legitimate-looking licences — turning a local crack into a
+permanent server-side account.
+
+**Why not a pre-seeded allowlist:** it was checked and it cannot work. See
+`PHASE_2_INTEGRATION_SHAPE.md` §7.1 — the key history holds **12 distinct keys,
+one with a client note**, because the v3 format made a key a pure function of
+its expiry month, so dozens of hostels were issued the same twelve strings. A
+key never identified a customer. There is no customer list to inherit; the
+first registration is where customer identity gets created for this product.
+
+---
+
+## D-9 — Deploy target: **the existing Railway API service**
+
+`/desktop/v1/*` registers in the existing `apps/api` Fastify app alongside
+`/api/v1/*`. At `pollIntervalMs: 60000`, 50 machines is 0.83 req/s — not a
+second service's worth of traffic — and it reuses the deploy pipeline, the
+response envelope, the error handler, Sentry and the Redis `jti` blocklist.
+
+Four conditions attach, and they are requirements, not preferences:
+
+1. `/desktop/v1/healthz` must **not** probe the database. `/api/v1/health` does;
+   pointing every install at that shape buys 50 pointless DB round-trips a minute.
+2. `railway.toml`'s `healthcheckPath` stays `/api/v1/health` — that is Railway's
+   deploy gate and a different job.
+3. Device tokens get their **own** middleware and an `aud` claim each verifier
+   rejects. `requireAuth` sets `request.hostelId` for RLS; a device token has no
+   user and may have no hostel, and must never satisfy it.
+4. `/devices/register` needs its own Redis rate limit — this API has no global
+   rate-limit plugin, only per-route limiters (`rl:login:{ip}`).
+
+CORS is a non-issue: the desktop calls from the Electron main process via
+`net.fetch`, which sends no `Origin`, so `CORS_ORIGIN` never applies.
+
+---
+
 ## Still open
 
-- **`C:\hostyllo` integration shape** — not yet inspected (D-1). Blocks Phase 2, not Phase 1.
+- ~~**`C:\hostyllo` integration shape**~~ — **CLOSED 2026-08-19.** Inspected;
+  findings and the proposed `/desktop/v1/*` contract are in
+  `docs/PHASE_2_INTEGRATION_SHAPE.md`. D-7, D-8 and D-9 above settle what it left open.
 - **Packaged installers** — neither x64 nor ia32 has been built and launched yet. The
   packaging config changes are reasoned from loader source, not proven.
 - **Manual GUI QA** — print/PDF, charts, Excel, menus, About, License Info. Needs a human.

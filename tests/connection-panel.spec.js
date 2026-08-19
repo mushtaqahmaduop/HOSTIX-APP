@@ -55,10 +55,12 @@ test('the connection panel reports four separate states and makes no requests', 
     null, { timeout: 30000 });
   await win.waitForTimeout(400);
 
-  // The bridge is exactly five read-only methods — a sixth must be deliberate.
+  // The bridge is exactly six read-only methods — a seventh must be deliberate.
+  // 'entitlement' was the sixth (Phase 2): a snapshot of this machine's licence
+  // state, for support. Never the signed token, which is a credential.
   const bridge = await win.evaluate(() => Object.keys(window.online || {}).sort());
   console.log('\n[bridge] ' + JSON.stringify(bridge));
-  expect(bridge).toEqual(['checkNow', 'getLastSuccessfulConnection',
+  expect(bridge).toEqual(['checkNow', 'entitlement', 'getLastSuccessfulConnection',
                           'onStatusChanged', 'getStatus', 'queueStats'].sort());
 
   // The offline gate: nothing configured, nothing ever reached.

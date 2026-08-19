@@ -111,11 +111,20 @@ test('Phase 1 services boot, stay offline, and expose a narrow bridge', async ()
     expect(Array.isArray(roomsOk)).toBe(true);
 
     // ── 5. Nothing sensitive, and no URL, crossed the bridge ────────────────
+    // An exact set, so accidentally widening the bridge fails the build.
+    // 'entitlement' joined it in Phase 2 and returns a description of the
+    // licence state — no token, no signed blob, nothing replayable.
     const keys = await win.evaluate(() => Object.keys(window.online).sort());
     expect(keys).toEqual([
-      'checkNow', 'getLastSuccessfulConnection', 'getStatus',
+      'checkNow', 'entitlement', 'getLastSuccessfulConnection', 'getStatus',
       'onStatusChanged', 'queueStats'
     ]);
+
+    // And what it hands back must be a description, never a credential.
+    const ent = await win.evaluate(() => window.online.entitlement());
+    expect(ent.state, 'no machine can hold an entitlement yet').toBe('NONE');
+    expect(ent.enforced, 'this phase gates nothing').toBe(false);
+    expect(Object.keys(ent)).not.toContain('jws');
   } finally {
     await app.close();
   }

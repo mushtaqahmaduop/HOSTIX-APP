@@ -1255,7 +1255,12 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     online = onlineServices.start({
       db,
       userDataDir: app.getPath('userData'),
-      isDev: !IS_PROD
+      isDev: !IS_PROD,
+      // Injected rather than imported: an entitlement is bound to a machine,
+      // and the services layer must not reach back into main.js for it. Note
+      // this is getMachineId(), NOT checkLicenseValidity() — that one writes
+      // last_run.dat as a side effect (see the Phase 1 report §4a).
+      machineIdProvider: getMachineId
     });
   } catch (e) {
     console.error('[HOSTYLLO] Online services failed to start:', e.message);
