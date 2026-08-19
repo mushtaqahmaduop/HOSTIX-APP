@@ -29,3 +29,7 @@ blob-report/
 
 # Dev-mode app data — never the real client database
 .devdata/
+
+# Control-plane server — its own dependency tree, not the app's
+server/node_modules/
+server/.env
