@@ -4,8 +4,11 @@
    Also provides deactivateLicense() for the Settings page.
 
    FIXES:
-   FIX-L1  maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars).
-   FIX-L2  licDoActivate validates key length using 21.
+   FIX-L1  maxlength is 26 — the current key has four body groups
+           (HOSTEL-XXXX-XXXX-XXXX-XXXX). The 21-char three-group key predates
+           it and still activates, so the field accepts both.
+   FIX-L2  licDoActivate accepts either length, rejecting only what is
+           shorter than the legacy 21.
    FIX-L3  Activate button double-click race condition fixed — disable on click.
    FIX-L4  licFormatKey rewritten — handles partial input and paste correctly.
    FIX-L5  Machine ID shown as truncated (first 16 chars + …) for privacy.
@@ -90,8 +93,9 @@ function _showActivationScreen(reason, expiry) {
     + (canActivate
       ? '<div style="margin-bottom:10px;text-align:left;">'
         + '<div style="font-size:11px;color:#4d6580;margin-bottom:6px;font-weight:700;">LICENSE KEY</div>'
-        // [FIX-L1] maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars)
-        + '<input id="lic-key-input" type="text" maxlength="21" placeholder="HOSTEL-XXXX-XXXX-XXXX"'
+        // maxlength 26 — HOSTEL-XXXX-XXXX-XXXX-XXXX = 6+4*(1+4) = 26 chars. The
+        // older three-group key is 21 and still fits, so one field takes both.
+        + '<input id="lic-key-input" type="text" maxlength="26" placeholder="HOSTEL-XXXX-XXXX-XXXX-XXXX"'
         + ' oninput="licFormatKey(this)"'
         + ' style="width:100%;box-sizing:border-box;padding:12px 16px;background:#0f1a2e;'
         + 'border:1px solid #1e3050;border-radius:10px;color:#e8eef8;font-size:15px;'
@@ -134,10 +138,11 @@ function licFormatKey(inp) {
   // Ensure HOSTEL prefix
   var body  = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
 
-  // Build formatted parts (max 12 body chars = 3 groups of 4)
-  // This correctly reformats both partial input and fully-pasted keys
+  // Build formatted parts (max 16 body chars = 4 groups of 4). Sixteen, not
+  // twelve: a current key has four body groups and a 12-char cap would eat the
+  // last one as the user pasted it. Three-group legacy keys still format fine.
   var parts = [];
-  for (var i = 0; i < body.length && i < 12; i += 4) {
+  for (var i = 0; i < body.length && i < 16; i += 4) {
     parts.push(body.slice(i, i + 4));
   }
 
@@ -164,15 +169,16 @@ async function licDoActivate() {
   if (errEl) errEl.style.display = 'none';
   if (okEl)  okEl.style.display  = 'none';
 
-  // [FIX-L2] Correct length check: HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 characters
+  // 21 is the legacy three-group key; 26 the current four-group one. Anything
+  // shorter than the legacy form cannot be complete whichever it is.
   if (!key || key.length < 21) {
-    if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
     return;
   }
 
   // Basic format check before sending to main process
-  if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
-    if (errEl) { errEl.textContent = 'Key format is invalid. Expected: HOSTEL-XXXX-XXXX-XXXX'; errEl.style.display = 'block'; }
+  if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}(-[A-Z0-9]{4})?$/.test(key)) {
+    if (errEl) { errEl.textContent = 'Key format is invalid. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX'; errEl.style.display = 'block'; }
     return;
   }
 

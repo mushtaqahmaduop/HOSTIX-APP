@@ -1272,9 +1272,22 @@ function renderLicenseSettingsPanel() {
   const expStr   = hasLic && licCache.expiry
     ? new Date(licCache.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})
     : '—';
+  // Mask the checksum groups by POSITION, not by an exact segment count: keys
+  // come in three groups (legacy) or four (current), and the old `length===4`
+  // test fell through to printing a current key on screen in full.
   const keyStr   = hasLic && licCache.key
-    ? (() => { const p = licCache.key.split('-'); return p.length===4 ? p[0]+'-'+p[1]+'-····-'+p[3] : licCache.key; })()
+    ? (() => {
+        const p = licCache.key.split('-');
+        if (p.length < 4) return licCache.key;
+        return p.slice(0, 2).join('-') + '-'
+             + p.slice(2, -1).map(() => '····').join('-') + '-' + p[p.length - 1];
+      })()
     : '—';
+  // Days left is worth showing now that keys can be cut for a week: on a
+  // one-month licence the expiry date alone reads as far away until it is not.
+  const daysLeft = hasLic && licCache.expiry
+    ? Math.ceil((new Date(licCache.expiry) - new Date()) / 86400000)
+    : null;
 
   return `
   <div class="card">
@@ -1297,6 +1310,7 @@ function renderLicenseSettingsPanel() {
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Valid Until</div>
         <div style="font-size:13px;font-weight:700;color:${hasLic?'var(--green)':'var(--text3)'}">${escHtml(expStr)}</div>
+        ${daysLeft === null ? '' : `<div style="font-size:11px;margin-top:4px;color:${daysLeft <= 14 ? 'var(--danger-fg)' : 'var(--text3)'}">${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining</div>`}
       </div>
     </div>
     <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">

@@ -636,23 +636,123 @@ function courseKeyNav(e) {
   if (items[cur]) items[cur].scrollIntoView({ block: 'nearest' });
 }
 
-// Centralized utility functions for key validation
+// ── License key format ───────────────────────────────────────────────────────
+// Two formats are in circulation. Both validate; only v4 is issued.
+//
+//   v3  HOSTEL-EEEE-CCCC-CCCC          (21 chars, 3 groups)
+//       EEEE = base36(year*12 + month-1). Expiry is a whole MONTH, and the key
+//       is a pure function of that month — so every client whose licence ended
+//       in the same month was handed the SAME key, and no key could ever be
+//       cut for a trial shorter than a month. Those two facts are why the
+//       format is retired. It is still ACCEPTED, because the licence files on
+//       the 50+ machines already activated re-check their key at every startup.
+//
+//   v4  HOSTEL-EEEE-SSSS-CCCC-CCCC     (26 chars, 5 groups)
+//       EEEE = base36(days since 1970-01-01 UTC) — expiry is an exact DAY, so
+//              7-day and 14-day keys are expressible.
+//       SSSS = random base36 serial — two keys cut for the same expiry date
+//              still differ.
+//       CCCC-CCCC = HMAC-SHA256('V4:EEEE:SSSS', SECRET) hex, first 8.
+//
+// A v4 licence runs to the END of its expiry day (23:59:59.999 local).
+const LICENSE_KEY_RE_V3 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+const LICENSE_KEY_RE_V4 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+
+function parseLicenseKey(key) {
+  const k = String(key == null ? '' : key).toUpperCase().trim();
+  if (LICENSE_KEY_RE_V4.test(k)) {
+    const p = k.split('-');
+    return { version: 4, key: k, expPart: p[1], serial: p[2], checksum: p[3] + p[4] };
+  }
+  if (LICENSE_KEY_RE_V3.test(k)) {
+    const p = k.split('-');
+    return { version: 3, key: k, expPart: p[1], serial: '', checksum: p[2] + p[3] };
+  }
+  return null;
+}
+
+// What the checksum is taken over. The 'V4:' tag stops a v4 key from ever
+// colliding with the v3 key that happens to share its first group.
+function licenseChecksumPayload(parsed) {
+  return parsed.version === 4
+    ? 'V4:' + parsed.expPart + ':' + parsed.serial
+    : parsed.expPart;
+}
+
+function licenseChecksum(parsed, secret) {
+  return crypto.createHmac('sha256', secret)
+    .update(licenseChecksumPayload(parsed)).digest('hex').toUpperCase().slice(0, 8);
+}
+
+// Days between the Unix epoch and a calendar date, counted in UTC so the number
+// a key carries does not shift with the machine's timezone.
+function licenseDayNumber(year, month, day) {
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function licenseDayToDate(dayNumber) {
+  const utc = new Date(dayNumber * 86400000);
+  // Same calendar date, but ending a millisecond before local midnight: the
+  // client's last day is the whole day, not the instant it starts.
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate(), 23, 59, 59, 999);
+}
+
 function validateKeyFormat(key) {
-  return /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key.toUpperCase().trim());
+  return parseLicenseKey(key) !== null;
 }
 
 function validateKeyChecksum(key, secret) {
   try {
-    const parts = key.toUpperCase().trim().split('-');
-    const expPart = parts[1];
-    const chk = parts[2] + parts[3];
-    const expected = crypto.createHmac('sha256', secret)
-      .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-    return chk === expected;
+    const parsed = parseLicenseKey(key);
+    if (!parsed) return false;
+    return parsed.checksum === licenseChecksum(parsed, secret);
   } catch (e) {
     console.error('[DAMAM] Key checksum validation failed:', e.message);
     return false;
   }
+}
+
+// The expiry instant a key encodes. v3 keys keep their original meaning to the
+// millisecond — midnight at the start of the month's last day — because moving
+// it would move the expiry date under licences already activated in the field.
+function licenseKeyExpiry(key) {
+  const parsed = parseLicenseKey(key);
+  if (!parsed) return null;
+  const n = parseInt(parsed.expPart, 36);
+  if (isNaN(n)) return null;
+  if (parsed.version === 4) return licenseDayToDate(n);
+  return new Date(Math.floor(n / 12), (n % 12) + 1, 0);
+}
+
+// Rejection-sampled so every base36 character is equally likely: 256 is not a
+// multiple of 36, and a plain modulo would favour 0-3 in every position.
+function licenseSerial() {
+  const A = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let out = '';
+  while (out.length < 4) {
+    const n = crypto ? crypto.randomBytes(1)[0] : Math.floor(Math.random() * 256);
+    if (n >= 252) continue;                     // 252 = 36 * 7 — drop the biased tail
+    out += A[n % 36];
+  }
+  return out;
+}
+
+// Issue a key. `serial` is injectable for the tests only; every production
+// caller omits it and gets a fresh random one.
+function buildLicenseKey(year, month, day, secret, serial) {
+  const expPart = licenseDayNumber(year, month, day).toString(36).toUpperCase().padStart(4, '0');
+  const ser     = String(serial || licenseSerial()).toUpperCase();
+  const chk     = licenseChecksum({ version: 4, expPart: expPart, serial: ser }, secret);
+  return 'HOSTEL-' + expPart + '-' + ser + '-' + chk.slice(0, 4) + '-' + chk.slice(4, 8);
+}
+
+// Legacy issuer — month granularity, no serial, identical output for identical
+// input. Only for topping up a client still running a build that predates v4
+// and would reject the longer key outright.
+function buildLegacyLicenseKey(year, month, secret) {
+  const expPart = (year * 12 + (month - 1)).toString(36).toUpperCase().padStart(4, '0');
+  const chk     = licenseChecksum({ version: 3, expPart: expPart }, secret);
+  return 'HOSTEL-' + expPart + '-' + chk.slice(0, 4) + '-' + chk.slice(4, 8);
 }
 
 // ── Room ordering ────────────────────────────────────────────────────────────
@@ -701,5 +801,9 @@ function studentsByRoom(list) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { validateKeyFormat, validateKeyChecksum, cmpRoomNo };
+  module.exports = {
+    validateKeyFormat, validateKeyChecksum, parseLicenseKey, licenseKeyExpiry,
+    licenseDayNumber, licenseDayToDate, licenseSerial,
+    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo
+  };
 }

@@ -299,7 +299,7 @@ function decryptLicense(encStr, machineId) {
 }
 
 // ── Key Validation ────────────────────────────────────────────────────────────
-const { validateKeyFormat, validateKeyChecksum } = require('./renderer/src/utils');
+const { validateKeyFormat, validateKeyChecksum, licenseKeyExpiry } = require('./renderer/src/utils');
 
 function _validateKeyFormat(key) {
   return validateKeyFormat(key);
@@ -309,10 +309,10 @@ function _validateKeyChecksum(key) {
   return validateKeyChecksum(key, _SECRET);
 }
 
+// Both key formats decode here: a v3 key expires at the start of its month's
+// last day, a v4 key at the end of its exact expiry day. See licenseKeyExpiry.
 function _getExpiryFromKey(key) {
-  const expPart = key.toUpperCase().trim().split('-')[1];
-  const months  = parseInt(expPart, 36);
-  return new Date(Math.floor(months / 12), months % 12 + 1, 0);
+  return licenseKeyExpiry(key);
 }
 
 // ── Anti-Time-Cheat ───────────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ function checkLicenseValidity() {
 function activateLicense(key) {
   const k = key.toUpperCase().trim();
   if (!_validateKeyFormat(k))
-    return { success: false, reason: 'Invalid key format. Expected: HOSTEL-XXXX-XXXX-XXXX' };
+    return { success: false, reason: 'Invalid key format. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX' };
   if (!_validateKeyChecksum(k))
     return { success: false, reason: 'Invalid license key — signature mismatch. Check the key and try again.' };
   const expiry = _getExpiryFromKey(k);

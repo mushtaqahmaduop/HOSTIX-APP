@@ -317,8 +317,8 @@
       class="key-input"
       id="key-input"
       type="text"
-      placeholder="HOSTEL-XXXX-XXXX-XXXX"
-      maxlength="21"
+      placeholder="HOSTEL-XXXX-XXXX-XXXX-XXXX"
+      maxlength="26"
       autocomplete="off"
       spellcheck="false"
       oninput="formatKeyInput(this)"
@@ -405,14 +405,17 @@
       });
     }
 
-    // ── Auto-format key input: HOSTEL-XXXX-XXXX-XXXX ─────────────────────────
+    // ── Auto-format key input ────────────────────────────────────────────────
+    // Groups of four, up to four groups: HOSTEL-XXXX-XXXX-XXXX-XXXX. Three
+    // groups is the older key format, still accepted — so the body cap is 16,
+    // not 12, or a current key gets its last group silently chopped off.
     function formatKeyInput(inp) {
       // Strip non-alphanumeric, uppercase
       let raw = inp.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
       // Prefix is always HOSTEL
       const body = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
       const parts = [];
-      for (let i = 0; i < body.length && i < 12; i += 4) parts.push(body.slice(i, i+4));
+      for (let i = 0; i < body.length && i < 16; i += 4) parts.push(body.slice(i, i+4));
       inp.value = 'HOSTEL' + (parts.length ? '-' + parts.join('-') : '');
       inp.classList.remove('error', 'success');
       showMsg('', '');
@@ -431,10 +434,11 @@
       const btn = document.getElementById('activate-btn');
       const val = inp.value.trim();
 
-      // Must match HOSTEL-XXXX-XXXX-XXXX (19 chars with dashes)
-      if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(val)) {
+      // Current keys carry four groups; the three-group form is the older
+      // format and still activates, so both shapes have to pass this gate.
+      if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}(-[A-Z0-9]{4})?$/.test(val)) {
         inp.classList.add('error');
-        showMsg('❌ Invalid format. Expected: HOSTEL-XXXX-XXXX-XXXX', 'error');
+        showMsg('❌ Invalid format. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX', 'error');
         return;
       }
 
