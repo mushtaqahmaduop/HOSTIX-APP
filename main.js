@@ -38,6 +38,7 @@ let _schemaMigrated = false;
 // control plane URL is configured — see services/config.js.
 const onlineServices = require('./services');
 const appLogger = require('./services/logger');
+const enforcement = require('./services/enforcement');
 let online = null;
 
 // Insert/replace a row, populating the promoted typed columns for the tables that
@@ -387,6 +388,87 @@ function checkLicenseValidity() {
     machineId: data.machineId, activatedAt: data.activatedAt };
 }
 
+// ── Enforcement ───────────────────────────────────────────────────────────────
+// One decision, recomputed at most once a second, consulted by the write gate
+// and handed to the renderer for the banner.
+//
+// Cached because it is consulted on EVERY database write. Recomputing it per
+// write would mean decrypting license.enc and reading two files for every row a
+// bulk import touches. One second is short enough that a suspension arriving
+// mid-session takes effect immediately in human terms.
+let _enforceCache = { at: 0, decision: null };
+
+function currentEnforcement(force) {
+  const now = Date.now();
+  if (!force && _enforceCache.decision && now - _enforceCache.at < 1000) {
+    return _enforceCache.decision;
+  }
+
+  let licence;
+  try {
+    licence = _licenceSnapshot();
+  } catch (e) {
+    // A licence check that throws must not take the app down with it. Treat it
+    // as unlicensed — the customer gets the activation screen, which is
+    // recoverable, rather than a dead window.
+    licence = { valid: false, reason: 'corrupt' };
+  }
+
+  const ent = (online && online.entitlement) ? safe(() => online.entitlement.getStatus(), null) : null;
+
+  const time = enforcement.effectiveNow({
+    lastRun: safe(() => _readLastRun(), null),
+    activatedAt: licence.activatedAt || null,
+    serverTimeSeen: ent ? ent.serverTimeSeen : null
+  });
+
+  const decision = enforcement.resolve({ licence, entitlement: ent, now: time.now });
+  decision.clockSuspect = time.clockSuspect;
+  decision.timeSource = time.source;
+
+  _enforceCache = { at: now, decision };
+  return decision;
+}
+
+function safe(fn, fallback) {
+  try { return fn(); } catch (_) { return fallback; }
+}
+
+/**
+ * The licence WITHOUT the last_run.dat side effect.
+ *
+ * checkLicenseValidity() advances the anti-clock-rollback watermark every time
+ * it runs (main.js _writeLastRun). The write gate calls this on every database
+ * write, so using that function here would rewrite the watermark thousands of
+ * times a day — and worse, it would keep pushing it forward from a clock we do
+ * not yet trust. Read the file, decide nothing, write nothing.
+ */
+function _licenceSnapshot() {
+  if (!fs.existsSync(LICENSE_PATH)) return { valid: false, reason: 'not_activated' };
+  let data;
+  try {
+    data = decryptLicense(fs.readFileSync(LICENSE_PATH, 'utf8'), getMachineId());
+  } catch (e) {
+    return { valid: false, reason: e.message === 'TAMPERED' ? 'tampered' : 'corrupt' };
+  }
+  if (data.machineId !== getMachineId()) return { valid: false, reason: 'wrong_machine' };
+  if (!_validateKeyChecksum(data.key)) return { valid: false, reason: 'tampered' };
+  return { valid: true, expiry: data.expiry, activatedAt: data.activatedAt, key: data.key };
+}
+
+/** Invalidate the cache — after activation, deactivation, or a fresh entitlement. */
+function refreshEnforcement() {
+  _enforceCache = { at: 0, decision: null };
+  const decision = currentEnforcement(true);
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('license:enforcementChanged', decision);
+    }
+  } catch (_) {}
+  return decision;
+}
+
 // ── Activate License ──────────────────────────────────────────────────────────
 function activateLicense(key) {
   const k = key.toUpperCase().trim();
@@ -405,6 +487,9 @@ function activateLicense(key) {
       activatedAt: new Date().toISOString() };
     fs.writeFileSync(LICENSE_PATH, encryptLicense(licenseData, machineId), 'utf8');
     _writeLastRun();
+    // The cached decision is now stale by definition — a moment ago this
+    // machine was unlicensed.
+    refreshEnforcement();
     return {
       success: true,
       message: 'License activated successfully!',
@@ -423,6 +508,7 @@ function deactivateLicense() {
     if (fs.existsSync(LICENSE_PATH))  fs.unlinkSync(LICENSE_PATH);
     if (fs.existsSync(LAST_RUN_PATH)) fs.unlinkSync(LAST_RUN_PATH);
     _cachedMachineId = null; // [FIX-05] clear cache on deactivation
+    refreshEnforcement();
     return { success: true };
   } catch (e) {
     return { success: false, message: 'Could not remove license files. Please contact support.' };
@@ -627,13 +713,25 @@ function createWindow() {
   mainWindow.on('maximize', _sendMaxState);
   mainWindow.on('unmaximize', _sendMaxState);
 
+  // checkLicenseValidity() still runs, because it is what advances the
+  // anti-clock-rollback watermark. What it no longer decides on its own is
+  // whether the app opens.
   const lic = checkLicenseValidity();
+  const decision = refreshEnforcement();
 
-  if (lic.valid) {
+  // EXPIRED is no longer a locked door. Past its date a hostel gets the app in
+  // read-only: every student, payment and report visible, searchable,
+  // printable and exportable, with new entries paused (D-3). Only a genuinely
+  // unusable licence — never activated, tampered with, bound to another
+  // machine, or revoked by the owner — sends them to the activation screen.
+  //
+  // The write gate at the database IPC boundary is what makes read-only real;
+  // this only decides which page loads.
+  if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: lic.message }
+      query: { reason: lic.reason || decision.reason, message: lic.message }
     });
   }
 
@@ -742,6 +840,13 @@ ipcMain.handle('license:check', () => {
   if (online) online.noteLicenseResult(result);
   return { ...result, valid: result.valid };
 });
+
+/**
+ * What the app is currently allowed to do. Read-only, cheap, and safe to poll —
+ * the renderer uses it to render the banner and to disable the controls that
+ * would fail at the gate anyway.
+ */
+ipcMain.handle('license:enforcement', () => currentEnforcement());
 
 // [FIX-03] Rate-limited license:activate — max 5 attempts per 60 seconds
 const _licRateLimit = { times: [] };
@@ -1129,25 +1234,52 @@ ipcMain.handle('db:all', (_e, table, where) => {
   } catch (e) { console.error('[DB] all:', e.message); return []; }
 });
 
+/**
+ * THE WRITE GATE.
+ *
+ * In the main process, at the IPC boundary, because the renderer is the
+ * untrusted side — anything it can choose not to do it can also choose to do.
+ * The renderer gets the same decision so it can grey out buttons and explain
+ * itself, but this is the one that counts.
+ *
+ * Reads are never gated. An expired hostel keeps every record visible,
+ * searchable, printable and exportable; that is decision D-3 and the difference
+ * between a customer who pays late and an ex-customer.
+ */
+function _assertWritable(table) {
+  const decision = currentEnforcement();
+  if (enforcement.writeBlocked(decision, table)) {
+    const err = new Error(decision.state === 'SUSPENDED'
+      ? 'This licence is suspended — new entries are paused.'
+      : 'This licence has expired — new entries are paused until it is renewed.');
+    err.code = 'LICENCE_READ_ONLY';
+    err.licenceState = decision.state;
+    throw err;
+  }
+}
+
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
     _assertRendererTable(table);
+    _assertWritable(table);
     _dbInsert(table, id, record);
     return { ok: true };
-  } catch (e) { return { ok: false, error: e.message }; }
+  } catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
 });
 
 ipcMain.handle('db:delete', (_e, table, id) => {
   try {
     _assertRendererTable(table);
+    _assertWritable(table);
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
     return { ok: true };
-  } catch (e) { return { ok: false, error: e.message }; }
+  } catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
 });
 
 ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   try {
     _assertRendererTable(table);
+    _assertWritable(table);
     const transaction = db.transaction((rows) => {
       db.prepare(`DELETE FROM ${table}`).run();
       for (const r of rows) _dbInsert(table, r.id, r);
@@ -1190,6 +1322,8 @@ ipcMain.handle('db:exportFull', () => {
 });
 
 ipcMain.handle('db:importFull', (_e, data) => {
+  try { _assertWritable('import'); }
+  catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
   try {
     const transaction = db.transaction(() => {
       const tables = ['rooms','students','payments','expenses','cancellations',

@@ -47,6 +47,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // License — basic
   licenseCheck: () => ipcRenderer.invoke('license:check'),
 
+  /**
+   * What the app is currently allowed to do — the licence state, whether it is
+   * read-only, days remaining, and the message to show.
+   *
+   * The renderer uses this to render the banner and disable controls. It is NOT
+   * the enforcement: the real gate is in the main process at the database IPC
+   * boundary, because anything the renderer can choose not to do it can also
+   * choose to do. This is the courtesy, not the lock.
+   */
+  licenseEnforcement: () => ipcRenderer.invoke('license:enforcement'),
+
+  /** @param {(decision:object)=>void} cb @returns {()=>void} unsubscribe */
+  onEnforcementChanged: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    // The IpcRendererEvent is never handed across — it carries a `sender` that
+    // would widen this bridge well past a status snapshot.
+    const listener = (_e, decision) => { try { cb(decision); } catch (_) {} };
+    ipcRenderer.on('license:enforcementChanged', listener);
+    return () => ipcRenderer.removeListener('license:enforcementChanged', listener);
+  },
+
   // [FIX-P1] Validate key is a string before sending to main process
   licenseActivate: (key) => {
     if (typeof key !== 'string') {

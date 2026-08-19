@@ -1072,6 +1072,223 @@ await okAsync('refresh() makes ZERO network calls while unconfigured', async () 
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\nenforcement.js — what the app is allowed to do');
+// ══════════════════════════════════════════════════════════════════════════
+
+const enf = require('../services/enforcement');   // DAY is already defined above
+
+const licenceValid = (over) => Object.assign({
+  valid: true,
+  expiry: new Date(Date.now() + 90 * DAY).toISOString(),
+  activatedAt: new Date(Date.now() - 200 * DAY).toISOString()
+}, over || {});
+
+ok('a healthy licence is ACTIVE and unrestricted', () => {
+  const d = enf.resolve({ licence: licenceValid() });
+  assert.strictEqual(d.state, 'ACTIVE');
+  assert.strictEqual(d.readOnly, false);
+  assert.strictEqual(d.blocked, false);
+  assert.strictEqual(d.source, 'local');
+});
+
+ok('past expiry it enters GRACE and STILL works', () => {
+  // The customer gets room to pay. Locking on the stroke of midnight would
+  // punish a hostel whose renewal is already in the post.
+  const d = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 3 * DAY).toISOString() }) });
+  assert.strictEqual(d.state, 'GRACE');
+  assert.strictEqual(d.readOnly, false, 'grace must not restrict anything');
+});
+
+ok('past grace it is EXPIRED and read-only', () => {
+  const d = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 90 * DAY).toISOString() }) });
+  assert.strictEqual(d.state, 'EXPIRED');
+  assert.strictEqual(d.readOnly, true);
+  assert.strictEqual(d.blocked, false, 'expired must NOT lock them out of their own records');
+});
+
+ok('an unusable licence file still sends them to activation', () => {
+  // Unchanged from what 50+ machines already do. None of these is a licensing
+  // policy decision this module should soften.
+  for (const reason of ['not_activated', 'tampered', 'wrong_machine', 'corrupt']) {
+    const d = enf.resolve({ licence: { valid: false, reason } });
+    assert.strictEqual(d.state, 'UNLICENSED', reason);
+    assert.strictEqual(d.blocked, true, reason);
+  }
+});
+
+ok('EXPIRED never blocks, and REVOKED always does', () => {
+  const expired = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 900 * DAY).toISOString() }) });
+  assert.strictEqual(expired.blocked, false);
+  const revoked = enf.resolve({
+    licence: licenceValid(),
+    entitlement: { state: 'REVOKED', policy: enf.DEFAULT_POLICY }
+  });
+  assert.strictEqual(revoked.blocked, true);
+});
+
+ok('a fresh entitlement outranks the local file', () => {
+  // The only thing that can know about a suspension decided after activation.
+  const d = enf.resolve({
+    licence: licenceValid(),                       // local says: fine for 90 days
+    entitlement: { state: 'SUSPENDED', policy: enf.DEFAULT_POLICY, expiresAt: licenceValid().expiry }
+  });
+  assert.strictEqual(d.state, 'SUSPENDED');
+  assert.strictEqual(d.source, 'entitlement');
+  assert.strictEqual(d.readOnly, true);
+});
+
+ok('a STALE or missing entitlement falls back to the licence file', () => {
+  // Offline is the normal case. A hostel with no internet for six months and a
+  // valid licence must keep working exactly as before.
+  for (const ent of [null, { state: 'NONE' }, { state: 'STALE', reason: 'E_ENT_STALE' }]) {
+    const d = enf.resolve({ licence: licenceValid(), entitlement: ent });
+    assert.strictEqual(d.state, 'ACTIVE', JSON.stringify(ent));
+    assert.strictEqual(d.source, 'local', JSON.stringify(ent));
+    assert.strictEqual(d.readOnly, false);
+  }
+});
+
+ok('the server can extend grace, and can switch the lock off entirely', () => {
+  const expiry = new Date(Date.now() - 20 * DAY).toISOString();
+  const strict = enf.resolve({ licence: licenceValid({ expiry }) });
+  assert.strictEqual(strict.state, 'EXPIRED');   // 14-day default
+
+  const lenient = enf.resolve({
+    licence: licenceValid({ expiry }),
+    entitlement: { state: 'GRACE', expiresAt: expiry, policy: { graceDays: 60, readOnlyOnExpiry: true } }
+  });
+  assert.strictEqual(lenient.state, 'GRACE');
+  assert.strictEqual(lenient.readOnly, false);
+
+  const noLock = enf.resolve({
+    licence: licenceValid({ expiry }),
+    entitlement: { state: 'EXPIRED', expiresAt: expiry, policy: { graceDays: 14, readOnlyOnExpiry: false } }
+  });
+  assert.strictEqual(noLock.state, 'EXPIRED');
+  assert.strictEqual(noLock.readOnly, false, 'readOnlyOnExpiry:false must actually unlock');
+});
+
+// ── Effective time ────────────────────────────────────────────────────────
+
+ok('with an honest clock, the clock is used', () => {
+  const t = enf.effectiveNow({
+    systemNow: Date.parse('2026-08-20T10:00:00Z'),
+    lastRun: '2026-08-19T10:00:00Z',
+    activatedAt: '2026-01-01T00:00:00Z'
+  });
+  assert.strictEqual(t.source, 'system');
+  assert.strictEqual(t.clockSuspect, false);
+});
+
+ok('a clock wound back is replaced by the watermark, not rejected', () => {
+  // Using the watermark AS the clock rather than raising a tamper error: an
+  // error screen is a puzzle to solve, and a customer who learns to trigger it
+  // has learned something useful.
+  const t = enf.effectiveNow({
+    systemNow: Date.parse('2026-01-01T00:00:00Z'),
+    lastRun: '2026-08-19T10:00:00Z'
+  });
+  assert.strictEqual(t.source, 'last_run');
+  assert.strictEqual(t.clockSuspect, true);
+  assert.strictEqual(t.now.toISOString(), '2026-08-19T10:00:00.000Z');
+});
+
+ok('rolling the clock back does NOT extend a licence', () => {
+  // The whole point. Expiry is enforced locally, so this is the attack.
+  const expiry = '2026-06-01T00:00:00Z';
+  const t = enf.effectiveNow({
+    systemNow: Date.parse('2026-05-01T00:00:00Z'),   // "it is still May"
+    lastRun: '2026-08-19T00:00:00Z'                  // but the app ran in August
+  });
+  const d = enf.resolve({ licence: licenceValid({ expiry }), now: t.now });
+  assert.strictEqual(d.state, 'EXPIRED', 'a wound-back clock bought more time');
+});
+
+ok('the LATEST watermark wins, and a signed one counts', () => {
+  const t = enf.effectiveNow({
+    systemNow: Date.parse('2026-01-01T00:00:00Z'),
+    lastRun: '2026-03-01T00:00:00Z',
+    activatedAt: '2026-02-01T00:00:00Z',
+    serverTimeSeen: '2026-08-01T00:00:00Z'
+  });
+  assert.strictEqual(t.source, 'server');
+  assert.strictEqual(t.now.toISOString(), '2026-08-01T00:00:00.000Z');
+});
+
+ok('small drift is a lazy clock, not an accusation', () => {
+  const t = enf.effectiveNow({
+    systemNow: Date.parse('2026-08-20T10:00:00Z'),
+    lastRun: '2026-08-20T10:01:00Z'          // one minute ahead
+  });
+  assert.strictEqual(t.clockSuspect, false, 'a minute of drift must not accuse anyone');
+});
+
+ok('no watermarks at all is not a failure', () => {
+  const t = enf.effectiveNow({ systemNow: 1000 });
+  assert.strictEqual(t.source, 'system');
+  assert.strictEqual(t.clockSuspect, false);
+});
+
+// ── The write gate ────────────────────────────────────────────────────────
+
+ok('an active licence blocks nothing', () => {
+  const d = enf.resolve({ licence: licenceValid() });
+  for (const t of ['students', 'payments', 'expenses', 'rooms', 'activitylog']) {
+    assert.strictEqual(enf.writeBlocked(d, t), false, t);
+  }
+});
+
+ok('read-only blocks business writes', () => {
+  const d = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 90 * DAY).toISOString() }) });
+  assert.strictEqual(d.readOnly, true);
+  for (const t of ['students', 'payments', 'expenses', 'rooms', 'cancellations']) {
+    assert.strictEqual(enf.writeBlocked(d, t), true, t);
+  }
+});
+
+ok('the activity log keeps recording during a lockout', () => {
+  // Freezing it would make the one period a support call cares about the one
+  // period with no record.
+  const d = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 90 * DAY).toISOString() }) });
+  assert.strictEqual(enf.writeBlocked(d, 'activitylog'), false);
+});
+
+ok('GRACE blocks nothing at all', () => {
+  const d = enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 3 * DAY).toISOString() }) });
+  for (const t of ['students', 'payments']) {
+    assert.strictEqual(enf.writeBlocked(d, t), false, t);
+  }
+});
+
+// ── What the customer is told ─────────────────────────────────────────────
+
+ok('an active licence says nothing until renewal is near', () => {
+  assert.strictEqual(enf.message(enf.resolve({ licence: licenceValid() })), null);
+  const soon = enf.message(enf.resolve({
+    licence: licenceValid({ expiry: new Date(Date.now() + 10 * DAY).toISOString() }) }));
+  assert.ok(soon && /10 days left/.test(soon.text), soon && soon.text);
+});
+
+ok('every restricted state explains itself and offers a way out', () => {
+  const cases = [
+    enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 3 * DAY).toISOString() }) }),
+    enf.resolve({ licence: licenceValid({ expiry: new Date(Date.now() - 90 * DAY).toISOString() }) }),
+    enf.resolve({ licence: licenceValid(), entitlement: { state: 'SUSPENDED', policy: enf.DEFAULT_POLICY } })
+  ];
+  for (const d of cases) {
+    const m = enf.message(d, { supportContact: 'Hostyllo support' });
+    assert.ok(m && m.text.length > 20, d.state);
+    assert.ok(/renew|restore|contact/i.test(m.text), d.state + ': ' + m.text);
+  }
+});
+
+ok('read-only messages promise the data is still there', () => {
+  const m = enf.message(enf.resolve({
+    licence: licenceValid({ expiry: new Date(Date.now() - 90 * DAY).toISOString() }) }));
+  assert.ok(/view|print/i.test(m.text), m.text);
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 logger.close();
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) {}
