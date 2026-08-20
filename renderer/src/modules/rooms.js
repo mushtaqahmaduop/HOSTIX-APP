@@ -19,16 +19,38 @@ function setRoomSort(v) {
 }
 
 function renderRooms() {
-  // PERF: compute active-student count + names per room in ONE pass over students,
+  /* THE BED IS OCCUPIED UNTIL THEY ACTUALLY GO.
+
+     This page filtered on status==='Active', so a student on the cancellation
+     list vanished from their room the moment the request was raised — the bed
+     read Vacant for the three or four weeks they were still sleeping in it,
+     and the warden could book it to somebody else. Every other screen already
+     asks isResident(), which counts 'Cancelling'; this page was the one that
+     still disagreed with them, so the Rooms page and the dashboard reported
+     different occupancy for the same hostel.
+
+     Occupancy is isResident() now, and the bed is instead MARKED: the occupant
+     carries the date they leave, so the warden can see the seat is spoken for
+     and when it frees, which is the thing they actually needed to know. */
+  const _vacatingBy = new Map();   // studentId → vacate date, pending requests only
+  for (const c of (DB.cancellations || [])) {
+    if (c && c.status === 'Pending' && c.studentId) _vacatingBy.set(c.studentId, c.vacateDate || '');
+  }
+
+  // PERF: compute resident count + occupants per room in ONE pass over students,
   // instead of scanning all students for every room (was O(rooms × students), 3×).
   const _activeByRoom = new Map();
   for (const t of DB.students) {
-    if (t.status !== 'Active') continue;
+    if (!isResident(t)) continue;
     let e = _activeByRoom.get(t.roomId);
-    if (!e) { e = { count: 0, names: [] }; _activeByRoom.set(t.roomId, e); }
+    if (!e) { e = { count: 0, names: [], people: [], vacating: 0 }; _activeByRoom.set(t.roomId, e); }
+    const leaves = _vacatingBy.has(t.id) ? (_vacatingBy.get(t.id) || '') : null;
     e.count++; e.names.push(t.name);
+    e.people.push({ id: t.id, name: t.name, leaves });
+    if (leaves !== null) e.vacating++;
   }
   const _occOf = id => (_activeByRoom.get(id) ? _activeByRoom.get(id).count : 0);
+  const _vacOf = id => (_activeByRoom.get(id) ? _activeByRoom.get(id).vacating : 0);
 
   let rooms = DB.rooms.filter(r=>{
     const occ = _occOf(r.id) > 0;
@@ -56,7 +78,10 @@ function renderRooms() {
   const occRooms   = DB.rooms.filter(r=>_occOf(r.id)>0).length;
   const vacRooms   = totalRooms - occRooms;
   const totalBeds  = DB.rooms.reduce((s,r)=>s+(getRoomType(r)?.capacity||0),0);
-  const filledBeds = DB.students.filter(t=>t.status==='Active').length;
+  // isResident, to agree with _occOf above. Counting only 'Active' here made the
+  // bed-occupancy percentage disagree with the room counts beside it in the very
+  // same strip whenever anyone was on notice.
+  const filledBeds = DB.students.filter(isResident).length;
   const occPct     = totalRooms?Math.round(occRooms/totalRooms*100):0;
   const vacPct     = totalRooms?Math.round(vacRooms/totalRooms*100):0;
   const bedPct     = totalBeds?Math.round(filledBeds/totalBeds*100):0;
@@ -76,12 +101,14 @@ function renderRooms() {
     const cap  = type.capacity;
     const isFull = occ >= cap;
     const stateHue = occ>0 ? 'dh-green' : 'dh-violet';
-    const names = _activeByRoom.get(r.id) ? _activeByRoom.get(r.id).names : [];
+    const people = _activeByRoom.get(r.id) ? _activeByRoom.get(r.id).people : [];
+    const nVac = _vacOf(r.id);
     return `<div class="rms-card">
       <div class="rms-card__pic ${stateHue}" onclick="showRoomDetail('${r.id}')" title="Open room #${escHtml(String(r.number))}">
         ${r.photo?`<img src="${escHtml(r.photo)}" alt="Room ${escHtml(String(r.number))}">`:picPlaceholder}
         <span class="rms-card__state">${occ>0?'Occupied':'Vacant'}</span>
         <span class="rms-card__beds">${occ}/${cap} beds</span>
+        ${nVac?`<span class="rms-card__vac" title="${nVac} of these beds ${nVac===1?'is':'are'} on notice and will free up">${nVac} vacating</span>`:''}
       </div>
       <div class="rms-card__body ${stateHue}">
         <div class="rms-card__num">#${escHtml(String(r.number))}</div>
@@ -96,9 +123,14 @@ function renderRooms() {
           <span class="k">Type</span><span class="v">${cap} bed${cap===1?'':'s'}</span>
         </div>
 
-        ${names.length?`<div class="rms-occ">${names.map(n=>{
-          const st = DB.students.find(s=>s.name===n && s.roomId===r.id && s.status==='Active');
-          return `<span class="rms-occ__chip" ${st?`onclick="event.stopPropagation();showViewStudentModal('${st.id}')" title="Open ${escHtml(n)}"`:''}><i></i><span>${escHtml(n)}</span></span>`;
+        ${/* The chip used to re-find the student by NAME and status 'Active' —
+              so two students with the same name opened whichever came first,
+              and a student on notice matched nothing at all and lost their
+              click. The occupant carries its own id now. */''}
+        ${people.length?`<div class="rms-occ">${people.map(p=>{
+          const leaving = p.leaves !== null;
+          const when = leaving ? (p.leaves ? fmtDate(p.leaves) : 'end of month') : '';
+          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showViewStudentModal('${p.id}')" title="${leaving?`Leaving ${escHtml(when)} — bed stays theirs until then`:`Open ${escHtml(p.name)}`}"><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">${escHtml(when)}</b>`:''}</span>`;
         }).join('')}</div>`:''}
 
         <div class="rms-acts">
@@ -119,14 +151,15 @@ function renderRooms() {
     const type = getRoomType(r);
     const occ  = _occOf(r.id);
     const cap  = type.capacity;
-    const names = _activeByRoom.get(r.id) ? _activeByRoom.get(r.id).names : [];
+    const people = _activeByRoom.get(r.id) ? _activeByRoom.get(r.id).people : [];
+    const nVac = _vacOf(r.id);
     return `<tr onclick="showRoomDetail('${r.id}')" style="cursor:pointer">
       <td><span class="num">#${escHtml(String(r.number))}</span></td>
       <td>${escHtml(type.name)}</td>
       <td>${escHtml(r.floor||'—')} Floor</td>
-      <td>${occ}/${cap}</td>
+      <td>${occ}/${cap}${nVac?`<span class="rms-vac-note" title="${nVac} on notice">−${nVac}</span>`:''}</td>
       <td><span class="rms-card__state ${occ>0?'dh-green':'dh-violet'}" style="position:static">${occ>0?'Occupied':'Vacant'}</span></td>
-      <td>${names.length?escHtml(names.join(', ')):'<span style="color:var(--text3)">—</span>'}</td>
+      <td>${people.length?people.map(p=>escHtml(p.name)+(p.leaves!==null?` <span class="rms-vac-note">leaves ${escHtml(p.leaves?fmtDate(p.leaves):'end of month')}</span>`:'')).join(', '):'<span style="color:var(--text3)">—</span>'}</td>
       <td onclick="event.stopPropagation()">
         <div class="rms-acts" style="margin:0;padding:0">
           <button onclick="showEditRoomModal('${r.id}')" style="flex:none;padding:0 12px">Edit</button>

@@ -170,8 +170,8 @@ function renderCancellations(filterStatus='All') {
     <div class="lk-banner__l">
       <div class="lk-banner__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg></div>
       <div>
-        <div class="lk-banner__t">Freed Seats (Pending + Confirmed)</div>
-        <div class="lk-banner__s">These seats are now vacant and available for new bookings</div>
+        <div class="lk-banner__t">Seats Leaving (Pending + Confirmed)</div>
+        <div class="lk-banner__s">Confirmed seats are free now; pending ones free on their vacate date</div>
       </div>
     </div>
     <div>
@@ -405,7 +405,7 @@ function showAddCancellationModal() {
 
   showModal('modal-md','🚫 Add Cancellation Request',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--text2)">
-      ${icon('warning','sm')} <strong>Note:</strong> Once added, the student's seat is immediately marked as <strong style="color:var(--red)">Vacant</strong> and available for new bookings.
+      ${icon('warning','sm')} <strong>Note:</strong> The student stays on the roster and <strong>keeps their bed until the vacate date</strong> — they are still billed for it, and the Rooms page marks the seat <strong style="color:var(--amber)">vacating</strong> so nobody books it twice. The bed frees when the cancellation is confirmed.
     </div>
     <div class="form-grid">
       <div class="field col-full">
@@ -547,7 +547,7 @@ async function saveCancellation() {
   student.status = 'Cancelling';
   await saveDB();
   closeModal();
-  toast(`${student.name} added to cancellation list. Seat is now vacant.`, 'success');
+  toast(`${student.name} is on notice — bed held until ${vacateDate ? fmtDate(vacateDate) : 'the vacate date'}.`, 'success');
   if(currentPage==='cancellations') renderPage('cancellations');
   else if(currentPage==='dashboard') renderPage('dashboard');
 }

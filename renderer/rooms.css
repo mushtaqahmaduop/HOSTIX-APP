@@ -141,6 +141,33 @@
 .rms-occ__chip i { width:5px; height:5px; border-radius:50%; background:var(--dh); flex-shrink:0; }
 .rms-occ__chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+/* ── ON NOTICE ───────────────────────────────────────────────────────────────
+   A student on the cancellation list keeps their bed until the vacate date, so
+   the room still counts as occupied. These marks say WHEN it frees, which is
+   the question the warden is actually asking when they look at a full room.
+   Amber, not red: nothing is wrong, something is scheduled. */
+.rms-card__vac {
+    position:absolute; bottom:9px; left:9px;
+    padding:4px 10px; border-radius:999px;
+    background:var(--amber-dim); border:1px solid var(--amber);
+    color:var(--amber); font-size:10.5px; font-weight:700;
+    backdrop-filter:blur(4px);
+}
+.rms-occ__chip.is-vacating   { border-color:var(--amber); border-style:dashed; }
+.rms-occ__chip.is-vacating i { background:var(--amber); }
+.rms-occ__chip .rms-occ__vac {
+    flex-shrink:0; padding-left:6px; margin-left:1px;
+    border-left:1px solid var(--border2);
+    color:var(--amber); font-weight:700; font-size:10px; white-space:nowrap;
+}
+/* The table view says it inline — there is no room for a floating badge in a
+   grid cell, and the roster column is read left to right anyway. */
+.rms-vac-note {
+    margin-left:5px; padding:1px 6px; border-radius:5px;
+    background:var(--amber-dim); color:var(--amber);
+    font-size:10px; font-weight:700; white-space:nowrap;
+}
+
 .rms-acts { display:flex; gap:7px; margin-top:auto; padding-top:12px; min-width:0; }
 .rms-acts button {
     flex:1; height:34px; border-radius:9px; cursor:pointer; white-space:nowrap;
