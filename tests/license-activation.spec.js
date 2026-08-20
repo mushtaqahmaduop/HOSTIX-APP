@@ -80,7 +80,7 @@ test('7-day key activates and the app boots licensed', async () => {
   await win.waitForSelector('#key-input', { state: 'visible', timeout: 60000 });
 
   await activate(win, key);
-  await expect(win.locator('#msg')).toContainText('✅', { timeout: 30000 });
+  await expect(win.locator('#msg.success')).toBeVisible({ timeout: 30000 });
   expect(fs.existsSync(path.join(profile, 'license.enc'))).toBe(true);
   await app.close();
 
@@ -112,7 +112,7 @@ test('legacy three-group key still activates', async () => {
   const win = await app.firstWindow();
 
   await activate(win, key);
-  await expect(win.locator('#msg')).toContainText('✅', { timeout: 30000 });
+  await expect(win.locator('#msg.success')).toBeVisible({ timeout: 30000 });
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 60000 });
 
   const status = await win.evaluate(() => window.electronAPI.licenseCheck());
@@ -132,7 +132,7 @@ test('a key with an edited serial is refused', async () => {
   const win = await app.firstWindow();
 
   await activate(win, parts.join('-'));
-  await expect(win.locator('#msg')).toContainText('❌', { timeout: 30000 });
+  await expect(win.locator('#msg.error')).toBeVisible({ timeout: 30000 });
   expect(fs.existsSync(path.join(profile, 'license.enc'))).toBe(false);
 
   await app.close();

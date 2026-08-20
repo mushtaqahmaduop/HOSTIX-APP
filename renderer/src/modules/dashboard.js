@@ -571,7 +571,7 @@ function renderDashboard() {
           <div class="dash-kpi__label" style="margin-bottom:5px">Vacant Rooms</div>
           <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
             <span class="dash-tile__num">${vac}</span>
-            <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
+            <span style="font-size:11px;color:var(--text3)">${availSeats} seat${availSeats===1?'':'s'} free</span>
           </div>
         </div>
         <span class="dash-tile__caret">›</span>
@@ -589,8 +589,24 @@ function renderDashboard() {
         <div style="min-width:0">
           <div class="dash-kpi__label" style="margin-bottom:5px">Cash Received</div>
           <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
-            <span class="dash-tile__num">${fmtNum(cashIn.total)}</span>
-            <span style="font-size:11px;color:var(--text3)">${cashIn.arrears>0?'incl. '+fmtPKR(cashIn.arrears)+' arrears':'this month'}</span>
+            ${''/* MONEY IN A ROW OF COUNTS.
+
+                   The three tiles beside this one are counts — rooms, rooms,
+                   students — so a bare "24,500" here read as a quantity of
+                   something rather than as an amount of money. It carries its
+                   unit now, in the same <span class="pkr"> form the rest of the
+                   app uses for a figure that needs one. fmtPKR() is NOT used
+                   with it: that would print the prefix twice (CLAUDE.md rule 4).
+
+                   The caption names the month, because "this month" on a
+                   dashboard whose month selector can be moved is ambiguous
+                   exactly when it matters. */}
+            <span class="dash-tile__num"><span class="pkr">PKR</span> ${fmtNum(cashIn.total)}</span>
+            <span style="font-size:11px;color:var(--text3)">${
+              cashIn.arrears>0
+                ? 'incl. ' + fmtPKR(cashIn.arrears) + ' arrears'
+                : (typeof _rptMonthName==='function' ? 'in ' + _rptMonthName(mo) : 'this month')
+            }</span>
           </div>
         </div>
         <span class="dash-tile__caret">›</span>
