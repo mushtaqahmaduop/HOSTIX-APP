@@ -282,7 +282,19 @@ function _initDBFields(d) {
     if (s.messOptIn == null) s.messOptIn = true;
   });
   if (!d.settings.paymentMethods) d.settings.paymentMethods = ['Cash','JazzCash','EasyPaisa','Bank Transfer','Cheque'];
-  if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Other'];
+  if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Fund Transfer','Other'];
+  /* FUND TRANSFER BECOMES AN EXPENSE CATEGORY.
+     A transfer is money leaving the same till as a gas bill, and it is now
+     entered on the Expenses page like one. Existing installs get the category
+     added; it goes in before 'Other' so the catch-all stays last. Records
+     already in DB.transfers are NOT migrated — they keep their own array and
+     are folded into this category wherever outgoings are itemised, so no
+     history moves and nothing is rewritten. */
+  if (!d.settings.expenseCategories.includes(FUND_TRANSFER_CAT)) {
+    const _oi = d.settings.expenseCategories.findIndex(c => /^other$/i.test(String(c)));
+    if (_oi >= 0) d.settings.expenseCategories.splice(_oi, 0, FUND_TRANSFER_CAT);
+    else          d.settings.expenseCategories.push(FUND_TRANSFER_CAT);
+  }
   if (!d.settings.floors) d.settings.floors = ['Ground','1st','2nd','3rd'];
   // FIX #6: Use == null to guard receiptCounter — !0 is truthy so a simple falsy
   // check would reset a valid counter of 0 back to 0, potentially duplicating receipt numbers.

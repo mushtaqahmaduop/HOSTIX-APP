@@ -9,6 +9,15 @@
 const _ACTIVE_HOSTEL = sessionStorage.getItem('active_hostel') || 'hostel_1';
 const LS_KEY = 'dbh2_v3_' + _ACTIVE_HOSTEL;
 
+// The expense category a funds transfer is filed under. The standalone Funds
+// Transfer feature — its own card, screens and modals — has been removed; a
+// transfer is money leaving the same till as a gas bill and is recorded as an
+// ordinary expense under this category. Named once so the settings list, the
+// Expenses page and every report section agree. Records already in the legacy
+// `DB.transfers` array are NOT migrated: they are folded into this same
+// category wherever outgoings are itemised, so no history was rewritten.
+const FUND_TRANSFER_CAT = 'Fund Transfer';
+
 // ── Default DB schema — used by loadDB() on first run ────────────────────────
 let DB = {
   settings: {
@@ -40,7 +49,8 @@ let DB = {
     ],
     paymentMethods:     ['Cash', 'JazzCash', 'EasyPaisa', 'Bank Transfer', 'Cheque'],
     expenseCategories:  ['Electricity', 'Water', 'Gas', 'Maintenance', 'Cleaning',
-                         'Security', 'Internet', 'Furniture', 'Plumbing', 'Other'],
+                         'Security', 'Internet', 'Furniture', 'Plumbing',
+                         'Fund Transfer', 'Other'],
     floors:             ['Ground', '1st', '2nd', '3rd'],
     defaultWANumber:    '',
     hostelNameFont:     'DM Serif Display',

@@ -78,7 +78,22 @@ function renderExpenses() {
   const scope = expFilter.showAll ? 'All' : (expFilter.month || mo);
   const inScope = e => scope === 'All' || String(e.date || '').startsWith(scope);
 
-  const scoped = DB.expenses.filter(inScope);
+  /* Legacy funds-transfer records ride along as ordinary rows under the Fund
+     Transfer category. They live in DB.transfers rather than DB.expenses
+     because they used to be entered on a screen of their own, and that screen
+     is now hidden — so without this they would be inside the Total Expenses
+     figure at the top of this page while being absent from the table beneath
+     it, and the page would visibly fail to add up. Edit and delete route back
+     to the edit/delete handlers that still own the record. Nothing is rewritten
+     or migrated — the standalone Funds Transfer screens are gone, but the money
+     they recorded is all still here, under this category. */
+  const _legacyTransfers = (DB.transfers || []).filter(inScope).map(t => ({
+    id: t.id, date: t.date, category: FUND_TRANSFER_CAT,
+    description: t.description || ('Transfer' + (t.receivedBy ? ' to ' + t.receivedBy : '')),
+    amount: Number(t.amount || 0), _transfer: true,
+  }));
+
+  const scoped = DB.expenses.filter(inScope).concat(_legacyTransfers);
 
   let exps = scoped.filter(e => {
     if (expFilter.cat !== 'All' && e.category !== expFilter.cat) return false;
@@ -108,10 +123,11 @@ function renderExpenses() {
   // full with the transfer share spelled out underneath. Without this the
   // Expenses page and the dashboard's Expenses card read differently for the
   // same month, which is the disagreement this strip exists to prevent.
-  const recordsTotal  = scoped.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const scopedTrf     = (DB.transfers || []).filter(inScope)
-                          .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const scopedTotal   = recordsTotal + scopedTrf;
+  // `scoped` already carries the legacy transfers as rows, so the headline is
+  // simply its sum. It used to be records + transfers because the table held
+  // only DB.expenses; adding the transfers again now would count them twice.
+  const scopedTrf   = _legacyTransfers.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const scopedTotal = scoped.reduce((s, e) => s + Number(e.amount || 0), 0);
   // Average per day across the days actually elapsed in the scope, not the
   // calendar month — dividing August's spend by 31 on the 8th reads far too low.
   const now = new Date();
@@ -162,7 +178,11 @@ function renderExpenses() {
   const catOpts = DB.settings.expenseCategories
     .map(c => `<option value="${escHtml(c)}" ${expFilter.cat===c?'selected':''}>${escHtml(c)}</option>`).join('');
 
-  const monthsPresent = [...new Set(DB.expenses.map(e => String(e.date||'').slice(0,7)).filter(Boolean))]
+  // Transfer dates count too, or a month whose only outgoing was a transfer
+  // would be missing from the picker and unreachable from this page.
+  const monthsPresent = [...new Set(
+      DB.expenses.concat(DB.transfers || [])
+        .map(e => String(e.date||'').slice(0,7)).filter(Boolean))]
     .sort().reverse();
   if (!monthsPresent.includes(mo)) monthsPresent.unshift(mo);
   const monthOpts = monthsPresent
@@ -209,8 +229,8 @@ function renderExpenses() {
       <td class="exp-amt">${fmtPKR(e.amount)}</td>
       <td>
         <div class="exp-acts">
-          <button class="exp-act dh-blue" onclick="showEditExpenseModal('${e.id}')" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-          <button class="exp-act dh-red" onclick="deleteExpense('${e.id}')" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+          <button class="exp-act dh-blue" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button class="exp-act dh-red" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
       </td>
     </tr>`;
@@ -289,6 +309,14 @@ function expPager(pg) {
     </div>
   </div>`;
 }
+// Where an expense write should re-render to. Expenses are now editable from
+// the Reports → Expenses by Category register as well as this page, and
+// hard-coding 'expenses' navigated the owner off the report they were reading
+// the moment they corrected a figure in it.
+function _expReturnPage() {
+  return currentPage === 'reports' ? 'reports' : 'expenses';
+}
+
 function showAddExpenseModal() {
   const catOpts=DB.settings.expenseCategories.map(c=>`<option>${c}</option>`).join('');
   showModal('modal-md','Add Expense',`
@@ -314,7 +342,7 @@ async function submitAddExpense() {
   }
   DB.expenses.push({id:'e_'+uid(),category:cat,amount,date:document.getElementById('f-edate').value,description:document.getElementById('f-edesc').value.trim()});
   logActivity('Expense Added', cat+' — PKR '+amount, 'Finance');
-  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense recorded','success');
+  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense recorded','success');
 }
 function showEditExpenseModal(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
@@ -345,14 +373,14 @@ async function submitEditExpense(id) {
   e.date=document.getElementById('f-edate').value;
   e.description=document.getElementById('f-edesc').value.trim();
   logActivity('Expense Updated', e.category+' — PKR '+e.amount, 'Finance');
-  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense updated','success');
+  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense updated','success');
 }
 async function deleteExpense(id) {
   showConfirm('Delete expense?','This cannot be undone.',(async ()=>{
     const _del_e=DB.expenses.find(x=>x.id===id);
     DB.expenses=DB.expenses.filter(x=>x.id!==id);
     if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
-    await saveDB(); renderPage('expenses'); toast('Expense deleted','info');
+    await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
   }));
 }
 

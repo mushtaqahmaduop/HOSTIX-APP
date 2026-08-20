@@ -1,9 +1,13 @@
 /* ─── HOSTIX — REPORTS MODULE ───────────────────────────────────────────────
-   Contains: renderReportDetail, renderReports, showTransferRecordsModal,
-             deleteTransferFromModal, showEditTransferModal, submitEditTransfer,
-             showAddTransferModal, submitAddTransfer, deleteTransfer,
-             downloadDetailPDF, downloadReportDetailPDF, printReport,
-             downloadDetailCSV
+   Contains: renderReportDetail, renderReports, showEditTransferModal,
+             submitEditTransfer, deleteTransfer, downloadDetailPDF,
+             downloadReportDetailPDF, printReport, downloadDetailCSV
+
+   The standalone Funds Transfer feature — its stat card, detail view, add
+   modal and records modal — is gone: a transfer is an ordinary expense under
+   the Fund Transfer category now. showEditTransferModal / deleteTransfer stay,
+   because records already in DB.transfers are listed under that category and
+   must remain correctable in place.
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -21,7 +25,14 @@ function _buildRoomStudentIndex() {
 }
 
 function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
-  const periodLabel = reportPeriod==='month' ? thisMonth() : thisYear();
+  // Names the window the detail is actually built from. There was no 'custom'
+  // branch, so a Custom Range detail headed itself with the current YEAR while
+  // listing the range's rows.
+  const _plKeys = _rptKeys();
+  const periodLabel = reportPeriod==='month' ? thisMonth()
+    : reportPeriod==='year' ? thisYear()
+    : (_plKeys.length ? _rptMonthName(_plKeys[0]) + ' – ' + _rptMonthName(_plKeys[_plKeys.length-1])
+                      : 'Custom Range');
   const csvBtn = (type, color) => `<button onclick="downloadDetailCSV('${type}')" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📥 CSV</button>`;
   const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" style="background:var(--accent);color:#000;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📄 PDF</button>`;
 
@@ -75,12 +86,16 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
   // ── PENDING ────────────────────────────────────────────────────────────────
   if (id === 'pending') {
-    const pendingPays = DB.payments.filter(p=>p.status==='Pending').sort((a,b)=>new Date(b.date)-new Date(a.date));
+    // Scoped to the period the report header names. This read the whole payment
+    // table, so July's report listed August's unpaid rents under a "Pending"
+    // card whose own figure counted July only — the table and the stat above it
+    // described two different windows.
+    const pendingPays = pays.filter(p=>p.status==='Pending').sort((a,b)=>new Date(b.date)-new Date(a.date));
     const totalPend = pendingPays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
     const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">⏳ Pending Payments — All Unpaid</div>
+        <div class="card-title">⏳ Pending Payments — ${escHtml(periodLabel)}</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('pending','var(--amber)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
@@ -206,23 +221,63 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   }
 
   // ── EXPENSES ───────────────────────────────────────────────────────────────
+  // Grouped into one section per category, each with its own running total and
+  // a grand total underneath, rather than one flat grid of raw rows. The flat
+  // grid could not answer "what did staff salary cost this month" without the
+  // reader adding the rows up by hand.
   if (id === 'expenses') {
-    const _expSorted = exps.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const _pg = paginate(_expSorted, reportDetailFilter);
+    const groups = _rptByCategory(exps);
+    const grand  = _rptGroupsTotal(groups);
+
+    // Edit/delete route by record type: an ordinary expense goes to the
+    // Expenses modals, a legacy DB.transfers row to the transfer modals that
+    // still own it. Both come back to this detail view after the write.
+    // reportDetail is already 'expenses' here, and the expense/transfer writers
+    // re-render whichever page is current, so both routes come back to this
+    // same section instead of bouncing the owner onto the Expenses screen.
+    const acts = e => e._transfer
+      ? `<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditTransferModal('${e.id}')" title="Edit transfer">✏️</button>
+         <button class="btn btn-danger btn-icon btn-sm" onclick="deleteTransfer('${e.id}')" title="Delete transfer">🗑</button>`
+      : `<button class="btn btn-secondary btn-icon btn-sm" onclick="showEditExpenseModal('${e.id}')" title="Edit">✏️</button>
+         <button class="btn btn-danger btn-icon btn-sm" onclick="deleteExpense('${e.id}')" title="Delete">🗑</button>`;
+
+    const sections = groups.map(g => `
+      <div style="margin-bottom:18px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--dash-sunk);border-bottom:1px solid var(--border)">
+          <span class="badge badge-amber">${escHtml(g.cat)}</span>
+          <span style="font-size:11px;color:var(--text3)">${g.items.length} record${g.items.length===1?'':'s'}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3)">${grand>0?Math.round(g.total/grand*100):0}% of outgoings</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${g.items.map(e=>`<tr>
+              <td class="text-muted" style="font-size:12px;white-space:nowrap">${fmtDate(e.date)}</td>
+              <td>${escHtml(e.description||'—')}</td>
+              <td class="text-red fw-700">${fmtPKR(e.amount)}</td>
+              <td><div style="display:flex;gap:4px">${acts(e)}</div></td>
+            </tr>`).join('')}
+            <tr style="background:var(--dash-sunk);font-weight:800">
+              <td colspan="2" style="text-align:right">Total — ${escHtml(g.cat)}</td>
+              <td class="text-red fw-700">${fmtPKR(g.total)}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>`).join('');
+
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">📉 Expenses — ${periodLabel}</div>
+        <div class="card-title">📉 Expenses by Category — ${periodLabel}</div>
         <div style="display:flex;align-items:center;gap:10px"><div style="font-size:18px;font-weight:900;color:var(--red)">${fmtPKR(totalExp)}</div>${csvBtn('expenses','var(--red)')}${pdfBtn}</div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-      ${_pg.slice.map(e=>`<tr>
-        <td class="text-muted" style="font-size:12px">${fmtDate(e.date)}</td>
-        <td><span class="badge badge-amber">${escHtml(e.category)}</span></td>
-        <td>${escHtml(e.description||'—')}</td>
-        <td class="text-red fw-700">${fmtPKR(e.amount)}</td>
-      </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No expenses this period</td></tr>'}
-      </tbody></table></div>
-      ${renderPager(_pg,'reportDetailFilter','reports')}
+      ${groups.length
+        ? sections + `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:2px solid var(--border2);border-radius:12px;background:var(--dash-sunk)">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:700">Grand Total — ${groups.length} categor${groups.length===1?'y':'ies'}</div>
+        <div style="margin-left:auto;font-size:22px;font-weight:900;color:var(--red)">${fmtPKR(grand)}</div>
+      </div>`
+        : '<div style="text-align:center;color:var(--text3);padding:28px">No expenses this period</div>'}
     </div>`;
   }
 
@@ -247,49 +302,6 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     </div>`;
   }
 
-  // ── TRANSFERS ──────────────────────────────────────────────────────────────
-  if (id === 'transfers') {
-    // Scoped to the report period like every other detail card. It previously
-    // listed every transfer ever recorded under a header naming one month, so
-    // August's transfers showed inside July's report.
-    const allTr = _periodTransfers().slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const totalTr = allTr.reduce((s,t)=>s+Number(t.amount),0);
-    const cashTr  = allTr.filter(t=>t.method==='Cash').reduce((s,t)=>s+Number(t.amount),0);
-    const bankTr  = allTr.filter(t=>t.method!=='Cash').reduce((s,t)=>s+Number(t.amount),0);
-    // The fourth card used to read "This Period", which is now what the other
-    // three already are. Lifetime is the figure the period view cannot give.
-    const lifeTr    = (DB.transfers||[]);
-    const lifeTotal = lifeTr.reduce((s,t)=>s+Number(t.amount),0);
-    return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div class="card-title">🏦 Funds Transfer — ${escHtml(periodLabel)}</div>
-        <div style="display:flex;gap:8px;align-items:center">${csvBtn('transfers','var(--blue)')}<button class="btn btn-primary btn-sm" onclick="showAddTransferModal()">+ New</button>${pdfBtn}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-        <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.35);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700;margin-bottom:4px">Total</div><div>${moneyValue(totalTr,{size:"section",color:"var(--blue)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.length} records</div></div>
-        <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700;margin-bottom:4px">Cash</div><div>${moneyValue(cashTr,{size:"section",color:"var(--green)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method==='Cash').length} records</div></div>
-        <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);font-weight:700;margin-bottom:4px">Bank</div><div>${moneyValue(bankTr,{size:"section",color:"var(--purple)"})}</div><div style="font-size:10px;color:var(--text3)">${allTr.filter(t=>t.method!=='Cash').length} records</div></div>
-        <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700;margin-bottom:4px">All Time</div><div>${moneyValue(lifeTotal,{size:"section",color:"var(--accent-strong)"})}</div><div style="font-size:10px;color:var(--text3)">${lifeTr.length} transfers</div></div>
-      </div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th><th>Received By</th><th>Notes</th><th>By Warden</th><th>Actions</th></tr></thead><tbody>
-      ${allTr.length===0?'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px">No transfers in this period — click + New to add.</td></tr>'
-        :paginate(allTr, reportDetailFilter).slice.map(tr=>`<tr>
-          <td class="text-muted" style="font-size:12px;white-space:nowrap">${fmtDate(tr.date)}</td>
-          <td class="fw-700">${escHtml(tr.description||'Transfer')}</td>
-          <td>${tr.method==='Cash'?'<span class="badge badge-green">💵 Cash</span>':'<span class="badge badge-blue">🏦 '+escHtml(tr.method)+'</span>'}</td>
-          <td style="font-weight:900;color:var(--blue);font-size:14px">${fmtPKR(tr.amount)}</td>
-          <td class="text-muted" style="font-size:12px">${escHtml(tr.receivedBy||'—')}</td>
-          <td class="text-muted" style="font-size:12px">${escHtml(tr.notes||'—')}</td>
-          <td class="text-muted" style="font-size:12px">${escHtml(tr.byWarden||'—')}</td>
-          <td><div style="display:flex;gap:4px">
-            <button class="btn btn-secondary btn-icon btn-sm" onclick="showEditTransferModal('${tr.id}')" title="Edit">✏️</button>
-            <button class="btn btn-danger btn-icon btn-sm" onclick="deleteTransfer('${tr.id}');reportDetail='transfers';renderPage('reports')" title="Delete">🗑</button>
-          </div></td>
-        </tr>`).join('')}
-      </tbody></table></div>
-      ${renderPager(paginate(allTr, reportDetailFilter),'reportDetailFilter','reports')}
-    </div>`;
-  }
   return '';
 }
 
@@ -360,6 +372,23 @@ function _rptPeriodWord() {
        : reportPeriod === 'custom' ? 'previous range' : 'last month';
 }
 
+/* ── EXPORT PERIOD ───────────────────────────────────────────────────────────
+   Every PDF and CSV must describe the same window the screen is showing.
+   They each opened with `reportPeriod==='month' ? thisMonth() : thisYear()`,
+   which has no branch for 'custom' — so exporting a Custom Range report handed
+   the owner the WHOLE YEAR under a filename naming the range. These two put the
+   exports back on _rptKeys(), the same matcher the page itself uses.          */
+function _rptExportLabel() {
+  const ks = _rptKeys();
+  if (reportPeriod === 'year')   return thisYear();
+  if (reportPeriod === 'custom') return ks.length ? ks[0] + '_to_' + ks[ks.length - 1] : 'custom';
+  return thisMonth();
+}
+function _rptExportWord() {
+  return reportPeriod === 'month' ? 'Monthly'
+       : reportPeriod === 'year'  ? 'Annual' : 'Custom Range';
+}
+
 // Every outgoing in a period as ONE list of expense-shaped rows: the expenses
 // themselves, plus each funds transfer carrying a category of its own. Anything
 // that itemises expenses reads this, so an itemised table always adds up to the
@@ -370,10 +399,82 @@ function _rptOutgoings(key) {
   const hit  = d => keys.some(k => String(d || '').startsWith(k));
   return (DB.expenses || []).filter(e => hit(e.date)).concat(
     (DB.transfers || []).filter(t => hit(t.date)).map(t => ({
-      id: t.id, date: t.date, category: 'Funds Transfer',
+      id: t.id, date: t.date, category: FUND_TRANSFER_CAT,
       description: t.description || ('Transfer' + (t.receivedBy ? ' to ' + t.receivedBy : '')),
       amount: Number(t.amount || 0), method: t.method || '', _transfer: true,
     })));
+}
+
+/* ── CATEGORY REGISTER ───────────────────────────────────────────────────────
+   The owner's requirement for every itemised outgoing view, on screen and in
+   the exports alike: one section per category, each row carrying its date,
+   description and amount, each section carrying its own total, and a grand
+   total across all of them at the end. A flat grid of raw rows cannot answer
+   "what did staff salary cost this month" without the reader adding it up by
+   hand.
+
+   Ordering is by size, largest category first, so the biggest outgoing is the
+   first thing read. Rows inside a category are newest first.
+
+   Categories with nothing recorded in the period are dropped — an empty
+   "Plumbing — PKR 0" section is noise, not information.
+
+   Legacy DB.transfers records arrive here already carrying FUND_TRANSFER_CAT
+   (see _rptOutgoings), so old transfers and new Fund Transfer expenses land in
+   the same section and total together.                                       */
+function _rptByCategory(rows) {
+  const bucket = new Map();
+  (rows || []).forEach(e => {
+    const cat = String(e.category || 'Other');
+    if (!bucket.has(cat)) bucket.set(cat, []);
+    bucket.get(cat).push(e);
+  });
+  const out = [];
+  bucket.forEach((items, cat) => {
+    items.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
+    out.push({ cat, items, total: items.reduce((s, e) => s + Number(e.amount || 0), 0) });
+  });
+  out.sort((a, b) => b.total - a.total);
+  return out;
+}
+
+// Grand total across the grouped sections — stated once so a section subtotal
+// and the figure under it can never be computed two different ways.
+function _rptGroupsTotal(groups) {
+  return (groups || []).reduce((s, g) => s + g.total, 0);
+}
+
+/* The same category register as printed HTML, shared by every PDF and the
+   Print view so the paper matches the screen section for section. Plain colours
+   rather than CSS variables: these documents are rendered outside the app's
+   stylesheet and a var() would come out black. */
+function _rptCatTablesHTML(rows) {
+  const groups = _rptByCategory(rows);
+  const grand  = _rptGroupsTotal(groups);
+  if (!groups.length)
+    return '<table><tbody><tr><td style="text-align:center;color:#aaa;padding:12px">No expenses this period</td></tr></tbody></table>';
+
+  const sections = groups.map(g => `
+    <h3 style="margin-top:16px">${g.cat} — ${g.items.length} record${g.items.length===1?'':'s'}</h3>
+    <table><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+      ${g.items.map(e=>`<tr>
+        <td>${fmtDate(e.date)||'—'}</td>
+        <td>${escHtml(e.description||'—')}</td>
+        <td class="red" style="text-align:right">${fmtPKR(e.amount)}</td>
+      </tr>`).join('')}
+      <tr style="background:#f1f5f9;font-weight:800">
+        <td colspan="2" style="text-align:right">Total — ${g.cat}</td>
+        <td class="red" style="text-align:right">${fmtPKR(g.total)}</td>
+      </tr>
+    </tbody></table>`).join('');
+
+  return sections + `
+    <table style="margin-top:18px"><tbody>
+      <tr style="background:#e2e8f0;font-weight:900;font-size:13px">
+        <td style="padding:10px 12px">GRAND TOTAL — ${groups.length} categor${groups.length===1?'y':'ies'}</td>
+        <td class="red" style="padding:10px 12px;text-align:right">${fmtPKR(grand)}</td>
+      </tr>
+    </tbody></table>`;
 }
 
 // Totals for an arbitrary set of period keys, so current and previous windows
@@ -466,12 +567,15 @@ function renderReports() {
   // fixed position in DB.settings.expenseCategories. Position-keyed rather than
   // render-order-keyed, so a category keeps the same colour when another one
   // drops out of the period.
+  // Fund Transfer is an ordinary member of settings.expenseCategories now, so
+  // it needs no special-casing here. It is still appended defensively for an
+  // install whose owner deleted the category from Settings while transfer
+  // records exist — without a bar those records would be inside the total but
+  // absent from the breakdown, and the two would not add up.
   const catCats = DB.settings.expenseCategories || [];
-  // Funds Transfer is listed as a category of its own. It is not in
-  // settings.expenseCategories — it is entered on its own screen — but it counts
-  // in totalExp, so without a bar here the breakdown would not add up to the
-  // total printed underneath it.
-  const cats = catCats.concat(['Funds Transfer']).map((cat, i) => {
+  const _allCats = catCats.includes(FUND_TRANSFER_CAT)
+    ? catCats : catCats.concat([FUND_TRANSFER_CAT]);
+  const cats = _allCats.map((cat, i) => {
     const amt = exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);
     return { cat, amt, i, pct: totalExp>0 ? Math.round(amt/totalExp*100) : 0 };
   }).filter(c=>c.amt>0).sort((a,b)=>b.amt-a.amt);
@@ -620,9 +724,6 @@ function renderReports() {
     ${stat('students','dh-blue','Students',nActiveS,
       `${_rptDelta(sDelta,0,'abs')} joined vs left`,
       '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
-    ${stat('transfers','dh-slate','Transfers',fmtPKR(_periodTransfers().reduce((s,t)=>s+Number(t.amount),0)),
-      `${_periodTransfers().length} record${_periodTransfers().length!==1?'s':''}`,
-      '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>')}
   </div>
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
@@ -874,6 +975,7 @@ function drawReportCharts() {
         }
       }
     });
+    _chartFontFix(_rptTrendChart);
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────
@@ -895,75 +997,13 @@ function drawReportCharts() {
         }
       }
     });
+    _chartFontFix(_rptDonutChart);
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // FUNDS TRANSFER
 // ════════════════════════════════════════════════════════════════════════════
-function showTransferRecordsModal() {
-  const transfers = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const totalAll = transfers.reduce((s,t)=>s+Number(t.amount),0);
-  const mo = new Date().toISOString().slice(0,7);
-  const moTransfers = transfers.filter(t=>t.date?.startsWith(mo));
-  const moTotal = moTransfers.reduce((s,t)=>s+Number(t.amount),0);
-
-  const rows = transfers.length===0
-    ? '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🏦</div><div style="font-size:14px">No transfers recorded yet</div></div>'
-    : '<div class="table-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Amount</th><th>Method</th><th>Received By</th><th>Description</th><th>Actions</th></tr></thead><tbody>'
-      + transfers.map((tr, idx)=>
-          '<tr>'
-          +'<td style="font-size:11px;font-weight:700;color:var(--text3)">'+String(idx+1).padStart(2,'0')+'</td>'
-          +'<td style="font-size:12px;color:var(--text3)">'+fmtDate(tr.date)+'</td>'
-          +'<td style="font-size:15px;font-weight:900;color:var(--blue)">'+fmtPKR(tr.amount)+'</td>'
-          +'<td>'+(tr.method==='Cash'?'<span class="badge badge-green">💵 Cash</span>':'<span class="badge badge-blue">🏦 Bank</span>')+'</td>'
-          +'<td style="font-weight:600;color:var(--text2)">'+escHtml(tr.receivedBy||'—')+'</td>'
-          +'<td style="color:var(--text3);font-size:12px;max-width:140px;white-space:normal">'+escHtml(tr.description||'—')+'</td>'
-          +'<td><div style="display:flex;gap:5px">'
-          +'<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 8px" onclick="showEditTransferModal(\''+tr.id+'\')">✏️ Edit</button>'
-          +'<button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px" onclick="deleteTransferFromModal(\''+tr.id+'\')">✕</button>'
-          +'</div></td>'
-          +'</tr>'
-        ).join('')
-      + '</tbody></table></div>';
-
-  showModal('modal-xl','🏦 Funds Transfer Records',`
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px">🏦 Total Funds Transferred</div>
-        <div style="font-size:28px;font-weight:900;color:var(--blue)">${fmtPKR(totalAll)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${transfers.length} record${transfers.length!==1?'s':''} total</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px">📅 This Month</div>
-        <div style="font-size:28px;font-weight:900;color:var(--green)">${fmtPKR(moTotal)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${moTransfers.length} transfer${moTransfers.length!==1?'s':''}</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:6px">💵 Cash vs Bank</div>
-        <div style="font-size:16px;font-weight:900;color:var(--text);line-height:1.4">
-          <span style="color:var(--green)">${fmtPKR(transfers.filter(t=>t.method==='Cash').reduce((s,t)=>s+Number(t.amount),0))}</span>
-          <span style="color:var(--text3);font-size:12px"> cash</span><br>
-          <span style="color:var(--blue)">${fmtPKR(transfers.filter(t=>t.method!=='Cash').reduce((s,t)=>s+Number(t.amount),0))}</span>
-          <span style="color:var(--text3);font-size:12px"> bank</span>
-        </div>
-      </div>
-    </div>
-    ${rows}`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Close</button>
-   <button class="btn btn-primary" onclick="closeModal();navigate('reports')">+ New Transfer (Reports)</button>`);
-}
-
-async function deleteTransferFromModal(id) {
-  showConfirm('Delete transfer?','This cannot be undone.',(async ()=>{
-    DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
-    await saveDB();
-    closeModal();
-    setTimeout(()=>showTransferRecordsModal(), 100);
-    toast('Transfer deleted','info');
-  }));
-}
-
 function showEditTransferModal(id) {
   const tr = (DB.transfers||[]).find(x=>x.id===id);
   if(!tr) return;
@@ -990,7 +1030,7 @@ function showEditTransferModal(id) {
         <textarea class="form-control" id="fe-trdesc" rows="2">${escHtml(tr.description||'')}</textarea>
       </div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal();setTimeout(()=>showTransferRecordsModal(),80)">Cancel</button>
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
    <button class="btn btn-primary" onclick="submitEditTransfer('${id}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
 }
 
@@ -1009,96 +1049,64 @@ async function submitEditTransfer(id) {
   tr.editedAt = today();
   await saveDB();
   closeModal();
-  setTimeout(()=>showTransferRecordsModal(), 80);
+  // A legacy transfer is editable from the Expenses table and the Reports
+  // category register — refresh whichever page the owner is on.
+  renderPage(currentPage);
   toast('Transfer updated','success');
 }
 
-function showAddTransferModal() {
-  showModal('modal-md','🏦 New Funds Transfer',`
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text2)">
-      Record a cash or bank funds transfer
-    </div>
-    <div class="form-grid">
-      <div class="field"><label>Transfer Method *</label>
-        <select class="form-control" id="f-trmethod">
-          <option value="Cash">💵 Cash</option>
-          <option value="Bank Transfer">🏦 Bank Transfer</option>
-          <option value="JazzCash">📱 JazzCash</option>
-          <option value="EasyPaisa">📱 EasyPaisa</option>
-        </select>
-      </div>
-      <div class="field"><label>Amount (PKR) *</label><input class="form-control" id="f-tramt" type="number" placeholder="Enter amount"></div>
-      <div class="field"><label>Date *</label><input class="form-control cdp-trigger" id="f-trdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field"><label>Received By</label><input class="form-control" id="f-trrec" placeholder="Owner / Recipient Name"></div>
-      <div class="field col-full"><label>Description / Notes</label><textarea class="form-control" id="f-trdesc" placeholder="Purpose of transfer…" rows="2"></textarea></div>
-    </div>`,
-  `<button class="btn btn-secondary btn-sm" onclick="closeModal();showTransferRecordsModal()" style="margin-right:auto">📋 View Records</button>
-   <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" onclick="submitAddTransfer()">✓ Record Transfer</button>`);
-}
-async function submitAddTransfer() {
-  const amt = parseFloat(document.getElementById('f-tramt').value);
-  const method = document.getElementById('f-trmethod').value;
-  const date = document.getElementById('f-trdate').value;
-  if(!amt||!method||!date){toast('Fill all required fields','error');return;}
-  if(!DB.transfers) DB.transfers = [];
-  DB.transfers.push({
-    id:'tr_'+uid(), method, amount:amt, date,
-    receivedBy: document.getElementById('f-trrec').value.trim(),
-    description: document.getElementById('f-trdesc').value.trim(),
-    notes: document.getElementById('f-trdesc').value.trim(),
-    byWarden: (typeof CUR_USER !== 'undefined' && CUR_USER?.name) ? CUR_USER.name : '',
-    createdAt: today()
-  });
-  await saveDB(); closeModal();
-  // Stay on current page (dashboard) and refresh it — don't redirect to reports
-  renderPage(currentPage);
-  toast('Transfer recorded — ' + fmtPKR(amt) + ' transferred','success');
-}
 async function deleteTransfer(id) {
   showConfirm('Delete transfer record?','This cannot be undone.',(async ()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
-    await saveDB(); renderPage('reports'); toast('Transfer deleted','info');
+    // Refresh whichever page the row was deleted from — Expenses and the
+    // Reports register both list transfers now.
+    await saveDB(); renderPage(currentPage); toast('Transfer deleted','info');
   }));
 }
 
 
 
 function downloadDetailPDF(type) {
-  const key = reportPeriod==='month' ? thisMonth() : thisYear();
-  const label = reportPeriod==='month' ? 'Monthly' : 'Annual';
-  const pays = DB.payments.filter(p=>_payMatchesMonth(p,key));
+  // Same window and the same arithmetic as the screen — _rptTotals() is what
+  // renderReports() itself calls, so a figure cannot differ between the page
+  // and the PDF printed from it.
+  const keys  = _rptKeys();
+  const key   = _rptExportLabel();
+  const label = _rptExportWord();
   // Transfers are folded in as ordinary expense rows under their own category,
   // so the itemised table adds up to the total printed above it.
-  const exps = _rptOutgoings(key);
-  const rev = calcRevenue(key);
-  const totalExp = calcExpenses(key);
-  const totalTransfers = calcTransfers(key);
-  const net = rev - totalExp;
+  const { pays, exps, rev, totalExp, totalTransfers, net } = _rptTotals(keys);
   const css = printDocStyles();
   let body = `<div class="hdr"><div><div class="ht">${DB.settings.hostelName}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
     body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
     body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td class="go">#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${p.method||'—'}</td><td class="${p.status==='Paid'?'gr':'re'}">${p.status}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
   } else if(type==='pending'){
-    const pend = DB.payments.filter(p=>p.status==='Pending');
+    // Period-scoped like the table it is printed from. It read the whole
+    // payment table, so a monthly PDF carried every unpaid rent ever recorded.
+    const pend = pays.filter(p=>p.status==='Pending');
     const totalUnpaid = pend.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
     body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pend.length}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${totalUnpaid.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pend.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</div></div></div>`;
     body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td class="go">#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${(p.unpaid!=null?p.unpaid:p.amount).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
   } else if(type==='netprofit'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Funds Transfer</span><div class="kv re">PKR ${totalTransfers.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
-    body+=`<table><thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th></tr></thead><tbody>${DB.settings.expenseCategories.concat(['Funds Transfer']).map(cat=>{const amt=exps.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount),0);const pct=totalExp>0?Math.round(amt/totalExp*100):0;return amt>0?`<tr><td>${cat}</td><td class="re">PKR ${amt.toLocaleString()}</td><td>${pct}%</td></tr>`:'';}).join('')||'<tr><td colspan="3" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
+    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
+    // Category summary, then the full register underneath it so the reader can
+    // go from "Staff Salary was the biggest line" to the rows behind it.
+    const _g = _rptByCategory(exps);
+    body+=`<table><thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th></tr></thead><tbody>${_g.map(g=>`<tr><td>${g.cat}</td><td class="re">PKR ${g.total.toLocaleString()}</td><td>${totalExp>0?Math.round(g.total/totalExp*100):0}%</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
+    body+=_rptCatTablesHTML(exps);
   } else if(type==='expenses'){
     body+=`<div class="kc" style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:18px"><span class="kl">Total Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div>`;
-    body+=`<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr><td>${e.date||'—'}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="re">PKR ${Number(e.amount).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
+    body+=_rptCatTablesHTML(exps);
   } else if(type==='students'){
     const _idx=_buildRoomStudentIndex();
     // Scoped to the period named in this PDF's own header. The on-screen table
     // and the CSV already do this; the PDF did not, so the same report exported
-    // three ways disagreed about who was on the roster. `key` is a YYYY-MM month
-    // or a YYYY year — _studentInPeriod() takes either.
-    const _roster = DB.students.filter(t => _studentInPeriod(t, key) ||
-      DB.payments.some(p => p.studentId === t.id && _payMatchesMonth(p, key)));
+    // three ways disagreed about who was on the roster. Matched against every
+    // key in the window, not one — `key` is now a filename label and a custom
+    // range spans several months.
+    const _roster = DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
+      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k))));
     body+=`<table><thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent/mo</th><th>Join Date</th><th>Status</th></tr></thead><tbody>${_roster.map(t=>{const room=_idx.roomById.get(t.roomId);return `<tr><td style="font-size:10px;color:#aaa">#${t.id}</td><td>${t.name}</td><td class="go">${room?'#'+room.number:'—'}</td><td>${t.fatherName||'—'}</td><td>${t.phone||'—'}</td><td class="gr">PKR ${Number(t.rent||0).toLocaleString()}</td><td>${t.joinDate||'—'}</td><td class="${t.status==='Active'?'gr':t.status==='Blacklisted'?'re':''}">${t.status}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No students</td></tr>'}</tbody></table>`;
   } else if(type==='rooms'){
     const _idx=_buildRoomStudentIndex();
@@ -1110,45 +1118,46 @@ function downloadDetailPDF(type) {
 }
 
 function downloadReportDetailPDF(detailId) {
-  const mo = reportPeriod==='month' ? thisMonth() : thisYear();
-  const pays = DB.payments.filter(p=>_payMatchesMonth(p,mo));
+  // Honours Custom Range like the screen does; `mo` is now only the label the
+  // header and filename carry.
+  const keys = _rptKeys();
+  const mo   = _rptExportLabel();
   // Transfers ride along as expense rows under their own category, so totalExp
   // is the whole outgoing and Available Fund is revenue minus it.
-  const exps = _rptOutgoings(mo);
-  const rev = calcRevenue(mo);
-  const totalExp = calcExpenses(mo);
-  const totalTransfers = calcTransfers(mo);
-  const net = rev - totalExp;
+  const { pays, exps, rev, totalExp, totalTransfers, net } = _rptTotals(keys);
   const hostel = DB.settings.hostelName || 'DAMAM Hostel';
-  const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expense Breakdown',payments:'Payment Transactions'};
+  const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expenses by Category',payments:'Payment Transactions'};
   const title = titles[detailId] || 'Report';
   let tableHTML = '';
   if(detailId==='financial'||detailId==='payments') {
     const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
     tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td>#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${(p.unpaid||0)>0?'red':''}">${fmtPKR(p.unpaid||0)}</td><td>${p.method||'—'}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='expenses') {
-    tableHTML = `<h3>Expenses</h3><table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Expenses by Category</h3>` + _rptCatTablesHTML(exps);
   } else if(detailId==='pending') {
-    const pendPays = DB.payments.filter(p=>p.status==='Pending');
+    // Period-scoped like the on-screen table this PDF is printed from.
+    const pendPays = pays.filter(p=>p.status==='Pending');
     tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td>#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td><td>${p.method||'—'}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='students') {
     const _idx=_buildRoomStudentIndex();
     // Same period scope as the on-screen table this PDF is printed from.
-    const _roster = DB.students.filter(t => _studentInPeriod(t, mo) ||
-      DB.payments.some(p => p.studentId === t.id && _payMatchesMonth(p, mo)));
+    const _roster = DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
+      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k))));
     tableHTML = `<h3>Student Directory</h3><table><thead><tr><th>Name</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>${_roster.map(t=>{const r=_idx.roomById.get(t.roomId);return `<tr><td>${t.name}</td><td>${r?'#'+r.number:'—'}</td><td>${fmtDate(t.joinDate)}</td><td class="green">${fmtPKR(t.rent)}</td><td>${t.status}</td><td>${t.phone||'—'}</td></tr>`;}).join('')}</tbody></table>`;
   } else if(detailId==='rooms') {
     const _idx=_buildRoomStudentIndex();
     tableHTML = `<h3>Room Occupancy</h3><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Capacity</th><th>Students</th><th>Status</th></tr></thead><tbody>${DB.rooms.map(r=>{const type=getRoomType(r);const sts=_idx.activeStudentsByRoom.get(r.id)||[];const occ=sts.length;return `<tr><td class="gold">#${r.number}</td><td>${type.name}</td><td>${r.floor}</td><td>${occ}/${type.capacity}</td><td>${sts.map(t=>t.name).join(', ')||'Empty'}</td><td>${occ>0?'Occupied':'Vacant'}</td></tr>`;}).join('')}</tbody></table>`;
   } else if(detailId==='netprofit') {
-    // Full breakdown: revenue transactions + expense list + transfers deduction
-    const allTr = (DB.transfers||[]).filter(t=>(t.date||'').startsWith(mo));
+    // Full breakdown: revenue transactions + the category register.
+    // _periodTransfers() rather than a startsWith on `mo`, which is a filename
+    // label now and never matches a date under Custom Range.
+    const allTr = _periodTransfers();
     const trTotal = allTr.reduce((s,t)=>s+Number(t.amount),0);
     tableHTML = `
       <div class="summary-box" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
           <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#16a34a;font-weight:700;margin-bottom:4px">Revenue</div><div style="font-size:22px;font-weight:900;color:#16a34a">${fmtPKR(rev)}</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#dc2626;font-weight:700;margin-bottom:4px">Total Outgoing</div><div style="font-size:22px;font-weight:900;color:#dc2626">${fmtPKR(totalExp + trTotal)}</div><div style="font-size:10px;color:#666">Expenses ${fmtPKR(totalExp)}${trTotal>0?' + Transfers '+fmtPKR(trTotal):''}</div></div>
+          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#dc2626;font-weight:700;margin-bottom:4px">Total Outgoing</div><div style="font-size:22px;font-weight:900;color:#dc2626">${fmtPKR(totalExp)}</div><div style="font-size:10px;color:#666">Expenses ${fmtPKR(totalExp - trTotal)}${trTotal>0?' + Transfers '+fmtPKR(trTotal):''}</div></div>
           <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${net>=0?'#16a34a':'#dc2626'};font-weight:700;margin-bottom:4px">Available Fund</div><div style="font-size:22px;font-weight:900;color:${net>=0?'#16a34a':'#dc2626'}">${fmtPKR(net)}</div></div>
         </div>
       </div>
@@ -1156,34 +1165,11 @@ function downloadReportDetailPDF(detailId) {
       <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Date</th></tr></thead><tbody>
       ${pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${p.studentName||'—'}</td><td class="gold">#${p.roomNumber||'—'}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td>${p.method||'—'}</td><td>${fmtDate(p.date)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No paid transactions this period</td></tr>'}
       </tbody></table>
-      <h3 style="margin-top:18px">📉 Expenses</h3>
-      <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-      ${exps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#aaa;padding:10px">No expenses this period</td></tr>'}
-      </tbody></table>
-      ${allTr.length>0?`
-      <h3 style="margin-top:18px">🏦 Funds Transfer</h3>
-      <table><thead><tr><th>Date</th><th>Method</th><th>Description</th><th>Received By</th><th>Amount</th></tr></thead><tbody>
-      ${allTr.map(t=>`<tr><td>${fmtDate(t.date)}</td><td>${t.method||'—'}</td><td>${t.description||'—'}</td><td>${t.receivedBy||'—'}</td><td class="red">${fmtPKR(t.amount)}</td></tr>`).join('')}
-      <tr style="background:#f8fafc;font-weight:700"><td colspan="4" style="text-align:right;padding:8px 12px">Total Funds Transferred</td><td class="red">${fmtPKR(trTotal)}</td></tr>
-      </tbody></table>`:''}`;
-  } else if(detailId==='transfers') {
-    const allTr2 = (DB.transfers||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const trTotal2 = allTr2.reduce((s,t)=>s+Number(t.amount),0);
-    const moTr2 = allTr2.filter(t=>(t.date||'').startsWith(mo));
-    const moTrTotal = moTr2.reduce((s,t)=>s+Number(t.amount),0);
-    tableHTML = `
-      <div class="summary-box" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;font-weight:700;margin-bottom:4px">Total All Time</div><div style="font-size:22px;font-weight:900;color:#1d4ed8">${fmtPKR(trTotal2)}</div><div style="font-size:10px;color:#666">${allTr2.length} records</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;font-weight:700;margin-bottom:4px">This Period</div><div style="font-size:22px;font-weight:900;color:#1d4ed8">${fmtPKR(moTrTotal)}</div><div style="font-size:10px;color:#666">${moTr2.length} records</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;font-weight:700;margin-bottom:4px">Period Revenue</div><div style="font-size:22px;font-weight:900;color:#16a34a">${fmtPKR(rev)}</div></div>
-        </div>
-      </div>
-      <h3>🏦 All Funds Transfer Records</h3>
-      <table><thead><tr><th>Date</th><th>Method</th><th>Description</th><th>Received By</th><th>By Warden</th><th>Amount</th></tr></thead><tbody>
-      ${allTr2.length===0?'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:14px">No transfers recorded yet</td></tr>':allTr2.map(t=>`<tr><td>${fmtDate(t.date)}</td><td>${t.method||'—'}</td><td>${t.description||'—'}</td><td>${t.receivedBy||'—'}</td><td>${t.byWarden||'—'}</td><td class="red" style="font-weight:900">${fmtPKR(t.amount)}</td></tr>`).join('')}
-      <tr style="background:#f8fafc;font-weight:700"><td colspan="5" style="text-align:right;padding:8px 12px">Grand Total</td><td class="red">${fmtPKR(trTotal2)}</td></tr>
-      </tbody></table>`;
+      <h3 style="margin-top:18px">📉 Expenses by Category</h3>
+      ${_rptCatTablesHTML(exps)}`;
+      // The transfers used to get a table of their own after this one. They are
+      // inside the register above under the Fund Transfer category now, so a
+      // second table would print the same money twice on one page.
   }
   _electronPDF(`<!DOCTYPE html><html><head><title>${title} — ${hostel}</title>${printDocStyles()}</head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px">${mo} · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${tableHTML}<div class="footer">Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`,
     hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + title.replace(/\s+/g,'-') + '_' + mo + '.pdf',
@@ -1191,18 +1177,15 @@ function downloadReportDetailPDF(detailId) {
 }
 
 function printReport() {
-  const mo=reportPeriod==='month'?thisMonth():thisYear();
-  const pays=DB.payments.filter(p=>_payMatchesMonth(p,mo));
-  const exps=_rptOutgoings(mo);
-  const rev=calcRevenue(mo);
+  // Same window as the screen, Custom Range included.
+  const keys=_rptKeys();
+  const mo=_rptExportLabel();
   // Transfers are inside expTotal — Available Fund is revenue minus it, with no
   // second deduction.
-  const expTotal=calcExpenses(mo);
-  const _printKey=reportPeriod==='month'?thisMonth():thisYear();
-  const pending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,_printKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const { pays, exps, rev, pending, totalExp:expTotal } = _rptTotals(keys);
   const _occIdx=_buildRoomStudentIndex();
   const occ=DB.rooms.filter(r=>_occIdx.occ(r)>0).length;
-  const _rptHtml = `<!DOCTYPE html><html><head><title>${reportPeriod==='month'?'Monthly':'Annual'} Report — ${DB.settings.hostelName}</title>
+  const _rptHtml = `<!DOCTYPE html><html><head><title>${_rptExportWord()} Report — ${DB.settings.hostelName}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
@@ -1226,8 +1209,8 @@ function printReport() {
     @media print{body{padding:16px}}
   </style></head><body>
   <div class="header">
-    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${reportPeriod==='month'?'Monthly':'Annual'} Report · ${DB.settings.location||''} · Generated ${new Date().toLocaleDateString()}</div></div>
-    <div class="badge">${reportPeriod==='month'?'Monthly':'Annual'} Report</div>
+    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${_rptExportWord()} Report · ${DB.settings.location||''} · Generated ${new Date().toLocaleDateString()}</div></div>
+    <div class="badge">${_rptExportWord()} Report</div>
   </div>
   <div class="kpi-grid">
     <div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
@@ -1237,7 +1220,6 @@ function printReport() {
     <div class="kpi"><label>Rooms Occupied</label><div class="val">${occ}/${DB.rooms.length}</div></div>
     <div class="kpi"><label>Active Students</label><div class="val">${DB.students.filter(t=>t.status==='Active').length}</div></div>
     <div class="kpi"><label>Total Payments</label><div class="val">${pays.filter(p=>p.status==='Paid').length}</div></div>
-    <div class="kpi"><label>Funds Transferred</label><div class="val" style="color:#5b21b6">${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div></div>
   </div>
   <div class="section">
     <h3>💳 Payment Transactions</h3>
@@ -1246,21 +1228,12 @@ function printReport() {
     </tbody></table>
   </div>
   <div class="section">
-    <h3>📉 Expense Breakdown</h3>
-    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-    ${exps.map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${e.category||'—'}</td><td>${e.description||'—'}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No expenses</td></tr>'}
-    </tbody></table>
-  </div>
-  <div class="section">
-    <h3>🏦 Funds Transfer</h3>
-    <table><thead><tr><th>Date</th><th>Description</th><th>Method</th><th>Amount</th></tr></thead><tbody>
-    ${(DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).map(tr=>`<tr><td>${fmtDate(tr.date)}</td><td>${escHtml(tr.description||'Transfer')}</td><td>${escHtml(tr.method||'—')}</td><td class="gold">${fmtPKR(tr.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No transfers this period</td></tr>'}
-    </tbody></table>
-    ${(DB.transfers||[]).length>0?`<div style="text-align:right;padding:8px 12px 0;font-weight:700;color:#5b21b6">Total Funds Transferred: ${fmtPKR((DB.transfers||[]).filter(tr=>(tr.date||'').startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0))}</div>`:''}
+    <h3>📉 Expense Breakdown by Category</h3>
+    ${_rptCatTablesHTML(exps)}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · Confidential</div>
   </body></html>`;
-  _electronPDF(_rptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Report_'+(reportPeriod==='month'?thisMonth():thisYear())+'.pdf', {pageSize:'A4'});
+  _electronPDF(_rptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Report_'+mo+'.pdf', {pageSize:'A4'});
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1268,36 +1241,42 @@ function printReport() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function downloadDetailCSV(type) {
-  const key = reportPeriod==='month' ? thisMonth() : thisYear();
+  // Same window as the screen and the PDFs, Custom Range included.
+  const keys = _rptKeys();
+  const key  = _rptExportLabel();
+  const _inPeriodPays = DB.payments.filter(p=>keys.some(k=>_payMatchesMonth(p,k)));
   let rows = [], filename = '';
   if (type === 'financial') {
     filename = 'Revenue_'+key+'.csv';
     rows.push(['Student','Room','Month','Amount Paid','Method','Date']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
+    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
     });
   } else if (type === 'pending') {
-    filename = 'Pending_Payments.csv';
+    // Period-scoped, and the period is now in the filename — this exported
+    // every unpaid record ever under a name that claimed nothing about when.
+    filename = 'Pending_Payments_'+key+'.csv';
     rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
-    DB.payments.filter(p=>p.status==='Pending').forEach(p=>{
+    _inPeriodPays.filter(p=>p.status==='Pending').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
         p.unpaid!=null?p.amount:0, p.unpaid!=null?p.unpaid:p.amount,
         p.method||'—', p.date||'—']);
     });
   } else if (type === 'expenses') {
-    filename = 'Expenses_'+key+'.csv';
-    rows.push(['Date','Category','Description','Amount']);
-    // _rptOutgoings carries the transfers too, under a Funds Transfer category,
-    // so this file totals the same as the Expenses figure on screen.
-    _rptOutgoings(key).forEach(e=>{
-      rows.push([e.date||'—',e.category||'—',e.description||'—',e.amount]);
+    // Grouped by category with a subtotal after each one and a grand total at
+    // the end, matching the register on screen. A flat dump of rows made the
+    // owner rebuild those subtotals in a spreadsheet by hand.
+    // _rptOutgoings carries the transfers too, under the Fund Transfer
+    // category, so this file totals the same as the Expenses figure on screen.
+    filename = 'Expenses_by_Category_'+key+'.csv';
+    rows.push(['Category','Date','Description','Amount']);
+    const _groups = _rptByCategory(_rptOutgoings(keys));
+    _groups.forEach(g => {
+      g.items.forEach(e => rows.push([g.cat, e.date||'—', e.description||'—', e.amount]));
+      rows.push(['', '', 'Total — '+g.cat, g.total]);
+      rows.push(['', '', '', '']);
     });
-  } else if (type === 'transfers') {
-    filename = 'Funds_Transfer.csv';
-    rows.push(['Date','Description','Method','Amount','Received By','Notes']);
-    _periodTransfers().forEach(t=>{
-      rows.push([t.date||'—',t.description||'—',t.method||'—',t.amount,t.receivedBy||'—',t.notes||'—']);
-    });
+    rows.push(['', '', 'GRAND TOTAL', _rptGroupsTotal(_groups)]);
   } else if (type === 'students') {
     filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
     rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
@@ -1323,16 +1302,16 @@ function downloadDetailCSV(type) {
   } else if (type === 'payments') {
     filename = 'PaymentMethods_'+key+'.csv';
     rows.push(['Student','Room','Month','Amount Paid','Method','Status','Date']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
+    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.status,p.date||'—']);
     });
   } else if (type === 'netprofit') {
     filename = 'AvailableFund_'+key+'.csv';
     rows.push(['Date','Type','Description','Amount']);
-    DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,key)).forEach(p=>{
+    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
       rows.push([p.date||'—','Income',p.studentName+' · '+p.month,p.amount]);
     });
-    _rptOutgoings(key).forEach(e=>{
+    _rptOutgoings(keys).forEach(e=>{
       rows.push([e.date||'—','Expense',e.category+': '+e.description,'-'+e.amount]);
     });
   }
@@ -1348,11 +1327,10 @@ function downloadDetailCSV(type) {
 }
 // calPopoverOpen declared in dashboard.js (shared)
 // ════════════════════════════════════════════════════════════════════════════
-// ANNUAL ARCHIVE  (page: 'archive' — nav.js / command palette)
-// Read-only viewer of historical records in DB.archive (old payment/expense
-// records, e.g. migrated from the legacy localStorage build). Grouped by year.
-// Restored in Phase 2 §6.1 — the call site existed but renderArchive() was never
-// implemented, so the page threw a ReferenceError (caught by TypeScript).
+// ANNUAL ARCHIVE — record classifier
+// Tells an archived payment from an archived expense. The Archive PAGE itself
+// lives in modules/archive.js; this stays here because the reports code reads
+// DB.archive too, and both must classify a row the same way.
 // ════════════════════════════════════════════════════════════════════════════
 function _archiveClassify(r) {
   // Records archived by enforceDataRetention() carry `_src` naming the live
@@ -1372,68 +1350,3 @@ function _archiveClassify(r) {
   return { isExpense, date, year, label, amount: Number((r && r.amount) || 0) };
 }
 
-function renderArchive() {
-  const items = (DB.archive || []).map(_archiveClassify);
-
-  if (items.length === 0) {
-    return `
-    <div class="empty-state" style="padding:48px 24px;text-align:center">
-      <div class="icon" style="font-size:40px;margin-bottom:8px">🗄</div>
-      <h3>No archived records yet</h3>
-      <div style="font-size:13px;color:var(--text3);max-width:440px;margin:8px auto 0;line-height:1.6">
-        The Annual Archive holds historical payment and expense records from
-        previous years (for example, data carried over from an older version of
-        the app). Nothing has been archived on this device yet.
-      </div>
-    </div>`;
-  }
-
-  const payTotal = items.filter(x => !x.isExpense).reduce((s, x) => s + x.amount, 0);
-  const expTotal = items.filter(x =>  x.isExpense).reduce((s, x) => s + x.amount, 0);
-
-  // Group by year, newest first.
-  const byYear = {};
-  items.forEach(x => { (byYear[x.year] = byYear[x.year] || []).push(x); });
-  const years = Object.keys(byYear).sort((a, b) => String(b).localeCompare(String(a)));
-
-  const summary = `
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Records</div>
-      <div style="font-size:22px;font-weight:900;color:var(--text)">${items.length}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">${years.length} year${years.length !== 1 ? 's' : ''}</div>
-    </div>
-    <div style="background:var(--card);border:1px solid rgba(46,201,138,0.25);border-radius:var(--radius);padding:16px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Payments</div>
-      <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(payTotal)}</div>
-    </div>
-    <div style="background:var(--card);border:1px solid rgba(224,82,82,0.25);border-radius:var(--radius);padding:16px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px">Archived Expenses</div>
-      <div style="font-size:22px;font-weight:900;color:var(--red)">${fmtPKR(expTotal)}</div>
-    </div>
-  </div>`;
-
-  const sections = years.map(y => {
-    const rows = byYear[y]
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-      .map(x => `
-        <tr>
-          <td style="padding:8px 12px;color:var(--text3);white-space:nowrap">${escHtml(x.date || '—')}</td>
-          <td style="padding:8px 12px">
-            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${x.isExpense ? 'rgba(224,82,82,0.12)' : 'rgba(46,201,138,0.12)'};color:${x.isExpense ? 'var(--red)' : 'var(--green)'}">${x.isExpense ? 'Expense' : 'Payment'}</span>
-          </td>
-          <td style="padding:8px 12px;color:var(--text)">${escHtml(x.label)}</td>
-          <td style="padding:8px 12px;text-align:right;font-weight:700;color:${x.isExpense ? 'var(--red)' : 'var(--green)'}">${fmtPKR(x.amount)}</td>
-        </tr>`).join('');
-    return `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden">
-      <div style="padding:12px 16px;font-weight:800;font-size:14px;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-        <span class="micon" style="font-size:18px;color:var(--accent)">event</span>${escHtml(String(y))}
-        <span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--text3)">${byYear[y].length} record${byYear[y].length !== 1 ? 's' : ''}</span>
-      </div>
-      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">${rows}</table></div>
-    </div>`;
-  }).join('');
-
-  return summary + sections;
-}

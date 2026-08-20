@@ -29,7 +29,6 @@
     act('Add Expense', '➕', 'showAddExpenseModal');
     act('Add Cancellation', '➕', 'showAddCancellationModal');
     act('Add Issue / Complaint', '➕', 'showAddIssueModal');
-    act('New Funds Transfer', '🏦', 'showAddTransferModal');
     act('Export Students CSV', '📥', 'exportStudentsCSV');
     act('Export Payments CSV', '📥', 'exportPaymentsCSV');
     act('Export Rooms CSV', '📥', 'exportRoomsCSV');
