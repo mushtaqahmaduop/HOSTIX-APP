@@ -54,7 +54,26 @@ Master is what 50+ paying clients run. No exceptions.
 
 6. **Dark surfaces must span more than 8 lightness points apart** for visible contrast.
 
-7. **CSS deduplication is dangerous.** Structural rules (position, display, grid, flex) look duplicate but often aren't. Manual review required for any CSS cleanup pass.
+7. **Every user-typed value reaching HTML goes through `escHtml()`.** The H4
+   sweep closed ~95 sites; `tests/html-escaping.spec.js` holds it closed by
+   typing markup into every field and asserting no element materialises.
+
+   Three sinks are not obvious and cost the most time to find:
+   - **`showModal(size, title, body)` renders `title` as raw HTML**, and
+     `showConfirm(title, text)` renders BOTH as raw HTML. Escape the user-data
+     part at the call site — many call sites pass deliberate markup (icons,
+     `roomModalTitle()`), so these cannot be escaped at the sink.
+   - **`toast()` already escapes** its message and title. Do NOT escape at a
+     `toast()` call site — you will print `&amp;` at a warden. Same for
+     `logActivity()`, which the activity log escapes when it renders.
+   - **Not all HTML is a template literal.** Several tables are built with
+     string concatenation (`'<td>' + x + '</td>'`), which no `${...}` scan will
+     ever find. Two real holes lived there.
+
+   CSV is the opposite case: `rows.push([...])` and `csvEsc()` must receive the
+   RAW value — HTML-escaping a CSV corrupts it.
+
+8. **CSS deduplication is dangerous.** Structural rules (position, display, grid, flex) look duplicate but often aren't. Manual review required for any CSS cleanup pass.
 
 ## Before editing, always ask yourself
 - Which module file will this touch?

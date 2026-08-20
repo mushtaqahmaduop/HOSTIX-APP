@@ -674,8 +674,8 @@ function renderDashboard() {
           const occ2=getRoomOccupancy(r);
           const free=cap-occ2;
           const isFull=free===0;
-          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" class="dash-room dh-violet${isFull?' is-full':''}">
-            <div class="n">${r.number}</div>
+          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${escHtml(String(r.number))} — ${occ2}/${cap} filled, ${free} free — click to edit" class="dash-room dh-violet${isFull?' is-full':''}">
+            <div class="n">${escHtml(String(r.number))}</div>
             <div class="c">${occ2}/${cap}</div>
           </div>`;
         }).join('')}
@@ -761,7 +761,7 @@ function renderDashboard() {
           +'<div class="dash-av '+_dashAvatarHue(nm)+'">'+escHtml(ini)+'</div>'
           +'<div class="dash-pay__id" onclick="showViewStudentModal(\''+p.studentId+'\')">'
           +'<div class="dash-pay__name">'+escHtml(p.studentName||'')+'</div>'
-          +'<div class="dash-pay__room">Room '+(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
+          +'<div class="dash-pay__room">Room '+escHtml(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
           +'<div>'
@@ -799,9 +799,9 @@ function renderDashboard() {
       extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
       return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+p.studentId+'\')">'
       +'<td><div style="display:flex;align-items:center;gap:7px">'
-      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+(p.studentName||'?')[0].toUpperCase()+'</div>'
+      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+escHtml((p.studentName||'?')[0].toUpperCase())+'</div>'
       +'<span style="font-weight:700;color:var(--text);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
-      +'<td><span style="color:var(--text2);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
+      +'<td><span style="color:var(--text2);font-weight:700;font-size:12px">#'+escHtml(p.roomNumber||'')+'</span></td>'
       +'<td><span style="font-weight:700;font-size:12px">'+(mRent>0?fmtPKR(mRent):'—')+'</span></td>'
       +'<td>'+paidCell+'</td>'
       +'<td><span style="color:'+(unpaidAmt2>0?'var(--text)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
@@ -830,7 +830,7 @@ function showRoomSeatDetailModal(roomId) {
     if(s){
       seatSlots += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
             <div style="font-weight:700;font-size:13px;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -852,15 +852,15 @@ function showRoomSeatDetailModal(roomId) {
     }
   }
 
-  showModal('modal-md', `${ICONS.bed} Room #${r.number} — Seat Details`,`
+  showModal('modal-md', `${ICONS.bed} Room #${escHtml(String(r.number))} — Seat Details`,`
     <!-- Room header -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center">
       <div>
-        <div style="font-size:22px;font-weight:900;color:var(--accent-strong)">#${r.number}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Room</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:var(--text)">${rtype?.name||'—'}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text)">${escHtml(rtype?.name||'—')}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Type</div>
       </div>
       <div>
@@ -1141,8 +1141,8 @@ function showSeatDetailModal(type) {
     allRooms.forEach(r=>{
       const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
       content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(37,99,235,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(37,99,235,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${r.number}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${rt?.name||'—'} · Floor ${r.floor||'?'}</div>
+        <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${escHtml(String(r.number))}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(rt?.name||'—')} · Floor ${escHtml(r.floor||'?')}</div>
         <div style="margin-top:8px;display:flex;justify-content:space-between">
           <span style="font-size:12px;font-weight:700;color:${free===0?'var(--text2)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
           <span style="font-size:12px;font-weight:700;color:${free>0?'var(--text2)':'var(--text3)'}">${free} free</span>
@@ -1171,8 +1171,8 @@ function showSeatDetailModal(type) {
       const free=cap-occ;
       rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>
-          <div style="font-weight:700;color:var(--text)">Room #${r.number}</div>
-          <div style="font-size:12px;color:var(--text3)">${type?.name||'—'} · Floor ${r.floor||'?'}</div>
+          <div style="font-weight:700;color:var(--text)">Room #${escHtml(String(r.number))}</div>
+          <div style="font-size:12px;color:var(--text3)">${escHtml(type?.name||'—')} · Floor ${escHtml(r.floor||'?')}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:13px;font-weight:700;color:var(--text)">${free} free seat${free!==1?'s':''}</div>
@@ -1193,13 +1193,13 @@ function showSeatDetailModal(type) {
       rows+=`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div>
-            <span style="font-weight:700;color:var(--text)">Room #${r.number}</span>
-            <span style="font-size:12px;color:var(--text3);margin-left:8px">${rtype?.name||'—'} · Floor ${r.floor||'?'}</span>
+            <span style="font-weight:700;color:var(--text)">Room #${escHtml(String(r.number))}</span>
+            <span style="font-size:12px;color:var(--text3);margin-left:8px">${escHtml(rtype?.name||'—')} · Floor ${escHtml(r.floor||'?')}</span>
           </div>
           <span style="font-size:12px;font-weight:700;color:var(--text2)">${occ}/${cap} filled</span>
         </div>
         ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--border)">
-          <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -1217,15 +1217,15 @@ function showSeatDetailModal(type) {
       const rtype=room?getRoomType(room):null;
       rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();showViewStudentModal('${s.id}')">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
             <div style="font-weight:700;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:12px;font-weight:700;color:var(--accent-strong)">Rm #${room?.number||'?'}</div>
-          <div style="font-size:11px;color:var(--text3)">${rtype?.name||'—'}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--accent-strong)">Rm #${escHtml(room?.number||'?')}</div>
+          <div style="font-size:11px;color:var(--text3)">${escHtml(rtype?.name||'—')}</div>
         </div>
       </div>`;
     });
@@ -1333,9 +1333,9 @@ function showOccupiedRoomsModal() {
     const occ=students.length;
     const cap=type.capacity;
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
-      <td class="text-muted">${r.floor} Floor</td>
+      <td class="text-muted">${escHtml(r.floor)} Floor</td>
       <td><span class="badge badge-gray">${occ}/${cap} beds</span></td>
       <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
       <td>${students.map(s=>`<div style="font-size:12px;color:var(--text);font-weight:600">• ${escHtml(s.name)}</div>`).join('')||'—'}</td>
@@ -1385,9 +1385,9 @@ function showVacantRoomsModal() {
     const avail=type.capacity-occ;
     const students=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
-      <td class="text-muted">${r.floor} Floor</td>
+      <td class="text-muted">${escHtml(r.floor)} Floor</td>
       <td><span class="badge badge-gray">${occ}/${type.capacity} occupied</span></td>
       <td><span class="badge badge-gray" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>
       <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
@@ -1463,7 +1463,7 @@ function renderMonthModal(monthKey, monthLabel) {
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
       <td><span style="font-weight:700;color:var(--text)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
-      <td style="font-weight:700;color:var(--text2)">#${room?room.number:'—'}</td>
+      <td style="font-weight:700;color:var(--text2)">#${escHtml(String(room?room.number:'—'))}</td>
       <td style="color:var(--text3);font-size:12px">${fmtPKR(s.rent)}/mo</td>
       <td style="color:var(--text);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
       <td style="color:${sPend>0?'var(--text)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
@@ -1733,7 +1733,7 @@ function printMonthReport(monthKey, monthLabel) {
   ${printDocStyles()}
   </head><body>
   <div class="header">
-    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
+    <div><div class="title">${escHtml(DB.settings.hostelName)}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
     <div class="badge">Monthly Report</div>
   </div>
   <div class="kpi-grid">
@@ -1744,7 +1744,7 @@ function printMonthReport(monthKey, monthLabel) {
   </div>
   <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>
     <table><thead><tr><th>Name</th><th>Room</th><th>Rent</th><th>Phone</th><th>Status</th></tr></thead><tbody>
-    ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${rm?rm.number:'—'}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
+    ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${escHtml(String(rm?rm.number:'—'))}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
     </tbody></table>
   </div>
   <div class="section"><h3>${ICONS.card} Fee Records</h3>
@@ -1755,7 +1755,7 @@ function printMonthReport(monthKey, monthLabel) {
   <div class="section"><h3>${ICONS.trendDown} Expenses by Category</h3>
     ${_rptCatTablesHTML(exps)}
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} · Confidential</div>
   </body></html>`;
   _electronPDF(_mRptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+monthLabel.replace(/\s+/g,'-')+'.pdf', {pageSize:'A4'});
 }

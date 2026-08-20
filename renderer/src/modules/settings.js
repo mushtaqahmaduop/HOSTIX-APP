@@ -145,7 +145,7 @@ function renderActivityLog() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3)">Your Collections</div>
       </div>
       <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(myPayTotal)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">${myPaymentsThisMo.length} payment${myPaymentsThisMo.length!==1?'s':''} this month${curName?' · '+curName:''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">${myPaymentsThisMo.length} payment${myPaymentsThisMo.length!==1?'s':''} this month${curName?' · '+escHtml(curName):''}</div>
     </div>
     <div style="background:var(--card);border:1px solid rgba(155,109,240,0.25);border-radius:var(--radius);padding:16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -153,7 +153,7 @@ function renderActivityLog() {
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3)">Students Added</div>
       </div>
       <div style="font-size:22px;font-weight:900;color:var(--purple)">${myStudentsThisMo.length}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">this month${curName?' · '+curName:''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">this month${curName?' · '+escHtml(curName):''}</div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -181,7 +181,7 @@ function renderActivityLog() {
         ${a.by?`<div style="font-size:10px;color:var(--text3);margin-top:2px"><span class="micon" style="font-size:12px;vertical-align:middle">person</span> ${escHtml(a.by)}</div>`:''}
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:${catColor[a.category]||'var(--blue)'}22;color:${catColor[a.category]||'var(--blue)'};margin-bottom:4px;display:inline-block">${a.category||'General'}</span>
+        <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:${catColor[a.category]||'var(--blue)'}22;color:${catColor[a.category]||'var(--blue)'};margin-bottom:4px;display:inline-block">${escHtml(a.category||'General')}</span>
         <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(a.date)} · ${a.time||''}</div>
       </div>
     </div>`).join('')}
@@ -267,7 +267,7 @@ async function saveBillSplit() {
 // ROOM INSPECTIONS
 // ════════════════════════════════════════════════════════════════════════════
 const INSPECTION_ITEMS = ['Walls & Paint','Flooring','Windows & Locks','Bathroom','Plumbing','Electrical Fixtures','Fan / AC','Beds & Furniture','Cleanliness','Lighting'];function showAddInspectionModal() {
-  const rooms = roomsByNumber(DB.rooms).map(r=>`<option value="${r.id}">Room ${r.number}</option>`).join('');
+  const rooms = roomsByNumber(DB.rooms).map(r=>`<option value="${r.id}">Room ${escHtml(String(r.number))}</option>`).join('');
   showModal('modal-sm','Room Inspection Checklist',`
     <div class="form-grid">
       <div class="field"><label>Room *</label><select id="ins-room" class="form-control"><option value="">Select Room</option>${rooms}</select></div>
@@ -1933,7 +1933,7 @@ function _showExcelImportPreview(rows, errors) {
     <tr>
       <td class="fw-700" style="color:var(--blue)">${escHtml(r.name)}</td>
       <td style="color:var(--text2)">${escHtml(r.fatherName||'—')}</td>
-      <td style="color:var(--accent-strong)">Rm #${r.roomNumber}</td>
+      <td style="color:var(--accent-strong)">Rm #${escHtml(String(r.roomNumber))}</td>
       <td style="color:var(--green)">${fmtPKR(r.rent)}</td>
       <td style="font-size:11px;color:var(--text3)">${r.joinDate}</td>
       <td>${r.paidAtAdmission>0?`<span style="color:var(--green)">${fmtPKR(r.paidAtAdmission)}</span>`:'<span style="color:var(--text3)">—</span>'}</td>

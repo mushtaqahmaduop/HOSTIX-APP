@@ -186,7 +186,7 @@ function renderExpenses() {
     .sort().reverse();
   if (!monthsPresent.includes(mo)) monthsPresent.unshift(mo);
   const monthOpts = monthsPresent
-    .map(m => `<option value="${m}" ${scope===m?'selected':''}>${fmtMonthLabel(m)}</option>`).join('');
+    .map(m => `<option value="${escHtml(m)}" ${scope===m?'selected':''}>${fmtMonthLabel(m)}</option>`).join('');
 
   const th = (key, label, extra) => {
     const on  = expFilter.sortKey === key;
@@ -318,7 +318,7 @@ function _expReturnPage() {
 }
 
 function showAddExpenseModal() {
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option>${c}</option>`).join('');
+  const catOpts=DB.settings.expenseCategories.map(c=>`<option>${escHtml(c)}</option>`).join('');
   showModal('modal-md','Add Expense',`
     <div class="form-grid">
       <div class="field"><label>Category *</label><select class="form-control" id="f-ecat">${catOpts}</select></div>

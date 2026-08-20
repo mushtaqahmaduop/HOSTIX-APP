@@ -334,7 +334,7 @@ function printKpiGrid(items) {
 }
 
 function printHeader(hostelName, title, subtitle) {
-  return `<div class="header"><div><div class="title">${hostelName}</div>` +
+  return `<div class="header"><div><div class="title">${escHtml(hostelName)}</div>` +
     (subtitle ? `<div class="subtitle">${title} · ${subtitle}</div>` : `<div class="subtitle">${title}</div>`) +
     `</div></div>`;
 }

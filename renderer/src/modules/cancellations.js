@@ -313,7 +313,7 @@ function showEditCancellationModal(cancId) {
       <div style="width:40px;height:40px;border-radius:10px;background:var(--red-dim);display:flex;align-items:center;justify-content:center;font-size:18px">🚫</div>
       <div>
         <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(c.studentName||'—')}</div>
-        <div style="font-size:12px;color:var(--text3)">Room #${c.roomNumber||'?'} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
+        <div style="font-size:12px;color:var(--text3)">Room #${escHtml(c.roomNumber||'?')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
       </div>
     </div>
     <div class="form-grid">
@@ -393,7 +393,7 @@ function showAddCancellationModal() {
   const available = activeStudents.filter(s=>!alreadyCancelling.includes(s.id));
   const studentOpts = available.map(s=>{
     const room=DB.rooms.find(r=>r.id===s.roomId);
-    return `<option value="${s.id}">👤 ${escHtml(s.name)} — Room #${room?room.number:'?'}</option>`;
+    return `<option value="${s.id}">👤 ${escHtml(s.name)} — Room #${escHtml(String(room?room.number:'?'))}</option>`;
   }).join('');
 
   if(available.length===0){
@@ -477,7 +477,7 @@ function cancStudentSearch(query) {
     return `<div onclick="selectCancStudent('${s.id}')"
       style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px"
       onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
+      <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0">${escHtml((s.name||'?')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(s.name)}</div>
         <div style="font-size:11px;color:var(--text3)">${roomLabel} · ${escHtml(s.phone||'—')}</div>
@@ -555,7 +555,7 @@ async function saveCancellation() {
 async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Confirm Cancellation', `Mark ${c.studentName}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
+  showConfirm('Confirm Cancellation', `Mark ${escHtml(c.studentName)}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
     c.status = 'Confirmed';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){
@@ -572,7 +572,7 @@ async function confirmCancellation(cancId) {
 async function restoreFromCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Restore Student', `Restore ${c.studentName} to Active? Their seat will be re-occupied.`, (async ()=>{
+  showConfirm('Restore Student', `Restore ${escHtml(c.studentName)} to Active? Their seat will be re-occupied.`, (async ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){ student.status='Active'; }
@@ -598,7 +598,7 @@ function downloadCancellationReport() {
   const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth()-2, 1);
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Cancellation Report — ${DB.settings.hostelName||'Hostel'}</title>
+  <title>Cancellation Report — ${escHtml(DB.settings.hostelName||'Hostel')}</title>
   <style>
     @page { margin: 15mm; }
     @media print { .no-print { display:none; } }
@@ -624,7 +624,7 @@ function downloadCancellationReport() {
     <button onclick="window.close()">✕ Close</button>
   </div>
   <h1>📋 Cancellation Report</h1>
-  <div class="sub">${DB.settings.hostelName||'Hostel'} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
+  <div class="sub">${escHtml(DB.settings.hostelName||'Hostel')} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
 
   list.forEach(c => {
     const student = DB.students.find(s=>s.id===c.studentId);
@@ -645,8 +645,8 @@ function downloadCancellationReport() {
     html += `<div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
-          <div style="font-size:15px;font-weight:800;color:#0f1a2e">${c.studentName||'—'}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">Room #${c.roomNumber||'—'} · ${c.roomType||'—'} · ${student?.phone||'No phone'}</div>
+          <div style="font-size:15px;font-weight:800;color:#0f1a2e">${escHtml(c.studentName||'—')}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">Room #${escHtml(c.roomNumber||'—')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
         </div>
         <span class="badge ${statusBadge}">${c.status}</span>
       </div>
@@ -654,8 +654,8 @@ function downloadCancellationReport() {
         <tr><th>Field</th><th>Details</th></tr>
         <tr><td>Request Date</td><td>${fmtDate(c.requestDate)||'—'}</td></tr>
         <tr><td>Vacate Date</td><td>${fmtDate(c.vacateDate)||'End of Month'}</td></tr>
-        <tr><td>Reason</td><td>${c.reason||'—'}</td></tr>
-        <tr><td>Notes</td><td>${c.notes||'—'}</td></tr>
+        <tr><td>Reason</td><td>${escHtml(c.reason||'—')}</td></tr>
+        <tr><td>Notes</td><td>${escHtml(c.notes||'—')}</td></tr>
       </table>
       <div class="section-title">💰 Payment History (Last 2 Months)</div>`;
 
@@ -668,7 +668,7 @@ function downloadCancellationReport() {
           <td>${fmtPKR(p.monthlyRent||0)}</td>
           <td>${fmtPKR(p.amount||0)}</td>
           <td style="color:${(p.unpaid||0)>0?'#dc2626':'#16a34a'};font-weight:700">${fmtPKR(p.unpaid||0)}</td>
-          <td>${p.method||'—'}</td>
+          <td>${escHtml(p.method||'—')}</td>
           <td>${fmtDate(p.date)||'—'}</td>
           <td><span class="badge ${statusCls}">${p.status}</span></td>
         </tr>`;

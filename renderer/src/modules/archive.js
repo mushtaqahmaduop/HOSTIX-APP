@@ -596,7 +596,7 @@ function printArchive() {
 
   const money = n => 'PKR ' + Number(n || 0).toLocaleString('en-PK');
   const sec = (title, inner) => `<h3>${title}</h3>${inner}`;
-  const none = m => `<table><tbody><tr><td style="text-align:center;color:#aaa;padding:10px">${m}</td></tr></tbody></table>`;
+  const none = m => `<table><tbody><tr><td style="text-align:center;color:#aaa;padding:10px">${escHtml(m)}</td></tr></tbody></table>`;
 
   const students = T.students.map(s => {
     const f = _arcStudentFigures(s.id, key);

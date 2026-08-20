@@ -138,7 +138,7 @@ function renderIssues() {
       </div>
       <div class="iss-row__e">
         <div class="iss-row__acts">
-          <span class="lk-chip ${k.hue}">${k.label}</span>
+          <span class="lk-chip ${k.hue}">${escHtml(k.label)}</span>
           ${i.status!=='Resolved'?`<button class="lk-act lk-act--icon lk-act--hue dh-green" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></button>`:''}
           ${i.kind==='maintenance'&&i.status==='Open'?`<button class="lk-act lk-act--icon lk-act--hue dh-amber" onclick="progressMaint('${i.id}')" title="Mark in progress">

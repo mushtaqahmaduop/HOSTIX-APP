@@ -288,7 +288,7 @@ function renderPayments() {
 
   const _pg = paginate(pays, payFilter);
 
-  const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${m}" ${payFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
+  const pmOpts=DB.settings.paymentMethods.map(m=>`<option value="${escHtml(m)}" ${payFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
 
   // Which of the visible rows are carried-over debt rather than this month's
   // billing. Only meaningful in the default this-month scope; an explicit month
@@ -2270,7 +2270,7 @@ function showEditPaymentModal(id) {
   const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + (messIncluded?messCharge:0) + admissionFee - concession - paidAmount);
   showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${(p.studentName||'?')[0].toUpperCase()}</div>
+      <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(p.studentName||'—')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:1px">Room <span style="color:var(--accent-strong);font-weight:700">#${room?.number||'?'}</span>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>

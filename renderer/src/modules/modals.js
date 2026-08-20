@@ -905,7 +905,7 @@ function deleteUser(id) {
     toast('This is the only account that can manage users', 'error', 'Cannot delete'); return;
   }
   showConfirm('Delete user?',
-    'Remove ' + (u.name || u.username) + '? They will no longer be able to sign in. '
+    'Remove ' + escHtml(u.name || u.username) + '? They will no longer be able to sign in. '
     + 'Records they already created are not affected.',
     function () {
       delete WARDENS[id];

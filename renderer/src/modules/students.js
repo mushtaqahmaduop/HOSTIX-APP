@@ -733,7 +733,7 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
       const currentOcc = getRoomOccupancy(selectedRoom);
       showConfirm(
         '⚠️ Room Is At Full Capacity',
-        `Room #${selectedRoom.number} (${roomType.name}) already has ${currentOcc}/${roomType.capacity} students. Do you want to force-add ${name} anyway? Room capacity display will remain at ${roomType.capacity} but this room will show as over-capacity.`,
+        `Room #${escHtml(String(selectedRoom.number))} (${escHtml(roomType.name)}) already has ${currentOcc}/${roomType.capacity} students. Do you want to force-add ${escHtml(name)} anyway? Room capacity display will remain at ${roomType.capacity} but this room will show as over-capacity.`,
         async () => {
           t.isForced = true; // FIX: force-added students don't count against available seats
           DB.students.push(t);
@@ -1225,13 +1225,13 @@ function printStudentCard(id) {
     @media print{body{padding:16px}}
   </style></head><body>
   <div class="header">
-    <div><div class="hostel-name">${t.name}</div><div class="hostel-sub">${DB.settings.hostelName} · ${DB.settings.location||''}</div></div>
+    <div><div class="hostel-name">${escHtml(t.name)}</div><div class="hostel-sub">${escHtml(DB.settings.hostelName)} · ${escHtml(DB.settings.location||'')}</div></div>
     <div class="report-badge">Student Profile Report</div>
   </div>
   <div class="profile-hero">
-    <div class="avatar">${t.name[0].toUpperCase()}</div>
+    <div class="avatar">${escHtml(t.name[0].toUpperCase())}</div>
     <div>
-      <div style="font-size:20px;font-weight:800">${t.name}</div>
+      <div style="font-size:20px;font-weight:800">${escHtml(t.name)}</div>
       <div style="font-size:12px;opacity:0.6;font-family:monospace;margin-top:2px">#${t.id}</div>
       <div class="badges">
         <span class="badge badge-${t.status==='Active'?'green':'blue'}">${t.status}</span>
@@ -1249,7 +1249,7 @@ function printStudentCard(id) {
     <div class="section">
       <div class="section-title">${icon('student','sm')} Personal Information</div>
       <div class="info-grid">
-        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v||'—'}</div></div>`).join('')}
+        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${escHtml(v||'—')}</div></div>`).join('')}
       </div>
     </div>
     <div class="section">
@@ -1269,11 +1269,11 @@ function printStudentCard(id) {
       const _extraHTML=_admF>0?`<div style='font-size:10px;color:#1e40af'>🎓 +${fmtPKR(_admF)} adm.</div>`:'';
       const _xHTML=_extras.map(x=>`<div style='font-size:10px;color:#b45309'>+${fmtPKR(x.amount)} ${escHtml(x.label||'')}</div>`).join('');
       const _concHTML=_conc>0?`<div style='font-size:10px;color:#dc2626'>−${fmtPKR(_conc)} concession</div>`:'';
-      return `<tr><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${fmtPKR(p.amount)}${_extraHTML}${_xHTML}${_concHTML}</td><td>${p.method||'—'}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td><td style="color:#94a3b8">${p.notes||'—'}</td></tr>`;
+      return `<tr><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${fmtPKR(p.amount)}${_extraHTML}${_xHTML}${_concHTML}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${escHtml(p.status)}</td><td>${fmtDate(p.date)||'—'}</td><td style="color:#94a3b8">${escHtml(p.notes||'—')}</td></tr>`;
     }).join('')}
     </tbody></table>`:'<p style="color:#94a3b8;text-align:center;padding:12px">No payment records</p>'}
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} Management System · ${DB.settings.location||''}</div>
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} Management System · ${escHtml(DB.settings.location||'')}</div>
   </body></html>`;
   var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + today() + '.pdf';
   _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
@@ -1281,7 +1281,7 @@ function printStudentCard(id) {
 function showEditStudentModal(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||getRoomOccupancy(r)<getRoomType(r).capacity));
-  const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${m}</option>`).join('');
+  const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
   // The student's own status is always in the list. It used to be built from
   // three fixed values, so a student on the cancellation list ('Cancelling')
   // matched none of them, the browser selected the first — Active — and merely
@@ -1593,7 +1593,7 @@ function showRoomShiftModal(studentId) {
   const roomOpts = available.map(r => {
     const type = getRoomType(r);
     const occ  = getRoomOccupancy(r);
-    return `<option value="${r.id}">#${r.number} — ${type.name} · ${r.floor} Floor (${occ}/${type.capacity} occupied)</option>`;
+    return `<option value="${r.id}">#${escHtml(String(r.number))} — ${escHtml(type.name)} · ${escHtml(r.floor)} Floor (${occ}/${type.capacity} occupied)</option>`;
   }).join('');
 
   showModal('modal-md', '🔀 Shift Student to Another Room', `
@@ -1602,7 +1602,7 @@ function showRoomShiftModal(studentId) {
       <div style="font-size:24px">🧑‍🎓</div>
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--text)">${escHtml(t.name)}</div>
-        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${fromRoom ? fromRoom.number : '?'}</strong></div>
+        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${escHtml(String(fromRoom ? fromRoom.number : '?'))}</strong></div>
       </div>
     </div>
 
@@ -1785,7 +1785,7 @@ function formerStudentSearch(query) {
     const recentRows = payHistory.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3)">${escHtml(p.month||fmtDate(p.date)||'—')}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${fmtPKR(p.amount)}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'}">${p.status==='Paid'?icon('checkmark','xs'):'⏳'}</span></div>`).join('');
     return `<div id="fsr-${s.id}" style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;gap:13px">
-        <div style="width:44px;height:44px;border-radius:11px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0">${escHtml((s.name||'?')[0].toUpperCase())}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">${escHtml(s.name||'—')}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;margin-bottom:8px">
@@ -1825,7 +1825,7 @@ function _getAvailableRooms() {
 function openRestoreStudentForm(studentId) {
   const t = DB.students.find(x=>x.id===studentId); if(!t) return;
   const availRooms = roomsByNumber(_getAvailableRooms());
-  const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${r.number} — ${type?.name||''} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
+  const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${escHtml(String(r.number))} — ${escHtml(type?.name||'')} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
   const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
   const today = ymd(new Date());
   const thisMonthKey = today.slice(0,7);

@@ -63,7 +63,7 @@ function renderRooms() {
   });
 
   const typeOptions = DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${roomFilter.type===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
-  const floorOptions = DB.settings.floors.map(f=>`<option value="${f}" ${roomFilter.floor===f?'selected':''}>${f} Floor</option>`).join('');
+  const floorOptions = DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${roomFilter.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
 
   rooms = applySort(rooms, roomFilter, {
     number:    r => r.number,
@@ -329,14 +329,14 @@ function showRoomDetail(id) {
   const type = getRoomType(r);
   const occ = getRoomOccupancy(r);
   const activeStudents = DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
-  showModal('modal-md',`Room #${r.number} — ${type.name}`,`
+  showModal('modal-md',`Room #${escHtml(String(r.number))} — ${escHtml(type.name)}`,`
     <div class="forms-grid">
       <div class="card" style="padding:14px"><div class="stat-label">Type</div><div style="font-weight:700;color:var(--text)">${escHtml(type.name)}</div></div>
-      <div class="card" style="padding:14px"><div class="stat-label">Floor</div><div style="font-weight:700">${r.floor}</div></div>
+      <div class="card" style="padding:14px"><div class="stat-label">Floor</div><div style="font-weight:700">${escHtml(r.floor)}</div></div>
       <div class="card" style="padding:14px"><div class="stat-label">Capacity</div><div style="font-weight:700">${occ}/${type.capacity} occupied</div></div>
     </div>
     <div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Amenities</div><div class="tag-list">${(r.amenities||[]).map(a=>`<div class="tag-item">${escHtml(a)}</div>`).join('')||'<span class="text-muted">None listed</span>'}</div></div>
-    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${t.name[0]}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div></div>`).join('')}</div>`:''}
+    ${activeStudents.length?`<div style="margin-top:14px"><div class="stat-label" style="margin-bottom:8px">Current Students</div>${activeStudents.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="avatar" style="background:var(--accent-dim);color:var(--accent)">${escHtml(t.name[0])}</div><div><div style="font-weight:600">${escHtml(t.name)}</div><div class="td-sub">${escHtml(t.phone||'—')}</div></div></div>`).join('')}</div>`:''}
     ${r.notes?`<div style="margin-top:14px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px"><div class="stat-label" style="margin-bottom:4px">Notes</div><div style="font-size:13px;color:var(--text2)">${escHtml(r.notes)}</div></div>`:''}
   `,`<button class="btn btn-secondary" onclick="closeModal();showEditRoomModal('${r.id}')">Edit Room</button><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
 }
@@ -444,7 +444,7 @@ function syncRoomPreview() {
 
 function showAddRoomModal(presetId='') {
   const typeOpts = DB.settings.roomTypes.map(t=>`<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
-  const floorOpts = DB.settings.floors.map(f=>`<option value="${f}">${f} Floor</option>`).join('');
+  const floorOpts = DB.settings.floors.map(f=>`<option value="${escHtml(f)}">${escHtml(f)} Floor</option>`).join('');
   showModal('modal-lg', roomModalTitle('doorOpen','Add New Room','Register a new room or unit in your hostel'), `
     <div class="arm">
       <div class="arm-guide">
@@ -531,8 +531,8 @@ async function submitAddRoom() {
 function showEditRoomModal(id) {
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const typeOpts=DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${r.typeId===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
-  const floorOpts=DB.settings.floors.map(f=>`<option value="${f}" ${r.floor===f?'selected':''}>${f} Floor</option>`).join('');
-  showModal('modal-lg', roomModalTitle('edit',`Edit Room #${r.number}`,'Update this room’s details, type and amenities'), `
+  const floorOpts=DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${r.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
+  showModal('modal-lg', roomModalTitle('edit',`Edit Room #${escHtml(String(r.number))}`,'Update this room’s details, type and amenities'), `
     <div class="arm">
       <div class="arm-card">
         <label class="arm-label" for="f-rnum">Room Name / Number</label>
@@ -622,7 +622,7 @@ async function confirmDeleteRoom(id) {
   const _living = DB.students.filter(t => t.roomId === r.id && isResident(t)).length;
   if(_living>0){toast('Cannot delete Room #'+r.number+' — '+_living+' student(s) still assigned to it','error');return;}
   closeModal();
-  showConfirm(`Delete Room #${r.number}?`,'This cannot be undone.',(async ()=>{
+  showConfirm(`Delete Room #${escHtml(String(r.number))}?`,'This cannot be undone.',(async ()=>{
     DB.rooms=DB.rooms.filter(x=>x.id!==id);
     logActivity('Room Deleted', 'Room #'+r.number, 'Room');
     await saveDB(); renderPage('rooms'); toast('Room deleted','info');
