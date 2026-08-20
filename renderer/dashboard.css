@@ -12,34 +12,41 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Card shell ──────────────────────────────────────────────────────────── */
+/* Guide §7 — white, thin border, 16px radius, and a resting shadow. Cards
+   "should NOT look flat": with no shadow at rest they sit ON the tinted
+   workspace as outlines rather than as elevated surfaces. */
 .dsh-card {
     position: relative;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 16px 18px;
+    box-shadow: var(--shadow);
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .dsh-card--click { cursor: pointer; }
 .dsh-card--click:hover {
     transform: translateY(-3px);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-royal, var(--shadow));
     border-color: var(--border2);
 }
 
 /* ── KPI cards (row 1) ───────────────────────────────────────────────────── */
 .dash-kpi-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(212px,1fr)); gap:12px; margin-bottom:12px; }
-.dash-kpi__top   { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
-.dash-kpi__label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text2); line-height:1.3; }
+/* min-width:0 lets the label ellipsise instead of pushing the pill stack past
+   the card edge — "63% Occupied" was being clipped to "63% Occupie". */
+.dash-kpi__top   { display:flex; align-items:center; gap:10px; margin-bottom:12px; min-width:0; }
+.dash-kpi__label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text2); line-height:1.3; min-width:0; }
 .dash-kpi__value { display:block; color:var(--text); margin-bottom:9px; }
 .dash-kpi__sub   { font-size:11px; color:var(--text3); line-height:1.55; }
 
+/* Guide §22 — icon containers are 40×40 at 12px radius, on a semantic tint. */
 .dash-chip {
-    width:38px; height:38px; border-radius:11px; flex-shrink:0;
+    width:40px; height:40px; border-radius:12px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
-.dash-chip .icon     { width:19px; height:19px; }
+.dash-chip .icon     { width:20px; height:20px; }
 .dash-chip--lg       { width:44px; height:44px; border-radius:13px; }
 .dash-chip--lg .icon { width:21px; height:21px; }
 
@@ -53,6 +60,9 @@
 /* ── Sparkline — drawn from the real 12-month series ─────────────────────── */
 .dash-spark            { display:block; width:100%; height:36px; margin-top:2px; overflow:visible; }
 .dash-spark polyline   { stroke:var(--dh); }
+/* The wash under the line. currentColor picks up --dh via the rule below, so
+   one declaration covers every hue and both themes. */
+.dash-spark__area      { fill:var(--dh); opacity:.10; stroke:none; }
 .dash-spark-empty      { height:36px; display:flex; align-items:flex-end; font-size:10px; color:var(--text3); }
 
 /* ── Quick tiles (row 2) ─────────────────────────────────────────────────── */
@@ -240,9 +250,15 @@
    scales the whole screen down ~12% so more fits above the fold. Kept as one
    trailing block rather than edited inline, so the density can be dialled up
    or down (or dropped entirely) without touching the component rules.
+
+   RADIUS AND ICON CONTAINERS ARE NOT PART OF THE DENSITY PASS. The design
+   guide fixes them (§20: 16px cards; §22: 40x40 at 12px) and lists both in its
+   Definition of Done, and neither buys vertical room — what does is padding,
+   gaps and the size of the KPI number. So this block keeps trimming those and
+   leaves the geometry to the guide.
    ═══════════════════════════════════════════════════════════════════════════ */
-.dsh-card              { padding:13px 15px; border-radius:14px; }
-.dash-sec               { padding:12px 14px; border-radius:14px; }
+.dsh-card              { padding:13px 15px; }
+.dash-sec               { padding:12px 14px; border-radius:16px; }
 .dash-kpi-grid          { grid-template-columns:repeat(auto-fit,minmax(196px,1fr)); gap:10px; margin-bottom:10px; }
 .dash-tile-grid         { grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:10px; margin-bottom:10px; }
 
@@ -254,10 +270,8 @@
 .dash-kpi__value .money-value--display { font-size:clamp(25px, 1.95vw, 29px); }
 .dash-kpi__sub          { font-size:10.5px; line-height:1.5; }
 
-.dash-chip              { width:34px; height:34px; border-radius:10px; }
-.dash-chip .icon        { width:17px; height:17px; }
-.dash-chip--lg          { width:39px; height:39px; border-radius:11px; }
-.dash-chip--lg .icon    { width:19px; height:19px; }
+.dash-chip--lg          { width:44px; height:44px; border-radius:13px; }
+.dash-chip--lg .icon    { width:21px; height:21px; }
 
 .dash-tile__head        { gap:10px; margin-bottom:9px; }
 .dash-tile__num         { font-size:26px; }

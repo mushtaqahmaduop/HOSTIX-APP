@@ -2004,7 +2004,9 @@ function downloadAllStudentsPDF() {
     var lbl=d.toLocaleString('default',{month:'long',year:'numeric'});
     monthOpts += '<option value="'+val+'"'+(i===0?' selected':'')+'>'+lbl+'</option>';
   }
-  showModal('modal-md','📥 Download Students PDF',
+  // Emoji out, icon() in — same pass as the report itself. showModal
+  // interpolates the title as HTML, so the SVG lands in the header.
+  showModal('modal-md',icon('download','sm')+' Download Students PDF',
     '<div style="padding:4px 0">'
     +'<div style="margin-bottom:18px">'
     +'<label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px">Select Month for Fee Report</label>'
@@ -2012,7 +2014,7 @@ function downloadAllStudentsPDF() {
     +'<div style="font-size:11px;color:var(--text3);margin-top:6px">The PDF will show each student\'s rent, deposit, paid amount, and pending balance for the selected month.</div>'
     +'</div>'
     +'<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">'
-    +'<div style="font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:8px">📋 Report will include:</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:8px">'+icon('list','xs')+'Report will include:</div>'
     +'<div style="font-size:12px;color:var(--text2);line-height:1.8">'
     +icon('checkmark','xs')+' Student name, father\'s name, room number<br>'
     +icon('checkmark','xs')+' CNIC and phone number<br>'
@@ -2020,20 +2022,19 @@ function downloadAllStudentsPDF() {
     +icon('checkmark','xs')+' Amount paid in selected month<br>'
     +icon('checkmark','xs')+' Pending / unpaid balance for that month<br>'
     +icon('checkmark','xs')+' Payment status badge<br>'
-    +icon('checkmark','xs')+' <strong style="color:var(--amber)">Expenses summary badge &amp; full breakdown</strong><br>'
-    +icon('checkmark','xs')+' <strong style="color:var(--blue)">Funds Transfer badge &amp; full breakdown</strong><br>'
-    +icon('checkmark','xs')+' <strong style="color:var(--green)">Net Available fund calculation</strong>'
+    +icon('checkmark','xs')+' <strong style="color:var(--amber)">Expenses badge &amp; breakdown by category, with per-category totals</strong><br>'
+    +icon('checkmark','xs')+' <strong style="color:var(--green)">Available Fund calculation</strong>'
     +'</div>'
     +'</div>'
     +'</div>',
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>'
-    +'<button class="btn btn-primary" onclick="doGenerateStudentsPDF(document.getElementById(\'pdf-month-sel\').value);closeModal()">📥 Generate PDF</button>'
+    +'<button class="btn btn-primary" onclick="doGenerateStudentsPDF(document.getElementById(\'pdf-month-sel\').value);closeModal()">'+icon('download','sm')+' Generate PDF</button>'
   );
 }
 
 function doGenerateStudentsPDF(monthKey) {
-  var appName  = DB.settings.appName  || 'HOSTYLLO';
   if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
+  var appName  = DB.settings.appName  || 'HOSTYLLO';
   var hostel   = DB.settings.hostelName || 'DAMAM Boys Hostel';
   var location = DB.settings.location  || '';
   var now      = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
@@ -2077,9 +2078,11 @@ function doGenerateStudentsPDF(monthKey) {
   // Grand totals
   var grandRent=0, grandAdmFee=0, grandExtra=0, grandConc=0, grandPaid=0, grandPending=0;
 
-  // Month-level expenses and transfers
-  var grandExpenses  = (DB.expenses||[]).filter(function(e){ return (e.date||'').startsWith(monthKey); }).reduce(function(s,e){ return s+Number(e.amount||0); },0);
-  var grandTransfers = (DB.transfers||[]).filter(function(t){ return (t.date||'').startsWith(monthKey); }).reduce(function(s,t){ return s+Number(t.amount||0); },0);
+  // Month-level outgoings. calcExpenses() is the figure every other screen
+  // quotes and it already carries the funds transfers, so this PDF stops
+  // counting them as a separate line — a transfer is an expense under the Fund
+  // Transfer category here like everywhere else.
+  var grandExpenses  = calcExpenses(monthKey);
 
   var rows = '';
   students.forEach(function(s, i) {
@@ -2100,10 +2103,10 @@ function doGenerateStudentsPDF(monthKey) {
 
     var hasRecord   = mPays.length > 0;
     var statusTxt   = !hasRecord ? '—' : pendingAmt>0 ? 'Partial' : 'Paid ✓';
-    var statusStyle = !hasRecord ? 'color:#888;background:#f0f0f0' : pendingAmt>0 ? 'color:#8b1a1a;background:#fde8e8' : 'color:#1a6b3a;background:#d4f4e0';
-    var sColor      = s.status==='Active'?'#1a7a3a':s.status==='Left'?'#555':'#8b0000';
-    var sBg         = s.status==='Active'?'#d4f4e0':s.status==='Left'?'#eee':'#fde8e8';
-    var rowBg       = (i%2===0)?'#fff':'#f9f9fb';
+    var statusCls   = !hasRecord ? 'p-none' : pendingAmt>0 ? 'p-part' : 'p-paid';
+    var sCls        = s.status==='Active' ? 'p-act' : s.status==='Left' ? 'p-left' : 'p-other';
+    // Zebra striping is a :nth-child rule in the stylesheet now, not a colour
+    // computed per row and pasted onto every <tr>.
 
     grandRent    += Number(s.rent||0);
     grandAdmFee  += admFee;
@@ -2112,7 +2115,7 @@ function doGenerateStudentsPDF(monthKey) {
     grandPaid    += paidAmt;
     grandPending += pendingAmt;
 
-    var dash = '<span style="color:#ccc">—</span>';
+    var dash = '—';   // the cell's .nil class carries the muted colour
     // Build extra charges label: show each charge with description+amount
     var extCell = (function(){
       var allExt = [];
@@ -2137,80 +2140,176 @@ function doGenerateStudentsPDF(monthKey) {
       return descs.length ? '−'+descs.join('<br>') : '−'+fmtPKR(concession);
     })();
 
-    rows += '<tr style="background:'+rowBg+'">';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center;font-weight:700;color:#888;font-size:10px">'+(i+1)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-weight:700;color:#111">'+escHtml(s.name||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;color:#444;font-size:10px">'+escHtml(s.fatherName||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center;font-weight:800;color:#b8860b">'+(room?'#'+room.number:'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-family:monospace;font-size:9.5px;color:#444">'+escHtml(s.cnic||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;font-size:10px;color:#333">'+escHtml(s.phone||'—')+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:#1a5c3a">'+fmtPKR(s.rent||0)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(admFee>0?'#1a3a7a':'#bbb')+';font-size:10px">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(extraTotal>0?'#7a4d00':'#bbb')+';font-size:10px">'+extCell+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:700;color:'+(concession>0?'#0a5a40':'#bbb')+';font-size:10px">'+concCell+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:'+(paidAmt>0?'#1a6b3a':'#aaa')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:right;font-weight:800;color:'+(pendingAmt>0?'#8b1a1a':'#aaa')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;'+statusStyle+'">'+statusTxt+'</span></td>';
-    rows += '<td style="padding:6px 5px;border:1px solid #c8d0db;text-align:center"><span style="display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:800;background:'+sBg+';color:'+sColor+'">'+escHtml(s.status||'—')+'</span></td>';
+    rows += '<tr>';
+    rows += '<td class="no">'+(i+1)+'</td>';
+    rows += '<td class="nm">'+escHtml(s.name||'—')+'</td>';
+    rows += '<td class="fa">'+escHtml(s.fatherName||'—')+'</td>';
+    rows += '<td class="rm">'+(room?'#'+room.number:'—')+'</td>';
+    rows += '<td class="mono">'+escHtml(s.cnic||'—')+'</td>';
+    rows += '<td class="ph">'+escHtml(s.phone||'—')+'</td>';
+    rows += '<td class="money rent">'+fmtPKR(s.rent||0)+'</td>';
+    rows += '<td class="money '+(admFee>0?'adm':'nil')+'">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
+    rows += '<td class="money '+(extraTotal>0?'ext':'nil')+'">'+extCell+'</td>';
+    rows += '<td class="money '+(concession>0?'conc':'nil')+'">'+concCell+'</td>';
+    rows += '<td class="money '+(paidAmt>0?'paid':'nil')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
+    rows += '<td class="money '+(pendingAmt>0?'pend':'nil')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
+    rows += '<td class="c"><span class="pill '+statusCls+'">'+statusTxt+'</span></td>';
+    rows += '<td class="c"><span class="pill '+sCls+'">'+escHtml(s.status||'—')+'</span></td>';
     rows += '</tr>';
   });
 
   // Totals row — adm/ext/conc NOT grand-totalled (they are per-student breakdown only)
-  rows += '<tr style="background:#0f1a2e">';
-  rows += '<td colspan="6" style="padding:8px 8px;font-weight:900;color:#a78bfa;font-size:12px;border:1px solid #2a3d5a">TOTALS &nbsp;<span style="font-weight:400;font-size:10px">('+total+' students)</span></td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(grandRent)+'</td>';
-  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
-  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
-  rows += '<td style="padding:8px 5px;text-align:center;color:#4a6a9a;font-size:9px">—</td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#4ade80">'+fmtPKR(grandPaid)+'</td>';
-  rows += '<td style="padding:8px 5px;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(grandPending)+'</td>';
-  rows += '<td colspan="2" style="padding:8px 5px;text-align:center;font-size:10px;color:#8899bb">'+active+' active · '+left+' left</td>';
+  rows += '<tr class="totals">';
+  rows += '<td colspan="6" class="lbl">TOTALS &nbsp;<span>('+total+' students)</span></td>';
+  rows += '<td class="r">'+fmtPKR(grandRent)+'</td>';
+  rows += '<td class="dim">—</td>';
+  rows += '<td class="dim">—</td>';
+  rows += '<td class="dim">—</td>';
+  rows += '<td class="r g">'+fmtPKR(grandPaid)+'</td>';
+  rows += '<td class="r rd">'+fmtPKR(grandPending)+'</td>';
+  rows += '<td colspan="2" class="note">'+active+' active · '+left+' left</td>';
   rows += '</tr>';
 
-  var netFund = grandPaid - grandExpenses - grandTransfers;
+  // Available Fund, computed the one way the whole app computes it:
+  // calcRevenue − calcExpenses. It used to be grandPaid (the sum of the rows in
+  // THIS table, which a status filter can narrow) minus expenses minus
+  // transfers again — two ways to disagree with the Available Fund card on the
+  // dashboard for the very same month.
+  var netFund = calcRevenue(monthKey) - grandExpenses;
 
   // ── HTML ──────────────────────────────────────────────────────────────────
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1300">';
   html += '<title>'+hostel+' — Students Fee Report '+monthLabel+'</title>';
+  /* ── STYLES ───────────────────────────────────────────────────────────────
+     One stylesheet, classes on the cells. This document used to carry the same
+     `padding:6px 5px;border:1px solid #c8d0db` string on all fourteen cells of
+     every row, which made a colour change a fourteen-place edit and put most of
+     the file's weight in repeated attributes.
+
+     Palette is the Room Visit Sheet's — slate ink, #e2e8f0 rules, semantic
+     green/red/amber — so the two documents a warden prints in the same minute
+     look like they came from the same system. The old purple-on-navy headers
+     (#a78bfa on #0f1a2e) and the brown expenses panel were each their own
+     scheme, and neither matched anything else the app prints. */
   html += '<style>';
   html += '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}';
   html += '@page{size:A4 landscape;margin:7mm 9mm}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
-  html += 'body{font-family:"Segoe UI",-apple-system,Roboto,Arial,sans-serif;background:#fff;color:#111;padding:14px 18px;font-size:10.5px}';
+  html += 'body{font-family:"Segoe UI",-apple-system,Roboto,Arial,sans-serif;background:#fff;color:#0f172a;padding:14px 18px;font-size:10.5px}';
   html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
-  // 11 cols: # name father room cnic phone rent paid pend fst sst
+  // This document opens in its own window with none of the app's stylesheets,
+  // so icon() SVGs would fall back to the replaced-element default of 300×150
+  // and tear the layout apart. Same rules the visit sheet carries.
+  html += 'svg.icon{width:14px;height:14px;flex-shrink:0;vertical-align:-2px}';
+  html += 'svg.icon-xs{width:11px;height:11px}svg.icon-sm{width:13px;height:13px}';
+
+  // ── Header
+  html += '.hdr{display:flex;justify-content:space-between;align-items:flex-end;';
+  html += 'border-bottom:2px solid #1e293b;padding-bottom:9px;margin-bottom:12px}';
+  html += '.hdr h1{font-size:21px;font-weight:900;letter-spacing:-.02em}';
+  html += '.hdr .sub{display:flex;align-items:center;gap:4px;font-size:10px;color:#64748b;margin-top:3px}';
+  html += '.hdr .kicker{margin-top:5px;font-size:9.5px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1.6px}';
+  html += '.hdr .date{text-align:right}';
+  html += '.hdr .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;font-size:12px;font-weight:800;color:#1e293b}';
+  html += '.hdr .date .h{font-size:9px;color:#94a3b8;margin-top:3px}';
+
+  // ── Summary tiles. Eight across a landscape page, so the value sits at 15px
+  //    and every label is one line — the old ones broke on a <br> mid-phrase.
+  html += '.summary{display:flex;gap:6px;margin-bottom:12px}';
+  html += '.sbox{flex:1;min-width:0;display:flex;align-items:center;gap:7px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px}';
+  html += '.sbox .ico{width:26px;height:26px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center}';
+  html += '.sbox .v{display:block;font-size:15px;font-weight:900;line-height:1.15;white-space:nowrap}';
+  html += '.sbox .l{display:block;font-size:7.5px;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;font-weight:700;margin-top:1px;white-space:nowrap}';
+  html += '.sbox.t-slate .ico{background:#e2e8f0;color:#475569}.sbox.t-slate .v{color:#0f172a}';
+  html += '.sbox.t-green .ico{background:#dcfce7;color:#16a34a}.sbox.t-green .v{color:#15803d}';
+  html += '.sbox.t-gray  .ico{background:#f1f5f9;color:#94a3b8}.sbox.t-gray  .v{color:#64748b}';
+  html += '.sbox.t-blue  .ico{background:#dbeafe;color:#2563eb}.sbox.t-blue  .v{color:#1d4ed8}';
+  html += '.sbox.t-red   .ico{background:#fee2e2;color:#dc2626}.sbox.t-red   .v{color:#b91c1c}';
+  html += '.sbox.t-amber .ico{background:#fef3c7;color:#b45309}.sbox.t-amber .v{color:#b45309}';
+
+  // ── Roster table
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
   html += 'col.c-no{width:3%}col.c-name{width:13%}col.c-father{width:10%}col.c-room{width:4%}col.c-cnic{width:11%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:7%}col.c-ext{width:8%}col.c-conc{width:8%}col.c-paid{width:8%}col.c-pend{width:7%}col.c-fst{width:7%}col.c-sst{width:6%}';
-  html += 'thead th{background:#0f1a2e;color:#a78bfa;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;border:1px solid #1e3050;word-break:break-word}';
+  html += 'thead th{background:#f1f5f9;color:#475569;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;border:1px solid #e2e8f0;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
-  html += 'td{padding:5px 5px;border:1px solid #c8d0db !important;word-break:break-word;vertical-align:middle;font-size:10px}';
-  html += 'tr:hover td{background:#f0f4ff!important}';
-  html += '.sum{display:inline-flex;align-items:center;gap:5px;background:#f5f7ff;border:1px solid #dde2ea;border-radius:8px;padding:5px 10px;margin:2px}';
-  html += '.sum .v{font-size:15px;font-weight:900}.sum .l{font-size:8px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}';
-  html += '.pbtn{background:#0f1a2e;color:#a78bfa;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,Arial,sans-serif}';
+  html += 'td{padding:6px 5px;border:1px solid #e2e8f0;word-break:break-word;vertical-align:middle;font-size:10px}';
+  html += 'tbody tr:nth-child(even) td{background:#f8fafc}';
+  html += 'td.c{text-align:center}td.r{text-align:right}';
+  html += 'td.no{text-align:center;font-weight:700;color:#94a3b8}';
+  html += 'td.nm{font-weight:700;color:#0f172a}';
+  html += 'td.fa{color:#475569}';
+  html += 'td.rm{text-align:center;font-weight:800;color:#b45309}';
+  html += 'td.mono{font-family:Consolas,"Courier New",monospace;font-size:9.5px;color:#475569}';
+  html += 'td.ph{color:#475569}';
+  html += 'td.money{text-align:right;font-weight:800}';
+  html += 'td.rent{color:#15803d}td.paid{color:#15803d}td.pend{color:#b91c1c}';
+  html += 'td.adm{color:#1d4ed8;font-weight:700}td.ext{color:#b45309;font-weight:700}td.conc{color:#0f766e;font-weight:700}';
+  html += 'td.nil{color:#cbd5e1;font-weight:400}';
+  html += '.pill{display:inline-block;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:800;white-space:nowrap}';
+  html += '.p-paid{background:#dcfce7;color:#15803d}.p-part{background:#fee2e2;color:#b91c1c}';
+  html += '.p-none{background:#f1f5f9;color:#94a3b8}';
+  html += '.p-act{background:#dcfce7;color:#15803d}.p-left{background:#f1f5f9;color:#64748b}.p-other{background:#fee2e2;color:#b91c1c}';
+
+  // ── Totals band — the ink bar the eye lands on, matching the visit sheet's
+  //    floor header rather than inventing a third dark shade.
+  html += 'tr.totals td{background:#0f172a!important;border:1px solid #1e293b;padding:8px 5px;color:#cbd5e1;font-weight:900}';
+  html += 'tr.totals td.lbl{font-size:12px;color:#fff;text-align:left}';
+  html += 'tr.totals td.lbl span{font-weight:400;font-size:10px;color:#94a3b8}';
+  // .r before .g/.rd — same specificity, so source order decides which colour
+  // the collected and pending figures keep.
+  html += 'tr.totals td.r{text-align:right;color:#fff}';
+  html += 'tr.totals td.g{color:#86efac}tr.totals td.rd{color:#fca5a5}tr.totals td.dim{color:#64748b;font-weight:400;font-size:9px;text-align:center}';
+  html += 'tr.totals td.note{color:#94a3b8;font-weight:400;font-size:10px;text-align:center}';
+
+  // ── Outgoings register
+  html += '.outgo{margin-top:16px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px}';
+  html += '.outgo h2{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:9px}';
+  html += '.cat{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;color:#0f172a;margin:11px 0 5px}';
+  html += '.cat .n{font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;background:#f1f5f9;border-radius:20px;padding:2px 8px}';
+  html += 'table.exp{font-size:10.5px}';
+  html += 'table.exp th{background:#f1f5f9;color:#475569;padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}';
+  html += 'table.exp th.r{text-align:right}';
+  html += 'table.exp td{padding:5px 10px;border:1px solid #e2e8f0}';
+  html += 'table.exp td.amt{text-align:right;font-weight:800;color:#b91c1c}';
+  html += 'table.exp td.dsc{color:#475569}';
+  html += 'table.exp tr.sub td{background:#f8fafc!important;font-weight:900;color:#0f172a}';
+  html += 'table.exp tr.sub td.amt{color:#b91c1c}';
+  html += 'table.grand td{background:#0f172a;border:1px solid #1e293b;padding:7px 10px;font-weight:900;color:#fff;font-size:10.5px}';
+  html += 'table.grand td.amt{text-align:right;color:#fca5a5}';
+
+  html += '.footer{margin-top:12px;padding-top:7px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}';
+  html += '.footer .gen{font-size:9px;color:#94a3b8}';
+  html += '.footer .tally{font-size:10px;color:#475569;font-weight:600}';
+  html += '.pbtn{display:inline-flex;align-items:center;gap:7px;background:#1d4ed8;color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}';
   html += '</style></head><body>';
 
-  // Header
-  html += '<div style="border-bottom:3px solid #7c3aed;padding-bottom:10px;margin-bottom:12px;display:flex;align-items:flex-start;justify-content:space-between">';
-  html += '<div><div style="font-size:22px;font-weight:900;color:#0f1a2e">'+escHtml(hostel)+'</div>';
-  if(location) html += '<div style="font-size:11px;color:#666;margin-top:2px">📍 '+escHtml(location)+'</div>';
-  html += '<div style="font-size:14px;font-weight:800;color:#b8860b;margin-top:4px;text-transform:uppercase;letter-spacing:0.8px">Students Fee Report — '+monthLabel+'</div></div>';
-  html += '<div style="text-align:right"><div style="font-size:10px;color:#888">Generated on</div><div style="font-size:12px;font-weight:700;color:#333">'+now+'</div>';
-  html += '<button class="pbtn no-print" style="margin-top:8px" onclick="window.print()">🖨️ Print / Save PDF</button></div>';
+  // Header. Emoji are out — the print documents use icon() SVGs, and the pin /
+  // calendar / printer here are the same three the visit sheet uses.
+  html += '<div class="hdr">';
+  html += '<div><h1>'+escHtml(hostel)+'</h1>';
+  if(location) html += '<div class="sub">'+icon('pin','xs')+'<span>'+escHtml(location)+'</span></div>';
+  html += '<div class="kicker">Students Fee Report — '+monthLabel+'</div></div>';
+  html += '<div class="date"><div class="d">'+icon('calendar','xs')+'<span>'+now+'</span></div>';
+  html += '<div class="h">All amounts are in PKR</div>';
+  html += '<button class="pbtn no-print" style="margin-top:8px" onclick="window.print()">'+icon('print','sm')+' Print / Save PDF</button></div>';
   html += '</div>';
 
-  // Summary badges (Fix #12: admission fee and concession removed from grand total badges)
-  html += '<div style="display:flex;flex-wrap:wrap;gap:0;margin-bottom:12px">';
-  html += '<div class="sum"><div class="v" style="color:#0f1a2e">'+total+'</div><div class="l">In<br>Report</div></div>';
-  html += '<div class="sum"><div class="v" style="color:#1a7a3a">'+active+'</div><div class="l">Active</div></div>';
-  html += '<div class="sum"><div class="v" style="color:#555">'+left+'</div><div class="l">Left</div></div>';
-  html += '<div class="sum" style="background:#e8f5e9"><div class="v" style="color:#1a5c3a">'+fmtPKR(grandRent)+'</div><div class="l">Rent<br>Expected</div></div>';
-  html += '<div class="sum" style="background:#e8f5e9"><div class="v" style="color:#1a6b3a">'+fmtPKR(calcRevenue(monthKey))+'</div><div class="l">Total<br>Collected</div></div>';
+  // Summary tiles (Fix #12: admission fee and concession removed from grand total badges)
   var _pdfPending=DB.payments.filter(function(p){return p.status==='Pending'&&_payMatchesMonth(p,monthKey);}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
-  html += '<div class="sum" style="background:'+(_pdfPending>0?'#fde8e8':'#edfaf3')+'">';
-  html += '<div class="v" style="color:'+(_pdfPending>0?'#8b1a1a':'#1a6b3a')+'">'+fmtPKR(_pdfPending)+'</div><div class="l">Pending<br>Unpaid</div></div>';
-  html += '<div class="sum" style="background:#fff8e1;border-color:#e8a830"><div class="v" style="color:#5b21b6">'+fmtPKR(grandExpenses)+'</div><div class="l">Expenses<br>'+monthLabel+'</div></div>';
-  html += '<div class="sum" style="background:#eef2ff"><div class="v" style="color:#1a2c80">'+fmtPKR(grandTransfers)+'</div><div class="l">Funds<br>Transfer</div></div>';
-  html += '<div class="sum" style="background:'+(netFund>=0?'#edfaf3':'#fde8e8')+'"><div class="v" style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</div><div class="l">Net<br>Available</div></div>';
+  var _tile = function(tone, ico, val, lbl) {
+    return '<div class="sbox t-'+tone+'"><span class="ico">'+icon(ico,'sm')+'</span>'
+      + '<span><span class="v">'+val+'</span><span class="l">'+lbl+'</span></span></div>';
+  };
+  html += '<div class="summary">';
+  html += _tile('slate','users',      total,                      'In Report');
+  html += _tile('green','userCheck',  active,                     'Active');
+  html += _tile('gray', 'logout',     left,                       'Left');
+  html += _tile('blue', 'receipt',    fmtPKR(grandRent),          'Rent Expected');
+  html += _tile('green','wallet',     fmtPKR(calcRevenue(monthKey)), 'Collected');
+  html += _tile(_pdfPending>0?'red':'green', 'clock', fmtPKR(_pdfPending), 'Pending Unpaid');
+  // No Funds Transfer tile: that money is inside the Expenses figure beside it,
+  // and showing both read as two separate deductions from one month's cash.
+  html += _tile('amber','trendDown',  fmtPKR(grandExpenses),      'Expenses');
+  html += _tile(netFund>=0?'green':'red', 'money', fmtPKR(netFund), 'Net Available');
   html += '</div>';
 
   // Table
@@ -2219,62 +2318,56 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
   html += '<th class="r">Rent/Mo</th>';
-  html += '<th class="r" style="color:#7ab4ff">Adm.Fee</th>';
-  html += '<th class="r" style="color:#ffd27a">Extra Chrgs</th>';
-  html += '<th class="r" style="color:#7aefcf">Concession</th>';
-  html += '<th class="r" style="color:#4ade80">Amount Paid</th>';
-  html += '<th class="r" style="color:#f87171">Pending</th>';
+  // These five kept the tints they were given for the old navy header strip —
+  // #7ab4ff, #ffd27a, #7aefcf were picked to glow on #0f1a2e and are close to
+  // invisible on a light one. Same coding, at the weight the column's own
+  // figures use.
+  html += '<th class="r" style="color:#1d4ed8">Adm.Fee</th>';
+  html += '<th class="r" style="color:#b45309">Extra Chrgs</th>';
+  html += '<th class="r" style="color:#0f766e">Concession</th>';
+  html += '<th class="r" style="color:#15803d">Amount Paid</th>';
+  html += '<th class="r" style="color:#b91c1c">Pending</th>';
   html += '<th class="c">Fee Status</th>';
-  html += '<th class="c">Stu.Status</th>';
+  // "Stu.Status" is one unbroken token, so in a 6% column word-break split it
+  // mid-word as "STU.STATU / S". A space gives it a legal wrap point.
+  html += '<th class="c">Stu. Status</th>';
   html += '</tr></thead>';
   html += '<tbody>'+rows+'</tbody>';
   html += '</table>';
 
-  // Expenses breakdown section
-  var monthExpenses = (DB.expenses||[]).filter(function(e){ return (e.date||'').startsWith(monthKey); });
-  if(monthExpenses.length) {
-    html += '<div style="margin-top:16px;padding:12px 14px;background:#fffbf0;border:1px solid #e8c86a;border-radius:10px">';
-    html += '<div style="font-size:13px;font-weight:800;color:#6b3d00;margin-bottom:8px">📉 Expenses — '+monthLabel+'</div>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-    html += '<thead><tr style="background:#3d2000"><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Date</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Category</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #6b3d00">Description</th><th style="padding:6px 10px;color:#a78bfa;text-align:right;border:1px solid #6b3d00">Amount</th></tr></thead><tbody>';
-    var expTotal=0;
-    monthExpenses.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');}).forEach(function(e,i){
-      expTotal+=Number(e.amount||0);
-      html+='<tr style="background:'+(i%2===0?'#fff':'#fffbf0')+'">';
-      html+='<td style="padding:5px 10px;border:1px solid #e8c86a">'+fmtDate(e.date)+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #e8c86a"><span style="padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#fde8b4;color:#7a4400">'+escHtml(e.category||'—')+'</span></td>';
-      html+='<td style="padding:5px 10px;border:1px solid #e8c86a;color:#444">'+escHtml(e.description||'—')+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #e8c86a;text-align:right;font-weight:800;color:#8b1a1a">'+fmtPKR(e.amount)+'</td>';
-      html+='</tr>';
+  // Outgoings breakdown — grouped BY CATEGORY with a total per category and a
+  // grand total, the same register the Reports screen and the other PDFs use.
+  // _rptOutgoings() folds the funds transfers in under the Fund Transfer
+  // category, so the separate "🏦 Funds Transfer" table that used to follow
+  // this one is gone: it printed the same money a second time, under a second
+  // total, on the same page.
+  var _monthOut = _rptOutgoings(monthKey);
+  if(_monthOut.length) {
+    var _mGroups = _rptByCategory(_monthOut);
+    html += '<div class="outgo">';
+    html += '<h2>'+icon('trendDown','sm')+'Expenses by Category — '+monthLabel+'</h2>';
+    _mGroups.forEach(function(g){
+      html += '<div class="cat">'+escHtml(g.cat)+'<span class="n">'+g.items.length+' record'+(g.items.length===1?'':'s')+'</span></div>';
+      html += '<table class="exp">';
+      html += '<thead><tr><th>Date</th><th>Description</th><th class="r">Amount</th></tr></thead><tbody>';
+      g.items.forEach(function(e){
+        html+='<tr>';
+        html+='<td>'+fmtDate(e.date)+'</td>';
+        html+='<td class="dsc">'+escHtml(e.description||'—')+'</td>';
+        html+='<td class="amt">'+fmtPKR(e.amount)+'</td>';
+        html+='</tr>';
+      });
+      html+='<tr class="sub"><td colspan="2" style="text-align:right">Total — '+escHtml(g.cat)+'</td><td class="amt">'+fmtPKR(g.total)+'</td></tr>';
+      html+='</tbody></table>';
     });
-    html+='<tr style="background:#3d2000"><td colspan="3" style="padding:6px 10px;border:1px solid #6b3d00;font-weight:900;color:#a78bfa">Total Expenses</td><td style="padding:6px 10px;border:1px solid #6b3d00;text-align:right;font-weight:900;color:#f87171">'+fmtPKR(expTotal)+'</td></tr>';
+    html+='<table class="grand" style="margin-top:10px"><tbody>';
+    html+='<tr><td>GRAND TOTAL — '+_mGroups.length+' categor'+(_mGroups.length===1?'y':'ies')+'</td><td class="amt">'+fmtPKR(_rptGroupsTotal(_mGroups))+'</td></tr>';
     html+='</tbody></table></div>';
   }
 
-  // Transfers breakdown section
-  var monthTransfers = (DB.transfers||[]).filter(function(t){ return (t.date||'').startsWith(monthKey); });
-  if(monthTransfers.length) {
-    html += '<div style="margin-top:14px;padding:12px 14px;background:#f0f4ff;border:1px solid #c5d0e6;border-radius:10px">';
-    html += '<div style="font-size:13px;font-weight:800;color:#0f1a2e;margin-bottom:8px">🏦 Funds Transfer — '+monthLabel+'</div>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-    html += '<thead><tr style="background:#0f1a2e"><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Date</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Description</th><th style="padding:6px 10px;color:#a78bfa;text-align:left;border:1px solid #1e3050">Method</th><th style="padding:6px 10px;color:#a78bfa;text-align:right;border:1px solid #1e3050">Amount</th></tr></thead><tbody>';
-    var trTotal=0;
-    monthTransfers.forEach(function(t,i){
-      trTotal+=Number(t.amount||0);
-      html+='<tr style="background:'+(i%2===0?'#fff':'#f9f9fb')+'">';
-      html+='<td style="padding:5px 10px;border:1px solid #dde2ea">'+fmtDate(t.date)+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #dde2ea;font-weight:600">'+escHtml(t.description||'Transfer')+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #dde2ea">'+escHtml(t.method||'—')+'</td>';
-      html+='<td style="padding:5px 10px;border:1px solid #dde2ea;text-align:right;font-weight:800;color:#5b21b6">'+fmtPKR(t.amount)+'</td>';
-      html+='</tr>';
-    });
-    html+='<tr style="background:#0f1a2e"><td colspan="3" style="padding:6px 10px;border:1px solid #1e3050;font-weight:900;color:#a78bfa">Total Transferred</td><td style="padding:6px 10px;border:1px solid #1e3050;text-align:right;font-weight:900;color:#a78bfa">'+fmtPKR(trTotal)+'</td></tr>';
-    html+='</tbody></table></div>';
-  }
-
-  html += '<div style="margin-top:12px;padding-top:6px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center">';
-  html += '<div style="font-size:9px;color:#aaa">Generated by <strong>' + escHtml(appName) + '</strong> · '+escHtml(hostel)+' · '+monthLabel+'</div>';
-  html += '<div style="font-size:10px;color:#555;font-weight:600">'+total+' students · Collected: <b style="color:#1a6b3a">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#5b21b6">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#1a6b3a':'#8b1a1a')+'">'+fmtPKR(netFund)+'</b></div>';
+  html += '<div class="footer">';
+  html += '<div class="gen">Generated by <strong>' + escHtml(appName) + '</strong> · '+escHtml(hostel)+' · '+monthLabel+'</div>';
+  html += '<div class="tally">'+total+' students · Collected: <b style="color:#15803d">'+fmtPKR(grandPaid)+'</b> · Expenses: <b style="color:#b45309">'+fmtPKR(grandExpenses)+'</b> · Net: <b style="color:'+(netFund>=0?'#15803d':'#b91c1c')+'">'+fmtPKR(netFund)+'</b></div>';
   html += '</div>';
 
   html += '</body></html>';

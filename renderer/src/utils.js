@@ -286,7 +286,10 @@ function moneyValue(amount, opts) {
 // brand colours, radii, and class names. This is the one place to edit the
 // brand look of every PDF (Monthly Report, Rent Summary, Transfers, etc.)
 const PRINT_BRAND = {
-  accent: '#7c3aed',  // matches --accent (violet, light theme)
+  // Royal blue, matching --accent. This was still violet from before the
+  // accent ramp was repointed, so every PDF the app produced was branded a
+  // colour that appears nowhere in the app.
+  accent: '#2563eb',
   green: '#16a34a',
   red:   '#dc2626',
   ink:   '#1a1a2e',

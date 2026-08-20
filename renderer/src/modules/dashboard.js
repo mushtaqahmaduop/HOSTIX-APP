@@ -156,16 +156,40 @@ function _dashSeries() {
   const now = new Date();
   const yr  = now.getFullYear();
   const cur = now.getMonth(); // 0-based
-  const out = { rev:[], exp:[], trf:[], pend:[] };
+  const out = { rev:[], exp:[], pend:[] };
   for (let i = 0; i <= cur; i++) {
     const k = yr + '-' + String(i+1).padStart(2,'0');
     out.rev.push(calcRevenue(k));
-    out.exp.push(calcExpenses(k));    // transfers included
-    out.trf.push(calcTransfers(k));   // …and itemised here for the transfer card
+    out.exp.push(calcExpenses(k));    // transfers included — they ARE expenses
     out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
       .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
   }
   return out;
+}
+
+/* ── CHART FIRST-PAINT FONT FIX ───────────────────────────────────────────────
+   Chart.js measures axis ticks, legend text and datalabels with whatever font
+   is RESOLVED AT DRAW TIME, and bakes those measurements into the scale
+   layout. Inter is a local @font-face (vendor/fonts.css), so on a cold start
+   the dashboard can paint before the face is parsed: the ticks get measured in
+   the fallback, the plot area is sized for the wrong metrics, and the chart
+   sits slightly out of place. Anything that re-renders it — switching pages
+   and back, toggling the theme, "refreshing" — measures against the now-loaded
+   font and it snaps right. That is the "it fixes itself when I refresh" bug.
+
+   document.fonts.ready settles once every face is usable; re-laying out then
+   costs one frame and makes the first paint identical to every later one.
+   Guarded on the chart still existing, because a page change can destroy it
+   while the promise is in flight. */
+function _chartFontFix(chart) {
+  if (!chart || !document.fonts || !document.fonts.ready) return;
+  document.fonts.ready.then(function () {
+    try {
+      if (!chart.ctx || !chart.canvas || !chart.canvas.isConnected) return;
+      chart.resize();
+      chart.update('none');
+    } catch (e) { /* chart was torn down mid-flight — nothing to fix */ }
+  });
 }
 
 // Inline SVG sparkline. Stroke colour comes from the parent's --dh via CSS
@@ -182,7 +206,13 @@ function _dashSpark(series) {
     const y = H - ((v-min)/span)*(H-4) - 2;
     return x.toFixed(1)+','+y.toFixed(1);
   }).join(' ');
+  // A soft area wash under the line, as in the reference KPI cards. The
+  // polygon closes the same points down to the baseline; the fill colour is
+  // set in dashboard.css from the card's own --dh, so it stays semantic
+  // (green revenue, red expenses…) and follows the theme.
+  const area = d + ' ' + W + ',' + H + ' 0,' + H;
   return '<svg class="dash-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'
+       + '<polygon class="dash-spark__area" points="'+area+'"/>'
        + '<polyline points="'+d+'" fill="none" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 }
 
@@ -247,7 +277,6 @@ function renderDashboard() {
   const seatsRemainingInOccupiedRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0).reduce((s,r)=>{const cap=getRoomType(r)?.capacity||1;return s+(cap-getRoomOccupancy(r));},0);
   const activeStudents = DB.students.filter(t=>t.status==='Active').length;
   const mo = thisMonth();
-  const moTransferDeduct = calcTransfers(mo);   // itemised on its own card
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
   // Pending — only for the selected month
   const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
@@ -255,8 +284,12 @@ function renderDashboard() {
   const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
   // Expenses INCLUDE funds transfers — a transfer is money out of the same till.
-  // The Funds Transfer card below still shows its own share of this figure.
   const moExp = calcExpenses(mo);
+  // …so the item count has to count both too. It used to count DB.expenses
+  // alone while the value beside it carried the transfers as well, which is why
+  // the card could read "PKR 84,000 · 3 items" over four actual records.
+  const moExpCount = DB.expenses.filter(e => String(e.date||'').startsWith(mo)).length
+                   + (DB.transfers||[]).filter(t => String(t.date||'').startsWith(mo)).length;
   const totalExpected = collected + pending;
   const netProfit = collected - moExp;
 
@@ -266,6 +299,9 @@ function renderDashboard() {
   const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for available seat math only
   const availSeats = totalSeats - filledSeats;
   const seatPct = totalSeats>0 ? Math.round(filledSeats/totalSeats*100) : 0;
+  // Admissions dated inside the current month — the "N new this month" line on
+  // the Total Residents card.
+  const newThisMonth = DB.students.filter(t => String(t.joinDate||'').startsWith(mo)).length;
 
   // Per-room-type seat breakdown.
   // type.color is DATA (owner-configured per room type), not styling — it stays
@@ -332,8 +368,25 @@ function renderDashboard() {
   </div>`:''}
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
-  ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
   <div class="dash-kpi-grid">
+
+    <!-- Total Residents — blue. Design guide §8 opens the KPI row with the
+         people, not the money: a hostel is beds before it is rupees, and every
+         figure to its right is a consequence of this one. -->
+    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-blue">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2c0-3-4-5-8-5Z"/></svg></div>
+        <div class="dash-kpi__label">Total<br>Residents</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill ${seatPct>=90?'dh-red':seatPct>=70?'dh-green':'dh-amber'}">${seatPct}% full</span>
+        </div>
+      </div>
+      <!-- A headcount, so no currency prefix — the money-value classes are
+           reused for the typography only. -->
+      <div class="dash-kpi__value"><span class="money-value money-value--display"><span class="money-amt">${fmtNum(allActiveSeats)}</span></span><span style="font-size:13px;font-weight:500;color:var(--text3);margin-left:6px">of ${fmtNum(totalSeats)} beds</span></div>
+      <div class="dash-track"><div class="dash-track__fill" style="width:${seatPct}%"></div></div>
+      <div class="dash-kpi__sub">${newThisMonth>0?`▲ ${newThisMonth} new this month`:'No new admissions this month'}</div>
+    </div>
 
     <!-- Total Revenue — blue -->
     <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-blue">
@@ -350,6 +403,22 @@ function renderDashboard() {
       <div class="dash-kpi__sub">of <span class="pkr">PKR</span>${fmtNum(totalExpected)} expected</div>
     </div>
 
+    <!-- Expenses — red. Money OUT sits immediately after money IN and before
+         what is left of it: the Available Fund card next door states its own
+         figure as "collected − expenses", and it used to sit to the LEFT of the
+         expenses it subtracts, so the row asked the reader to hold a number
+         that had not been shown yet. -->
+    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
+        <div class="dash-kpi__label">Expenses</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
+      </div>
+      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display"})}</div>
+      <div class="dash-kpi__sub">this month</div>
+      ${_dashSpark(series.exp)}
+    </div>
+
     <!-- Available Fund — green when in profit, red when the fund is negative
          (a negative fund is genuine danger, not decoration) -->
     <div onclick="navigate('reports')" class="dsh-card dsh-card--click ${netProfit>=0?'dh-green':'dh-red'}">
@@ -361,32 +430,13 @@ function renderDashboard() {
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display"})}</div>
       <div class="dash-kpi__sub">
         ${fmtPKR(collected)} − ${fmtPKR(moExp)}
-        ${moTransferDeduct>0?`<br>(transferred) &nbsp;− ${fmtPKR(moTransferDeduct)}`:''}
       </div>
-    </div>
-
-    <!-- Expenses — red -->
-    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
-      <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
-        <div class="dash-kpi__label">Expenses</div>
-        <div class="dash-pill-stack"><span class="dash-pill">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span></div>
-      </div>
-      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display"})}</div>
-      <div class="dash-kpi__sub">this month</div>
-      ${_dashSpark(series.exp)}
-    </div>
-
-    <!-- Funds Transfer — violet -->
-    <div onclick="showAddTransferModal()" class="dsh-card dsh-card--click dh-violet">
-      <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
-        <div class="dash-kpi__label">Funds<br>Transfer</div>
-        <div class="dash-pill-stack"><span class="dash-pill">${moTransfers.length} record${moTransfers.length===1?'':'s'}</span></div>
-      </div>
-      <div class="dash-kpi__value">${moneyValue(moTransferTotal,{size:"display"})}</div>
-      <div class="dash-kpi__sub">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
-      ${_dashSpark(series.trf)}
+      <!-- This was the only money card with no history behind it, so it sat
+           visibly emptier than the four beside it. The series is the same
+           subtraction the headline states, month by month — nothing new is
+           computed here, and _dashSpark scales to min/max so the months the
+           fund ran negative still read. -->
+      ${_dashSpark(series.rev.map((v,i)=>v-(series.exp[i]||0)))}
     </div>
 
     <!-- Pending — amber -->
@@ -403,7 +453,7 @@ function renderDashboard() {
       <div class="dash-kpi__sub">click to collect</div>
       ${_dashSpark(series.pend)}
     </div>
-  </div>`;})()}
+  </div>
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
   <div class="dash-tile-grid">
@@ -464,10 +514,11 @@ function renderDashboard() {
       <div class="dash-legend" style="margin-left:auto">
         <!-- Pending was dh-violet here while both the line and the hover badge
              draw it in --accent; the chip is dh-blue so all three agree. -->
-        <span class="dash-legend__k dh-green"><i></i>Revenue</span>
+        <!-- Chips must match the drawn series (guide §12): Revenue blue,
+             Expenses red, Pending purple. -->
+        <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
         <span class="dash-legend__k dh-red"><i></i>Expenses</span>
-        <span class="dash-legend__k dh-amber"><i></i>Transfers</span>
-        <span class="dash-legend__k dh-blue"><i></i>Pending</span>
+        <span class="dash-legend__k dh-violet"><i></i>Pending</span>
       </div>
     </div>
     <!-- This-month figures -->
@@ -727,6 +778,7 @@ function showRoomSeatDetailModal(roomId) {
 
 // ── SEAT AVAILABILITY PRINT REPORT ──────────────────────────────────────────
 function printSeatAvailability() {
+  if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
   const hostel = DB.settings.hostelName || 'DAMAM Boys Hostel';
   const location = DB.settings.location || '';
   const now2 = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
@@ -734,13 +786,49 @@ function printSeatAvailability() {
   const allActiveSeats2 = DB.students.filter(t=>t.status==='Active').length; // badge: ALL active
   const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for free seat calc
   const freeSeats = totalSeats - filledSeats;
-  const floors = [...new Set(DB.rooms.map(r=>r.floor||'Unknown'))].sort();
+  // Floors in the order the owner arranged them in Settings, not alphabetically
+  // — a plain .sort() put "1st, 2nd, Ground" on the sheet, so the warden walked
+  // the building starting from the middle. Floors not in Settings trail behind
+  // in their own alphabetical order rather than vanishing.
+  const _fOrder = DB.settings.floors || [];
+  const floors = [...new Set(DB.rooms.map(r=>r.floor||'Unknown'))].sort((a,b)=>{
+    const ia = _fOrder.indexOf(a), ib = _fOrder.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return String(a).localeCompare(String(b));
+  });
   let body = '';
 
+  // Short badge for the floor header — 'Basement' → B, 'Ground' → G, '1st' → 1.
+  const floorBadge = f => {
+    const s = String(f || '').trim();
+    const n = /^(\d+)/.exec(s);
+    return n ? n[1] : (s.slice(0, 1).toUpperCase() || '?');
+  };
+
   floors.forEach(floor => {
-    const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor).sort((a,b)=>a.number-b.number);
-    body += `<div class="floor-label">${icon('doorOpen','xs')}<span>${escHtml(String(floor))} Floor</span>
-      <span class="floor-count">${floorRooms.length} room${floorRooms.length===1?'':'s'}</span></div><div class="room-grid">`;
+    // Numeric-aware compare: room numbers are strings and some carry a suffix
+    // ("6A"), which a-b turns into NaN and leaves the grid in insertion order.
+    const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor)
+      .sort((a,b)=>String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+    // Per-floor totals, so a warden can sign off one floor at a time instead of
+    // holding the whole building in their head.
+    const fSeats = floorRooms.reduce((s,r)=>{
+      const t = DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); },0);
+    const fOcc = DB.students.filter(s=>s.status==='Active'
+      && floorRooms.some(r=>r.id===s.roomId)).length;
+    const fFree = fSeats - fOcc;
+    body += `<div class="floor-head">
+      <span class="fbadge">${escHtml(floorBadge(floor))}</span>
+      <span class="fname">${escHtml(String(floor))} Floor
+        <span class="fcount">${floorRooms.length} room${floorRooms.length===1?'':'s'}</span></span>
+      <span class="fstats">
+        <span class="fstat">${icon('users','xs')}<b>${fSeats}</b> Seats Total</span>
+        <span class="fstat is-occ">${icon('userCheck','xs')}<b>${fOcc}</b> Occupied</span>
+        <span class="fstat is-free">${icon('armchair','xs')}<b>${fFree}</b> Available</span>
+      </span>
+    </div><div class="room-grid">`;
 
     floorRooms.forEach(r => {
       const rtype = DB.settings.roomTypes.find(t=>t.id===r.typeId);
@@ -752,7 +840,11 @@ function printSeatAvailability() {
       // Three states, not two: over capacity is its own case and used to render
       // as "-1 free" in the same amber as a genuinely free seat.
       const seatCls = free === 0 ? 'seats-full' : free < 0 ? 'seats-over' : 'seats-free';
-      const seatTxt = free === 0 ? 'Full' : free + ' free';
+      // …and the label has to say it too. The badge went red for over-capacity
+      // but still read "-1 free", which is the opposite of what it means.
+      const seatTxt = free === 0 ? 'Full'
+        : free < 0 ? Math.abs(free) + ' over'
+        : free + ' free';
 
       const labelStyle = r.roomLabelFont ? `font-family:${r.roomLabelFont};` : '';
       body += `<div class="room-box">
@@ -778,7 +870,6 @@ function printSeatAvailability() {
       outgoing.forEach(c => {
         const vacDate = c.vacateDate ? new Date(c.vacateDate+'T00:00:00').toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : 'TBD';
         body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
-  if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
       });
       body += `</div>`;
 
@@ -836,12 +927,29 @@ function printSeatAvailability() {
     .sbox.t-occ   .ico{background:#fee2e2;color:#dc2626}
     .sbox.t-free  .ico{background:#dcfce7;color:#16a34a}
 
-    /* ── Floor band ─────────────────────────────────────────────────────── */
-    .floor-label{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;
-                 text-transform:uppercase;letter-spacing:2px;color:#fff;background:#0f172a;
-                 padding:7px 12px;border-radius:7px;margin:12px 0 8px}
-    .floor-count{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.6px;
-                 color:#cbd5e1;text-transform:none}
+    /* ── Floor header ───────────────────────────────────────────────────────
+       A floor is the unit a warden actually walks, so its header carries that
+       floor's own seat maths — total / occupied / available — and they can sign
+       one floor off without adding up the room cards themselves. page-break-
+       after:avoid keeps a header from stranding at the foot of a page with its
+       rooms overleaf. */
+    .floor-head{display:flex;align-items:center;gap:9px;margin:13px 0 8px;
+                background:#0f172a;border-radius:8px;padding:7px 11px;
+                page-break-after:avoid;page-break-inside:avoid}
+    .fbadge{width:22px;height:22px;flex-shrink:0;border-radius:6px;background:#334155;
+            color:#fff;font-size:11px;font-weight:900;
+            display:flex;align-items:center;justify-content:center}
+    .fname{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:900;
+           color:#fff;text-transform:uppercase;letter-spacing:1.8px}
+    .fcount{font-size:8.5px;font-weight:700;letter-spacing:.6px;text-transform:none;
+            color:#cbd5e1;background:#1e293b;border-radius:20px;padding:2px 8px}
+    .fstats{display:flex;align-items:center;gap:7px;margin-left:auto}
+    .fstat{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;
+           letter-spacing:.5px;text-transform:uppercase;color:#cbd5e1;
+           background:#1e293b;border-radius:20px;padding:3px 9px}
+    .fstat b{font-size:11px;font-weight:900;color:#fff;letter-spacing:0}
+    .fstat.is-occ b{color:#fca5a5}
+    .fstat.is-free b{color:#86efac}
 
     /* ── Room cards ─────────────────────────────────────────────────────────
        Cards used to be tinted green when full and yellow when partial, which
@@ -1132,13 +1240,16 @@ function renderMonthModal(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
   const paidPays = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,monthKey));
   const pendPays = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // Outgoings, not just DB.expenses — the Expenses KPI in this modal is
+  // calcExpenses(), which counts the funds transfers too. Listing only
+  // DB.expenses meant the table and the "N records" caption under that KPI
+  // described a smaller set than the figure above them.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
   // A transfer is an expense, so expTotal carries both and Available Fund is
-  // revenue minus it. moTransfers stays for the line that itemises the transfers.
+  // revenue minus it — there is no separate transfer deduction anywhere.
   const expTotal = calcExpenses(monthKey);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
-  const moTransfers = calcTransfers(monthKey);
   const netProfit = rev - expTotal;
   // The roster AS IT STOOD in this month — not whoever happens to be Active
   // today. Anyone with a fee record for the month is included regardless, so a
@@ -1184,23 +1295,22 @@ function renderMonthModal(monthKey, monthLabel) {
     </td>
   </tr>`).join('');
 
-  const expRows = exps.map(e=>`<tr id="exp-row-${e.id}">
-    <td class="text-muted" style="font-size:12px">
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','date',this)" title="Click to edit">${fmtDate(e.date)||'—'}</span>
-    </td>
+  // A legacy transfer row is not a DB.expenses record, so the inline cell
+  // editors — which look the id up in DB.expenses — cannot edit it. Those rows
+  // render as plain text and send edit/delete to the modals that own them.
+  const expRows = exps.map(e=>{
+    const cell = (field, html, extra) => e._transfer
+      ? `<span${extra?' style="'+extra+'"':''}>${html}</span>`
+      : `<span class="editable-cell"${extra?' style="'+extra+'"':''} onclick="editMonthExpField('${e.id}','${field}',this)" title="Click to edit">${html}</span>`;
+    return `<tr id="exp-row-${e.id}">
+    <td class="text-muted" style="font-size:12px">${cell('date', fmtDate(e.date)||'—')}</td>
+    <td>${cell('category', escHtml(e.category||'—'))}</td>
+    <td>${cell('description', escHtml(e.description||'—'))}</td>
+    <td>${cell('amount', fmtPKR(e.amount), 'color:var(--text);font-weight:700')}</td>
     <td>
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','category',this)" title="Click to edit">${escHtml(e.category||'—')}</span>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')`}">${ICONS.trash}</button>
     </td>
-    <td>
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','description',this)" title="Click to edit">${escHtml(e.description||'—')}</span>
-    </td>
-    <td>
-      <span class="editable-cell" style="color:var(--text);font-weight:700" onclick="editMonthExpField('${e.id}','amount',this)" title="Click to edit">${fmtPKR(e.amount)}</span>
-    </td>
-    <td>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
-    </td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 
   showModal('modal-xl', `${ICONS.calendar} ${monthLabel} — Full Monthly Report`,
   `<!-- KPI Summary -->
@@ -1218,7 +1328,10 @@ function renderMonthModal(monthKey, monthLabel) {
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
       <div>${moneyValue(netProfit,{size:"section"})}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp − Transfers</div>
+      <!-- "Rev − Exp − Transfers" described a sum nothing computes: netProfit
+           is rev − calcExpenses(), and calcExpenses() already carries the
+           transfers. The caption implied they were deducted a second time. -->
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
@@ -1387,13 +1500,19 @@ function exportMonthCSV(monthKey, monthLabel) {
   const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
-  const moTransfers = calcTransfers(monthKey);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses (incl. funds transfer),${expTotal}\nof which Funds Transfer,${moTransfers}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
+  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
-  csv += `\nExpenses\nDate,Category,Description,Amount\n`;
-  exps.forEach(e=>{ csv += [csvEsc(e.date),csvEsc(e.category),csvEsc(e.description),Number(e.amount)].join(',')+"\n"; });
+  // Grouped with a subtotal per category and a grand total, matching the
+  // register the Reports screen and the PDFs now print.
+  csv += `\nExpenses by Category\nCategory,Date,Description,Amount\n`;
+  const _mGroups = _rptByCategory(exps);
+  _mGroups.forEach(g=>{
+    g.items.forEach(e=>{ csv += [csvEsc(g.cat),csvEsc(e.date),csvEsc(e.description),Number(e.amount)].join(',')+"\n"; });
+    csv += ['','','Total — '+csvEsc(g.cat),g.total].join(',')+"\n\n";
+  });
+  csv += ['','','GRAND TOTAL',_rptGroupsTotal(_mGroups)].join(',')+"\n";
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1435,10 +1554,8 @@ function printMonthReport(monthKey, monthLabel) {
     ${pays.map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${p.roomNumber||'—'}</td><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:12px">No records</td></tr>'}
     </tbody></table>
   </div>
-  <div class="section"><h3>${ICONS.trendDown} Expenses</h3>
-    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-    ${exps.map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${escHtml(e.category||'—')}</td><td>${escHtml(e.description||'—')}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No expenses</td></tr>'}
-    </tbody></table>
+  <div class="section"><h3>${ICONS.trendDown} Expenses by Category</h3>
+    ${_rptCatTablesHTML(exps)}
   </div>
   <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>
   </body></html>`;
@@ -1517,6 +1634,7 @@ function drawRoomDonut() {
       }
     }
   });
+  _chartFontFix(_dashDonutChart);
 }
 
 // ── TREND CHART (Chart.js — Jan–Dec, revenue line + hover tooltip) ───────────
@@ -1535,13 +1653,12 @@ function drawTrendChart() {
   var yr   = now.getFullYear();
   var curKey = yr + '-' + String(now.getMonth()+1).padStart(2,'0');
 
-  var months=[], revD=[], expD=[], trfD=[], pendD=[], real=[];
+  var months=[], revD=[], expD=[], pendD=[], real=[];
   for(var i=0;i<12;i++){
     var k = yr+'-'+String(i+1).padStart(2,'0');
     var isPast = k <= curKey;
     var rev = isPast ? calcRevenue(k) : 0;
     var exp = isPast ? calcExpenses(k)  : 0;   // transfers included
-    var trf = isPast ? calcTransfers(k) : 0;   // …plotted separately as its own line
     var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
     // null means "this month has not happened", NOT "this month was zero".
@@ -1552,7 +1669,6 @@ function drawTrendChart() {
     // simply stops (Chart.js spanGaps defaults to false).
     revD.push(isPast?rev:null);
     expD.push(isPast?exp:null);
-    trfD.push(isPast?trf:null);
     pendD.push(isPast?pend:null);
     real.push(isPast&&rev>0);
   }
@@ -1563,6 +1679,12 @@ function drawTrendChart() {
   var cRed    = _cs.getPropertyValue('--red').trim()    || '#ffb4ab';
   var cAmber  = _cs.getPropertyValue('--amber').trim()  || '#fbbf24';
   var cAccent = _cs.getPropertyValue('--accent').trim() || '#3b82f6';
+  // Design guide §12 fixes the series colours: Revenue blue, Expenses red,
+  // Pending purple. Revenue used to be green and Pending the accent blue,
+  // which put two blues on one chart and left green doing double duty as both
+  // "revenue" and "went up".
+  var cRevenue = _cs.getPropertyValue('--blue').trim()   || '#2563eb';
+  var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
   var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
@@ -1570,11 +1692,10 @@ function drawTrendChart() {
 
   // Plotted as-is: the nulls are meaningful and must reach Chart.js intact.
   var plotRev = revD;
-  var ptColors = plotRev.map(function(v,i){
-    if(!real[i]) return cGreen+'26';
-    if(i===0) return cGreen;
-    var p=null; for(var j=i-1;j>=0;j--){if(real[j]){p=plotRev[j];break;}} return v>=(p||0)?cGreen:cRed;
-  });
+  // Points follow the Revenue series colour. They used to be green/red by
+  // rise-or-fall, which read as a second meaning on the same mark — the
+  // datalabels below already carry the ▲/▼ and its colour.
+  var ptColors = plotRev.map(function(v,i){ return real[i] ? cRevenue : cRevenue+'26'; });
   var lblColors = plotRev.map(function(v,i){
     if(!real[i]) return cText3;
     if(i===0) return cGreen;
@@ -1583,13 +1704,16 @@ function drawTrendChart() {
 
   var badge = document.getElementById('trend-hb');
   function showBadge(idx,x,y){
-    var rev=revD[idx]||0, exp=expD[idx]||0, trf=trfD[idx]||0, pend=pendD[idx]||0, net=rev-exp-trf;
+    // calcExpenses() — and so expD — already carries the transfers, so Net is
+    // revenue minus expenses full stop. Subtracting trf as well deducted every
+    // transfer TWICE, which is why this tooltip's Net disagreed with the
+    // Available Fund card sitting directly above the chart.
+    var rev=revD[idx]||0, exp=expD[idx]||0, pend=pendD[idx]||0, net=rev-exp;
     var isR=real[idx];
     badge.innerHTML='<div style="font-size:12px;font-weight:700;color:'+cText2+';margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGreen+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cGreen+'">'+fmtPKR(rev)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cRevenue+'">'+fmtPKR(rev)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRed+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cRed+'">'+fmtPKR(exp)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAmber+';display:inline-block"></span>Transfers</span><span style="font-weight:700;color:'+cAmber+'">'+fmtPKR(trf)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAccent+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cAccent+'">'+fmtPKR(pend)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cPending+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cPending+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
       '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
     ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
@@ -1625,7 +1749,7 @@ function drawTrendChart() {
       datasets:[{
         label:'Revenue',
         data:plotRev,
-        borderColor:cGreen,
+        borderColor:cRevenue,
         borderWidth:2.5,
         pointBackgroundColor:ptColors, pointBorderColor:ptColors,
         pointRadius:function(c){return real[c.dataIndex]?5:3;}, pointHoverRadius:8,
@@ -1641,11 +1765,22 @@ function drawTrendChart() {
         backgroundColor:function(c){
           var area=c.chart.chartArea; if(!area) return 'transparent';
           var g=c.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
-          g.addColorStop(0,cGreen+'3d'); g.addColorStop(1,cGreen+'00');
+          g.addColorStop(0,cRevenue+'3d'); g.addColorStop(1,cRevenue+'00');
           return g;
         },
         datalabels:{
-          display:function(c){return real[c.dataIndex];},
+          // Only the peak and the latest month are called out. Labelling every
+          // real month stacked eight overlapping badges across the middle of a
+          // 178px-tall panel and buried the line they were annotating; the
+          // reference calls out one or two points and lets the hover badge
+          // answer the rest.
+          display:function(c){
+            var i=c.dataIndex; if(!real[i]) return false;
+            var last=-1, peak=-1, peakV=-Infinity;
+            for(var j=0;j<real.length;j++){ if(!real[j]) continue;
+              last=j; if((plotRev[j]||0)>peakV){peakV=plotRev[j]||0; peak=j;} }
+            return i===last || i===peak;
+          },
           anchor:'end',align:'top',offset:6,
           color:function(c){return lblColors[c.dataIndex];},
           backgroundColor:cBg2, borderColor:function(c){return lblColors[c.dataIndex];},
@@ -1661,7 +1796,7 @@ function drawTrendChart() {
         }
       },
       // The legend above this chart has always advertised four series, but
-      // only the revenue line was ever drawn — expD/trfD/pendD were computed
+      // only the revenue line was ever drawn — expD/pendD were computed
       // for all twelve months and then used by nothing but the hover badge.
       // They are plotted here so the legend describes what is on screen.
       //
@@ -1670,9 +1805,11 @@ function drawTrendChart() {
       // deliberately quieter — thinner stroke, no fill, no labels — because
       // this panel is 178px tall and four equally-weighted filled lines in
       // that space is noise, not a comparison.
+      // No Transfers line: expD already CONTAINS the transfers, so a second
+      // line drew the same money twice and a reader adding the two got a figure
+      // the ledger never held.
       secondary('Expenses',  expD,  cRed),
-      secondary('Transfers', trfD,  cAmber),
-      secondary('Pending',   pendD, cAccent)]
+      secondary('Pending',   pendD, cPending)]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -1692,6 +1829,7 @@ function drawTrendChart() {
       }
     }
   });
+  _chartFontFix(_dashTrendChart);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1728,20 +1866,6 @@ function calPopSelect(key, label) {
 // in the ledger and in every figure derived from it, so the automatic path is
 // gone; Auto-Generate Month on the Payments screen is now the only way to
 // create a month of rent records in bulk.
-
-async function quickDashTransfer() {
-  const amt = parseFloat(document.getElementById('dash-transfer-amt')?.value)||0;
-  const method = document.getElementById('dash-transfer-method')?.value||'Cash';
-  const recv = document.getElementById('dash-transfer-recv')?.value?.trim()||'';
-  const desc = document.getElementById('dash-transfer-desc')?.value?.trim()||'Funds Transfer';
-  if(!amt||amt<=0){toast('Enter a valid amount','error');return;}
-  if(!DB.transfers) DB.transfers=[];
-  DB.transfers.push({id:'tr_'+uid(),amount:amt,method,receivedBy:recv,description:desc,date:today()});
-  await saveDB();
-  ['dash-transfer-amt','dash-transfer-recv','dash-transfer-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  renderPage('dashboard');
-  toast(`Transfer of ${fmtPKR(amt)} recorded!`,'success');
-}
 
 // Alias the old name for backward compat
 
