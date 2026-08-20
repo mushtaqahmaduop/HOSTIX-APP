@@ -119,7 +119,7 @@
     color:var(--text); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
 }
 
-.rms-card__body { padding:10px 12px; display:flex; flex-direction:column; flex:1; }
+.rms-card__body { padding:10px 12px; display:flex; flex-direction:column; flex:1; min-width:0; }
 .rms-card__num  { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text);
                  font-variant-numeric:tabular-nums; line-height:1.1; }
 .rms-card__type { display:inline-block; margin-top:5px; padding:3px 9px; border-radius:999px;
@@ -141,12 +141,17 @@
 .rms-occ__chip i { width:5px; height:5px; border-radius:50%; background:var(--dh); flex-shrink:0; }
 .rms-occ__chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-.rms-acts { display:flex; gap:7px; margin-top:auto; padding-top:12px; }
+.rms-acts { display:flex; gap:7px; margin-top:auto; padding-top:12px; min-width:0; }
 .rms-acts button {
     flex:1; height:34px; border-radius:9px; cursor:pointer; white-space:nowrap;
     display:inline-flex; align-items:center; justify-content:center; gap:5px;
     font-family:var(--font); font-size:12px; font-weight:600; transition:var(--transition);
     background:var(--card); border:1px solid var(--border2); color:var(--text2);
+    /* A flex item will not shrink below its own content by default, so at the
+       178px column width "Edit" + "Force Add" pushed this row wider than the
+       card and the two buttons ran into each other. min-width:0 lets them
+       shrink; overflow clips the label rather than letting it spill. */
+    min-width:0; overflow:hidden;
 }
 .rms-acts button:hover      { background:var(--dash-sunk); color:var(--text); }
 .rms-acts .rms-add           { background:var(--accent); border-color:var(--accent); color:#fff; }

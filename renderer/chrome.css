@@ -42,8 +42,10 @@
 }
 
 body.light-theme {
-    /* Light theme: deep navy, per payments.png. */
-    --sb-bg:       #0B1B33;
+    /* Deep navy enterprise gradient — design guide §5. The rail is the app's
+       strongest visual anchor and stays navy in BOTH themes; only the ramp
+       differs. Never pure black (guide §3). */
+    --sb-bg:       linear-gradient(180deg, #071A3A 0%, #0B2A5B 52%, #082B69 100%);
     --sb-border:   rgba(255,255,255,.07);
     --sb-fg:       #ffffff;
     --sb-fg2:      rgba(255,255,255,.70);
@@ -134,10 +136,14 @@ body.light-theme #sidebar {
     background: var(--sb-hover); color: var(--sb-fg);
     border-color: transparent; transform: none;
 }
+/* Active navigation — design guide §5.1. A premium blue gradient with a soft
+   glow, not a flat fill: on a navy rail a solid block reads as a hole, while
+   the gradient plus the shadow lifts the pill off the surface. */
 #sidebar .nav-item.active {
-    background: var(--sb-active);
+    background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%);
     color: var(--sb-active-fg);
-    border-color: transparent;
+    border-color: rgba(255, 255, 255, .10);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, .22);
     font-weight: 600;
 }
 #sidebar .nav-item.active .nav-icon { color: var(--sb-active-fg); }

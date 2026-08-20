@@ -41,14 +41,21 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
 })();
 
 // ── INJECT SMALL BADGE INTO LOGIN SCREEN (when valid) ────────────────────────
+// It goes INSIDE #login-screen, not on <body>. Appended to the body it outlived
+// the screen it was written for: a fixed, z-index 99990 label pinned to the
+// bottom-right corner of every page for the whole session, painting on top of
+// whatever sat in that corner — most visibly the last room card in the Rooms
+// grid. Inside the login screen it disappears when that screen does, which is
+// what "badge into login screen" always meant.
 function _injectLicenseBadge(status) {
   try {
     const exp   = new Date(status.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'});
     const badge = document.createElement('div');
+    badge.id = 'license-badge';
     badge.style.cssText = 'position:fixed;bottom:10px;right:12px;z-index:99990;'
       + 'font-size:9px;color:#2ec98a;font-family:monospace;opacity:0.6;pointer-events:none;';
     badge.textContent = '✅ Licensed · Exp: ' + exp;
-    document.body.appendChild(badge);
+    (document.getElementById('login-screen') || document.body).appendChild(badge);
   } catch(e) {}
 }
 

@@ -31,10 +31,17 @@ function updateThemeUI(isLight) {
   const toggle = document.getElementById('theme-toggle');
   if (toggle) toggle.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
 }
-// Apply theme immediately
+// Apply theme immediately.
+//
+// LIGHT IS THE DEFAULT. The premium enterprise design is a light workspace —
+// navy rail, #F4F7FC ground, white cards — so an install with no stored
+// preference opens in it. Dark is not going anywhere: it is a click of the
+// header toggle, and a warden who has chosen it keeps it, because the check
+// below reads the SAVED value first and only falls back when there is none.
 (function initTheme() {
   const saved = localStorage.getItem('theme');
-  if (saved === 'light') {
+  const light = saved ? saved === 'light' : true;
+  if (light) {
     document.body.classList.add('light-theme');
     setTimeout(() => updateThemeUI(true), 50);
   }

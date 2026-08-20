@@ -65,7 +65,10 @@ function renderRooms() {
   // photographs; rather than ship decorative stock imagery that misrepresents
   // an actual room, an empty room draws this mark until a real photo is set
   // on it in Edit Room.
-  const picPlaceholder = '<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg>';
+  // 32px, not 42px. The card header dropped from 112px to 96px when the grid
+  // was tightened, and at that height the corner badges ("Occupied", "4/4
+  // beds") clipped the corners of a 42px centred mark.
+  const picPlaceholder = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg>';
 
   const cards = _pg.slice.map(r=>{
     const type = getRoomType(r);

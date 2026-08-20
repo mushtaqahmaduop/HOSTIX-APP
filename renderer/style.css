@@ -101,44 +101,68 @@ body.no-transition *::after {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   CLAUDE LIGHT THEME  —  Clean neutral white
+   LIGHT THEME — premium enterprise workspace
+   Source of truth: HOSTYLLO_DASHBOARD_PREMIUM_ENTERPRISE_DESIGN_GUIDE.md.
+
+   The hexes below are the guide's, not approximations. The page is a very
+   light blue-gray (#F4F7FC) rather than the old neutral #f7f7f7 — pure white
+   or pure gray reads as a document, and the reference is a workspace with
+   white cards sitting ON a tinted ground.
+
+   Where the guide gives two values for one colour — a vivid one for charts
+   and fills, a darker one for text — the token takes the READABLE one, and
+   the vivid one lives in the *-dim fill beside it. --green:#10B981 as body
+   text on white is about 2.5:1; #059669 is the guide's own success-text.
    ══════════════════════════════════════════════════════════════════════════ */
 body.light-theme {
-    --bg:            #f7f7f7;
-    --bg2:           #f0f0f0;
-    --bg3:           #e8e8e8;
-    --bg4:           #dcdcdc;
-    --sidebar-bg:    #f2f2f2;
+    --bg:            #f4f7fc;   /* workspace ground */
+    --bg2:           #eef2f9;
+    --bg3:           #e8edf5;   /* progress-track / sunk surfaces */
+    --bg4:           #dde4ef;
+    --sidebar-bg:    #071a3a;
     --card:          #ffffff;
-    --card2:         #fafafa;
-    --border:        #e2e2e2;
-    --border2:       #cccccc;
+    --card2:         #f8fafc;
+    --border:        #e2e8f0;
+    --border2:       #cbd5e1;
+    --divider:       #eef2f7;   /* soft row separator (guide §19) */
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
     --teal:          #0891b2;
     --teal-dim:      rgba(8, 145, 178, 0.08);
     --red:           #dc2626;
-    --red-dim:       rgba(220, 38, 38, 0.07);
+    --red-dim:       rgba(239, 68, 68, 0.08);
     --green:         #059669;
-    --green-dim:     rgba(5, 150, 105, 0.07);
+    --green-dim:     rgba(16, 185, 129, 0.10);
     --amber:         #d97706;
-    --amber-dim:     rgba(217, 119, 6, 0.07);
-    --blue:          #3b82f6;
-    --blue-dim:      rgba(59, 130, 246, 0.07);
+    --amber-dim:     rgba(245, 158, 11, 0.10);
+    --blue:          #2563eb;
+    --blue-dim:      rgba(37, 99, 235, 0.10);
     --purple:        #7c3aed;
-    --purple-dim:    rgba(124, 58, 237, 0.07);
+    --purple-dim:    rgba(139, 92, 246, 0.10);
 
-    --text:          #1a1a1a;
-    --text2:         #555555;
-    --text3:         #909090;
+    --text:          #0f172a;
+    --text2:         #334155;
+    --text3:         #64748b;
 
-    --shadow:           0 2px 12px rgba(0, 0, 0, 0.07);
-    --shadow-accent:      0 4px 16px rgba(0, 0, 0, 0.08);
-    --shadow-royal:     0 4px 16px rgba(0, 0, 0, 0.10);
-    --shadow-indigo-sm: 0 2px 8px rgba(0, 0, 0, 0.10);
-    --glow-indigo:      0 0 12px rgba(0, 0, 0, 0.08);
-    --glow-gold:        0 0 12px rgba(0, 0, 0, 0.08);
+    /* Guide §21 — subtle and professional, never heavy. */
+    --shadow:           0 8px 24px rgba(15, 23, 42, 0.045);
+    --shadow-elevated:  0 14px 35px rgba(15, 23, 42, 0.08);
+    --shadow-accent:      0 5px 14px rgba(37, 99, 235, 0.20);
+    --shadow-royal:     0 12px 30px rgba(15, 23, 42, 0.075);
+    --shadow-indigo-sm: 0 4px 12px rgba(15, 23, 42, 0.06);
+    --glow-indigo:      0 0 12px rgba(37, 99, 235, 0.10);
+    --glow-gold:        0 0 12px rgba(15, 23, 42, 0.06);
+}
+
+/* Guide §4 — the atmosphere wash. Kept extremely subtle: it must read as a
+   premium workspace, not a marketing page. Fixed so it does not scroll with
+   the content and re-tint the page halfway down. */
+body.light-theme #main {
+    background:
+      radial-gradient(circle at 80% 0%, rgba(37, 99, 235, 0.045), transparent 32%),
+      var(--bg);
+    background-attachment: fixed;
 }
 
 /* Light — specific overrides */

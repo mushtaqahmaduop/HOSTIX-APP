@@ -25,12 +25,15 @@
 .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:rgba(255,255,255,.09); }
 
 /* ── Hue palette · light ─────────────────────────────────────────────────── */
+/* Light hues are the design guide's semantic pairs verbatim (§8, §11): the
+   icon-container tint is --dh-bg, the icon/graph colour is --dh, and --dh-2 is
+   the lighter end used for progress-bar gradients. */
 body.light-theme .dh-blue   { --dh:#2563eb; --dh-2:#3b82f6; --dh-bg:#dbeafe; }
-body.light-theme .dh-green  { --dh:#16a34a; --dh-2:#22c55e; --dh-bg:#dcfce7; }
-body.light-theme .dh-red    { --dh:#dc2626; --dh-2:#ef4444; --dh-bg:#fee2e2; }
+body.light-theme .dh-green  { --dh:#059669; --dh-2:#10b981; --dh-bg:#dcfce7; }
+body.light-theme .dh-red    { --dh:#ef4444; --dh-2:#f87171; --dh-bg:#fee2e2; }
 body.light-theme .dh-violet { --dh:#7c3aed; --dh-2:#8b5cf6; --dh-bg:#ede9fe; }
-body.light-theme .dh-amber  { --dh:#ea580c; --dh-2:#f97316; --dh-bg:#ffedd5; }
-body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#eef0f3; }
+body.light-theme .dh-amber  { --dh:#d97706; --dh-2:#f59e0b; --dh-bg:#fef3c7; }
+body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#f1f5f9; }
 
 /* Sunken surfaces used INSIDE cards. The dark values sit far enough off
    --card (#161616) to stay visible, and every consumer also draws a border as
