@@ -156,21 +156,22 @@ function _bannerEl() {
 function _renderBanner(decision) {
   var el = _bannerEl();
 
-  var msg = null;
-  if (decision) {
-    if (decision.state === 'GRACE') {
-      msg = { tone: 'warn', text: 'Your licence expired on ' + _fmt(decision.expiresAt)
-        + '. The app keeps working for now — please renew to avoid interruption.' };
-    } else if (decision.state === 'EXPIRED') {
-      msg = { tone: 'error', text: 'Your licence expired on ' + _fmt(decision.expiresAt)
-        + '. You can still view, search and print everything — new entries and edits are paused until it is renewed.' };
-    } else if (decision.state === 'SUSPENDED') {
-      msg = { tone: 'error', text: 'This licence has been suspended. You can still view, search and print everything. Contact support to restore full access.' };
-    } else if (decision.state === 'ACTIVE' && decision.daysRemaining !== null
-               && decision.daysRemaining <= 30) {
-      msg = { tone: 'info', text: 'Your licence expires on ' + _fmt(decision.expiresAt)
-        + ' — ' + decision.daysRemaining + ' day' + (decision.daysRemaining === 1 ? '' : 's') + ' left.' };
-    }
+  /* THE MESSAGE COMES FROM THE DECISION, NOT FROM HERE.
+
+     This function used to re-derive the wording with its own switch on
+     decision.state — a second copy of enforcement.message(), which the main
+     process now attaches as decision.banner. The copy handled GRACE, EXPIRED,
+     SUSPENDED and near-expiry, and had NO CASE FOR REVOKED: a revoked customer
+     got their writes refused with a blank, hidden banner and no explanation.
+
+     Deriving UI text in two places is what produced that. There is one place
+     now, and the fallback below exists only for a decision that predates the
+     change reaching this window — never as a second opinion. */
+  var msg = (decision && decision.banner) ? decision.banner : null;
+  if (!msg && decision && decision.state === 'ACTIVE'
+      && decision.daysRemaining !== null && decision.daysRemaining <= 30) {
+    msg = { tone: 'info', text: 'Your licence expires on ' + _fmt(decision.expiresAt)
+      + ' — ' + decision.daysRemaining + ' day' + (decision.daysRemaining === 1 ? '' : 's') + ' left.' };
   }
 
   if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }

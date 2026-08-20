@@ -253,6 +253,39 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
     const restored = await win.evaluate(() =>
       window.electronAPI.dbUpsert('students', 'cp-3', { id: 'cp-3', name: 'Allowed again' }));
     expect(restored.ok, 'lifting a suspension must restore full use').toBe(true);
+
+    /* ── 7. REVOKING IS STRONGER THAN SUSPENDING, AND IT MUST REACH THE APP ──
+
+       Revocation was exercised here only as CLEANUP, in the finally block with
+       its result thrown away — so the strongest action the control plane has
+       was the one action never asserted. That matters more than it sounds:
+       resolve() previously tested `!BLOCKED_STATES.has(ent.state)` before
+       trusting an entitlement, which discarded REVOKED and fell back to the
+       local licence, meaning revoking a customer did precisely nothing. The
+       unit tests cover that decision; nothing proved it survived the whole
+       chain from the portal to a running app.
+
+       SUSPENDED is read-only. REVOKED is blocked outright — enforcement.js puts
+       it in BLOCKED_STATES with UNLICENSED. So the assertions differ: a write
+       is refused either way, but revocation is not a state the customer keeps
+       working in. */
+    await setStatus('revoked', 'automated test — revocation reaches the app');
+    await win.evaluate(() => window.online.checkNow());
+    await waitForState('REVOKED');
+
+    const afterRevoke = await win.evaluate(() =>
+      window.electronAPI.dbUpsert('students', 'cp-4', { id: 'cp-4', name: 'Must not land' }));
+    expect(afterRevoke.ok, 'a revoked licence still accepted a write').toBe(false);
+
+    // The record really is not there — the refusal is at the IPC boundary, not
+    // a message the renderer chose to show.
+    const afterRows = await win.evaluate(() => window.electronAPI.dbAll('students'));
+    expect(afterRows.some((s) => s && s.id === 'cp-4'),
+      'a write refused under revocation must not have landed').toBe(false);
+
+    // And the customer is told which of the two it is, since the remedies differ.
+    await expect(win.locator('#licence-banner')).toBeVisible();
+    expect(await win.locator('#licence-banner').innerText()).toMatch(/revok/i);
   } finally {
     await app.close();
     // The portal has no delete — deliberately, since a licence is a customer

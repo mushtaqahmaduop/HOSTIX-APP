@@ -39,6 +39,9 @@ let _schemaMigrated = false;
 const onlineServices = require('./services');
 const appLogger = require('./services/logger');
 const enforcement = require('./services/enforcement');
+/* Shown to a customer who cannot use the app, so it must be somewhere they can
+   actually reach. Matches the SUPPORT constant on the activation screen. */
+const SUPPORT_CONTACT = 'mushtaqahmadicp@gmail.com';
 let online = null;
 
 // Insert/replace a row, populating the promoted typed columns for the tables that
@@ -425,6 +428,22 @@ function currentEnforcement(force) {
   const decision = enforcement.resolve({ licence, entitlement: ent, now: time.now });
   decision.clockSuspect = time.clockSuspect;
   decision.timeSource = time.source;
+
+  /* ONE SOURCE FOR WHAT THE CUSTOMER IS TOLD.
+
+     enforcement.message() covers every state — including REVOKED — and was
+     EXPORTED AND CALLED BY NOTHING. The renderer had its own copy of the same
+     switch in _renderBanner(), and that copy handled GRACE, EXPIRED, SUSPENDED
+     and near-expiry but not REVOKED. So revoking a customer blocked their
+     writes correctly and told them nothing at all: an app that silently refused
+     every save, with an empty banner.
+
+     Attaching it here means the renderer renders a decision rather than
+     re-deriving one, so a state added to the enforcement module can no longer
+     arrive in the UI with no words attached. */
+  decision.banner = enforcement.message(decision, {
+    supportContact: SUPPORT_CONTACT
+  });
 
   _enforceCache = { at: now, decision };
   return decision;
