@@ -257,21 +257,36 @@ test('archive page renders (regression: renderArchive was undefined → Render E
   expect(emptyHtml, 'archive page threw a render error (renderArchive missing?)').not.toContain('Render Error');
   expect(emptyHtml).toContain('No archived records');
 
-  // Populated archive → records render grouped by year, still no error.
+  // Populated archive → the page opens on the newest year that HOLDS records
+  // (not simply the current year, which would be empty here) and shows them.
   // (renderPage swaps #content inside a setTimeout fade, so wait before reading.)
   await win.evaluate(() => {
     DB.archive = [
       { id: 'a1', studentName: 'Old Student', month: 'January 2024', amount: 16000, date: '2024-01-05', status: 'Paid' },
       { id: 'a2', category: 'Electricity', amount: 5000, date: '2024-02-01', description: 'WAPDA' },
     ];
+    archiveFilter = { year: '', month: '', tab: 'overview' };
     renderPage('archive');
   });
   await win.waitForTimeout(400);
   const html = await win.evaluate(() => document.getElementById('content').innerHTML);
   expect(html, 'archive render error with data').not.toContain('Render Error');
-  expect(html).toContain('Old Student');
-  expect(html).toContain('Electricity');
-  expect(html).toContain('2024');
+  expect(html, 'archive did not default to the newest year holding records').toContain('2024');
+  // The year overview reports the money; the records themselves are one tab in.
+  expect(html).toContain('16,000');
+  expect(html).toContain('5,000');
+
+  // arcSetTab() goes through renderPage(), which swaps #content inside a
+  // setTimeout fade — read after the wait, not in the same evaluate().
+  await win.evaluate(() => arcSetTab('payments'));
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => document.getElementById('content').innerText),
+    'archived payment missing from the Payments tab').toContain('Old Student');
+
+  await win.evaluate(() => arcSetTab('expenses'));
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => document.getElementById('content').innerText),
+    'archived expense missing from the Expenses tab').toContain('Electricity');
 
   await app.close();
 });

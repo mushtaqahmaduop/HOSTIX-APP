@@ -184,6 +184,15 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
     series: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
                ? _dashTrendChart.data.datasets.map(d => d.label) : null,
     legend: [...document.querySelectorAll('.dash-legend__k')].map(e => e.textContent.trim()),
+    // KPI row order is the argument the row makes: people, money in, money out,
+    // what is left, what is owed. Available Fund states itself as
+    // "collected − expenses" and must not precede the expenses it subtracts.
+    kpiOrder: [...document.querySelectorAll('.dash-kpi-grid .dash-kpi__label')]
+      .map(l => l.textContent.replace(/\s+/g, '')),
+    // Every money card carries its own 12-month history; the first (a headcount
+    // with a fill bar) does not.
+    kpiSparks: [...document.querySelectorAll('.dash-kpi-grid .dsh-card')]
+      .map(c => !!c.querySelector('.dash-spark')),
     // Months that have not happened must be null (line stops), not 0 (line
     // runs flat along the axis claiming a year of zero revenue).
     futureNulls: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
@@ -220,7 +229,15 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
       len: captured.length,
       hasTintedCards: /room-box\.full|room-box\.partial/.test(captured),  // must be gone
       sboxes: d.querySelectorAll('.sbox').length,
-      floors: d.querySelectorAll('.floor-label').length,
+      floors: d.querySelectorAll('.floor-head').length,
+      // Each floor header carries that floor's own seat maths. Unstyled spans
+      // would still be *present*, so measure one — a styled .fstat pill is
+      // inline-flex with padding, a bare span collapses to the text box.
+      fstats: d.querySelectorAll('.floor-head .fstat').length,
+      fstatDisplay: (() => { const s = d.querySelector('.floor-head .fstat');
+        return s ? getComputedStyle(s).display : null; })(),
+      fbadgeW: (() => { const b = d.querySelector('.floor-head .fbadge');
+        return b ? Math.round(b.getBoundingClientRect().width) : null; })(),
       rooms:  d.querySelectorAll('.room-box').length,
       iconW:  anyIcon ? Math.round(anyIcon.getBoundingClientRect().width) : null,
       bodyW:  d.body ? Math.round(d.body.scrollWidth) : null,
@@ -258,6 +275,46 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   }));
   console.log('LICENSE ' + JSON.stringify(lic));
 
+  // ── 8. Students Fee Report print document ──────────────────────────────────
+  // This one cannot be captured like the visit sheet: it goes out through
+  // electronAPI.openPdfWindow, and contextBridge freezes that object, so the
+  // stub-and-read trick above is impossible. Let the real window open instead.
+  const monthKey = await win.evaluate(() => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  });
+  const [feePage] = await Promise.all([
+    app.waitForEvent('window'),
+    win.evaluate((k) => doGenerateStudentsPDF(k), monthKey),
+  ]);
+  await feePage.waitForLoadState('domcontentloaded');
+  await feePage.waitForSelector('.summary .sbox', { timeout: 15000 });
+  const fee = await feePage.evaluate(() => ({
+    tiles: document.querySelectorAll('.summary .sbox').length,
+    // Print docs load none of the app's stylesheets, so an unsized icon() SVG
+    // falls back to 300×150 — the same trap the visit sheet has rules for.
+    iconW: (() => { const s = document.querySelector('svg.icon');
+      return s ? Math.round(s.getBoundingClientRect().width) : null; })(),
+    blankIcons: document.querySelectorAll('.sbox .ico:empty').length,
+    // Every tile label used to break mid-phrase on a <br>; one line each now.
+    labelH: (() => { const l = document.querySelector('.sbox .l');
+      return l ? Math.round(l.getBoundingClientRect().height) : null; })(),
+    // The roster's cells are styled by class. A drift back to per-cell inline
+    // styles is what made a colour change a fourteen-place edit.
+    inlineCells: document.querySelectorAll('tbody td[style]').length,
+    // Header tints were once picked for a dark strip; on the light one they
+    // have to stay dark enough to read. Reject anything above 60% lightness.
+    paleHeaders: [...document.querySelectorAll('thead th[style]')].filter(th => {
+      const m = /rgb\((\d+), (\d+), (\d+)\)/.exec(getComputedStyle(th).color);
+      if (!m) return false;
+      const [r, g, b] = [+m[1], +m[2], +m[3]];
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+    }).length,
+    totalsRow: document.querySelectorAll('tr.totals').length,
+    overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  console.log('FEEREPORT ' + JSON.stringify(fee));
+
   console.log('ERRORS ' + JSON.stringify(errs));
 
   expect(addRoom.guide, 'add-room guide banner missing').toBe(true);
@@ -271,20 +328,43 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   expect(reports.series, 'profit series missing').toEqual(['Collection', 'Expenses', 'Profit']);
   expect(reports.tension, 'trend line must be straight, not curved').toEqual([0, 0, 0]);
   expect(dash.renderError, 'dashboard render error').toBe(false);
-  expect(dash.tension, 'dashboard trend lines must be straight too').toEqual([0, 0, 0, 0]);
-  expect(dash.series, 'dashboard must draw every series its legend claims')
-    .toEqual(['Revenue', 'Expenses', 'Transfers', 'Pending']);
+  // Series COUNT is not the assertion — the properties are. The Transfers line
+  // is drawn only while FEATURES.fundsTransferCard is on (it plots money that
+  // calcExpenses, and so the Expenses line, already carries), so hard-coding
+  // four datasets made this fail for a deliberate change rather than a defect.
+  expect(dash.tension, 'dashboard trend lines must be straight too')
+    .toEqual(dash.tension.map(() => 0));
+  expect(dash.series, 'dashboard must draw Revenue, Expenses and Pending')
+    .toEqual(expect.arrayContaining(['Revenue', 'Expenses', 'Pending']));
   expect(dash.legend, 'legend must match the drawn series').toEqual(dash.series);
+  expect(dash.kpiOrder, 'KPI row order: people, in, out, left, owed')
+    .toEqual(['TotalResidents', 'TotalRevenue', 'Expenses', 'AvailableFund', 'Pending']);
+  expect(dash.kpiSparks, 'Available Fund lost its history sparkline')
+    .toEqual([false, false, true, true, true]);
   expect(dash.futureNulls, 'past months must plot, future months must be null')
-    .toEqual([{ past: true, future: true }, { past: true, future: true },
-              { past: true, future: true }, { past: true, future: true }]);
+    .toEqual(dash.series.map(() => ({ past: true, future: true })));
   expect(backup.stats).toBe(4);
   expect(student && student.stats, 'student profile stat tiles').toBe(4);
   expect(student && student.emoji, 'student profile still contains emoji').toBe(false);
   expect(visit.hasTintedCards, 'full/partial card tints should be gone').toBe(false);
   expect(visit.sboxes, 'visit sheet summary tiles').toBe(4);
   expect(visit.rooms, 'visit sheet room cards').toBeGreaterThan(0);
+  expect(visit.floors, 'visit sheet floor headers').toBeGreaterThan(0);
+  expect(visit.fstats, 'per-floor seat stats (3 per floor)').toBe(visit.floors * 3);
+  // .fstat is declared inline-flex but sits in a flex row, so it blockifies to
+  // 'flex'. An unstyled <span> in that same row would blockify to 'block', so
+  // this still tells the two apart.
+  expect(visit.fstatDisplay, 'floor stat pill is unstyled').toBe('flex');
+  expect(visit.fbadgeW, 'floor badge is unstyled').toBe(22);
   expect(visit.iconW, 'print-doc icon is unsized (300px fallback)').toBeLessThan(20);
+  expect(fee.tiles, 'fee report summary tiles').toBe(8);
+  expect(fee.iconW, 'fee report icon is unsized (300px fallback)').toBeLessThan(20);
+  expect(fee.blankIcons, 'empty tile icon chips (bad icon name)').toBe(0);
+  expect(fee.labelH, 'tile label wrapped onto a second line').toBeLessThan(14);
+  expect(fee.inlineCells, 'roster cells drifted back to inline styles').toBeLessThan(8);
+  expect(fee.paleHeaders, 'column header too pale to read on the light strip').toBe(0);
+  expect(fee.totalsRow, 'fee report totals band').toBe(1);
+  expect(fee.overflow, 'fee report scrolls horizontally').toBe(false);
   expect(lic.facts, 'license facts strip').toBe(6);
   expect(lic.acts, 'license action rows').toBe(3);
   expect(lic.unfilled, 'unfilled data-ico placeholders').toBe(0);
