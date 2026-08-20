@@ -51,8 +51,13 @@ function stuAvatarHue(name) {
   return hues[h % hues.length];
 }
 
+/* Amber is the LIVE signal — someone leaving on a date the warden has to act
+   on — so it belongs to 'Cancelling', not to 'Left'. A student who has already
+   gone needs nothing from anybody and reads as neutral history; painting them
+   amber spent the one colour that means "attention" on the one state that
+   needs none, and left the state that does need it grey. */
 function stuStatusHue(s) {
-  return s === 'Active' ? 'dh-green' : s === 'Left' ? 'dh-amber'
+  return s === 'Active' ? 'dh-green' : s === 'Cancelling' ? 'dh-amber'
        : s === 'Blacklisted' ? 'dh-red' : 'dh-slate';
 }
 
@@ -77,6 +82,18 @@ function renderStudents() {
   const nActive = DB.students.filter(t=>t.status==='Active').length;
   const nLeft   = DB.students.filter(t=>t.status==='Left').length;
   const nBlack  = DB.students.filter(t=>t.status==='Blacklisted').length;
+  /* THE CARDS HAVE TO ADD UP TO TOTAL.
+
+     'Cancelling' is a fourth status and no card counted it, so from the moment
+     anybody gave notice the strip read e.g. Total 40, Active 38, Left 1,
+     Blacklisted 0 — and the owner is left to wonder which student the app has
+     lost. On Notice is that missing card.
+
+     It appears only when somebody is on notice, which is the same rule the
+     status filter below already follows: an always-visible card reading 0 is
+     clutter on the ~95% of days nobody is leaving, and with nobody on notice
+     the other three sum to Total on their own anyway. */
+  const nCanc   = DB.students.filter(t=>t.status==='Cancelling').length;
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
@@ -113,7 +130,16 @@ function renderStudents() {
       <div class="stu-stat__sub">Students</div>
     </div>
 
-    <div class="stu-stat stu-stat--click dh-amber" onclick="stuSetStatus('Left')" title="Show only students who have left">
+    ${nCanc?`<div class="stu-stat stu-stat--click dh-amber" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
+      <div class="stu-stat__top">
+        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg></div>
+        <div class="stu-stat__label">On Notice</div>
+      </div>
+      <div class="stu-stat__val">${nCanc}</div>
+      <div class="stu-stat__sub">Bed held till vacate date</div>
+    </div>`:''}
+
+    <div class="stu-stat stu-stat--click dh-slate" onclick="stuSetStatus('Left')" title="Show only students who have left">
       <div class="stu-stat__top">
         <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="stu-stat__label">Left</div>
@@ -1488,36 +1514,59 @@ async function confirmDeleteStudent(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   closeModal();
 
-  /* The dialog now says what actually happens. Removing a student also removes
-     every payment they ever made, which rewrites months that were closed and
-     reconciled: last quarter's collected total drops, and the receipts already
-     in students' hands stop matching the books. That was happening behind the
-     words "delete the student record", with no entry in the activity log to
-     say a figure had moved.
+  /* THE MONEY STAYS. THE PERSON GOES.
 
-     The cascade itself is left alone — this is the deliberate "erase them"
-     path, and the app already has a softer one (mark the student Left, which
-     keeps the history). What changes is that the warden is told the size of
-     what they are about to erase, and that it is written down. */
-  const _pays   = DB.payments.filter(p => p.studentId === id);
-  const _paid   = _pays.reduce((s,p) => s + Number(p.amount || 0), 0);
-  const _owed   = _pays.reduce((s,p) => s + Number(p.unpaid || 0), 0);
+     This used to cascade: `DB.payments = DB.payments.filter(...)` deleted every
+     payment the student had ever made. That rewrites months which were closed
+     and reconciled — last quarter's collected total silently drops, and the
+     receipts already in students' hands stop matching the books. Cash that was
+     genuinely counted into the till left the accounts because somebody tidied
+     up a contact record.
+
+     A payment is a record of an event that happened. Deleting the person does
+     not un-happen it. So the rows stay, and they can stay safely because each
+     one already carries its own `studentName` and `roomNumber` snapshot —
+     syncStudentSnapshots() and repairStudentSnapshots() both no-op when the
+     student is gone, so the name on a historical receipt never blanks out.
+
+     THE OUTSTANDING BALANCE IS LEFT ALONE TOO, DELIBERATELY.
+
+     It is tempting to zero `unpaid` on the way out so a removed student stops
+     showing as a debtor. That is the same mistake in the other direction:
+     writing off a debt is a financial decision the warden makes on purpose, on
+     a record, not something that happens as a side effect of deleting a row
+     from a contact list. If the money is not coming, mark the record settled —
+     which is a visible act, in the activity log, with a figure attached.
+
+     What the warden loses by deleting is the STUDENT: the roster entry, the
+     room assignment, the profile. That is what they asked to lose. */
+  const _pays = DB.payments.filter(p => p.studentId === id);
+  const _paid = _pays.reduce((s,p) => s + Number(p.amount  || 0), 0);
+  const _owed = _pays.reduce((s,p) => s + Number(p.unpaid  || 0), 0);
   const _detail = _pays.length
     ? `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.75">`
-      + `This also deletes <strong>${_pays.length}</strong> payment record(s) —`
-      + ` <strong>${fmtPKR(_paid)}</strong> already collected and`
-      + ` <strong style="color:var(--red)">${fmtPKR(_owed)}</strong> still outstanding —`
-      + ` and removes that money from every past month's totals.</div>`
-      + `<small style="color:var(--text3)">To keep the history, cancel this and set their status to <em>Left</em> instead.</small>`
-    : 'This will permanently delete the student record.';
+      + `Their <strong>${_pays.length}</strong> payment record(s) <strong>stay in the books</strong> —`
+      + ` <strong>${fmtPKR(_paid)}</strong> collected`
+      + (_owed ? ` and <strong style="color:var(--red)">${fmtPKR(_owed)}</strong> still outstanding` : '')
+      + ` — so no past month's totals change. They will be listed under`
+      + ` <em>${escHtml(t.name)}</em> with the seat marked removed.</div>`
+      + `<small style="color:var(--text3)">This removes the student from the roster and frees their bed.`
+      + (_owed ? ` The outstanding balance is not written off — settle the record first if it is not coming.` : '')
+      + `</small>`
+    : 'This removes the student from the roster. They have no payment records.';
 
   showConfirm(`Remove ${escHtml(t.name)}?`, _detail, (async ()=>{
     logActivity('Student Deleted',
-      `${t.name} — ${_pays.length} payment record(s) removed · ${fmtPKR(_paid)} collected, ${fmtPKR(_owed)} outstanding`,
+      `${t.name} — roster entry removed · ${_pays.length} payment record(s) KEPT · `
+      + `${fmtPKR(_paid)} collected, ${fmtPKR(_owed)} outstanding`,
       'Students');
-    DB.students=DB.students.filter(x=>x.id!==id);
-    DB.payments=DB.payments.filter(p=>p.studentId!==id);
-    await saveDB(); renderPage('students'); toast('Student removed','info');
+    /* Stamp the rows before dropping the student, so every screen that lists a
+       payment can say the person is no longer on the roster instead of quietly
+       showing a name that resolves to nobody. */
+    _pays.forEach(p => { p.studentRemoved = true; p.studentRemovedOn = today(); });
+    DB.students = DB.students.filter(x => x.id !== id);
+    await saveDB(); renderPage('students');
+    toast(`${t.name} removed — ${_pays.length} payment record(s) kept`, 'info');
   }));
 }
 
