@@ -22,6 +22,93 @@ function calcRevenue(datePrefix) {
   return paid + partial;
 }
 
+/* ══ SINGLE SOURCE OF TRUTH FOR CASH RECEIVED ════════════════════════════════
+   calcRevenue() above is ACCRUAL: it answers "how much did month M earn",
+   and July's rent handed over on 3 August is July's revenue. That is correct
+   for the books and every report depends on it.
+
+   It is the wrong figure to count a cash box against. At month end the warden
+   has a drawer of notes and wants to know what should be in it — money that
+   physically arrived between the 1st and the 31st, whatever month it settles.
+   There was no such figure anywhere in the app, so the drawer could not be
+   reconciled at all.
+
+   HOW A RECORD'S CASH IS DATED
+
+   `p.amount` is the total collected on that record. `p.partialPayments` is the
+   instalment trail, and each entry carries the date its instalment arrived —
+   so a record part-paid in July and cleared in August is genuinely two cash
+   events in two months. The first collection is not always written to the
+   trail, so whatever the trail does not account for is attributed to the
+   record's own payment date.
+
+   MONEY IS CONSERVED, WHICH IS THE WHOLE POINT
+
+   Every branch below distributes exactly `p.amount` across months — never more,
+   never less — so summing the twelve months of a year returns the same total
+   the year's records hold. A reconciliation tool that could invent or lose a
+   rupee would be worse than none.
+
+   A trail claiming MORE than was ever collected is known to exist on disk —
+   repairPaymentComposition() documents the two bugs that wrote them. Those
+   trails cannot be trusted to date anything, so such a record falls back
+   entirely to its own date rather than being scaled or partly believed. */
+function _cashEvents(p) {
+  const total = Number(p && p.amount || 0);
+  if (!p || total <= 0) return [];
+  const base  = p.date || p.paidDate || p.dueDate || '';
+  const trail = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+  const trailSum = trail.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+
+  // No trail, or a trail that claims more than was collected: one event.
+  if (!trail.length || trailSum > total + 0.5) return [{ date: base, amount: total }];
+
+  const events = trail
+    .filter(e => e && Number(e.amount || 0) > 0)
+    .map(e => ({ date: e.date || base, amount: Number(e.amount || 0) }));
+  const residual = total - trailSum;
+  if (residual > 0.5) events.push({ date: base, amount: residual });
+  return events;
+}
+
+// Cash that physically arrived inside `key` (a YYYY-MM month or a YYYY year,
+// matched as a date prefix — the same shape calcExpenses() takes).
+function calcCashReceived(key) {
+  if (!key) return 0;
+  return (DB.payments || []).reduce((sum, p) =>
+    sum + _cashEvents(p).reduce((s, e) =>
+      s + (String(e.date || '').indexOf(String(key)) === 0 ? e.amount : 0), 0), 0);
+}
+
+/* The month's cash split by WHICH month it settles, which is the reconciliation
+   itself: cash received = this period's own rent + arrears carried in from
+   earlier months + anything paid ahead. `advance` is money for a future month,
+   so it is in the drawer now and in none of this month's revenue. */
+function cashBreakdown(key) {
+  const out = { total: 0, current: 0, arrears: 0, advance: 0, count: 0 };
+  (DB.payments || []).forEach(p => {
+    const events = _cashEvents(p);
+    if (!events.length) return;
+    /* Compared at the SAME granularity as `key`. `key` is a prefix and may be a
+       whole year, and '2026-04' < '2026' is false while '2026' < '2026-04' is
+       true — so comparing a month against a year key sent every record in that
+       year to `advance`, i.e. the year view reported all of its cash as paid in
+       advance. Truncating the record's month to the key's width compares like
+       with like in both cases. */
+    const k       = String(key);
+    const settles = _payMonthKey(p);            // the month this record bills
+    const mine    = settles ? settles.slice(0, k.length) : null;
+    events.forEach(e => {
+      if (String(e.date || '').indexOf(k) !== 0) return;
+      out.total += e.amount; out.count++;
+      if (!mine || mine === k)  out.current += e.amount;
+      else if (mine < k)        out.arrears += e.amount;
+      else                      out.advance += e.amount;
+    });
+  });
+  return out;
+}
+
 // ══ SINGLE SOURCE OF TRUTH FOR EXPENSES ═════════════════════════════════════
 // A funds transfer is an expense. It is money that leaves the hostel's cash the
 // same way a gas bill does; it is only stored in its own array because it is
@@ -278,6 +365,10 @@ function renderDashboard() {
   const activeStudents = DB.students.filter(t=>t.status==='Active').length;
   const mo = thisMonth();
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
+  // Cash basis — what should physically be in the drawer for this month. See
+  // calcCashReceived(): this is deliberately NOT `collected`, and the two
+  // differing is normal rather than a fault.
+  const cashIn = cashBreakdown(mo);
   // Pending — only for the selected month
   const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
@@ -486,6 +577,25 @@ function renderDashboard() {
         <span class="dash-tile__caret">›</span>
       </div>
       <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%"></div></div>
+    </div>
+
+    ${''/* CASH RECEIVED — the drawer, not the books. The tile beside it reads
+           "Total Revenue" for the same month and will usually show a DIFFERENT
+           number; that is the point of having both, and the modal explains the
+           gap line by line. */}
+    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-amber">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H3a1 1 0 0 1 0-2h15a1 1 0 0 0 0-2H3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Zm-3 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Cash Received</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${fmtNum(cashIn.total)}</span>
+            <span style="font-size:11px;color:var(--text3)">${cashIn.arrears>0?'incl. '+fmtPKR(cashIn.arrears)+' arrears':'this month'}</span>
+          </div>
+        </div>
+        <span class="dash-tile__caret">›</span>
+      </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${cashIn.total>0?Math.min(100,Math.round(cashIn.current/cashIn.total*100)):0}%"></div></div>
     </div>
 
     <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-violet">
@@ -1125,6 +1235,94 @@ function showSeatDetailModal(type) {
       <span style="font-size:12px;color:var(--text3)">Click rows to view details</span>
     </div>
     <div style="max-height:400px;overflow-y:auto">${rows}</div>`);
+}
+
+/* ══ THE MONTH-END RECONCILIATION ════════════════════════════════════════════
+   Answers one question: what should be in the cash box, and why does it not
+   equal the Total Revenue card next to it?
+
+   The gap is not an error and the panel says so in words. Revenue is what the
+   month EARNED; cash is what ARRIVED. They differ by exactly two things —
+   arrears collected this month for an earlier one (in the drawer, not in this
+   month's revenue) and this month's rent not yet handed over (in the revenue,
+   not in the drawer). Both are listed, and the identity that ties them is
+   printed at the bottom so the warden can follow it rather than trust it. */
+function showCashReceivedModal() {
+  const mo    = thisMonth();
+  const label = (typeof _rptMonthName === 'function') ? _rptMonthName(mo) : mo;
+  const cash  = cashBreakdown(mo);
+  const rev   = calcRevenue(mo);
+
+  // Every cash event in the month, newest first, with the month it settles.
+  const rows = [];
+  (DB.payments || []).forEach(p => {
+    const settles = _payMonthKey(p);
+    _cashEvents(p).forEach(e => {
+      if (String(e.date || '').indexOf(mo) !== 0) return;
+      const kind = !settles || settles === mo ? 'current' : settles < mo ? 'arrears' : 'advance';
+      rows.push({ date: e.date, amount: e.amount, name: p.studentName || '—',
+                  room: p.roomNumber || '', settles, kind, removed: !!p.studentRemoved });
+    });
+  });
+  rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  const kindBadge = { current: ['badge-green', 'This month'],
+                      arrears: ['badge-gold',  'Arrears'],
+                      advance: ['badge-gray',  'Advance'] };
+
+  const body = rows.map(r => {
+    const [cls, txt] = kindBadge[r.kind];
+    return `<tr>
+      <td class="text-muted">${escHtml(fmtDate(r.date))}</td>
+      <td class="fw-700">${escHtml(r.name)}${r.removed?' <span style="color:var(--amber);font-size:10px;font-weight:700">(removed)</span>':''}</td>
+      <td class="text-muted">${r.room?'#'+escHtml(String(r.room)):'—'}</td>
+      <td><span class="badge ${cls}">${txt}</span></td>
+      <td class="text-muted">${escHtml(r.settles ? (typeof _rptMonthName==='function'?_rptMonthName(r.settles):r.settles) : '—')}</td>
+      <td class="fw-700" style="text-align:right">${fmtPKR(r.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  const tile = (label2, val, hue, note) => `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">${label2}</div>
+      <div style="font-size:22px;font-weight:900;color:${hue};font-variant-numeric:tabular-nums">${fmtPKR(val)}</div>
+      ${note?`<div style="font-size:10.5px;color:var(--text3);margin-top:2px">${note}</div>`:''}
+    </div>`;
+
+  // The identity, stated with real figures so it can be checked rather than believed.
+  const owedThisMonth = rev - cash.current;
+
+  showModal('modal-xl', 'Cash Received — ' + escHtml(label), `
+    <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      ${tile('In the drawer', cash.total, 'var(--amber)', 'Count against this')}
+      ${tile('For ' + escHtml(label), cash.current, 'var(--text)', 'This month&rsquo;s own rent')}
+      ${tile('Arrears collected', cash.arrears, 'var(--green)', 'Earlier months')}
+      ${tile('Paid in advance', cash.advance, 'var(--text2)', 'Future months')}
+    </div>
+
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.85;color:var(--text2)">
+      <strong style="color:var(--text)">Why this is not the same as Total Revenue.</strong>
+      Revenue is what ${escHtml(label)} <em>earned</em>; cash is what <em>arrived</em>.
+      Rent for July handed over in August is July&rsquo;s revenue and August&rsquo;s cash.
+      <div style="margin-top:9px;font-family:monospace;font-size:12px;color:var(--text)">
+        Revenue ${fmtPKR(rev)}
+        &minus; still owed ${fmtPKR(owedThisMonth)}
+        + arrears ${fmtPKR(cash.arrears)}
+        + advance ${fmtPKR(cash.advance)}
+        = <strong>${fmtPKR(cash.total)}</strong>
+      </div>
+    </div>
+
+    ${rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Student</th><th>Room</th><th>Type</th><th>Settles</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr>
+        <td colspan="5" class="fw-700" style="text-align:right">Total received in ${escHtml(label)}</td>
+        <td class="fw-700" style="text-align:right">${fmtPKR(cash.total)}</td>
+      </tr></tfoot>
+    </table></div>`
+    : `<div style="text-align:center;padding:26px;color:var(--text3);font-size:13px">No money has been received in ${escHtml(label)} yet.</div>`}
+  `);
 }
 
 function showOccupiedRoomsModal() {

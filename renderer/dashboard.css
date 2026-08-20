@@ -340,8 +340,9 @@
    five KPI columns still clear the 196px the density block asks for. */
 @media (min-width:1330px) {
     .dash-kpi-grid  { grid-template-columns:repeat(5,minmax(0,1fr)); }
-    .dash-tile-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
-    .dash-tile-grid > :nth-child(1) { grid-column:span 2; }   /* Occupied Rooms */
-    .dash-tile-grid > :nth-child(2) { grid-column:span 1; }   /* Vacant Rooms   */
-    .dash-tile-grid > :nth-child(3) { grid-column:span 2; }   /* Active Students */
+    /* Four equal tiles. This used to be a 5-column grid with 2/1/2 spans for
+       three tiles; adding Cash Received made the arithmetic wrong and wrapped
+       the fourth onto a row of its own, where a lone full-width tile read as a
+       section heading rather than one of a set. */
+    .dash-tile-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
