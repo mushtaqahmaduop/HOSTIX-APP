@@ -814,3 +814,111 @@ if (typeof module !== 'undefined' && module.exports) {
     buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo
   };
 }
+/* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────
+   A backup file is the ONE arbitrary document this app ingests. It arrives from
+   a file picker, so its contents are entirely outside our control, and what it
+   becomes is the whole database — `DB = _initDBFields(data)`.
+
+   Two import paths existed and they did not agree. restoreBackup() in
+   storage.js checked a size cap, that rooms/students were arrays, and that each
+   record had an id. importData() in settings.js did `JSON.parse` and handed the
+   result straight to _initDBFields(). Both now come through here.
+
+   WHAT A HOSTILE OR BROKEN FILE COULD DO BEFORE THIS
+
+   * PROTOTYPE POLLUTION. JSON.parse() itself is safe — it defines __proto__ as
+     an ordinary own property rather than invoking the setter — but the object
+     then gets merged, spread and assigned all over the app, and any one of
+     those re-introduces the pollution. A "__proto__": {"isAdmin": true} in a
+     backup should never have got as far as those merges.
+
+   * A TRUTHY NON-ARRAY COLLECTION. _initDBFields guards with `if (!d.students)
+     d.students = []`, so a students value of "" or 0 is replaced — but the
+     string "abc" is truthy and survives, and then every .filter/.map/.reduce
+     on DB.students throws. The app boots into a broken state with the real
+     database already overwritten.
+
+   * A RECORD WITH NO id. db:importFull binds r.id into an INSERT; undefined
+     fails the whole transaction AFTER the renderer has already replaced its
+     in-memory DB, which is the worst ordering: memory says one thing, disk
+     says another.
+
+   * RUNAWAY NESTING. A deeply nested document blows the stack in JSON.stringify
+     during save, not during parse, so it fails late and half-applied.
+
+   Returns { ok: true } or { ok: false, reason: '<human sentence>' }. The reason
+   is shown to the warden, so it says what is wrong with THEIR file rather than
+   naming an internal field.                                                  */
+const BACKUP_COLLECTIONS = [
+  'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
+  'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
+  'billSplits', 'transfers', 'roomShifts', 'archive',
+];
+// Collections whose records are written to SQLite by id, so an id is mandatory.
+const BACKUP_ID_REQUIRED = [
+  'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
+];
+const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
+const BACKUP_MAX_DEPTH   = 24;
+
+function _isPlainObject(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** Any __proto__ / constructor / prototype key, at any depth. Also depth-caps. */
+function _findPollution(node, depth) {
+  if (depth > BACKUP_MAX_DEPTH) return 'nested too deeply';
+  if (Array.isArray(node)) {
+    for (const v of node) {
+      const hit = _findPollution(v, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (!_isPlainObject(node)) return null;
+  for (const k of Object.keys(node)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype')
+      return 'contains a reserved key ("' + k + '")';
+    const hit = _findPollution(node[k], depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function validateBackup(data) {
+  if (!_isPlainObject(data))
+    return { ok: false, reason: 'This file is not a Hostyllo backup — it does not contain a data object.' };
+
+  const polluted = _findPollution(data, 0);
+  if (polluted)
+    return { ok: false, reason: 'This backup was rejected because it ' + polluted + '. A genuine backup never does.' };
+
+  // It must look like OUR backup, not merely like valid JSON.
+  const looksLikeOurs = BACKUP_COLLECTIONS.some(k => k in data) || _isPlainObject(data.settings);
+  if (!looksLikeOurs)
+    return { ok: false, reason: 'This file is valid JSON but is not a Hostyllo backup.' };
+
+  let total = 0;
+  for (const key of BACKUP_COLLECTIONS) {
+    if (!(key in data) || data[key] == null) continue;   // absent is fine — it gets defaulted
+    if (!Array.isArray(data[key]))
+      return { ok: false, reason: 'The "' + key + '" section of this backup is damaged — it should be a list.' };
+    total += data[key].length;
+    if (total > BACKUP_MAX_RECORDS)
+      return { ok: false, reason: 'This backup holds more than ' + fmtNum(BACKUP_MAX_RECORDS) + ' records, which is beyond what this app can restore.' };
+    for (const rec of data[key]) {
+      if (!_isPlainObject(rec))
+        return { ok: false, reason: 'The "' + key + '" section contains an entry that is not a record.' };
+    }
+    if (BACKUP_ID_REQUIRED.indexOf(key) !== -1) {
+      const bad = data[key].findIndex(r => r.id === undefined || r.id === null || r.id === '');
+      if (bad !== -1)
+        return { ok: false, reason: 'A record in "' + key + '" (number ' + (bad + 1) + ') has no id, so it cannot be restored.' };
+    }
+  }
+
+  if ('settings' in data && data.settings != null && !_isPlainObject(data.settings))
+    return { ok: false, reason: 'The settings section of this backup is damaged.' };
+
+  return { ok: true };
+}

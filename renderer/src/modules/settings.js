@@ -1761,16 +1761,49 @@ function exportData() {
 }
 async function importData(input) {
   const file=input.files[0]; if(!file) return;
+  /* A 50MB cap before the file is even read. The other import path had one and
+     this one did not, so the same oversized file was refused politely in one
+     place and froze the renderer in the other. */
+  if (file.size > 50 * 1024 * 1024) {
+    toast('That file is larger than 50 MB — it is not a Hostyllo backup', 'error');
+    input.value = ''; return;
+  }
   const reader=new FileReader();
   reader.onload=e=>{
-    try {
-      const data=JSON.parse(e.target.result);
-      showConfirm('Import Data?','This will replace all current data with the imported backup.',async ()=>{
-        DB=_initDBFields(data); // FIX 24: normalize schema on import same as restoreBackup
-        await saveDB(); navigate('dashboard'); toast('Data imported successfully','success');
-      });
-    } catch(err){ toast('Invalid backup file','error'); }
+    let data;
+    try { data = JSON.parse(e.target.result); }
+    catch(err){ toast('That file is not valid JSON, so it cannot be a backup','error'); input.value=''; return; }
+
+    /* THE FILE IS CHECKED BEFORE IT BECOMES THE DATABASE.
+
+       This used to hand the parsed JSON straight to _initDBFields(), whose
+       guards are `if (!d.students) d.students = []` — a truthy non-array such
+       as the string "abc" walks through, and every screen that filters
+       DB.students then throws, with the real database already replaced. */
+    const check = validateBackup(data);
+    if (!check.ok) {
+      toast(check.reason, 'error', 'Backup rejected');
+      logActivity('Backup Import Rejected', check.reason, 'Settings');
+      input.value = ''; return;
+    }
+
+    showConfirm('Import Data?','This will replace all current data with the imported backup.',async ()=>{
+      // The in-memory DB is only replaced once the write has SUCCEEDED. The old
+      // order set DB first and saved after, so a failed write left memory and
+      // disk disagreeing with no way back.
+      const prev = DB;
+      DB = _initDBFields(data);
+      const okSave = await saveDB();
+      if (okSave === false) {
+        DB = prev;
+        toast('The backup could not be written — nothing was changed', 'error');
+        return;
+      }
+      logActivity('Backup Imported', file.name || 'backup.json', 'Settings');
+      navigate('dashboard'); toast('Data imported successfully','success');
+    });
   };
+  reader.onerror = () => { toast('That file could not be read','error'); input.value=''; };
   reader.readAsText(file);
 }
 

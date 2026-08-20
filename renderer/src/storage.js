@@ -377,51 +377,54 @@ if (window.electronAPI) {
   window.electronAPI.onImportBackup(async function (jsonString) {
     try {
       if (typeof jsonString !== 'string' || jsonString.length > 50 * 1024 * 1024) {
-        if (typeof toast === 'function') toast('❌ Backup file is too large or invalid', 'error');
+        if (typeof toast === 'function') toast('Backup file is too large or invalid', 'error');
         return;
       }
       const data   = JSON.parse(jsonString);
       const dbData = data.db || data;
 
-      // BUG FIX (B6): was && — only caught case where BOTH were missing
+      /* One validator, shared with Settings -> Import Data. The checks that used
+         to live here — rooms/students are arrays, every record has an id — are
+         a subset of what validateBackup() does, and having two import paths
+         disagree about what a valid backup is meant a file could be refused in
+         one place and accepted in the other. It also adds the check neither
+         path had: reserved keys such as __proto__ anywhere in the document. */
       if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
-        if (typeof toast === 'function') toast('❌ Invalid backup file — missing required data', 'error');
+        if (typeof toast === 'function') toast('Invalid backup file — it has no rooms or students', 'error');
         return;
       }
-
-      // BUG FIX (B6): validate each record has an id field to prevent silent import failures
-      if (dbData.students.some(function(s){ return !s || typeof s !== 'object' || !s.id; })) {
-        if (typeof toast === 'function') toast('❌ Backup has corrupted student records — missing id fields', 'error');
-        return;
-      }
-      if (dbData.rooms.some(function(r){ return !r || typeof r !== 'object' || !r.id; })) {
-        if (typeof toast === 'function') toast('❌ Backup has corrupted room records — missing id fields', 'error');
-        return;
+      if (typeof validateBackup === 'function') {
+        const check = validateBackup(dbData);
+        if (!check.ok) {
+          if (typeof toast === 'function') toast(check.reason, 'error', 'Backup rejected');
+          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
+          return;
+        }
       }
 
       const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
       if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains too many student records', 'error');
+        if (typeof toast === 'function') toast('Backup contains too many student records', 'error');
         return;
       }
       if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains too many payment records', 'error');
+        if (typeof toast === 'function') toast('Backup contains too many payment records', 'error');
         return;
       }
 
       const result = await window.electronAPI.dbImportFull(dbData);
       if (!result.ok) {
-        if (typeof toast === 'function') toast('❌ Import failed: ' + result.error, 'error');
+        if (typeof toast === 'function') toast('Import failed: ' + result.error, 'error');
         return;
       }
       await loadDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
-      if (typeof toast         === 'function') toast('✅ Backup imported successfully!', 'success');
+      if (typeof toast         === 'function') toast('Backup imported successfully', 'success');
       markBackupDone();
     } catch (e) {
       console.error('[HOSTIX] Import failed:', e);
-      if (typeof toast === 'function') toast('❌ Import failed: ' + e.message, 'error');
+      if (typeof toast === 'function') toast('Import failed: ' + e.message, 'error');
     }
   });
 }

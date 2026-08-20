@@ -31,6 +31,12 @@ declare var CUR_USER: any;
 // ── Utility helpers (defined in utils.js — which is a CommonJS module for the
 //    node license test, so TS doesn't see its functions as global; at runtime in
 //    the browser they ARE global. Declared here so script files can use them.) ──
+/* Backup validation — utils.js. The one arbitrary document this app ingests,
+   so both import paths gate on it. Declared here because storage.js and
+   settings.js call it across file boundaries in a no-bundler app. */
+declare function validateBackup(data: any): { ok: boolean; reason?: string };
+declare function _isPlainObject(v: any): boolean;
+
 declare function escHtml(s: any): string;
 declare function fmtPKR(n: any): string;
 declare function fmtNum(n: any): string;
