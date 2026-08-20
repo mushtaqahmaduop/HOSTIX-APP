@@ -78,3 +78,7 @@
 body.has-titlebar #sidebar      { top: var(--titlebar-h); }
 body.has-titlebar #main         { margin-top: var(--titlebar-h); height: calc(100vh - var(--titlebar-h)); }
 body.has-titlebar #login-screen { top: var(--titlebar-h); }
+/* The toast stack was the one fixed-position element nobody offset, so every
+   toast rendered UNDERNEATH the titlebar and lost its first line — the owner
+   reported a camera-permission message cut in half. */
+body.has-titlebar #toast-container { top: calc(var(--titlebar-h) + 14px); }

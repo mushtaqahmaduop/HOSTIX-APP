@@ -1364,10 +1364,27 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       ...details.responseHeaders,
       // Single source of truth for CSP (the <meta> CSP in index.html was removed).
       // All libs/fonts are bundled locally, so no remote hosts are allowed.
-      // 'unsafe-inline' stays: the UI relies on inline event handlers throughout.
+      //
+      // 'unsafe-eval' IS GONE (audit M2). It was never needed: nothing in this
+      // app or in any bundled library calls eval() or the Function constructor
+      // — verified across chart.umd.js, chartjs-plugin-datalabels and
+      // xlsx.full.min.js, whose only "Function(" match is a method NAMED
+      // _tickFormatFunction. Removing it means a string that reaches a script
+      // context can no longer become code, which is the last step of most
+      // injection chains and a useful backstop now that the control plane
+      // supplies content.
+      //
+      // 'unsafe-inline' STAYS, and this is a deliberate, documented decision
+      // rather than an oversight. The UI is built from inline onclick/oninput
+      // handlers in generated HTML across every module; removing it means
+      // rewriting every screen's event wiring to addEventListener, which is a
+      // far larger change than the audit asks for and would risk exactly the
+      // kind of broad regression Rule 1 exists to prevent. The escaping sweep
+      // is what protects those handlers: no user-typed value reaches HTML
+      // unescaped, so none can close an attribute and open a new one.
       'Content-Security-Policy': [
         "default-src 'self';" +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval';" +
+        "script-src 'self' 'unsafe-inline';" +
         "style-src 'self' 'unsafe-inline';" +
         "font-src 'self' data:;" +
         "img-src 'self' data: blob:;" +
@@ -1377,12 +1394,36 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     }
   });
 });
+  /* THE CAMERA WAS BEING DENIED BY THIS APP, NOT BY WINDOWS.
+
+     Student photos are captured with navigator.mediaDevices.getUserMedia(),
+     which Electron gates behind the 'media' permission — and 'media' was not on
+     this list, so the handler called back false every time. The camera could
+     never work, on any machine, however Windows was configured. The error the
+     warden saw then sent them to Windows Settings to fix a Windows setting that
+     was not the problem.
+
+     'media' is allowed, but only for VIDEO. The app has no feature that records
+     audio, so a microphone request is still refused — a permission nothing
+     needs should not be granted just because it arrives on the same channel. */
   const ALLOWED_PERMS = ['clipboard-read', 'clipboard-sanitized-write'];
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(ALLOWED_PERMS.includes(permission));
-  });
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+
+  function _permitted(permission, details) {
+    if (permission === 'media') {
+      const want = (details && details.mediaTypes) || [];
+      // No mediaTypes at all is the permission CHECK, which Chromium makes
+      // without saying what for; allow it and let the request itself decide.
+      if (!want.length) return true;
+      return want.includes('video') && !want.includes('audio');
+    }
     return ALLOWED_PERMS.includes(permission);
+  }
+
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    callback(_permitted(permission, details));
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
+    return _permitted(permission, details);
   });
   initDatabase();
 

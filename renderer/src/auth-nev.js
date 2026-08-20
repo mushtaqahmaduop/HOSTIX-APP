@@ -516,6 +516,9 @@ async function checkLogin() {
         applyPermissionsToChrome();
         _startIdleTracking();
         _checkDefaultPasswords();
+        // Anything raised while the login screen was up has been held; the app
+        // is visible now, so it has somewhere to land.
+        if (typeof flushToastQueue === 'function') flushToastQueue();
         if (typeof showSplashScreen === 'function') showSplashScreen();
       }, 420);
  
@@ -715,6 +718,9 @@ var CUR_USER = null;
     setTimeout(updateRoleBadge,        300);
     setTimeout(applyPermissionsToChrome, 320);
     setTimeout(_checkDefaultPasswords, 2500);
+    // The login screen is hidden immediately on this path, but the boot timers
+    // can still fire before it is, so the queue has to be drained here too.
+    setTimeout(() => { if (typeof flushToastQueue === 'function') flushToastQueue(); }, 600);
     _startIdleTracking();
 
   } else {

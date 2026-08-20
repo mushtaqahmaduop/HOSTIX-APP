@@ -1016,7 +1016,7 @@ function openAddStudentCamera() {
         box.style.display='none';
         var msg;
         if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
-          msg='📷 Camera access denied. On Windows: Settings → Privacy & Security → Camera → enable this app. Then restart.';
+          msg='Camera blocked. Windows Settings → Privacy & Security → Camera → turn on "Let desktop apps access your camera" (bottom of the page), then restart.';
         else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
           msg='📷 No camera found. Please connect a camera and try again.';
         else if(e.name==='NotReadableError'||e.name==='TrackStartError')
@@ -1107,7 +1107,7 @@ function openEditStudentCamera() {
         box.style.display='none';
         var msg;
         if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError')
-          msg='📷 Camera access denied. On Windows: Settings → Privacy & Security → Camera → enable this app. Then restart.';
+          msg='Camera blocked. Windows Settings → Privacy & Security → Camera → turn on "Let desktop apps access your camera" (bottom of the page), then restart.';
         else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
           msg='📷 No camera found. Please connect a camera and try again.';
         else if(e.name==='NotReadableError'||e.name==='TrackStartError')

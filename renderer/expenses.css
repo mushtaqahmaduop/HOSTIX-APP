@@ -6,13 +6,21 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Stat strip ──────────────────────────────────────────────────────────── */
+/* minmax(0,1fr), NOT 1fr. A grid item will not shrink below its own content,
+   and .exp-stat__v is white-space:nowrap holding a full PKR figure — so on a
+   hostel with six-figure monthly expenses the four cards demanded more width
+   than the row had and the last one ("Categories") was pushed off the right
+   edge, half-drawn. The zero minimum lets the tracks actually be equal.
+   .stu-stats and .dash-tile-grid already use this; this row was the one that
+   did not. */
 .exp-stats {
-    display:grid; grid-template-columns:repeat(4, 1fr); gap:13px; margin-bottom:14px;
+    display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:13px; margin-bottom:14px;
 }
 .exp-stat {
     display:flex; align-items:center; gap:12px;
     padding:9px 15px; border-radius:14px;
     background:var(--card); border:1px solid var(--border);
+    min-width:0; overflow:hidden;   /* the flex children may shrink; nothing spills */
 }
 .exp-stat__ic {
     width:34px; height:34px; border-radius:11px; flex-shrink:0;
@@ -21,13 +29,16 @@
 }
 .exp-stat__ic svg { width:18px; height:18px; }
 .exp-stat__c { min-width:0; flex:1; }
-.exp-stat__l { font-size:11px; font-weight:600; color:var(--text3); white-space:nowrap; }
+.exp-stat__l { font-size:11px; font-weight:600; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .exp-stat__v {
     margin-top:2px; font-size:19px; font-weight:800; color:var(--text);
     font-variant-numeric:tabular-nums; white-space:nowrap;
 }
-.exp-stat__s { margin-top:1px; font-size:10.5px; color:var(--text3); white-space:nowrap; }
+.exp-stat__s { margin-top:1px; font-size:10.5px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* The sparkline is decoration and gives up its space first: below ~1320px it
+   goes entirely rather than squeezing the figure beside it. */
 .exp-spark   { flex-shrink:0; color:var(--dh); opacity:.85; align-self:center; }
+@media (max-width:1320px) { .exp-spark { display:none; } }
 
 @media (max-width:1180px) { .exp-stats { grid-template-columns:repeat(2, 1fr); } }
 

@@ -8,7 +8,7 @@
              renderActivityLog, calcBillSplit, saveBillSplit, saveCheckin,
              deleteCheckin, saveNotice, deleteNotice, saveFine, payFine,
              deleteFine, drawCharts, enforceDataRetention,
-             uploadLogo, loadSavedLogo
+             (the logo uploader was removed — the brand mark is fixed)
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -2068,42 +2068,17 @@ async function resetAllData() {
 }
 
 
-function uploadLogo(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img  = document.getElementById('sb-logo-img');
-    const svg  = document.getElementById('sb-logo-svg');
-    img.src = e.target.result;
-    img.style.display = 'block';
-    if (svg) svg.style.display = 'none';
-    // Also sync login screen logo
-    const loginImg   = document.getElementById('login-logo-img');
-    const loginEmoji = document.getElementById('login-logo-emoji');
-    if (loginImg)   { loginImg.src = e.target.result; loginImg.style.display = 'block'; }
-    if (loginEmoji) loginEmoji.style.display = 'none';
-    try { localStorage.setItem('hostel_logo_' + _ACTIVE_HOSTEL, e.target.result); } catch(err) {}
-    toast('Logo updated — login screen updated too', 'success');
-  };
-  reader.readAsDataURL(file);
-  input.value = '';
-}
-function loadSavedLogo() {
-  try {
-    const saved = localStorage.getItem('hostel_logo_' + _ACTIVE_HOSTEL);
-    if (saved) {
-      const img = document.getElementById('sb-logo-img');
-      const svg = document.getElementById('sb-logo-svg');
-      if (img) { img.src = saved; img.style.display = 'block'; if(svg) svg.style.display='none'; }
-      // Also sync login screen logo
-      const loginImg   = document.getElementById('login-logo-img');
-      const loginEmoji = document.getElementById('login-logo-emoji');
-      if (loginImg)   { loginImg.src = saved; loginImg.style.display = 'block'; }
-      if (loginEmoji) loginEmoji.style.display = 'none';
-    }
-  } catch(e) {}
-}
+/* uploadLogo() and loadSavedLogo() are GONE.
+
+   They let the customer replace the Hostyllo mark on their own sidebar and
+   login screen with any image file, persisted in localStorage. The mark is the
+   product's identity and is now hardcoded in index.html; the hostel's own
+   identity is the name printed next to it, which Settings still owns.
+
+   Nothing calls these any more — the upload input and its click handler were
+   removed with them, so leaving the functions would leave dead code that reads
+   as a feature. Existing 'hostel_logo_*' localStorage entries are simply never
+   read again. */
 
 // ════════════════════════════════════════════════════════════════════════════
 // SIDEBAR CALENDAR (professional compact inline calendar)

@@ -320,6 +320,10 @@ function printDocStyles() {
     .green,.gr{color:${b.green};font-weight:700}
     .red,.re{color:${b.red};font-weight:700}
     .gold,.go{color:#5b21b6;font-weight:700}
+    /* Partial: amber, matching payStatusHue()'s dh-amber on screen. It used
+       to borrow .gold, which is the room-number colour in these documents —
+       so a part-paid row and a room number read as the same kind of thing. */
+    .part{color:#b45309;font-weight:700}
     .footer,.ft{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:${b.faint}}
     @media print{body{padding:16px}}
   </style>`;

@@ -89,7 +89,7 @@
           ]
         }
       ],
-      "icon": "assets/logo.ico",
+      "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "verifyUpdateCodeSignature": false,
       "signAndEditExecutable": false
@@ -102,9 +102,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "HOSTIX",
-      "installerIcon": "assets/logo.ico",
-      "uninstallerIcon": "assets/logo.ico",
-      "installerHeader": "assets/logo.ico",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false,
       "displayLanguageSelector": false,
       "include": null,

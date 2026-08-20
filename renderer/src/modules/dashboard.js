@@ -1987,9 +1987,26 @@ function drawTrendChart() {
           formatter:function(v,c){
             var i=c.dataIndex; if(!real[i])return'';
             var pv=null; for(var j=i-1;j>=0;j--){if(real[j]){pv=plotRev[j];break;}}
-            if(pv===null)return'PKR '+v.toLocaleString();
-            var p=(((v-pv)/pv)*100).toFixed(1);
-            return'PKR '+v.toLocaleString()+'\n'+(parseFloat(p)>=0?'▲':'▼')+' '+Math.abs(p)+'%';
+            /* THE MOVEMENT, NOT THE MONEY.
+            
+               This printed the figure and the percentage on two stacked lines, so the
+               badge repeated an amount the Y axis and the Total Revenue card both
+               already state -- three places for one number -- while the thing a trend
+               chart exists to show, the direction and size of the move, was the
+               smaller half of it. The exact figure for any month is one hover away in
+               the badge, which is where a precise number belongs.
+            
+               No baseline means no percentage: the first month with data has nothing
+               to have moved FROM, and inventing 0% there would draw a flat trend for
+               a hostel that has simply just opened. */
+            if(pv===null)return'';
+            /* A previous month of ZERO has no percentage either: (v-0)/0 is Infinity,
+               and this rendered the literal "▲ Infinity%" on the first month a
+               hostel collected anything. Say it rose, without pretending to say by
+               how much. */
+            if(!pv) return v>0?'▲ new':'';
+            var p=(((v-pv)/pv)*100);
+            return (p>=0?'▲ ':'▼ ')+Math.abs(p).toFixed(1)+'%';
           }
         }
       },

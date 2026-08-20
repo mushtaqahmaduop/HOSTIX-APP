@@ -204,6 +204,13 @@ function renderExpenses() {
     <select class="exp-select${expFilter.cat!=='All'?' is-set':''}" onchange="expFilter.cat=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by category">
       <option value="All">All Categories</option>${catOpts}
     </select>
+    ${/* Adding a category used to mean leaving the page, finding it in Settings,
+         adding it, and coming back — in the middle of entering an expense that
+         needed it. */''}
+    <button class="exp-catadd" onclick="showAddExpenseCategoryModal()" title="Add a new expense category">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Category
+    </button>
     <div class="exp-month">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>
       <select onchange="expSetMonth(this.value)" title="Filter by month">
@@ -310,6 +317,78 @@ function expPager(pg) {
   </div>`;
 }
 // Where an expense write should re-render to. Expenses are now editable from
+/* ── ADD A CATEGORY, FROM WHERE IT IS NEEDED ─────────────────────────────────
+   Settings already had addExpenseCategory(), but it reads a field that only
+   exists on the Settings page and always re-renders Settings, so it cannot be
+   called from here. This one is page-agnostic: it re-renders whatever the
+   warden was looking at, so adding a category from the Expenses page leaves
+   them on the Expenses page.
+
+   It also validates harder than the Settings version, which compared with a
+   case-sensitive includes() — so "gas" and "Gas" could both exist, and an
+   expense filed under one was invisible when filtering by the other. */
+function showAddExpenseCategoryModal() {
+  if (typeof requirePerm === 'function' && !requirePerm('expenses')) return;
+  showModal('modal-sm', 'Add Expense Category', `
+    <div class="field">
+      <label for="new-exp-cat">Category name</label>
+      <input class="form-control" id="new-exp-cat" maxlength="40" autocomplete="off"
+             placeholder="e.g. Generator Fuel"
+             oninput="capFirstChar(this);_expCatValidate()"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddExpenseCategory();}">
+      <div id="new-exp-cat-err" class="field-err" style="display:none"></div>
+    </div>
+    <p style="font-size:12px;color:var(--text3);line-height:1.6;margin:10px 0 0">
+      It becomes available immediately on the Add Expense form and in the filter
+      above. Categories can be removed in Settings, but only while nothing is
+      filed under them.
+    </p>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="new-exp-cat-save" onclick="submitAddExpenseCategory()">Add Category</button>`);
+  setTimeout(() => { const i = document.getElementById('new-exp-cat'); if (i) i.focus(); }, 60);
+}
+
+/* Inline validation: the warden is told WHILE typing, not after pressing Save. */
+function _expCatValidate() {
+  const inp = document.getElementById('new-exp-cat');
+  const err = document.getElementById('new-exp-cat-err');
+  const btn = document.getElementById('new-exp-cat-save');
+  if (!inp || !err) return true;
+  const v = inp.value.trim();
+  const list = DB.settings.expenseCategories || [];
+  let msg = '';
+  if (!v)                                                   msg = '';
+  else if (v.length < 2)                                    msg = 'Too short — use at least 2 characters.';
+  else if (list.some(c => String(c).toLowerCase() === v.toLowerCase()))
+                                                            msg = '"' + v + '" already exists.';
+  else if (!/[A-Za-z؀-ۿ]/.test(v))                msg = 'A category needs at least one letter.';
+  const ok = !msg && v.length >= 2;
+  err.textContent = msg;
+  err.style.display = msg ? 'block' : 'none';
+  inp.classList.toggle('is-invalid', !!msg);
+  if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '' : '.55'; btn.style.cursor = ok ? '' : 'not-allowed'; }
+  return ok;
+}
+
+async function submitAddExpenseCategory() {
+  if (!_expCatValidate()) return;
+  const inp = document.getElementById('new-exp-cat');
+  const v = inp ? inp.value.trim() : '';
+  if (!v) return;
+  if (!DB.settings.expenseCategories) DB.settings.expenseCategories = [];
+  // Before 'Other', so the catch-all stays last — the same placement
+  // _initDBFields() uses for the Fund Transfer category.
+  const oi = DB.settings.expenseCategories.findIndex(c => /^other$/i.test(String(c)));
+  if (oi >= 0) DB.settings.expenseCategories.splice(oi, 0, v);
+  else         DB.settings.expenseCategories.push(v);
+  const okSave = await saveDB();
+  if (okSave === false) { toast('Could not save the category — nothing was changed', 'error'); return; }
+  logActivity('Expense Category Added', v, 'Settings');
+  closeModal();
+  renderPage(typeof currentPage !== 'undefined' && currentPage ? currentPage : 'expenses');
+  toast('Category "' + v + '" added', 'success');
+}
+
 // the Reports → Expenses by Category register as well as this page, and
 // hard-coding 'expenses' navigated the owner off the report they were reading
 // the moment they corrected a figure in it.

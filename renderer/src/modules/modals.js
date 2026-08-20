@@ -646,17 +646,36 @@ function _showCameraPermBanner() {
     'color:var(--danger-fg)','font-size:12.5px','font-weight:500',
     'padding:10px 14px 10px 16px',
     'display:flex','align-items:flex-start','gap:10px',
-    'max-width:340px','line-height:1.5',
+    'max-width:420px','line-height:1.55',
     'box-shadow:-4px 4px 20px rgba(0,0,0,0.5)'
   ].join(';');
+/* WHY THIS WORDING CHANGED.
+   The old text said "enable this app" in Windows Settings -> Privacy &
+   Security -> Camera. Windows lists individual apps there ONLY for Store
+   (UWP) apps. Hostyllo is a packaged desktop app, so it never appears in
+   that list, and the owner went looking for an entry that cannot exist.
+   Desktop apps are governed by the single "Let desktop apps access your
+   camera" switch at the BOTTOM of the same page. That is the one to name. */
   b.innerHTML =
     '<span style="display:inline-flex;flex-shrink:0;margin-top:1px">'+MODAL_ICONS.cameraOff+'</span>' +
     '<span style="flex:1"><strong style="color:var(--danger-fg);display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
-    'Go to <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
+    'Open <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong>, turn on <strong style="color:var(--text)">Camera access</strong>, then scroll to the bottom and turn on <strong style="color:var(--text)">Let desktop apps access your camera</strong>. Restart Hostyllo afterwards. (Hostyllo will not appear in the app list above — that list is only for Microsoft Store apps.)</span>' +
     '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
       'style="background:none;border:none;color:var(--danger-fg);font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
       'title="Dismiss">✕</button>';
   document.body.appendChild(b);
+}
+
+/* Toasts raised while the login screen is up wait here. flushToastQueue() is
+   called once the app proper is visible — from BOTH login paths, the typed one
+   and the restored-session one. */
+const _toastQueue = [];
+function flushToastQueue() {
+  if (!_toastQueue.length) return;
+  const pending = _toastQueue.splice(0, _toastQueue.length);
+  // Staggered, so three queued boot warnings do not arrive as one stack the
+  // warden dismisses without reading.
+  pending.forEach((args, i) => setTimeout(() => toast.apply(null, args), i * 700));
 }
 
 function toast(msg, type='info', title='') {
@@ -670,8 +689,31 @@ function toast(msg, type='info', title='') {
     warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
   };
   const defaultTitles = { success: 'Success', error: 'Error', info: 'Info', warning: 'Heads up' };
-  // A warning is read, not glanced at, so it stays up as long as an error.
-  const delay = (type === 'error' || type === 'warning') ? 4500 : 3000;
+
+  /* DWELL TIME — the owner reported these hanging around far too long.
+
+     A success toast is a GLANCE: the warden already knows what they did, the
+     toast only confirms it landed, and 3s of it sitting over the top-right KPI
+     card is a nuisance rather than information. 1.5s is enough to register.
+
+     An error or a warning is READ, so it keeps a longer dwell — but 4.5s was
+     tuned for nothing in particular and is cut too. Anything that genuinely
+     needs more time than this should not be a toast at all; it should be a
+     modal the warden dismisses. */
+  const delay = (type === 'error' || type === 'warning') ? 2600 : 1500;
+
+  /* NOT OVER THE LOGIN SCREEN.
+
+     Two boot checks fire on timers — the default-password warning at 2s and the
+     backup reminder at 4s — and on a cold start those land while the warden is
+     still typing their password, on a screen with no context for them. Holding
+     them here rather than at those two call sites means any future boot toast
+     is covered by the same rule instead of having to remember this. */
+  const _login = document.getElementById('login-screen');
+  if (_login && _login.style.display !== 'none' && getComputedStyle(_login).display !== 'none') {
+    _toastQueue.push([msg, type, title]);
+    return;
+  }
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.style.cssText = 'position:relative;overflow:hidden;';

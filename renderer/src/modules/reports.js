@@ -1080,7 +1080,7 @@ function downloadDetailPDF(type) {
   let body = `<div class="hdr"><div><div class="ht">${escHtml(DB.settings.hostelName)}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
     body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'gr':'re'}">${p.status}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
+    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
   } else if(type==='pending'){
     // Period-scoped like the table it is printed from. It read the whole
     // payment table, so a monthly PDF carried every unpaid rent ever recorded.
@@ -1209,6 +1209,7 @@ function printReport() {
     .green{color:#16a34a;font-weight:700}
     .red{color:#dc2626;font-weight:700}
     .gold{color:#5b21b6;font-weight:700}
+    .part{color:#b45309;font-weight:700}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
     @media print{body{padding:16px}}
   </style></head><body>
@@ -1227,8 +1228,12 @@ function printReport() {
   </div>
   <div class="section">
     <h3>💳 Payment Transactions</h3>
-    <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
+    ${''/* Collected AND Still Owed, because a table that prints only what was
+         taken cannot be reconciled against the Pending figure in the KPI row
+         directly above it -- the owner was reading a payments report with no
+         payable in it. */}
+    <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Collected</th><th>Still Owed</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
+    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${Number(p.unpaid||0)>0?'red':''}">${Number(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
     </tbody></table>
   </div>
   <div class="section">

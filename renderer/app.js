@@ -100,7 +100,7 @@ async function processAutoCancellations() {
 }
 // ── Pre-boot: theme/logo/sidebar don't need DB — run immediately ─────────────
 applySavedSidebar();
-loadSavedLogo();
+// loadSavedLogo() removed with the logo uploader — the mark is fixed in the markup.
 updateSidebar(); // shows zeros/defaults until boot() completes
 
 // #main must never scroll. `overflow:hidden` stops the user scrolling it but

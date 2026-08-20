@@ -288,13 +288,12 @@
       }
     }
     // ── Logo ───────────────────────────────────────────────────────────────
-    var logo = localStorage.getItem('hostel_logo_' + activeHostel);
-    if (logo) {
-      var img = document.getElementById('login-logo-img');
-      var emoji = document.getElementById('login-logo-emoji');
-      if (img)   { img.src = logo; img.style.display = 'block'; }
-      if (emoji) emoji.style.display = 'none';
-    }
+    // Deliberately NOT read from localStorage any more. A customer-uploaded
+    // image used to replace the product mark on this screen; the brand is
+    // fixed now and the markup carries it, so there is nothing to restore.
+    // Old 'hostel_logo_*' keys are left on disk rather than deleted — they are
+    // inert, and removing a customer's file from their machine is not this
+    // change's business.
     // Warden names and avatars used to be pre-painted here to stop the login
     // screen flashing placeholder names before _boot() resolved. The login
     // screen no longer names anyone — it is a username field — so there is
@@ -317,14 +316,16 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18-6-6 6-6"/></svg>
     </button>
     <div class="sb-logo-mark">
-      <div class="sb-logo-icon" id="sb-logo-icon" onclick="document.getElementById('logo-upload').click()" title="Click to upload logo" style="cursor:pointer">
-        <img id="sb-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:11px;position:absolute;top:0;left:0">
-        <span id="sb-logo-emoji" style="display:none"></span>
-        <svg id="sb-logo-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
-          <text x="12" y="17" text-anchor="middle" fill="#ffffff" font-family="Outfit, sans-serif" font-size="15" font-weight="800" letter-spacing="0.5">H</text>
-        </svg>
+      <!-- THE PRODUCT MARK, FIXED. It was an upload target: clicking it opened a
+           file picker and whatever the customer chose replaced the Hostyllo
+           logo, on their sidebar AND their login screen, stored in
+           localStorage. This is the product's identity, not a per-hostel
+           setting — the hostel's own name is the line of text beside it. The
+           white variant is used because the rail is navy in both themes. -->
+      <div class="sb-logo-icon" id="sb-logo-icon">
+        <img id="sb-logo-img" src="img/brand/mark-light.png" alt="Hostyllo"
+             style="width:22px;height:22px;object-fit:contain;position:relative;z-index:1">
       </div>
-      <input type="file" id="logo-upload" accept="image/*" style="display:none" onchange="uploadLogo(this)">
       <div class="sb-logo-text">
         <div class="name">HOSTYLLO</div>
         <div class="sub" id="sb-hostel-name">Hostel Management</div>

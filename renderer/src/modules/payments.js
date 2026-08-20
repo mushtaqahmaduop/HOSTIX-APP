@@ -255,7 +255,9 @@ function payFiltered() {
     if (payFilter.unpaidOnly && !(Number(p.unpaid || 0) > 0)) return false;
 
     if (payFilter.status !== 'All') {
-      if (payFilter.status === 'Overdue') { if (!payIsOverdue(p)) return false; }
+      // 'Overdue' is no longer offered, but a session that had it selected — or
+      // a saved filter — would otherwise filter against a status nothing sets.
+      if (payFilter.status === 'Overdue') { payFilter.status = 'Pending'; }
       else if (payStatusOf(p) !== payFilter.status) return false;
     }
     if (payFilter.search) {
@@ -306,7 +308,6 @@ function renderPayments() {
   const total=pays.filter(p=>!isArrear(p)).reduce((s,p)=>s+Number(p.amount),0);
   const nPaid    = pays.filter(p=>payStatusOf(p)==='Paid').length;
   const nPending = pays.filter(p=>payStatusOf(p)!=='Paid').length;
-  const nOverdue = pays.filter(p=>payIsOverdue(p)).length;
   const outstanding = pays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):0),0);
   const share = n => pays.length ? Math.round(n/pays.length*100) : 0;
 
@@ -374,17 +375,15 @@ function renderPayments() {
       </div>
     </div>
 
-    <div class="pay-stat pay-stat--click dh-red" onclick="paySetStatus('Overdue')" title="Show only records past their due date">
-      <div class="pay-stat__top">
-        <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
-        <div class="pay-stat__label">Overdue</div>
-      </div>
-      <div class="pay-stat__val">${nOverdue}</div>
-      <div class="pay-stat__foot">
-        <span class="pay-stat__sub">Past due date</span>
-        <span class="pay-stat__delta">${share(nOverdue)}%</span>
-      </div>
-    </div>
+    ${''/* OVERDUE IS GONE, ON THE OWNER'S CALL.
+
+           It was a fifth card and a fifth filter derived from dueDate, and it
+           overlapped Pending completely: every overdue record is also pending,
+           so the two cards double-counted the same money and the row no longer
+           summed to Total. A warden chasing rent wants one list of who has not
+           paid; whether a date has passed is a property of a row, not a
+           separate category of debt. The per-row "Overdue" mark in the table
+           stays, because that IS row-level information. */}
 
     <div class="pay-stat dh-violet">
       <div class="pay-stat__top">
@@ -423,7 +422,7 @@ function renderPayments() {
       </select>
 
       <select class="pay-select${payFilter.status!=='All'?' is-set':''}" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')" title="Filter by status">
-        ${['All','Paid','Partial','Pending','Overdue'].map(s=>`<option value="${s}" ${payFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
+        ${['All','Paid','Partial','Pending'].map(s=>`<option value="${s}" ${payFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
       </select>
 
       <div style="position:relative">
