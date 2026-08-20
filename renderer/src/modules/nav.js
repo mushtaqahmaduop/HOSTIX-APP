@@ -205,6 +205,22 @@ function renderPage(p, resetScroll=false) {
       // Page-level permission gate. Hiding the sidebar item is not enough on
       // its own — the command palette and direct navigate() calls reach a page
       // without ever touching the rail.
+      // Feature gate first: what the HOSTEL has bought, from the signed
+      // entitlement. Hiding the rail item is not enough on its own — the
+      // command palette and direct navigate() calls reach a page without ever
+      // touching the rail, which is the same reason the permission check below
+      // exists. Fails open: no entitlement means every feature is available.
+      const _feature = (typeof featureForPage === 'function') ? featureForPage(basePage) : null;
+      if (_feature && typeof hasFeature === 'function' && !hasFeature(_feature)) {
+        const _label = (typeof FEATURE_LABELS !== 'undefined' && FEATURE_LABELS[_feature])
+          || _feature;
+        el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'
+          + '<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px">Not included</div>'
+          + '<div style="font-size:13px">' + escHtml(_label) + ' is not part of this hostel' + String.fromCharCode(8217) + 's plan.<br>Contact support to add it.</div>'
+          + '</div>';
+        return;
+      }
+
       const _needs = { settings:'settings', reports:'reports', archive:'reports' }[basePage];
       if (_needs && typeof canDo === 'function' && !canDo(_needs)) {
         el.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--text3)">'

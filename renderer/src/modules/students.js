@@ -2033,6 +2033,7 @@ function downloadAllStudentsPDF() {
 
 function doGenerateStudentsPDF(monthKey) {
   var appName  = DB.settings.appName  || 'HOSTYLLO';
+  if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
   var hostel   = DB.settings.hostelName || 'DAMAM Boys Hostel';
   var location = DB.settings.location  || '';
   var now      = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});

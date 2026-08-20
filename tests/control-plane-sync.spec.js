@@ -201,6 +201,50 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
     await expect(win.locator('#licence-banner')).toBeVisible();
     expect(await win.locator('#licence-banner').innerText()).toMatch(/suspend/i);
 
+    // ── 5b. Feature flags reach the app and remove the page ────────────────
+    await setStatus('active', 'restore before feature test');
+    await win.evaluate(() => window.online.checkNow());
+    await waitForState('ACTIVE');
+
+    // Reports is on by default — the catalogue defaults are generous so that
+    // existing customers lose nothing.
+    expect(await win.evaluate(() => hasFeature('reports'))).toBe(true);
+    await win.evaluate(() => navigate('reports'));
+    await win.waitForTimeout(500);
+    expect(await win.evaluate(() => document.getElementById('content').innerText))
+      .not.toMatch(/Not included/i);
+
+    const off = await admin.call('/licenses/' + licenceId + '/features',
+      { method: 'PUT', body: { features: { reports: false } } });
+    expect(off.status, JSON.stringify(off.json)).toBe(200);
+
+    await win.evaluate(() => window.online.checkNow());
+    await expect.poll(async () => win.evaluate(() => hasFeature('reports')),
+      { timeout: 60000 }).toBe(false);
+
+    // The rail item goes.
+    expect(await win.evaluate(() =>
+      document.querySelector('.nav-item[data-page="reports"]').style.display)).toBe('none');
+
+    // And the page itself refuses — hiding the rail is not enough, because the
+    // command palette and direct navigate() calls never touch it.
+    await win.evaluate(() => navigate('reports'));
+    await win.waitForTimeout(500);
+    expect(await win.evaluate(() => document.getElementById('content').innerText))
+      .toMatch(/Not included/i);
+
+    // Turning it back on restores the page.
+    const on = await admin.call('/licenses/' + licenceId + '/features',
+      { method: 'PUT', body: { features: {} } });
+    expect(on.status).toBe(200);
+    await win.evaluate(() => window.online.checkNow());
+    await expect.poll(async () => win.evaluate(() => hasFeature('reports')),
+      { timeout: 60000 }).toBe(true);
+
+    await setStatus('suspended', 're-suspend for the restore step');
+    await win.evaluate(() => window.online.checkNow());
+    await waitForState('SUSPENDED');
+
     // ── 6. Lifting it restores full use ────────────────────────────────────
     await setStatus('active', 'automated test — restore');
     await win.evaluate(() => window.online.checkNow());

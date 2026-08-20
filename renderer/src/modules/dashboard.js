@@ -778,6 +778,7 @@ function printSeatAvailability() {
       outgoing.forEach(c => {
         const vacDate = c.vacateDate ? new Date(c.vacateDate+'T00:00:00').toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : 'TBD';
         body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
+  if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
       });
       body += `</div>`;
 

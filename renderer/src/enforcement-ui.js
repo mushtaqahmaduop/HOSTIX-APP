@@ -44,6 +44,99 @@ function requireWritable(what) {
   return false;
 }
 
+// ── Feature flags ───────────────────────────────────────────────────────────
+//
+// A second axis from permissions, and the two must not be confused.
+//
+//   canDo(perm)      what THIS WARDEN may do. Per user. Fails CLOSED — an
+//                    unknown permission denies.
+//   hasFeature(key)  what THIS HOSTEL has bought. Per licence, delivered in
+//                    the signed entitlement. Fails OPEN.
+//
+// Failing open is the important half. Every machine in the field today has no
+// entitlement at all, so `features` is null — and a null that disabled things
+// would strip Reports, Expenses and Backup from ~50 hostels the moment they
+// installed an update. A feature is off only when the control plane has
+// explicitly said so for this customer.
+
+/** Which flag gates which nav item and page. Empty means always available. */
+var FEATURE_PAGES = {
+  reports:  ['reports'],
+  archive:  ['archive'],
+  backup:   ['backup'],
+  expenses: ['expenses']
+  // printDocs and multiUser gate actions rather than pages — see below.
+};
+
+/** Human labels, for the message a warden actually reads. */
+var FEATURE_LABELS = {
+  reports:   'Reports & analytics',
+  archive:   'Annual archive',
+  backup:    'Backup & restore',
+  printDocs: 'Printable documents',
+  multiUser: 'Multiple staff logins',
+  expenses:  'Expenses & fund transfers'
+};
+
+/**
+ * Is this feature available to this hostel?
+ *
+ * True unless the entitlement explicitly says false. No entitlement, no
+ * connection, an older build of the control plane — all mean yes.
+ */
+function hasFeature(key) {
+  if (!_enforcement || !_enforcement.features) return true;
+  return _enforcement.features[key] !== false;
+}
+
+/**
+ * Gate an action at its entry point, the way requirePerm does:
+ *   if (!requireFeature('printDocs')) return;
+ */
+function requireFeature(key) {
+  if (hasFeature(key)) return true;
+  var label = FEATURE_LABELS[key] || key;
+  if (typeof toast === 'function') {
+    toast(label + ' is not included in this hostel’s plan. Contact support to add it.',
+      'error', 'Not included');
+  }
+  return false;
+}
+
+/**
+ * Hide the rail items for features this hostel does not have.
+ *
+ * Runs alongside applyPermissionsToChrome() rather than inside it: permissions
+ * are known at login, features arrive whenever the control plane answers, and
+ * a page hidden by one must not be un-hidden by the other. Each only ever
+ * hides — neither reveals something the other took away.
+ */
+function applyFeaturesToChrome() {
+  for (var key in FEATURE_PAGES) {
+    if (!Object.prototype.hasOwnProperty.call(FEATURE_PAGES, key)) continue;
+    if (hasFeature(key)) continue;
+    var pages = FEATURE_PAGES[key];
+    for (var i = 0; i < pages.length; i++) {
+      document.querySelectorAll('.nav-item[data-page="' + pages[i] + '"]')
+        .forEach(function (el) { el.style.display = 'none'; });
+    }
+  }
+  // Staff management is a feature as well as a permission.
+  if (!hasFeature('multiUser')) {
+    var manage = document.getElementById('user-menu-manage');
+    if (manage) manage.style.display = 'none';
+  }
+}
+
+/** The flag that gates a page, or null. Used by nav.js's page-level check. */
+function featureForPage(page) {
+  for (var key in FEATURE_PAGES) {
+    if (!Object.prototype.hasOwnProperty.call(FEATURE_PAGES, key)) continue;
+    if (FEATURE_PAGES[key].indexOf(page) !== -1) return key;
+  }
+  return null;
+}
+
 // ── Banner ──────────────────────────────────────────────────────────────────
 
 function _bannerEl() {
@@ -128,6 +221,15 @@ function _apply(decision) {
   _enforcement = decision || null;
   try { _renderBanner(_enforcement); } catch (e) { console.error('[licence] banner:', e); }
   try { _applyReadOnly(isReadOnly()); } catch (e) { console.error('[licence] readonly:', e); }
+  try { applyFeaturesToChrome(); } catch (e) { console.error('[licence] features:', e); }
+  // A page the customer is standing on may have just been switched off. Send
+  // them somewhere that still exists rather than leaving them on a screen that
+  // no longer renders.
+  try {
+    var current = (typeof currentPage !== 'undefined') ? currentPage : null;
+    var flag = current ? featureForPage(current) : null;
+    if (flag && !hasFeature(flag) && typeof navigate === 'function') navigate('dashboard');
+  } catch (_) {}
 }
 
 (function initEnforcementUI() {

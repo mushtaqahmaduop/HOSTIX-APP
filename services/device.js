@@ -246,14 +246,22 @@ class DeviceService {
         return { ok: false, errorCode: this._lastError };
       }
 
-      const before = this.entitlement ? this.entitlement.getStatus().state : null;
+      // Compare everything that changes what the app DOES, not just the state.
+      // Comparing state alone missed a feature flag being switched off and a
+      // renewal date moving — both leave the state ACTIVE, so nothing was
+      // pushed to the windows and the change sat invisible until the hourly
+      // poll. A licence change the customer cannot see is a support call.
+      const signature = (st) => st && JSON.stringify({
+        state: st.state, features: st.features, expiresAt: st.expiresAt, policy: st.policy
+      });
+      const before = this.entitlement ? signature(this.entitlement.getStatus()) : null;
       const result = await this.entitlement.refresh(token);
       this._lastSyncAt = Date.now();
 
       if (result.ok) {
         this._lastError = null;
-        const after = result.status.state;
-        log.info('entitlement_synced', { state: after, changed: before !== after });
+        const after = signature(result.status);
+        log.info('entitlement_synced', { state: result.status.state, changed: before !== after });
         // Tell the app immediately rather than at the next poll. A suspension
         // that takes an hour to bite is a suspension the customer notices at a
         // random moment with no explanation on screen.

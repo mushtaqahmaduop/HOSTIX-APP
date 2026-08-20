@@ -387,6 +387,18 @@ class EntitlementService {
       issuedAt:     c ? c.issuedAt  : null,
       notAfter:     c ? c.notAfter  : null,
       policy:       c ? c.policy    : null,
+
+      // What this hostel has bought. Carried all the way from the control
+      // plane's catalogue, through the signed claims, to the screens that gate
+      // on it — and omitted here at first, which meant the flags arrived and
+      // stopped: the app received them in the entitlement and nothing could
+      // read them, so every feature stayed on no matter what the portal said.
+      //
+      // `null` when there are no claims, and that is the honest answer: no
+      // entitlement means no opinion, and the app treats no opinion as "yes"
+      // rather than stripping features from the machines in the field.
+      features:     c ? c.features  : null,
+
       storedAt:     this._storedAt,
       serverTimeSeen: this._serverTimeSeen,
       clockSuspect: this.clockSuspect()

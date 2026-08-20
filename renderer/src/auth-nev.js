@@ -614,6 +614,14 @@ function applyPermissionsToChrome() {
   show('user-menu-manage',   canDo('users'));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.
+
+  // Features LAST, and this order is load-bearing. Every showNav() above sets
+  // display back to '' for anything the user is permitted, which would
+  // un-hide a rail item the hostel's licence does not include. Permissions
+  // decide what this warden may reach; features decide what exists at all.
+  if (typeof applyFeaturesToChrome === 'function') {
+    try { applyFeaturesToChrome(); } catch (e) { console.error('[features]', e); }
+  }
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
