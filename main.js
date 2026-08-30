@@ -209,6 +209,7 @@ try {
 // Result is cached to avoid repeated slow calls.
 // ─────────────────────────────────────────────────────────────────────────────
 let _cachedMachineId = null;
+let _lastMachineIdReason = null;   // clean | substituted | degraded | changed | error
 
 /* Local calendar date. toISOString() is UTC, and at UTC+5 that names yesterday
    from 7pm onward — a backup taken after the evening rent round was filed under
@@ -219,38 +220,17 @@ function _ymdLocal(d) {
   return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
 }
 
-function _getWinMachineGuid() {
-  if (os.platform() !== 'win32') return '';
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync(
-      'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
-      { encoding: 'utf8', timeout: 2000, windowsHide: true }
-    );
-    const m = out.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/);
-    return m ? m[1].trim() : '';
-  } catch (e) { return ''; }
-}
+/* The three hardware probes and the fingerprint they feed now live in
+   services/machine-id.js — pure Node, so tests/services.test.js can drive them
+   directly. They used to be three bare `wmic` calls that returned '' on a 2s
+   timeout, and '' is not an error to a hash function: it is a different fact,
+   a different machine id, and a paying customer sent to the activation screen
+   holding a valid licence. See the header of that file for the whole story.
 
-function _getDriveSerial() {
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync('wmic logicaldisk where "DeviceID=\'C:\'" get VolumeSerialNumber /value', { encoding: 'utf8', timeout: 2000, windowsHide: true });
-    const m = out.match(/VolumeSerialNumber=(\w+)/);
-    return m ? m[1].trim() : '';
-  } catch (e) { return ''; }
-}
-
-// [S5-FIX] BIOS serial — harder to spoof than registry GUID or drive serial
-function _getBiosSerial() {
-  if (os.platform() !== 'win32') return '';
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync('wmic bios get SerialNumber /value', { encoding: 'utf8', timeout: 2000, windowsHide: true });
-    const m = out.match(/SerialNumber=([^\r\n]+)/);
-    return m ? m[1].trim() : '';
-  } catch (e) { return ''; }
-}
+   getMachineId() keeps its name, its signature and its per-process cache, and
+   on a healthy machine it hashes byte-for-byte the same string it always did,
+   so every licence already in the field keeps opening. */
+const _machineId = require('./services/machine-id');
 
 async function _writeLastRun() {
   try {
@@ -259,25 +239,38 @@ async function _writeLastRun() {
     console.error('[HOSTYLLO] Failed to write last run date:', e.message);
   }
 }
-
 function getMachineId() {
-  if (_cachedMachineId) return _cachedMachineId; // [FIX-05] use cached value
+  if (_cachedMachineId) return _cachedMachineId;   // [FIX-05] use cached value
   try {
-    const raw = [
-      // hostname intentionally excluded — see FIX-04
-      os.platform(),
-      os.arch(),
-      (os.cpus()[0] && os.cpus()[0].model) || 'cpu',
-      _getWinMachineGuid(),
-      _getDriveSerial(),
-      _getBiosSerial()  // [S5-FIX] BIOS serial adds a 6th hardware factor
-    ].join('|');
-    _cachedMachineId = crypto.createHash('sha256').update(raw).digest('hex');
+    const r = _machineId.computeMachineId({
+      stateDir: app.getPath('userData'),
+      logger: console,
+    });
+    _cachedMachineId = r.id;
+    _lastMachineIdReason = r.reason;
   } catch (e) {
     _cachedMachineId = 'UNKNOWN_MACHINE_ID_FALLBACK_' + '0'.repeat(36);
+    _lastMachineIdReason = 'error';
   }
   return _cachedMachineId;
 }
+
+/** Why the last fingerprint came out the way it did — surfaced in License Info
+    so a support call can tell "wrong PC" apart from "the probes failed". */
+function getMachineIdReason() { return _lastMachineIdReason; }
+
+/** The same, in words a warden reading it down a phone line can repeat. */
+function _machineIdReasonLabel(reason) {
+  switch (reason) {
+    case 'clean':       return 'All checks read normally';
+    case 'substituted': return 'One reading failed, recovered from this PC\'s record';
+    case 'degraded':    return 'READINGS FAILED — the ID may not match your licence';
+    case 'changed':     return 'Hardware differs from the last recorded reading';
+    case 'error':       return 'Could not be read at all';
+    default:            return '—';
+  }
+}
+
 
 // ── AES-256-CBC Encrypt / Decrypt with HMAC Tamper Detection ─────────────────
 function encryptLicense(data, machineId) {
@@ -661,7 +654,12 @@ function doLicenseInfo() {
       `Reason   : ${result.valid ? 'All checks passed' : result.reason}`,
       `Expiry   : ${result.expiry ? new Date(result.expiry).toLocaleDateString('en-PK') : '—'}`,
       `Machine  : ${machineId.slice(0, 16)}…`,
-      `Activated: ${result.activatedAt ? new Date(result.activatedAt).toLocaleDateString('en-PK') : '—'}`
+      `Activated: ${result.activatedAt ? new Date(result.activatedAt).toLocaleDateString('en-PK') : '—'}`,
+      // Without this, "my licence suddenly stopped working" and "you are on a
+      // different PC" look identical from a support call. 'degraded' means the
+      // hardware probes came back short and the id is NOT the one the licence
+      // was sealed against — which is a fixable problem, not a wrong machine.
+      `Hardware : ${_machineIdReasonLabel(getMachineIdReason())}`
     ].join('\n')
   });
 }

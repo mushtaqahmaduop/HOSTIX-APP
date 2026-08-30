@@ -1289,6 +1289,133 @@ ok('read-only messages promise the data is still there', () => {
   assert.ok(/view|print/i.test(m.text), m.text);
 });
 
+console.log('\nmachine-id.js — the fingerprint a licence is sealed against');
+
+const mid = require('../services/machine-id');
+
+/* One machine, read cleanly. Every test below is a variation on this. */
+const REAL = { guid: '229b5ac4-0000-0000-0000-000000000001', drive: 'B0A36AFE', bios: 'YLKW082053' };
+const SYS  = { platform: 'win32', arch: 'x64', cpu: 'Intel(R) Core(TM) i5-3230M CPU @ 2.60GHz' };
+const midDir = () => {
+  const d = path.join(TMP, 'mid-' + Math.random().toString(36).slice(2));
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+};
+const idOf = (factors, dir) =>
+  mid.computeMachineId({ system: SYS, factors, stateDir: dir }).id;
+
+ok('THE COMPATIBILITY CONTRACT: the hashed string is unchanged', () => {
+  // Every licence in the field was sealed against sha256 of exactly this
+  // string. If this digest ever changes, 50+ installs stop opening their own
+  // licence, so it is hard-coded here rather than recomputed from the module.
+  const raw = [SYS.platform, SYS.arch, SYS.cpu, REAL.guid, REAL.drive, REAL.bios].join('|');
+  const expected = crypto.createHash('sha256').update(raw).digest('hex');
+  assert.strictEqual(idOf(REAL, midDir()), expected);
+});
+
+ok('the same machine gives the same id every time', () => {
+  const d = midDir();
+  assert.strictEqual(idOf(REAL, d), idOf(REAL, d));
+});
+
+ok('a clean reading is remembered, a degraded one is not', () => {
+  const d = midDir();
+  idOf(REAL, d);
+  assert.deepStrictEqual(mid.readKnownFactors(d), REAL);
+
+  const d2 = midDir();
+  idOf({ guid: REAL.guid, drive: '', bios: '' }, d2);
+  assert.strictEqual(mid.readKnownFactors(d2), null,
+    'a degraded probe was written back as if it were the truth');
+});
+
+ok('THE BUG: one probe timing out no longer changes the machine id', () => {
+  // This is the whole point. wmic returned '' for the BIOS serial on one boot
+  // — a cold WMI service, nothing more — and the id changed, so a valid
+  // licence read as TAMPERED and the customer was sent to activation.
+  const d = midDir();
+  const clean = idOf(REAL, d);                       // a good boot, remembered
+  const r = mid.computeMachineId({
+    system: SYS, stateDir: d,
+    factors: { guid: REAL.guid, drive: REAL.drive, bios: '' },
+  });
+  assert.strictEqual(r.reason, 'substituted');
+  assert.strictEqual(r.id, clean, 'a transient probe failure still moved the id');
+});
+
+ok('two probes failing at once is still rescued, three is not', () => {
+  const d = midDir();
+  const clean = idOf(REAL, d);
+
+  // Two missing, one confirmed: below the corroboration bar, so no rescue.
+  const one = mid.computeMachineId({
+    system: SYS, stateDir: d, factors: { guid: REAL.guid, drive: '', bios: '' } });
+  assert.strictEqual(one.reason, 'degraded');
+  assert.notStrictEqual(one.id, clean);
+
+  // Nothing read at all cannot prove anything about which machine this is.
+  const none = mid.computeMachineId({
+    system: SYS, stateDir: d, factors: { guid: '', drive: '', bios: '' } });
+  assert.strictEqual(none.reason, 'degraded');
+  assert.notStrictEqual(none.id, clean);
+});
+
+ok('THE HOLE IT MUST NOT OPEN: the remembered facts do not travel', () => {
+  // Copy license.enc AND machine.json to another PC and break WMI there. The
+  // registry GUID of that machine is still readable and still disagrees, so
+  // nothing is substituted, the id differs, and the licence refuses. If this
+  // ever fails, the fingerprint has stopped binding to hardware.
+  const d = midDir();
+  const clean = idOf(REAL, d);
+  const otherPc = { guid: 'ffffffff-0000-0000-0000-00000000ffff', drive: '', bios: '' };
+  const r = mid.computeMachineId({ system: SYS, stateDir: d, factors: otherPc });
+  assert.notStrictEqual(r.id, clean, 'a stolen machine.json validated on another PC');
+  assert.strictEqual(r.reason, 'changed');
+});
+
+ok('replaced hardware is a real change, not a probe failure', () => {
+  const d = midDir();
+  const clean = idOf(REAL, d);
+  // A new disk. Two facts still match, but one genuinely differs — that is a
+  // changed machine and the id must move, exactly as it always did.
+  const r = mid.computeMachineId({
+    system: SYS, stateDir: d,
+    factors: { guid: REAL.guid, drive: 'DEADBEEF', bios: REAL.bios } });
+  // Nothing was missing, so nothing needed rescuing and the reading is 'clean'.
+  // What matters is that the id followed the hardware — that is the binding.
+  assert.strictEqual(r.reason, 'clean');
+  assert.notStrictEqual(r.id, clean, 'a replaced disk did not change the id');
+  // …and the new truth is what gets remembered from here on.
+  assert.strictEqual(mid.readKnownFactors(d).drive, 'DEADBEEF');
+});
+
+ok('a first-ever boot with a failing probe is reported, not hidden', () => {
+  // No machine.json yet, so nothing can be substituted. The id is wrong and
+  // the caller is told why, instead of silently getting an activation screen.
+  const r = mid.computeMachineId({
+    system: SYS, stateDir: midDir(), factors: { guid: REAL.guid, drive: '', bios: '' } });
+  assert.strictEqual(r.reason, 'degraded');
+});
+
+ok('a probe falls back to a second mechanism before giving up', () => {
+  // wmic is deprecated and already missing from recent Windows images. When it
+  // fails the PowerShell CIM query has to answer, or every install on such a
+  // machine loses its licence at once.
+  const calls = [];
+  const exec = (cmd) => {
+    calls.push(cmd);
+    if (cmd.indexOf('wmic') === 0) return '';                 // no wmic here
+    // What PowerShell actually emits for (Get-CimInstance ...).VolumeSerialNumber:
+    // the bare value on its own line, no header.
+    return 'B0A36AFE\r\n';                                 // PowerShell answers
+  };
+  if (os.platform() === 'win32') {
+    assert.strictEqual(mid.getDriveSerial(exec), 'B0A36AFE');
+    assert.ok(calls.length === 2 && /wmic/.test(calls[0]) && /powershell/i.test(calls[1]),
+      'the fallback was not attempted: ' + JSON.stringify(calls));
+  }
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 logger.close();
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) {}
