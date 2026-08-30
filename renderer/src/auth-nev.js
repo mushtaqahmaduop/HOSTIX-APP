@@ -299,7 +299,39 @@ function _remainingAttempts(role) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 5.  SESSION MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
-function _createSession(role) {
+/*
+ * REMEMBER ME.
+ *
+ * Owner's call, 2026-08-30: wardens were retyping a password every time the
+ * app opened, several times a shift. This screen had deliberately shipped
+ * WITHOUT the checkbox, on the argument that it defeats the 8h session and the
+ * 30min idle logout on a shared counter PC. It does not have to. What is
+ * remembered is the session that already exists, never the password:
+ *
+ *   - The 8h sessionTTL still bounds it. A shift is a shift; tomorrow asks
+ *     again. Nothing here raises that ceiling.
+ *   - The 30min idle logout still runs the whole time the app is open.
+ *   - The password is not stored, in any form. Nothing new lands on disk that
+ *     could be read back as a credential -- only a token that dies with the
+ *     shift.
+ *
+ * The real cost, stated plainly: the session token now sits in localStorage,
+ * so it survives closing the app. That is the entire feature. On a machine
+ * where the hostel's whole database already lives beside it, the token is not
+ * the most valuable thing on that disk.
+ *
+ * The idle rule is deliberately NOT charged for the time the app was shut.
+ * Idle logout protects an app left open and unattended; a closed app is not
+ * sitting on a counter showing anybody's data. Without this exception a warden
+ * who closed the app over lunch would be asked to sign in again anyway, which
+ * is the complaint that started this.
+ */
+function _rememberedUser() {
+  const r = _getJSON(_key('remember'));
+  return (r && typeof r.user === 'string') ? r.user : '';
+}
+
+function _createSession(role, remember) {
   const now     = Date.now();
   const session = {
     token:      _randomHex(AUTH_CFG.tokenBytes),   // 64 hex chars = 256 bits of entropy
@@ -308,26 +340,51 @@ function _createSession(role) {
     createdAt:  now,
     expiresAt:  now + AUTH_CFG.sessionTTL,
     lastActive: now,
+    remembered: !!remember,
   };
   _ssSet(_key('session'), session);
+  if (remember) {
+    _setJSON(_key('session'),  session);
+    _setJSON(_key('remember'), { user: WARDENS[role].username || role });
+  } else {
+    // Unticking the box is also how a warden revokes an earlier tick.
+    localStorage.removeItem(_key('session'));
+    localStorage.removeItem(_key('remember'));
+  }
   return session;
 }
- 
-function _getSession()  { return _ssGet(_key('session')); }
-function _killSession() { _ssDel(_key('session')); }
+
+/** This run's session, or the remembered one a previous run left behind. */
+function _getSession()  { return _ssGet(_key('session')) || _getJSON(_key('session')); }
+
+/**
+ * End the session everywhere. The remembered USERNAME survives on purpose:
+ * signing out should not make a warden retype who they are, only prove again
+ * that they are them.
+ */
+function _killSession() {
+  _ssDel(_key('session'));
+  localStorage.removeItem(_key('session'));
+}
  
 /**
  * Validate the current session.
  * Returns the session object if valid, or null (and destroys the session).
  */
 function _validateSession() {
-  const s = _getSession();
+  const fromThisRun = _ssGet(_key('session'));
+  const s = fromThisRun || _getJSON(_key('session'));
   if (!s?.token) return null;
   const now = Date.now();
-  if (now > s.expiresAt)              { _killSession(); return null; }
-  if (now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
+  // The shift ceiling is absolute and applies to both kinds of session.
+  if (now > s.expiresAt) { _killSession(); return null; }
+  // Idle only counts while the app was actually open. A remembered session
+  // coming back on a fresh launch has not been sitting idle in front of anyone.
+  const restoring = !fromThisRun && s.remembered;
+  if (!restoring && now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
   s.lastActive = now;
   _ssSet(_key('session'), s);
+  if (s.remembered) _setJSON(_key('session'), s);
   return s;
 }
  
@@ -504,7 +561,8 @@ async function checkLogin() {
       await _migrateIfNeeded(CUR_ROLE, plain);
       CUR_USER = WARDENS[CUR_ROLE];
 
-      _createSession(CUR_ROLE);
+      const rememberEl = _ui('login-remember');
+      _createSession(CUR_ROLE, !!(rememberEl && rememberEl.checked));
       _setLoginState('success');
  
       const screen = _ui('login-screen');
@@ -726,8 +784,16 @@ var CUR_USER = null;
   } else {
     // ── No valid session — show login ─────────────────────────────────────
     _killSession(); // clear any stale/invalid session data
+    // A remembered warden gets their name back, and the cursor goes to the one
+    // box they still have to fill.
     const uinp = _ui('login-user');
-    if (uinp) setTimeout(() => uinp.focus(), 120);
+    const pinp = _ui('login-input');
+    const remembered = _rememberedUser();
+    const rememberEl = _ui('login-remember');
+    if (rememberEl) rememberEl.checked = !!remembered;
+    if (uinp && remembered) uinp.value = remembered;
+    const focusTarget = (remembered && pinp) ? pinp : uinp;
+    if (focusTarget) setTimeout(() => focusTarget.focus(), 120);
   }
  
 })().catch(err => {

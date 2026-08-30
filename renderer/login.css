@@ -1,6 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   HOSTYLLO — LOGIN v5
-   Owner reference design: docs/design/login.png
+   HOSTYLLO — LOGIN v6
+   Owner reference design: the Cloud edition's sign-in, supplied 2026-08-30.
+
+   The layout is taken whole: brand panel left, form right, feature list, a
+   stats strip and Remember me. The parts of it that describe a cloud product
+   are not shipped — index.html carries the list and the reason for each.
 
    Loaded after style.css and scoped under #login-screen with `lg-*` class
    names, so it replaces the old login look without touching any rule the rest
@@ -44,7 +48,9 @@ body.light-theme #login-screen { background:
 /* ── Card shell ──────────────────────────────────────────────────────────── */
 #login-screen #login-card {
     display: grid;
-    grid-template-columns: minmax(360px, 470px) minmax(0, 1fr);
+    /* Brand panel first, form second — the reference's arrangement. The brand
+       panel carries no focusable control, so DOM order and tab order agree. */
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 486px);
     width: 100%; max-width: 1120px;
     background: var(--lg-surface);
     border: 1px solid var(--lg-line);
@@ -56,9 +62,10 @@ body.light-theme #login-screen { background:
 #login-screen #login-card::before,
 #login-screen #login-card::after { display: none; }
 
-/* ── Left: the actual form ───────────────────────────────────────────────── */
-.lg-left  { padding: 40px 44px 26px; display: flex; flex-direction: column; }
-.lg-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 34px; }
+/* ── Right: the actual form ─────────────────────────────────────────────── */
+.lg-form  { padding: 46px 46px 26px; display: flex; flex-direction: column; }
+/* The brand lockup lives on the brand panel now, where the reference puts it. */
+.lg-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
 .lg-mark  {
     width: 54px; height: 60px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -67,7 +74,13 @@ body.light-theme #login-screen { background:
 .lg-brand__n { display: block; font-size: 25px; font-weight: 800; letter-spacing: .14em; color: var(--lg-ink); line-height: 1; }
 .lg-brand__s { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: .16em; color: var(--lg-ink2); margin-top: 6px; }
 
-.lg-h  { font-size: 31px; font-weight: 800; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1.15; margin: 0; }
+/* margin-top:auto here and margin-bottom:auto on .lg-safe split the spare
+   height above and below the form instead of dumping all of it into one gap.
+   The reference fills that space with OR / Google / Microsoft / "New to
+   Hostyllo?", none of which this edition can honestly show, and a 300px hole
+   between the security note and the footer read as a missing element rather
+   than as breathing room. */
+.lg-h  { margin-top: auto; font-size: 32px; font-weight: 800; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1.15; margin: 0; }
 .lg-h em { font-style: normal; color: var(--lg-brand); }
 .lg-p  { font-size: 13.5px; line-height: 1.6; color: var(--lg-ink2); margin: 9px 0 0; }
 .lg-p b { font-weight: 700; color: var(--lg-ink); }
@@ -77,12 +90,15 @@ body.light-theme #login-screen { background:
    card grid, its avatars and its tick have no markup left to style. The first
    .lg-field below is the username field; the second is the password. */
 
-/* Fields */
-.lg-field { position: relative; display: flex; align-items: center; margin-top: 13px; }
-/* The username field is the first thing after the intro copy, where the warden
-   picker used to sit — it needs that block's breathing room, not the tight
-   field-to-field gap. */
-.lg-p + .lg-field, .lg-addr + .lg-field { margin-top: 26px; }
+/* Fields. The reference labels each one above the box instead of relying on
+   the placeholder, which is the accessible arrangement anyway: a placeholder
+   vanishes the moment the warden starts typing. */
+.lg-lbl {
+    display: block; margin-top: 18px; margin-bottom: 7px;
+    font-size: 12.5px; font-weight: 650; color: var(--lg-ink);
+}
+.lg-p + .lg-lbl, .lg-addr + .lg-lbl { margin-top: 28px; }
+.lg-field { position: relative; display: flex; align-items: center; }
 .lg-field > svg.lg-lead { position: absolute; left: 15px; color: var(--lg-ink3); pointer-events: none; }
 #login-screen .lg-in {
     width: 100%; height: 52px; padding: 0 46px; border-radius: 12px;
@@ -99,7 +115,30 @@ body.light-theme #login-screen { background:
 }
 #login-screen .lg-eye:hover { color: var(--lg-ink2); }
 
-.lg-meta { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.lg-meta { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+
+/* Remember me. The native checkbox is kept for the keyboard and for assistive
+   tech and hidden with opacity rather than display:none, so it still focuses;
+   .lg-check is what is actually drawn. */
+.lg-remember {
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+    font-size: 13px; font-weight: 550; color: var(--lg-ink2); user-select: none;
+}
+.lg-remember input {
+    position: absolute; width: 18px; height: 18px; margin: 0; opacity: 0; cursor: pointer;
+}
+.lg-check {
+    width: 18px; height: 18px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--lg-surface); border: 1.5px solid #CBD5E1; color: transparent;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.lg-remember input:checked + .lg-check {
+    background: var(--lg-brand-2); border-color: var(--lg-brand-2); color: #fff;
+}
+.lg-remember input:focus-visible + .lg-check {
+    border-color: var(--lg-brand); box-shadow: 0 0 0 4px rgba(59,130,246,.16);
+}
 #login-screen .lg-link {
     margin-left: auto; background: none; border: none; padding: 0; cursor: pointer;
     font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--lg-brand);
@@ -153,7 +192,8 @@ body.light-theme #login-screen { background:
    footer takes the slack instead — whitespace above a bottom rule reads as
    padding, whereas a 100px hole mid-column reads as a missing element. */
 .lg-safe {
-    display: flex; align-items: flex-start; gap: 10px; margin-top: 24px;
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-top: 24px; margin-bottom: auto;
 }
 .lg-safe svg  { color: #16A34A; flex-shrink: 0; margin-top: 1px; }
 .lg-safe b    { display: block; font-size: 12.5px; font-weight: 600; color: var(--lg-ink); }
@@ -170,20 +210,41 @@ body.light-theme #login-screen { background:
    actually needs to read out. */
 .lg-foot__v { margin-left: auto; font-weight: 600; color: var(--lg-ink2); font-variant-numeric: tabular-nums; }
 
-/* ── Right: brand panel ──────────────────────────────────────────────────── */
-.lg-right {
-    position: relative; padding: 44px 46px;
-    background: var(--lg-panel); border-left: 1px solid var(--lg-line);
+/* ── Left: brand panel ──────────────────────────────────────────────────── */
+.lg-side {
+    position: relative; padding: 40px 44px 32px;
+    background: var(--lg-panel); border-right: 1px solid var(--lg-line);
     display: flex; flex-direction: column;
 }
-.lg-quote  { font-size: 42px; line-height: .8; color: var(--lg-brand); font-weight: 800; }
-.lg-right h2 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); line-height: 1.25; margin: 14px 0 0; }
-.lg-right h2 em { font-style: normal; color: var(--lg-brand); }
-.lg-right p  { font-size: 13.5px; line-height: 1.65; color: var(--lg-ink2); margin: 12px 0 0; max-width: 42ch; }
+.lg-badge {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 13px; border-radius: 999px;
+    background: var(--lg-brand-soft); border: 1px solid #DBEAFE;
+    font-size: 12px; font-weight: 650; color: var(--lg-brand-2);
+}
+.lg-h2 { font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1.2; margin: 16px 0 0; }
+.lg-h2 em { font-style: normal; color: var(--lg-brand-2); }
+.lg-sub { font-size: 13.5px; line-height: 1.65; color: var(--lg-ink2); margin: 11px 0 0; max-width: 44ch; }
+
+/* Feature list */
+.lg-feats { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 15px; }
+.lg-feat  { display: flex; align-items: flex-start; gap: 13px; }
+.lg-feat__i {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--lg-brand-soft); color: var(--lg-brand-2);
+}
+.lg-feat > span:last-child { min-width: 0; }
+.lg-feat b    { display: block; font-size: 13.5px; font-weight: 700; color: var(--lg-ink); line-height: 1.35; }
+.lg-feat span span { display: block; font-size: 12px; color: var(--lg-ink2); margin-top: 2px; line-height: 1.45; }
 
 /* Building illustration — a drawn placeholder, not a stock photograph. */
 .lg-art {
-    position: relative; flex: 1; min-height: 205px; margin: 24px 0 0;
+    /* flex:1 with a 205px floor made the drawing swallow every spare pixel. With
+       a feature list above it there is far less to swallow, and it must not
+       squeeze the facts strip off the bottom of the panel. */
+    position: relative; flex: 1 1 auto; min-height: 120px; max-height: 240px; margin: 20px 0 0;
     border-radius: 16px; overflow: hidden;
     background: linear-gradient(160deg, #FFF6EE 0%, #EFF3F7 55%, #E7ECF2 100%);
     border: 1px solid var(--lg-line);
@@ -215,10 +276,28 @@ body.light-theme #login-screen { background:
 /* ── Narrow windows: drop the brand panel, keep the form usable ──────────── */
 @media (max-width: 940px) {
     #login-screen #login-card { grid-template-columns: 1fr; max-width: 480px; }
-    .lg-right { display: none; }
-    .lg-left  { padding: 32px 28px 22px; }
+    .lg-side { display: none; }
+    .lg-form { padding: 32px 28px 22px; }
 }
-@media (max-height: 720px) {
-    .lg-left { padding-top: 26px; }
-    .lg-brand { margin-bottom: 22px; }
+/* Short windows. The form column is the one that must never lose its Sign In
+   button below the fold — the same failure the licence screen had. The brand
+   panel gives up its illustration first, then its feature subtitles. */
+@media (max-height: 780px) {
+    #login-screen  { padding: 16px; }
+    .lg-form       { padding: 30px 46px 20px; }
+    .lg-h          { font-size: 27px; }
+    .lg-lbl        { margin-top: 14px; }
+    .lg-p + .lg-lbl, .lg-addr + .lg-lbl { margin-top: 20px; }
+    .lg-safe       { margin-top: 16px; }
+    .lg-side       { padding: 30px 40px 24px; }
+    .lg-brand      { margin-bottom: 18px; }
+    .lg-h2         { font-size: 25px; margin-top: 13px; }
+    .lg-feats      { gap: 11px; margin-top: 16px; }
+    .lg-art        { display: none; }
+}
+@media (max-height: 640px) {
+    .lg-feat span span { display: none; }   /* keep the headings, drop the prose */
+    .lg-sub            { display: none; }
+    .lg-facts          { display: none !important; }
+    .lg-safe           { display: none; }
 }

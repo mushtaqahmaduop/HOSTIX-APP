@@ -328,7 +328,14 @@ function expPager(pg) {
    case-sensitive includes() — so "gas" and "Gas" could both exist, and an
    expense filed under one was invisible when filtering by the other. */
 function showAddExpenseCategoryModal() {
-  if (typeof requirePerm === 'function' && !requirePerm('expenses')) return;
+  // 'expenses' is not a permission. PERMS declares edit / delete / payments /
+  // reports / backup / settings / users / clearall, and canDo() fails closed on
+  // anything else — so this gate denied EVERY account, including the built-in
+  // full-access one, and the toast read 'does not have permission to: expenses'
+  // because requirePerm found no label to print either. Adding a category is an
+  // ordinary record edit, which is the permission the Add Expense form itself
+  // sits behind.
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   showModal('modal-sm', 'Add Expense Category', `
     <div class="field">
       <label for="new-exp-cat">Category name</label>

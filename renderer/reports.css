@@ -199,10 +199,17 @@
 .mov {
     background:var(--card); border:1px solid var(--border); border-radius:18px;
     padding:18px 20px 14px; margin-bottom:14px; min-width:0;
+    /* The strip below asks THIS card how wide it is, not the window. The card
+       is a grid column, so its width and the viewport are only loosely related
+       — which is how a 1100px window ended up drawing four 115px columns. */
+    container-type:inline-size; container-name:mov;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 .mov__head { display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+/* The title block had no min-width:0, so it refused to shrink and shoved the
+   period chip onto a line of its own the moment the card got narrow. */
+.mov__head > div { flex:1 1 auto; min-width:0; }
 .mov__ico  {
     width:46px; height:46px; border-radius:14px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -231,24 +238,52 @@
 .mov .rpt-canvas { height:288px; }
 
 /* ── Peaks + margin strip ────────────────────────────────────────────────── */
+ /* The strip used a fixed repeat(4,1fr) and dropped to two columns at a
+   VIEWPORT width of 900px. But it does not live at viewport width — it sits in
+   the 1.65fr column of .rpt-toprow, about 500px wide on a 1100px window, so at
+   1100 it was still drawing four 115px columns for text that needed 161px. The
+   labels and the money figures ran straight across the cell dividers into their
+   neighbours. auto-fit asks the card how much room there actually is.
+
+   The dividers are the 1px grid gap showing the strip's own background through,
+   rather than a border-right per cell. Border-right needs a rule for the last
+   cell in every row, and with auto-fit nobody knows where the rows break. */
 .mov__strip {
-    display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+    display:grid; grid-template-columns:repeat(2, 1fr);
+    gap:1px; background:var(--border);
     margin-top:14px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
 }
+/* Four across only when the CARD is wide enough for it, which on a 1400px
+   window it is not: .mov is the 1.65fr column of a two-column row, so it holds
+   about 640px and four cells would be 160px each — the width that was cutting
+   "Highest Collection" in half. auto-fit was tried first and gave 3 + 1
+   orphan, which is worse than an even 2x2. */
+@container mov (min-width: 760px) { .mov__strip { grid-template-columns:repeat(4, 1fr); } }
+@container mov (max-width: 330px) { .mov__strip { grid-template-columns:1fr; } }
+/* stretch, not flex-start: the cell fills the grid row, so the text block can
+   push its figure to the bottom. "Highest Collection" wraps to two lines and
+   "Highest Profit" does not, which left the four money figures sitting at four
+   different heights across one strip — the raggedness the owner reported. The
+   icon keeps its own 38px box and is unaffected. */
 .mov__cell {
-    display:flex; align-items:flex-start; gap:11px; min-width:0;
-    padding:14px 16px; border-right:1px solid var(--border);
+    display:flex; align-items:stretch; gap:11px; min-width:0;
+    padding:14px 16px; background:var(--card);
 }
-.mov__cell:last-child { border-right:none; }
+/* Without this the text block is a flex item at min-width:auto, which never
+   shrinks — so .mov__cv's ellipsis could not fire and the figure simply
+   overflowed the cell instead of being cut short. */
+.mov__cell > div { min-width:0; display:flex; flex-direction:column; }
 .mov__cico {
     width:38px; height:38px; border-radius:11px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
-.mov__cl { font-size:12.5px; font-weight:700; color:var(--text); }
+.mov__cl { font-size:12.5px; font-weight:700; color:var(--text); line-height:1.3; }
 .mov__cs { margin-top:2px; font-size:11.5px; color:var(--text3); }
 .mov__cv {
-    margin-top:4px; font-size:17px; font-weight:800; letter-spacing:-.02em; color:var(--dh);
+    /* auto, not 4px: whatever the label did above it, the figure lands on the
+       bottom edge of the cell and therefore level with its neighbours. */
+    margin-top:auto; padding-top:4px; font-size:17px; font-weight:800; letter-spacing:-.02em; color:var(--dh);
     font-variant-numeric:tabular-nums; line-height:1.2;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
@@ -263,8 +298,7 @@
 .mov__foot span { display:inline-flex; align-items:center; gap:6px; }
 
 @media (max-width:900px) {
-    .mov__strip  { grid-template-columns:repeat(2,1fr); }
-    .mov__cell:nth-child(2n)  { border-right:none; }
-    .mov__cell:nth-child(-n+2){ border-bottom:1px solid var(--border); }
+    /* The strip is on auto-fit now and needs no viewport rule; the cell borders
+       are the grid gap, so the nth-child fixups went with them. */
     .mov__period { margin-left:0; }
 }

@@ -289,6 +289,48 @@
       .title { font-size: 32px; }
       .page-foot { flex-direction: column; align-items: flex-start; }
     }
+
+    /* ── SHORT SCREENS ───────────────────────────────────────────────────────
+       The card was laid out for a tall window and never asked how much height
+       it actually had. On a 768px laptop panel — which is most of the field
+       — the usable viewport is around 600px once the title bar, the Windows
+       task bar and the window chrome take their cut, and Activate License sat
+       at 656px: the customer saw the top half of their own Activate button and
+       nothing below it. The page does scroll, but this is the first screen of a
+       locked-out install, and a primary action you have to go looking for is a
+       support call.
+
+       So the decoration gives up its height first — logo, title, paddings —
+       and the machine ID, the key field and the button keep theirs. Two steps,
+       because 600px and 520px are different problems. */
+    @media (max-height: 780px) {
+      body                { padding-top: 16px; }
+      body.has-titlebar   { padding-top: calc(var(--titlebar-h) + 16px); }
+      .card               { padding: 26px 46px 0; margin-bottom: 16px; }
+      .logo               { width: 64px; height: 64px; border-radius: 18px; margin-bottom: 14px; }
+      .logo img           { width: 32px; height: 32px; }
+      .title              { font-size: 30px; }
+      .subtitle-row       { margin: 8px auto 4px; }
+      .divider            { margin-bottom: 18px; }
+      .machine-box        { padding: 14px 18px; margin-bottom: 18px; }
+      .machine-label      { margin-bottom: 8px; }
+      .machine-id         { font-size: 15px; }
+      .machine-hint       { margin-top: 8px; font-size: 12px; }
+      .key-input          { height: 52px; }
+      .activate-btn       { height: 52px; margin-top: 16px; }
+      .trust              { padding: 16px 46px; }
+    }
+    @media (max-height: 620px) {
+      /* Below this the logo is the only thing left worth spending height on,
+         and it is worth less than the button. */
+      .logo               { display: none; }
+      .title              { font-size: 26px; }
+      .subtitle-row       { margin: 6px auto 4px; }
+      .divider            { margin-bottom: 14px; }
+      .machine-box        { margin-bottom: 14px; }
+      .machine-hint       { display: none; }   /* the label already says what it is */
+      .card               { padding-top: 22px; }
+    }
   </style>
   <!-- Custom frameless title bar. This page has its own palette and does not
        load tokens.css, so map the handful of tokens titlebar.css needs onto it. -->
