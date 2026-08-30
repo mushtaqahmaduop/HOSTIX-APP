@@ -615,8 +615,10 @@ function doAbout() {
   if (!mainWindow) return;
   dialog.showMessageBox(mainWindow, {
     type: 'info', title: 'About',
-    message: 'Hostyllo — Hostel Management System',
-    detail: 'Version 3.0 (Security Patched)\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar\n\nOffline app — all data stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
+    message: 'Hostyllo — Offline Edition',
+    detail: 'Hostel Management System\nVersion ' + app.getVersion() +
+      '\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar' +
+      '\n\nAll hostel data is stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
   });
 }
 

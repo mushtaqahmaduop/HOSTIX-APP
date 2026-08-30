@@ -1,7 +1,15 @@
-# HOSTIX — Offline Hostel Management System
+# Hostyllo Offline — Hostel Management System
 
 Desktop app built with Electron. Runs fully offline — application data is stored
 locally in a **SQLite** database on the device; no internet is required.
+
+> **A note on the name.** The product is *Hostyllo Offline*; the cloud edition
+> lives in a separate repo. The app was previously called HOSTIX, and four
+> internal identifiers still carry that name on purpose — the repo and remote
+> (`HOSTIX-APP`), the userData folder (`%APPDATA%\hostix-app`), the database file
+> (`hostix.db`) and the installer's `appId`. They are frozen because renaming any
+> of them would move or orphan a live client's data. Paths below that read
+> `hostix` are correct as written; see `CLAUDE.md` for the full table.
 
 ---
 

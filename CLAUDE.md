@@ -5,6 +5,33 @@ Offline Electron desktop app for hostel management. Deployed to 50+ Pakistani ho
 
 User-visible branding is **HOSTYLLO** — set by `appName` in `renderer/src/config.js`. Do not reintroduce "HOSTIX" in any user-facing string. The repo folder and remote are still named `HOSTIX-APP`; that is expected, leave paths alone.
 
+The product is **one brand, two editions**: this desktop app is *Hostyllo Offline*,
+the SaaS at `C:\hostyllo` is the cloud edition. They share a name deliberately —
+Phase 2 has this app fetching its entitlement from the Hostyllo control plane, so a
+customer must never see two vendor names for one purchase. Write the wordmark as
+`HOSTYLLO`, prose as `Hostyllo`, and the full product name as `Hostyllo Offline`.
+
+**Four names are identifiers, not branding, and must not be renamed** (rename swept
+2026-08-30; see commit `04e73f2`):
+
+| Name | Why it is frozen |
+|---|---|
+| `package.json` `"name": "hostix-app"` | `app.getName()` resolves it, so it *is* `%APPDATA%\hostix-app` — the folder holding every client's `hostix.db`, `license.enc` and `last_run.dat`. Renaming points 50+ installs at an empty folder. Needs a userData migration, not a rename. |
+| `hostix.db` | Same, plus the `hostix.db.pre-v1.bak` migration snapshot and ~20 specs. |
+| `appId: com.zeerak.hostix` | NSIS upgrade identity. A new appId installs *alongside* the old app instead of replacing it. |
+| `publish.repo: "HOSTIX-APP"` | Must match the GitHub repository name or auto-update breaks. |
+
+`build.productName` **was** safe to change (now `Hostyllo Offline`): it sits under
+`build`, so Electron never sees it as a top-level `productName` and `app.getName()`
+still returns `hostix-app`. That is the same behaviour behind the 2026-08-15
+dev-data incident, and the reason userData does not move.
+
+`DAMAM` is likewise frozen where it is load-bearing: `damam_salt_v1` (derives the
+licence AES key), `DAMAM_WARDEN_PW_SALT_v1_2025` (hashes warden passwords), the
+`damam_auth_*` localStorage keys (hold the user accounts), and the keygen history
+store. It also stays as the sample default hostel name — that is client data, not
+branding.
+
 This is the offline desktop product. The separate cloud SaaS at `C:\hostyllo` is a
 **different repo with different rules, and nothing here depends on it.**
 
