@@ -1,0 +1,443 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — APP CHROME v5  (sidebar + header)
+   Owner reference design: docs/design/payments.png
+
+   Loaded LAST so it wins on equal specificity. It intentionally overrides the
+   existing #sidebar / #header / .nav-item rules in style.css rather than
+   editing them in place — style.css is shared by every screen and CLAUDE.md
+   rule 7 warns off structural edits there. Everything is confined to the
+   chrome; no page content selector is touched.
+
+   THEME MODEL (owner's call)
+   The sidebar is dark in BOTH themes — deep navy in light, near-black in dark.
+   Only the content area flips. So sidebar colours are declared as their own
+   --sb-* token set instead of borrowing the page tokens, which would drag the
+   sidebar to white in light mode.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* Dark theme: the sidebar sits BELOW the page surface so it recedes.
+       #0A0A0A against the #0f0f0f page is a small delta, so the separation is
+       carried by an explicit border, not by fill alone (CLAUDE.md rule 6). */
+    --sb-bg:       #0A0A0A;
+    --sb-border:   rgba(255,255,255,.09);
+    --sb-fg:       #f5f5f5;
+    --sb-fg2:      rgba(255,255,255,.66);
+    --sb-fg3:      rgba(255,255,255,.40);
+    --sb-hover:    rgba(255,255,255,.07);
+    /* Was #3b82f6 royal blue, inherited from the older payments.png reference.
+       That left the app with two accents at once — blue chrome (sidebar pill,
+       avatar, header action button) against violet page content — which is the
+       mismatch the owner flagged. Pointed at the accent ramp so there is one
+       accent in the app, per CLAUDE.md rule 5, and matching the violet the
+       reports / complaints / cancellations references show. */
+    --sb-active:   var(--accent);
+    --sb-active-hover:var(--accent-strong);
+    --sb-active-fg:#ffffff;
+    --sb-divider:  rgba(255,255,255,.08);
+    --sb-avatar:   var(--accent);
+
+    /* Narrowed 244 -> 212 (13%) on the owner's call, 2026-08-30. The rail is
+       the widest fixed cost on every page, and 212 still clears the longest
+       label ("Backup & Restore") without the .nav-label ellipsis biting:
+       212 - 24 (.sb-nav) - 24 (.nav-item) - 31 (icon + gap) = 133px of text. */
+    --sidebar-w:   212px;
+    --header-h:    66px;
+}
+
+body.light-theme {
+    /* Deep navy enterprise gradient — design guide §5. The rail is the app's
+       strongest visual anchor and stays navy in BOTH themes; only the ramp
+       differs. Never pure black (guide §3). */
+    --sb-bg:       linear-gradient(180deg, #071A3A 0%, #0B2A5B 52%, #082B69 100%);
+    --sb-border:   rgba(255,255,255,.07);
+    --sb-fg:       #ffffff;
+    --sb-fg2:      rgba(255,255,255,.70);
+    --sb-fg3:      rgba(255,255,255,.44);
+    --sb-hover:    rgba(255,255,255,.08);
+    --sb-active:   var(--accent);
+    --sb-active-hover:var(--accent-strong);
+    --sb-active-fg:#ffffff;
+    --sb-divider:  rgba(255,255,255,.10);
+    --sb-avatar:   var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* style.css carries TWO `body.light-theme #sidebar { background:#ffffff }`
+   rules (lines ~3656 and ~3926). That selector is (1,1,1); a bare `#sidebar`
+   is (1,0,0), so loading this file last was NOT enough — the white always won
+   and the navy never appeared. Matching the selector exactly makes it a tie,
+   which load order then settles in our favour. Same story for #header below.
+   Do not "simplify" these back to a bare id selector. */
+#sidebar,
+body.light-theme #sidebar {
+    background: var(--sb-bg);
+    border-right: 1px solid var(--sb-border);
+    box-shadow: none;
+    color: var(--sb-fg);
+}
+
+/* Brand block */
+#sidebar .sb-logo {
+    padding: 18px 16px 16px;
+    background: none;
+    border-bottom: 1px solid var(--sb-divider);
+}
+#sidebar .sb-logo::after { display: none; }
+#sidebar .sb-logo-mark { display: flex; align-items: center; gap: 11px; }
+#sidebar .sb-logo-icon {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    background: var(--sb-active);
+    display: flex; align-items: center; justify-content: center;
+    border: none; box-shadow: none;
+}
+#sidebar .sb-logo-icon::before,
+#sidebar .sb-logo-icon::after { display: none; }
+#sidebar .sb-logo-text .name {
+    font-size: 16px; font-weight: 800; letter-spacing: .2px;
+    color: var(--sb-fg); background: none; -webkit-text-fill-color: currentColor;
+}
+#sidebar .sb-logo-text .sub {
+    font-size: 11px; font-weight: 500; color: var(--sb-fg2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Collapse affordance. It sits just INSIDE the rail: #sidebar is
+   `overflow:hidden`, so the half-outside placement the mock shows was being
+   clipped into a sliver. */
+#sidebar .sidebar-collapse-btn {
+    position: absolute; top: 22px; right: 12px; z-index: 5;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sb-hover); color: var(--sb-fg2);
+    border: 1px solid var(--sb-divider); cursor: pointer; padding: 0;
+    box-shadow: none; transition: var(--transition);
+}
+#sidebar .sidebar-collapse-btn:hover { background: var(--sb-active); color: #fff; border-color: var(--sb-active); }
+
+/* Nav */
+#sidebar .sb-nav { padding: 14px 12px; }
+#sidebar .sb-section {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--sb-fg3); padding: 14px 10px 6px;
+}
+#sidebar .sb-nav > .sb-section:first-child { padding-top: 2px; }
+
+#sidebar .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; margin-bottom: 3px;
+    border-radius: 10px; border: 1px solid transparent;
+    color: var(--sb-fg2); font-size: 13.5px; font-weight: 500;
+    cursor: pointer; overflow: hidden;
+    transition: background .15s ease, color .15s ease;
+}
+/* The shimmer sweep and the translate-on-hover belong to the old look. */
+#sidebar .nav-item::after  { display: none; }
+#sidebar .nav-item::before { display: none; }
+#sidebar .nav-item:hover {
+    background: var(--sb-hover); color: var(--sb-fg);
+    border-color: transparent; transform: none;
+}
+/* Active navigation — design guide §5.1. A premium blue gradient with a soft
+   glow, not a flat fill: on a navy rail a solid block reads as a hole, while
+   the gradient plus the shadow lifts the pill off the surface. */
+#sidebar .nav-item.active {
+    background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%);
+    color: var(--sb-active-fg);
+    border-color: rgba(255, 255, 255, .10);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, .22);
+    font-weight: 600;
+}
+#sidebar .nav-item.active .nav-icon { color: var(--sb-active-fg); }
+#sidebar .nav-item .nav-icon { width: 19px; height: 19px; opacity: .95; }
+#sidebar .nav-item--danger { color: #f87171 !important; }
+
+/* style.css paints this strip with `background: var(--sidebar-bg)`, which is
+   #f2f2f2 in light theme — a light-grey band across the bottom of a navy rail,
+   with white labels on it that were almost unreadable. It inherits the rail
+   colour instead. */
+#sidebar .sidebar__bottom {
+    background: transparent;
+    border-top: 1px solid var(--sb-divider);
+    padding: 10px 12px 8px;
+}
+#sidebar .sidebar__bottom .nav-item { margin-bottom: 2px; font-size: 13px; padding: 9px 12px; }
+#sidebar .sidebar__bottom .nav-icon { width: 18px; height: 18px; }
+
+/* Nav labels must not wrap — "Complaints & Maintenance" broke onto a second
+   line and threw off the rhythm of every row below it. */
+#sidebar .nav-label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+#sidebar .nav-badge {
+    margin-left: auto; flex-shrink: 0;
+    background: var(--sb-active); color: #fff;
+    min-width: 19px; height: 19px; border-radius: 999px;
+    font-size: 10px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; padding: 0 5px;
+}
+#sidebar .nav-item.active .nav-badge { background: rgba(255,255,255,.28); }
+
+/* User card pinned under the nav. The account menu moved here from the header
+   and opens UPWARD; this wrapper is its positioning context. The rule that
+   flips it upward lives with .hdr-menu further down — it has to win on
+   specificity, and at equal weight .hdr-menu would win on source order. */
+.sb-user-wrap { position: relative; }
+/* The card is deliberately translucent: the nav list scrolls underneath it and
+   a solid panel made the rail look like it simply ended there. Letting the
+   content beneath show through faintly keeps the card reading as a layer on
+   top of the sidebar rather than the bottom edge of it. The blur is what keeps
+   the name legible over whatever happens to be behind it; browsers without
+   backdrop-filter still get a readable card from the tint alone. */
+.sb-user {
+    display: flex; align-items: center; gap: 11px;
+    margin: 0 12px 14px; padding: 10px 12px;
+    background: rgba(255,255,255,.055); border: 1px solid var(--sb-divider);
+    border-radius: 12px; cursor: pointer;
+    -webkit-backdrop-filter: blur(7px) saturate(120%);
+    backdrop-filter: blur(7px) saturate(120%);
+    transition: background .15s ease, border-color .15s ease;
+}
+.sb-user:hover { background: rgba(255,255,255,.11); border-color: var(--sb-active); }
+.sb-user__av {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sb-avatar); color: #fff;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
+}
+.sb-user__id   { flex: 1; min-width: 0; }
+.sb-user__name { font-size: 13px; font-weight: 700; color: var(--sb-fg);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-user__role { font-size: 11px; color: var(--sb-fg2); margin-top: 1px; }
+.sb-user__caret{ flex-shrink: 0; color: var(--sb-fg2); }
+
+/* Collapsed sidebar — hide labels, centre the icons */
+body.sidebar-collapsed .sb-user__id,
+body.sidebar-collapsed .sb-user__caret,
+body.sidebar-collapsed #sidebar .sb-logo-text,
+body.sidebar-collapsed #sidebar .sb-section { display: none; }
+body.sidebar-collapsed .sb-user { justify-content: center; padding: 8px; }
+body.sidebar-collapsed #sidebar .nav-item { justify-content: center; padding: 10px 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Same specificity story as #sidebar — style.css has two
+   `body.light-theme #header` rules, one of which also adds a backdrop blur and
+   a warm #d7c3b5 border left over from the old palette. */
+#header,
+body.light-theme #header {
+    height: var(--header-h);
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    gap: 14px;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.hdr-title-wrap { min-width: 0; }
+#header .page-title {
+    font-size: 20px; font-weight: 800; letter-spacing: -.02em;
+    color: var(--text); line-height: 1.2;
+}
+#header .page-sub {
+    font-size: 12px; font-weight: 400; color: var(--text3); margin-top: 2px;
+}
+
+/* The hamburger (#sidebar-toggle) and the Back button (#hdr-back-btn) were
+   removed from the header on the owner's call, so their rules are gone too.
+   nav.js still guards both by id, and both lookups now return null harmlessly.
+
+   Consequence that had to be handled: style.css @900px slid the sidebar
+   off-canvas (translateX(-100%)) and ONLY the hamburger could bring it back,
+   so below 900px navigation would have been unreachable. The sidebar now
+   stays on screen at every width and narrows instead. The in-sidebar collapse
+   button still gives an icons-only rail when space is tight. */
+@media (max-width: 900px) {
+    #sidebar {
+        position: sticky; transform: none !important;
+        width: 190px; min-width: 190px;
+    }
+    #sidebar-overlay { display: none !important; }
+    #main { margin-left: 0 !important; }
+}
+@media (max-width: 640px) {
+    #sidebar { width: 62px; min-width: 62px; }
+    #sidebar .sb-logo-text,
+    #sidebar .sb-section,
+    #sidebar .nav-label,
+    #sidebar .sb-user__id,
+    #sidebar .sb-user__caret { display: none; }
+    #sidebar .nav-item { justify-content: center; padding: 10px 0; }
+    .sb-user { justify-content: center; padding: 8px; }
+    .sb-user-menu { left: 6px; right: auto; width: 210px; }
+}
+
+/* Search pill */
+.hdr-find {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 11px; padding: 0 10px; height: 40px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.hdr-find:focus-within {
+    border-color: var(--sb-active);
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+.hdr-find__ico { color: var(--text3); display: flex; flex-shrink: 0; }
+.hdr-find input {
+    flex: 1; min-width: 0; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--font); font-size: 13px; padding: 0;
+}
+.hdr-find input::placeholder { color: var(--text3); }
+.hdr-kbd {
+    flex-shrink: 0; cursor: pointer;
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 7px; font-family: var(--font-mono, monospace);
+}
+.hdr-kbd:hover { color: var(--text2); }
+
+/* Right-hand control cluster */
+.hdr-right { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+
+.hdr-btn {
+    position: relative; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border2);
+    color: var(--text2); cursor: pointer; transition: var(--transition);
+}
+.hdr-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+.hdr-btn__count {
+    position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 999px;
+    background: #ef4444; color: #fff;
+    font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+    border: 2px solid var(--card);
+}
+
+/* Date pill wraps the existing month picker */
+.hdr-month-picker {
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 11px; height: 40px; display: flex; align-items: center;
+    padding: 0 4px; flex-shrink: 0;
+}
+.hdr-month-picker .sb-month-picker__header {
+    display: flex; align-items: center; gap: 2px; background: none; border: none; padding: 0;
+}
+.hdr-month-picker .sb-month-picker__display {
+    display: flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 0 6px; color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.hdr-month-picker .sb-month-picker__icon { color: var(--sb-active); flex-shrink: 0; }
+.hdr-month-picker .sb-month-picker__arrow {
+    width: 26px; height: 30px; border-radius: 8px; border: none; background: none;
+    color: var(--text3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.hdr-month-picker .sb-month-picker__arrow:hover { background: var(--bg3); color: var(--text); }
+
+/* The header account chip (.hdr-user) was removed — the account lives in the
+   sidebar card. .hdr-menu stays: the notifications menu still uses it, and so
+   does the account menu now anchored to .sb-user-wrap. */
+.hdr-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 9999;
+    min-width: 216px; padding: 6px;
+    background: var(--card); border: 1px solid var(--border2);
+    border-radius: 12px; box-shadow: var(--shadow);
+}
+
+/* The account menu hangs off the BOTTOM of the sidebar, so it opens upward.
+   `top` must be unset or the rule above and this one both apply and squeeze the
+   box to a sliver below the window — which is exactly what happened. Two
+   class names deep so it beats .hdr-menu on specificity rather than on source
+   order, which is the trap that bit here the first time. */
+.sb-user-wrap .hdr-menu {
+    top: auto; bottom: calc(100% + 8px);
+    left: 12px; right: 12px;
+    /* Never taller than the sidebar above it — #sidebar is overflow:hidden, so
+       an over-long menu would be silently clipped instead of scrolling. */
+    max-height: calc(100vh - 120px); overflow-y: auto;
+}
+.hdr-menu__item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px; border-radius: 9px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--text2);
+    transition: var(--transition); border: none; background: none;
+    width: 100%; text-align: left; font-family: var(--font);
+}
+.hdr-menu__item:hover { background: var(--bg3); color: var(--text); }
+.hdr-menu__item svg { flex-shrink: 0; opacity: .8; }
+.hdr-menu__item--danger { color: var(--red); }
+.hdr-menu__item--danger:hover { background: var(--red-dim); color: var(--red); }
+.hdr-menu__sep { height: 1px; background: var(--border); margin: 5px 4px; }
+.hdr-menu__head {
+    padding: 9px 11px 7px; border-bottom: 1px solid var(--border); margin-bottom: 5px;
+}
+.hdr-menu__head b { display: block; font-size: 13px; color: var(--text); }
+.hdr-menu__head span { font-size: 11px; color: var(--text3); }
+
+/* Notification dropdown rows */
+.hdr-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 11px; border-radius: 9px; cursor: pointer;
+    transition: var(--transition);
+}
+.hdr-note:hover { background: var(--bg3); }
+.hdr-note__ico {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.hdr-note__msg { font-size: 12.5px; font-weight: 500; color: var(--text); line-height: 1.4; }
+.hdr-note__empty { padding: 22px 12px; text-align: center; font-size: 12.5px; color: var(--text3); }
+
+/* ── Primary action colour ───────────────────────────────────────────────────
+   style.css paints .btn-primary as a violet gradient (--accent), so "Add
+   Student" came out purple. In both reference designs the primary action is
+   flat blue; violet stays reserved for what it actually means on these screens
+   (funds transfer, seat availability, active students).
+
+   This changes the primary button app-wide, which is the intent — the accent
+   TOKEN is untouched, so every other violet element keeps its meaning.
+   `body.light-theme .btn-primary` is matched explicitly because style.css
+   defines it at that specificity; a bare .btn-primary would lose to it. */
+.btn-primary,
+body.light-theme .btn-primary {
+    background: var(--sb-active);
+    color: #fff;
+    box-shadow: none;
+    text-shadow: none;
+}
+.btn-primary:hover,
+body.light-theme .btn-primary:hover {
+    background: var(--sb-active-hover);
+    transform: none;
+    box-shadow: 0 2px 10px rgba(37,99,235,.28);
+}
+
+/* Primary header action */
+#header .btn-primary,
+#header .btn-success {
+    height: 40px; border-radius: 11px; padding: 0 16px;
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+
+/* The old header search block is replaced by .hdr-find */
+#hdr-search-wrap { flex: 1; max-width: 380px; min-width: 0; margin: 0; position: relative; }
+
+/* The warden identity moved to the user chip + sidebar card. #role-badge stays
+   in the DOM so showUserMgmt()'s entry point and updateRoleBadge() keep
+   working untouched, but it is never shown. */
+#role-badge { display: none !important; }
+
+@media (max-width: 1100px) {
+    #hdr-search-wrap { display: none; }
+    .hdr-user__name  { display: none; }
+}

@@ -1,4 +1,4 @@
-/* ─── HOSTIX — CANCELLATIONS MODULE ────────────────────────────────────────
+/* ─── HOSTYLLO — CANCELLATIONS MODULE ────────────────────────────────────────
    Contains: renderCancellations, showEditCancellationModal,
              submitEditCancellation, deleteCancellationRecord,
              showAddCancellationModal, cancStudentSearch, selectCancStudent,
@@ -7,117 +7,364 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+/* ── Cancellations v5 — toolbar state ────────────────────────────────────────
+   Status is NOT read from nav.js. Its `cancFilter` looks like shared state but
+   is a function-local `let` inside renderPage(), re-initialised to 'All' on
+   every call — so anything here that read it always saw 'All' and silently
+   dropped the status filter on the next toolbar change. The route argument is
+   the authority, and renderCancellations mirrors it into `status` below so the
+   toolbar can re-render into the same view. */
+let cancelFilter = { status:'All', search:'', type:'All', room:'All', from:'', to:'',
+                     month:thisMonth(), page:1, pageSize:30, sortKey:null, sortDir:'asc' };
+
+/* ── WHICH MONTH A CANCELLATION BELONGS TO ───────────────────────────────────
+   The month the student LEAVES, not the month the form was filled in. Here the
+   two are routinely different: the house rule is that notice is given by the
+   25th, so a request written on 20 July for a 31 August move-out is an August
+   departure. Filing it under July is what made July's leavers keep turning up
+   in August's list.
+
+   requestDate is only a fallback for records written before vacateDate was
+   captured; without it those rows would fall out of every month at once. */
+function _cancMonthKey(c) {
+  return _toMonthKey(c && c.vacateDate) || _toMonthKey(c && c.requestDate) || null;
+}
+
+/* '' matches everything, '2026' a whole year, '2026-08' one month — the same
+   prefix convention _inPeriod() uses on the dashboard. */
+function _cancInScope(c) {
+  const scope = cancelFilter.month;
+  if (!scope) return true;
+  return String(_cancMonthKey(c) || '').startsWith(scope);
+}
+
+/* Every month the data actually touches, newest first, plus the current one so
+   a hostel with no cancellations yet still has something to show. Each year
+   gets a whole-year entry of its own: the scope is matched as a string prefix,
+   so '2026' selects all of 2026 with no extra machinery. */
+function _cancMonthOptions() {
+  const months = new Set([thisMonth()]);
+  (DB.cancellations || []).forEach(c => { const k = _cancMonthKey(c); if (k) months.add(k); });
+  const years = new Set([...months].map(m => m.slice(0, 4)));
+  return [...months, ...years].sort().reverse();
+}
+
+function _cancMonthLabel(key) {
+  if (!key) return 'All months';
+  if (/^\d{4}$/.test(key)) return 'All of ' + key;
+  const d = new Date(key + '-01T00:00:00');
+  return isNaN(d) ? key
+    : d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function canSetMonth(v) {
+  cancelFilter.month = v;
+  cancelFilter.page = 1;
+  renderPage('cancellations_' + cancelFilter.status);
+}
+
+/* Display reference for a request.
+   New records carry a persistent `seq` (assigned in saveCancellation). Records
+   created before that fall back to their position in the list — which means
+   deleting an older record renumbers the ones after it. That is why the number
+   is persisted going forward rather than always derived. */
+function _cancSeq(c, list) {
+  const n = c.seq || (list.indexOf(c) + 1);
+  return 'CAN-' + String(n).padStart(4, '0');
+}
+function _cancNextSeq() {
+  return (DB.cancellations || []).reduce((m, c) => Math.max(m, Number(c.seq) || 0), 0) + 1;
+}
+
+/* Room types carry their own colour in settings — that is data, not styling, so
+   the type chip uses it rather than a decorative hue. */
+function _cancTypeColor(name) {
+  const t = ((DB.settings && DB.settings.roomTypes) || []).find(x => x.name === name);
+  return t && t.color ? t.color : '';
+}
+
+function _cancInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '—';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 function renderCancellations(filterStatus='All') {
-  const list = DB.cancellations || [];
+  cancelFilter.status = filterStatus;   // the route is the authority; mirror it
+  const all  = DB.cancellations || [];
+  // Everything below counts THIS MONTH's departures. Before this, the strip
+  // counted the whole database, so a hostel two years in read "All Records
+  // 214" on a page a warden opens to answer "who is going this month".
+  const list = all.filter(_cancInScope);
   const pending = list.filter(c=>c.status==='Pending');
   const confirmed = list.filter(c=>c.status==='Confirmed');
   const restored = list.filter(c=>c.status==='Restored');
   const freed = list.filter(c=>c.status==='Pending'||c.status==='Confirmed');
-  const filtered = filterStatus==='All'?list:filterStatus==='Freed'?freed:list.filter(c=>c.status===filterStatus);
+  const byStatus = filterStatus==='All'?list:filterStatus==='Freed'?freed:list.filter(c=>c.status===filterStatus);
+
+  // Toolbar narrowing, applied on top of the status the cards/route select.
+  const q = cancelFilter.search.trim().toLowerCase();
+  let filtered = byStatus.filter(c => {
+    if (cancelFilter.type !== 'All' && (c.roomType||'') !== cancelFilter.type) return false;
+    if (cancelFilter.room !== 'All' && String(c.roomNumber||'') !== cancelFilter.room) return false;
+    if (cancelFilter.from && (c.requestDate||'') < cancelFilter.from) return false;
+    if (cancelFilter.to   && (c.requestDate||'') > cancelFilter.to)   return false;
+    if (!q) return true;
+    return [c.studentName, c.roomNumber, c.roomType, c.reason, c.status, _cancSeq(c, list)]
+      .some(v => String(v||'').toLowerCase().includes(q));
+  });
+  filtered = applySort(filtered, cancelFilter, {
+    student: c=>c.studentName||'', room: c=>Number(c.roomNumber)||0, type: c=>c.roomType||'',
+    request: c=>c.requestDate||'', vacate: c=>c.vacateDate||'',
+    status:  c=>c.status||'',      reason: c=>c.reason||''
+  });
+  const _pg = paginate(filtered, cancelFilter);
+
+  const roomNums = [...new Set(list.map(c=>String(c.roomNumber||'')).filter(Boolean))]
+                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const types    = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
+  const nActive  = [cancelFilter.type!=='All', cancelFilter.room!=='All',
+                    !!cancelFilter.from, !!cancelFilter.to, !!q].filter(Boolean).length;
+
+  const SV = {
+    // Pending is genuinely "act on me", Confirmed is settled, Restored reversed.
+    // The sub-line states what the status DID, which is what a warden scanning
+    // the column actually needs.
+    Pending:   { hue:'dh-amber', sub:'Awaiting action',
+                 svg:'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>' },
+    Confirmed: { hue:'dh-green', sub:'Student left',
+                 svg:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    Restored:  { hue:'dh-blue',  sub:'Back to active',
+                 svg:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>' }
+  };
+  const calSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>';
 
   const mkRow = (c) => {
     const student = DB.students.find(s=>s.id===c.studentId);
-    const statusBadgeHtml = c.status==='Pending'
-      ? '<span class="badge badge-red">⏳ Pending</span>'
+    const st  = SV[c.status] || SV.Pending;
+    const tc  = _cancTypeColor(c.roomType);
+    // Pending can be confirmed or reversed; Confirmed can still be reversed;
+    // Restored is terminal. Same rules the previous list enforced.
+    const acts = c.status==='Pending'
+      ? `<button class="lk-act lk-act--hue dh-green" onclick="confirmCancellation('${c.id}')" title="Confirm — marks the student Left">
+           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Confirm</button>
+         <button class="lk-act lk-act--hue dh-blue" onclick="restoreFromCancellation('${c.id}')" title="Restore the student to Active">
+           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Restore</button>`
       : c.status==='Confirmed'
-        ? '<span class="badge badge-gray" style="background:rgba(224,82,82,0.1);color:var(--red);border-color:rgba(224,82,82,0.3)">'+icon('check','sm')+' Confirmed</span>'
-        : '<span class="badge badge-green">↩️ Restored</span>';
-    const actionBtns = c.status==='Pending'
-      ? '<button class="btn btn-danger btn-sm" style="font-size:11px" onclick="confirmCancellation(\''+c.id+'\')"><span class=\"micon\" style=\"font-size:14px\">check_circle</span></button>'
-        +'<button class="btn btn-success btn-sm" style="font-size:11px" onclick="restoreFromCancellation(\''+c.id+'\')">↩</button>'
-      : c.status==='Confirmed'
-        ? '<button class="btn btn-success btn-sm" style="font-size:11px" onclick="restoreFromCancellation(\''+c.id+'\')">↩ Restore</button>'
+        ? `<button class="lk-act lk-act--hue dh-blue" onclick="restoreFromCancellation('${c.id}')" title="Restore the student to Active">
+             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Restore</button>`
         : '';
-    return `<tr style="cursor:pointer" onclick="showEditCancellationModal('${c.id}')">
+    return `<tr>
       <td>
-        <div style="font-weight:700;color:var(--blue)">${escHtml(c.studentName||'—')}</div>
-        <div style="font-size:11px;color:var(--text3)">${escHtml(student?.phone||'')}</div>
+        <div class="lk-who dh-violet">
+          <div class="lk-who__av">${escHtml(_cancInitials(c.studentName))}</div>
+          <div style="min-width:0">
+            <div class="lk-who__n">${escHtml(c.studentName||'—')}</div>
+            ${student&&student.phone?`<div class="lk-who__s">${escHtml(student.phone)}</div>`:''}
+            <div class="lk-who__id">ID: ${_cancSeq(c, list)}</div>
+          </div>
+        </div>
       </td>
-      <td><span style="font-size:15px;font-weight:900;color:var(--accent-strong)">#${c.roomNumber||'—'}</span></td>
-      <td><span class="badge badge-gray">${escHtml(c.roomType||'—')}</span></td>
-      <td class="text-muted" style="font-size:12px">${fmtDate(c.requestDate)}</td>
-      <td class="text-muted" style="font-size:12px">${fmtDate(c.vacateDate)||'End of Month'}</td>
-      <td>${statusBadgeHtml}</td>
-      <td class="text-muted" style="font-size:12px;max-width:140px;white-space:normal">${escHtml(c.reason||'—')}</td>
-      <td onclick="event.stopPropagation()">
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="showEditCancellationModal('${c.id}')">✏️ Edit</button>
-          ${actionBtns}
+      <td><div class="lk-room__n">#${escHtml(String(c.roomNumber||'—'))}</div></td>
+      <td>${c.roomType
+            ? `<span class="lk-chip${tc?'':' lk-chip--flat'}"${tc?` style="background:${tc}22;color:${tc}"`:''}>${escHtml(c.roomType)}</span>`
+            : '<span class="lk-dash">—</span>'}</td>
+      <td><div class="lk-when">${calSvg}${fmtDate(c.requestDate)}</div></td>
+      <td>${c.vacateDate
+            ? `<div class="lk-when">${calSvg}${fmtDate(c.vacateDate)}</div>`
+            : '<span class="lk-dash">End of month</span>'}</td>
+      <td>
+        <span class="lk-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span>
+        <div class="lk-sub">${st.sub}</div>
+      </td>
+      <td style="max-width:170px;white-space:normal">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
+      <td>
+        <div class="lk-acts">
+          <button class="lk-act" onclick="showEditCancellationModal('${c.id}')" title="Edit this record">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</button>
+          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="deleteCancellationRecord('${c.id}')" title="Delete this record">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+          ${acts}
         </div>
       </td>
     </tr>`;
   };
 
+  const card = (status, hue, label, sub, value, svg) => `
+    <div class="lk-stat lk-stat--click ${hue}${filterStatus===status?' is-on':''}" onclick="renderPage('cancellations_${status}')" title="Show ${label.toLowerCase()}">
+      <div class="lk-stat__top">
+        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
+        <div class="lk-stat__label">${label}</div>
+      </div>
+      <div class="lk-stat__val">${value}</div>
+      <div class="lk-stat__sub">${filterStatus===status?'Showing these':sub}</div>
+    </div>`;
+
+  const th = (key,label) => {
+    const on  = cancelFilter.sortKey===key;
+    const arw = on ? (cancelFilter.sortDir==='asc'?'▲':'▼') : '⇅';
+    return `<th class="is-sortable${on?' is-sorted':''}" onclick="toggleSort(cancelFilter,'cancellations_${filterStatus}','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+  };
+
   return `
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-    <div class="stat-card gold" onclick="renderPage('cancellations_All')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='All'?';border-color:var(--accent)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='All'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)"></div>':''}
-      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">${icon('list')}</div>
-      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px">${list.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='All'?'var(--accent-strong)':'var(--text3)'}">All Records</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='All'?'▲ showing all':'click to show all'}</div>
-    </div>
-    <div class="stat-card red" onclick="renderPage('cancellations_Pending')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Pending'?';border-color:var(--red)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Pending'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>':''}
-      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">🚨</div>
-      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px;color:var(--red)">${pending.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Pending'?'var(--red)':'var(--text3)'}">Pending</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Pending'?'▲ showing':'Awaiting action'}</div>
-    </div>
-    <div class="stat-card teal" onclick="renderPage('cancellations_Confirmed')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Confirmed'?';border-color:var(--teal)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Confirmed'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--teal)"></div>':''}
-      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">${icon('check')}</div>
-      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px">${confirmed.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Confirmed'?'var(--teal)':'var(--text3)'}">Confirmed</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Confirmed'?'▲ showing':'Students left'}</div>
-    </div>
-    <div class="stat-card green" onclick="renderPage('cancellations_Restored')" style="padding:18px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden${filterStatus==='Restored'?';border-color:var(--green)':''}" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-      ${filterStatus==='Restored'?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--green)"></div>':''}
-      <div class="stat-icon" style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 6px">↩️</div>
-      <div class="stat-value" style="font-size:36px;line-height:1;margin-bottom:4px;color:var(--green)">${restored.length}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${filterStatus==='Restored'?'var(--green)':'var(--text3)'}">Restored</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${filterStatus==='Restored'?'▲ showing':'Reversed cancels'}</div>
-    </div>
+  <!-- ══ STAT STRIP ══ -->
+  <div class="lk-stats">
+    ${/* THE NUMBER THAT MUST NOT SHRINK.
+          It used to be four status counts and nothing else, so as wardens
+          marked leavers Left the Pending card fell 20 -> 15 while the month's
+          real answer was still 20. An owner asking "you said twenty are going
+          this month" read 15 and concluded the warden was making it up. The
+          headline is now the month's departures — Pending plus Confirmed —
+          which only moves when a departure is added, cancelled or restored,
+          never when one merely progresses from one status to the other. */''}
+    ${card('Freed','dh-violet',cancelFilter.month?('Leaving '+(/^\d{4}$/.test(cancelFilter.month)?cancelFilter.month:_cancMonthLabel(cancelFilter.month).split(' ')[0])):'Leaving (all months)',
+        'Still in + already left',freed.length,'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>')}
+    ${card('Pending','dh-amber','Still in hostel','Notice given, not gone yet',pending.length,'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>')}
+    ${card('Confirmed','dh-green','Already left','Seat is free',confirmed.length,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
+    ${card('Restored','dh-blue','Restored','Notice withdrawn',restored.length,'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')}
   </div>
 
-  <!-- Freed Seats banner clickable -->
-  <div onclick="renderPage('cancellations_Freed')" style="background:${filterStatus==='Freed'?'var(--teal-dim)':'var(--card)'};border:1px solid ${filterStatus==='Freed'?'rgba(15,188,173,0.4)':'var(--border)'};border-radius:var(--radius);padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-    <div style="display:flex;align-items:center;gap:14px">
-      <div style="width:44px;height:44px;border-radius:10px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;font-size:20px">${icon('bed','sm')}</div>
+  <!-- ══ FREED SEATS ══ -->
+  <div class="lk-banner dh-violet${filterStatus==='Freed'?' is-on':''}" onclick="renderPage('cancellations_Freed')" title="Show everyone leaving — those still here and those already gone">
+    <div class="lk-banner__l">
+      <div class="lk-banner__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg></div>
       <div>
-        <div style="font-size:13px;font-weight:700;color:var(--teal)">Freed Seats (Pending + Confirmed)</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">These seats are now vacant and available for new bookings</div>
+        <div class="lk-banner__t">${freed.length} leaving in ${escHtml(_cancMonthLabel(cancelFilter.month))}</div>
+        <div class="lk-banner__s">${confirmed.length} already left &middot; ${pending.length} still in the hostel, seat theirs until their vacate date</div>
       </div>
     </div>
-    <div style="text-align:center">
-      <div style="font-size:32px;font-weight:900;color:var(--teal)">${freed.length}</div>
-      <div style="font-size:10px;color:var(--text3)">${filterStatus==='Freed'?'▲ showing':'click to filter'}</div>
+    <div>
+      <div class="lk-banner__v">${freed.length}</div>
+      <div class="lk-banner__a">${filterStatus==='Freed'?'Showing these':'Click to filter'}</div>
     </div>
   </div>
 
-  ${pending.length>0&&filterStatus==='All'?`
-  <div style="background:rgba(224,82,82,0.07);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
-    <span style="font-size:16px">${icon('warning','sm')}</span>
-    <span style="font-size:12.5px;color:var(--text2)">${pending.length} pending cancellation${pending.length!==1?'s':''} await action — seats already freed. Click <strong style="color:var(--red)">Pending</strong> card above to view them.</span>
-  </div>`:''}
-
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">
-        ${filterStatus==='All'?icon('list')+' All Cancellations':filterStatus==='Pending'?'🚨 Pending Cancellations':filterStatus==='Confirmed'?icon('check','sm')+' Confirmed Cancellations':filterStatus==='Restored'?'↩️ Restored Cancellations':icon('bed','sm')+' Freed Seats (Pending + Confirmed)'}
+  <!-- ══ TOOLBAR + TABLE ══ -->
+  <div class="lk-panel">
+    <div class="lk-tools">
+      <div class="lk-search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        <input id="canc-search" placeholder="Search student, room, reason, request ID…"
+               value="${escHtml(cancelFilter.search)}" oninput="canSearch(this.value)">
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;color:var(--text3)">${filtered.length} record${filtered.length!==1?'s':''}</span>
-        <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="downloadCancellationReport()">⬇️ Download Report</button>
-        ${filterStatus!=='All'?`<button class="btn btn-secondary btn-sm" onclick="renderPage('cancellations_All')">✕ Clear Filter</button>`:''}
+
+      ${/* First control on the row on purpose: it governs every number above
+            it, so it has to be the first thing read, not a filter tucked in
+            among the room-type dropdowns. */''}
+      <select class="lk-select${cancelFilter.month?' is-set':''}" onchange="canSetMonth(this.value)" title="Show one month only">
+        <option value="" ${!cancelFilter.month?'selected':''}>All months</option>
+        ${_cancMonthOptions().map(k=>`<option value="${escHtml(k)}" ${cancelFilter.month===k?'selected':''}>${escHtml(_cancMonthLabel(k))}</option>`).join('')}
+      </select>
+
+      <select class="lk-select${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)" title="Filter by status">
+        ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
+          `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'All Leaving':s}</option>`).join('')}
+      </select>
+
+      <select class="lk-select${cancelFilter.type!=='All'?' is-set':''}" onchange="canSet('type',this.value)" title="Filter by room type">
+        <option value="All">All Types</option>
+        ${types.map(t=>`<option value="${escHtml(t)}" ${cancelFilter.type===t?'selected':''}>${escHtml(t)}</option>`).join('')}
+      </select>
+
+      <select class="lk-select${cancelFilter.room!=='All'?' is-set':''}" onchange="canSet('room',this.value)" title="Filter by room">
+        <option value="All">All Rooms</option>
+        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${cancelFilter.room===r?'selected':''}>Room #${escHtml(r)}</option>`).join('')}
+      </select>
+
+      <div class="lk-range" title="Filter by request date">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+        <input class="cdp-trigger" type="text" readonly placeholder="From" value="${escHtml(cancelFilter.from)}"
+               onclick="showCustomDatePicker(this,event)" onchange="canSet('from',this.value)">
+        <span>→</span>
+        <input class="cdp-trigger" type="text" readonly placeholder="To" value="${escHtml(cancelFilter.to)}"
+               onclick="showCustomDatePicker(this,event)" onchange="canSet('to',this.value)">
+      </div>
+
+      <div class="lk-tools__end">
+        ${nActive?`<button class="lk-btn lk-btn--on" onclick="canClearFilters()" title="Clear the toolbar filters">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          Clear<span class="lk-btn__count">${nActive}</span></button>`:''}
+        <button class="lk-btn lk-btn--go" onclick="downloadCancellationReport()" title="Print / save the cancellation report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          Download Report</button>
       </div>
     </div>
-    ${filtered.length===0?`<div class="empty-state" style="padding:32px"><div class="icon">${filterStatus==='Pending'?'🎉':icon('list')}</div><div>${filterStatus==='Pending'?'No pending cancellations!':'No records found'}</div></div>`:
-    `<div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>Type</th><th>Request Date</th><th>Vacate By</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
-      <tbody>${filtered.map(c=>mkRow(c)).join('')}</tbody>
-      </table>
-    </div>`}
+
+    <div class="lk-head">
+      <div class="lk-head__t">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+        ${filterStatus==='All'?'All Cancellations':filterStatus==='Freed'?'Freed Seats (Pending + Confirmed)':filterStatus+' Cancellations'}
+      </div>
+      <div class="lk-head__n">${_pg.total} record${_pg.total!==1?'s':''}</div>
+    </div>
+
+    ${_pg.total===0?`
+      <div class="lk-empty">
+        <div class="lk-empty__i"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
+        <div class="lk-empty__t">${list.length===0?'No cancellations yet':nActive?'Nothing matches those filters':'No '+filterStatus.toLowerCase()+' cancellations'}</div>
+        <div class="lk-empty__s">${list.length===0?'Cancellation requests will appear here once you add one.':nActive?'Try widening the search or date range.':'Nothing to action here.'}</div>
+        ${list.length===0
+          ? `<button class="lk-btn lk-btn--go" onclick="showAddCancellationModal()">+ Add Cancellation</button>`
+          : nActive?`<button class="lk-btn" onclick="canClearFilters()">Clear filters</button>`:''}
+      </div>`
+    : `<div class="lk-table-wrap">
+        <table class="lk-table">
+          <thead><tr>
+            ${th('student','Student')}${th('room','Room')}${th('type','Type')}
+            ${th('request','Request Date')}${th('vacate','Vacate By')}
+            ${th('status','Status')}${th('reason','Reason')}
+            <th>Actions</th>
+          </tr></thead>
+          <tbody>${_pg.slice.map(c=>mkRow(c)).join('')}</tbody>
+        </table>
+      </div>
+      ${canPager(_pg, filterStatus)}`}
+  </div>`;
+}
+
+/* ── Cancellations v5 — toolbar behaviour ────────────────────────────────── */
+function canSet(key, val) {
+  cancelFilter[key] = val;
+  cancelFilter.page = 1;
+  renderPage('cancellations_' + cancelFilter.status);
+}
+const canSearch = debounce(function (v) { canSet('search', v); }, 220);
+function canClearFilters() {
+  cancelFilter.month = thisMonth(); cancelFilter.search = ''; cancelFilter.type = 'All'; cancelFilter.room = 'All';
+  cancelFilter.from = ''; cancelFilter.to = '';
+  canSet('page', 1);
+}
+function canPager(pg, status) {
+  const btn = (label, target, o) => {
+    o = o || {};
+    if (o.disabled) return `<button disabled>${label}</button>`;
+    if (o.active)   return `<button class="is-on">${label}</button>`;
+    return `<button onclick="gotoPage(cancelFilter,'cancellations_${status}',${target})">${label}</button>`;
+  };
+  const { page, pages } = pg;
+  let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
+  lo = Math.max(1, hi-4);
+  let nums = '';
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="lk-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
+  if (hi < pages) nums += (hi<pages-1?'<span class="lk-pager__gap">…</span>':'') + btn(String(pages), pages);
+
+  return `<div class="lk-foot">
+    <div class="lk-foot__size">
+      Show
+      <select onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')">
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${cancelFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+      </select>
+      entries
+    </div>
+    <div class="lk-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} record${pg.total!==1?'s':''}</div>
+    <div class="lk-pager">
+      ${btn('«',1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1})}
+      ${nums}
+      ${btn('›',page+1,{disabled:page>=pages})}
+      ${btn('»',pages,{disabled:page>=pages})}
+    </div>
   </div>`;
 }
 
@@ -133,7 +380,7 @@ function showEditCancellationModal(cancId) {
       <div style="width:40px;height:40px;border-radius:10px;background:var(--red-dim);display:flex;align-items:center;justify-content:center;font-size:18px">🚫</div>
       <div>
         <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(c.studentName||'—')}</div>
-        <div style="font-size:12px;color:var(--text3)">Room #${c.roomNumber||'?'} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
+        <div style="font-size:12px;color:var(--text3)">Room #${escHtml(c.roomNumber||'?')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
       </div>
     </div>
     <div class="form-grid">
@@ -158,6 +405,17 @@ function showEditCancellationModal(cancId) {
    <button class="btn btn-primary" onclick="submitEditCancellation('${cancId}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
 }
 
+/* The room a student is leaving, read from the roster rather than from a field
+   students do not have. `student.roomNumber` is only ever written by the
+   restore flow, so for everyone who left the ordinary way lastRoom was set to
+   '' — and the Former Students list, whose whole job is to say which room a
+   past student had, showed nothing for any of them. */
+function _cancRoomNumberOf(student) {
+  if (!student) return '';
+  const r = DB.rooms.find(x => x.id === student.roomId);
+  return r ? String(r.number) : String(student.roomNumber || '');
+}
+
 async function submitEditCancellation(cancId) {
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
@@ -171,8 +429,12 @@ async function submitEditCancellation(cancId) {
   if(student) {
     if(newStatus==='Confirmed') {
       student.status='Left';
-      student.leftDate = new Date().toISOString().slice(0,10);
-      student.lastRoom = student.roomNumber || '';
+      // The vacate date is when they actually go. Stamping today() meant a
+      // cancellation processed on the 20th for a 31st move-out recorded the
+      // student as having left eleven days before they did — and that is the
+      // date every historical report reads afterwards.
+      student.leftDate = c.vacateDate || today();
+      student.lastRoom = _cancRoomNumberOf(student);
     }
     else if(newStatus==='Restored') student.status='Active';
     else if(newStatus==='Pending') student.status='Cancelling';
@@ -198,7 +460,7 @@ function showAddCancellationModal() {
   const available = activeStudents.filter(s=>!alreadyCancelling.includes(s.id));
   const studentOpts = available.map(s=>{
     const room=DB.rooms.find(r=>r.id===s.roomId);
-    return `<option value="${s.id}">👤 ${escHtml(s.name)} — Room #${room?room.number:'?'}</option>`;
+    return `<option value="${s.id}">👤 ${escHtml(s.name)} — Room #${escHtml(String(room?room.number:'?'))}</option>`;
   }).join('');
 
   if(available.length===0){
@@ -206,11 +468,11 @@ function showAddCancellationModal() {
     return;
   }
 
-  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return d.toISOString().split('T')[0]; })();
+  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return ymd(d); })();
 
   showModal('modal-md','🚫 Add Cancellation Request',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--text2)">
-      ${icon('warning','sm')} <strong>Note:</strong> Once added, the student's seat is immediately marked as <strong style="color:var(--red)">Vacant</strong> and available for new bookings.
+      ${icon('warning','sm')} <strong>Note:</strong> The student stays on the roster and <strong>keeps their bed until the vacate date</strong> — they are still billed for it, and the Rooms page marks the seat <strong style="color:var(--amber)">vacating</strong> so nobody books it twice. The bed frees when the cancellation is confirmed.
     </div>
     <div class="form-grid">
       <div class="field col-full">
@@ -282,7 +544,7 @@ function cancStudentSearch(query) {
     return `<div onclick="selectCancStudent('${s.id}')"
       style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px"
       onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--red-dim);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
+      <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0">${escHtml((s.name||'?')[0].toUpperCase())}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(s.name)}</div>
         <div style="font-size:11px;color:var(--text3)">${roomLabel} · ${escHtml(s.phone||'—')}</div>
@@ -336,6 +598,7 @@ async function saveCancellation() {
   if(!DB.cancellations) DB.cancellations=[];
   DB.cancellations.push({
     id: 'canc_'+uid(), // FIX 22: consistent 'canc_' prefix matching rest of cancellation system
+    seq: _cancNextSeq(), // stable CAN-#### shown in the list; survives deletions
     studentId: student.id,
     studentName: student.name,
     roomId: student.roomId||'',
@@ -351,7 +614,7 @@ async function saveCancellation() {
   student.status = 'Cancelling';
   await saveDB();
   closeModal();
-  toast(`${student.name} added to cancellation list. Seat is now vacant.`, 'success');
+  toast(`${student.name} is on notice — bed held until ${vacateDate ? fmtDate(vacateDate) : 'the vacate date'}.`, 'success');
   if(currentPage==='cancellations') renderPage('cancellations');
   else if(currentPage==='dashboard') renderPage('dashboard');
 }
@@ -359,13 +622,13 @@ async function saveCancellation() {
 async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Confirm Cancellation', `Mark ${c.studentName}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
+  showConfirm('Confirm Cancellation', `Mark ${escHtml(c.studentName)}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
     c.status = 'Confirmed';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){
       student.status='Left';
-      student.leftDate = new Date().toISOString().slice(0,10);
-      student.lastRoom = student.roomNumber || '';
+      student.leftDate = c.vacateDate || today();
+      student.lastRoom = _cancRoomNumberOf(student);
     }
     await saveDB();
     toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
@@ -376,7 +639,7 @@ async function confirmCancellation(cancId) {
 async function restoreFromCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Restore Student', `Restore ${c.studentName} to Active? Their seat will be re-occupied.`, (async ()=>{
+  showConfirm('Restore Student', `Restore ${escHtml(c.studentName)} to Active? Their seat will be re-occupied.`, (async ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
     if(student){ student.status='Active'; }
@@ -389,7 +652,9 @@ async function restoreFromCancellation(cancId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ROOMS
 // ════════════════════════════════════════════════════════════════════════════
-let roomFilter = {status:'All', type:'All', floor:'All', search:'', page:1, sortKey:null, sortDir:'asc'};
+// Rooms v5 adds a grid/list view switch.
+let roomFilter = {status:'All', type:'All', floor:'All', search:'', view:'grid',
+                  page:1, sortKey:null, sortDir:'asc'};
 
 function downloadCancellationReport() {
   const list = DB.cancellations || [];
@@ -400,7 +665,7 @@ function downloadCancellationReport() {
   const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth()-2, 1);
 
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Cancellation Report — ${DB.settings.hostelName||'Hostel'}</title>
+  <title>Cancellation Report — ${escHtml(DB.settings.hostelName||'Hostel')}</title>
   <style>
     @page { margin: 15mm; }
     @media print { .no-print { display:none; } }
@@ -426,7 +691,7 @@ function downloadCancellationReport() {
     <button onclick="window.close()">✕ Close</button>
   </div>
   <h1>📋 Cancellation Report</h1>
-  <div class="sub">${DB.settings.hostelName||'Hostel'} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
+  <div class="sub">${escHtml(DB.settings.hostelName||'Hostel')} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
 
   list.forEach(c => {
     const student = DB.students.find(s=>s.id===c.studentId);
@@ -447,8 +712,8 @@ function downloadCancellationReport() {
     html += `<div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
-          <div style="font-size:15px;font-weight:800;color:#0f1a2e">${c.studentName||'—'}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">Room #${c.roomNumber||'—'} · ${c.roomType||'—'} · ${student?.phone||'No phone'}</div>
+          <div style="font-size:15px;font-weight:800;color:#0f1a2e">${escHtml(c.studentName||'—')}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">Room #${escHtml(c.roomNumber||'—')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
         </div>
         <span class="badge ${statusBadge}">${c.status}</span>
       </div>
@@ -456,8 +721,8 @@ function downloadCancellationReport() {
         <tr><th>Field</th><th>Details</th></tr>
         <tr><td>Request Date</td><td>${fmtDate(c.requestDate)||'—'}</td></tr>
         <tr><td>Vacate Date</td><td>${fmtDate(c.vacateDate)||'End of Month'}</td></tr>
-        <tr><td>Reason</td><td>${c.reason||'—'}</td></tr>
-        <tr><td>Notes</td><td>${c.notes||'—'}</td></tr>
+        <tr><td>Reason</td><td>${escHtml(c.reason||'—')}</td></tr>
+        <tr><td>Notes</td><td>${escHtml(c.notes||'—')}</td></tr>
       </table>
       <div class="section-title">💰 Payment History (Last 2 Months)</div>`;
 
@@ -470,7 +735,7 @@ function downloadCancellationReport() {
           <td>${fmtPKR(p.monthlyRent||0)}</td>
           <td>${fmtPKR(p.amount||0)}</td>
           <td style="color:${(p.unpaid||0)>0?'#dc2626':'#16a34a'};font-weight:700">${fmtPKR(p.unpaid||0)}</td>
-          <td>${p.method||'—'}</td>
+          <td>${escHtml(p.method||'—')}</td>
           <td>${fmtDate(p.date)||'—'}</td>
           <td><span class="badge ${statusCls}">${p.status}</span></td>
         </tr>`;
@@ -484,6 +749,6 @@ function downloadCancellationReport() {
 
   html += `</body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+today()+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────

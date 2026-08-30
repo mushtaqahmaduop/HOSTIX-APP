@@ -1,0 +1,40 @@
+# Railway service config for the control plane.
+#
+# Set the service's Root Directory to `server` in Railway, so this file is found
+# and the build context is this directory alone. That is why the app's shared
+# key module is vendored here by scripts/sync-shared.js — the rest of the repo
+# is not present at build time.
+
+[build]
+# Nothing to compile. Plain CommonJS, no bundler, matching the desktop app.
+buildCommand = "npm ci --omit=dev"
+
+# NO watchPatterns here, and that is deliberate.
+#
+# Paths in this file are relative to the SERVICE's root, not the repository's.
+# `server/**` looked right and matched nothing — with `railway up` the upload
+# context is this directory, so its contents sit at the top level, and a deploy
+# silently reported "no changes detected in watch paths, build will skip" while
+# appearing to succeed.
+#
+# It is also unnecessary: the service's root directory already scopes what
+# triggers a rebuild. If a pattern is ever wanted, write it relative to this
+# file — `src/**`, not `server/src/**`.
+
+[deploy]
+startCommand = "npm start"
+
+# The DEPLOY GATE, and deliberately not /v1/healthz.
+#
+# This one probes Postgres, because a process that cannot reach its database
+# should not be promoted. /v1/healthz probes nothing on purpose — every install
+# polls it every 60 seconds — so pointing the gate at it would let a build with
+# a broken database connection go live looking perfectly healthy.
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+
+# Restart on crash, but do not loop forever on a misconfiguration: a missing
+# DATABASE_URL makes the process exit immediately, and retrying that at speed
+# just fills the logs.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5

@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — AUTH SYSTEM v2.0 ────────────────────────────────────────
+/* ─── HOSTYLLO — AUTH SYSTEM v2.0 ────────────────────────────────────────
    Requires: config.js, utils.js (escHtml, toast).
  
    SECURITY MODEL:
@@ -126,32 +126,131 @@ async function _sha256v1(plain) {
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
-// 3.  WARDEN CONFIG
+// 3.  USER CONFIG
+//
+// Was a fixed two-warden map (warden1 / warden2). It is now an open list of
+// users, each with its own username and its own permission set. The storage
+// key is unchanged so existing installs upgrade in place — see _migrateUsers().
 // ─────────────────────────────────────────────────────────────────────────────
-const _DEFAULT_META = {
-  warden1: { name: 'Faheem Ullah', phone: '', canDelete: true,  canSettings: true,  canEdit: true },
-  warden2: { name: 'Warden 2',    phone: '', canDelete: true,  canSettings: false, canEdit: true },
-};
- 
+
+/** Every permission the app enforces. Order is the order shown in the UI. */
+const PERMS = [
+  { key: 'edit',     label: 'Add & edit records',   hint: 'Students, rooms, payments, expenses' },
+  { key: 'delete',   label: 'Delete records',       hint: 'Remove students, payments and rooms' },
+  { key: 'payments', label: 'Collect payments',     hint: 'Record and edit payments' },
+  { key: 'reports',  label: 'View reports',         hint: 'Reports page and PDF exports' },
+  { key: 'backup',   label: 'Backup & restore',     hint: 'Export and import the database' },
+  { key: 'settings', label: 'Change settings',      hint: 'Hostel details, room types, rent' },
+  { key: 'users',    label: 'Manage users',         hint: 'Add users and set permissions' },
+  { key: 'clearall', label: 'Clear all data',       hint: 'Wipe the database. Rarely needed.' },
+];
+const PERM_KEYS = PERMS.map(p => p.key);
+
 /**
- * Load warden config from localStorage, or build it fresh on first run.
- * Default password for each warden = their own key (e.g. 'warden1').
+ * Password a brand-new install seeds its built-in account with.
+ *
+ * Installs created before this was introduced seeded the account's own username
+ * as its password instead, so both count as "default" for the weak-password
+ * warning in checkDefaultPasswords().
+ */
+const DEFAULT_PASSWORD = 'admin123';
+
+/** A brand-new install starts with one full-access account. */
+const _DEFAULT_META = {
+  warden1: {
+    username: 'warden1', name: 'Hostyllo', phone: '',
+    perms: Object.fromEntries(PERM_KEYS.map(k => [k, true])),
+    active: true, builtin: true,
+  },
+};
+
+/**
+ * Bring a stored config up to the current shape.
+ *
+ * Existing installs hold `{ warden1:{name,phone,canEdit,canDelete,canSettings,pw,photo}, warden2:{...} }`.
+ * Two rules govern this migration, because getting it wrong locks a paying
+ * hostel out of its own data:
+ *   1. `pw` is never touched — their current password must keep working.
+ *   2. Access is never silently reduced. The old canEdit/canDelete/canSettings
+ *      flags were declared but never actually checked, so every existing user
+ *      effectively had full access. Anything not covered by an old flag is
+ *      therefore granted, not denied.
+ * Returns true if anything changed and the config needs saving.
+ */
+function _migrateUsers(cfg) {
+  let changed = false;
+  for (const [id, u] of Object.entries(cfg)) {
+    if (!u || typeof u !== 'object') continue;
+
+    if (!u.username) { u.username = id; changed = true; }
+    if (u.active === undefined) { u.active = true; changed = true; }
+
+    if (!u.perms) {
+      u.perms = {
+        edit:     u.canEdit     !== false,
+        delete:   u.canDelete   !== false,
+        settings: u.canSettings !== false,
+        // Never enforced before, so everyone keeps them.
+        payments: true, reports: true, backup: true,
+        // Only an account that could already reach settings inherits user
+        // management — otherwise every warden could grant themselves anything.
+        users:    u.canSettings !== false,
+        clearall: u.canDelete   !== false,
+      };
+      changed = true;
+    }
+    // A later version may add a permission; grant it rather than silently deny.
+    for (const k of PERM_KEYS) {
+      if (u.perms[k] === undefined) { u.perms[k] = true; changed = true; }
+    }
+  }
+
+  // There must always be at least one account that can manage users, or the
+  // install becomes unadministrable.
+  if (Object.keys(cfg).length && !Object.values(cfg).some(u => u?.perms?.users && u.active !== false)) {
+    const first = Object.values(cfg)[0];
+    first.perms.users = true;
+    first.active = true;
+    changed = true;
+    console.warn('[Auth] No account could manage users; restored it on', first.username);
+  }
+  return changed;
+}
+
+/**
+ * Load the user config from localStorage, or build it fresh on first run.
+ * Default password on a fresh install = DEFAULT_PASSWORD. Only fresh installs
+ * are affected — an existing install returns its stored config untouched above,
+ * so no client's current password ever changes.
  */
 async function _loadWardenConfig() {
   const existing = _getJSON(_key('wardens'));
-  if (existing && typeof existing === 'object') return existing;
- 
+  if (existing && typeof existing === 'object' && Object.keys(existing).length) {
+    if (_migrateUsers(existing)) _setJSON(_key('wardens'), existing);
+    return existing;
+  }
+
   // First run — hash default passwords with PBKDF2
   const cfg = {};
   for (const [id, meta] of Object.entries(_DEFAULT_META)) {
-    cfg[id] = { ...meta, pw: await hashPassword(id) };
+    cfg[id] = { ...meta, pw: await hashPassword(DEFAULT_PASSWORD) };
   }
   _setJSON(_key('wardens'), cfg);
   return cfg;
 }
- 
+
 function saveWardenConfig() {
   _setJSON(_key('wardens'), WARDENS);
+}
+
+/** Find a user id by username, case-insensitively. Returns the id or null. */
+function findUserByUsername(username) {
+  const want = String(username || '').trim().toLowerCase();
+  if (!want) return null;
+  for (const [id, u] of Object.entries(WARDENS)) {
+    if (String(u?.username || id).toLowerCase() === want) return id;
+  }
+  return null;
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,7 +299,39 @@ function _remainingAttempts(role) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 5.  SESSION MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
-function _createSession(role) {
+/*
+ * REMEMBER ME.
+ *
+ * Owner's call, 2026-08-30: wardens were retyping a password every time the
+ * app opened, several times a shift. This screen had deliberately shipped
+ * WITHOUT the checkbox, on the argument that it defeats the 8h session and the
+ * 30min idle logout on a shared counter PC. It does not have to. What is
+ * remembered is the session that already exists, never the password:
+ *
+ *   - The 8h sessionTTL still bounds it. A shift is a shift; tomorrow asks
+ *     again. Nothing here raises that ceiling.
+ *   - The 30min idle logout still runs the whole time the app is open.
+ *   - The password is not stored, in any form. Nothing new lands on disk that
+ *     could be read back as a credential -- only a token that dies with the
+ *     shift.
+ *
+ * The real cost, stated plainly: the session token now sits in localStorage,
+ * so it survives closing the app. That is the entire feature. On a machine
+ * where the hostel's whole database already lives beside it, the token is not
+ * the most valuable thing on that disk.
+ *
+ * The idle rule is deliberately NOT charged for the time the app was shut.
+ * Idle logout protects an app left open and unattended; a closed app is not
+ * sitting on a counter showing anybody's data. Without this exception a warden
+ * who closed the app over lunch would be asked to sign in again anyway, which
+ * is the complaint that started this.
+ */
+function _rememberedUser() {
+  const r = _getJSON(_key('remember'));
+  return (r && typeof r.user === 'string') ? r.user : '';
+}
+
+function _createSession(role, remember) {
   const now     = Date.now();
   const session = {
     token:      _randomHex(AUTH_CFG.tokenBytes),   // 64 hex chars = 256 bits of entropy
@@ -209,26 +340,51 @@ function _createSession(role) {
     createdAt:  now,
     expiresAt:  now + AUTH_CFG.sessionTTL,
     lastActive: now,
+    remembered: !!remember,
   };
   _ssSet(_key('session'), session);
+  if (remember) {
+    _setJSON(_key('session'),  session);
+    _setJSON(_key('remember'), { user: WARDENS[role].username || role });
+  } else {
+    // Unticking the box is also how a warden revokes an earlier tick.
+    localStorage.removeItem(_key('session'));
+    localStorage.removeItem(_key('remember'));
+  }
   return session;
 }
- 
-function _getSession()  { return _ssGet(_key('session')); }
-function _killSession() { _ssDel(_key('session')); }
+
+/** This run's session, or the remembered one a previous run left behind. */
+function _getSession()  { return _ssGet(_key('session')) || _getJSON(_key('session')); }
+
+/**
+ * End the session everywhere. The remembered USERNAME survives on purpose:
+ * signing out should not make a warden retype who they are, only prove again
+ * that they are them.
+ */
+function _killSession() {
+  _ssDel(_key('session'));
+  localStorage.removeItem(_key('session'));
+}
  
 /**
  * Validate the current session.
  * Returns the session object if valid, or null (and destroys the session).
  */
 function _validateSession() {
-  const s = _getSession();
+  const fromThisRun = _ssGet(_key('session'));
+  const s = fromThisRun || _getJSON(_key('session'));
   if (!s?.token) return null;
   const now = Date.now();
-  if (now > s.expiresAt)              { _killSession(); return null; }
-  if (now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
+  // The shift ceiling is absolute and applies to both kinds of session.
+  if (now > s.expiresAt) { _killSession(); return null; }
+  // Idle only counts while the app was actually open. A remembered session
+  // coming back on a fresh launch has not been sitting idle in front of anyone.
+  const restoring = !fromThisRun && s.remembered;
+  if (!restoring && now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
   s.lastActive = now;
   _ssSet(_key('session'), s);
+  if (s.remembered) _setJSON(_key('session'), s);
   return s;
 }
  
@@ -241,7 +397,7 @@ function _resetIdle() {
   clearTimeout(_idleTimer);
   _idleTimer = setTimeout(() => {
     _killSession();
-    if (typeof toast === 'function') toast('Session expired due to inactivity.', 'info', 4000);
+    if (typeof toast === 'function') toast('Session expired due to inactivity.', 'info', 'Signed out');
     setTimeout(() => location.reload(), 1200);
   }, AUTH_CFG.idleTimeout);
 }
@@ -260,14 +416,28 @@ async function _checkDefaultPasswords() {
   if (sessionStorage.getItem('pw_warned')) return;
   for (const [id, warden] of Object.entries(WARDENS)) {
     try {
-      if (await verifyPassword(id, warden.pw)) { // default pw = key name
+      // Two passwords count as default: DEFAULT_PASSWORD (what fresh installs
+      // seed today) and the account's own username (what older installs seeded).
+      // Both populations exist in the field, so both must be warned about.
+      // Checking the storage id instead of the username only worked while the
+      // two were the same string, which stopped being true once users could be
+      // added (their id is generated, e.g. u1a2b3c).
+      const weak = [DEFAULT_PASSWORD, warden.username || id];
+      let isWeak = false;
+      for (const w of weak) {
+        if (await verifyPassword(w, warden.pw)) { isWeak = true; break; }
+      }
+      if (warden.active !== false && isWeak) {
         sessionStorage.setItem('pw_warned', '1');
         setTimeout(() => {
           if (typeof toast === 'function') {
+            // toast() is (msg, type, title) — the third arg used to be 8000,
+            // meant as a duration, so this warning rendered with the literal
+            // title "8000". There is no duration parameter to pass.
             toast(
-              'Security: One or more wardens are using default passwords. ' +
-              'Change them in Settings → Wardens.',
-              'error', 8000
+              'One or more accounts are still using their default password. ' +
+              'Change them in the account menu → Manage Users.',
+              'error', 'Security'
             );
           }
         }, 2000);
@@ -355,33 +525,44 @@ function _setLoginState(state, payload) {
 // 10. CORE LOGIN FLOW
 // ─────────────────────────────────────────────────────────────────────────────
 async function checkLogin() {
-  const inp = _ui('login-input');
+  const uinp = _ui('login-user');
+  const inp  = _ui('login-input');
   if (!inp) return;
-  const plain = inp.value.trim();
-  if (!plain) { inp.focus(); return; }
- 
-  // ── Lockout gate ──────────────────────────────────────────────────────────
-  const lockedUntil = _isLockedOut(CUR_ROLE);
+  const plain    = inp.value.trim();
+  const typedUsr = uinp ? uinp.value.trim() : '';
+
+  if (!typedUsr) { if (uinp) uinp.focus(); _setLoginState('error', 'Enter your username.'); return; }
+  if (!plain)    { inp.focus(); return; }
+
+  const id = findUserByUsername(typedUsr);
+
+  // Lockout is keyed on what was typed, so hammering an unknown username is
+  // rate-limited too and cannot be used to probe which accounts exist.
+  const lockKey = id || ('~' + typedUsr.toLowerCase());
+  const lockedUntil = _isLockedOut(lockKey);
   if (lockedUntil) {
     _setLoginState('locked', lockedUntil);
     return;
   }
- 
+
   _setLoginState('loading');
- 
+
   try {
-    const warden = WARDENS[CUR_ROLE];
-    if (!warden) throw new Error('Unknown warden role: ' + CUR_ROLE);
- 
-    const ok = await verifyPassword(plain, warden.pw);
- 
+    const warden = id ? WARDENS[id] : null;
+
+    // Unknown username and wrong password fail identically — same message,
+    // same lockout path — so the screen never reveals which accounts exist.
+    const ok = !!warden && warden.active !== false && await verifyPassword(plain, warden.pw);
+
     if (ok) {
       // ── Successful login ──────────────────────────────────────────────────
-      _clearAttempts(CUR_ROLE);
+      CUR_ROLE = id;
+      _clearAttempts(lockKey);
       await _migrateIfNeeded(CUR_ROLE, plain);
       CUR_USER = WARDENS[CUR_ROLE];
- 
-      _createSession(CUR_ROLE);
+
+      const rememberEl = _ui('login-remember');
+      _createSession(CUR_ROLE, !!(rememberEl && rememberEl.checked));
       _setLoginState('success');
  
       const screen = _ui('login-screen');
@@ -390,19 +571,24 @@ async function checkLogin() {
       setTimeout(() => {
         if (screen) screen.style.display = 'none';
         updateRoleBadge();
+        applyPermissionsToChrome();
         _startIdleTracking();
         _checkDefaultPasswords();
+        // Anything raised while the login screen was up has been held; the app
+        // is visible now, so it has somewhere to land.
+        if (typeof flushToastQueue === 'function') flushToastQueue();
         if (typeof showSplashScreen === 'function') showSplashScreen();
       }, 420);
  
     } else {
       // ── Failed attempt ────────────────────────────────────────────────────
-      const entry = _recordFail(CUR_ROLE);
+      const entry = _recordFail(lockKey);
       if (entry.lockedUntil) {
         _setLoginState('locked', entry.lockedUntil);
       } else {
-        const rem = _remainingAttempts(CUR_ROLE);
-        _setLoginState('error', `Incorrect password. ${rem} attempt${rem !== 1 ? 's' : ''} remaining.`);
+        const rem = _remainingAttempts(lockKey);
+        _setLoginState('error',
+          `Incorrect username or password. ${rem} attempt${rem !== 1 ? 's' : ''} remaining.`);
       }
     }
  
@@ -425,25 +611,78 @@ async function hashNewPassword(plain) {
   return await hashPassword(plain); // { hash, salt, v }
 }
  
-/** Permission check — used throughout the app. */
-function canDo(p) { return CUR_USER ? CUR_USER[p] !== false : false; }
- 
+/**
+ * Permission check — the single gate the whole app asks.
+ *
+ * Reads the user's own permission set. Fails CLOSED: no session, no user, or
+ * an unknown permission name all deny. The old version read CUR_USER[p] and
+ * defaulted to allow, which is why nothing was ever actually restricted.
+ */
+function canDo(p) {
+  if (!CUR_USER || !CUR_USER.perms) return false;
+  return CUR_USER.perms[p] === true;
+}
+
+/**
+ * Gate an action at its entry point. Returns true if allowed; otherwise tells
+ * the user why and returns false, so callers read as:
+ *   if (!requirePerm('delete')) return;
+ */
+function requirePerm(p) {
+  if (canDo(p)) return true;
+  const label = (PERMS.find(x => x.key === p) || {}).label || p;
+  if (typeof toast === 'function') {
+    toast('Your account does not have permission to: ' + label.toLowerCase() +
+          '. Ask an administrator.', 'error', 'Not permitted');
+  }
+  return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// 12. WARDEN SELECTOR
+// 12. USER-AWARE UI
+//
+// The two-card warden picker is gone — login is username + password, so the
+// screen no longer advertises the staff list. Kept as a no-op-safe helper
+// because the boot path and older call sites still reference it.
 // ─────────────────────────────────────────────────────────────────────────────
 function selectWarden(key) {
+  if (!key || !WARDENS[key]) return;
   CUR_ROLE = key;
-  ['warden1', 'warden2'].forEach(x => {
-    const el = _ui('rb-' + x);
-    if (!el) return;
-    el.classList.toggle('selected', x === key);
-    el.setAttribute('aria-pressed', x === key ? 'true' : 'false');
-    el.style.border = '';
-    el.style.background = '';
-  });
-  const w = WARDENS[key];
-  const h = _ui('login-hint');
-  if (h && w) h.textContent = 'Signing in as ' + w.name;
+}
+
+/**
+ * Show or hide chrome the current user may not use. Called after login and on
+ * every session restore. UI-level enforcement — an offline single-machine app
+ * has no server to enforce against, so this is the honest boundary: it stops
+ * staff from using what they should not, not a determined attacker with the
+ * machine and devtools.
+ */
+function applyPermissionsToChrome() {
+  const show = (id, ok) => { const el = _ui(id); if (el) el.style.display = ok ? '' : 'none'; };
+  const showNav = (page, ok) => {
+    document.querySelectorAll('.nav-item[data-page="' + page + '"]').forEach(el => {
+      el.style.display = ok ? '' : 'none';
+    });
+  };
+  showNav('settings', canDo('settings'));
+  showNav('backup',   canDo('backup'));
+  showNav('reports',  canDo('reports'));
+  // Annual Archive is gated on 'reports' — same as the page-level check in
+  // nav.js renderPage(). Keep the two in step or the rail offers a page that
+  // then refuses to render.
+  showNav('archive',  canDo('reports'));
+  showNav('clearall', canDo('clearall'));
+  show('user-menu-manage',   canDo('users'));
+  // Settings is no longer in the account menu — showNav('settings') above is
+  // the only gate it needs now that the rail item is the single entry point.
+
+  // Features LAST, and this order is load-bearing. Every showNav() above sets
+  // display back to '' for anything the user is permitted, which would
+  // un-hide a rail item the hostel's licence does not include. Permissions
+  // decide what this warden may reach; features decide what exists at all.
+  if (typeof applyFeaturesToChrome === 'function') {
+    try { applyFeaturesToChrome(); } catch (e) { console.error('[features]', e); }
+  }
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -454,10 +693,14 @@ function updateRoleBadge() {
   if (!b) return;
   const safe = typeof escHtml === 'function' ? escHtml : (s) => s;
   const photo = CUR_USER?.photo
-    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(124,58,237,.5);flex-shrink:0">`
+    ? `<img src="${CUR_USER.photo}" style="width:22px;height:22px;border-radius:6px;object-fit:cover;border:1.5px solid rgba(37,99,235,.5);flex-shrink:0">`
     : (typeof icon === 'function' ? icon('warden', 'sm') : '');
   b.innerHTML  = `${photo}&nbsp;${safe(CUR_USER?.name || '')}`;
   b.style.cssText = 'display:flex;align-items:center;gap:6px;';
+  // Chrome v5: the warden's identity now lives in the header user chip and the
+  // sidebar user card. #role-badge is kept (and kept hidden by chrome.css) so
+  // the existing showUserMgmt() entry point is undisturbed.
+  if (typeof refreshChromeUser === 'function') refreshChromeUser();
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -520,35 +763,37 @@ var CUR_USER = null;
   WARDENS = await _loadWardenConfig();
   USERS   = WARDENS;
  
-  // 2. Populate warden-picker names
-  const b1 = _ui('wb1-name'); if (b1) b1.textContent = WARDENS.warden1?.name || '';
-  const b2 = _ui('wb2-name'); if (b2) b2.textContent = WARDENS.warden2?.name || '';
- 
-  // 3. Load avatars (100ms defer to let DOM settle)
-  setTimeout(() => {
-    ['warden1', 'warden2'].forEach(k => {
-      if (WARDENS[k]?.photo && typeof updateLoginAvatar === 'function') updateLoginAvatar(k);
-    });
-  }, 100);
- 
-  // 4. Attempt session restore
+  // 2. Attempt session restore. The login screen no longer names any account,
+  //    so there is nothing to pre-populate before this point.
   const session = _validateSession();
- 
-  if (session && WARDENS[session.role]) {
+
+  if (session && WARDENS[session.role] && WARDENS[session.role].active !== false) {
     // ── Valid existing session — skip login screen ─────────────────────────
     CUR_ROLE = session.role;
     CUR_USER = WARDENS[session.role];
     const screen = _ui('login-screen');
     if (screen) screen.style.display = 'none';
-    selectWarden(CUR_ROLE);
     setTimeout(updateRoleBadge,        300);
+    setTimeout(applyPermissionsToChrome, 320);
     setTimeout(_checkDefaultPasswords, 2500);
+    // The login screen is hidden immediately on this path, but the boot timers
+    // can still fire before it is, so the queue has to be drained here too.
+    setTimeout(() => { if (typeof flushToastQueue === 'function') flushToastQueue(); }, 600);
     _startIdleTracking();
- 
+
   } else {
     // ── No valid session — show login ─────────────────────────────────────
     _killSession(); // clear any stale/invalid session data
-    selectWarden('warden1');
+    // A remembered warden gets their name back, and the cursor goes to the one
+    // box they still have to fill.
+    const uinp = _ui('login-user');
+    const pinp = _ui('login-input');
+    const remembered = _rememberedUser();
+    const rememberEl = _ui('login-remember');
+    if (rememberEl) rememberEl.checked = !!remembered;
+    if (uinp && remembered) uinp.value = remembered;
+    const focusTarget = (remembered && pinp) ? pinp : uinp;
+    if (focusTarget) setTimeout(() => focusTarget.focus(), 120);
   }
  
 })().catch(err => {

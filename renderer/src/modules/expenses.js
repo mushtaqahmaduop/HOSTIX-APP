@@ -1,4 +1,4 @@
-/* ─── HOSTIX — EXPENSES MODULE ─────────────────────────────────────────────
+/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
              showEditExpenseModal, submitEditExpense, deleteExpense,
              showClearAllMenu, clearPayments, clearExpenses, clearStudents,
@@ -6,59 +6,405 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+// ════════════════════════════════════════════════════════════════════════════
+// EXPENSES v5 — rebuilt to the owner's reference design
+// ════════════════════════════════════════════════════════════════════════════
+
+// Categories are owner-configurable, so both the icon and the colour are matched
+// on keywords rather than a fixed list — a hostel that renames "Meals" to
+// "Staff Nashta" still gets the food icon. One table so the two can never drift.
+// `hue` is null where no colour is semantically obvious; those fall through to
+// the hash below, which is what keeps two food categories visually distinct.
+const _EXP_CATS = [
+  [/electric|light|wapda|bulb/i, 'dh-amber',  '<path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/>'],
+  [/water|tank|plumb|pipe|tap/i, 'dh-blue',   '<path d="M12 2s6 7.5 6 11.5A6 6 0 0 1 6 13.5C6 9.5 12 2 12 2Z"/>'],
+  [/gas|fuel|cylinder/i,         'dh-red',    '<path d="M12 2c1 4 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 .5 2 2 2 2 0 0-2-1-3 1-5Z"/>'],
+  [/maint|repair|fix|tool/i,     'dh-green',  '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-1.4-1.4 2.6-2.6Z"/>'],
+  [/clean|wash|soap|sweep/i,     'dh-green',  '<path d="M9 3h6v5H9z"/><path d="M8 8h8l1 13H7L8 8Z"/>'],
+  [/secur|guard|chowkidar/i,     'dh-violet', '<path d="M12 2 4 5v6c0 5 3.4 9.2 8 11 4.6-1.8 8-6 8-11V5l-8-3Z"/>'],
+  [/internet|wifi|net|ptcl/i,    'dh-blue',   '<path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1.2"/>'],
+  [/furnit|bed|chair|table/i,    'dh-violet', '<path d="M3 10V6h18v4"/><path d="M3 10h18v6H3z"/><path d="M5 16v3M19 16v3"/>'],
+  [/meal|nashta|food|lunch|dinner|chai|tea|breakfast|kitchen|rashan/i,
+                                 null,        '<path d="M7 2v9M4 2v6a3 3 0 0 0 3 3M17 2c-1.5 0-2.5 1.5-2.5 4s1 4 2.5 4"/><path d="M7 11v11M17 10v12"/>'],
+  [/rent|salary|staff|wage|pay/i, null,       '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 1.6c-3.2 0-6.4 1.6-6.4 4V19a1 1 0 0 0 1 1h10.8a1 1 0 0 0 1-1v-1.4c0-2.4-3.2-4-6.4-4Z"/>'],
+];
+const _EXP_ICON_FALLBACK = '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>';
+
+function _expCatMatch(cat) {
+  return _EXP_CATS.find(row => row[0].test(String(cat || '')));
+}
+
+function expCatIcon(cat) {
+  const hit = _expCatMatch(cat);
+  return hit ? hit[2] : _EXP_ICON_FALLBACK;
+}
+
+// Semantic hue where there is one, otherwise a stable hash of the name — so a
+// category keeps the same pill colour between renders and across machines.
+// Mirrors payAvatarHue()'s hashing.
+function expCatHue(cat) {
+  const name = String(cat || '');
+  if (/^other$/i.test(name)) return 'dh-slate';   // the catch-all reads as neutral
+  const hit = _expCatMatch(name);
+  if (hit && hit[1]) return hit[1];
+  const hues = ['dh-amber','dh-violet','dh-green','dh-blue','dh-red'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return hues[h % hues.length];
+}
+
+// Minimal inline sparkline. Chart.js would be four more canvases on this page
+// for four decorative 60x26 trends; an SVG polyline costs nothing and cannot
+// leak a chart instance on re-render.
+function expSpark(values) {
+  const w = 62, h = 26, pad = 3;
+  const v = (values && values.length) ? values : [0, 0];
+  const max = Math.max.apply(null, v), min = Math.min.apply(null, v);
+  const span = (max - min) || 1;
+  const step = v.length > 1 ? (w - pad * 2) / (v.length - 1) : 0;
+  const pts = v.map((n, i) =>
+    (pad + i * step).toFixed(1) + ',' + (h - pad - ((n - min) / span) * (h - pad * 2)).toFixed(1)
+  ).join(' ');
+  return `<svg class="exp-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" fill="none" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${pts}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 function renderExpenses() {
-  const mo = thisMonth();
+  const mo      = thisMonth();
   const moLabel = thisMonthLabel();
 
-  let exps=DB.expenses.filter(e=>{
-    // Month filter
-    if(!expFilter.showAll && !(e.date||'').startsWith(mo)) return false;
-    if(expFilter.cat!=='All' && e.category!==expFilter.cat) return false;
-    if(expFilter.search && !e.description?.toLowerCase().includes(expFilter.search.toLowerCase()) && !e.category?.toLowerCase().includes(expFilter.search.toLowerCase())) return false;
+  // Month scope: '' means the current month, 'All' every month, otherwise a
+  // specific YYYY-MM picked from the dropdown.
+  const scope = expFilter.showAll ? 'All' : (expFilter.month || mo);
+  const inScope = e => scope === 'All' || String(e.date || '').startsWith(scope);
+
+  /* Legacy funds-transfer records ride along as ordinary rows under the Fund
+     Transfer category. They live in DB.transfers rather than DB.expenses
+     because they used to be entered on a screen of their own, and that screen
+     is now hidden — so without this they would be inside the Total Expenses
+     figure at the top of this page while being absent from the table beneath
+     it, and the page would visibly fail to add up. Edit and delete route back
+     to the edit/delete handlers that still own the record. Nothing is rewritten
+     or migrated — the standalone Funds Transfer screens are gone, but the money
+     they recorded is all still here, under this category. */
+  const _legacyTransfers = (DB.transfers || []).filter(inScope).map(t => ({
+    id: t.id, date: t.date, category: FUND_TRANSFER_CAT,
+    description: t.description || ('Transfer' + (t.receivedBy ? ' to ' + t.receivedBy : '')),
+    amount: Number(t.amount || 0), _transfer: true,
+  }));
+
+  const scoped = DB.expenses.filter(inScope).concat(_legacyTransfers);
+
+  let exps = scoped.filter(e => {
+    if (expFilter.cat !== 'All' && e.category !== expFilter.cat) return false;
+    if (expFilter.search) {
+      const q = expFilter.search.toLowerCase();
+      if (!String(e.description || '').toLowerCase().includes(q) &&
+          !String(e.category || '').toLowerCase().includes(q)) return false;
+    }
     return true;
-  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  });
 
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option value="${c}" ${expFilter.cat===c?'selected':''}>${c}</option>`).join('');
-  const total=exps.reduce((s,e)=>s+Number(e.amount),0);
+  exps = applySort(exps, expFilter, {
+    date:        e => e.date || '',
+    category:    e => String(e.category || '').toLowerCase(),
+    description: e => String(e.description || '').toLowerCase(),
+    amount:      e => Number(e.amount) || 0,
+  });
+  if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
 
-  return `
-  <div class="filter-bar">
-    <div class="search-wrap">
-      <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input class="form-control" id="search-expenses" placeholder="Search expenses…" value="${escHtml(expFilter.search)}" oninput="capFirstChar(this);expFilter.search=this.value;_dExpenses();toggleClearBtn('search-expenses','clear-expenses')">
-      <button class="search-clear ${expFilter.search?'visible':''}" id="clear-expenses" onclick="expFilter.search='';document.getElementById('search-expenses').value='';this.classList.remove('visible');renderPage('expenses')" title="Clear">✕</button>
+  const total = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const _pg   = paginate(exps, expFilter);
+
+  // ── Stat strip ────────────────────────────────────────────────────────────
+  // The table below is the register of expense RECORDS, so it stays as it is —
+  // a transfer is not editable here. The headline figure is the one every other
+  // screen quotes, though, and that one counts transfers, so it is stated in
+  // full with the transfer share spelled out underneath. Without this the
+  // Expenses page and the dashboard's Expenses card read differently for the
+  // same month, which is the disagreement this strip exists to prevent.
+  // `scoped` already carries the legacy transfers as rows, so the headline is
+  // simply its sum. It used to be records + transfers because the table held
+  // only DB.expenses; adding the transfers again now would count them twice.
+  const scopedTrf   = _legacyTransfers.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const scopedTotal = scoped.reduce((s, e) => s + Number(e.amount || 0), 0);
+  // Average per day across the days actually elapsed in the scope, not the
+  // calendar month — dividing August's spend by 31 on the 8th reads far too low.
+  const now = new Date();
+  const daysElapsed = (scope === 'All')
+    ? Math.max(1, new Set(scoped.map(e => e.date)).size)
+    : (scope === mo ? Math.max(1, now.getDate())
+                    : Math.max(1, new Date(Number(scope.slice(0,4)), Number(scope.slice(5,7)), 0).getDate()));
+  const avgDaily  = Math.round(scopedTotal / daysElapsed);
+  const activeCat = new Set(scoped.map(e => e.category).filter(Boolean)).size;
+
+  // Daily totals across the scope drive every sparkline's shape.
+  const byDay = {};
+  scoped.forEach(e => { const d = String(e.date||''); if (d) byDay[d] = (byDay[d]||0) + Number(e.amount||0); });
+  const days      = Object.keys(byDay).sort();
+  const daySeries = days.map(d => byDay[d]);
+  const cntSeries = days.map(d => scoped.filter(e => e.date === d).length);
+
+  const scopeLabel = scope === 'All' ? 'All months'
+                   : scope === mo    ? 'This Month'
+                   : fmtMonthLabel(scope);
+
+  const stat = (hue, icon, label, value, sub, series) => `
+    <div class="exp-stat ${hue}">
+      <span class="exp-stat__ic">${icon}</span>
+      <div class="exp-stat__c">
+        <div class="exp-stat__l">${label}</div>
+        <div class="exp-stat__v">${value}</div>
+        <div class="exp-stat__s">${sub}</div>
+      </div>
+      ${expSpark(series)}
+    </div>`;
+
+  const stats = `
+  <div class="exp-stats">
+    ${stat('dh-violet','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
+          'Total Expenses', fmtPKR(scopedTotal),
+          scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
+          daySeries)}
+    ${stat('dh-blue','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
+          'Average Daily', fmtPKR(avgDaily), 'Avg per day', daySeries)}
+    ${stat('dh-green','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
+          'Total Records', String(scoped.length), scopeLabel, cntSeries)}
+    ${stat('dh-amber','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+          'Categories', String(activeCat), 'Active', cntSeries)}
+  </div>`;
+
+  // ── Toolbar ───────────────────────────────────────────────────────────────
+  const catOpts = DB.settings.expenseCategories
+    .map(c => `<option value="${escHtml(c)}" ${expFilter.cat===c?'selected':''}>${escHtml(c)}</option>`).join('');
+
+  // Transfer dates count too, or a month whose only outgoing was a transfer
+  // would be missing from the picker and unreachable from this page.
+  const monthsPresent = [...new Set(
+      DB.expenses.concat(DB.transfers || [])
+        .map(e => String(e.date||'').slice(0,7)).filter(Boolean))]
+    .sort().reverse();
+  if (!monthsPresent.includes(mo)) monthsPresent.unshift(mo);
+  const monthOpts = monthsPresent
+    .map(m => `<option value="${escHtml(m)}" ${scope===m?'selected':''}>${fmtMonthLabel(m)}</option>`).join('');
+
+  const th = (key, label, extra) => {
+    const on  = expFilter.sortKey === key;
+    const arw = on ? (expFilter.sortDir === 'asc' ? '▲' : '▼') : '⇅';
+    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(expFilter,'expenses','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+  };
+
+  const toolbar = `
+  <div class="exp-tools">
+    <div class="exp-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="search-expenses" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
+             oninput="capFirstChar(this);expFilter.search=this.value;expFilter.page=1;_dExpenses()">
     </div>
-    <select class="form-control" style="width:160px" onchange="expFilter.cat=this.value;renderPage('expenses')">
+    <select class="exp-select${expFilter.cat!=='All'?' is-set':''}" onchange="expFilter.cat=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by category">
       <option value="All">All Categories</option>${catOpts}
     </select>
-    <button class="btn btn-sm ${expFilter.showAll?'btn-primary':'btn-secondary'}" style="white-space:nowrap;font-size:11px" onclick="expFilter.showAll=!expFilter.showAll;renderPage('expenses')" title="${expFilter.showAll?'Showing all months — click to filter by '+moLabel:'Showing '+moLabel+' only — click to show all'}">
-      ${expFilter.showAll ? '📅 All Months' : '📅 '+moLabel}
+    ${/* Adding a category used to mean leaving the page, finding it in Settings,
+         adding it, and coming back — in the middle of entering an expense that
+         needed it. */''}
+    <button class="exp-catadd" onclick="showAddExpenseCategoryModal()" title="Add a new expense category">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Category
     </button>
-    <span class="text-muted" style="font-size:12px;margin-left:auto">${exps.length} records · <span class="text-red fw-700">${fmtPKR(total)}</span></span>
-  </div>
-  <div class="table-wrap">
-    <table style="border-collapse:collapse;width:100%">
-      <thead><tr><th style="padding:8px 10px">Date</th><th style="padding:8px 10px">Category</th><th style="padding:8px 10px">Description</th><th style="padding:8px 10px">Amount</th><th style="padding:8px 10px">Actions</th></tr></thead>
-      <tbody>
-        ${exps.length===0?`<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">No expenses found</td></tr>`:
-        exps.map(e=>`<tr>
-          <td class="text-muted" style="font-size:12px;padding:8px 10px">${fmtDate(e.date)}</td>
-          <td style="padding:8px 10px"><span class="badge badge-amber">${escHtml(e.category)}</span></td>
-          <td style="padding:8px 10px">${escHtml(e.description||'—')}</td>
-          <td class="text-red fw-700" style="padding:8px 10px">${fmtPKR(e.amount)}</td>
-          <td style="padding:8px 8px">
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-secondary btn-icon btn-sm" onclick="showEditExpenseModal('${e.id}')">✏️</button>
-              <button class="btn btn-danger btn-icon btn-sm" onclick="deleteExpense('${e.id}')">🗑</button>
-            </div>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
+    <div class="exp-month">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>
+      <select onchange="expSetMonth(this.value)" title="Filter by month">
+        <option value="All" ${scope==='All'?'selected':''}>All Months</option>
+        ${monthOpts}
+      </select>
+    </div>
+    <div class="exp-count">${_pg.total} record${_pg.total!==1?'s':''} &middot; <b>${fmtPKR(total)}</b></div>
+  </div>`;
+
+  // ── Table ─────────────────────────────────────────────────────────────────
+  const rows = _pg.slice.map(e => {
+    const hue = expCatHue(e.category);
+    return `<tr>
+      <td class="exp-date">${escHtml(fmtDate(e.date))}</td>
+      <td>
+        <span class="exp-cat ${hue}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">${expCatIcon(e.category)}</svg>
+          ${escHtml(e.category || 'Other')}
+        </span>
+      </td>
+      <td class="exp-desc">${e.description ? escHtml(e.description) : '<span class="exp-dash">—</span>'}</td>
+      <td class="exp-amt">${fmtPKR(e.amount)}</td>
+      <td>
+        <div class="exp-acts">
+          <button class="exp-act dh-blue" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button class="exp-act dh-red" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const table = `
+  <div class="exp-shell">
+    <div class="exp-table-wrap">
+      <table class="exp-table">
+        <thead><tr>
+          ${th('date','Date')}
+          ${th('category','Category')}
+          ${th('description','Description')}
+          ${th('amount','Amount')}
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${_pg.total===0
+            ? `<tr><td colspan="5"><div class="exp-empty">
+                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+                 <div>No expenses match these filters.</div></div></td></tr>`
+            : rows}
+        </tbody>
+      </table>
+    </div>
+    ${expPager(_pg)}
+  </div>`;
+
+  return stats + toolbar + table;
+}
+
+// Month dropdown → filter state. 'All' switches the page out of month scope.
+function expSetMonth(v) {
+  if (v === 'All') { expFilter.showAll = true; expFilter.month = ''; }
+  else             { expFilter.showAll = false; expFilter.month = v; }
+  expFilter.page = 1;
+  renderPage('expenses');
+}
+
+// 'YYYY-MM' → 'August 2026'. Built from a fixed day so a short month can never
+// roll the date into the next one.
+function fmtMonthLabel(ym) {
+  const y = Number(String(ym).slice(0,4)), m = Number(String(ym).slice(5,7));
+  if (!y || !m) return String(ym||'');
+  return new Date(y, m-1, 1).toLocaleDateString('en-GB', { month:'long', year:'numeric' });
+}
+
+function expPager(pg) {
+  const btn = (label, target, o) => {
+    o = o || {};
+    if (o.disabled) return `<button disabled>${label}</button>`;
+    if (o.active)   return `<button class="is-on">${label}</button>`;
+    return `<button onclick="gotoPage(expFilter,'expenses',${target})">${label}</button>`;
+  };
+  const { page, pages } = pg;
+  let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
+  lo = Math.max(1, hi-4);
+  let nums = '';
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="exp-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
+  if (hi < pages) nums += (hi<pages-1?'<span class="exp-pager__gap">…</span>':'') + btn(String(pages), pages);
+
+  return `<div class="exp-foot">
+    <div class="exp-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} record${pg.total!==1?'s':''}</div>
+    <div class="exp-pager">
+      ${btn('«',1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1})}
+      ${nums}
+      ${btn('›',page+1,{disabled:page>=pages})}
+      ${btn('»',pages,{disabled:page>=pages})}
+    </div>
+    <div class="exp-foot__size">
+      <select onchange="expFilter.pageSize=Number(this.value);expFilter.page=1;renderPage('expenses')" title="Rows per page">
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${expFilter.pageSize===n?'selected':''}>${n} / page</option>`).join('')}
+      </select>
+    </div>
   </div>`;
 }
+// Where an expense write should re-render to. Expenses are now editable from
+/* ── ADD A CATEGORY, FROM WHERE IT IS NEEDED ─────────────────────────────────
+   Settings already had addExpenseCategory(), but it reads a field that only
+   exists on the Settings page and always re-renders Settings, so it cannot be
+   called from here. This one is page-agnostic: it re-renders whatever the
+   warden was looking at, so adding a category from the Expenses page leaves
+   them on the Expenses page.
+
+   It also validates harder than the Settings version, which compared with a
+   case-sensitive includes() — so "gas" and "Gas" could both exist, and an
+   expense filed under one was invisible when filtering by the other. */
+function showAddExpenseCategoryModal() {
+  // 'expenses' is not a permission. PERMS declares edit / delete / payments /
+  // reports / backup / settings / users / clearall, and canDo() fails closed on
+  // anything else — so this gate denied EVERY account, including the built-in
+  // full-access one, and the toast read 'does not have permission to: expenses'
+  // because requirePerm found no label to print either. Adding a category is an
+  // ordinary record edit, which is the permission the Add Expense form itself
+  // sits behind.
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  showModal('modal-sm', 'Add Expense Category', `
+    <div class="field">
+      <label for="new-exp-cat">Category name</label>
+      <input class="form-control" id="new-exp-cat" maxlength="40" autocomplete="off"
+             placeholder="e.g. Generator Fuel"
+             oninput="capFirstChar(this);_expCatValidate()"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddExpenseCategory();}">
+      <div id="new-exp-cat-err" class="field-err" style="display:none"></div>
+    </div>
+    <p style="font-size:12px;color:var(--text3);line-height:1.6;margin:10px 0 0">
+      It becomes available immediately on the Add Expense form and in the filter
+      above. Categories can be removed in Settings, but only while nothing is
+      filed under them.
+    </p>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="new-exp-cat-save" onclick="submitAddExpenseCategory()">Add Category</button>`);
+  setTimeout(() => { const i = document.getElementById('new-exp-cat'); if (i) i.focus(); }, 60);
+}
+
+/* Inline validation: the warden is told WHILE typing, not after pressing Save. */
+function _expCatValidate() {
+  const inp = document.getElementById('new-exp-cat');
+  const err = document.getElementById('new-exp-cat-err');
+  const btn = document.getElementById('new-exp-cat-save');
+  if (!inp || !err) return true;
+  const v = inp.value.trim();
+  const list = DB.settings.expenseCategories || [];
+  let msg = '';
+  if (!v)                                                   msg = '';
+  else if (v.length < 2)                                    msg = 'Too short — use at least 2 characters.';
+  else if (list.some(c => String(c).toLowerCase() === v.toLowerCase()))
+                                                            msg = '"' + v + '" already exists.';
+  else if (!/[A-Za-z؀-ۿ]/.test(v))                msg = 'A category needs at least one letter.';
+  const ok = !msg && v.length >= 2;
+  err.textContent = msg;
+  err.style.display = msg ? 'block' : 'none';
+  inp.classList.toggle('is-invalid', !!msg);
+  if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '' : '.55'; btn.style.cursor = ok ? '' : 'not-allowed'; }
+  return ok;
+}
+
+async function submitAddExpenseCategory() {
+  if (!_expCatValidate()) return;
+  const inp = document.getElementById('new-exp-cat');
+  const v = inp ? inp.value.trim() : '';
+  if (!v) return;
+  if (!DB.settings.expenseCategories) DB.settings.expenseCategories = [];
+  // Before 'Other', so the catch-all stays last — the same placement
+  // _initDBFields() uses for the Fund Transfer category.
+  const oi = DB.settings.expenseCategories.findIndex(c => /^other$/i.test(String(c)));
+  if (oi >= 0) DB.settings.expenseCategories.splice(oi, 0, v);
+  else         DB.settings.expenseCategories.push(v);
+  const okSave = await saveDB();
+  if (okSave === false) { toast('Could not save the category — nothing was changed', 'error'); return; }
+  logActivity('Expense Category Added', v, 'Settings');
+  closeModal();
+  renderPage(typeof currentPage !== 'undefined' && currentPage ? currentPage : 'expenses');
+  toast('Category "' + v + '" added', 'success');
+}
+
+// the Reports → Expenses by Category register as well as this page, and
+// hard-coding 'expenses' navigated the owner off the report they were reading
+// the moment they corrected a figure in it.
+function _expReturnPage() {
+  return currentPage === 'reports' ? 'reports' : 'expenses';
+}
+
 function showAddExpenseModal() {
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option>${c}</option>`).join('');
+  const catOpts=DB.settings.expenseCategories.map(c=>`<option>${escHtml(c)}</option>`).join('');
   showModal('modal-md','Add Expense',`
     <div class="form-grid">
       <div class="field"><label>Category *</label><select class="form-control" id="f-ecat">${catOpts}</select></div>
@@ -71,14 +417,24 @@ function showAddExpenseModal() {
 async function submitAddExpense() {
   const cat=document.getElementById('f-ecat').value;
   const amount=parseFloat(document.getElementById('f-eamt').value);
-  if(!cat||!amount){toast('Fill required fields','error');return;}
+  if(!cat){toast('Pick a category','error');return;}
+  // > 0, not merely truthy. A minus sign in front of the figure passed the old
+  // check and wrote a negative expense, which does not reduce what was spent —
+  // it quietly adds to the month's profit.
+  if(!isFinite(amount)||amount<=0){
+    toast('Enter an amount greater than zero','error');
+    document.getElementById('f-eamt')?.focus();
+    return;
+  }
   DB.expenses.push({id:'e_'+uid(),category:cat,amount,date:document.getElementById('f-edate').value,description:document.getElementById('f-edesc').value.trim()});
   logActivity('Expense Added', cat+' — PKR '+amount, 'Finance');
-  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense recorded','success');
+  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense recorded','success');
 }
 function showEditExpenseModal(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join('');
+  const _catList = DB.settings.expenseCategories.slice();
+  if (e.category && _catList.indexOf(e.category) === -1) _catList.unshift(e.category);
+  const catOpts=_catList.map(c=>`<option ${e.category===c?'selected':''}>${escHtml(c)}</option>`).join('');
   showModal('modal-sm',`Edit Expense`,`
     <div class="form-grid">
       <div class="field"><label>Category</label><select class="form-control" id="f-ecat">${catOpts}</select></div>
@@ -90,19 +446,27 @@ function showEditExpenseModal(id) {
 }
 async function submitEditExpense(id) {
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
+  const _newAmt=parseFloat(document.getElementById('f-eamt').value);
+  // `|| e.amount` kept the old figure whenever the new one was 0 or negative,
+  // so a correction to zero looked accepted and changed nothing.
+  if(!isFinite(_newAmt)||_newAmt<=0){
+    toast('Enter an amount greater than zero','error');
+    document.getElementById('f-eamt')?.focus();
+    return;
+  }
   e.category=document.getElementById('f-ecat').value;
-  e.amount=parseFloat(document.getElementById('f-eamt').value)||e.amount;
+  e.amount=_newAmt;
   e.date=document.getElementById('f-edate').value;
   e.description=document.getElementById('f-edesc').value.trim();
   logActivity('Expense Updated', e.category+' — PKR '+e.amount, 'Finance');
-  await saveDB(); closeModal(); renderPage('expenses'); toast('Expense updated','success');
+  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense updated','success');
 }
 async function deleteExpense(id) {
   showConfirm('Delete expense?','This cannot be undone.',(async ()=>{
     const _del_e=DB.expenses.find(x=>x.id===id);
     DB.expenses=DB.expenses.filter(x=>x.id!==id);
     if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
-    await saveDB(); renderPage('expenses'); toast('Expense deleted','info');
+    await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
   }));
 }
 
@@ -110,6 +474,7 @@ async function deleteExpense(id) {
 // CLEAR DATA FUNCTIONS
 // ════════════════════════════════════════════════════════════════════════════
 function showClearAllMenu() {
+  if (typeof requirePerm === 'function' && !requirePerm('clearall')) return;
   showModal('modal-md','🗑️ Clear Data',`
     <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.35);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--text2)">
       ⚠️ <strong style="color:var(--red)">Warning:</strong> This action is <strong>permanent and cannot be undone</strong>. Export a backup first!

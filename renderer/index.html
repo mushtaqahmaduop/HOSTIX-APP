@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HOSTIX | Hostel Management System</title>
+  <title>HOSTYLLO | Hostel Management System</title>
   <!-- CSP is enforced via a single header policy in main.js (session.defaultSession). -->
 
   <!-- Self-hosted fonts (bundled — no network required) -->
@@ -20,77 +20,260 @@
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="components.css">
   <link rel="stylesheet" href="style.css">
+  <!-- v5 screens — ui-kit supplies the dh-* hue palette both sheets consume,
+       listkit the shared stat-strip / toolbar / table / pager chrome -->
+  <link rel="stylesheet" href="ui-kit.css">
+  <link rel="stylesheet" href="listkit.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="payments.css">
+  <link rel="stylesheet" href="students.css">
+  <link rel="stylesheet" href="rooms.css">
+  <link rel="stylesheet" href="issues.css">
+  <link rel="stylesheet" href="reports.css">
+  <link rel="stylesheet" href="expenses.css">
+  <link rel="stylesheet" href="archive.css">
+  <link rel="stylesheet" href="whatsapp.css">
+  <link rel="stylesheet" href="settings.css">
+  <!-- App chrome v5 (sidebar + header) — loads last so it wins on ties -->
+  <link rel="stylesheet" href="chrome.css">
+  <!-- Custom frameless title bar (loads after chrome so its offsets win) -->
+  <link rel="stylesheet" href="titlebar.css">
+  <!-- Login v5 — fully scoped under #login-screen, so load order is moot -->
+  <link rel="stylesheet" href="login.css">
 </head>
 <body>
 
 
-<!-- WARDEN LOGIN SCREEN — Premium v2.0 -->
+<!-- ════════════════════════════════════════════════════════════════════════════
+     LOGIN v6 — owner reference design (Hostyllo Offline)
+     Styles: renderer/login.css (everything scoped under #login-screen).
+
+     The reference the owner supplied is the CLOUD edition's sign-in: brand
+     panel left, form right, feature list, stats strip, Remember me. That
+     layout is adopted whole. Four things on it describe a product this one is
+     not, and shipping them would be shipping a lie to a paying customer:
+
+       • Email address     — there is no email account here. Identity is a
+                             username held on this machine, so the field is a
+                             username field with the same weight in the layout.
+       • Sign Up tab /     — accounts are created by an administrator in
+         "Create account"    Settings → Users. A self-serve signup on an
+                             offline hostel install has nothing to sign up to.
+       • Google / Microsoft — no network, no OAuth. A button that can never
+                             work is worse than no button.
+       • "500+ Active       — those are the vendor's numbers, on a screen a
+         Hostels / 10K+       customer looks at every morning. The strip shows
+         Students / PKR       THIS hostel's own counts instead, read from its
+         50M+ Transactions"   database, and stays hidden until there are some.
+
+     Remember me IS adopted — owner's call, 2026-08-30. See the long note in
+     auth-nev.js for what is and is not remembered: the session, never the
+     password, and never past the 8h shift ceiling.
+
+     Every element id the auth layer reads is preserved: login-hostel-name,
+     login-address, login-user, login-input, login-btn, login-hint,
+     login-error, login-pw-hint, login-version, login-facts, login-fact-*.
+     login-remember is new.
+     ══════════════════════════════════════════════════════════════════════ -->
 <div id="login-screen">
-  <!-- Animated background -->
+  <!-- Decorative layers from an older design; login.css hides them. -->
   <div id="login-bg"></div>
-  <!-- Floating ambient orbs -->
   <div id="login-orb-1"></div>
   <div id="login-orb-2"></div>
   <div id="login-orb-3"></div>
 
-  <!-- Card -->
   <div id="login-card">
-    <!-- App brand -->
-    <div class="login-app-brand">
-      <svg width="36" height="36" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(56,189,248,0.12)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
-        <text x="14" y="18.5" text-anchor="middle" fill="#38bdf8" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
-      </svg>
-      <span class="login-app-name">HOSTIX</span>
-    </div>
 
-    <!-- Hostel identity -->
-    <div class="login-hostel-name" id="login-hostel-name">Hostel Management</div>
-    <div class="login-system-label">Hostel Management System</div>
-    <div class="login-address" id="login-address" style="display:none"></div>
+    <!-- ── LEFT: brand panel ────────────────────────────────────── -->
+    <aside class="lg-side">
 
-    <!-- Warden selector -->
-    <div class="login-warden-grid">
-      <div class="login-warden-btn selected" id="rb-warden1" onclick="selectWarden('warden1')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden1');}" tabindex="0" role="button" aria-pressed="true">
-        <div class="login-warden-photo" id="w1-photo">
-          <span class="warden-login-emoji" style="display:none"></span>
-          <svg class="warden-avatar-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-        </div>
-        <div class="login-warden-name" id="wb1-name">Warden 1</div>
-        <div class="login-warden-role">Full Access</div>
+      <div class="lg-brand">
+        <span class="lg-mark" aria-hidden="true">
+          <svg width="50" height="56" viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M25 2.6 46 14.3v27.4L25 53.4 4 41.7V14.3z" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/>
+            <path d="M20.4 15.6h9.2M25 12.4v3.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <text x="25" y="38" text-anchor="middle" fill="currentColor" font-family="Outfit, sans-serif" font-size="20" font-weight="800">H</text>
+          </svg>
+        </span>
+        <span>
+          <span class="lg-brand__n">HOSTYLLO</span>
+          <span class="lg-brand__s">HOSTEL MANAGEMENT SYSTEM</span>
+        </span>
       </div>
-      <div class="login-warden-btn" id="rb-warden2" onclick="selectWarden('warden2')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWarden('warden2');}" tabindex="0" role="button" aria-pressed="false">
-        <div class="login-warden-photo" id="w2-photo">
-          <span class="warden-login-emoji" style="display:none"></span>
-          <svg class="warden-avatar-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-        </div>
-        <div class="login-warden-name" id="wb2-name">Warden 2</div>
-        <div class="login-warden-role">Full Access</div>
-      </div>
-    </div>
 
-    <!-- Password -->
-    <div class="login-input-wrap">
-      <input id="login-input" type="password" placeholder="Enter password" autocomplete="current-password" aria-label="Password">
-      <button id="login-pw-toggle" type="button" aria-label="Toggle password visibility" onclick="(function(){var i=document.getElementById('login-input');i.type=i.type==='password'?'text':'password';})()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /> <circle cx="12" cy="12" r="3" /></svg>
+      <span class="lg-badge">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21.02 7 14.14l-5-4.87 7.1-1.01z"/></svg>
+        All-in-One Hostel Management
+      </span>
+
+      <h2 class="lg-h2">Smart management<br>for <em>better living.</em></h2>
+      <p class="lg-sub">Manage students, rooms, payments, staff and reports
+        &mdash; all in one place, and all on this computer.</p>
+
+      <!-- Four claims, each one true of THIS build. The reference's fourth was
+           "Access Anywhere — Cloud based. Access on any device", which is the
+           opposite of what this edition is, so it states the opposite. -->
+      <ul class="lg-feats">
+        <li class="lg-feat">
+          <span class="lg-feat__i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span><b>Complete Management</b><span>Students, rooms, staff, fees and more</span></span>
+        </li>
+        <li class="lg-feat">
+          <span class="lg-feat__i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></span>
+          <span><b>Secure &amp; Reliable</b><span>Passwords hashed on this device, one-click backups</span></span>
+        </li>
+        <li class="lg-feat">
+          <span class="lg-feat__i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+          <span><b>Insightful Reports</b><span>Live figures you can print or export</span></span>
+        </li>
+        <li class="lg-feat">
+          <span class="lg-feat__i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M18 14h3v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z"/><path d="M3 14a9 9 0 0 1 18 0"/></svg></span>
+          <span><b>Works Offline</b><span>No internet needed, ever</span></span>
+        </li>
+      </ul>
+
+      <!-- A drawing, not a photograph. The app ships no picture of any real
+           hostel, and stock imagery would misrepresent the customer's building
+           (same call made for room photos in rooms.js). -->
+      <div class="lg-art" role="img" aria-label="Illustration of a hostel building">
+        <svg viewBox="0 0 420 260" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
+          <rect x="60" y="52" width="300" height="208" rx="6" fill="#FFFFFF" stroke="#DFE5EC" stroke-width="1.5"/>
+          <!-- Sign band carries the brand, so it follows --accent (royal blue).
+               The window glow below stays warm on purpose: lit windows at dusk
+               are naturalistic, not branding, and cool-blue windows read as an
+               empty building. -->
+          <rect x="60" y="52" width="300" height="34" rx="6" fill="#EFF6FF" stroke="#DFE5EC" stroke-width="1.5"/>
+          <text x="210" y="75" text-anchor="middle" fill="#2563EB" font-family="Outfit, sans-serif" font-size="15" font-weight="800" letter-spacing="2.5">HOSTYLLO</text>
+          <linearGradient id="lgWin" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FFD9A8"/><stop offset="1" stop-color="#F9B25E"/>
+          </linearGradient>
+          <g fill="url(#lgWin)" stroke="#F3C89A" stroke-width="1">
+            <rect x="82"  y="104" width="30" height="26" rx="3"/><rect x="126" y="104" width="30" height="26" rx="3"/>
+            <rect x="170" y="104" width="30" height="26" rx="3"/><rect x="214" y="104" width="30" height="26" rx="3"/>
+            <rect x="258" y="104" width="30" height="26" rx="3"/><rect x="302" y="104" width="30" height="26" rx="3"/>
+            <rect x="82"  y="148" width="30" height="26" rx="3"/><rect x="126" y="148" width="30" height="26" rx="3"/>
+            <rect x="170" y="148" width="30" height="26" rx="3"/><rect x="214" y="148" width="30" height="26" rx="3"/>
+            <rect x="258" y="148" width="30" height="26" rx="3"/><rect x="302" y="148" width="30" height="26" rx="3"/>
+            <rect x="82"  y="192" width="30" height="26" rx="3"/><rect x="126" y="192" width="30" height="26" rx="3"/>
+            <rect x="258" y="192" width="30" height="26" rx="3"/><rect x="302" y="192" width="30" height="26" rx="3"/>
+          </g>
+          <g stroke="#F0D4B4" stroke-width="1">
+            <path d="M97 104v26M141 104v26M185 104v26M229 104v26M273 104v26M317 104v26"/>
+            <path d="M97 148v26M141 148v26M185 148v26M229 148v26M273 148v26M317 148v26"/>
+            <path d="M97 192v26M141 192v26M273 192v26M317 192v26"/>
+          </g>
+          <rect x="176" y="188" width="68" height="72" rx="4" fill="#E9EEF4" stroke="#DFE5EC" stroke-width="1.5"/>
+          <path d="M210 188v72" stroke="#D3DCE6" stroke-width="1.5"/>
+          <path d="M176 188h68" stroke="#CBB79F" stroke-width="3"/>
+          <g stroke="#CBD5E0" stroke-width="1.5" stroke-linecap="round">
+            <path d="M28 260v-42"/><path d="M392 260v-42"/>
+          </g>
+          <g fill="#FBBF77"><circle cx="28" cy="214" r="6"/><circle cx="392" cy="214" r="6"/></g>
+          <path d="M0 260h420" stroke="#DFE5EC" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <!-- Real counts from this hostel's own database, using the same
+           definitions the Rooms page uses. Hidden entirely until there is data
+           to report — no placeholder or marketing figures. -->
+      <div class="lg-facts" id="login-facts" style="display:none">
+        <div class="lg-fact">
+          <span class="lg-fact__i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
+          <div class="lg-fact__v" id="login-fact-rooms">0</div>
+          <div class="lg-fact__l">Rooms</div>
+        </div>
+        <div class="lg-fact">
+          <span class="lg-fact__i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <div class="lg-fact__v" id="login-fact-students">0</div>
+          <div class="lg-fact__l">Students</div>
+        </div>
+        <div class="lg-fact">
+          <span class="lg-fact__i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+          <div class="lg-fact__v" id="login-fact-occupancy">0%</div>
+          <div class="lg-fact__l">Beds filled</div>
+
+      <div class="lg-trust">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        Your data is encrypted and stays on this computer
+      </div>
+    </aside>
+
+    <!-- ── RIGHT: the form ─────────────────────────────────────── -->
+    <section class="lg-form">
+
+      <h1 class="lg-h">Welcome back</h1>
+      <p class="lg-p">Sign in to continue managing
+        <b id="login-hostel-name">your hostel</b>.</p>
+      <div class="lg-addr" id="login-address" style="display:none"></div>
+
+      <!-- Username. The two-card warden picker was removed earlier: the app has
+           an open user list, and a picker printed every staff name to anyone
+           who opened the app. -->
+      <label class="lg-lbl" for="login-user">Username</label>
+      <div class="lg-field">
+        <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+        <input id="login-user" class="lg-in" type="text" placeholder="Enter your username"
+               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username">
+      </div>
+
+      <label class="lg-lbl" for="login-input">Password</label>
+      <div class="lg-field">
+        <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input id="login-input" class="lg-in" type="password" placeholder="Enter your password"
+               autocomplete="current-password" aria-label="Password">
+        <button id="login-pw-toggle" class="lg-eye" type="button" aria-label="Show password"
+                onclick="(function(b){var i=document.getElementById('login-input');var s=i.type==='password';i.type=s?'text':'password';b.setAttribute('aria-label',s?'Hide password':'Show password');})(this)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+
+      <div class="lg-meta">
+        <label class="lg-remember">
+          <input type="checkbox" id="login-remember">
+          <span class="lg-check" aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+          </span>
+          Remember me
+        </label>
+        <button type="button" class="lg-link" aria-expanded="false" aria-controls="login-pw-hint"
+                onclick="(function(b){var n=document.getElementById('login-pw-hint');var open=n.hasAttribute('hidden');if(open){n.removeAttribute('hidden');}else{n.setAttribute('hidden','');}b.setAttribute('aria-expanded',open?'true':'false');})(this)">Forgot Password?</button>
+      </div>
+
+      <!-- selectWarden() announces the chosen warden here, for screen readers. -->
+      <div id="login-hint" class="lg-sr" aria-live="polite"></div>
+
+      <div id="login-error" role="alert"></div>
+
+      <!-- There is no self-serve reset: passwords are PBKDF2 hashes held on this
+           machine only, and nothing can mail them out. This is the real
+           recovery path, and it exists today in Settings → Users. -->
+      <p class="lg-note" id="login-pw-hint" hidden>
+        Passwords are stored only on this computer and cannot be emailed or
+        recovered. Ask another warden to sign in and set a new one from
+        <b>Settings → Users</b>.
+      </p>
+
+      <button id="login-btn" type="button">
+        Sign In
+        <span class="lg-arrow" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </span>
       </button>
-    </div>
 
-    <div id="login-hint" aria-live="polite"></div>
-    <div id="login-error" role="alert">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-      Wrong password. Try again.
-    </div>
+      <div class="lg-safe">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>
+          <b>Protected with enterprise security</b>
+          <span>Passwords are PBKDF2-hashed and never leave this computer</span>
+        </span>
+      </div>
 
-    <button id="login-btn" type="button">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5" /> <path d="M15 12H3" /> <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg>
-      Sign In
-    </button>
+      <div class="lg-foot">
+        <span class="lg-foot__c">&copy; 2026 HOSTYLLO. All rights reserved.</span>
+        <span class="lg-foot__v" id="login-version"></span>
+      </div>
+    </section>
 
-    <div class="login-hint-box" id="login-pw-hint">
-      <strong>Hint:</strong> Enter your warden password to continue.
-    </div>
   </div>
 </div>
 
@@ -106,47 +289,59 @@
     var lsKey = 'dbh2_v3_' + activeHostel;
     // ── Hostel name & address ──────────────────────────────────────────────
     var raw = localStorage.getItem(lsKey);
+    var saved = null, s = null;
     if (raw) {
-      var saved = JSON.parse(raw);
-      var s = saved && saved.settings;
+      saved = JSON.parse(raw);
+      s = saved && saved.settings;
       if (s && s.hostelName) {
         var hn = document.getElementById('login-hostel-name');
         if (hn) hn.textContent = s.hostelName;
-        document.title = 'HOSTIX | ' + s.hostelName;
+        document.title = 'HOSTYLLO | ' + s.hostelName;
       }
       if (s && s.location) {
         var addr = document.getElementById('login-address');
-        if (addr) addr.innerHTML = '&#x1F4CD; ' + s.location;
+        if (addr) addr.textContent = s.location;
+      }
+      if (s && s.version) {
+        var ver = document.getElementById('login-version');
+        if (ver) ver.textContent = s.version;
+      }
+    }
+
+    // ── Brand-panel figures ────────────────────────────────────────────────
+    // Real counts from this hostel's own DB, using the SAME definitions as
+    // renderRooms(): active students are the filled beds, and a room's bed
+    // count is its room type's capacity. The strip stays hidden on a fresh
+    // install rather than reporting zeros.
+    var facts = document.getElementById('login-facts');
+    if (facts && saved && Array.isArray(saved.rooms) && Array.isArray(saved.students)) {
+      var types  = (s && Array.isArray(s.roomTypes)) ? s.roomTypes : [];
+      var capOf  = function (r) {
+        for (var i = 0; i < types.length; i++)
+          if (types[i].id === r.typeId) return types[i].capacity || 0;
+        return 0;
+      };
+      var totalBeds = saved.rooms.reduce(function (n, r) { return n + capOf(r); }, 0);
+      var active    = saved.students.filter(function (t) { return t.status === 'Active'; }).length;
+      if (saved.rooms.length || active) {
+        document.getElementById('login-fact-rooms').textContent     = saved.rooms.length;
+        document.getElementById('login-fact-students').textContent  = active;
+        document.getElementById('login-fact-occupancy').textContent =
+          (totalBeds ? Math.round(active / totalBeds * 100) : 0) + '%';
+        facts.style.display = '';
       }
     }
     // ── Logo ───────────────────────────────────────────────────────────────
-    var logo = localStorage.getItem('hostel_logo_' + activeHostel);
-    if (logo) {
-      var img = document.getElementById('login-logo-img');
-      var emoji = document.getElementById('login-logo-emoji');
-      if (img)   { img.src = logo; img.style.display = 'block'; }
-      if (emoji) emoji.style.display = 'none';
-    }
-    // ── Warden names ──────────────────────────────────────────────────────
-    var wcfg = localStorage.getItem('warden_config_' + activeHostel);
-    if (wcfg) {
-      var w = JSON.parse(wcfg);
-      var b1 = document.getElementById('wb1-name');
-      var b2 = document.getElementById('wb2-name');
-      if (b1 && w.warden1 && w.warden1.name) b1.textContent = w.warden1.name;
-      if (b2 && w.warden2 && w.warden2.name) b2.textContent = w.warden2.name;
-      ['warden1','warden2'].forEach(function(k) {
-        if (w[k] && w[k].photo) {
-          var card = document.getElementById('rb-' + k);
-          if (card) {
-            var emojiEl = card.querySelector('.warden-login-emoji');
-            if (emojiEl) {
-              emojiEl.innerHTML = '<img src="'+w[k].photo+'" style="width:40px;height:40px;border-radius:10px;object-fit:cover;border:2px solid rgba(124,58,237,0.5)">';
-            }
-          }
-        }
-      });
-    }
+    // Deliberately NOT read from localStorage any more. A customer-uploaded
+    // image used to replace the product mark on this screen; the brand is
+    // fixed now and the markup carries it, so there is nothing to restore.
+    // Old 'hostel_logo_*' keys are left on disk rather than deleted — they are
+    // inert, and removing a customer's file from their machine is not this
+    // change's business.
+    // Warden names and avatars used to be pre-painted here to stop the login
+    // screen flashing placeholder names before _boot() resolved. The login
+    // screen no longer names anyone — it is a username field — so there is
+    // nothing left to pre-paint, and nothing to flash.
   } catch(e) {}
 })();
 </script>
@@ -165,17 +360,18 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18-6-6 6-6"/></svg>
     </button>
     <div class="sb-logo-mark">
-      <div class="sb-logo-icon" id="sb-logo-icon" onclick="document.getElementById('logo-upload').click()" title="Click to upload logo" style="cursor:pointer">
-        <img id="sb-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:11px;position:absolute;top:0;left:0">
-        <span id="sb-logo-emoji" style="display:none"></span>
-        <svg id="sb-logo-svg" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="position:relative;z-index:1">
-          <rect x="4" y="4" width="20" height="20" rx="5" fill="rgba(124,58,237,0.12)" stroke="rgba(124,58,237,0.45)" stroke-width="1"/>
-          <text x="14" y="18" text-anchor="middle" fill="rgba(124,58,237,0.8)" font-family="Outfit, sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">H</text>
-        </svg>
+      <!-- THE PRODUCT MARK, FIXED. It was an upload target: clicking it opened a
+           file picker and whatever the customer chose replaced the Hostyllo
+           logo, on their sidebar AND their login screen, stored in
+           localStorage. This is the product's identity, not a per-hostel
+           setting — the hostel's own name is the line of text beside it. The
+           white variant is used because the rail is navy in both themes. -->
+      <div class="sb-logo-icon" id="sb-logo-icon">
+        <img id="sb-logo-img" src="img/brand/mark-light.png" alt="Hostyllo"
+             style="width:22px;height:22px;object-fit:contain;position:relative;z-index:1">
       </div>
-      <input type="file" id="logo-upload" accept="image/*" style="display:none" onchange="uploadLogo(this)">
       <div class="sb-logo-text">
-        <div class="name">HOSTIX</div>
+        <div class="name">HOSTYLLO</div>
         <div class="sub" id="sb-hostel-name">Hostel Management</div>
       </div>
     </div>
@@ -212,20 +408,20 @@
       </svg>
       <span class="nav-label">Students</span>
     </div>
-    <div class="nav-item" onclick="navigate('cancellations')" data-page="cancellations" title="Cancellation List">
+    <div class="nav-item" onclick="navigate('cancellations')" data-page="cancellations" title="Cancellations">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="m15 9-6 6" />
         <path d="m9 9 6 6" />
       </svg>
-      <span class="nav-label">Cancellation List</span>
+      <span class="nav-label">Cancellations</span>
       <span id="cancel-badge" class="nav-badge" style="display:none;background:var(--red)">0</span>
     </div>
-    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints &amp; Maintenance">
+    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
       </svg>
-      <span class="nav-label">Complaints &amp; Maintenance</span>
+      <span class="nav-label">Complaints</span>
       <span id="issues-badge" class="nav-badge" style="display:none;background:var(--amber)">0</span>
     </div>
     <div class="sb-section" style="margin-top:8px">Finance</div>
@@ -253,14 +449,24 @@
       </svg>
       <span class="nav-label">Reports</span>
     </div>
-    <div class="sb-section" style="margin-top:8px">System</div>
-    <div class="nav-item" onclick="showBackupRestoreModal()" data-page="backup" title="Backup &amp; Restore">
+    <div class="nav-item" onclick="navigate('archive')" data-page="archive" title="Annual Archive">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 13v8l-4-4" />
-        <path d="m12 21 4-4" />
-        <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" />
+        <rect x="2" y="3" width="20" height="5" rx="1" />
+        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+        <path d="M10 12h4" />
       </svg>
-      <span class="nav-label">Backup &amp; Restore</span>
+      <span class="nav-label">Annual Archive</span>
+    </div>
+    <div class="sb-section" style="margin-top:8px">System</div>
+    <!-- Settings lives here, in System, alongside the other configuration
+         items. It used to sit in the account menu, where it read as a personal
+         preference rather than what it is — hostel-wide configuration. -->
+    <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      <span class="nav-label">Settings</span>
     </div>
     <div class="nav-item" onclick="navigate('activitylog')" data-page="activitylog" title="Activity Log">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -268,6 +474,14 @@
         <path d="M12 6v6l4 2" />
       </svg>
       <span class="nav-label">Activity Log</span>
+    </div>
+    <div class="nav-item" onclick="showBackupRestoreModal()" data-page="backup" title="Backup &amp; Restore">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 13v8l-4-4" />
+        <path d="m12 21 4-4" />
+        <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" />
+      </svg>
+      <span class="nav-label">Backup &amp; Restore</span>
     </div>
     <div class="nav-item nav-item--danger" onclick="showClearAllMenu()" data-page="clearall" title="Clear All Data">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -281,22 +495,38 @@
     </div>
   </nav>
 
-  <!-- STICKY BOTTOM — Settings + Help only -->
-  <div class="sidebar__bottom">
-    <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-      <span class="nav-label">Settings</span>
+  <!-- USER CARD — the only account control in the app; the header chip that
+       used to mirror it was removed. The menu it opens lives here too, and
+       opens upward because the card sits at the bottom of the sidebar. -->
+  <div class="sb-user-wrap">
+    <div class="sb-user" id="sb-user" onclick="toggleUserMenu(event)" title="Account">
+      <div class="sb-user__av" id="sb-user-av">MA</div>
+      <div class="sb-user__id">
+        <div class="sb-user__name" id="sb-user-name">Warden</div>
+        <div class="sb-user__role" id="sb-user-role">Admin</div>
+      </div>
+      <svg class="sb-user__caret" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </div>
-    <div class="nav-item" onclick="openExternalLink('https://hostyllo.com/support')" title="Help &amp; Support">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-        <path d="M12 17h.01"/>
-      </svg>
-      <span class="nav-label">Help &amp; Support</span>
+    <div class="hdr-menu sb-user-menu" id="user-menu" style="display:none">
+      <div class="hdr-menu__head">
+        <b id="user-menu-name">Warden</b>
+        <span id="user-menu-role">Admin</span>
+      </div>
+      <button class="hdr-menu__item" onclick="closeHdrMenus();showFormerStudentsModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        Former Students
+      </button>
+      <button class="hdr-menu__item" id="user-menu-manage" onclick="closeHdrMenus();showUserMgmt()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
+        Manage Users
+      </button>
+      <!-- Settings moved out of this menu and into the sidebar's System group;
+           it configures the hostel, not this account. -->
+      <div class="hdr-menu__sep"></div>
+      <button class="hdr-menu__item hdr-menu__item--danger" onclick="closeHdrMenus();logout()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>
+        Logout
+      </button>
     </div>
   </div>
 </aside>
@@ -304,41 +534,33 @@
 <!-- MAIN -->
 <div id="main">
   <header id="header">
+    <!-- The hamburger and the Back button were removed on the owner's call.
+         Navigation is the sidebar; sub-pages carry their own exit (the student
+         form has Cancel, detail views are modals with a close). goBack() and
+         pageHistory are kept — the command palette and in-page controls still
+         call them. -->
     <div class="hdr-left" style="display:flex;align-items:center;gap:12px">
-      <!-- FIX #13: Hamburger button for mobile sidebar toggle -->
-      <button id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle menu" aria-label="Toggle navigation">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16" /> <path d="M4 12h16" /> <path d="M4 19h16" /></svg>
-      </button>
-      <!-- FIX #5: history.back is always truthy as a function; use pageHistory.length instead -->
-      <button id="hdr-back-btn" onclick="pageHistory.length > 1 ? goBack() : navigate('dashboard')" style="display:none;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:var(--transition);align-items:center;gap:6px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='var(--bg3)'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg> Back
-      </button>
-      <div>
+      <div class="hdr-title-wrap">
         <div class="page-title" id="hdr-title">Dashboard</div>
         <div class="page-sub" id="hdr-sub" style="display:none"></div>
       </div>
     </div>
     <!-- Global search in header -->
-    <div style="flex:1;max-width:420px;position:relative;margin:0 16px" id="hdr-search-wrap">
-      <div style="display:flex;align-items:center;background:rgba(255,255,255,0.05);border:1px solid var(--border2);border-radius:10px;overflow:visible;transition:border-color 0.2s"
-        onfocusin="this.style.borderColor='rgba(124,58,237,0.55)';this.style.background='rgba(255,255,255,0.07)'"
-        onfocusout="this.style.borderColor='var(--border2)';this.style.background='rgba(255,255,255,0.05)'">
-        <div style="padding:0 10px;color:var(--text3);display:flex;align-items:center;flex-shrink:0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-        </div>
+    <div id="hdr-search-wrap">
+      <div class="hdr-find">
+        <span class="hdr-find__ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
+        </span>
         <input id="dash-global-search" type="text"
-          placeholder="Search students, rooms, locations…"
+          placeholder="Search students, rooms, payments…"
           autocomplete="off"
-          style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:12px;font-family:var(--font);padding:8px 0;min-width:0"
           oninput="dashGlobalSearch(this.value)"
           onkeydown="if(event.key==='Escape'){this.value='';dashGlobalSearchClear();}">
         <button id="dash-search-clear"
           onclick="document.getElementById('dash-global-search').value='';dashGlobalSearchClear()"
-          style="display:none;background:rgba(255,255,255,0.08);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;margin-right:4px;height:26px;align-items:center;justify-content:center"
-          onmouseover="this.style.background='rgba(255,255,255,0.15)';this.style.color='var(--text)'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='var(--text2)'"
+          style="display:none;background:var(--bg3);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;height:24px;align-items:center;justify-content:center"
           title="Clear search (Esc)"><span class="micon" style="font-size:16px">close</span></button>
-        <kbd onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)"
-          style="cursor:pointer;flex-shrink:0;margin-right:6px;font-size:10px;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:5px;padding:2px 6px;font-family:var(--font-mono,monospace)">Ctrl K</kbd>
+        <kbd class="hdr-kbd" onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)">Ctrl K</kbd>
       </div>
       <!-- Search results dropdown — anchored to hdr-search-wrap -->
       <div id="dash-search-results" style="display:none;position:fixed;top:56px;width:min(460px,calc(100vw - 32px));background:var(--bg2);border:1px solid var(--border2);border-radius:12px;z-index:9999;max-height:420px;overflow-y:auto;box-shadow:0 16px 50px rgba(0,0,0,0.7)"></div>
@@ -373,21 +595,31 @@
     </div>
 
     <div class="hdr-right">
-      <div id="role-badge" onclick="showUserMgmt()" style="display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.25);font-size:11px;font-weight:700;color:#a78bfa;cursor:pointer;" title="Manage users"></div>
-      <button onclick="showFormerStudentsModal()" style="background:var(--bg3);border:1px solid rgba(124,58,237,0.35);color:#a78bfa;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Search former students & restore">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34" /> <circle cx="11" cy="11" r="8" /></svg>
-        Former Students
+      <div id="role-badge" onclick="showUserMgmt()" style="display:none"></div>
+
+      <!-- Notifications — count and contents come from real DB state -->
+      <div style="position:relative">
+        <button class="hdr-btn" id="hdr-bell" onclick="toggleNotifMenu(event)" title="Notifications" aria-label="Notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
+          <span class="hdr-btn__count" id="hdr-bell-count" style="display:none">0</span>
+        </button>
+        <div class="hdr-menu" id="notif-menu" style="display:none"></div>
+      </div>
+
+      <button class="hdr-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Mode" aria-label="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
       </button>
-      <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;" title="Toggle Light/Dark Mode">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
-      </button>
-      <button onclick="logout()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5" /> <path d="M21 12H9" /> <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg> Logout</button>
+
+      <!-- The account chip that used to sit here was removed; the account
+           control is the user card at the bottom of the sidebar, and the menu
+           it opens moved there with it. -->
+
       <button class="btn btn-success btn-sm" id="hdr-action2" style="display:none" onclick="headerAction2()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
         <span id="hdr-action2-text">Add Payment</span>
       </button>
       <button class="btn btn-primary btn-sm" id="hdr-action" style="display:none" onclick="headerAction()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg>
         <span id="hdr-action-text">Add</span>
       </button>
     </div>
@@ -429,6 +661,7 @@
   <script src="src/auth-nev.js"></script>
   <script src="src/storage.js"></script>
   <script src="src/license.js"></script>
+  <script src="src/enforcement-ui.js"></script>
   <script src="src/receipt.js"></script>
   <!-- Feature modules -->
   <script src="src/modules/theme.js"></script>
@@ -440,11 +673,15 @@
   <script src="src/modules/payments.js"></script>
   <script src="src/modules/expenses.js"></script>
   <script src="src/modules/reports.js"></script>
+  <script src="src/modules/archive.js"></script>
   <script src="src/modules/settings.js"></script>
+  <script src="src/modules/whatsapp.js"></script>
   <script src="src/modules/modals.js"></script>
   <script src="src/modules/sidebar_calendar.js"></script>
   <script src="src/modules/issues.js"></script>
   <script src="src/modules/command-palette.js"></script>
+  <!-- Custom title bar (self-contained; mounts the frameless window chrome) -->
+  <script src="src/titlebar.js"></script>
   <!-- Boot & misc -->
   <script src="app.js" defer></script>
 </body>

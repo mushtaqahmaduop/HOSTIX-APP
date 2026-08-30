@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!--
+  Control plane — admin portal.
+
+  Plain HTML/CSS/JS with no build step, matching the desktop app this service
+  exists for. It is an internal tool for one or two people; a bundler, a
+  framework and a dependency tree to audit would all be cost without a payer.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Plane</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ── Sign in ─────────────────────────────────────────────────────────── -->
+<div id="login" class="login" hidden>
+  <form class="login__card" id="login-form" autocomplete="on">
+    <div class="login__brand">Control Plane</div>
+    <div class="login__sub">Hostyllo — offline edition</div>
+    <label class="field">
+      <span>Email</span>
+      <input type="email" id="login-email" required autocomplete="username">
+    </label>
+    <label class="field">
+      <span>Password</span>
+      <input type="password" id="login-password" required autocomplete="current-password">
+    </label>
+    <div class="msg msg--error" id="login-error" hidden></div>
+    <button class="btn btn--primary btn--block" type="submit" id="login-btn">Sign in</button>
+  </form>
+</div>
+
+<!-- ── App ─────────────────────────────────────────────────────────────── -->
+<div id="app" hidden>
+  <header class="top">
+    <div class="top__brand">Control Plane</div>
+    <nav class="top__nav">
+      <button class="tab is-active" data-view="licenses">Licences</button>
+      <button class="tab" data-view="issue">Issue key</button>
+      <button class="tab" data-view="audit">Audit</button>
+    </nav>
+    <div class="top__right">
+      <span class="who" id="who"></span>
+      <button class="btn btn--ghost" id="logout">Sign out</button>
+    </div>
+  </header>
+
+  <div class="warnbar" id="warnbar" hidden></div>
+
+  <!-- Licences -->
+  <main class="view" id="view-licenses">
+    <section class="stats" id="stats"></section>
+
+    <div class="toolbar">
+      <input class="input input--search" id="search" placeholder="Search hostel, city, contact…">
+      <select class="input" id="filter-status">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="suspended">Suspended</option>
+        <option value="revoked">Revoked</option>
+      </select>
+      <select class="input" id="filter-verification">
+        <option value="">All</option>
+        <option value="unverified">Unverified</option>
+        <option value="verified">Verified</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <label class="check">
+        <input type="checkbox" id="filter-expiring"> Expiring in 30 days
+      </label>
+    </div>
+
+    <div class="tablewrap">
+      <table class="table" id="licenses-table">
+        <thead>
+          <tr>
+            <th>Hostel</th><th>Key</th><th>Status</th><th>Expires</th>
+            <th>Devices</th><th>Last seen</th><th>Version</th>
+          </tr>
+        </thead>
+        <tbody id="licenses-body"></tbody>
+      </table>
+      <div class="empty" id="licenses-empty" hidden>No licences match.</div>
+    </div>
+  </main>
+
+  <!-- Issue key -->
+  <main class="view" id="view-issue" hidden>
+    <div class="panel panel--narrow">
+      <h2 class="panel__title">Issue a licence key</h2>
+      <p class="panel__note">
+        The key is shown <strong>once</strong> — only its fingerprint is stored. Send it to the
+        customer before leaving this page.
+      </p>
+      <form id="issue-form">
+        <label class="field"><span>Expires on</span><input type="date" id="issue-expires" required></label>
+        <div class="presets" id="issue-presets"></div>
+        <label class="field"><span>Hostel name</span><input type="text" id="issue-hostel"></label>
+        <div class="row">
+          <label class="field"><span>Contact</span><input type="text" id="issue-contact" placeholder="Contact person"></label>
+          <label class="field"><span>Phone</span><input type="text" id="issue-phone" placeholder="03xx…"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>City</span><input type="text" id="issue-city"></label>
+          <label class="field"><span>Computers allowed</span><input type="number" id="issue-devices" min="1" max="1000" value="1"></label>
+        </div>
+        <label class="field"><span>Notes</span><input type="text" id="issue-notes"></label>
+        <div class="msg msg--error" id="issue-error" hidden></div>
+        <button class="btn btn--primary" type="submit">Generate key</button>
+      </form>
+
+      <div class="keyout" id="issue-result" hidden>
+        <div class="keyout__label">New licence key — copy it now</div>
+        <div class="keyout__key" id="issue-key"></div>
+        <button class="btn" id="issue-copy">Copy</button>
+        <div class="keyout__meta" id="issue-meta"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Audit -->
+  <main class="view" id="view-audit" hidden>
+    <div class="tablewrap">
+      <table class="table">
+        <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- ── Licence detail ──────────────────────────────────────────────────── -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer__scrim" id="drawer-scrim"></div>
+  <aside class="drawer__panel">
+    <header class="drawer__head">
+      <div>
+        <h2 class="drawer__title" id="d-title">—</h2>
+        <div class="drawer__sub" id="d-sub"></div>
+      </div>
+      <button class="btn btn--ghost" id="drawer-close">Close</button>
+    </header>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

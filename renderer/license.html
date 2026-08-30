@@ -3,295 +3,396 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HOSTIX — Activate License</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:; font-src 'self' data:;">
+  <title>HOSTYLLO — Activate License</title>
+  <!-- 'unsafe-eval' removed here too (audit M2). The main window's CSP header
+       dropped it; leaving it in this page's meta would have made the activation
+       screen the one place in the app where a string could still become code. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;">
   <link rel="stylesheet" href="vendor/fonts.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── THE ACTIVATION SCREEN IS A LIGHT WORKSPACE ─────────────────────────
+       It used to be a dark page with floating violet orbs, which matched
+       nothing else the product shows: the approved design is the light
+       enterprise workspace, and this is the FIRST screen a new customer ever
+       sees. The palette below is the design guide's, the same one style.css
+       uses, so the activation screen and the app are recognisably one product.
+
+       This page deliberately does not load tokens.css or style.css — it must
+       render before the app is licensed, with no dependency on app state — so
+       the handful of values it needs are restated here. */
     :root {
-      --accent:      #7c3aed;
-      --accent-light:     #a78bfa;
-      --red:       #e05252;
-      --green:     #2ec98a;
-      --blue:      #1e5fd4;
-      --bg:        #060c18;
-      --bg2:       #071428;
-      --bg3:       #0d1f38;
-      --border:    #1e3050;
-      --border2:   #1e4080;
-      --text:      #e8eef8;
-      --text2:     #a0b4cc;
-      --text3:     #4d6a90;
+      --ink:        #0f2557;   /* headings — deep navy */
+      --ink-2:      #35507f;   /* body text */
+      --ink-3:      #7c8fb0;   /* captions */
+      --line:       #e2e8f0;
+      --line-soft:  #eef2f7;
+      --card:       #ffffff;
+      --bg:         #f4f7fc;
+      --blue:       #2563eb;
+      --blue-2:     #3b82f6;
+      --blue-dim:   #f0f5ff;
+      --blue-line:  #dbe7ff;
+      --red:        #dc2626;
+      --red-dim:    #fef2f2;
+      --red-line:   #fecaca;
+      --green:      #059669;
+      --amber:      #d97706;
+      --font:       'Outfit', 'Segoe UI', system-ui, sans-serif;
+      --mono:       'JetBrains Mono', 'Consolas', ui-monospace, monospace;
+      --shadow:     0 10px 40px rgba(15, 37, 87, .07);
+      --shadow-lg:  0 18px 60px rgba(15, 37, 87, .10);
     }
 
+    html, body { height: 100%; }
     body {
-      font-family: 'Outfit', 'Segoe UI', sans-serif;
+      font-family: var(--font);
       background: var(--bg);
-      color: var(--text);
+      color: var(--ink-2);
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-
-    /* Animated background grid */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(30,95,212,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(30,95,212,0.04) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* Glow orbs */
-    .orb {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.15;
-      pointer-events: none;
-      z-index: 0;
-    }
-    .orb-1 { width: 500px; height: 500px; background: #1e5fd4; top: -150px; left: -150px; }
-    .orb-2 { width: 400px; height: 400px; background: #7c3aed; bottom: -100px; right: -100px; animation: orb2 8s ease-in-out infinite alternate; }
-    @keyframes orb2 { from { transform: translate(0,0); } to { transform: translate(-30px,-30px); } }
-
-    .card {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 26px 20px 0;
       position: relative;
-      z-index: 1;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 44px 42px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 32px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(30,95,212,0.1);
-      animation: cardIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
+      overflow-x: hidden;
     }
-    @keyframes cardIn { from { opacity:0; transform:translateY(24px) scale(0.97); } to { opacity:1; transform:none; } }
 
-    /* Top accent bar */
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      border-radius: 24px 24px 0 0;
-      background: linear-gradient(90deg, #1e5fd4, #7c3aed, #1e5fd4);
+    /* Watermark. Line art at very low opacity rather than a photograph: it
+       gives the page depth without competing with the one thing on it that
+       matters, which is the key field. */
+    .bg-art {
+      position: fixed; left: -60px; bottom: 0; width: 520px; height: 520px;
+      color: #c7d8f5; opacity: .30; pointer-events: none; z-index: 0;
+    }
+    .bg-art-2 {
+      position: fixed; right: -140px; top: 40px; width: 460px; height: 460px;
+      color: #dbe7ff; opacity: .45; pointer-events: none; z-index: 0;
+    }
+
+    /* ── The activation card ─────────────────────────────────────────────── */
+    .card {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 716px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow-lg);
+      padding: 40px 46px 0;
+      margin-bottom: 22px;
     }
 
     .logo {
-      width: 72px; height: 72px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(124,58,237,0.08));
-      border: 1px solid rgba(124,58,237,0.35);
+      width: 96px; height: 96px; margin: 0 auto 22px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+      box-shadow: 0 10px 26px rgba(37, 99, 235, .28);
       display: flex; align-items: center; justify-content: center;
-      font-size: 32px;
-      margin: 0 auto 20px;
-      box-shadow: 0 8px 32px rgba(124,58,237,0.15);
     }
+    .logo img { width: 46px; height: 46px; object-fit: contain; }
 
     .title {
-      text-align: center;
-      font-size: 22px;
-      font-weight: 900;
-      color: var(--accent-light);
-      margin-bottom: 4px;
-      letter-spacing: 0.3px;
+      text-align: center; font-size: 40px; font-weight: 800;
+      letter-spacing: -.5px; color: var(--ink); line-height: 1.05;
+    }
+    .subtitle-row {
+      display: flex; align-items: center; gap: 16px;
+      margin: 12px auto 6px; max-width: 420px;
+    }
+    .subtitle-row::before, .subtitle-row::after {
+      content: ''; flex: 1; height: 1px; background: var(--line);
     }
     .subtitle {
-      text-align: center;
-      font-size: 11px;
-      color: var(--text3);
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      margin-bottom: 8px;
+      font-size: 13px; font-weight: 600; letter-spacing: 3.2px;
+      text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
     }
     .divider {
-      width: 50px; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      margin: 16px auto 28px;
-      border-radius: 2px;
+      width: 54px; height: 3px; border-radius: 2px; margin: 0 auto 30px;
+      background: linear-gradient(90deg, var(--blue), var(--blue-2));
     }
 
-    /* Machine ID display */
+    /* ── Machine ID ──────────────────────────────────────────────────────── */
     .machine-box {
-      background: var(--bg3);
-      border: 1px solid var(--border2);
-      border-radius: 12px;
-      padding: 14px 16px;
-      margin-bottom: 22px;
+      background: var(--blue-dim);
+      border: 1px solid var(--blue-line);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 26px;
     }
     .machine-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: var(--text3);
-      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 1.3px;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 12px;
     }
-    .machine-id-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .machine-label svg { flex-shrink: 0; }
+    .machine-id-row { display: flex; align-items: flex-start; gap: 14px; }
     .machine-id {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--accent-light);
-      letter-spacing: 2px;
-      flex: 1;
+      flex: 1; min-width: 0;
+      font-family: var(--mono);
+      font-size: 17px; font-weight: 700; letter-spacing: .6px;
+      color: var(--blue); line-height: 1.5;
       word-break: break-all;
     }
     .copy-btn {
-      background: rgba(124,58,237,0.12);
-      border: 1px solid rgba(124,58,237,0.3);
-      color: var(--accent);
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.15s;
-      white-space: nowrap;
       flex-shrink: 0;
-    }
-    .copy-btn:hover { background: rgba(124,58,237,0.22); }
-    .copy-btn.copied { background: rgba(46,201,138,0.15); border-color: rgba(46,201,138,0.4); color: var(--green); }
-
-    .machine-hint {
-      font-size: 10px;
-      color: var(--text3);
-      margin-top: 7px;
-      line-height: 1.5;
-    }
-
-    /* Input */
-    .field-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text2);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .key-input {
-      width: 100%;
-      padding: 14px 16px;
-      background: var(--bg3);
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      font-size: 15px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      text-transform: uppercase;
-    }
-    .key-input::placeholder { color: var(--text3); letter-spacing: 1px; font-size: 13px; }
-    .key-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
-    .key-input.error { border-color: var(--red); box-shadow: 0 0 0 3px rgba(224,82,82,0.12); }
-    .key-input.success { border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,201,138,0.12); }
-
-    /* Message */
-    .msg {
-      margin-top: 10px;
-      padding: 10px 14px;
-      border-radius: 9px;
-      font-size: 13px;
-      font-weight: 600;
-      display: none;
-      animation: msgIn 0.2s ease;
-    }
-    @keyframes msgIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
-    .msg.error   { display: block; background: rgba(224,82,82,0.12);  border: 1px solid rgba(224,82,82,0.35);  color: #f08080; }
-    .msg.success { display: block; background: rgba(46,201,138,0.12); border: 1px solid rgba(46,201,138,0.35); color: #5ce8a8; }
-
-    /* Button */
-    .activate-btn {
-      width: 100%;
-      margin-top: 18px;
-      padding: 15px;
-      background: linear-gradient(135deg, #1e5fd4, #2872f0);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      letter-spacing: 0.3px;
-    }
-    .activate-btn:hover:not(:disabled) { background: linear-gradient(135deg, #2470f0, #3080ff); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(30,95,212,0.4); }
-    .activate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .activate-btn.success-btn { background: linear-gradient(135deg, #1a7a50, #2ec98a); }
-
-    /* Footer note */
-    .footer-note {
-      margin-top: 24px;
-      padding: 12px 14px;
-      background: rgba(30,48,80,0.4);
-      border: 1px solid rgba(30,48,80,0.8);
+      display: inline-flex; align-items: center; gap: 7px;
+      height: 38px; padding: 0 16px;
+      background: var(--card); border: 1px solid var(--blue-line);
       border-radius: 10px;
-      font-size: 11px;
-      color: var(--text3);
-      line-height: 1.7;
+      font-family: var(--font); font-size: 13px; font-weight: 650;
+      color: var(--ink-2); cursor: pointer;
+      transition: border-color .16s, color .16s, background .16s;
     }
-    .footer-note strong { color: var(--text2); }
+    .copy-btn:hover  { border-color: var(--blue); color: var(--blue); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); background: #ecfdf5; }
+    .machine-hint {
+      margin-top: 12px; font-size: 12.5px; line-height: 1.6; color: var(--ink-3);
+    }
 
-    /* Spinner */
+    /* ── Key field ───────────────────────────────────────────────────────── */
+    .field-label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 1.3px;
+      text-transform: uppercase; color: var(--ink); margin-bottom: 10px;
+    }
+    .field-label svg { color: var(--amber); flex-shrink: 0; }
+    .key-input {
+      width: 100%; height: 58px;
+      padding: 0 20px;
+      background: var(--card);
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      font-family: var(--mono); font-size: 17px; font-weight: 600;
+      letter-spacing: 1.6px; color: var(--ink);
+      transition: border-color .16s, box-shadow .16s;
+    }
+    .key-input::placeholder { color: #b9c6da; font-weight: 500; }
+    .key-input:focus {
+      outline: none; border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+    }
+    .key-input.error   { border-color: var(--red);   box-shadow: 0 0 0 4px rgba(220,38,38,.10); }
+    .key-input.success { border-color: var(--green); box-shadow: 0 0 0 4px rgba(5,150,105,.12); }
+
+    /* ── Message ─────────────────────────────────────────────────────────── */
+    .msg {
+      min-height: 0; margin-top: 0;
+      font-size: 13px; font-weight: 600; line-height: 1.6;
+      white-space: pre-line;
+    }
+    .msg:not(:empty)   { margin-top: 14px; }
+    .msg.error   { color: var(--red); }
+    .msg.success { color: var(--green); }
+
+    /* ── Activate ────────────────────────────────────────────────────────── */
+    .activate-btn {
+      width: 100%; height: 58px; margin-top: 20px;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+      border: none; border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(37, 99, 235, .28);
+      font-family: var(--font); font-size: 16px; font-weight: 700;
+      color: #fff; cursor: pointer;
+      transition: transform .14s, box-shadow .16s, opacity .16s;
+    }
+    .activate-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px rgba(37, 99, 235, .34);
+    }
+    .activate-btn:disabled { opacity: .75; cursor: default; }
+    .activate-btn.success-btn {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      box-shadow: 0 8px 22px rgba(5, 150, 105, .28);
+    }
     .spinner {
-      width: 18px; height: 18px;
-      border: 2.5px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2.4px solid rgba(255,255,255,.35); border-top-color: #fff;
+      animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Success checkmark animation */
-    .check-wrap {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px;
-    }
-    .check-svg { animation: checkPop 0.3s cubic-bezier(0.22,1,0.36,1); }
+    .check-wrap { display: inline-flex; animation: checkPop .3s cubic-bezier(.2,.9,.3,1.4); }
     @keyframes checkPop { from { transform: scale(0); } to { transform: scale(1); } }
+
+    /* ── Trust strip, inside the card ────────────────────────────────────── */
+    .trust {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin: 32px -46px 0; padding: 20px 46px;
+      border-top: 1px solid var(--line-soft);
+    }
+    .trust-item { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .trust-ic {
+      width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+      background: var(--blue-dim); color: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .trust-t { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+    .trust-s { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 1.3; }
+
+    /* ── Support card ────────────────────────────────────────────────────── */
+    .help {
+      position: fixed; right: 34px; top: 50%; transform: translateY(-50%);
+      z-index: 1;
+      width: 262px;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow);
+      padding: 20px 18px;
+    }
+    .help-t { font-size: 15px; font-weight: 750; color: var(--ink); text-align: center; }
+    .help-s {
+      font-size: 11.5px; line-height: 1.6; color: var(--ink-3);
+      text-align: center; margin: 7px 0 15px;
+    }
+    .help-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 11px; margin-bottom: 8px;
+      border: 1px solid var(--line); border-radius: 10px;
+      font-size: 11.5px; font-weight: 600; color: var(--blue);
+      text-decoration: none; line-height: 1.45;
+      /* anywhere, not break-all: break-all splits at whatever character lands
+         on the edge, which chopped a support address into "…@gmai / l.com".
+         This breaks only when a line genuinely cannot fit, and prefers a
+         natural boundary when there is one. */
+      overflow-wrap: anywhere; word-break: normal;
+      transition: border-color .16s, background .16s;
+    }
+    .help-row:last-child { margin-bottom: 0; }
+    .help-row:hover { border-color: var(--blue-line); background: var(--blue-dim); }
+    .help-ic {
+      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+      background: var(--blue-dim); color: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Page footer ─────────────────────────────────────────────────────── */
+    .page-foot {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 1180px;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 20px; padding: 4px 6px 22px;
+      margin-top: auto;
+    }
+    .foot-l { font-size: 11.5px; line-height: 1.6; color: var(--ink-3); }
+    .foot-r { display: flex; align-items: center; gap: 10px; }
+    .foot-r .trust-ic { width: 30px; height: 30px; }
+    .foot-r b { display: block; font-size: 12px; font-weight: 700; color: var(--ink); }
+    .foot-r span { font-size: 11px; color: var(--ink-3); }
+
+    /* The support card floats beside the activation card on a wide window; on
+       a narrow one it must not overlap it, so it drops into the flow. */
+    @media (max-width: 1160px) {
+      .help { position: static; transform: none; width: 100%; max-width: 716px; margin-bottom: 22px; }
+      .bg-art, .bg-art-2 { display: none; }
+    }
+    @media (max-width: 620px) {
+      .card { padding: 30px 22px 0; }
+      .trust { grid-template-columns: 1fr; margin: 26px -22px 0; padding: 18px 22px; }
+      .title { font-size: 32px; }
+      .page-foot { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ── SHORT SCREENS ───────────────────────────────────────────────────────
+       The card was laid out for a tall window and never asked how much height
+       it actually had. On a 768px laptop panel — which is most of the field
+       — the usable viewport is around 600px once the title bar, the Windows
+       task bar and the window chrome take their cut, and Activate License sat
+       at 656px: the customer saw the top half of their own Activate button and
+       nothing below it. The page does scroll, but this is the first screen of a
+       locked-out install, and a primary action you have to go looking for is a
+       support call.
+
+       So the decoration gives up its height first — logo, title, paddings —
+       and the machine ID, the key field and the button keep theirs. Two steps,
+       because 600px and 520px are different problems. */
+    @media (max-height: 780px) {
+      body                { padding-top: 16px; }
+      body.has-titlebar   { padding-top: calc(var(--titlebar-h) + 16px); }
+      .card               { padding: 26px 46px 0; margin-bottom: 16px; }
+      .logo               { width: 64px; height: 64px; border-radius: 18px; margin-bottom: 14px; }
+      .logo img           { width: 32px; height: 32px; }
+      .title              { font-size: 30px; }
+      .subtitle-row       { margin: 8px auto 4px; }
+      .divider            { margin-bottom: 18px; }
+      .machine-box        { padding: 14px 18px; margin-bottom: 18px; }
+      .machine-label      { margin-bottom: 8px; }
+      .machine-id         { font-size: 15px; }
+      .machine-hint       { margin-top: 8px; font-size: 12px; }
+      .key-input          { height: 52px; }
+      .activate-btn       { height: 52px; margin-top: 16px; }
+      .trust              { padding: 16px 46px; }
+    }
+    @media (max-height: 620px) {
+      /* Below this the logo is the only thing left worth spending height on,
+         and it is worth less than the button. */
+      .logo               { display: none; }
+      .title              { font-size: 26px; }
+      .subtitle-row       { margin: 6px auto 4px; }
+      .divider            { margin-bottom: 14px; }
+      .machine-box        { margin-bottom: 14px; }
+      .machine-hint       { display: none; }   /* the label already says what it is */
+      .card               { padding-top: 22px; }
+    }
+  </style>
+  <!-- Custom frameless title bar. This page has its own palette and does not
+       load tokens.css, so map the handful of tokens titlebar.css needs onto it. -->
+  <link rel="stylesheet" href="titlebar.css">
+  <style>
+    #hz-titlebar {
+      --card: #ffffff; --dash-sunk: #f1f5f9;
+      --accent-strong: var(--blue); --accent-dim: var(--blue-dim);
+      --text: var(--ink); --text2: var(--ink-2); --text3: var(--ink-3);
+      --border: var(--line);
+      --font: 'Outfit','Segoe UI',sans-serif;
+    }
+    body.has-titlebar { padding-top: calc(var(--titlebar-h) + 26px); }
   </style>
 </head>
-<body>
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
+<body data-titlebar="minimal">
 
-  <div class="card">
-    <!-- Logo -->
-    <div class="logo">🏨</div>
+  <!-- Watermarks -->
+  <svg class="bg-art" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+    <path d="M40 180V70l40-26 40 26v110"/><path d="M20 180h160"/>
+    <rect x="56" y="86" width="16" height="16"/><rect x="88" y="86" width="16" height="16"/>
+    <rect x="56" y="116" width="16" height="16"/><rect x="88" y="116" width="16" height="16"/>
+    <path d="M72 180v-30h16v30"/><path d="M80 44V28h22v12"/>
+    <circle cx="100" cy="100" r="86" stroke-width="1"/>
+  </svg>
+  <svg class="bg-art-2" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+    <circle cx="100" cy="100" r="95"/><circle cx="100" cy="100" r="70"/><circle cx="100" cy="100" r="45"/>
+  </svg>
 
-    <div class="title">HOSTIX</div>
-    <div class="subtitle">License Activation</div>
+  <!-- Support -->
+  <aside class="help">
+    <div class="help-t">Need Help?</div>
+    <div class="help-s">If you're having trouble activating your license, our support team is ready to assist you.</div>
+    <a class="help-row" id="help-email" href="#">
+      <span class="help-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+      <span id="help-email-text">—</span>
+    </a>
+    <a class="help-row" id="help-phone" href="#">
+      <span class="help-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.18 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg></span>
+      <span id="help-phone-text">—</span>
+    </a>
+  </aside>
+
+  <main class="card">
+    <div class="logo"><img src="img/brand/mark-light.png" alt="Hostyllo"></div>
+
+    <h1 class="title">HOSTYLLO</h1>
+    <div class="subtitle-row"><span class="subtitle">License Activation</span></div>
     <div class="divider"></div>
 
     <!-- Machine ID -->
     <div class="machine-box">
-      <div class="machine-label">🖥️ This Computer's Machine ID</div>
+      <div class="machine-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+        This Computer's Machine ID
+      </div>
       <div class="machine-id-row">
         <div class="machine-id" id="machine-id">Loading…</div>
-        <button class="copy-btn" id="copy-btn" onclick="copyMachineId()">Copy</button>
+        <button class="copy-btn" id="copy-btn" onclick="copyMachineId()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy</span>
+        </button>
       </div>
       <div class="machine-hint">
         Share this ID with your software provider to receive a license key tied to this computer.
@@ -300,14 +401,15 @@
 
     <!-- License Key Input -->
     <div class="field-label">
-      🔑 Enter License Key
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+      Enter License Key
     </div>
     <input
       class="key-input"
       id="key-input"
       type="text"
-      placeholder="HOSTEL-XXXX-XXXX-XXXX"
-      maxlength="21"
+      placeholder="HOSTEL-XXXX-XXXX-XXXX-XXXX"
+      maxlength="26"
       autocomplete="off"
       spellcheck="false"
       oninput="formatKeyInput(this)"
@@ -323,15 +425,67 @@
       Activate License
     </button>
 
-    <!-- Footer -->
-    <div class="footer-note">
-      <strong>Offline Activation:</strong> This software works fully offline. Your license key is
-      permanently bound to this machine and stored securely on this device.
-      Contact your software provider if you need to transfer the license.
+    <!-- Trust strip -->
+    <div class="trust">
+      <div class="trust-item">
+        <span class="trust-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></span>
+        <div style="min-width:0"><div class="trust-t">Secure &amp; Reliable</div><div class="trust-s">Enterprise grade security</div></div>
+      </div>
+      <div class="trust-item">
+        <span class="trust-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span>
+        <div style="min-width:0"><div class="trust-t">One Time Activation</div><div class="trust-s">Bound to this device</div></div>
+      </div>
+      <div class="trust-item">
+        <span class="trust-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M18 14h3v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z"/><path d="M3 14a9 9 0 0 1 18 0"/></svg></span>
+        <div style="min-width:0"><div class="trust-t">Works Offline</div><div class="trust-s">No internet required</div></div>
+      </div>
     </div>
-  </div>
+  </main>
+
+  <footer class="page-foot">
+    <div class="foot-l">
+      &copy; <span id="year">2026</span> Hostyllo<br>All rights reserved.
+    </div>
+    <div class="foot-r">
+      <span class="trust-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></span>
+      <div><b>Your data is safe with us</b><span>Stored on this device &middot; Never uploaded</span></div>
+    </div>
+  </footer>
 
   <script>
+    /* ── SUPPORT CONTACTS ─────────────────────────────────────────────────────
+       ⚠️ CONFIRM THESE BEFORE SHIPPING.
+
+       This is the screen a LOCKED-OUT customer reads, so a wrong address here
+       is a customer who cannot reach anybody. The reference mockup carried
+       placeholders (support@hostyllo.com, +92 300 1234567); shipping those
+       would send real customers to an address that does not exist, so the
+       default below is the contact already published in package.json's author
+       field — a real inbox — rather than an invented one.
+
+       Change these two lines to the real support desk when it exists. They are
+       the only place these appear. */
+    const SUPPORT = {
+      email: 'mushtaqahmadicp@gmail.com',
+      phone: '',                     // empty hides the row entirely
+    };
+
+    (function fillSupport() {
+      document.getElementById('year').textContent = new Date().getFullYear();
+      const e = document.getElementById('help-email');
+      if (SUPPORT.email) {
+        document.getElementById('help-email-text').textContent = SUPPORT.email;
+        e.href = 'mailto:' + SUPPORT.email;
+      } else { e.remove(); }
+      const p = document.getElementById('help-phone');
+      // A row with a dash in it is worse than no row: it looks like the number
+      // failed to load rather than like there is no phone line.
+      if (SUPPORT.phone) {
+        document.getElementById('help-phone-text').textContent = SUPPORT.phone;
+        p.href = 'tel:' + SUPPORT.phone.replace(/[^0-9+]/g, '');
+      } else { p.remove(); }
+    })();
+
     let machineIdValue = '';
 
     // ── Show reason from query params if app redirected here ────────────────
@@ -341,19 +495,29 @@
         const reason  = params.get('reason');
         const message = params.get('message');
         if (!reason || reason === 'not_activated') return; // default flow, no banner needed
+        // Light-theme equivalents of the old dark palette. Every one of these
+        // states is a customer who cannot get in, so the banner is legible
+        // first and decorative second.
         const bannerColors = {
-          expired:      { bg: 'rgba(224,82,82,0.12)',  border: 'rgba(224,82,82,0.4)',  color: '#f08080' },
-          tampered:     { bg: 'rgba(224,82,82,0.15)',  border: 'rgba(224,82,82,0.5)',  color: '#ff7070' },
-          wrong_machine:{ bg: 'rgba(124,58,237,0.10)', border: 'rgba(124,58,237,0.4)', color: '#a78bfa' },
-          time_cheat:   { bg: 'rgba(240,160,48,0.12)', border: 'rgba(240,160,48,0.4)', color: '#f0a030' },
-          corrupt:      { bg: 'rgba(224,82,82,0.10)',  border: 'rgba(224,82,82,0.35)', color: '#f08080' },
+          expired:      { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+          tampered:     { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b' },
+          wrong_machine:{ bg: '#eef2ff', border: '#c7d2fe', color: '#4338ca' },
+          time_cheat:   { bg: '#fffbeb', border: '#fde68a', color: '#b45309' },
+          corrupt:      { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
         };
         const c = bannerColors[reason] || bannerColors.expired;
         const banner = document.createElement('div');
-        banner.style.cssText = `margin-bottom:18px;padding:12px 16px;border-radius:10px;`
+        banner.style.cssText = `display:flex;align-items:flex-start;gap:12px;`
+          + `margin-bottom:22px;padding:15px 18px;border-radius:12px;`
           + `background:${c.bg};border:1px solid ${c.border};color:${c.color};`
-          + `font-size:13px;font-weight:600;line-height:1.6;white-space:pre-line;`;
-        banner.textContent = message || 'License verification failed.';
+          + `font-size:13.5px;font-weight:600;line-height:1.6;white-space:pre-line;`;
+        const ic = document.createElement('span');
+        ic.style.cssText = 'flex-shrink:0;display:inline-flex;margin-top:1px';
+        ic.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+        const txt = document.createElement('span');
+        // textContent, not innerHTML: `message` arrives from a query string.
+        txt.textContent = message || 'License verification failed.';
+        banner.appendChild(ic); banner.appendChild(txt);
         // Insert before machine-box
         const machineBox = document.querySelector('.machine-box');
         if (machineBox) machineBox.parentNode.insertBefore(banner, machineBox);
@@ -379,29 +543,35 @@
     // ── Copy machine ID ──────────────────────────────────────────────────────
     function copyMachineId() {
       if (!machineIdValue) return;
-      navigator.clipboard.writeText(machineIdValue).then(() => {
-        const btn = document.getElementById('copy-btn');
-        btn.textContent = '✓ Copied!';
+      const btn   = document.getElementById('copy-btn');
+      const label = btn.querySelector('span');
+      const done = () => {
+        label.textContent = 'Copied';
         btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-      }).catch(() => {
+        setTimeout(() => { label.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      };
+      navigator.clipboard.writeText(machineIdValue).then(done).catch(() => {
         const el = document.createElement('textarea');
         el.value = machineIdValue;
         document.body.appendChild(el);
         el.select();
         document.execCommand('copy');
         document.body.removeChild(el);
+        done();
       });
     }
 
-    // ── Auto-format key input: HOSTEL-XXXX-XXXX-XXXX ─────────────────────────
+    // ── Auto-format key input ────────────────────────────────────────────────
+    // Groups of four, up to four groups: HOSTEL-XXXX-XXXX-XXXX-XXXX. Three
+    // groups is the older key format, still accepted — so the body cap is 16,
+    // not 12, or a current key gets its last group silently chopped off.
     function formatKeyInput(inp) {
       // Strip non-alphanumeric, uppercase
       let raw = inp.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
       // Prefix is always HOSTEL
       const body = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
       const parts = [];
-      for (let i = 0; i < body.length && i < 12; i += 4) parts.push(body.slice(i, i+4));
+      for (let i = 0; i < body.length && i < 16; i += 4) parts.push(body.slice(i, i+4));
       inp.value = 'HOSTEL' + (parts.length ? '-' + parts.join('-') : '');
       inp.classList.remove('error', 'success');
       showMsg('', '');
@@ -414,16 +584,19 @@
       el.textContent = text;
     }
 
+    const BTN_SHIELD = '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 1l9 5v5c0 5.25-3.5 10.74-9 12-5.5-1.26-9-6.75-9-12V6l9-5z"/></svg>';
+
     // ── Activate ─────────────────────────────────────────────────────────────
     async function activateLicense() {
       const inp = document.getElementById('key-input');
       const btn = document.getElementById('activate-btn');
       const val = inp.value.trim();
 
-      // Must match HOSTEL-XXXX-XXXX-XXXX (19 chars with dashes)
-      if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(val)) {
+      // Current keys carry four groups; the three-group form is the older
+      // format and still activates, so both shapes have to pass this gate.
+      if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}(-[A-Z0-9]{4})?$/.test(val)) {
         inp.classList.add('error');
-        showMsg('❌ Invalid format. Expected: HOSTEL-XXXX-XXXX-XXXX', 'error');
+        showMsg('Invalid format. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX', 'error');
         return;
       }
 
@@ -432,9 +605,9 @@
 
       try {
         if (!window.licenseAPI) {
-          showMsg('⚠️ License API not available — run inside Electron', 'error');
+          showMsg('License API not available — run inside Electron', 'error');
           btn.disabled = false;
-          btn.innerHTML = '🔐 Activate License';
+          btn.innerHTML = BTN_SHIELD + ' Activate License';
           return;
         }
 
@@ -450,23 +623,25 @@
               </svg>
             </div>
             Activated — Loading App…`;
-          showMsg('✅ ' + result.message + ' Expires: ' + result.expiry, 'success');
+          showMsg(result.message + ' Expires: ' + result.expiry, 'success');
           await sleep(1800);
           await window.licenseAPI.reloadApp();
         } else {
           inp.classList.add('error');
-          showMsg('❌ ' + (result.reason || result.message || 'Activation failed'), 'error');
+          showMsg(result.reason || result.message || 'Activation failed', 'error');
           btn.disabled = false;
-          btn.innerHTML = '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 1l9 5v5c0 5.25-3.5 10.74-9 12-5.5-1.26-9-6.75-9-12V6l9-5z"/></svg> Try Again';
+          btn.innerHTML = BTN_SHIELD + ' Try Again';
         }
       } catch(e) {
-        showMsg('❌ Unexpected error: ' + e.message, 'error');
+        showMsg('Unexpected error: ' + e.message, 'error');
         btn.disabled = false;
-        btn.innerHTML = '🔐 Activate License';
+        btn.innerHTML = BTN_SHIELD + ' Activate License';
       }
     }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   </script>
+  <!-- Custom title bar (Help + window controls only, via data-titlebar) -->
+  <script src="src/titlebar.js"></script>
 </body>
 </html>

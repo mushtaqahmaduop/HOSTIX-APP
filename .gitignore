@@ -18,6 +18,7 @@ keygen.html
 # Archive/scratch files (do not recommit)
 app_old.js
 archive_recovery.js
+.scratch-*
 .lucide-tmp/
 
 # Playwright (Phase 0 e2e safety net)
@@ -25,3 +26,10 @@ test-results/
 playwright-report/
 blob-report/
 .last-run.json
+
+# Dev-mode app data — never the real client database
+.devdata/
+
+# Control-plane server — its own dependency tree, not the app's
+server/node_modules/
+server/.env

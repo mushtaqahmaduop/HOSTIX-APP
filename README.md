@@ -1,7 +1,15 @@
-# HOSTIX — Offline Hostel Management System
+# Hostyllo Offline — Hostel Management System
 
 Desktop app built with Electron. Runs fully offline — application data is stored
 locally in a **SQLite** database on the device; no internet is required.
+
+> **A note on the name.** The product is *Hostyllo Offline*; the cloud edition
+> lives in a separate repo. The app was previously called HOSTIX, and four
+> internal identifiers still carry that name on purpose — the repo and remote
+> (`HOSTIX-APP`), the userData folder (`%APPDATA%\hostix-app`), the database file
+> (`hostix.db`) and the installer's `appId`. They are frozen because renaming any
+> of them would move or orphan a live client's data. Paths below that read
+> `hostix` are correct as written; see `CLAUDE.md` for the full table.
 
 ---
 
@@ -115,11 +123,30 @@ HOSTIX-APP/
 | Storage         | AES-256-CBC encrypted `license.enc` in Electron userData              |
 | Key derivation  | `scrypt(machineId + secret, salt, 32)`                                 |
 | Machine binding | SHA-256(platform \| arch \| cpu \| WinMachineGuid \| DriveSerial)      |
-| Key format      | `HOSTEL-XXXX-XXXX-XXXX` (HMAC-SHA256 checksum)                        |
+| Key format      | `HOSTEL-EEEE-SSSS-CCCC-CCCC` — expiry day, serial, HMAC-SHA256      |
 | Anti-time-cheat | `last_run.dat` blocks clock rollback                                   |
 | Hardening       | DevTools blocked, `--inspect` flag rejected in production              |
 
-Keys are generated with `keygen.js` (excluded from builds via `package.json`).
+Keys are generated with `keygen.js` (CLI) or `keygen.html` (browser) — both
+excluded from builds via `package.json`.
+
+**Key format v4.** `EEEE` is base36 of the days since 1970-01-01 UTC, so a key
+can expire on any exact day — 7-day and 14-day licences are expressible. `SSSS`
+is a random base36 serial, so two keys cut for the same expiry date are still
+different strings. `CCCC-CCCC` is the first 8 hex of
+HMAC-SHA256(`V4:EEEE:SSSS`, secret).
+
+The older 21-character `HOSTEL-EEEE-CCCC-CCCC` keys are still accepted — they
+are what the machines already in the field activated with — but are no longer
+issued: they encoded only the expiry *month*, with no random component, so
+every client ending in the same month received the identical key string. The
+generators can still cut one (`L` in the CLI, the legacy checkbox in the page)
+for a client running a build older than v4, which rejects the longer key.
+
+The canonical implementation is `renderer/src/utils.js`, required by `main.js`,
+`keygen.js` and `test-license.js`. `keygen.html` cannot require it and carries a
+marked mirror — change the two together. `node test-license.js` covers both
+formats.
 
 ---
 

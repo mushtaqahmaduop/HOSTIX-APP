@@ -1,7 +1,7 @@
 {
   "name": "hostix-app",
   "version": "4.0.1",
-  "description": "HOSTIX — Hostel Management System by Zeerak Hostix",
+  "description": "Hostyllo Offline — Hostel Management System",
   "author": {
     "name": "MUSHTAQ AHMAD",
     "email": "mushtaqahmadicp@gmail.com"
@@ -11,6 +11,7 @@
     "start": "electron . --dev",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:ia32": "node scripts/rebuild-ia32.js",
     "build": "electron-builder --win --x64 --ia32",
     "build:x64": "electron-builder --win nsis portable --x64",
     "build:ia32": "electron-builder --win nsis portable --ia32",
@@ -20,17 +21,17 @@
     "test:license": "node test-license.js",
     "test:e2e": "playwright test",
     "test:migrate": "node migrations/001-relational-schema.test.js",
+    "test:retention": "node tests/retention.test.js",
+    "test:services": "node tests/services.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {
     "appId": "com.zeerak.hostix",
-    "productName": "HOSTIX",
-    "copyright": "Copyright © 2025 Zeerak Hostix — MUSHTAQ AHMAD",
+    "productName": "Hostyllo Offline",
+    "copyright": "Copyright © 2026 Hostyllo — MUSHTAQ AHMAD",
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
+      "node_modules/better-sqlite3/**/*"
     ],
     "directories": {
       "output": "dist",
@@ -40,6 +41,7 @@
       "renderer/**/*",
       "main.js",
       "preload.js",
+      "services/**/*",
       "migrations/001-relational-schema.js",
       "assets/**/*",
       "package.json",
@@ -56,10 +58,17 @@
     ],
     "extraResources": [
       {
+        "from": "node_modules/better-sqlite3/prebuilds",
+        "to": "app/node_modules/better-sqlite3/prebuilds",
+        "filter": [
+          "**/*.node"
+        ]
+      },
+      {
         "from": "node_modules/better-sqlite3/build/Release",
         "to": "app/node_modules/better-sqlite3/build/Release",
         "filter": [
-          "**/*.node"
+          "better_sqlite3.node"
         ]
       }
     ],
@@ -80,7 +89,7 @@
           ]
         }
       ],
-      "icon": "assets/logo.ico",
+      "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "verifyUpdateCodeSignature": false,
       "signAndEditExecutable": false
@@ -92,20 +101,20 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HOSTIX",
-      "installerIcon": "assets/logo.ico",
-      "uninstallerIcon": "assets/logo.ico",
-      "installerHeader": "assets/logo.ico",
+      "shortcutName": "Hostyllo Offline",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false,
       "displayLanguageSelector": false,
       "include": null,
       "license": null,
-      "artifactName": "HOSTIX-Setup-${version}-${arch}.exe",
+      "artifactName": "Hostyllo-Offline-Setup-${version}-${arch}.exe",
       "warningsAsErrors": false,
       "differentialPackage": false
     },
     "portable": {
-      "artifactName": "HOSTIX-Portable-${version}-${arch}.exe",
+      "artifactName": "Hostyllo-Offline-Portable-${version}-${arch}.exe",
       "useZip": false
     },
     "publish": {
@@ -118,13 +127,12 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@playwright/test": "^1.61.1",
-    "electron": "^22.3.27",
+    "electron": "^43.4.0",
     "electron-builder": "^26.8.1",
-    "electron-rebuild": "^3.2.9",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.3",
     "lucide-static": "^1.21.0"
   }

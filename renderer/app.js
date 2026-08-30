@@ -1,4 +1,4 @@
-/* ─── HOSTIX — APP ENTRY POINT (slim orchestrator) ─────────────────────────
+/* ─── HOSTYLLO — APP ENTRY POINT (slim orchestrator) ─────────────────────────
    Modular structure (Phase E refactor):
    ┌─ src/config.js            ─ constants, DB schema default
    ├─ src/utils.js             ─ uid, escHtml, fmtDate, fmtPKR, debounce
@@ -100,8 +100,22 @@ async function processAutoCancellations() {
 }
 // ── Pre-boot: theme/logo/sidebar don't need DB — run immediately ─────────────
 applySavedSidebar();
-loadSavedLogo();
+// loadSavedLogo() removed with the logo uploader — the mark is fixed in the markup.
 updateSidebar(); // shows zeros/defaults until boot() completes
+
+// #main must never scroll. `overflow:hidden` stops the user scrolling it but
+// NOT the browser: focusing a control low in a long page makes Chromium scroll
+// every ancestor that can move, hidden or not, and #main sliding up takes the
+// header with it — under the fixed title bar, which is opaque and sits above
+// everything. #content is the real scroller, so anything #main does is spurious.
+(function pinMain() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  main.addEventListener('scroll', function () {
+    if (main.scrollTop) main.scrollTop = 0;
+    if (main.scrollLeft) main.scrollLeft = 0;
+  }, { passive: true });
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -110,6 +124,29 @@ updateSidebar(); // shows zeros/defaults until boot() completes
   await loadDB();
   // After DB loads: migrate IDs, run auto-cancellations, refresh all UI
   if (typeof migrateStudentIdsToNumeric === 'function') migrateStudentIdsToNumeric();
+  // One-off repair of student-name snapshots frozen into payment/cancellation
+  // rows before an edit could push the correction down. Writes only when it
+  // actually found something stale, so a healthy database costs one scan.
+  if (typeof repairStudentSnapshots === 'function') {
+    const _fixed = repairStudentSnapshots();
+    if (_fixed > 0) {
+      await saveDB();
+      console.info('[HOSTYLLO] Re-synced ' + _fixed + ' stale student name(s) on payment records.');
+    }
+  }
+  // Records that describe themselves wrongly — mess counted twice inside a
+  // pre-split rent, a mess tick left on a month billed rent-only, and instalment
+  // trails claiming collections that never happened. Money is never moved; see
+  // repairPaymentComposition() for what each case proves before it touches
+  // anything. Silent on a healthy database.
+  if (typeof repairPaymentComposition === 'function') {
+    const _rp = repairPaymentComposition();
+    const _rpTotal = _rp.drift + _rp.messFlag + _rp.students + _rp.dupEntries + _rp.ghostTrails;
+    if (_rpTotal > 0) {
+      await saveDB();
+      console.info('[HOSTYLLO] Repaired payment composition: ' + JSON.stringify(_rp));
+    }
+  }
   await processAutoCancellations();
   // Sync login screen hostel name now that DB is loaded
   const loginNameEl = document.getElementById('login-hostel-name');
@@ -125,8 +162,14 @@ updateSidebar(); // shows zeros/defaults until boot() completes
   // Refresh sidebar counts and calendar now that data is loaded
   if (typeof updateSidebar         === 'function') updateSidebar();
   if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
-  // Run scheduled checks
-  if (typeof checkAutoMonthAdvance    === 'function') checkAutoMonthAdvance();
+  // Run scheduled checks.
+  //
+  // Payment records are NOT among them. Booting the app used to raise a Pending
+  // row against every active student for any month that had rolled over since
+  // the last launch — money the warden had never entered, appearing in the
+  // ledger and in every total that reads it. Rent records are now created only
+  // when the warden asks for them, with Auto-Generate Month on the Payments
+  // screen (generateMonthlyRents) or by recording a payment.
   if (typeof checkAutoBackupSchedule  === 'function') checkAutoBackupSchedule();
   // Navigate to dashboard last (after all data is ready)
   if (typeof navigate === 'function') navigate('dashboard');
@@ -200,7 +243,10 @@ document.addEventListener('keydown', function(e) {
 // ══════════════════════════════════════════════════════════════════
 // COMBINED ISSUES PAGE (Complaints & Maintenance tabs)
 // ══════════════════════════════════════════════════════════════════
-var issuesTab = 'maintenance';
+// 'all' | 'maintenance' | 'complaints'. v5 lands on the unified feed the
+// reference design shows; nav.js still forces a single kind for the
+// /maintenance and /complaints routes.
+var issuesTab = 'all';
 
 
 // ── Fix #8: Patch window.open so receipt windows never show LICENSE INFO ──────

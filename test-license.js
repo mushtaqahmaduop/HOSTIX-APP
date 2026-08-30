@@ -1,7 +1,7 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════
  * PHASE 12 — LICENSE SYSTEM TEST SUITE v3  (Final)
- * DAMAM Boys Hostel Management System
+ * Hostyllo — Hostel Management System
  *
  * Run with:  node test-license.js
  *
@@ -40,14 +40,17 @@ const os = require('os');
 const path = require('path');
 
 // Replaced duplicate key validation functions with imports from utils
-const { validateKeyFormat, validateKeyChecksum } = require('./renderer/src/utils');
+const {
+  validateKeyFormat, validateKeyChecksum, licenseKeyExpiry,
+  buildLicenseKey, buildLegacyLicenseKey, parseLicenseKey
+} = require('./renderer/src/utils');
 
 // ── Reproduce exact logic from main.js ───────────────────────────────────────
 const _SECRET = Buffer.from(
   '44344d344d5f483053543333545f5333435233545f5334344c545f7631', 'hex'
 ).toString();
 
-const TMP_DIR       = path.join(os.tmpdir(), 'damam_license_test_' + Date.now());
+const TMP_DIR       = path.join(os.tmpdir(), 'hostyllo_license_test_' + Date.now());
 const LICENSE_PATH  = path.join(TMP_DIR, 'license.enc');
 const LAST_RUN_PATH = path.join(TMP_DIR, 'last_run.dat');
 
@@ -107,30 +110,31 @@ function _validateKeyChecksum(key) {
 }
 
 function _getExpiryFromKey(key) {
-  const expPart = key.toUpperCase().trim().split('-')[1];
-  const months  = parseInt(expPart, 36);
-  return new Date(Math.floor(months / 12), months % 12 + 1, 0);
+  return licenseKeyExpiry(key);
 }
 
+// Every key the suite exercises is a current v4 key unless a test explicitly
+// asks for the legacy shape, so the default path through the whole file is the
+// format actually being issued.
 function generateValidKey(yearOffset = 1) {
-  // Generate a real valid key for THIS machine, expiring yearOffset years from now
-  const d      = new Date();
-  const year   = d.getFullYear() + yearOffset;
-  const month  = d.getMonth() + 1;
-  const months = year * 12 + (month - 1);
-  const expPart = months.toString(36).toUpperCase().padStart(4, '0');
-  const chk8   = crypto.createHmac('sha256', _SECRET)
-    .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-  return `HOSTEL-${expPart}-${chk8.slice(0,4)}-${chk8.slice(4,8)}`;
+  const d = new Date();
+  return buildLicenseKey(d.getFullYear() + yearOffset, d.getMonth() + 1, d.getDate(), _SECRET);
+}
+
+// A key that expires N days from today — the short window v3 could not express.
+function generateKeyInDays(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return buildLicenseKey(d.getFullYear(), d.getMonth() + 1, d.getDate(), _SECRET);
+}
+
+function generateLegacyKey(yearOffset = 1) {
+  const d = new Date();
+  return buildLegacyLicenseKey(d.getFullYear() + yearOffset, d.getMonth() + 1, _SECRET);
 }
 
 function generateExpiredKey() {
-  // A key that expired in 2020
-  const months  = 2020 * 12 + 0; // Jan 2020
-  const expPart = months.toString(36).toUpperCase().padStart(4, '0');
-  const chk8    = crypto.createHmac('sha256', _SECRET)
-    .update(expPart).digest('hex').toUpperCase().slice(0, 8);
-  return `HOSTEL-${expPart}-${chk8.slice(0,4)}-${chk8.slice(4,8)}`;
+  return buildLicenseKey(2020, 1, 15, _SECRET);   // expired long ago
 }
 
 // Mirrors checkLicenseValidity from main.js v3 — uses test paths
@@ -190,7 +194,7 @@ function cleanFiles() {
   try {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
   } catch (e) {
-    console.error('[DAMAM] Failed to clean temporary files:', e.message);
+    console.error('[HOSTYLLO] Failed to clean temporary files:', e.message);
   }
   // Recreate temp directory for next test
   fs.mkdirSync(TMP_DIR, { recursive: true });
@@ -328,11 +332,10 @@ test('last_run.dat in past (normal) → valid', () => {
 // ── 8. Bad checksum key → rejected ──────────────────────────────────────────
 console.log('\n── Key Validation ──────────────────────────────────');
 test('Key with corrupted checksum → _validateKeyChecksum returns false', () => {
-  const key     = generateValidKey(1);
-  const parts   = key.split('-');
-  parts[2]      = 'ZZZZ'; // corrupt checksum part
-  const badKey  = parts.join('-');
-  return _validateKeyChecksum(badKey) === false;
+  const key    = generateValidKey(1);
+  const parts  = key.split('-');
+  parts[parts.length - 1] = 'ZZZZ';        // last group is the checksum tail
+  return _validateKeyChecksum(parts.join('-')) === false;
 });
 
 test('Valid key checksum → _validateKeyChecksum returns true', () => {
@@ -431,6 +434,115 @@ test('Delete last_run.dat + roll clock back → sentinel catches on next run', (
   fs.writeFileSync(LAST_RUN_PATH, future.toISOString(), 'utf8');
   const r = checkLicenseValidity();
   return r.valid === false && r.reason === 'time_cheat';
+});
+
+// ── v4: unique keys and day-precision expiry ─────────────────────────────────
+// The two bugs v4 exists to fix: v3 encoded only the expiry month with no
+// random component, so the same month always produced the same key string and
+// nothing shorter than a month could be sold.
+console.log('\n── v4: Key Uniqueness & Day Precision ──────────────');
+
+test('Two keys for the SAME expiry date are different strings', () => {
+  const a = generateKeyInDays(30);
+  const b = generateKeyInDays(30);
+  return a !== b && _validateKeyChecksum(a) && _validateKeyChecksum(b);
+});
+
+test('A batch of 200 keys for one date contains no duplicate', () => {
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(generateKeyInDays(30));
+  return seen.size === 200;
+});
+
+test('Serial is 4 base36 chars and differs across keys', () => {
+  const a = parseLicenseKey(generateKeyInDays(30));
+  const b = parseLicenseKey(generateKeyInDays(30));
+  return a.version === 4 && /^[A-Z0-9]{4}$/.test(a.serial) && a.serial !== b.serial;
+});
+
+test('7-day key → expires 7 days out, not at a month boundary', () => {
+  const key    = generateKeyInDays(7);
+  const expiry = _getExpiryFromKey(key);
+  const want   = new Date();
+  want.setDate(want.getDate() + 7);
+  return expiry.getFullYear() === want.getFullYear() &&
+         expiry.getMonth()    === want.getMonth() &&
+         expiry.getDate()     === want.getDate();
+});
+
+test('14-day key → valid today, activation accepted', () => {
+  const key = generateKeyInDays(14);
+  writeLicense(key);
+  return checkLicenseValidity().valid === true;
+});
+
+test('1-day key → still valid today (licence runs to end of its day)', () => {
+  const key    = generateKeyInDays(0);
+  const expiry = _getExpiryFromKey(key);
+  return expiry > new Date() && expiry.getHours() === 23 && expiry.getMinutes() === 59;
+});
+
+test('Key that expired yesterday → checkLicenseValidity says expired', () => {
+  writeLicense(generateKeyInDays(-1));
+  return checkLicenseValidity().reason === 'expired';
+});
+
+test('Editing the serial breaks the checksum', () => {
+  const parts = generateKeyInDays(30).split('-');
+  parts[2] = parts[2] === 'ZZZZ' ? 'YYYY' : 'ZZZZ';
+  return _validateKeyChecksum(parts.join('-')) === false;
+});
+
+test('Editing the expiry group breaks the checksum', () => {
+  const parts = generateKeyInDays(30).split('-');
+  parts[1] = 'ZZZZ';                        // try to buy 40 more years
+  return _validateKeyChecksum(parts.join('-')) === false;
+});
+
+test('v4 key is 26 chars in 5 groups', () => {
+  const key = generateKeyInDays(30);
+  return key.length === 26 && key.split('-').length === 5 && _validateKeyFormat(key);
+});
+
+// ── v4: the keys already activated in the field must keep working ────────────
+console.log('\n── v4: Legacy v3 Key Compatibility ─────────────────');
+
+test('Legacy v3 key still passes format and checksum', () => {
+  const key = generateLegacyKey(1);
+  return key.length === 21 && _validateKeyFormat(key) && _validateKeyChecksum(key);
+});
+
+test('Legacy v3 key still activates and validates', () => {
+  writeLicense(generateLegacyKey(1));
+  return checkLicenseValidity().valid === true;
+});
+
+test('Legacy v3 expiry unchanged — last day of its month, at midnight', () => {
+  const key    = buildLegacyLicenseKey(2027, 3, _SECRET);
+  const expiry = _getExpiryFromKey(key);
+  return expiry.getFullYear() === 2027 && expiry.getMonth() === 2 &&
+         expiry.getDate() === 31 && expiry.getHours() === 0;
+});
+
+test('Legacy v3 key string is byte-for-byte what v3 produced', () => {
+  // The pre-v4 algorithm, inlined: base36(year*12 + month-1), HMAC over it.
+  const months  = 2027 * 12 + 2;
+  const expPart = months.toString(36).toUpperCase().padStart(4, '0');
+  const chk8    = crypto.createHmac('sha256', _SECRET)
+    .update(expPart).digest('hex').toUpperCase().slice(0, 8);
+  const v3Key   = `HOSTEL-${expPart}-${chk8.slice(0,4)}-${chk8.slice(4,8)}`;
+  return buildLegacyLicenseKey(2027, 3, _SECRET) === v3Key;
+});
+
+test('A v3 key is NOT accepted as a v4 key with groups shuffled', () => {
+  const legacy = generateLegacyKey(1);
+  // Same groups, re-cut as a 5-group key by duplicating one — must fail.
+  const parts  = legacy.split('-');
+  return _validateKeyChecksum([parts[0], parts[1], parts[1], parts[2], parts[3]].join('-')) === false;
+});
+
+test('Four-group garbage → _validateKeyFormat returns false', () => {
+  return _validateKeyFormat('HOSTEL-ABCD-EFGH-IJKL-MNOP-QRST') === false;
 });
 
 // ── v3 New: getMachineId uses full 64-char output ─────────────────────────────

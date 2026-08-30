@@ -51,7 +51,10 @@ async function login(win) {
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
     null, { timeout: 30000 });
-  await win.fill('#login-input', 'warden1'); // isolated fresh profile => default pw
+  // Login is username + password now; a fresh profile seeds warden1 with
+  // DEFAULT_PASSWORD (auth-nev.js).
+  await win.fill('#login-user', 'warden1');
+  await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
@@ -132,12 +135,16 @@ test('HOSTIX smoke: login → all pages render → add room+student → persist 
   expect(dbStuds.some(s => s.name === 'Test Student QA'),
     'student not persisted to SQLite').toBeTruthy();
 
-  // Add Payment modal opens (UI path; submission deferred to Phase 2).
+  // Add Payment opens (UI path; submission deferred to Phase 2).
+  // It is a PAGE now, not a modal: openAddPayment() navigates to 'addpayment'.
+  // #f-pcharge is its Monthly Charge box (was #f-pamt "Room Rent" before the
+  // charge became one derived figure driven by the mess tick).
   await win.evaluate(() => navigate('payments'));
   await win.waitForTimeout(300);
-  await win.evaluate(() => showAddPaymentModal());
-  await win.waitForSelector('#f-pamt', { timeout: 8000 });
-  await win.evaluate(() => { if (typeof closeModal === 'function') closeModal(); });
+  await win.evaluate(() => openAddPayment());
+  await win.waitForSelector('#f-pcharge', { timeout: 8000 });
+  await win.evaluate(() => navigate('payments'));
+  await win.waitForTimeout(300);
 
   // Backup export data path.
   const exp = await win.evaluate(() => window.electronAPI.dbExportFull());

@@ -1,4 +1,4 @@
-# HOSTIX — Manual QA Checklist (release sign-off)
+# Hostyllo Offline — Manual QA Checklist (release sign-off)
 
 **Purpose:** the exact flow a human runs to confirm a build is safe to ship to client machines.
 This is the source of truth the Phase 0 automated smoke test is built to reproduce. **Draft — pending

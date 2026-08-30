@@ -1,4 +1,4 @@
-/* ─── HOSTIX — THEME MODULE ─────────────────────────────────────────────────
+/* ─── HOSTYLLO — THEME MODULE ─────────────────────────────────────────────────
    Loaded by index.html after storage.js
    Contains: toggleTheme, updateThemeUI, applySavedSidebar, initTheme
    ─────────────────────────────────────────────────────────────────────────── */
@@ -15,8 +15,15 @@ function toggleTheme() {
       document.body.classList.remove('no-transition');
     });
   });
-  if (typeof drawTrendChart === 'function') setTimeout(drawTrendChart, 50);
-  if (typeof drawRoomDonut === 'function') setTimeout(drawRoomDonut, 50);
+  // The light-theme class is already toggled above, so the CSS tokens the
+  // charts read (--border for the grid lines, --green etc.) are live now. A
+  // 50ms setTimeout left the canvas grid painted in the old theme for a beat
+  // after everything else had switched — redraw on the next frame instead so
+  // the grid recolours in step with the rest of the UI.
+  requestAnimationFrame(function() {
+    if (typeof drawTrendChart === 'function') drawTrendChart();
+    if (typeof drawRoomDonut === 'function') drawRoomDonut();
+  });
 }
 function updateThemeUI(isLight) {
   const icon = document.getElementById('theme-icon');
@@ -24,10 +31,17 @@ function updateThemeUI(isLight) {
   const toggle = document.getElementById('theme-toggle');
   if (toggle) toggle.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
 }
-// Apply theme immediately
+// Apply theme immediately.
+//
+// LIGHT IS THE DEFAULT. The premium enterprise design is a light workspace —
+// navy rail, #F4F7FC ground, white cards — so an install with no stored
+// preference opens in it. Dark is not going anywhere: it is a click of the
+// header toggle, and a warden who has chosen it keeps it, because the check
+// below reads the SAVED value first and only falls back when there is none.
 (function initTheme() {
   const saved = localStorage.getItem('theme');
-  if (saved === 'light') {
+  const light = saved ? saved === 'light' : true;
+  if (light) {
     document.body.classList.add('light-theme');
     setTimeout(() => updateThemeUI(true), 50);
   }

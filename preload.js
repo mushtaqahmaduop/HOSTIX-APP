@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — PRELOAD (Secure IPC Bridge — PATCHED) ────────────────
+/* ─── HOSTYLLO — PRELOAD (Secure IPC Bridge — PATCHED) ────────────────
    contextIsolation: true  |  nodeIntegration: false
    All renderer ↔ main communication goes through this file only.
 
@@ -46,6 +46,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // License — basic
   licenseCheck: () => ipcRenderer.invoke('license:check'),
+
+  /**
+   * What the app is currently allowed to do — the licence state, whether it is
+   * read-only, days remaining, and the message to show.
+   *
+   * The renderer uses this to render the banner and disable controls. It is NOT
+   * the enforcement: the real gate is in the main process at the database IPC
+   * boundary, because anything the renderer can choose not to do it can also
+   * choose to do. This is the courtesy, not the lock.
+   */
+  licenseEnforcement: () => ipcRenderer.invoke('license:enforcement'),
+
+  /** @param {(decision:object)=>void} cb @returns {()=>void} unsubscribe */
+  onEnforcementChanged: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    // The IpcRendererEvent is never handed across — it carries a `sender` that
+    // would widen this bridge well past a status snapshot.
+    const listener = (_e, decision) => { try { cb(decision); } catch (_) {} };
+    ipcRenderer.on('license:enforcementChanged', listener);
+    return () => ipcRenderer.removeListener('license:enforcementChanged', listener);
+  },
 
   // [FIX-P1] Validate key is a string before sending to main process
   licenseActivate: (key) => {
@@ -109,6 +130,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }
 });
 
+// ── Custom title bar API (used by index.html AND license.html) ─────────────
+// Frameless window controls + the File/View/Help actions, routed to the same
+// main-process handlers the native accelerators use.
+contextBridge.exposeInMainWorld('titlebar', {
+  minimize:         () => ipcRenderer.send('window:minimize'),
+  toggleMaximize:   () => ipcRenderer.send('window:toggleMaximize'),
+  close:            () => ipcRenderer.send('window:close'),
+  isMaximized:      () => ipcRenderer.invoke('window:isMaximized'),
+  onMaximizeChange: (cb) => {
+    if (typeof cb === 'function') ipcRenderer.on('window:maximized', (_e, v) => cb(!!v));
+  },
+  isDev:            () => ipcRenderer.invoke('app:isDev'),
+  menu:             (action) => {
+    if (typeof action === 'string') ipcRenderer.send('titlebar:menu', action);
+  }
+});
+
 // ── License page & settings window API ────────────────────────────────────
 contextBridge.exposeInMainWorld('licenseAPI', {
   getMachineId:    ()    => ipcRenderer.invoke('license:machineId'),
@@ -126,4 +164,37 @@ contextBridge.exposeInMainWorld('licenseAPI', {
   deactivateLicense: ()    => ipcRenderer.invoke('license:deactivateWithDialog'),
   resetLicense:      ()    => ipcRenderer.invoke('license:reset'),
   prepareUninstall:  ()    => ipcRenderer.invoke('license:prepareUninstall')
+});
+
+// ── Online status API (Phase 1 — spec §3.5, §7, §29) ──────────────────────
+// Read-only and deliberately tiny. The renderer cannot supply a URL, a method,
+// a header or a payload; it can ask what the connection looks like and
+// subscribe to changes. All outbound HTTP stays in the main process, behind
+// the renderer's `connect-src 'self'` CSP.
+//
+// Shape returned by getStatus():
+//   { networkAvailable, apiReachable, authenticated, licenseValid,
+//     mode: 'unconfigured'|'offline'|'degraded'|'online',
+//     reason, lastCheckedAt, lastSuccessAt, consecutiveFailures, configured }
+contextBridge.exposeInMainWorld('online', {
+  getStatus:  () => ipcRenderer.invoke('online:getStatus'),
+  checkNow:   () => ipcRenderer.invoke('online:checkNow'),
+  queueStats: () => ipcRenderer.invoke('online:queueStats'),
+  getLastSuccessfulConnection: () => ipcRenderer.invoke('online:lastSuccess'),
+
+  // Phase 2 diagnostics. A description of this machine's entitlement —
+  // state, expiry, which key signed it — and never the signed token itself,
+  // which is a credential and has no business in the renderer.
+  // `enforced: false` until device registration exists; nothing gates on this.
+  entitlement: () => ipcRenderer.invoke('online:entitlement'),
+
+  /** @param {(status:object)=>void} cb @returns {()=>void} unsubscribe */
+  onStatusChanged: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    // The IpcRendererEvent is never handed to the renderer — it carries a
+    // `sender` that would widen this bridge well past a status snapshot.
+    const listener = (_e, status) => { try { cb(status); } catch (_) {} };
+    ipcRenderer.on('online:statusChanged', listener);
+    return () => ipcRenderer.removeListener('online:statusChanged', listener);
+  }
 });

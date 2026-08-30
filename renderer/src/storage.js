@@ -1,4 +1,4 @@
-/* ─── HOSTIX — STORAGE / DATABASE (v4.0 — SQLite via better-sqlite3) ─────────
+/* ─── HOSTYLLO — STORAGE / DATABASE (v4.0 — SQLite via better-sqlite3) ─────────
    Loaded after config.js, utils.js, auth.js.
    Contains: loadDB, saveDB, logActivity, backup/restore.
 
@@ -45,7 +45,7 @@ async function loadDB() {
       // SQLite empty — attempt one-time migration from localStorage
       const lsRaw = localStorage.getItem(LS_KEY);
       if (lsRaw) {
-        console.info('[HOSTIX] Migrating localStorage → SQLite...');
+        console.info('[HOSTYLLO] Migrating localStorage → SQLite...');
         try {
           const lsData = JSON.parse(lsRaw);
           for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
@@ -70,13 +70,13 @@ async function loadDB() {
           localStorage.removeItem(LS_KEY);
           localStorage.removeItem(_LS_PENDING_KEY);
           localStorage.removeItem('dbh2_archive');
-          console.info('[HOSTIX] Migration complete.');
+          console.info('[HOSTYLLO] Migration complete.');
           setTimeout(function () {
             if (typeof toast === 'function')
-              toast('✅ Data migrated to SQLite — faster and safer!', 'success', 4000);
+              toast('Data migrated to SQLite — faster and safer.', 'success', 'Upgraded');
           }, 1500);
         } catch (e) {
-          console.error('[HOSTIX] Migration failed:', e);
+          console.error('[HOSTYLLO] Migration failed:', e);
           setTimeout(function () {
             if (typeof toast === 'function')
               toast('⚠️ Migration failed — existing data preserved in localStorage.', 'error');
@@ -143,8 +143,78 @@ function _loadFromLocalStorage() {
     const s = localStorage.getItem(LS_KEY);
     if (s) DB = JSON.parse(s);
   } catch (e) {
-    console.error('[HOSTIX] localStorage fallback load failed:', e);
+    console.error('[HOSTYLLO] localStorage fallback load failed:', e);
   }
+}
+
+/* ── A FAILED SAVE MUST NOT LOOK LIKE A SAVE ─────────────────────────────────
+   saveDB() returns false when the write fails. Every one of its ~92 call sites
+   awaits it and then unconditionally toasts success and closes the modal — so a
+   warden saw "Payment recorded" for a record that only ever existed in memory,
+   and lost it at the next restart. The only warning was an error toast that
+   appeared 50ms later and disappeared 4.5 seconds after that, usually behind
+   the success toast the call site had just fired.
+
+   Rewriting 92 call sites is a wide, risky edit. Making the failure impossible
+   to miss is not. A failed write raises a bar across the top of the app that
+   does not time out and cannot be dismissed by accident. It clears only when a
+   save actually succeeds, so a success toast fired a moment later cannot bury
+   it, and it offers the two things that are actually useful at that moment:
+   try the write again, or get the data out of memory and onto disk as JSON
+   while it still exists.
+
+   Styles are inline on purpose — this has to render even if a stylesheet
+   failed to load, which is one of the ways a machine gets into this state. */
+let _saveFailed = false;
+
+function _clearSaveFailure() {
+  if (!_saveFailed) return;
+  _saveFailed = false;
+  const el = document.getElementById('save-failed-bar');
+  if (el) el.remove();
+}
+
+function _showSaveFailure(detail) {
+  _saveFailed = true;
+  if (!document.body) return;                 // failed before the UI existed
+  let el = document.getElementById('save-failed-bar');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-failed-bar';
+    el.setAttribute('role', 'alert');
+    el.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:2147483647',
+      'display:flex', 'align-items:center', 'gap:12px',
+      'padding:10px 16px', 'background:#b91c1c', 'color:#fff',
+      'font-family:system-ui,-apple-system,Segoe UI,sans-serif', 'font-size:13px',
+      'box-shadow:0 2px 10px rgba(0,0,0,.35)'
+    ].join(';');
+    document.body.appendChild(el);
+  }
+  const btn = 'background:#fff;color:#b91c1c;border:none;border-radius:7px;'
+            + 'padding:6px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit';
+  el.innerHTML =
+      '<strong style="flex-shrink:0">Not saved to disk.</strong>'
+    + '<span style="flex:1;min-width:0">Your most recent change is only in memory and will be lost if the app closes.'
+    + (detail ? ' <span style="opacity:.85">(' + String(detail).slice(0, 120) + ')</span>' : '')
+    + '</span>'
+    + '<button id="save-failed-retry" style="' + btn + '">Try saving again</button>'
+    + '<button id="save-failed-export" style="' + btn + '">Download a copy now</button>';
+
+  const retry = /** @type {HTMLButtonElement|null} */ (document.getElementById('save-failed-retry'));
+  if (retry) retry.onclick = async function () {
+    retry.disabled = true; retry.textContent = 'Saving…';
+    const ok = await saveDB();
+    if (!ok) { retry.disabled = false; retry.textContent = 'Try saving again'; }
+    else if (typeof toast === 'function') toast('Saved — everything is on disk again.', 'success');
+  };
+  const exp = document.getElementById('save-failed-export');
+  // exportData() serialises the in-memory DB straight to a file, so it still
+  // works when the database write is the thing that is broken.
+  if (exp) exp.onclick = function () {
+    if (typeof exportData === 'function') exportData();
+    else if (typeof toast === 'function') toast('Open Settings → Data Management to export.', 'info');
+  };
 }
 
 // ── Save DB ───────────────────────────────────────────────────────────────────
@@ -179,11 +249,12 @@ async function saveDB() {
       await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
 
       _takeFullSnapshot();
+      _clearSaveFailure();
       if (typeof updateSidebar         === 'function') updateSidebar();
       if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
       return true;
     } catch (e) {
-      console.error('[HOSTIX] surgical saveDB failed, falling back to full rewrite:', e);
+      console.error('[HOSTYLLO] surgical saveDB failed, falling back to full rewrite:', e);
       // Safety net: if anything goes wrong with the diff path, guarantee
       // consistency by rewriting everything the old way.
       return _saveDBFull();
@@ -203,15 +274,13 @@ async function _saveDBFull() {
       await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
 
       _takeFullSnapshot();
+      _clearSaveFailure();
       if (typeof updateSidebar         === 'function') updateSidebar();
       if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
       return true;
     } catch (e) {
-      console.error('[HOSTIX] SQLite saveDB failed:', e);
-      setTimeout(function () {
-        if (typeof toast === 'function')
-          toast('⚠️ Save failed! Export a backup immediately.', 'error');
-      }, 50);
+      console.error('[HOSTYLLO] SQLite saveDB failed:', e);
+      _showSaveFailure(e && e.message);
       return false;
     }
   } else {
@@ -225,15 +294,13 @@ function _saveToLocalStorage() {
     localStorage.setItem(_LS_PENDING_KEY, serialized);
     localStorage.setItem(LS_KEY, serialized);
     localStorage.removeItem(_LS_PENDING_KEY);
+    _clearSaveFailure();
     if (typeof updateSidebar         === 'function') updateSidebar();
     if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
     return true;
   } catch (e) {
-    console.error('[HOSTIX] localStorage save failed:', e);
-    setTimeout(function () {
-      if (typeof toast === 'function')
-        toast('⚠️ Storage full — data may NOT have saved! Export a backup immediately.', 'error');
-    }, 50);
+    console.error('[HOSTYLLO] localStorage save failed:', e);
+    _showSaveFailure('storage full');
     return false;
   }
 }
@@ -247,13 +314,13 @@ function logActivity(action, details, category) {
   const _logNow = new Date();
   DB.activityLog.unshift({
     id: 'al_' + uid(), action, details, category, by: byName,
-    date: _logNow.toISOString().split('T')[0],
+    date: ymd(_logNow),
     time: _logNow.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })
   });
   if (DB.activityLog.length >= 180 && DB.activityLog.length < 200) {
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Export before it auto-trims.', 'warning', 5000);
+        toast('📋 Activity log is almost full (' + DB.activityLog.length + '/200). Export before it auto-trims.', 'warning', 'Activity log');
     }, 500);
   }
   if (DB.activityLog.length > 200) DB.activityLog = DB.activityLog.slice(0, 200);
@@ -269,7 +336,7 @@ function _checkBackupReminder() {
     if (daysSince < 7) return;
     setTimeout(function () {
       if (typeof toast === 'function')
-        toast('💾 Over a week since last backup. Export one from Backup & Restore.', 'warning', 7000);
+        toast('Over a week since your last backup. Export one from Backup & Restore.', 'warning', 'Backup due');
     }, 4000);
   } catch (e) {}
 }
@@ -310,51 +377,54 @@ if (window.electronAPI) {
   window.electronAPI.onImportBackup(async function (jsonString) {
     try {
       if (typeof jsonString !== 'string' || jsonString.length > 50 * 1024 * 1024) {
-        if (typeof toast === 'function') toast('❌ Backup file is too large or invalid', 'error');
+        if (typeof toast === 'function') toast('Backup file is too large or invalid', 'error');
         return;
       }
       const data   = JSON.parse(jsonString);
       const dbData = data.db || data;
 
-      // BUG FIX (B6): was && — only caught case where BOTH were missing
+      /* One validator, shared with Settings -> Import Data. The checks that used
+         to live here — rooms/students are arrays, every record has an id — are
+         a subset of what validateBackup() does, and having two import paths
+         disagree about what a valid backup is meant a file could be refused in
+         one place and accepted in the other. It also adds the check neither
+         path had: reserved keys such as __proto__ anywhere in the document. */
       if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
-        if (typeof toast === 'function') toast('❌ Invalid backup file — missing required data', 'error');
+        if (typeof toast === 'function') toast('Invalid backup file — it has no rooms or students', 'error');
         return;
       }
-
-      // BUG FIX (B6): validate each record has an id field to prevent silent import failures
-      if (dbData.students.some(function(s){ return !s || typeof s !== 'object' || !s.id; })) {
-        if (typeof toast === 'function') toast('❌ Backup has corrupted student records — missing id fields', 'error');
-        return;
-      }
-      if (dbData.rooms.some(function(r){ return !r || typeof r !== 'object' || !r.id; })) {
-        if (typeof toast === 'function') toast('❌ Backup has corrupted room records — missing id fields', 'error');
-        return;
+      if (typeof validateBackup === 'function') {
+        const check = validateBackup(dbData);
+        if (!check.ok) {
+          if (typeof toast === 'function') toast(check.reason, 'error', 'Backup rejected');
+          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
+          return;
+        }
       }
 
       const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
       if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains too many student records', 'error');
+        if (typeof toast === 'function') toast('Backup contains too many student records', 'error');
         return;
       }
       if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('❌ Backup contains too many payment records', 'error');
+        if (typeof toast === 'function') toast('Backup contains too many payment records', 'error');
         return;
       }
 
       const result = await window.electronAPI.dbImportFull(dbData);
       if (!result.ok) {
-        if (typeof toast === 'function') toast('❌ Import failed: ' + result.error, 'error');
+        if (typeof toast === 'function') toast('Import failed: ' + result.error, 'error');
         return;
       }
       await loadDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
-      if (typeof toast         === 'function') toast('✅ Backup imported successfully!', 'success');
+      if (typeof toast         === 'function') toast('Backup imported successfully', 'success');
       markBackupDone();
     } catch (e) {
-      console.error('[HOSTIX] Import failed:', e);
-      if (typeof toast === 'function') toast('❌ Import failed: ' + e.message, 'error');
+      console.error('[HOSTYLLO] Import failed:', e);
+      if (typeof toast === 'function') toast('Import failed: ' + e.message, 'error');
     }
   });
 }

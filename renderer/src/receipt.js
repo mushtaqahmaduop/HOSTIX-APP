@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — RECEIPT SYSTEM (PATCHED) ───────────────────────────────
+/* ─── HOSTYLLO — RECEIPT SYSTEM (PATCHED) ───────────────────────────────
    FIXES:
    FIX-R1  Receipt counter moved OUT of buildReceiptHTML().
            Counter now only increments when receipt is FINALIZED (PDF save or print),
@@ -28,8 +28,21 @@ function printReceiptFromStudentView(payId, studentId) {
 // ── [FIX-R1 + FIX-R5] Assign receipt number ──────────────────────────────────
 // Only called when receipt is FINALIZED (print or PDF save).
 // If payment already has a receiptNo, reuse it (reprinting same receipt).
+/* ── FINDING A PAYMENT, INCLUDING AN OLD ONE ─────────────────────────────────
+   enforceDataRetention() moves settled payments older than seven months out of
+   DB.payments and into DB.archive. Everything about receipts looked in
+   DB.payments alone, so the moment a record crossed that line the Print button
+   found nothing, returned early, and did nothing at all — no receipt, no
+   message. A student asking for a duplicate of last year's receipt, which is
+   the whole reason a receipt is kept, got a dead button.                     */
+function _findPaymentAnywhere(payId) {
+  return (DB.payments || []).find(function (x) { return x.id === payId; })
+      || (DB.archive  || []).find(function (x) { return x.id === payId && x._src !== 'expenses'; })
+      || null;
+}
+
 function _assignReceiptNo(payId) {
-  const p = DB.payments.find(function(x){ return x.id === payId; });
+  const p = _findPaymentAnywhere(payId);
   if (!p) return 'RCP-??????';
 
   // [FIX-R5] Reuse existing receipt number on reprint
@@ -52,12 +65,12 @@ function _assignReceiptNo(payId) {
 // receiptNo is now passed in (or uses p.receiptNo if already assigned).
 // Does NOT increment the counter — that happens in _assignReceiptNo().
 function buildReceiptHTML(payId) {
-  var p = DB.payments.find(function(x){ return x.id === payId; });
+  var p = _findPaymentAnywhere(payId);
   if (!p) return null;
 
   var student   = DB.students.find(function(s){ return s.id === p.studentId; });
   var room      = DB.rooms.find(function(r){ return r.id === p.roomId; });
-  var hostel    = (DB.settings.hostelName  || 'DAMAM Boys Hostel').toUpperCase();
+  var hostel    = (DB.settings.hostelName  || 'Hostel Name').toUpperCase();
   var phone     = DB.settings.phone        || '';
   var email     = DB.settings.email        || '';
   var location  = DB.settings.location     || '';
@@ -142,13 +155,22 @@ function buildReceiptHTML(payId) {
     ? p.extraCharges.reduce(function(s, c){ return s + Number(c.amount||0); }, 0) : 0;
   var rcptDiscount = Number(p.concession || p.discount || 0);
   var rcptConcDesc = (p.concessionDesc || p.discountDesc || '').trim();
+  // Mess is billed alongside the rent but itemised separately, so a student can
+  // see what they paid for the room and what they paid for the food. Records
+  // written before the split carry no messCharge and print exactly as before.
+  var rcptMess     = Number(p.messIncluded === false ? 0 : (p.messCharge || 0));
   var rcptMonthly  = Number(p.monthlyRent || p.totalRent || 0)
-    || (rcptDiscount > 0 || rcptAdmFee > 0 || rcptExtra > 0 ? 0 : Number(p.amount || 0));
-  var rcptTotalDue = Math.max(0, rcptMonthly + rcptAdmFee + rcptExtra - rcptDiscount);
+    || (rcptDiscount > 0 || rcptAdmFee > 0 || rcptExtra > 0 || rcptMess > 0 ? 0 : Number(p.amount || 0));
+  var rcptTotalDue = Math.max(0, rcptMonthly + rcptMess + rcptAdmFee + rcptExtra - rcptDiscount);
 
   html += '<div style="padding:4px 22px 10px">';
   html += secLabel('Fee Breakdown');
-  html += dotRow('Monthly Rent', fmtPKR(rcptMonthly));
+  // Always "Room Rent" — the label used to flip to "Monthly Rent" when mess was
+  // 0, which made the same line mean the bed on one receipt and the whole
+  // charge on another. Rent is the bed; mess is its own line; the total below
+  // is the monthly charge.
+  html += dotRow('Room Rent', fmtPKR(rcptMonthly));
+  if (rcptMess > 0) html += dotRow('Mess Charges', fmtPKR(rcptMess));
   if (rcptAdmFee > 0) html += dotRow('Admission Fee', fmtPKR(rcptAdmFee));
   if (p.extraCharges && p.extraCharges.length) {
     p.extraCharges.forEach(function(ch) {
@@ -160,7 +182,7 @@ function buildReceiptHTML(payId) {
   }
   if (rcptDiscount > 0)
     html += dotRow('Concession' + (rcptConcDesc ? ' (' + escHtml(rcptConcDesc) + ')' : ''), '− ' + fmtPKR(rcptDiscount));
-  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0) {
+  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0 || rcptMess > 0) {
     html += sep('dashed');
     html += dotRow('TOTAL DUE', fmtPKR(rcptTotalDue), true);
   }
@@ -173,21 +195,49 @@ function buildReceiptHTML(payId) {
   }
   html += dotRow('Method', escHtml(p.method || 'Cash'));
   html += dotRow('Status', p.status === 'Paid' ? '✅ PAID' : '⏳ PENDING');
+
+  // ── Arrears taken in the same visit ───────────────────────────────────────
+  // This money belongs to earlier months and is posted to THEIR records, so it
+  // is not part of AMOUNT PAID above. It was still handed over at this counter,
+  // and a receipt that omits it is short of the cash the student gave.
+  var rcptArrears = (p.arrearsCollected && p.arrearsCollected.length)
+    ? p.arrearsCollected.filter(function (a) { return Number(a.amount) > 0; }) : [];
+  var rcptArrTotal = rcptArrears.reduce(function (s, a) { return s + Number(a.amount || 0); }, 0);
+  if (rcptArrTotal > 0) {
+    html += sep('dashed');
+    html += secLabel('Arrears Received (earlier months)');
+    rcptArrears.forEach(function (a) {
+      html += dotRow(escHtml(a.month || '—'), fmtPKR(a.amount));
+    });
+    html += sep('dashed');
+    html += dotRow('TOTAL RECEIVED', fmtPKR(Number(p.amount || 0) + rcptArrTotal), true);
+    html += '<div style="font-family:monospace;font-size:8.5px;color:#666;margin-top:2px">'
+      + 'Arrears are credited to the months listed above, not to '
+      + escHtml(p.month || 'this month') + '.</div>';
+  }
   html += '</div>';
 
   var history   = (p.partialPayments && p.partialPayments.length) ? p.partialPayments : [];
+  var histSum   = history.reduce(function(s, x){ return s + Number(x.amount || 0); }, 0);
   var initEntry = {
     date: p.date || p.dueDate || '',
-    amount: p.amount - history.reduce(function(s, x){ return s + Number(x.amount); }, 0),
+    amount: Number(p.amount || 0) - histSum,
     method: p.method || 'Cash',
     collectedBy: p.collectedBy || 'Warden',
     note: 'Initial payment'
   };
-  var allHistory = initEntry.amount > 0 ? [initEntry].concat(history) : history;
+  /* The trail is meant to add up to the figure printed above it. Two old bugs
+     could leave it claiming more than was ever collected, and the section then
+     printed — on a slip in a student's hand — a list of instalments totalling
+     twice the receipt's own TOTAL RECEIVED. The boot repair removes what is
+     provably false; what survives cannot be reconstructed, so the receipt owns
+     up to it instead of quietly presenting it as the breakdown. */
+  var histReconciles = histSum <= Number(p.amount || 0) + 1;
+  var allHistory = (histReconciles && initEntry.amount > 0) ? [initEntry].concat(history) : history;
   if (allHistory.length) {
     html += sep();
     html += '<div style="padding:4px 22px 10px">';
-    html += secLabel('Payment History');
+    html += secLabel(histReconciles ? 'Payment History' : 'Recorded Instalments');
     allHistory.forEach(function(h, idx) {
       html += '<div style="font-family:monospace;font-size:11px;color:#000;margin:5px 0;border-left:3px solid #333;padding-left:8px">';
       html += '<div style="display:flex;justify-content:space-between;font-weight:800">';
@@ -198,6 +248,14 @@ function buildReceiptHTML(payId) {
       html += (fmtDate(h.date) || '—') + ' · ' + escHtml(h.method || 'Cash') + ' · by ' + escHtml(h.collectedBy || 'Warden');
       html += '</div></div>';
     });
+    if (!histReconciles) {
+      html += '<div style="font-family:monospace;font-size:8.5px;color:#666;margin-top:6px;'
+        + 'border-top:1px dashed #999;padding-top:4px">'
+        + 'These entries total ' + fmtPKR(histSum) + ' and do not reconcile with the '
+        + fmtPKR(Number(p.amount || 0)) + ' recorded as collected for this month. '
+        + 'The collected figure above is the authoritative one.'
+        + '</div>';
+    }
     html += '</div>';
   }
 
@@ -219,7 +277,7 @@ function buildReceiptHTML(payId) {
   html += '</div>';
 
   // ── Powered-by footer (uses client's hostel name + system name) ───────────
-  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTIX';
+  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTYLLO';
   var hostelFtr = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) ? DB.settings.hostelName : '';
   var phoneFtr  = (typeof DB !== 'undefined' && DB.settings && DB.settings.phone)      ? DB.settings.phone      : '';
   html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
@@ -241,7 +299,13 @@ function buildReceiptHTML(payId) {
 // ── MAIN RECEIPT ENTRY POINT ──────────────────────────────────────────────────
 function printReceipt(payId) {
   var html = buildReceiptHTML(payId);
-  if (!html) return;
+  // Silence was the worst possible answer here: the warden pressed Print and
+  // could not tell the difference between "nothing happened" and "it printed".
+  if (!html) {
+    if (typeof toast === 'function')
+      toast('That payment record could not be found — it may have been deleted.', 'error');
+    return;
+  }
 
   // [FIX-R3] Pass _clearReturnStudentId to close handlers
   var backBtn = _returnStudentId

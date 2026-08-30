@@ -40,8 +40,9 @@ async function waitForLoginScreen(win) {
     null, { timeout: 30000 });
 }
 
-async function login(win, password = 'warden1') {
+async function login(win, password = 'admin123', username = 'warden1') {
   await waitForLoginScreen(win);
+  await win.fill('#login-user', username);
   await win.fill('#login-input', password);
   await win.click('#login-btn');
   await win.waitForFunction(
@@ -181,7 +182,7 @@ test('security: clear-all is blocked without the correct warden password', async
   // CORRECT password → the gate passes and clearAllData() opens its final
   // confirmation (proves the password check runs and gates the wipe).
   const afterCorrect = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'warden1';
+    document.getElementById('clear-all-pwd').value = 'admin123';
     await confirmClearAllWithPassword();
     return {
       confirmReached: typeof _pendingConfirmCb === 'function', // clearAllData() showed its confirm
@@ -256,21 +257,203 @@ test('archive page renders (regression: renderArchive was undefined → Render E
   expect(emptyHtml, 'archive page threw a render error (renderArchive missing?)').not.toContain('Render Error');
   expect(emptyHtml).toContain('No archived records');
 
-  // Populated archive → records render grouped by year, still no error.
+  // Populated archive → the page opens on the newest year that HOLDS records
+  // (not simply the current year, which would be empty here) and shows them.
   // (renderPage swaps #content inside a setTimeout fade, so wait before reading.)
   await win.evaluate(() => {
     DB.archive = [
       { id: 'a1', studentName: 'Old Student', month: 'January 2024', amount: 16000, date: '2024-01-05', status: 'Paid' },
       { id: 'a2', category: 'Electricity', amount: 5000, date: '2024-02-01', description: 'WAPDA' },
     ];
+    archiveFilter = { year: '', month: '', tab: 'overview' };
     renderPage('archive');
   });
   await win.waitForTimeout(400);
   const html = await win.evaluate(() => document.getElementById('content').innerHTML);
   expect(html, 'archive render error with data').not.toContain('Render Error');
-  expect(html).toContain('Old Student');
-  expect(html).toContain('Electricity');
-  expect(html).toContain('2024');
+  expect(html, 'archive did not default to the newest year holding records').toContain('2024');
+  // The year overview reports the money; the records themselves are one tab in.
+  expect(html).toContain('16,000');
+  expect(html).toContain('5,000');
+
+  // arcSetTab() goes through renderPage(), which swaps #content inside a
+  // setTimeout fade — read after the wait, not in the same evaluate().
+  await win.evaluate(() => arcSetTab('payments'));
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => document.getElementById('content').innerText),
+    'archived payment missing from the Payments tab').toContain('Old Student');
+
+  await win.evaluate(() => arcSetTab('expenses'));
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => document.getElementById('content').innerText),
+    'archived expense missing from the Expenses tab').toContain('Electricity');
+
+  await app.close();
+});
+
+// The Annual Archive was fully built — renderArchive(), pageConfig entry, router
+// branch, permission gate, stylesheet, icon — but had no sidebar item, so the
+// only way in was the Ctrl+K palette. This guards the way in, not the page.
+test('archive is reachable from the sidebar and hides with the reports permission', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  const railItem = win.locator('.nav-item[data-page="archive"]');
+  await expect(railItem, 'no Annual Archive item in the sidebar').toHaveCount(1);
+  await expect(railItem).toBeVisible();
+  await expect(railItem).toContainText('Annual Archive');
+
+  // Navigate by clicking the rail, not by calling navigate() directly.
+  await railItem.click();
+  await win.waitForTimeout(400);
+
+  expect(await win.evaluate(() => document.getElementById('hdr-title').textContent))
+    .toBe('Annual Archive');
+  expect(await win.evaluate(() => currentPage)).toBe('archive');
+  await expect(railItem, 'rail item did not light up').toHaveClass(/active/);
+
+  const html = await win.evaluate(() => document.getElementById('content').innerHTML);
+  expect(html, 'archive threw a render error when reached via the sidebar').not.toContain('Render Error');
+  expect(html).toContain('No archived records');
+
+  // The rail item and the page gate (nav.js renderPage) must agree: both key off
+  // 'reports'. If they drift, the rail offers a page that then refuses to render.
+  const hidden = await win.evaluate(() => {
+    const realCanDo = window.canDo;
+    window.canDo = p => (p === 'reports' ? false : realCanDo(p));
+    applyPermissionsToChrome();
+    const el = document.querySelector('.nav-item[data-page="archive"]');
+    const rep = document.querySelector('.nav-item[data-page="reports"]');
+    const out = { archive: el.style.display, reports: rep.style.display };
+    window.canDo = realCanDo;
+    applyPermissionsToChrome();
+    return out;
+  });
+  expect(hidden.archive, 'archive rail item stayed visible without reports permission').toBe('none');
+  expect(hidden.reports).toBe('none');
+
+  await app.close();
+});
+
+// The three secondary money columns sit past the right edge. They must be
+// reachable by dragging, and the CSV must list columns in the on-screen order.
+test('payments: table pans by dragging, and CSV column order matches the table', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  await win.evaluate(() => {
+    DB.rooms = [{ id: 'r1', number: '101', floor: 'Ground', typeId: '2s', rent: 16000 }];
+    DB.students = [{ id: 's1', name: 'Ali Khan', roomId: 'r1', rent: 16000, status: 'Active' }];
+    DB.payments = [{
+      id: 'p1', studentId: 's1', studentName: 'Ali Khan', roomNumber: '101',
+      month: thisMonthLabel(), monthlyRent: 16000, amount: 12000, unpaid: 4000,
+      method: 'Cash', status: 'Pending', admissionFee: 5000,
+      extraCharges: [{ label: 'Laundry', amount: 800 }], concession: 1000,
+      concessionDesc: 'Sibling', date: today(), paidDate: today(),
+    }];
+    navigate('payments');
+  });
+  await win.waitForTimeout(700);
+
+  // The secondary columns exist in the DOM — a display:none column could never
+  // be scrolled into view, which is the whole point of panning.
+  expect(await win.locator('.pay-table th.pay-col-x').count(),
+    'secondary columns missing from the table').toBe(3);
+
+  const wrap = win.locator('.pay-table-wrap');
+  const canPan = await wrap.evaluate(el => el.scrollWidth > el.clientWidth + 1);
+  expect(canPan, 'table does not overflow, so there is nothing to pan to').toBe(true);
+  expect(await wrap.evaluate(el => el.scrollLeft), 'should rest at the left edge').toBe(0);
+
+  // Drag leftwards across an inert part of a row.
+  const box = await wrap.boundingBox();
+  const y = box.y + box.height - 18;
+  await win.mouse.move(box.x + box.width * 0.55, y);
+  await win.mouse.down();
+  await win.mouse.move(box.x + box.width * 0.55 - 60, y, { steps: 6 });
+  await win.mouse.move(box.x + box.width * 0.55 - 200, y, { steps: 12 });
+  await win.mouse.up();
+  await win.waitForTimeout(200);
+
+  expect(await wrap.evaluate(el => el.scrollLeft),
+    'dragging did not pan the table').toBeGreaterThan(30);
+
+  // Dragging must not have triggered anything underneath it.
+  expect(await win.evaluate(() => document.querySelectorAll('.modal-overlay').length),
+    'the pan opened a modal — the trailing click was not swallowed').toBe(0);
+
+  // CSV header + row follow the table: money columns after Status, Date last.
+  const csv = await win.evaluate(() => {
+    let captured = null;
+    const real = window.downloadCSV;
+    window.downloadCSV = rows => { captured = rows; };
+    try { exportPaymentsCSV(); } finally { window.downloadCSV = real; }
+    return captured;
+  });
+  expect(csv, 'exportPaymentsCSV produced nothing').toBeTruthy();
+  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid',
+                          'Method','Status','Adm.Fee','Extra Charges','Concession','Date']);
+  // Values must have moved with their headers, not just the labels.
+  const row = csv[1];
+  expect(row[4], 'Amount Paid column').toBe(12000);
+  expect(row[5], 'Unpaid column').toBe(4000);
+  expect(row[6], 'Method column').toBe('Cash');
+  expect(row[8], 'Adm.Fee column').toBe(5000);
+  expect(String(row[9]), 'Extra Charges column').toContain('Laundry');
+  expect(row[10], 'Concession column').toBe(1000);
+
+  await app.close();
+});
+
+// The payment form's student box auto-selected as soon as one student matched,
+// overwriting what was being typed and rewriting the label faster than
+// backspace could delete it — the field could not be cleared or typed into.
+test('payment student search: types cleanly, clears on backspace, orders by room', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  await win.evaluate(() => {
+    // Deliberately out of order, with a two-digit and a lettered room.
+    DB.rooms = [{ id:'r10', number:'10', floor:'1st',    typeId:'2s', rent:16000 },
+                { id:'rA1', number:'A1', floor:'1st',    typeId:'2s', rent:16000 },
+                { id:'r2',  number:'2',  floor:'Ground', typeId:'2s', rent:16000 }];
+    DB.students = [{ id:'s1', name:'Zed Khan', roomId:'r10', rent:16000, status:'Active' },
+                   { id:'s2', name:'Abid Ali', roomId:'r2',  rent:16000, status:'Active' },
+                   { id:'s3', name:'Mid Wing', roomId:'rA1', rent:16000, status:'Active' }];
+    navigate('payments');
+  });
+  await win.waitForTimeout(400);
+
+  // Numeric rooms in numeric order, lettered wings after them — not "1, 10, 2"
+  // and not "A1" interleaved as if it were 1.
+  expect(await win.evaluate(() => roomsByNumber(DB.rooms).map(r => r.number)))
+    .toEqual(['2', '10', 'A1']);
+  expect(await win.evaluate(() => studentsByRoom(DB.students).map(s => s.name)))
+    .toEqual(['Abid Ali', 'Zed Khan', 'Mid Wing']);
+
+  await win.evaluate(() => openAddPayment());
+  await win.waitForSelector('#f-pstudent-search');
+  await win.click('#f-pstudent-search');
+  await win.type('#f-pstudent-search', 'Abid Ali');
+  await win.waitForTimeout(300);
+
+  // Typing must leave exactly what was typed. The old auto-select rewrote the
+  // box to "Abid Ali — Room #2" partway through, so the tail of the name landed
+  // on the end: "Abid Ali — Room #2Ali".
+  expect(await win.inputValue('#f-pstudent-search'),
+    'typing was overwritten by an auto-selection').toBe('Abid Ali');
+
+  for (let i = 0; i < 12; i++) { await win.keyboard.press('Backspace'); await win.waitForTimeout(30); }
+  expect(await win.inputValue('#f-pstudent-search'),
+    'backspace could not clear the search box').toBe('');
+  expect(await win.inputValue('#f-pstudent'),
+    'editing the text left the hidden student id pointing at the old pick').toBe('');
 
   await app.close();
 });
@@ -287,11 +470,14 @@ test('login: wrong password is rejected, decrements attempts, locks after 5', as
   // assertions don't race the login-error text's 4-second auto-hide.
   async function failOnce(pw) {
     return await win.evaluate(async (p) => {
+      document.getElementById('login-user').value = 'warden1';
       document.getElementById('login-input').value = p;
       await checkLogin();
+      // Lockout is keyed on the typed username, not on CUR_ROLE — CUR_ROLE is
+      // only set once a login actually succeeds.
       return {
-        remaining: _remainingAttempts(CUR_ROLE),
-        locked: !!_isLockedOut(CUR_ROLE),
+        remaining: _remainingAttempts('warden1'),
+        locked: !!_isLockedOut('warden1'),
         loggedIn: document.getElementById('login-screen').style.display === 'none',
       };
     }, pw);

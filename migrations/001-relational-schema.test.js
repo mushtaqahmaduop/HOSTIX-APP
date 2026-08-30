@@ -1,4 +1,4 @@
-/* ─── HOSTIX — Migration 001 lossless test (pure JS, runs under plain Node) ────
+/* ─── HOSTYLLO — Migration 001 lossless test (pure JS, runs under plain Node) ────
    Verifies the transform layer: every record survives promotion + reconstruction
    byte-identically (lossless), and the promoted columns match the record fields
    with correct coercion. Uses realistic, production-shaped records across all

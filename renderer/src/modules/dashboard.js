@@ -1,4 +1,4 @@
-/* ─── HOSTIX — DASHBOARD MODULE ────────────────────────────────────────────
+/* ─── HOSTYLLO — DASHBOARD MODULE ────────────────────────────────────────────
    Contains: calcRevenue, _payMatchesMonth, generateRooms, renderDashboard,
              all room detail modals, month detail modals, trend chart,
              global search, navigation helpers
@@ -21,36 +21,186 @@ function calcRevenue(datePrefix) {
     .reduce((s,p) => s + Number(p.amount||0), 0);
   return paid + partial;
 }
+
+/* ══ SINGLE SOURCE OF TRUTH FOR CASH RECEIVED ════════════════════════════════
+   calcRevenue() above is ACCRUAL: it answers "how much did month M earn",
+   and July's rent handed over on 3 August is July's revenue. That is correct
+   for the books and every report depends on it.
+
+   It is the wrong figure to count a cash box against. At month end the warden
+   has a drawer of notes and wants to know what should be in it — money that
+   physically arrived between the 1st and the 31st, whatever month it settles.
+   There was no such figure anywhere in the app, so the drawer could not be
+   reconciled at all.
+
+   HOW A RECORD'S CASH IS DATED
+
+   `p.amount` is the total collected on that record. `p.partialPayments` is the
+   instalment trail, and each entry carries the date its instalment arrived —
+   so a record part-paid in July and cleared in August is genuinely two cash
+   events in two months. The first collection is not always written to the
+   trail, so whatever the trail does not account for is attributed to the
+   record's own payment date.
+
+   MONEY IS CONSERVED, WHICH IS THE WHOLE POINT
+
+   Every branch below distributes exactly `p.amount` across months — never more,
+   never less — so summing the twelve months of a year returns the same total
+   the year's records hold. A reconciliation tool that could invent or lose a
+   rupee would be worse than none.
+
+   A trail claiming MORE than was ever collected is known to exist on disk —
+   repairPaymentComposition() documents the two bugs that wrote them. Those
+   trails cannot be trusted to date anything, so such a record falls back
+   entirely to its own date rather than being scaled or partly believed. */
+function _cashEvents(p) {
+  const total = Number(p && p.amount || 0);
+  if (!p || total <= 0) return [];
+  const base  = p.date || p.paidDate || p.dueDate || '';
+  const trail = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+  const trailSum = trail.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+
+  // No trail, or a trail that claims more than was collected: one event.
+  if (!trail.length || trailSum > total + 0.5) return [{ date: base, amount: total }];
+
+  const events = trail
+    .filter(e => e && Number(e.amount || 0) > 0)
+    .map(e => ({ date: e.date || base, amount: Number(e.amount || 0) }));
+  const residual = total - trailSum;
+  if (residual > 0.5) events.push({ date: base, amount: residual });
+  return events;
+}
+
+// Cash that physically arrived inside `key` (a YYYY-MM month or a YYYY year,
+// matched as a date prefix — the same shape calcExpenses() takes).
+function calcCashReceived(key) {
+  if (!key) return 0;
+  return (DB.payments || []).reduce((sum, p) =>
+    sum + _cashEvents(p).reduce((s, e) =>
+      s + (String(e.date || '').indexOf(String(key)) === 0 ? e.amount : 0), 0), 0);
+}
+
+/* The month's cash split by WHICH month it settles, which is the reconciliation
+   itself: cash received = this period's own rent + arrears carried in from
+   earlier months + anything paid ahead. `advance` is money for a future month,
+   so it is in the drawer now and in none of this month's revenue. */
+function cashBreakdown(key) {
+  const out = { total: 0, current: 0, arrears: 0, advance: 0, count: 0 };
+  (DB.payments || []).forEach(p => {
+    const events = _cashEvents(p);
+    if (!events.length) return;
+    /* Compared at the SAME granularity as `key`. `key` is a prefix and may be a
+       whole year, and '2026-04' < '2026' is false while '2026' < '2026-04' is
+       true — so comparing a month against a year key sent every record in that
+       year to `advance`, i.e. the year view reported all of its cash as paid in
+       advance. Truncating the record's month to the key's width compares like
+       with like in both cases. */
+    const k       = String(key);
+    const settles = _payMonthKey(p);            // the month this record bills
+    const mine    = settles ? settles.slice(0, k.length) : null;
+    events.forEach(e => {
+      if (String(e.date || '').indexOf(k) !== 0) return;
+      out.total += e.amount; out.count++;
+      if (!mine || mine === k)  out.current += e.amount;
+      else if (mine < k)        out.arrears += e.amount;
+      else                      out.advance += e.amount;
+    });
+  });
+  return out;
+}
+
+// ══ SINGLE SOURCE OF TRUTH FOR EXPENSES ═════════════════════════════════════
+// A funds transfer is an expense. It is money that leaves the hostel's cash the
+// same way a gas bill does; it is only stored in its own array because it is
+// entered on its own screen. Every "total expenses" figure in the app goes
+// through here, so the Expenses card, the reports strip, the PDFs and the CSVs
+// cannot drift apart — and profit is revenue minus THIS, with no separate
+// transfer deduction bolted on afterwards.
+//
+// `key` is a YYYY-MM month or a YYYY year, matched as a date prefix.
+function calcExpenses(key) {
+  return calcExpensesOnly(key) + calcTransfers(key);
+}
+function calcExpensesOnly(key) {
+  return (DB.expenses || [])
+    .filter(e => String(e.date || '').startsWith(key))
+    .reduce((s, e) => s + Number(e.amount || 0), 0);
+}
+function calcTransfers(key) {
+  return (DB.transfers || [])
+    .filter(t => String(t.date || '').startsWith(key))
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+}
+// Profit / Available Fund, stated once so nothing can compute it a second way.
+function calcProfit(key) {
+  return calcRevenue(key) - calcExpenses(key);
+}
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── PAYMENT MONTH MATCHER ────────────────────────────────────────────────────
 // Single source of truth for "does payment p belong to monthKey (YYYY-MM)?".
 // Fixes the core data-mixing bug: p.month stores "April 2026" while thisMonth()
 // returns "2026-04" — .startsWith() never matched, hiding all month-label payments.
+// Parse any month-ish string ("2026-04", "2026-04-17", "April 2026") to YYYY-MM.
+// Returns null when the string carries no usable month.
+function _toMonthKey(str) {
+  if (!str || typeof str !== 'string') return null;
+  var s = str.trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}/.test(s)) return s.slice(0, 7);
+  try {
+    // "April 2026" has no day; appending one makes it parseable in every engine.
+    var d = new Date(s + ' 1');
+    if (!isNaN(d.getTime()))
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  } catch (e) {}
+  return null;
+}
+
+// THE month a payment belongs to — exactly one, never several.
+//
+// `p.month` is the billing month the warden chose and is authoritative. The
+// date fields are only ever a fallback for records written before a month
+// label was stored, because they describe WHEN money moved, not WHAT PERIOD
+// it settles: July's rent handed over on 3 August is still July's rent.
+function _payMonthKey(p) {
+  if (!p) return null;
+  return _toMonthKey(p.month)
+      || _toMonthKey(p.date)
+      || _toMonthKey(p.dueDate)
+      || _toMonthKey(p.paidDate);
+}
+
+// Does payment p fall inside period `mk`? `mk` is a prefix, so it accepts both
+// a month ("2026-04") and a whole year ("2026") — the Reports year view relies
+// on the latter.
+//
+// This used to return true if ANY of month/date/dueDate/paidDate fell in the
+// period, which meant one record could be counted in up to four different
+// months at once. That was the cause of revenue appearing in two months and of
+// records showing up under a month they do not belong to.
 function _payMatchesMonth(p, mk) {
-  if (!mk) return false;
-  // Fast path: date fields are YYYY-MM-DD
-  if ((p.date||'').startsWith(mk))     return true;
-  if ((p.paidDate||'').startsWith(mk)) return true;
-  if ((p.dueDate||'').startsWith(mk))  return true;
-  // FIX-B3: Slow path — parse ANY date/month field that is not already YYYY-MM-DD.
-  // Fixes silent failure when dueDate/date/paidDate is stored as "April 2026" or
-  // "Apr 2026" instead of "2026-04-xx", causing payments to vanish from reports.
-  function _toYM(str) {
-    if (!str || typeof str !== 'string') return null;
-    if (/^\d{4}-\d{2}/.test(str)) return null; // fast-path already handled these
-    try {
-      var d = new Date(str.trim() + ' 1');
-      if (!isNaN(d.getTime()))
-        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    } catch (e) {}
-    return null;
-  }
-  var fields = [p.month, p.dueDate, p.date, p.paidDate];
-  for (var i = 0; i < fields.length; i++) {
-    if (_toYM(fields[i]) === mk) return true;
-  }
-  return false;
+  if (!p || !mk) return false;
+  var k = _payMonthKey(p);
+  return !!k && k.indexOf(String(mk)) === 0;
+}
+
+// Was this student on the roster during period `mk` (a YYYY-MM month or a YYYY
+// year)? Used by every historical view, which previously listed whoever is
+// Active *today* — so a student admitted in August appeared inside July's
+// figures as though they had been living there all along.
+function _studentInPeriod(s, mk) {
+  if (!s || !mk) return false;
+  var key   = String(mk);
+  var last  = key.length === 4 ? key + '-12' : key;   // a year ends in December
+  var first = key.length === 4 ? key + '-01' : key;
+  var join = _toMonthKey(s.joinDate);
+  if (join && join > last) return false;              // not admitted yet
+  var left = _toMonthKey(s.leftDate || s.leaveDate);
+  if (left && left < first) return false;             // already moved out
+  // No join date on record: the only honest signal left is the current status.
+  if (!join) return s.status === 'Active';
+  return true;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,12 +223,115 @@ function generateRooms(roomTypes) {
       const type = rtypes.find(t=>t.id===typeId);
       rooms.push({
         id:'room_'+uid(), number:num, floor:f.name, typeId,
-        rent:type?.defaultRent||16000, studentIds:[], amenities:['Fan','Bed','Wardrobe'], notes:''
+        rent:Number(type?.defaultRent)||0, studentIds:[], amenities:['Fan','Bed','Wardrobe'], notes:''
       });
       idx++;
     });
   });
   return rooms;
+}
+
+// ── DASHBOARD v5 HELPERS ─────────────────────────────────────────────────────
+// Small pure helpers backing the KPI cards. Everything here derives from DB —
+// no placeholder series, no invented deltas. If the data isn't there the
+// component renders its own empty state rather than a made-up number.
+
+// Real month-by-month series for the current year, truncated at the current
+// month (future months are absent, not zero — a zero would read as "no income
+// in November" on a chart).
+function _dashSeries() {
+  const now = new Date();
+  const yr  = now.getFullYear();
+  const cur = now.getMonth(); // 0-based
+  const out = { rev:[], exp:[], pend:[] };
+  for (let i = 0; i <= cur; i++) {
+    const k = yr + '-' + String(i+1).padStart(2,'0');
+    out.rev.push(calcRevenue(k));
+    out.exp.push(calcExpenses(k));    // transfers included — they ARE expenses
+    out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
+      .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
+  }
+  return out;
+}
+
+/* ── CHART FIRST-PAINT FONT FIX ───────────────────────────────────────────────
+   Chart.js measures axis ticks, legend text and datalabels with whatever font
+   is RESOLVED AT DRAW TIME, and bakes those measurements into the scale
+   layout. Inter is a local @font-face (vendor/fonts.css), so on a cold start
+   the dashboard can paint before the face is parsed: the ticks get measured in
+   the fallback, the plot area is sized for the wrong metrics, and the chart
+   sits slightly out of place. Anything that re-renders it — switching pages
+   and back, toggling the theme, "refreshing" — measures against the now-loaded
+   font and it snaps right. That is the "it fixes itself when I refresh" bug.
+
+   document.fonts.ready settles once every face is usable; re-laying out then
+   costs one frame and makes the first paint identical to every later one.
+   Guarded on the chart still existing, because a page change can destroy it
+   while the promise is in flight. */
+function _chartFontFix(chart) {
+  if (!chart || !document.fonts || !document.fonts.ready) return;
+  document.fonts.ready.then(function () {
+    try {
+      if (!chart.ctx || !chart.canvas || !chart.canvas.isConnected) return;
+      chart.resize();
+      chart.update('none');
+    } catch (e) { /* chart was torn down mid-flight — nothing to fix */ }
+  });
+}
+
+// Inline SVG sparkline. Stroke colour comes from the parent's --dh via CSS
+// (an SVG *attribute* cannot resolve a CSS variable — only the stylesheet can),
+// so .dash-spark polyline{stroke:var(--dh)} in dashboard.css does the colouring.
+function _dashSpark(series) {
+  const pts = (series||[]).filter(v=>typeof v==='number' && isFinite(v));
+  if (pts.length < 2) return '<div class="dash-spark-empty">not enough history yet</div>';
+  const W = 200, H = 34;
+  const max = Math.max.apply(null, pts), min = Math.min.apply(null, pts);
+  const span = (max - min) || 1;
+  const d = pts.map(function(v,i){
+    const x = (i/(pts.length-1))*W;
+    const y = H - ((v-min)/span)*(H-4) - 2;
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  // A soft area wash under the line, as in the reference KPI cards. The
+  // polygon closes the same points down to the baseline; the fill colour is
+  // set in dashboard.css from the card's own --dh, so it stays semantic
+  // (green revenue, red expenses…) and follows the theme.
+  const area = d + ' ' + W + ',' + H + ' 0,' + H;
+  return '<svg class="dash-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'
+       + '<polygon class="dash-spark__area" points="'+area+'"/>'
+       + '<polyline points="'+d+'" fill="none" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+// Month-over-month change of the last two real months. Returns null when there
+// is no prior month to compare against, so the card shows nothing instead of a
+// fabricated "+0%".
+function _dashDelta(series) {
+  if (!series || series.length < 2) return null;
+  const cur = series[series.length-1], prev = series[series.length-2];
+  if (!prev) return null;
+  return ((cur - prev) / prev) * 100;
+}
+
+// Stable avatar hue from the name — same student always gets the same colour
+// across renders (index-based rotation would reshuffle whenever the list moves).
+function _dashAvatarHue(name) {
+  const hues = ['dh-violet','dh-blue','dh-green','dh-amber','dh-red'];
+  let h = 0;
+  const s = String(name||'?');
+  for (let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return hues[h % hues.length];
+}
+
+// Due-state of a pending payment, derived from its own dueDate.
+function _dashDueState(p) {
+  const due = p.dueDate || '';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(due)) return { label:'Pending', hue:'dh-slate' };
+  const d0 = new Date(today()), d1 = new Date(due.slice(0,10));
+  const days = Math.round((d1 - d0) / 86400000);
+  if (days <  0) return { label:'Overdue',  hue:'dh-red'   };
+  if (days <= 3) return { label:'Due Soon', hue:'dh-amber' };
+  return { label:'Pending', hue:'dh-slate' };
 }
 
 function renderDashboard() {
@@ -98,13 +351,12 @@ function renderDashboard() {
   if(openMaint>0) alerts.push({type:'info',icon:ICON_WRENCH,msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
   if(openComp>0) alerts.push({type:'danger',icon:ICON_MESSAGE,msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
   if(occRate < 60) alerts.push({type:'warning',icon:ICON_HOME,msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
-  const alertColors = {warning:'var(--amber)',info:'var(--blue)',danger:'var(--red)'};
-  const alertBg = {warning:'var(--amber-dim)',info:'var(--blue-dim)',danger:'var(--red-dim)'};
-  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:20px">${alerts.map(a=>`
-    <div onclick="${a.action}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${alertBg[a.type]};border:1px solid ${alertColors[a.type]}55;border-radius:10px;cursor:pointer;transition:var(--transition)" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-      <span class="icon-box icon-box-sm" style="background:transparent;color:${alertColors[a.type]}">${a.icon}</span>
-      <span style="font-size:13px;font-weight:600;color:${alertColors[a.type]}">${a.msg}</span>
-      <span style="margin-left:auto;font-size:12px;color:${alertColors[a.type]}">View →</span>
+  const alertHue = {warning:'dh-amber',info:'dh-blue',danger:'dh-red'};
+  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:12px">${alerts.map(a=>`
+    <div onclick="${a.action}" class="dash-banner ${alertHue[a.type]}">
+      <span class="dash-chip">${a.icon}</span>
+      <span class="dash-banner__msg">${a.msg}</span>
+      <span class="dash-banner__go">View →</span>
     </div>`).join('')}</div>`:'';
 
   const occ = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
@@ -112,17 +364,25 @@ function renderDashboard() {
   const seatsRemainingInOccupiedRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0).reduce((s,r)=>{const cap=getRoomType(r)?.capacity||1;return s+(cap-getRoomOccupancy(r));},0);
   const activeStudents = DB.students.filter(t=>t.status==='Active').length;
   const mo = thisMonth();
-  const moTransferDeduct = (DB.transfers||[]).filter(t=>t.date?.startsWith(mo)).reduce((s,t)=>s+Number(t.amount),0);
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
+  // Cash basis — what should physically be in the drawer for this month. See
+  // calcCashReceived(): this is deliberately NOT `collected`, and the two
+  // differing is normal rather than a fault.
+  const cashIn = cashBreakdown(mo);
   // Pending — only for the selected month
   const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
   const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
-  const moExp = DB.expenses.filter(e=>e.date?.startsWith(mo)).reduce((s,e)=>s+Number(e.amount),0);
+  // Expenses INCLUDE funds transfers — a transfer is money out of the same till.
+  const moExp = calcExpenses(mo);
+  // …so the item count has to count both too. It used to count DB.expenses
+  // alone while the value beside it carried the transfers as well, which is why
+  // the card could read "PKR 84,000 · 3 items" over four actual records.
+  const moExpCount = DB.expenses.filter(e => String(e.date||'').startsWith(mo)).length
+                   + (DB.transfers||[]).filter(t => String(t.date||'').startsWith(mo)).length;
   const totalExpected = collected + pending;
-  // Funds transfer is also an outgoing — include in net calculation
-  const netProfit = collected - moExp - moTransferDeduct;
+  const netProfit = collected - moExp;
 
   // Seat calculations
   const totalSeats = DB.rooms.reduce((s,r)=>{ const t=DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); }, 0);
@@ -130,8 +390,19 @@ function renderDashboard() {
   const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for available seat math only
   const availSeats = totalSeats - filledSeats;
   const seatPct = totalSeats>0 ? Math.round(filledSeats/totalSeats*100) : 0;
+  // Admissions dated inside the current month — the "N new this month" line on
+  // the Total Residents card.
+  const newThisMonth = DB.students.filter(t => String(t.joinDate||'').startsWith(mo)).length;
 
-  // Per-room-type seat breakdown
+  // Per-room-type seat breakdown.
+  // type.color is DATA (owner-configured per room type), not styling — it stays
+  // the literal colour for the icon, the bar fill and the percentage.
+  // _rtTint() builds the pale chip background from it. Only 6-digit hex can take
+  // an alpha suffix; anything else (a stored rgb()/named colour) falls back to
+  // the neutral track colour rather than emitting a broken value.
+  const _rtTint = c => (/^#[0-9a-f]{6}$/i.test(String(c||'')) ? c + '22' : 'var(--dash-track)');
+  const _rtBed = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>`;
+
   let seatBreakdown = '';
   DB.settings.roomTypes.forEach(type => {
     const tRooms = DB.rooms.filter(r=>r.typeId===type.id);
@@ -140,21 +411,12 @@ function renderDashboard() {
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
     seatBreakdown += `
-      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="width:10px;height:10px;border-radius:3px;background:${type.color};flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(type.name)}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--text2);font-family:var(--font-mono)">${typeFilledSeats}/${typeTotalSeats}</span>
-          </div>
-          <div style="height:5px;background:var(--bg4);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${typePct}%;background:${type.color};border-radius:3px;transition:width 0.5s"></div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:11px;color:var(--green);font-weight:600">${typeAvail} free</div>
-          <div style="font-size:10px;color:var(--text3)">${typePct}% full</div>
-        </div>
+      <div class="rt-row" title="${escHtml(type.name)} — ${typeFilledSeats}/${typeTotalSeats} seats filled, ${typeAvail} free">
+        <span class="rt-row__ic" style="background:${escHtml(_rtTint(type.color))};color:${escHtml(type.color)}">${_rtBed}</span>
+        <span class="rt-row__name">${escHtml(type.name)}</span>
+        <span class="rt-row__rooms">${tRooms.length} room${tRooms.length===1?'':'s'}</span>
+        <span class="rt-row__bar"><i style="width:${typePct}%;background:${escHtml(type.color)}"></i></span>
+        <span class="rt-row__pct" style="color:${typePct>0?escHtml(type.color):'var(--text)'}">${typePct}%</span>
       </div>`;
   });
 
@@ -179,286 +441,397 @@ function renderDashboard() {
   });
 
   // Seats availability bar chart data
-  const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending');
+  // Soonest departure first: this is an act-on-it banner, so the student whose
+  // date arrives next is the one the warden needs to see.
+  const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending')
+    .slice().sort((a,b)=>String(a.vacateDate||'9999').localeCompare(String(b.vacateDate||'9999')));
+  const _nextVacate = (pendingCancels.find(c=>c.vacateDate)||{}).vacateDate || '';
+
+  // Real 12-month series behind the KPI sparklines + the revenue MoM delta.
+  const series   = _dashSeries();
+  const revDelta = _dashDelta(series.rev);
 
   return `
   ${pendingCancels.length>0?`
-  <div style="background:var(--red-dim);border:1px solid rgba(248,113,113,0.3);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="navigate('cancellations')">
-    <div style="display:flex;align-items:center;gap:10px"><span class="icon-box icon-box-sm red"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
-      <div><div style="font-size:13px;font-weight:700;color:var(--red)">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
-      <div style="font-size:11px;color:var(--text3)">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div></div>
+  <div class="dash-banner dh-red" style="margin-bottom:12px" onclick="navigate('cancellations')">
+    <span class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
+    <div>
+      <div class="dash-banner__msg">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
+      ${/* Said "seats freed", and they are not. A pending cancellation is a
+            student who has given notice and is still sleeping in the bed,
+            still billed for it, until their vacate date — which is the rule
+            the Rooms page and the Cancellations page have both followed since
+            2026-08-30 (CLAUDE.md rule 9). This line was the last screen still
+            telling a warden the opposite, and acting on it means booking a bed
+            somebody is still in. */''}
+      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — beds stay theirs until they leave${_nextVacate?' · first frees '+escHtml(fmtDate(_nextVacate)):''}</div>
     </div>
-    <button class="btn btn-danger btn-sm" style="font-size:11px">View →</button>
+    <span class="dash-banner__go">View →</span>
   </div>`:''}
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
-  ${(()=>{const transfers=DB.transfers||[];const moTransfers=transfers.filter(t=>t.date?.startsWith(mo));const moTransferTotal=moTransfers.reduce((s,t)=>s+Number(t.amount),0);return `
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin-bottom:12px">
-    <div onclick="navigate('payments')" class="stat-card blue" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent-strong)">Total Revenue</div>
-        <span class="badge badge-blue" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(collected/totalExpected*100):0}% · ${paidCount} paid</span>
+  <div class="dash-kpi-grid">
+
+    <!-- Total Residents — blue. Design guide §8 opens the KPI row with the
+         people, not the money: a hostel is beds before it is rupees, and every
+         figure to its right is a consequence of this one. -->
+    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-blue">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2c0-3-4-5-8-5Z"/></svg></div>
+        <div class="dash-kpi__label">Total<br>Residents</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill ${seatPct>=90?'dh-red':seatPct>=70?'dh-green':'dh-amber'}">${seatPct}% full</span>
+        </div>
       </div>
-      <div>${moneyValue(collected,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%;background:var(--accent);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">of <span class="pkr">PKR</span>${fmtNum(totalExpected)}</div>
+      <!-- A headcount, so no currency prefix — the money-value classes are
+           reused for the typography only. -->
+      <div class="dash-kpi__value"><span class="money-value money-value--display"><span class="money-amt">${fmtNum(allActiveSeats)}</span></span><span style="font-size:13px;font-weight:500;color:var(--text3);margin-left:6px">of ${fmtNum(totalSeats)} beds</span></div>
+      <div class="dash-track"><div class="dash-track__fill" style="width:${seatPct}%"></div></div>
+      <div class="dash-kpi__sub">${newThisMonth>0?`▲ ${newThisMonth} new this month`:'No new admissions this month'}</div>
     </div>
-    <div onclick="navigate('reports')" class="stat-card teal" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--teal)">Available Fund</div>
-        <span class="badge ${netProfit>=0?'badge-teal':'badge-red'}" style="margin-left:auto;font-size:10px">${netProfit>=0?'Profit':'Loss'}</span>
+
+    <!-- Total Revenue — blue -->
+    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-blue">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
+        <div class="dash-kpi__label">Total<br>Revenue</div>
+        <div class="dash-pill-stack">
+          ${revDelta!==null?`<span class="dash-pill ${revDelta>=0?'dh-green':'dh-red'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
+          <span class="dash-pill dh-slate">${paidCount} paid</span>
+        </div>
       </div>
-      <div>${moneyValue(netProfit,{size:"display",color:netProfit>=0?"var(--teal)":"var(--red)"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(Math.abs(netProfit)/collected*100)):0}%;background:${netProfit>=0?'var(--teal)':'var(--red)'};border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">${fmtPKR(collected)}${moTransferDeduct>0?` − ${fmtPKR(moTransferDeduct)} (transferred)`:''} − ${fmtPKR(moExp)}</div>
+      <div class="dash-kpi__value">${moneyValue(collected,{size:"display"})}</div>
+      <div class="dash-track"><div class="dash-track__fill" style="width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%"></div></div>
+      <div class="dash-kpi__sub">of <span class="pkr">PKR</span>${fmtNum(totalExpected)} expected</div>
     </div>
-    <div onclick="navigate('expenses')" class="stat-card red" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--red)">Expenses</div>
-        <span class="badge badge-red" style="margin-left:auto;font-size:10px">${DB.expenses.filter(e=>e.date?.startsWith(mo)).length} items</span>
+
+    <!-- Expenses — red. Money OUT sits immediately after money IN and before
+         what is left of it: the Available Fund card next door states its own
+         figure as "collected − expenses", and it used to sit to the LEFT of the
+         expenses it subtracts, so the row asked the reader to hold a number
+         that had not been shown yet. -->
+    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
+        <div class="dash-kpi__label">Expenses</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
       </div>
-      <div>${moneyValue(moExp,{size:"display",color:"var(--red)"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${collected>0?Math.min(100,Math.round(moExp/collected*100)):moExp>0?100:0}%;background:var(--red);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">this month</div>
+      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display"})}</div>
+      <div class="dash-kpi__sub">this month</div>
+      ${_dashSpark(series.exp)}
     </div>
-    <!-- Funds Transfer Card -->
-    <div onclick="showAddTransferModal()" class="stat-card" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      ${transfers.length>0?'<div style="position:absolute;top:9px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>':''}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon" style="background:var(--bg4)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text2)"><path d="M3 21h18a1 1 0 0 0 0-2H3a1 1 0 0 0 0 2ZM4 18h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-2 0v6H5v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1Zm14-8a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1Zm-6 0a1 1 0 0 0-1 1v6h-1v-6a1 1 0 0 0-2 0v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1ZM2.49 8.87l9-5.5a1 1 0 0 1 1 0l9 5.5A1 1 0 0 1 21 10.75a.93.93 0 0 1-.51-.14L12 5.17 3.51 10.6a1 1 0 0 1-1.39-.32 1 1 0 0 1 .37-1.41Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2)">Funds Transfer</div>
-        <span class="badge badge-gray" style="margin-left:auto;font-size:10px">${moTransfers.length} records</span>
+
+    <!-- Available Fund — green when in profit, red when the fund is negative
+         (a negative fund is genuine danger, not decoration) -->
+    <div onclick="navigate('reports')" class="dsh-card dsh-card--click ${netProfit>=0?'dh-green':'dh-red'}">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
+        <div class="dash-kpi__label">Available<br>Fund</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
-      <div>${moneyValue(moTransferTotal,{size:"display"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${moTransferTotal>0?Math.min(100,Math.round(moTransferTotal/(collected||1)*100)):0}%;background:var(--text3);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">${moTransferTotal>0?'deducted from net':'+ New Transfer'}</div>
-    </div>
-    <div onclick="navigate('payments')" class="stat-card gold" style="border-radius:var(--radius);padding:18px;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-        <div class="stat-icon"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--amber)">Pending</div>
-        <span class="badge badge-amber" style="margin-left:auto;font-size:10px">${totalExpected>0?Math.round(pending/totalExpected*100):0}% · ${pendingCount} unpaid</span>
+      <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display"})}</div>
+      <div class="dash-kpi__sub">
+        ${fmtPKR(collected)} − ${fmtPKR(moExp)}
       </div>
-      <div>${moneyValue(pending,{size:"display",color:"var(--amber)"})}</div>
-      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:${totalExpected>0?Math.round(pending/totalExpected*100):0}%;background:var(--amber);border-radius:2px;transition:width 0.5s"></div></div>
-      <div style="font-size:11px;color:var(--text3)">click to collect</div>
+      <!-- This was the only money card with no history behind it, so it sat
+           visibly emptier than the four beside it. The series is the same
+           subtraction the headline states, month by month — nothing new is
+           computed here, and _dashSpark scales to min/max so the months the
+           fund ran negative still read. -->
+      ${_dashSpark(series.rev.map((v,i)=>v-(series.exp[i]||0)))}
     </div>
-  </div>`;})()}
+
+    <!-- Pending — amber -->
+    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-amber">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
+        <div class="dash-kpi__label">Pending</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
+          <span class="dash-pill">${pendingCount} unpaid</span>
+        </div>
+      </div>
+      <div class="dash-kpi__value">${moneyValue(pending,{size:"display"})}</div>
+      <div class="dash-kpi__sub">click to collect</div>
+      ${_dashSpark(series.pend)}
+    </div>
+  </div>
 
   <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-    <div onclick="showOccupiedRoomsModal()" class="stat-card green" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px">Occupied Rooms</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--green)">${occ}</span>
-          <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
-          ${seatsRemainingInOccupiedRooms>0?`<span class="badge badge-green" style="font-size:9px">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+  <div class="dash-tile-grid">
+    <div onclick="showOccupiedRoomsModal()" class="dsh-card dsh-card--click dh-blue">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Occupied Rooms</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${occ}</span>
+            <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
+            ${seatsRemainingInOccupiedRooms>0?`<span class="dash-pill dh-green">+${seatsRemainingInOccupiedRooms} free</span>`:''}
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%;background:var(--green);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%"></div></div>
     </div>
-    <div onclick="showVacantRoomsModal()" class="stat-card teal" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:3px">Vacant Rooms</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--teal)">${vac}</span>
-          <span style="font-size:11px;color:var(--text3)">${availSeats} seats free</span>
+
+    <div onclick="showVacantRoomsModal()" class="dsh-card dsh-card--click dh-green">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Vacant Rooms</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${vac}</span>
+            <span style="font-size:11px;color:var(--text3)">${availSeats} seat${availSeats===1?'':'s'} free</span>
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%;background:var(--teal);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%"></div></div>
     </div>
-    <div onclick="navigate('students')" class="stat-card purple" style="border-radius:10px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <div class="stat-icon" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"><svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:3px">Active Students</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-value" style="font-size:32px;color:var(--purple)">${activeStudents}</span>
-          <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
+
+    ${''/* CASH RECEIVED — the drawer, not the books. The tile beside it reads
+           "Total Revenue" for the same month and will usually show a DIFFERENT
+           number; that is the point of having both, and the modal explains the
+           gap line by line. */}
+    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-amber">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H3a1 1 0 0 1 0-2h15a1 1 0 0 0 0-2H3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Zm-3 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Cash Received</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            ${''/* MONEY IN A ROW OF COUNTS.
+
+                   The three tiles beside this one are counts — rooms, rooms,
+                   students — so a bare "24,500" here read as a quantity of
+                   something rather than as an amount of money. It carries its
+                   unit now, in the same <span class="pkr"> form the rest of the
+                   app uses for a figure that needs one. fmtPKR() is NOT used
+                   with it: that would print the prefix twice (CLAUDE.md rule 4).
+
+                   The caption names the month, because "this month" on a
+                   dashboard whose month selector can be moved is ambiguous
+                   exactly when it matters. */}
+            <span class="dash-tile__num"><span class="pkr">PKR</span> ${fmtNum(cashIn.total)}</span>
+            <span style="font-size:11px;color:var(--text3)">${
+              cashIn.arrears>0
+                ? 'incl. ' + fmtPKR(cashIn.arrears) + ' arrears'
+                : (typeof _rptMonthName==='function' ? 'in ' + _rptMonthName(mo) : 'this month')
+            }</span>
+          </div>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%;background:var(--purple);border-radius:2px;transition:width 0.5s"></div></div>
+        <span class="dash-tile__caret">›</span>
       </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${cashIn.total>0?Math.min(100,Math.round(cashIn.current/cashIn.total*100)):0}%"></div></div>
+    </div>
+
+    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-violet">
+      <div class="dash-tile__head">
+        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
+        <div style="min-width:0">
+          <div class="dash-kpi__label" style="margin-bottom:5px">Active Students</div>
+          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+            <span class="dash-tile__num">${activeStudents}</span>
+            <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
+          </div>
+        </div>
+        <span class="dash-tile__caret">›</span>
+      </div>
+      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%"></div></div>
     </div>
   </div>
   <!-- ══ TREND + SEAT AVAILABILITY ROW ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-  <div class="card" style="padding:10px 14px 6px;position:relative;overflow:hidden">
-    <!-- Header: title row -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:26px;height:26px;border-radius:7px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--green)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
-        <div style="font-size:12px;font-weight:800;color:var(--text)">Revenue Trend <span style="font-size:9px;font-weight:400;color:var(--text3)">· Jan–Dec</span></div>
-      </div>
-      <!-- Legend -->
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--green);border-radius:2px"></span><span style="font-size:9px;color:var(--green);font-weight:700">Revenue</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--red);border-radius:2px"></span><span style="font-size:9px;color:var(--red);font-weight:700">Expenses</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:14px;height:2.5px;background:var(--amber);border-radius:2px"></span><span style="font-size:9px;color:var(--amber);font-weight:700">Transfers</span></span>
-        <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:12px;height:2px;background:var(--accent);border-radius:2px"></span><span style="font-size:9px;color:var(--accent);font-weight:600">Pending</span></span>
+  <div class="dash-split">
+  <div class="dash-sec">
+    <!-- Header: title + legend -->
+    <div class="dash-sec__head">
+      <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
+      <span class="dash-sec__title">Revenue Trend</span>
+      <span class="dash-sec__sub">Jan – Dec</span>
+      <div class="dash-legend" style="margin-left:auto">
+        <!-- Pending was dh-violet here while both the line and the hover badge
+             draw it in --accent; the chip is dh-blue so all three agree. -->
+        <!-- Chips must match the drawn series (guide §12): Revenue blue,
+             Expenses red, Pending purple. -->
+        <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
+        <span class="dash-legend__k dh-red"><i></i>Expenses</span>
+        <span class="dash-legend__k dh-violet"><i></i>Pending</span>
       </div>
     </div>
-    <!-- KPI chips row -->
-    <div style="display:flex;gap:6px;margin-bottom:6px">
-      <div style="flex:1;background:var(--green-dim);border:1px solid rgba(52,211,153,0.2);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Revenue</span>
-        <span style="font-size:15px;font-weight:900;color:var(--green);letter-spacing:-0.5px">${fmtPKR(collected)}</span>
-      </div>
-      <div style="flex:1;background:var(--red-dim);border:1px solid rgba(248,113,113,0.15);border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Expenses</span>
-        <span style="font-size:15px;font-weight:900;color:var(--red);letter-spacing:-0.5px">${fmtPKR(moExp)}</span>
-      </div>
-      <div style="flex:1;background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)'};border-radius:7px;padding:4px 8px;display:flex;align-items:baseline;justify-content:space-between">
-        <span style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};font-weight:700;text-transform:uppercase;letter-spacing:0.3px;opacity:0.75">Net</span>
-        <span style="font-size:13px;font-weight:900;color:${netProfit>=0?'var(--green)':'var(--red)'};letter-spacing:-0.3px">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span>
-      </div>
+    <!-- This-month figures -->
+    <div class="dash-mini-row">
+      <div class="dash-mini dh-green"><span class="dash-mini__k">Revenue</span><span class="dash-mini__v">${fmtPKR(collected)}</span></div>
+      <div class="dash-mini dh-red"><span class="dash-mini__k">Expenses</span><span class="dash-mini__v">${fmtPKR(moExp)}</span></div>
+      <div class="dash-mini ${netProfit>=0?'dh-green':'dh-red'}"><span class="dash-mini__k">Net</span><span class="dash-mini__v">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span></div>
     </div>
     <!-- Chart.js canvas -->
-    <div id="trend-chart-wrap" style="position:relative;height:160px;">
+    <div id="trend-chart-wrap" style="position:relative;height:178px;">
       <div id="trend-hb" style="position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;pointer-events:none;display:none;z-index:9999;min-width:210px;box-shadow:var(--shadow);"></div>
       <canvas id="trend-canvas" style="display:block"></canvas>
     </div>
   </div>
+
   <!-- Seat availability — interactive room grid -->
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;overflow:hidden">
-      <!-- Header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:30px;height:30px;border-radius:8px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--teal)"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--teal)">Seat Availability</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="printSeatAvailability()" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
-          <button onclick="showSeatDetailModal('rooms')" style="font-size:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">Expand ↗</button>
+    <div class="dash-sec">
+      <div class="dash-sec__head">
+        <div class="dash-chip dh-violet" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+        <span class="dash-sec__title">Seat Availability</span>
+        <div class="dash-sec__tools">
+          <button class="dash-btn" onclick="printSeatAvailability()"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
+          <button class="dash-btn" onclick="showSeatDetailModal('rooms')">Expand ↗</button>
         </div>
       </div>
       <!-- Summary row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px">
-        <div onclick="showSeatDetailModal('rooms')" style="background:rgba(15,188,173,0.1);border:1px solid rgba(15,188,173,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="All rooms">
-          <div style="font-size:20px;font-weight:900;color:var(--teal)">${totalSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Total</div>
+      <div class="dash-seat-sum">
+        <div class="dh-violet" onclick="showSeatDetailModal('rooms')" title="All seats">
+          <div class="n">${totalSeats}</div><div class="l">Total</div>
         </div>
-        <div onclick="showSeatDetailModal('vacant')" style="background:rgba(46,201,138,0.1);border:1px solid rgba(46,201,138,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Free seats">
-          <div style="font-size:20px;font-weight:900;color:var(--green)">${availSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Free</div>
+        <div class="dh-green" onclick="showSeatDetailModal('vacant')" title="Free seats">
+          <div class="n">${availSeats}</div><div class="l">Free</div>
         </div>
-        <div onclick="showSeatDetailModal('occupied')" style="background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.2);border-radius:8px;padding:7px;text-align:center;cursor:pointer" title="Filled seats">
-          <div style="font-size:20px;font-weight:900;color:var(--red)">${allActiveSeats}</div>
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;font-weight:600">Filled</div>
+        <div class="dh-violet" onclick="showSeatDetailModal('occupied')" title="Filled seats">
+          <div class="n">${allActiveSeats}</div><div class="l">Filled</div>
         </div>
       </div>
       <!-- Per-room mini tiles -->
-      <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:88px;overflow-y:auto">
+      <div class="dash-room-wrap">
         ${DB.rooms.map(r=>{
           const rtype2=getRoomType(r);
           const cap=rtype2?.capacity||1;
           const occ2=getRoomOccupancy(r);
           const free=cap-occ2;
-          const pct=Math.round(occ2/cap*100);
           const isFull=free===0;
-          const students2=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
-          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${r.number} — ${occ2}/${cap} filled, ${free} free — click to edit" style="background:${isFull?'rgba(46,201,138,0.12)':'rgba(124,58,237,0.1)'};border:1px solid ${isFull?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:6px;padding:5px 7px;cursor:pointer;min-width:38px;text-align:center;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:11px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${r.number}</div>
-            <div style="font-size:9px;color:var(--text3)">${occ2}/${cap}</div>
-            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
+          return `<div onclick="showRoomSeatDetailModal('${r.id}')" title="Room #${escHtml(String(r.number))} — ${occ2}/${cap} filled, ${free} free — click to edit" class="dash-room dh-violet${isFull?' is-full':''}">
+            <div class="n">${escHtml(String(r.number))}</div>
+            <div class="c">${occ2}/${cap}</div>
           </div>`;
         }).join('')}
       </div>
-      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></div><span style="font-size:10px;color:var(--text3)">Has free seats</span></div>
-        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div><span style="font-size:10px;color:var(--text3)">Full</span></div>
+      <div style="display:flex;gap:12px;margin-top:9px;flex-wrap:wrap;align-items:center">
+        <span class="dash-key dh-violet"><i></i>Has free seats</span>
+        <span class="dash-key dh-slate"><i></i>Full</span>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
       </div>
     </div>
   </div><!-- end 2-col trend+seat grid -->
 
   <!-- ══ ROW 3+4: BY ROOM TYPE + PENDING PAYMENTS (same row) ══ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-  <div class="card" style="position:relative;margin-bottom:0">
-    <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>
-        By Room Type
+  <div class="dash-split">
+  <div class="dash-sec">
+    <div class="dash-sec__head" style="margin-bottom:4px">
+      <div class="dash-chip dh-blue" style="width:34px;height:34px;border-radius:10px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:17px;height:17px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+      <div style="min-width:0">
+        <div class="dash-sec__title">Occupancy by Room Type</div>
+        <div class="dash-sec__sub">Overview of seat occupancy by room type</div>
       </div>
-      <span style="font-size:11px;color:var(--text2);font-weight:700;background:var(--bg3);padding:3px 10px;border-radius:20px;border:1px solid var(--border)">${seatPct}% full</span>
+      <span class="rt-full ${seatPct>=90?'is-high':''}" style="margin-left:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
+        ${seatPct}% Full
+      </span>
     </div>
-    <div style="display:grid;grid-template-columns:140px 1fr;gap:16px;padding:8px 0">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <canvas id="dash-roomtype-donut" width="260" height="260" style="width:130px;height:130px"></canvas>
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px">${filledSeats}<span style="color:var(--text3);font-weight:500">/${totalSeats}</span> <span style="font-size:10px;color:var(--text2);font-weight:500">seats</span></div>
+
+    <div class="rt-body">
+      <div class="rt-left">
+        <div class="rt-donut">
+          <!-- No width/height attributes: the chart is responsive:true, so
+               Chart.js sizes the backing store to this box and to the device
+               pixel ratio itself. Hard-coding them made it lay out against the
+               attribute size and draw the ring smaller than, and off-centre in,
+               its container. -->
+          <canvas id="dash-roomtype-donut"></canvas>
+          <div class="rt-donut__c">
+            <div class="rt-donut__n">${filledSeats}<span>/${totalSeats}</span></div>
+            <div class="rt-donut__l">Seats Occupied</div>
+          </div>
+        </div>
+        <div class="rt-stat">
+          <span class="rt-stat__ic dh-blue"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3-4-5-8-5Z"/></svg></span>
+          <div class="rt-stat__c"><b>${filledSeats}</b><span>Occupied</span></div>
+          <div class="rt-stat__sep"></div>
+          <div class="rt-stat__c"><b>${totalSeats}</b><span>Total Seats</span></div>
+        </div>
+        <div class="rt-avail"><i></i><b>${availSeats}</b> Seats Available</div>
       </div>
-      <div>
+
+      <div class="rt-right">
+        <div class="rt-list__hd">
+          <span>Room Type</span>
+          <span class="rt-list__hd-rooms">Rooms</span>
+          <span class="rt-list__hd-occ">Occupancy</span>
+        </div>
         ${seatBreakdown}
       </div>
     </div>
+
+    <div class="rt-note">
+      <span class="rt-note__ic"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 5a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7Zm1.5 10h-3a1 1 0 0 1 0-2h.5v-3h-.5a1 1 0 0 1 0-2H12a1 1 0 0 1 1 1v4h.5a1 1 0 0 1 0 2Z"/></svg></span>
+      Occupancy percentage is calculated based on available seats in each room type.
+    </div>
   </div>
   <!-- PENDING PAYMENTS -->
-  <div class="card" style="position:relative;display:flex;flex-direction:column;margin-bottom:0">
-      <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:0">
-        <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg>
-          Pending Payments
-        </div>
-        <span class="badge badge-gold" style="font-size:12px;padding:4px 10px">${pendingCount}</span>
+  <div class="dash-sec" style="display:flex;flex-direction:column">
+      <div class="dash-sec__head">
+        <div class="dash-chip dh-amber" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg></div>
+        <span class="dash-sec__title">Pending Payments</span>
+        <span class="dash-pill dh-slate">${pendingCount}</span>
+        ${pendingCount>0?`<button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>`:''}
       </div>
-      <div style="flex:1;overflow-y:auto;max-height:280px;padding-top:6px">
+      <div style="flex:1;overflow-y:auto;max-height:288px">
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
         '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--green)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg></div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
           const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
-          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(30,48,80,0.5)">'
-          +'<div onclick="showViewStudentModal(\''+p.studentId+'\')" style="cursor:pointer;flex:1;min-width:0">'
-          +'<div style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(p.studentName||'')+'</div>'
-          +'<div style="font-size:10px;color:var(--text3);margin-top:1px">Rm #'+(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
+          const due = _dashDueState(p);
+          const nm  = String(p.studentName||'?');
+          const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+          return '<div class="dash-pay">'
+          +'<div class="dash-av '+_dashAvatarHue(nm)+'">'+escHtml(ini)+'</div>'
+          +'<div class="dash-pay__id" onclick="showViewStudentModal(\''+p.studentId+'\')">'
+          +'<div class="dash-pay__name">'+escHtml(p.studentName||'')+'</div>'
+          +'<div class="dash-pay__room">Room '+escHtml(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
           +'</div>'
-          +'<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:8px">'
-          +'<div style="text-align:right">'
-          +'<div style="font-size:12px;font-weight:800;color:var(--red)">'+fmtPKR(unpaidShow)+'</div>'
-          +'<div style="font-size:9px;color:var(--text3)">unpaid</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
+          +'<div>'
+          +'<div class="dash-pay__amt">'+fmtPKR(unpaidShow)+'</div>'
+          +'<div class="dash-pay__due">'+(p.dueDate?'Due: '+fmtDate(p.dueDate):'unpaid')+'</div>'
           +'</div>'
-          +'<button class="btn btn-success btn-sm" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" style="font-size:10px;padding:3px 7px" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
-          +'<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" style="font-size:10px;padding:3px 7px" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
+          +'<span class="dash-status '+due.hue+'">'+due.label+'</span>'
+          +'<button class="dash-icon-btn dh-green" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
+          +'<button class="dash-icon-btn dh-slate" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:10px;border-top:1px solid var(--border);margin-top:auto;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" style="flex:1" onclick="navigate('payments')">View All →</button><button class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;border:none" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Remind</button></div>`:''}
+      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:9px;font-weight:600" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
     </div>
-  </div>
   </div><!-- end row3+4 grid -->
 
   <!-- ══ ROW 5: RECENT PAYMENTS ══ -->
-  <div class="card" style="position:relative">
-    <div class="card-header" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-      <div class="card-title" style="font-size:14px;display:flex;align-items:center;gap:8px">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text3)"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg>
-        Recent Payments
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('payments')" style="font-size:11px">View All →</button>
+  <div class="dash-sec">
+    <div class="dash-sec__head">
+      <div class="dash-chip dh-green" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div>
+      <span class="dash-sec__title">Recent Payments</span>
+      <button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>
     </div>
     ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
     '<div class="table-wrap" style="border:none">'
-    +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Monthly Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
+    +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Room Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
     +recentPay.map(p=>{
       const st2 = DB.students.find(s=>s.id===p.studentId);
       const mRent = p.monthlyRent||p.totalRent||st2?.rent||0;
       const admFee = Number(p.fee||0);
       const extras = p.extraCharges||[];
       const unpaidAmt2=p.unpaid!=null?p.unpaid:0;
-      let paidCell='<span style="color:var(--green);font-weight:700;font-size:12px">'+fmtPKR(p.amount)+'</span>';
-      if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--blue);font-weight:700">+'+fmtPKR(admFee)+' adm.</div>';
-      extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--amber);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
+      let paidCell='<span style="color:var(--text);font-weight:700;font-size:12px">'+fmtPKR(p.amount)+'</span>';
+      if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(admFee)+' adm.</div>';
+      extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
       return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+p.studentId+'\')">'
       +'<td><div style="display:flex;align-items:center;gap:7px">'
-      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+(p.studentName||'?')[0].toUpperCase()+'</div>'
-      +'<span style="font-weight:700;color:var(--blue);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
-      +'<td><span style="color:var(--accent-strong);font-weight:700;font-size:12px">#'+(p.roomNumber||'')+'</span></td>'
+      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+escHtml((p.studentName||'?')[0].toUpperCase())+'</div>'
+      +'<span style="font-weight:700;color:var(--text);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
+      +'<td><span style="color:var(--text2);font-weight:700;font-size:12px">#'+escHtml(p.roomNumber||'')+'</span></td>'
       +'<td><span style="font-weight:700;font-size:12px">'+(mRent>0?fmtPKR(mRent):'—')+'</span></td>'
       +'<td>'+paidCell+'</td>'
-      +'<td><span style="color:'+(unpaidAmt2>0?'var(--red)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
+      +'<td><span style="color:'+(unpaidAmt2>0?'var(--text)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
       +'<td>'+pmBadge(p.method)+'</td>'
       +'<td>'+statusBadge(p.status)+'</td>'
       +'<td style="font-size:11px;color:var(--text3)">'+fmtDate(p.date)+'</td>'
@@ -482,9 +855,9 @@ function showRoomSeatDetailModal(roomId) {
   for(let i=0;i<cap;i++){
     const s = students[i];
     if(s){
-      seatSlots += `<div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:28px;height:28px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
             <div style="font-weight:700;font-size:13px;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -496,9 +869,9 @@ function showRoomSeatDetailModal(roomId) {
         </div>
       </div>`;
     } else {
-      seatSlots += `<div style="background:var(--amber-dim);border:1px dashed rgba(124,58,237,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      seatSlots += `<div style="background:var(--accent-dim);border:1px dashed rgba(37,99,235,0.4);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:28px;height:28px;border-radius:7px;background:rgba(124,58,237,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
+          <div style="width:28px;height:28px;border-radius:7px;background:rgba(37,99,235,0.1);display:flex;align-items:center;justify-content:center;color:var(--accent-strong)"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13V7a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v6a2 2 0 0 0-2 2v3a1 1 0 0 0 1 1h1.18a2 2 0 0 0 3.64 0h4.36a2 2 0 0 0 3.64 0H19a1 1 0 0 0 1-1v-3a2 2 0 0 0-2-2Z"/></svg></div>
           <div style="font-size:13px;color:var(--text3);font-style:italic">Seat ${i+1} — Free</div>
         </div>
         <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Add Student</button>
@@ -506,29 +879,29 @@ function showRoomSeatDetailModal(roomId) {
     }
   }
 
-  showModal('modal-md', `${ICONS.bed} Room #${r.number} — Seat Details`,`
+  showModal('modal-md', `${ICONS.bed} Room #${escHtml(String(r.number))} — Seat Details`,`
     <!-- Room header -->
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center">
       <div>
-        <div style="font-size:22px;font-weight:900;color:var(--accent-strong)">#${r.number}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Room</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:var(--text)">${rtype?.name||'—'}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text)">${escHtml(rtype?.name||'—')}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Type</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:${isFull?'var(--green)':'var(--accent-strong)'}">${occ}/${cap}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text)">${occ}/${cap}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Occupied</div>
       </div>
       <div>
-        <div style="font-size:22px;font-weight:900;color:${free>0?'var(--teal)':'var(--text3)'}">${free}</div>
+        <div style="font-size:22px;font-weight:900;color:${free>0?'var(--text)':'var(--text3)'}">${free}</div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Free</div>
       </div>
     </div>
     <!-- Progress bar -->
     <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:18px">
-      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--accent)'};border-radius:3px;transition:width 0.5s"></div>
+      <div style="height:100%;width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--text3)':'var(--accent)'};border-radius:3px;transition:width 0.5s"></div>
     </div>
     <!-- Seat slots -->
     <div style="display:flex;flex-direction:column;gap:8px">${seatSlots}</div>
@@ -542,19 +915,57 @@ function showRoomSeatDetailModal(roomId) {
 
 // ── SEAT AVAILABILITY PRINT REPORT ──────────────────────────────────────────
 function printSeatAvailability() {
-  const hostel = DB.settings.hostelName || 'DAMAM Boys Hostel';
+  if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
+  const hostel = DB.settings.hostelName || 'Hostel Name';
   const location = DB.settings.location || '';
   const now2 = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
   const totalSeats = DB.rooms.reduce((s,r)=>{const t=DB.settings.roomTypes.find(x=>x.id===r.typeId);return s+(t?t.capacity:1);},0);
   const allActiveSeats2 = DB.students.filter(t=>t.status==='Active').length; // badge: ALL active
   const filledSeats = DB.students.filter(t=>t.status==='Active' && !t.isForced).length; // for free seat calc
   const freeSeats = totalSeats - filledSeats;
-  const floors = [...new Set(DB.rooms.map(r=>r.floor||'Unknown'))].sort();
+  // Floors in the order the owner arranged them in Settings, not alphabetically
+  // — a plain .sort() put "1st, 2nd, Ground" on the sheet, so the warden walked
+  // the building starting from the middle. Floors not in Settings trail behind
+  // in their own alphabetical order rather than vanishing.
+  const _fOrder = DB.settings.floors || [];
+  const floors = [...new Set(DB.rooms.map(r=>r.floor||'Unknown'))].sort((a,b)=>{
+    const ia = _fOrder.indexOf(a), ib = _fOrder.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return String(a).localeCompare(String(b));
+  });
   let body = '';
 
+  // Short badge for the floor header — 'Basement' → B, 'Ground' → G, '1st' → 1.
+  const floorBadge = f => {
+    const s = String(f || '').trim();
+    const n = /^(\d+)/.exec(s);
+    return n ? n[1] : (s.slice(0, 1).toUpperCase() || '?');
+  };
+
   floors.forEach(floor => {
-    const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor).sort((a,b)=>a.number-b.number);
-    body += `<div class="floor-label">${floor} Floor</div><div class="room-grid">`;
+    // Numeric-aware compare: room numbers are strings and some carry a suffix
+    // ("6A"), which a-b turns into NaN and leaves the grid in insertion order.
+    const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor)
+      .sort((a,b)=>String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+    // Per-floor totals, so a warden can sign off one floor at a time instead of
+    // holding the whole building in their head.
+    const fSeats = floorRooms.reduce((s,r)=>{
+      const t = DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); },0);
+    const fOcc = DB.students.filter(s=>s.status==='Active'
+      && floorRooms.some(r=>r.id===s.roomId)).length;
+    const fFree = fSeats - fOcc;
+    body += `<div class="floor-head">
+      <span class="fbadge">${escHtml(floorBadge(floor))}</span>
+      <span class="fname">${escHtml(String(floor))} Floor
+        <span class="fcount">${floorRooms.length} room${floorRooms.length===1?'':'s'}</span></span>
+      <span class="fstats">
+        <span class="fstat">${icon('users','xs')}<b>${fSeats}</b> Seats Total</span>
+        <span class="fstat is-occ">${icon('userCheck','xs')}<b>${fOcc}</b> Occupied</span>
+        <span class="fstat is-free">${icon('armchair','xs')}<b>${fFree}</b> Available</span>
+      </span>
+    </div><div class="room-grid">`;
 
     floorRooms.forEach(r => {
       const rtype = DB.settings.roomTypes.find(t=>t.id===r.typeId);
@@ -562,22 +973,31 @@ function printSeatAvailability() {
       const students = DB.students.filter(s=>s.roomId===r.id&&s.status==='Active');
       const occ = students.length;
       const free = cap - occ;
-      const isFull = free === 0;
       const hasBath = (r.amenities||[]).some(a=>/bath|attach/i.test(a));
+      // Three states, not two: over capacity is its own case and used to render
+      // as "-1 free" in the same amber as a genuinely free seat.
+      const seatCls = free === 0 ? 'seats-full' : free < 0 ? 'seats-over' : 'seats-free';
+      // …and the label has to say it too. The badge went red for over-capacity
+      // but still read "-1 free", which is the opposite of what it means.
+      const seatTxt = free === 0 ? 'Full'
+        : free < 0 ? Math.abs(free) + ' over'
+        : free + ' free';
 
       const labelStyle = r.roomLabelFont ? `font-family:${r.roomLabelFont};` : '';
-      body += `<div class="room-box ${isFull?'full':'partial'}">
+      body += `<div class="room-box">
         <div class="room-top">
-          <span class="rnum" style="${labelStyle}">${r.roomLabel ? r.roomLabel+' · ' : ''}Rm #${r.number}</span>
-          <span class="rtype">${rtype?rtype.name:'—'}</span>
-          ${hasBath?'<span class="bath">'+ICONS.bath+' Bath</span>':''}
-          <span class="seats ${isFull?'seats-full':'seats-free'}">${isFull?'Full':free+' free'}</span>
+          <span class="rnum" style="${labelStyle}">${r.roomLabel ? escHtml(r.roomLabel)+' · ' : ''}Rm #${escHtml(String(r.number))}</span>
+          <span class="rtype">${rtype?escHtml(rtype.name):'—'}</span>
+          ${hasBath?'<span class="bath">'+icon('bath','xs')+' Bath</span>':''}
+          <span class="seats ${seatCls}">${seatTxt}</span>
         </div>
-        <div class="occ-bar"><div style="width:${Math.round(occ/cap*100)}%;background:${isFull?'var(--green)':'var(--red)'};height:100%;border-radius:2px"></div></div>`;
+        <div class="room-rows">`;
 
       if (students.length) {
         students.forEach((s,i) => {
-          body += `<div class="student-row"><span class="snum">${i+1}</span><span class="sname">${escHtml(s.name)}</span><span class="scourse">${escHtml(s.occupation||'—')}</span></div>`;
+          const course = (s.occupation||'').trim();
+          body += `<div class="student-row"><span class="snum">${i+1}</span><span class="sname">${escHtml(s.name)}</span>${
+            course ? `<span class="scourse">${escHtml(course)}</span>` : `<span class="scourse is-none">—</span>`}</div>`;
         });
       } else {
         body += `<div class="empty-row">— Vacant —</div>`;
@@ -586,12 +1006,17 @@ function printSeatAvailability() {
       const outgoing = (DB.cancellations||[]).filter(c=>c.roomId===r.id&&(c.status==='Pending'||c.status==='Confirmed'));
       outgoing.forEach(c => {
         const vacDate = c.vacateDate ? new Date(c.vacateDate+'T00:00:00').toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : 'TBD';
-        body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname" style="text-decoration:line-through;color:#999">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
+        body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;
       });
+      body += `</div>`;
 
-      // Empty seat slots
-      for(let i=occ;i<cap;i++){
-        body += `<div class="seat-slot">Seat ${i+1} <span style="color:#bbb">— available —</span></div>`;
+      // Empty seat slots — the line the warden ticks against during the walk.
+      if (free > 0) {
+        body += `<div class="slot-list">`;
+        for(let i=occ;i<cap;i++) body += `<div class="seat-slot">Seat ${i+1} <span>— available</span></div>`;
+        body += `</div>`;
+      } else if (free < 0) {
+        body += `<div class="slot-list"><div class="seat-slot is-over">${Math.abs(free)} seat${Math.abs(free)===1?'':'s'} over capacity</div></div>`;
       }
       body += `</div>`;
     });
@@ -603,59 +1028,136 @@ function printSeatAvailability() {
     @page { size: A4; margin: 10mm 10mm; }
     @media print { .no-print{display:none!important} }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:#fff;padding:10px}
-    .header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}
-    .header h1{font-size:18px;font-weight:900;color:#0f1a2e}
-    .header .sub{font-size:10px;color:#666;margin-top:2px}
-    .header .date{font-size:11px;font-weight:700;text-align:right;color:#333}
-    .summary{display:flex;gap:8px;margin-bottom:12px}
-    .sbox{flex:1;border:1.5px solid #ddd;border-radius:5px;padding:6px 10px;text-align:center}
-    .sbox .v{font-size:20px;font-weight:900}
-    .sbox .l{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#888}
-    .floor-label{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:2px;color:#fff;background:#0f1a2e;padding:5px 10px;border-radius:4px;margin:10px 0 6px}
-    .room-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:4px}
-    .room-box{border:1.5px solid #ccc;border-radius:6px;padding:7px 9px;page-break-inside:avoid}
-    .room-box.full{border-color:#16a34a;background:#f0fff5}
-    .room-box.partial{border-color:#d97706;background:#fffdf0}
-    .room-top{display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap}
-    .rnum{font-size:13px;font-weight:900;color:#0f1a2e}
-    .rtype{font-size:9px;background:#eee;border-radius:20px;padding:1px 6px;color:#555}
-    .bath{font-size:9px;background:#e0f2fe;color:#0369a1;border-radius:20px;padding:1px 6px;font-weight:700}
-    .seats{font-size:9px;font-weight:800;margin-left:auto;padding:1px 7px;border-radius:20px}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#0f172a;background:#fff;padding:10px}
+
+    /* icons.js emits <svg class="icon">, and this print document has none of the
+       app stylesheets — without these rules the SVGs fall back to the replaced
+       element default (300×150) and blow the layout apart. */
+    svg.icon{width:14px;height:14px;flex-shrink:0;vertical-align:-2px}
+    svg.icon-xs{width:11px;height:11px}
+    svg.icon-sm{width:13px;height:13px}
+    svg.icon-lg{width:18px;height:18px}
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header{display:flex;justify-content:space-between;align-items:flex-end;
+            border-bottom:2px solid #1e293b;padding-bottom:9px;margin-bottom:12px}
+    .header h1{font-size:21px;font-weight:900;color:#0f172a;letter-spacing:-.02em}
+    .header .sub{display:flex;align-items:center;gap:4px;font-size:10px;color:#64748b;margin-top:3px}
+    .header .kicker{margin-top:5px;font-size:9.5px;font-weight:800;color:#475569;
+                    text-transform:uppercase;letter-spacing:1.6px}
+    .header .date{text-align:right}
+    .header .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;
+                     font-size:12px;font-weight:800;color:#1e293b}
+    .header .date .h{font-size:9px;color:#94a3b8;margin-top:3px}
+
+    /* ── Summary tiles ──────────────────────────────────────────────────── */
+    .summary{display:flex;gap:8px;margin-bottom:14px}
+    .sbox{flex:1;display:flex;align-items:center;gap:9px;
+          border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px}
+    .sbox .ico{width:32px;height:32px;border-radius:9px;flex-shrink:0;
+               display:flex;align-items:center;justify-content:center}
+    .sbox .v{display:block;font-size:21px;font-weight:900;line-height:1.1;color:#0f172a}
+    .sbox .l{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:1.1px;
+             color:#94a3b8;font-weight:700;margin-top:1px}
+    .sbox.t-rooms .ico{background:#ede9fe;color:#7c3aed}
+    .sbox.t-seats .ico{background:#dbeafe;color:#2563eb}
+    .sbox.t-occ   .ico{background:#fee2e2;color:#dc2626}
+    .sbox.t-free  .ico{background:#dcfce7;color:#16a34a}
+
+    /* ── Floor header ───────────────────────────────────────────────────────
+       A floor is the unit a warden actually walks, so its header carries that
+       floor's own seat maths — total / occupied / available — and they can sign
+       one floor off without adding up the room cards themselves. page-break-
+       after:avoid keeps a header from stranding at the foot of a page with its
+       rooms overleaf. */
+    .floor-head{display:flex;align-items:center;gap:9px;margin:13px 0 8px;
+                background:#0f172a;border-radius:8px;padding:7px 11px;
+                page-break-after:avoid;page-break-inside:avoid}
+    .fbadge{width:22px;height:22px;flex-shrink:0;border-radius:6px;background:#334155;
+            color:#fff;font-size:11px;font-weight:900;
+            display:flex;align-items:center;justify-content:center}
+    .fname{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:900;
+           color:#fff;text-transform:uppercase;letter-spacing:1.8px}
+    .fcount{font-size:8.5px;font-weight:700;letter-spacing:.6px;text-transform:none;
+            color:#cbd5e1;background:#1e293b;border-radius:20px;padding:2px 8px}
+    .fstats{display:flex;align-items:center;gap:7px;margin-left:auto}
+    .fstat{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;
+           letter-spacing:.5px;text-transform:uppercase;color:#cbd5e1;
+           background:#1e293b;border-radius:20px;padding:3px 9px}
+    .fstat b{font-size:11px;font-weight:900;color:#fff;letter-spacing:0}
+    .fstat.is-occ b{color:#fca5a5}
+    .fstat.is-free b{color:#86efac}
+
+    /* ── Room cards ─────────────────────────────────────────────────────────
+       Cards used to be tinted green when full and yellow when partial, which
+       put a full-bleed colour behind every room and left the status badge
+       saying the same thing twice. The card is neutral now; the badge carries
+       the state. Prints far cleaner on a mono office printer too. */
+    .room-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+    .room-box{border:1px solid #e2e8f0;border-radius:9px;padding:9px 11px;
+              page-break-inside:avoid;background:#fff}
+    .room-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+              padding-bottom:7px;border-bottom:1px solid #f1f5f9}
+    .rnum{font-size:14px;font-weight:900;color:#0f172a;letter-spacing:-.01em}
+    .rtype{font-size:9px;background:#f1f5f9;border-radius:20px;padding:2px 7px;
+           color:#475569;font-weight:700}
+    .bath{display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#e0f2fe;
+          color:#0369a1;border-radius:20px;padding:2px 7px;font-weight:700}
+    .seats{font-size:9px;font-weight:800;margin-left:auto;padding:2px 8px;border-radius:20px}
     .seats-full{background:#dcfce7;color:#15803d}
     .seats-free{background:#fef3c7;color:#b45309}
-    .occ-bar{height:3px;background:#eee;border-radius:2px;margin-bottom:5px;overflow:hidden}
-    .student-row{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px dashed #eee;font-size:10px}
-    .snum{width:14px;color:#aaa;font-weight:700;flex-shrink:0}
-    .sname{font-weight:700;flex:1;color:#111}
-    .scourse{color:#0369a1;font-size:9px;font-weight:700;background:#e0f2fe;border-radius:20px;padding:1px 6px;white-space:nowrap}
-    .empty-row{font-size:10px;color:#aaa;font-style:italic;padding:2px 0}
-    .seat-slot{font-size:10px;color:#bbb;padding:2px 0;border-bottom:1px dashed #f0f0f0}
-    .outgoing-row{opacity:0.75}
-    .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;border-radius:20px;padding:1px 6px;white-space:nowrap;margin-left:auto}
-    .footer{margin-top:12px;text-align:center;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:6px}
-    .print-btn{display:block;margin:0 auto 12px;padding:8px 24px;background:#0f1a2e;color:#a78bfa;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer}
+    .seats-over{background:#fee2e2;color:#dc2626}
+
+    .room-rows{padding-top:2px}
+    .student-row{display:flex;align-items:center;gap:6px;padding:3px 0;
+                 border-bottom:1px solid #f8fafc;font-size:10px}
+    .student-row:last-child{border-bottom:none}
+    .snum{width:13px;color:#cbd5e1;font-weight:700;flex-shrink:0;text-align:center}
+    .sname{font-weight:700;flex:1;color:#0f172a;min-width:0;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .scourse{color:#1d4ed8;font-size:8.5px;font-weight:700;background:#eff6ff;
+             border-radius:20px;padding:2px 7px;white-space:nowrap}
+    .scourse.is-none{color:#cbd5e1;background:#f8fafc}
+    .empty-row{font-size:10px;color:#94a3b8;font-style:italic;padding:5px 0}
+    .outgoing-row .sname{text-decoration:line-through;color:#94a3b8}
+    .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;
+               border-radius:20px;padding:2px 7px;white-space:nowrap}
+
+    .slot-list{margin-top:6px;padding-top:6px;border-top:1px dashed #e2e8f0}
+    .seat-slot{font-size:9.5px;color:#94a3b8;padding:1.5px 0}
+    .seat-slot span{color:#cbd5e1}
+    .seat-slot.is-over{color:#dc2626;font-weight:700}
+
+    .footer{margin-top:14px;text-align:center;font-size:9px;color:#94a3b8;
+            border-top:1px solid #e2e8f0;padding-top:7px}
+    .print-btn{display:inline-flex;align-items:center;gap:7px;margin:0 auto 14px;
+               padding:9px 22px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;
+               font-size:13px;font-weight:700;cursor:pointer}
+    .print-bar{display:flex;justify-content:center}
   </style></head><body>
-  <button class="print-btn no-print" onclick="window.print()">${ICONS.print} Print Visit Sheet</button>
+  <div class="print-bar no-print"><button class="print-btn" onclick="window.print()">${icon('print','sm')} Print Visit Sheet</button></div>
   <div class="header">
     <div>
       <h1>${escHtml(hostel)}</h1>
-      <div class="sub">${escHtml(location)}</div>
-      <div class="sub" style="margin-top:2px;font-weight:700">ROOM VISIT SHEET</div>
+      ${location?`<div class="sub">${icon('pin','xs')}<span>${escHtml(location)}</span></div>`:''}
+      <div class="kicker">Room Visit Sheet</div>
     </div>
-    <div class="date">${now2}<br><span style="font-size:9px;color:#aaa">Carry this during room visits</span></div>
+    <div class="date">
+      <div class="d">${icon('calendar','xs')}<span>${now2}</span></div>
+      <div class="h">Carry this during room visits</div>
+    </div>
   </div>
   <div class="summary">
-    <div class="sbox"><div class="v">${DB.rooms.length}</div><div class="l">Rooms</div></div>
-    <div class="sbox"><div class="v" style="color:#111">${totalSeats}</div><div class="l">Total Seats</div></div>
-    <div class="sbox"><div class="v" style="color:#dc2626">${allActiveSeats2}</div><div class="l">Occupied</div></div>
-    <div class="sbox"><div class="v" style="color:#16a34a">${freeSeats}</div><div class="l">Available</div></div>
+    <div class="sbox t-rooms"><span class="ico">${icon('doorOpen','sm')}</span><span><span class="v">${DB.rooms.length}</span><span class="l">Rooms</span></span></div>
+    <div class="sbox t-seats"><span class="ico">${icon('users','sm')}</span><span><span class="v">${totalSeats}</span><span class="l">Total Seats</span></span></div>
+    <div class="sbox t-occ"><span class="ico">${icon('userCheck','sm')}</span><span><span class="v">${allActiveSeats2}</span><span class="l">Occupied</span></span></div>
+    <div class="sbox t-free"><span class="ico">${icon('armchair','sm')}</span><span><span class="v">${freeSeats}</span><span class="l">Available</span></span></div>
   </div>
   ${body}
   <div class="footer">${escHtml(hostel)} · Room Visit Sheet · ${now2}</div>
   </body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+new Date().toISOString().slice(0,10)+'.pdf', {pageSize:'A4'});
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+today()+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────
 function showSeatDetailModal(type) {
@@ -665,14 +1167,14 @@ function showSeatDetailModal(type) {
     let content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
     allRooms.forEach(r=>{
       const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
-      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${free===0?'rgba(46,201,138,0.3)':'rgba(124,58,237,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${r.number}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${rt?.name||'—'} · Floor ${r.floor||'?'}</div>
+      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(37,99,235,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(37,99,235,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+        <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${escHtml(String(r.number))}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(rt?.name||'—')} · Floor ${escHtml(r.floor||'?')}</div>
         <div style="margin-top:8px;display:flex;justify-content:space-between">
-          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--green)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
-          <span style="font-size:12px;font-weight:700;color:${free>0?'var(--teal)':'var(--text3)'}">${free} free</span>
+          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--text2)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
+          <span style="font-size:12px;font-weight:700;color:${free>0?'var(--text2)':'var(--text3)'}">${free} free</span>
         </div>
-        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--green)':'var(--accent)'};border-radius:2px"></div></div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--text3)':'var(--accent)'};border-radius:2px"></div></div>
       </div>`;
     });
     content += '</div>';
@@ -696,18 +1198,18 @@ function showSeatDetailModal(type) {
       const free=cap-occ;
       rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>
-          <div style="font-weight:700;color:var(--text)">Room #${r.number}</div>
-          <div style="font-size:12px;color:var(--text3)">${type?.name||'—'} · Floor ${r.floor||'?'}</div>
+          <div style="font-weight:700;color:var(--text)">Room #${escHtml(String(r.number))}</div>
+          <div style="font-size:12px;color:var(--text3)">${escHtml(type?.name||'—')} · Floor ${escHtml(r.floor||'?')}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:13px;font-weight:700;color:var(--green)">${free} free seat${free!==1?'s':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${free} free seat${free!==1?'s':''}</div>
           <div style="font-size:11px;color:var(--text3)">${occ}/${cap} occupied</div>
         </div>
       </div>`;
     });
   } else if(type==='occupied') {
     title=ICONS.home+' Occupied Rooms — Filled Seats';
-    color='var(--green)';
+    color='var(--accent)';
     const occRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0);
     if(!occRooms.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No occupied rooms</div>';}
     else occRooms.forEach(r=>{
@@ -718,13 +1220,13 @@ function showSeatDetailModal(type) {
       rows+=`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div>
-            <span style="font-weight:700;color:var(--text)">Room #${r.number}</span>
-            <span style="font-size:12px;color:var(--text3);margin-left:8px">${rtype?.name||'—'} · Floor ${r.floor||'?'}</span>
+            <span style="font-weight:700;color:var(--text)">Room #${escHtml(String(r.number))}</span>
+            <span style="font-size:12px;color:var(--text3);margin-left:8px">${escHtml(rtype?.name||'—')} · Floor ${escHtml(r.floor||'?')}</span>
           </div>
-          <span style="font-size:12px;font-weight:700;color:var(--green)">${occ}/${cap} filled</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text2)">${occ}/${cap} filled</span>
         </div>
-        ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--green)">
-          <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${s.name[0]}</div>
+        ${students.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;padding-left:8px;border-left:2px solid var(--border)">
+          <div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
@@ -734,7 +1236,7 @@ function showSeatDetailModal(type) {
     });
   } else {
     title=ICONS.student+' Students in Occupied Rooms';
-    color='var(--purple)';
+    color='var(--accent)';
     const activeStudents=DB.students.filter(s=>s.status==='Active');
     if(!activeStudents.length){rows='<div style="padding:24px;text-align:center;color:var(--text3)">No active students</div>';}
     else activeStudents.forEach(s=>{
@@ -742,15 +1244,15 @@ function showSeatDetailModal(type) {
       const rtype=room?getRoomType(room):null;
       rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();showViewStudentModal('${s.id}')">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:9px;background:var(--purple-dim);color:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${s.name[0]}</div>
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
-            <div style="font-weight:700;color:var(--blue)">${escHtml(s.name)}</div>
+            <div style="font-weight:700;color:var(--text)">${escHtml(s.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'No phone')}</div>
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:12px;font-weight:700;color:var(--accent-strong)">Rm #${room?.number||'?'}</div>
-          <div style="font-size:11px;color:var(--text3)">${rtype?.name||'—'}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--accent-strong)">Rm #${escHtml(room?.number||'?')}</div>
+          <div style="font-size:11px;color:var(--text3)">${escHtml(rtype?.name||'—')}</div>
         </div>
       </div>`;
     });
@@ -762,6 +1264,94 @@ function showSeatDetailModal(type) {
     <div style="max-height:400px;overflow-y:auto">${rows}</div>`);
 }
 
+/* ══ THE MONTH-END RECONCILIATION ════════════════════════════════════════════
+   Answers one question: what should be in the cash box, and why does it not
+   equal the Total Revenue card next to it?
+
+   The gap is not an error and the panel says so in words. Revenue is what the
+   month EARNED; cash is what ARRIVED. They differ by exactly two things —
+   arrears collected this month for an earlier one (in the drawer, not in this
+   month's revenue) and this month's rent not yet handed over (in the revenue,
+   not in the drawer). Both are listed, and the identity that ties them is
+   printed at the bottom so the warden can follow it rather than trust it. */
+function showCashReceivedModal() {
+  const mo    = thisMonth();
+  const label = (typeof _rptMonthName === 'function') ? _rptMonthName(mo) : mo;
+  const cash  = cashBreakdown(mo);
+  const rev   = calcRevenue(mo);
+
+  // Every cash event in the month, newest first, with the month it settles.
+  const rows = [];
+  (DB.payments || []).forEach(p => {
+    const settles = _payMonthKey(p);
+    _cashEvents(p).forEach(e => {
+      if (String(e.date || '').indexOf(mo) !== 0) return;
+      const kind = !settles || settles === mo ? 'current' : settles < mo ? 'arrears' : 'advance';
+      rows.push({ date: e.date, amount: e.amount, name: p.studentName || '—',
+                  room: p.roomNumber || '', settles, kind, removed: !!p.studentRemoved });
+    });
+  });
+  rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  const kindBadge = { current: ['badge-green', 'This month'],
+                      arrears: ['badge-gold',  'Arrears'],
+                      advance: ['badge-gray',  'Advance'] };
+
+  const body = rows.map(r => {
+    const [cls, txt] = kindBadge[r.kind];
+    return `<tr>
+      <td class="text-muted">${escHtml(fmtDate(r.date))}</td>
+      <td class="fw-700">${escHtml(r.name)}${r.removed?' <span style="color:var(--amber);font-size:10px;font-weight:700">(removed)</span>':''}</td>
+      <td class="text-muted">${r.room?'#'+escHtml(String(r.room)):'—'}</td>
+      <td><span class="badge ${cls}">${txt}</span></td>
+      <td class="text-muted">${escHtml(r.settles ? (typeof _rptMonthName==='function'?_rptMonthName(r.settles):r.settles) : '—')}</td>
+      <td class="fw-700" style="text-align:right">${fmtPKR(r.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  const tile = (label2, val, hue, note) => `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">${label2}</div>
+      <div style="font-size:22px;font-weight:900;color:${hue};font-variant-numeric:tabular-nums">${fmtPKR(val)}</div>
+      ${note?`<div style="font-size:10.5px;color:var(--text3);margin-top:2px">${note}</div>`:''}
+    </div>`;
+
+  // The identity, stated with real figures so it can be checked rather than believed.
+  const owedThisMonth = rev - cash.current;
+
+  showModal('modal-xl', 'Cash Received — ' + escHtml(label), `
+    <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      ${tile('In the drawer', cash.total, 'var(--amber)', 'Count against this')}
+      ${tile('For ' + escHtml(label), cash.current, 'var(--text)', 'This month&rsquo;s own rent')}
+      ${tile('Arrears collected', cash.arrears, 'var(--green)', 'Earlier months')}
+      ${tile('Paid in advance', cash.advance, 'var(--text2)', 'Future months')}
+    </div>
+
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.85;color:var(--text2)">
+      <strong style="color:var(--text)">Why this is not the same as Total Revenue.</strong>
+      Revenue is what ${escHtml(label)} <em>earned</em>; cash is what <em>arrived</em>.
+      Rent for July handed over in August is July&rsquo;s revenue and August&rsquo;s cash.
+      <div style="margin-top:9px;font-family:monospace;font-size:12px;color:var(--text)">
+        Revenue ${fmtPKR(rev)}
+        &minus; still owed ${fmtPKR(owedThisMonth)}
+        + arrears ${fmtPKR(cash.arrears)}
+        + advance ${fmtPKR(cash.advance)}
+        = <strong>${fmtPKR(cash.total)}</strong>
+      </div>
+    </div>
+
+    ${rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Student</th><th>Room</th><th>Type</th><th>Settles</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr>
+        <td colspan="5" class="fw-700" style="text-align:right">Total received in ${escHtml(label)}</td>
+        <td class="fw-700" style="text-align:right">${fmtPKR(cash.total)}</td>
+      </tr></tfoot>
+    </table></div>`
+    : `<div style="text-align:center;padding:26px;color:var(--text3);font-size:13px">No money has been received in ${escHtml(label)} yet.</div>`}
+  `);
+}
+
 function showOccupiedRoomsModal() {
   const occRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0);
   const rows = occRooms.map(r=>{
@@ -770,36 +1360,36 @@ function showOccupiedRoomsModal() {
     const occ=students.length;
     const cap=type.capacity;
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
-      <td class="text-muted">${r.floor} Floor</td>
-      <td><span class="badge badge-green">${occ}/${cap} beds</span></td>
-      <td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td>
+      <td class="text-muted">${escHtml(r.floor)} Floor</td>
+      <td><span class="badge badge-gray">${occ}/${cap} beds</span></td>
+      <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
       <td>${students.map(s=>`<div style="font-size:12px;color:var(--text);font-weight:600">• ${escHtml(s.name)}</div>`).join('')||'—'}</td>
       <td><button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="closeModal();showRoomDetail('${r.id}')">View</button></td>
     </tr>`;
   }).join('');
   showModal('modal-xl',ICONS.home+' Occupied Rooms',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
-      <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupied Rooms</div>
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${occRooms.length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupied Rooms</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${occRooms.length}</div>
       </div>
-      <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Total Students</div>
-        <div style="font-size:26px;font-weight:900;color:var(--blue)">${DB.students.filter(t=>t.status==='Active').length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Total Students</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${DB.students.filter(t=>t.status==='Active').length}</div>
       </div>
-      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
-        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Filled Seats</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${occRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
       </div>
-      <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;font-weight:700">Monthly Revenue</div>
-        <div style="font-size:18px;font-weight:900;color:var(--purple)">${fmtPKR(occRooms.reduce((s,r)=>{const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return s+sts.reduce((ss,t)=>ss+Number(t.rent),0);},0))}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Monthly Revenue</div>
+        <div style="font-size:18px;font-weight:900;color:var(--text)">${fmtPKR(occRooms.reduce((s,r)=>{const sts=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');return s+sts.reduce((ss,t)=>ss+Number(t.rent),0);},0))}</div>
       </div>
-      <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupancy Rate</div>
-        <div style="font-size:26px;font-weight:900;color:var(--teal)">${DB.rooms.length?Math.round(occRooms.length/DB.rooms.length*100):0}%</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Occupancy Rate</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${DB.rooms.length?Math.round(occRooms.length/DB.rooms.length*100):0}%</div>
       </div>
     </div>
     <div class="table-wrap">
@@ -822,12 +1412,12 @@ function showVacantRoomsModal() {
     const avail=type.capacity-occ;
     const students=DB.students.filter(t=>t.roomId===r.id&&t.status==='Active');
     return `<tr>
-      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${r.number}</span></td>
+      <td><span style="font-size:16px;font-weight:900;color:var(--accent-strong)">#${escHtml(String(r.number))}</span></td>
       <td><span class="badge" style="background:${type.color}22;border-color:${type.color}44;color:${type.color}">${escHtml(type.name)}</span></td>
-      <td class="text-muted">${r.floor} Floor</td>
-      <td><span class="badge badge-gold">${occ}/${type.capacity} occupied</span></td>
-      <td><span class="badge badge-green" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>
-      <td class="text-green fw-700">${fmtPKR(r.rent)}/mo</td>
+      <td class="text-muted">${escHtml(r.floor)} Floor</td>
+      <td><span class="badge badge-gray">${occ}/${type.capacity} occupied</span></td>
+      <td><span class="badge badge-gray" style="font-size:13px;padding:5px 12px">${avail} seat${avail!==1?'s':''} free</span></td>
+      <td class="fw-700">${fmtPKR(r.rent)}/mo</td>
       <td>${students.length?students.map(s=>`<div style="font-size:12px;color:var(--text2)">• ${escHtml(s.name)}</div>`).join(''):'<span style="font-size:12px;color:var(--text3)">Empty</span>'}</td>
       <td><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="closeModal();showAddStudentModal('${r.id}')">+ Student</button></td>
     </tr>`;
@@ -835,25 +1425,25 @@ function showVacantRoomsModal() {
   const totalAvail=vacRooms.reduce((s,r)=>{const type=getRoomType(r);return s+(type.capacity-getRoomOccupancy(r));},0);
   showModal('modal-xl',ICONS.key+' Rooms with Available Seats',`
     <div style="margin-bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
-      <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-weight:700">Rooms w/ Space</div>
-        <div style="font-size:26px;font-weight:900;color:var(--teal)">${vacRooms.length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Rooms w/ Space</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.length}</div>
       </div>
-      <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700">Free Seats</div>
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${totalAvail}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Free Seats</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${totalAvail}</div>
       </div>
-      <div style="background:var(--accent-dim);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
-        <div style="font-size:26px;font-weight:900;color:var(--accent-strong)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Fully Empty</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.filter(r=>getRoomOccupancy(r)===0).length}</div>
       </div>
-      <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;font-weight:700">Partial Rooms</div>
-        <div style="font-size:26px;font-weight:900;color:var(--blue)">${vacRooms.filter(r=>getRoomOccupancy(r)>0).length}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Partial Rooms</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.filter(r=>getRoomOccupancy(r)>0).length}</div>
       </div>
-      <div style="background:var(--purple-dim);border:1px solid rgba(155,109,240,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;font-weight:700">Students in Vacant</div>
-        <div style="font-size:26px;font-weight:900;color:var(--purple)">${vacRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700">Students in Vacant</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text)">${vacRooms.reduce((s,r)=>s+getRoomOccupancy(r),0)}</div>
       </div>
     </div>
     <div class="table-wrap">
@@ -875,14 +1465,23 @@ function renderMonthModal(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
   const paidPays = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,monthKey));
   const pendPays = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // Outgoings, not just DB.expenses — the Expenses KPI in this modal is
+  // calcExpenses(), which counts the funds transfers too. Listing only
+  // DB.expenses meant the table and the "N records" caption under that KPI
+  // described a smaller set than the figure above them.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  // A transfer is an expense, so expTotal carries both and Available Fund is
+  // revenue minus it — there is no separate transfer deduction anywhere.
+  const expTotal = calcExpenses(monthKey);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
   const netProfit = rev - expTotal;
-  // Active students (those registered and active with a room this month)
-  // Show Active students + students who joined this month regardless of current status (historical view)
-  const activeStudents = DB.students.filter(s=>s.status==='Active'||(s.joinDate?.startsWith(monthKey)&&DB.payments.some(p=>p.studentId===s.id&&_payMatchesMonth(p,monthKey))));
+  // The roster AS IT STOOD in this month — not whoever happens to be Active
+  // today. Anyone with a fee record for the month is included regardless, so a
+  // student who has since left still appears against the money they paid.
+  const activeStudents = DB.students.filter(s =>
+    _studentInPeriod(s, monthKey) ||
+    DB.payments.some(p => p.studentId === s.id && _payMatchesMonth(p, monthKey)));
 
   const studentRows = activeStudents.map(s=>{
     const room = DB.rooms.find(r=>r.id===s.roomId);
@@ -890,18 +1489,18 @@ function renderMonthModal(monthKey, monthLabel) {
     const sPaid = sPays.filter(p=>p.status==='Paid').reduce((t,p)=>t+Number(p.amount),0);
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
-      <td><span style="font-weight:700;color:var(--blue)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
-      <td style="font-weight:700;color:var(--accent-strong)">#${room?room.number:'—'}</td>
+      <td><span style="font-weight:700;color:var(--text)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
+      <td style="font-weight:700;color:var(--text2)">#${escHtml(String(room?room.number:'—'))}</td>
       <td style="color:var(--text3);font-size:12px">${fmtPKR(s.rent)}/mo</td>
-      <td style="color:var(--green);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
-      <td style="color:${sPend>0?'var(--amber)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
+      <td style="color:var(--text);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
+      <td style="color:${sPend>0?'var(--text)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
       <td>${statusBadge(s.status)}</td>
     </tr>`;
   }).join('');
 
   const feeRows = pays.map(p=>`<tr id="fee-row-${p.id}">
-    <td><span style="color:var(--blue);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
-    <td style="color:var(--accent-strong);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
+    <td><span style="color:var(--text);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
+    <td style="color:var(--text2);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
     <td class="text-muted">${escHtml(p.month||'—')}</td>
     <td>
       <span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>
@@ -921,52 +1520,54 @@ function renderMonthModal(monthKey, monthLabel) {
     </td>
   </tr>`).join('');
 
-  const expRows = exps.map(e=>`<tr id="exp-row-${e.id}">
-    <td class="text-muted" style="font-size:12px">
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','date',this)" title="Click to edit">${fmtDate(e.date)||'—'}</span>
-    </td>
+  // A legacy transfer row is not a DB.expenses record, so the inline cell
+  // editors — which look the id up in DB.expenses — cannot edit it. Those rows
+  // render as plain text and send edit/delete to the modals that own them.
+  const expRows = exps.map(e=>{
+    const cell = (field, html, extra) => e._transfer
+      ? `<span${extra?' style="'+extra+'"':''}>${html}</span>`
+      : `<span class="editable-cell"${extra?' style="'+extra+'"':''} onclick="editMonthExpField('${e.id}','${field}',this)" title="Click to edit">${html}</span>`;
+    return `<tr id="exp-row-${e.id}">
+    <td class="text-muted" style="font-size:12px">${cell('date', fmtDate(e.date)||'—')}</td>
+    <td>${cell('category', escHtml(e.category||'—'))}</td>
+    <td>${cell('description', escHtml(e.description||'—'))}</td>
+    <td>${cell('amount', fmtPKR(e.amount), 'color:var(--text);font-weight:700')}</td>
     <td>
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','category',this)" title="Click to edit">${escHtml(e.category||'—')}</span>
+      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')`}">${ICONS.trash}</button>
     </td>
-    <td>
-      <span class="editable-cell" onclick="editMonthExpField('${e.id}','description',this)" title="Click to edit">${escHtml(e.description||'—')}</span>
-    </td>
-    <td>
-      <span class="editable-cell" style="color:var(--red);font-weight:700" onclick="editMonthExpField('${e.id}','amount',this)" title="Click to edit">${fmtPKR(e.amount)}</span>
-    </td>
-    <td>
-      <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthExpense('${e.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
-    </td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 
   showModal('modal-xl', `${ICONS.calendar} ${monthLabel} — Full Monthly Report`,
   `<!-- KPI Summary -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-    <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
-      <div>${moneyValue(rev,{size:"section",color:"var(--green)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
+      <div>${moneyValue(rev,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${paidPays.length} payments</div>
     </div>
-    <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
-      <div>${moneyValue(expTotal,{size:"section",color:"var(--red)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
+      <div>${moneyValue(expTotal,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} records</div>
     </div>
-    <div style="background:${netProfit>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${netProfit>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:${netProfit>=0?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
-      <div>${moneyValue(netProfit,{size:"section",color:netProfit>=0?"var(--green)":"var(--red)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>
+      <div>${moneyValue(netProfit,{size:"section"})}</div>
+      <!-- "Rev − Exp − Transfers" described a sum nothing computes: netProfit
+           is rev − calcExpenses(), and calcExpenses() already carries the
+           transfers. The caption implied they were deducted a second time. -->
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
-    <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:10px;padding:14px;text-align:center">
-      <div style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
-      <div>${moneyValue(pendTotal,{size:"section",color:"var(--amber)"})}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
+      <div>${moneyValue(pendTotal,{size:"section"})}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">${pendPays.length} unpaid</div>
     </div>
   </div>
 
   <!-- TAB NAVIGATION -->
   <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:10px">
-    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);border:1px solid rgba(124,58,237,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
+    <button onclick="switchMonthTab('students')" id="mtab-students" class="btn btn-sm" style="flex:1;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);border:1px solid rgba(37,99,235,0.3)">${ICONS.student} Students (${activeStudents.length})</button>
     <button onclick="switchMonthTab('fees')" id="mtab-fees" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.card} Fee Records (${pays.length})</button>
     <button onclick="switchMonthTab('expenses')" id="mtab-expenses" class="btn btn-sm" style="flex:1;border-radius:7px;background:transparent;color:var(--text3);border:none">${ICONS.trendDown} Expenses (${exps.length})</button>
   </div>
@@ -974,7 +1575,7 @@ function renderMonthModal(monthKey, monthLabel) {
   <!-- STUDENTS TAB -->
   <div id="mpanel-students">
     <div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>Monthly Rent</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Student</th><th>Room</th><th>Room Rent</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
       <tbody>${studentRows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">No students found</td></tr>'}</tbody>
       </table>
     </div>
@@ -1016,7 +1617,7 @@ function switchMonthTab(tab) {
     if(!panel||!btn) return;
     const active = t===tab;
     panel.style.display=active?'block':'none';
-    if(active){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent-strong)';btn.style.border='1px solid rgba(124,58,237,0.3)';}
+    if(active){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent-strong)';btn.style.border='1px solid rgba(37,99,235,0.3)';}
     else{btn.style.background='transparent';btn.style.color='var(--text3)';btn.style.border='none';}
   });
 }
@@ -1042,7 +1643,7 @@ async function editMonthFeeField(payId, field, cell) {
     span.title='Click to edit';
     span.onclick=()=>editMonthFeeField(payId,field,span);
     span.textContent = field==='amount'?fmtPKR(pay.amount):(field==='date'?fmtDate(pay[field]):pay[field]);
-    if(field==='amount'){span.style.color='var(--green)';span.style.fontWeight='700';}
+    if(field==='amount'){span.style.color='var(--text)';span.style.fontWeight='700';}
     inp.replaceWith(span);
     toast('Updated successfully','success');
   };
@@ -1071,7 +1672,7 @@ function editMonthExpField(expId, field, cell) {
     span.title='Click to edit';
     span.onclick=()=>editMonthExpField(expId,field,span);
     span.textContent = field==='amount'?fmtPKR(exp.amount):(field==='date'?fmtDate(exp[field]):exp[field]);
-    if(field==='amount'){span.style.color='var(--red)';span.style.fontWeight='700';}
+    if(field==='amount'){span.style.color='var(--text)';span.style.fontWeight='700';}
     inp.replaceWith(span);
     toast('Updated successfully','success');
   };
@@ -1109,7 +1710,7 @@ async function deleteMonthExpense(expId, monthKey, monthLabel) {
 
 function addMonthPaymentFromModal(monthKey, monthLabel) {
   closeModal();
-  showAddPaymentModal();
+  openAddPayment();
 }
 
 function addMonthExpenseFromModal(monthKey, monthLabel) {
@@ -1119,15 +1720,24 @@ function addMonthExpenseFromModal(monthKey, monthLabel) {
 
 function exportMonthCSV(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // The Expenses section lists transfers too, under their own category, so the
+  // rows add up to the Expenses figure in the summary block above them.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  const expTotal = calcExpenses(monthKey);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
   csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
-  csv += `\nExpenses\nDate,Category,Description,Amount\n`;
-  exps.forEach(e=>{ csv += [csvEsc(e.date),csvEsc(e.category),csvEsc(e.description),Number(e.amount)].join(',')+"\n"; });
+  // Grouped with a subtotal per category and a grand total, matching the
+  // register the Reports screen and the PDFs now print.
+  csv += `\nExpenses by Category\nCategory,Date,Description,Amount\n`;
+  const _mGroups = _rptByCategory(exps);
+  _mGroups.forEach(g=>{
+    g.items.forEach(e=>{ csv += [csvEsc(g.cat),csvEsc(e.date),csvEsc(e.description),Number(e.amount)].join(',')+"\n"; });
+    csv += ['','','Total — '+csvEsc(g.cat),g.total].join(',')+"\n\n";
+  });
+  csv += ['','','GRAND TOTAL',_rptGroupsTotal(_mGroups)].join(',')+"\n";
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1139,16 +1749,18 @@ function exportMonthCSV(monthKey, monthLabel) {
 
 function printMonthReport(monthKey, monthLabel) {
   const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
-  const exps = DB.expenses.filter(e=>e.date?.startsWith(monthKey));
+  // Transfers print as expense rows under their own category, so the Expenses
+  // table adds up to the Expenses KPI above it.
+  const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
-  const expTotal = exps.reduce((s,e)=>s+Number(e.amount),0);
+  const expTotal = calcExpenses(monthKey);
   const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
   ${printDocStyles()}
   </head><body>
   <div class="header">
-    <div><div class="title">${DB.settings.hostelName}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
+    <div><div class="title">${escHtml(DB.settings.hostelName)}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
     <div class="badge">Monthly Report</div>
   </div>
   <div class="kpi-grid">
@@ -1159,7 +1771,7 @@ function printMonthReport(monthKey, monthLabel) {
   </div>
   <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>
     <table><thead><tr><th>Name</th><th>Room</th><th>Rent</th><th>Phone</th><th>Status</th></tr></thead><tbody>
-    ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${rm?rm.number:'—'}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
+    ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${escHtml(String(rm?rm.number:'—'))}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
     </tbody></table>
   </div>
   <div class="section"><h3>${ICONS.card} Fee Records</h3>
@@ -1167,12 +1779,10 @@ function printMonthReport(monthKey, monthLabel) {
     ${pays.map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${p.roomNumber||'—'}</td><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:12px">No records</td></tr>'}
     </tbody></table>
   </div>
-  <div class="section"><h3>${ICONS.trendDown} Expenses</h3>
-    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-    ${exps.map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${escHtml(e.category||'—')}</td><td>${escHtml(e.description||'—')}</td><td class="red">${fmtPKR(e.amount)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No expenses</td></tr>'}
-    </tbody></table>
+  <div class="section"><h3>${ICONS.trendDown} Expenses by Category</h3>
+    ${_rptCatTablesHTML(exps)}
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${DB.settings.hostelName} · Confidential</div>
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} · Confidential</div>
   </body></html>`;
   _electronPDF(_mRptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+monthLabel.replace(/\s+/g,'-')+'.pdf', {pageSize:'A4'});
 }
@@ -1194,7 +1804,10 @@ function drawRoomDonut() {
   var labels = [];
   var data = [];
   var colors = [];
-  var grayScale = ['#525252','#737373','#a3a3a3','#d4d4d4','#e5e5e5'];
+
+  // Room-type colours are DATA (owner-configured in Settings), not styling —
+  // the donut uses each type's own colour so it matches the legend beside it.
+  var fallback = ['#3b82f6','#22c55e','#f97316','#8b5cf6','#ef4444'];
 
   types.forEach(function(t, i) {
     var tRooms = DB.rooms.filter(function(r){return r.typeId===t.id;});
@@ -1202,14 +1815,13 @@ function drawRoomDonut() {
     if(seats > 0) {
       labels.push(t.name);
       data.push(seats);
-      colors.push(grayScale[i % grayScale.length]);
+      colors.push(t.color || fallback[i % fallback.length]);
     }
   });
 
-  if(data.length > 0) {
-    var maxIdx = data.indexOf(Math.max.apply(null, data));
-    colors[maxIdx] = '#38bdf8';
-  }
+  // Separate the segments with the card colour rather than a fixed white, so the
+  // ring reads the same in both themes. theme.js already re-runs this on toggle.
+  var cardBg = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#161616';
 
   _dashDonutChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -1218,14 +1830,16 @@ function drawRoomDonut() {
       datasets: [{
         data: data,
         backgroundColor: colors,
-        borderWidth: 0,
-        hoverOffset: 4
+        borderWidth: 3,
+        borderColor: cardBg,
+        hoverOffset: 5
       }]
     },
     options: {
-      cutout: '65%',
-      responsive: false,
+      cutout: '64%',
+      responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: 2 },
       animation: false,
       plugins: {
         legend: { display: false },
@@ -1245,6 +1859,7 @@ function drawRoomDonut() {
       }
     }
   });
+  _chartFontFix(_dashDonutChart);
 }
 
 // ── TREND CHART (Chart.js — Jan–Dec, revenue line + hover tooltip) ───────────
@@ -1263,19 +1878,23 @@ function drawTrendChart() {
   var yr   = now.getFullYear();
   var curKey = yr + '-' + String(now.getMonth()+1).padStart(2,'0');
 
-  var months=[], revD=[], expD=[], trfD=[], pendD=[], real=[];
+  var months=[], revD=[], expD=[], pendD=[], real=[];
   for(var i=0;i<12;i++){
     var k = yr+'-'+String(i+1).padStart(2,'0');
     var isPast = k <= curKey;
     var rev = isPast ? calcRevenue(k) : 0;
-    var exp = isPast ? (DB.expenses||[]).filter(e=>(e.date||'').startsWith(k)).reduce((s,e)=>s+Number(e.amount||0),0) : 0;
-    var trf = isPast ? (DB.transfers||[]).filter(t=>(t.date||'').startsWith(k)).reduce((s,t)=>s+Number(t.amount||0),0) : 0;
+    var exp = isPast ? calcExpenses(k)  : 0;   // transfers included
     var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
-    revD.push(isPast&&rev>0?rev:null);
-    expD.push(isPast&&exp>0?exp:null);
-    trfD.push(isPast&&trf>0?trf:null);
-    pendD.push(isPast&&pend>0?pend:null);
+    // null means "this month has not happened", NOT "this month was zero".
+    // These used to collapse both cases to null and then map null→0, so every
+    // line ran flat along the axis out to December — a chart of a year that is
+    // half over claimed eight months of zero revenue. A month that is past and
+    // genuinely zero still plots 0; a future month plots null and the line
+    // simply stops (Chart.js spanGaps defaults to false).
+    revD.push(isPast?rev:null);
+    expD.push(isPast?exp:null);
+    pendD.push(isPast?pend:null);
     real.push(isPast&&rev>0);
   }
 
@@ -1284,18 +1903,24 @@ function drawTrendChart() {
   var cGreen  = _cs.getPropertyValue('--green').trim()  || '#45dfa4';
   var cRed    = _cs.getPropertyValue('--red').trim()    || '#ffb4ab';
   var cAmber  = _cs.getPropertyValue('--amber').trim()  || '#fbbf24';
-  var cAccent = _cs.getPropertyValue('--accent').trim() || '#8b5cf6';
+  var cAccent = _cs.getPropertyValue('--accent').trim() || '#3b82f6';
+  // Design guide §12 fixes the series colours: Revenue blue, Expenses red,
+  // Pending purple. Revenue used to be green and Pending the accent blue,
+  // which put two blues on one chart and left green doing double duty as both
+  // "revenue" and "went up".
+  var cRevenue = _cs.getPropertyValue('--blue').trim()   || '#2563eb';
+  var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
   var cBg2    = _cs.getPropertyValue('--bg2').trim()    || '#1c1b1b';
   var cBorder = _cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
 
-  var plotRev = revD.map(function(v){return v!==null?v:0;});
-  var ptColors = plotRev.map(function(v,i){
-    if(!real[i]) return cGreen+'26';
-    if(i===0) return cGreen;
-    var p=null; for(var j=i-1;j>=0;j--){if(real[j]){p=plotRev[j];break;}} return v>=(p||0)?cGreen:cRed;
-  });
+  // Plotted as-is: the nulls are meaningful and must reach Chart.js intact.
+  var plotRev = revD;
+  // Points follow the Revenue series colour. They used to be green/red by
+  // rise-or-fall, which read as a second meaning on the same mark — the
+  // datalabels below already carry the ▲/▼ and its colour.
+  var ptColors = plotRev.map(function(v,i){ return real[i] ? cRevenue : cRevenue+'26'; });
   var lblColors = plotRev.map(function(v,i){
     if(!real[i]) return cText3;
     if(i===0) return cGreen;
@@ -1304,13 +1929,16 @@ function drawTrendChart() {
 
   var badge = document.getElementById('trend-hb');
   function showBadge(idx,x,y){
-    var rev=revD[idx]||0, exp=expD[idx]||0, trf=trfD[idx]||0, pend=pendD[idx]||0, net=rev-exp-trf;
+    // calcExpenses() — and so expD — already carries the transfers, so Net is
+    // revenue minus expenses full stop. Subtracting trf as well deducted every
+    // transfer TWICE, which is why this tooltip's Net disagreed with the
+    // Available Fund card sitting directly above the chart.
+    var rev=revD[idx]||0, exp=expD[idx]||0, pend=pendD[idx]||0, net=rev-exp;
     var isR=real[idx];
     badge.innerHTML='<div style="font-size:12px;font-weight:700;color:'+cText2+';margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cGreen+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cGreen+'">'+fmtPKR(rev)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cRevenue+'">'+fmtPKR(rev)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRed+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cRed+'">'+fmtPKR(exp)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAmber+';display:inline-block"></span>Transfers</span><span style="font-weight:700;color:'+cAmber+'">'+fmtPKR(trf)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cAccent+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cAccent+'">'+fmtPKR(pend)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cPending+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cPending+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
       '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
     ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
@@ -1320,6 +1948,23 @@ function drawTrendChart() {
     badge.style.left=left+'px'; badge.style.top=top+'px'; badge.style.display='block';
   }
 
+  // Supporting series. Nulls pass through exactly as they do for revenue, so
+  // all four lines stop at the current month; datalabels are off so only the
+  // revenue figures are called out.
+  function secondary(label, arr, hex) {
+    return {
+      label: label,
+      data: arr,
+      borderColor: hex,
+      borderWidth: 1.8,
+      pointBackgroundColor: hex, pointBorderColor: hex,
+      pointRadius: 2.5, pointHoverRadius: 5,
+      tension: 0,
+      fill: false,
+      datalabels: { display: false }
+    };
+  }
+
   if(_dashTrendChart){_dashTrendChart.destroy();_dashTrendChart=null;}
 
   _dashTrendChart = new Chart(canvas.getContext('2d'),{
@@ -1327,14 +1972,40 @@ function drawTrendChart() {
     data:{
       labels:months.map(function(m){return m.label;}),
       datasets:[{
+        label:'Revenue',
         data:plotRev,
-        borderColor:function(c){var g=c.chart.ctx.createLinearGradient(0,0,c.chart.width,0);g.addColorStop(0,cGreen);g.addColorStop(1,cGreen+'4d');return g;},
+        borderColor:cRevenue,
         borderWidth:2.5,
         pointBackgroundColor:ptColors, pointBorderColor:ptColors,
-        pointRadius:function(c){return real[c.dataIndex]?6:3;}, pointHoverRadius:9,
-        tension:0.35, fill:false,
+        pointRadius:function(c){return real[c.dataIndex]?5:3;}, pointHoverRadius:8,
+        // Straight point-to-point, matching the Reports trend. Smoothing bows
+        // the line between months and implies figures the ledger never held —
+        // doubly wrong here, where `real[]` already marks some points as
+        // months with nothing recorded.
+        tension:0,
+        // Soft area wash under the revenue line (owner reference design).
+        // chartArea is undefined on the very first layout pass — bail to
+        // transparent then, Chart.js re-invokes this once the area is known.
+        fill:{target:'origin'},
+        backgroundColor:function(c){
+          var area=c.chart.chartArea; if(!area) return 'transparent';
+          var g=c.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
+          g.addColorStop(0,cRevenue+'3d'); g.addColorStop(1,cRevenue+'00');
+          return g;
+        },
         datalabels:{
-          display:function(c){return real[c.dataIndex];},
+          // Only the peak and the latest month are called out. Labelling every
+          // real month stacked eight overlapping badges across the middle of a
+          // 178px-tall panel and buried the line they were annotating; the
+          // reference calls out one or two points and lets the hover badge
+          // answer the rest.
+          display:function(c){
+            var i=c.dataIndex; if(!real[i]) return false;
+            var last=-1, peak=-1, peakV=-Infinity;
+            for(var j=0;j<real.length;j++){ if(!real[j]) continue;
+              last=j; if((plotRev[j]||0)>peakV){peakV=plotRev[j]||0; peak=j;} }
+            return i===last || i===peak;
+          },
           anchor:'end',align:'top',offset:6,
           color:function(c){return lblColors[c.dataIndex];},
           backgroundColor:cBg2, borderColor:function(c){return lblColors[c.dataIndex];},
@@ -1343,12 +2014,44 @@ function drawTrendChart() {
           formatter:function(v,c){
             var i=c.dataIndex; if(!real[i])return'';
             var pv=null; for(var j=i-1;j>=0;j--){if(real[j]){pv=plotRev[j];break;}}
-            if(pv===null)return'PKR '+v.toLocaleString();
-            var p=(((v-pv)/pv)*100).toFixed(1);
-            return'PKR '+v.toLocaleString()+'\n'+(parseFloat(p)>=0?'▲':'▼')+' '+Math.abs(p)+'%';
+            /* THE MOVEMENT, NOT THE MONEY.
+            
+               This printed the figure and the percentage on two stacked lines, so the
+               badge repeated an amount the Y axis and the Total Revenue card both
+               already state -- three places for one number -- while the thing a trend
+               chart exists to show, the direction and size of the move, was the
+               smaller half of it. The exact figure for any month is one hover away in
+               the badge, which is where a precise number belongs.
+            
+               No baseline means no percentage: the first month with data has nothing
+               to have moved FROM, and inventing 0% there would draw a flat trend for
+               a hostel that has simply just opened. */
+            if(pv===null)return'';
+            /* A previous month of ZERO has no percentage either: (v-0)/0 is Infinity,
+               and this rendered the literal "▲ Infinity%" on the first month a
+               hostel collected anything. Say it rose, without pretending to say by
+               how much. */
+            if(!pv) return v>0?'▲ new':'';
+            var p=(((v-pv)/pv)*100);
+            return (p>=0?'▲ ':'▼ ')+Math.abs(p).toFixed(1)+'%';
           }
         }
-      }]
+      },
+      // The legend above this chart has always advertised four series, but
+      // only the revenue line was ever drawn — expD/pendD were computed
+      // for all twelve months and then used by nothing but the hover badge.
+      // They are plotted here so the legend describes what is on screen.
+      //
+      // Revenue stays the headline: it keeps the area wash, the per-month
+      // datalabels and the rise/fall point colouring. The other three are
+      // deliberately quieter — thinner stroke, no fill, no labels — because
+      // this panel is 178px tall and four equally-weighted filled lines in
+      // that space is noise, not a comparison.
+      // No Transfers line: expD already CONTAINS the transfers, so a second
+      // line drew the same money twice and a reader adding the two got a figure
+      // the ledger never held.
+      secondary('Expenses',  expD,  cRed),
+      secondary('Pending',   pendD, cPending)]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -1368,11 +2071,12 @@ function drawTrendChart() {
       }
     }
   });
+  _chartFontFix(_dashTrendChart);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
 function navigateToMonth(monthKey) {
-  const realMonth = new Date().toISOString().slice(0,7);
+  const realMonth = ym(new Date());
   _dashboardMonth = (monthKey === realMonth) ? null : monthKey;
   const resetBtn = document.getElementById('sb-cal-reset-btn');
   if(resetBtn) resetBtn.style.display = _dashboardMonth ? 'inline-block' : 'none';
@@ -1398,67 +2102,12 @@ function calPopSelect(key, label) {
 }
 
 
-// ════════════════════════════════════════════════════════════════════════════
-async function checkAutoMonthAdvance() {
-  if (DB.settings.autoMonthGenerate === false) return;
-  const now = new Date();
-  const currentMonthKey = now.toISOString().slice(0, 7);
-  const lastGenKey = DB.settings.lastAutoGenMonth || null;
-  if (lastGenKey === currentMonthKey) return;
-
-  const startDate = lastGenKey ? new Date(lastGenKey + '-01') : new Date(now.getFullYear(), now.getMonth(), 1);
-  if (lastGenKey) startDate.setMonth(startDate.getMonth() + 1);
-
-  let totalAdded = 0;
-  let monthsGenerated = [];
-
-  while (startDate <= now) {
-    const mo = startDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const active = DB.students.filter(t => t.status === 'Active');
-    let added = 0;
-    active.forEach(t => {
-      if (!DB.payments.some(p => p.studentId === t.id && p.month === mo)) {
-        const room = DB.rooms.find(r => r.id === t.roomId);
-        DB.payments.push({
-          id: 'p_' + uid(), studentId: t.id, studentName: t.name,
-          roomId: t.roomId, roomNumber: room?.number || '',
-          amount: 0, monthlyRent: t.rent, totalRent: t.rent, unpaid: t.rent,
-          method: t.paymentMethod || 'Cash', month: mo,
-          date: startDate.toISOString().split('T')[0],
-          dueDate: '', status: 'Pending',
-          notes: 'Auto-generated', paidDate: ''
-        });
-        added++;
-      }
-    });
-    if (added > 0) { totalAdded += added; monthsGenerated.push(mo); }
-    startDate.setMonth(startDate.getMonth() + 1);
-  }
-
-  DB.settings.lastAutoGenMonth = currentMonthKey;
-  await saveDB();
-
-  if (totalAdded > 0) {
-    const msg = monthsGenerated.length === 1
-      ? ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated[0]
-      : ICONS.calendar + ' Auto-generated ' + totalAdded + ' payment records for ' + monthsGenerated.length + ' months';
-    toast(msg, 'success');
-  }
-}
-
-async function quickDashTransfer() {
-  const amt = parseFloat(document.getElementById('dash-transfer-amt')?.value)||0;
-  const method = document.getElementById('dash-transfer-method')?.value||'Cash';
-  const recv = document.getElementById('dash-transfer-recv')?.value?.trim()||'';
-  const desc = document.getElementById('dash-transfer-desc')?.value?.trim()||'Funds Transfer';
-  if(!amt||amt<=0){toast('Enter a valid amount','error');return;}
-  if(!DB.transfers) DB.transfers=[];
-  DB.transfers.push({id:'tr_'+uid(),amount:amt,method,receivedBy:recv,description:desc,date:today()});
-  await saveDB();
-  ['dash-transfer-amt','dash-transfer-recv','dash-transfer-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  renderPage('dashboard');
-  toast(`Transfer of ${fmtPKR(amt)} recorded!`,'success');
-}
+// checkAutoMonthAdvance() lived here. It ran at boot and raised a Pending
+// payment row against every active student for each month that had rolled
+// over since the last launch. Records the warden never entered were landing
+// in the ledger and in every figure derived from it, so the automatic path is
+// gone; Auto-Generate Month on the Payments screen is now the only way to
+// create a month of rent records in bulk.
 
 // Alias the old name for backward compat
 
@@ -1499,7 +2148,7 @@ function dashGlobalSearch(query) {
         type: 'room', icon: ICONS.bed,
         title: 'Room #' + r.number,
         sub: (type ? type.name : '') + ' · ' + r.floor + ' Floor · ' + occ + '/' + (type ? type.capacity : 1) + ' filled',
-        badge: '<span class="badge ' + (occ >= (type ? type.capacity : 1) ? 'badge-green' : 'badge-gray') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
+        badge: '<span class="badge" style="' + (occ >= (type ? type.capacity : 1) ? 'background:var(--bg4);border:1px solid var(--border);color:var(--text3)' : 'background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);color:var(--accent-strong)') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
         action: "showRoomDetail('" + r.id + "')"
       });
     }
@@ -1523,7 +2172,7 @@ function dashGlobalSearch(query) {
       type: 'location', icon: ICONS.pin,
       title: hit.city,
       sub: hit.students.slice(0, 3).join(', ') + (hit.students.length > 3 ? ' +' + (hit.students.length - 3) + ' more' : ''),
-      badge: '<span class="badge badge-blue">' + hit.students.length + ' student' + (hit.students.length !== 1 ? 's' : '') + '</span>',
+      badge: '<span class="badge badge-gray">' + hit.students.length + ' student' + (hit.students.length !== 1 ? 's' : '') + '</span>',
       action: "studentFilter.search='" + hit.city.replace(/'/g, "\\'") + "';navigate('students')"
     });
   });
@@ -1569,7 +2218,7 @@ function dashGlobalSearch(query) {
   });
   Object.keys(courseSub).slice(0,3).forEach(function(k){
     var hit=courseSub[k];
-    grouped['student'].push({type:'student',icon:ICONS.student,title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-blue">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
+    grouped['student'].push({type:'student',icon:ICONS.student,title:hit.course,sub:hit.students.slice(0,4).join(', ')+(hit.students.length>4?' +'+(hit.students.length-4)+' more':''),badge:'<span class="badge badge-gray">'+hit.students.length+' student'+(hit.students.length!==1?'s':'')+'</span>',action:"studentFilter.search='"+hit.course.replace(/'/g,"\\'")+ "';navigate('students')"});
   });
   results.forEach(function(r){ if (grouped[r.type]) grouped[r.type].push(r); });
 

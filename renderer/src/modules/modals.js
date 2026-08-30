@@ -1,9 +1,10 @@
-/* ─── HOSTIX — MODALS & UI MODULE ───────────────────────────────────────────
+/* ─── HOSTYLLO — MODALS & UI MODULE ───────────────────────────────────────────
    Contains: showModal, closeModal, showConfirm, toast, showCustomDatePicker,
              _cdpClose/_cdpClear/_cdpPrev/_cdpNext/_cdpRender/_cdpPick,
              _showCameraPermBanner, statusBadge, pmBadge,
              showBackupRestoreModal, exportBackup, restoreBackup, restoreFromPaste,
-             _initDBFields, saveWardenInfo/showUserMgmt/handleWardenPhoto
+             _initDBFields, showUserMgmt/showUserEditor/saveUser/deleteUser,
+             handleWardenPhoto
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -74,85 +75,114 @@ function showConfirm(title, text, onConfirm, onCancel) {
 // BACKUP & RESTORE
 // ════════════════════════════════════════════════════════════════════════════
 async function showBackupRestoreModal() {
-  const now = new Date();
-  const ts = now.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' + now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
+  if (typeof requirePerm === 'function' && !requirePerm('backup')) return;
   const dataSize = (JSON.stringify(DB).length / 1024).toFixed(1);
   const studentCount = DB.students.length;
   const paymentCount = DB.payments.length;
   const roomCount = DB.rooms.length;
+  // This line used to read "Last snapshot: <now>" — it formatted the current
+  // clock, so it always claimed a fresh backup existed no matter how long it
+  // had actually been. It now reports the real last export, recorded by
+  // exportBackup(), and says so plainly when there has never been one.
+  const lastExport = DB.settings?.lastBackupExport ? new Date(DB.settings.lastBackupExport) : null;
+  const lastExportTxt = lastExport
+    ? lastExport.toLocaleDateString('en-PK',{year:'numeric',month:'short',day:'2-digit'}) + ' ' +
+      lastExport.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'})
+    : null;
 
-  showModal('modal-md',`${MODAL_ICONS.shieldCheck} Backup & Restore Data`,`
-    <div style="background:var(--teal-dim);border:1px solid rgba(15,188,173,0.3);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
-      <div>${MODAL_ICONS.lock}</div>
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--teal)">Your data is safe in this browser</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Export a backup file to your PC/phone to protect against browser data loss</div>
+  showModal('modal-md', `<span class="bkp-head">
+      <span class="bkp-head__ico">${icon('shieldCheck','sm')}</span>
+      <span><span class="bkp-head__t">Backup &amp; Restore Data</span>
+      <span class="bkp-head__s">Secure your hostel data with export, backup and restore options</span></span>
+    </span>`, `
+    <div class="bkp">
+
+      <div class="bkp-safe">
+        <span class="bkp-safe__ico">${icon('lock','sm')}</span>
+        <div>
+          <div class="bkp-safe__t">Your data is stored on this computer</div>
+          <div class="bkp-safe__s">Hostyllo runs offline — nothing leaves this machine. Export a backup file to
+            a USB or cloud drive so a disk failure can’t take the hostel’s records with it.</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="bkp-stats">
+        <div class="bkp-stat dh-blue">
+          <span class="bkp-stat__ico">${icon('users','sm')}</span>
+          <span><span class="bkp-stat__v">${studentCount}</span><span class="bkp-stat__k">Students</span></span>
+        </div>
+        <div class="bkp-stat dh-red">
+          <span class="bkp-stat__ico">${icon('bed','sm')}</span>
+          <span><span class="bkp-stat__v">${roomCount}</span><span class="bkp-stat__k">Rooms</span></span>
+        </div>
+        <div class="bkp-stat dh-amber">
+          <span class="bkp-stat__ico">${icon('receipt','sm')}</span>
+          <span><span class="bkp-stat__v">${paymentCount}</span><span class="bkp-stat__k">Payments</span></span>
+        </div>
+        <div class="bkp-stat dh-violet">
+          <span class="bkp-stat__ico">${icon('database','sm')}</span>
+          <span><span class="bkp-stat__v">${dataSize} KB</span><span class="bkp-stat__k">Data Size</span></span>
+        </div>
+      </div>
+
+      <!-- Export section -->
+      <div class="bkp-sec">
+        <div class="bkp-sec__head dh-blue">
+          <span class="bkp-sec__ico">${icon('download','sm')}</span> Export / Download Backup
+        </div>
+        <div class="bkp-sec__body">
+          <p class="bkp-p">Download a <b>.json</b> backup file containing all your hostel data.
+            Store it on your PC, a USB stick, or a cloud drive.</p>
+          <div class="bkp-acts">
+            <button class="btn btn-primary" onclick="exportBackup('json')">
+              ${icon('download','sm')} Download JSON Backup
+            </button>
+            <button class="btn btn-secondary" onclick="exportBackup('copy')">
+              ${icon('copy','sm')} Copy to Clipboard
+            </button>
+          </div>
+          <div class="bkp-last${lastExportTxt ? '' : ' is-never'}">
+            ${icon('clock','xs')}
+            <span>${lastExportTxt ? 'Last exported: ' + lastExportTxt : 'No backup has been exported yet'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Restore section -->
+      <div class="bkp-sec">
+        <div class="bkp-sec__head dh-amber">
+          <span class="bkp-sec__ico">${icon('refreshCw','sm')}</span> Restore from Backup
+        </div>
+        <div class="bkp-sec__body">
+          <div class="bkp-warn">
+            <span class="bkp-warn__ico">${icon('warning','sm')}</span>
+            <span>Restoring <b>replaces ALL current data</b>. Export a backup first — this cannot be undone.</span>
+          </div>
+
+          <label class="bkp-label" for="restore-file-input">Select backup file (.json)</label>
+          <input type="file" id="restore-file-input" accept=".json" class="bkp-file">
+          <button class="btn btn-danger bkp-wide" onclick="restoreBackup()">
+            ${icon('upload','sm')} Restore Data from File
+          </button>
+
+          <div class="bkp-or">
+            <label class="bkp-label" for="restore-json-paste">Or paste JSON directly</label>
+            <textarea id="restore-json-paste" class="bkp-ta" rows="3" placeholder="Paste JSON backup data here…"></textarea>
+            <button class="btn btn-secondary bkp-wide" onclick="restoreFromPaste()">
+              ${icon('clipboard','sm')} Restore from Pasted JSON
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Stats row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--accent-strong)">${studentCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Students</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--green)">${roomCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Rooms</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--blue)">${paymentCount}</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Payments</div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:900;color:var(--purple)">${dataSize}KB</div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:2px">Data Size</div>
-      </div>
-    </div>
-
-    <!-- Export section -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.download} Export / Download Backup</div>
-      <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">Download a <strong style="color:var(--text)">.json</strong> backup file containing all your hostel data. Store it on your PC, USB, or Google Drive.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="exportBackup('json')" style="flex:1">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /> <path d="m7 10 5 5 5-5" /></svg>
-          Download JSON Backup
-        </button>
-        <button class="btn btn-secondary" onclick="exportBackup('copy')">
-          ${MODAL_ICONS.clipboardCopy} Copy to Clipboard
-        </button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Last snapshot: ${ts}</div>
-    </div>
-
-    <!-- Restore section -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:6px">${MODAL_ICONS.upload} Restore from Backup</div>
-      <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
-        <span style="display:inline-flex;vertical-align:middle">${MODAL_ICONS.alertTriangle}</span> <strong>Warning:</strong> Restoring will <strong style="color:var(--red)">replace ALL current data</strong>. Make sure to export a backup first!
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11.5px;color:var(--text3);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px">Select Backup File (.json)</label>
-        <input type="file" id="restore-file-input" accept=".json" class="form-control" style="font-size:12px">
-      </div>
-      <button class="btn btn-danger" onclick="restoreBackup()" style="width:100%">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /> <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-        Restore Data from File
-      </button>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="font-size:11.5px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Or Paste JSON directly</div>
-        <textarea id="restore-json-paste" class="form-control" rows="3" placeholder="Paste JSON backup data here…" style="font-family:var(--font-mono);font-size:11px"></textarea>
-        <button class="btn btn-secondary" onclick="restoreFromPaste()" style="width:100%;margin-top:8px">${MODAL_ICONS.clipboardPaste} Restore from Pasted JSON</button>
-      </div>
-    </div>
-  `, `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
+  `, `<button class="btn btn-secondary" onclick="closeModal()">${icon('close','sm')} Close</button>`);
 }
 
-function exportBackup(mode) {
+async function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'Hostyllo_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -162,11 +192,19 @@ function exportBackup(mode) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     toast('Backup downloaded: ' + filename, 'success');
   } else {
-    navigator.clipboard.writeText(json).then(()=>{
+    try {
+      await navigator.clipboard.writeText(json);
       toast('Data copied to clipboard!', 'success');
-    }).catch(()=>{
+    } catch {
       toast('Copy failed — try the Download button instead', 'error');
-    });
+      return;   // nothing left the app, so don't stamp it as an export
+    }
+  }
+  // Stamp the export so the modal can report when a backup was last taken,
+  // instead of formatting the current clock and calling it a snapshot.
+  if (DB.settings) {
+    DB.settings.lastBackupExport = now.toISOString();
+    await saveDB();
   }
 }
 
@@ -204,10 +242,10 @@ function _initDBFields(d) {
   // roomTypes already initialized above (before generateRooms)
   if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
   // Core identity — previously missing from restoreBackup path
-  if (!d.settings.appName) d.settings.appName = 'HOSTIX'; // ← Customisable system name
-  if (!d.settings.hostelName) d.settings.hostelName = 'DAMAM Boys Hostel';
+  if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
+  if (!d.settings.hostelName) d.settings.hostelName = 'Hostel Name';
   if (!d.settings.tagline) d.settings.tagline = 'Safe & Comfortable Living';
-  if (!d.settings.location) d.settings.location = '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar';
+  if (!d.settings.location) d.settings.location = '';
   if (!d.settings.phone) d.settings.phone = '';
   if (!d.settings.email) d.settings.email = '';
   if (!d.settings.version) d.settings.version = 'v1.0';
@@ -216,7 +254,11 @@ function _initDBFields(d) {
   if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
   if (!d.settings.currency) d.settings.currency = 'PKR';
-  if (d.settings.autoMonthGenerate === undefined) d.settings.autoMonthGenerate = true;
+  // autoMonthGenerate is no longer read by anything: nothing generates payment
+  // records on its own. Kept off, and kept at all, only so an older database
+  // that has it stored is not silently rewritten. Rent rows come from the
+  // warden — Auto-Generate Month on the Payments screen, or a recorded payment.
+  d.settings.autoMonthGenerate = false;
   if (!d.settings.defaultWANumber) d.settings.defaultWANumber = '';
   // Collections
   if (!d.settings.roomTypes || !d.settings.roomTypes.length) d.settings.roomTypes = [
@@ -226,8 +268,33 @@ function _initDBFields(d) {
     { id:'4s', name:'4-Seater', capacity:4, defaultRent:16000, color:'#7c3aed' },
     { id:'5s', name:'5-Seater', capacity:5, defaultRent:16000, color:'#f0a030' }
   ];
+  /* RENT + MESS SPLIT.
+     A hostel's monthly charge is really two charges — the bed and the food —
+     and a student may take the bed only. Existing installs stored the two
+     added together in defaultRent, so mess starts at 0 everywhere: the split
+     is opt-in from Settings → Rent & Mess and nobody's totals move until the
+     owner enters one. */
+  (d.settings.roomTypes || []).forEach(function (t) {
+    if (t.defaultMess == null) t.defaultMess = 0;
+  });
+  (d.students || []).forEach(function (s) {
+    if (s.mess == null)      s.mess = 0;
+    if (s.messOptIn == null) s.messOptIn = true;
+  });
   if (!d.settings.paymentMethods) d.settings.paymentMethods = ['Cash','JazzCash','EasyPaisa','Bank Transfer','Cheque'];
-  if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Other'];
+  if (!d.settings.expenseCategories) d.settings.expenseCategories = ['Electricity','Water','Gas','Maintenance','Cleaning','Security','Internet','Furniture','Plumbing','Fund Transfer','Other'];
+  /* FUND TRANSFER BECOMES AN EXPENSE CATEGORY.
+     A transfer is money leaving the same till as a gas bill, and it is now
+     entered on the Expenses page like one. Existing installs get the category
+     added; it goes in before 'Other' so the catch-all stays last. Records
+     already in DB.transfers are NOT migrated — they keep their own array and
+     are folded into this category wherever outgoings are itemised, so no
+     history moves and nothing is rewritten. */
+  if (!d.settings.expenseCategories.includes(FUND_TRANSFER_CAT)) {
+    const _oi = d.settings.expenseCategories.findIndex(c => /^other$/i.test(String(c)));
+    if (_oi >= 0) d.settings.expenseCategories.splice(_oi, 0, FUND_TRANSFER_CAT);
+    else          d.settings.expenseCategories.push(FUND_TRANSFER_CAT);
+  }
   if (!d.settings.floors) d.settings.floors = ['Ground','1st','2nd','3rd'];
   // FIX #6: Use == null to guard receiptCounter — !0 is truthy so a simple falsy
   // check would reset a valid counter of 0 back to 0, potentially duplicating receipt numbers.
@@ -246,7 +313,7 @@ async function restoreBackup() {
       // BUG FIX: Support both flat format (direct DB) and old wrapped {db:...,archive:...} format
       if (parsed.db && parsed.db.students) parsed = parsed.db;
       if(!parsed.students || !parsed.rooms || !parsed.settings){
-        toast('Invalid backup file — not a HOSTIX hostel backup', 'error'); return;
+        toast('Invalid backup file — not a HOSTYLLO hostel backup', 'error'); return;
       }
       const count = parsed.students.length;
       showConfirm('Restore Backup?',
@@ -281,7 +348,7 @@ async function restoreFromPaste() {
     // BUG FIX: Support both flat format and old wrapped {db:...,archive:...} format
     if (parsed.db && parsed.db.students) parsed = parsed.db;
     if(!parsed.students || !parsed.rooms || !parsed.settings){
-      toast('Invalid JSON — not a valid HOSTIX hostel backup', 'error'); return;
+      toast('Invalid JSON — not a valid HOSTYLLO hostel backup', 'error'); return;
     }
     const count = parsed.students.length;
     showConfirm('Restore from Pasted Data?',
@@ -312,8 +379,8 @@ function statusBadge(s) {
 function pmBadge(m) {
   // BUG FIX: 'EasypaIsa' was a dead duplicate key with a capital-I typo that
   // could never match any real payment method. Removed. EasyPaisa is sufficient.
-  const map={Cash:'badge-green',JazzCash:'badge-purple',EasyPaisa:'badge-teal','Bank Transfer':'badge-blue',Cheque:'badge-amber'};
-  return `<span class="badge ${map[m]||'badge-gray'}">${escHtml(m||'—')}</span>`;
+  // Payment methods are categories, not status — neutral pills per the rebrand.
+  return `<span class="badge badge-gray">${escHtml(m||'—')}</span>`;
 }
 
 
@@ -385,9 +452,11 @@ function pmBadge(m) {
       border:none;background:transparent;
     }
     ._cdp-day:hover{background:var(--bg3,rgba(255,255,255,0.08))}
-    ._cdp-day.today{background:var(--accent);color:#000;font-weight:800}
-    ._cdp-day.today:hover{background:var(--accent-strong)}
-    ._cdp-day.selected{background:var(--blue,#4a9cf0);color:#fff;font-weight:800}
+    /* Today = accent ring, selected = accent fill. Two accent states instead of
+       accent-vs-blue, so the picker stops introducing an off-brand hue. */
+    ._cdp-day.today{color:var(--accent);font-weight:800;box-shadow:inset 0 0 0 1px var(--accent)}
+    ._cdp-day.today:not(.selected):hover{background:var(--bg3,rgba(255,255,255,0.08))}
+    ._cdp-day.selected{background:var(--accent);color:#fff;font-weight:800;box-shadow:none}
     ._cdp-day.other-month{color:var(--text3,#6b7a99);opacity:0.45}
     ._cdp-day.other-month:hover{opacity:0.7}
     .cdp-input-wrap{position:relative;display:inline-block;width:100%}
@@ -577,17 +646,36 @@ function _showCameraPermBanner() {
     'color:var(--danger-fg)','font-size:12.5px','font-weight:500',
     'padding:10px 14px 10px 16px',
     'display:flex','align-items:flex-start','gap:10px',
-    'max-width:340px','line-height:1.5',
+    'max-width:420px','line-height:1.55',
     'box-shadow:-4px 4px 20px rgba(0,0,0,0.5)'
   ].join(';');
+/* WHY THIS WORDING CHANGED.
+   The old text said "enable this app" in Windows Settings -> Privacy &
+   Security -> Camera. Windows lists individual apps there ONLY for Store
+   (UWP) apps. Hostyllo is a packaged desktop app, so it never appears in
+   that list, and the owner went looking for an entry that cannot exist.
+   Desktop apps are governed by the single "Let desktop apps access your
+   camera" switch at the BOTTOM of the same page. That is the one to name. */
   b.innerHTML =
     '<span style="display:inline-flex;flex-shrink:0;margin-top:1px">'+MODAL_ICONS.cameraOff+'</span>' +
     '<span style="flex:1"><strong style="color:var(--danger-fg);display:block;margin-bottom:3px">Camera permission blocked.</strong>' +
-    'Go to <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong> and enable this app, then restart.</span>' +
+    'Open <strong style="color:var(--text)">Windows Settings → Privacy &amp; Security → Camera</strong>, turn on <strong style="color:var(--text)">Camera access</strong>, then scroll to the bottom and turn on <strong style="color:var(--text)">Let desktop apps access your camera</strong>. Restart Hostyllo afterwards. (Hostyllo will not appear in the app list above — that list is only for Microsoft Store apps.)</span>' +
     '<button onclick="document.getElementById(\'cam-perm-banner\').remove();window._camPermBannerActive=false;" ' +
       'style="background:none;border:none;color:var(--danger-fg);font-size:16px;cursor:pointer;padding:0 0 0 6px;line-height:1;flex-shrink:0;margin-top:1px" ' +
       'title="Dismiss">✕</button>';
   document.body.appendChild(b);
+}
+
+/* Toasts raised while the login screen is up wait here. flushToastQueue() is
+   called once the app proper is visible — from BOTH login paths, the typed one
+   and the restored-session one. */
+const _toastQueue = [];
+function flushToastQueue() {
+  if (!_toastQueue.length) return;
+  const pending = _toastQueue.splice(0, _toastQueue.length);
+  // Staggered, so three queued boot warnings do not arrive as one stack the
+  // warden dismisses without reading.
+  pending.forEach((args, i) => setTimeout(() => toast.apply(null, args), i * 700));
 }
 
 function toast(msg, type='info', title='') {
@@ -596,9 +684,36 @@ function toast(msg, type='info', title='') {
     success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>',
     error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></svg>',
     info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></svg>',
+    // 'warning' has been passed by callers for a long time without existing
+    // here, so those toasts came out with no icon and the title "Info".
+    warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
   };
-  const defaultTitles = { success: 'Success', error: 'Error', info: 'Info' };
-  const delay = type === 'error' ? 4500 : 3000;
+  const defaultTitles = { success: 'Success', error: 'Error', info: 'Info', warning: 'Heads up' };
+
+  /* DWELL TIME — the owner reported these hanging around far too long.
+
+     A success toast is a GLANCE: the warden already knows what they did, the
+     toast only confirms it landed, and 3s of it sitting over the top-right KPI
+     card is a nuisance rather than information. 1.5s is enough to register.
+
+     An error or a warning is READ, so it keeps a longer dwell — but 4.5s was
+     tuned for nothing in particular and is cut too. Anything that genuinely
+     needs more time than this should not be a toast at all; it should be a
+     modal the warden dismisses. */
+  const delay = (type === 'error' || type === 'warning') ? 2600 : 1500;
+
+  /* NOT OVER THE LOGIN SCREEN.
+
+     Two boot checks fire on timers — the default-password warning at 2s and the
+     backup reminder at 4s — and on a cold start those land while the warden is
+     still typing their password, on a screen with no context for them. Holding
+     them here rather than at those two call sites means any future boot toast
+     is covered by the same rule instead of having to remember this. */
+  const _login = document.getElementById('login-screen');
+  if (_login && _login.style.display !== 'none' && getComputedStyle(_login).display !== 'none') {
+    _toastQueue.push([msg, type, title]);
+    return;
+  }
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.style.cssText = 'position:relative;overflow:hidden;';
@@ -628,44 +743,219 @@ function toast(msg, type='info', title='') {
 // LOGO UPLOAD
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT
+//
+// Was a fixed editor for exactly two wardens. It is now an open user list:
+// add, edit, deactivate and delete accounts, each with its own permission set.
+// Guarded by the 'users' permission — see requirePerm() in auth-nev.js.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Count users who can still manage users and are not deactivated. */
+function _adminCount() {
+  return Object.values(WARDENS).filter(function (u) {
+    return u && u.active !== false && u.perms && u.perms.users === true;
+  }).length;
+}
+
 function showUserMgmt() {
-  var rows = '';
-  var wList = ['warden1','warden2'];
-  wList.forEach(function(key){
-    var w = WARDENS[key];
-    var isActive = key===CUR_ROLE;
-    var photoSrc = w.photo || '';
-    var avatarHtml = photoSrc
-      ? '<img src="'+photoSrc+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">'
-      : '<div id="warden-avatar-img-'+key+'" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="width:56px;height:56px;border-radius:14px;background:var(--bg3);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:2px dashed var(--border2)" title="Click to upload photo">&#x1F464;</div>';
-    rows += '<div style="background:var(--bg3);border:1px solid '+(isActive?'rgba(124,58,237,0.5)':'var(--border)')+';border-radius:12px;padding:16px;margin-bottom:10px">';
-    rows += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">';
-    rows += '<div style="position:relative;flex-shrink:0">';
-    rows += avatarHtml;
-    rows += '<div onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--bg3);color:var(--bg)" title="Change photo">'+(typeof icon==='function'?icon('edit','xs'):'')+'</div>';
-    rows += '<input type="file" id="warden-photo-input-'+key+'" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\''+key+'\')">';
-    rows += '</div>';
-    rows += '<div style="flex:1">';
-    rows += '<div style="font-weight:800;font-size:15px;color:var(--text)">'+escHtml(w.name)+(isActive?' <span style="font-size:9px;background:var(--accent-dim);color:var(--accent-strong);padding:2px 8px;border-radius:20px;border:1px solid rgba(124,58,237,0.3)">● LOGGED IN</span>':'')+'</div>';
-    rows += '<div style="font-size:11px;color:var(--text3);margin-top:2px">Full access · Add, edit payments &amp; records</div>';
-    rows += (photoSrc ? '<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Profile photo set</div>' : '<div style="font-size:10px;color:var(--text3);margin-top:4px">Click avatar to upload a photo</div>');
-    rows += '</div></div>';
-    rows += '<div class="form-grid" style="gap:8px">';
-    rows += '<div class="field"><label style="font-size:11px">Display Name</label><input id="wn-'+key+'" class="form-control" value="'+escHtml(w.name)+'" placeholder="Warden Name"></div>';
-    rows += '<div class="field"><label style="font-size:11px">New Password</label><input id="wp-'+key+'" class="form-control" type="password" placeholder="Leave blank to keep current"></div>';
-    rows += '<div class="field col-full"><label style="font-size:11px;display:flex;align-items:center;gap:5px">'+MODAL_ICONS.smartphone+' WhatsApp Number <span style="font-weight:400;color:var(--text3)">(used as default WA reminder number)</span></label><input id="wwa-'+key+'" class="form-control" value="'+escHtml(w.phone||'')+'" placeholder="03XX-XXXXXXX"></div>';
-    rows += '</div>';
-    rows += '<div style="display:flex;gap:8px;margin-top:10px">';
-    rows += '<button class="btn btn-primary btn-sm" style="flex:1" onclick="saveWardenInfo(\''+key+'\')">&#x1F4BE; Save Changes</button>';
-    if(photoSrc) rows += '<button class="btn btn-danger btn-sm" onclick="removeWardenPhoto(\''+key+'\')" title="Remove profile photo">'+MODAL_ICONS.trash+' Photo</button>';
-    rows += '</div>';
-    rows += '</div>';
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var rows = Object.keys(WARDENS).map(function (id) {
+    var u = WARDENS[id] || {};
+    var isMe = id === CUR_ROLE;
+    var perms = u.perms || {};
+    var granted = PERM_KEYS.filter(function (k) { return perms[k] === true; }).length;
+    var initials = (u.name || u.username || '?').trim().charAt(0).toUpperCase();
+
+    var av = u.photo
+      ? '<img src="' + u.photo + '" style="width:40px;height:40px;border-radius:11px;object-fit:cover;flex-shrink:0">'
+      : '<div style="width:40px;height:40px;border-radius:11px;background:var(--bg4);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">' + escHtml(initials) + '</div>';
+
+    return '<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">'
+      + av
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:700;font-size:14px;color:var(--text)">' + escHtml(u.name || '(no name)')
+      + (isMe ? ' <span style="font-size:10px;font-weight:700;color:var(--text3)">&middot; you</span>' : '')
+      + (u.active === false ? ' <span class="badge badge-gray" style="font-size:10px">Inactive</span>' : '')
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-top:2px">'
+      + escHtml(u.username || id) + ' &middot; ' + granted + ' of ' + PERM_KEYS.length + ' permissions'
+      + '</div>'
+      + '</div>'
+      + '<button class="btn btn-secondary btn-sm" onclick="showUserEditor(\'' + id + '\')">Edit</button>'
+      + '</div>';
+  }).join('');
+
+  showModal('modal-md', 'User Management',
+    rows
+    + '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:6px" onclick="showUserEditor(null)">+ Add User</button>'
+    + '<div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">'
+    + 'Permissions control what each person can reach in this app. They are enforced '
+    + 'on this machine &mdash; anyone with the Windows account and the database file '
+    + 'can still read the data directly.'
+    + '</div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">Close</button>'
+    + '<button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>'
+  );
+}
+
+/** Add (id === null) or edit one user. */
+function showUserEditor(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var isNew = !id;
+  var u = isNew ? { username: '', name: '', phone: '', perms: {}, active: true } : (WARDENS[id] || {});
+  var perms = u.perms || {};
+  // A new account starts with the everyday permissions ticked and the dangerous
+  // ones clear, so a mis-click cannot hand out clear-all by default.
+  var defaultOn = { edit: true, payments: true, reports: true };
+
+  var permRows = PERMS.map(function (p) {
+    var on = isNew ? (defaultOn[p.key] === true) : (perms[p.key] === true);
+    return '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);margin-bottom:6px;cursor:pointer">'
+      + '<input type="checkbox" id="up-' + p.key + '"' + (on ? ' checked' : '') + ' style="margin-top:2px;flex-shrink:0">'
+      + '<span style="flex:1"><span style="display:block;font-size:13px;font-weight:600;color:var(--text)">' + escHtml(p.label) + '</span>'
+      + '<span style="display:block;font-size:11.5px;color:var(--text3);margin-top:1px">' + escHtml(p.hint) + '</span></span>'
+      + '</label>';
+  }).join('');
+
+  // Photo is offered only when editing: a new user has no storage key yet to
+  // attach the image to. It saves immediately, unlike the fields below it.
+  var avatarHtml = isNew ? '' :
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
+    + _userAvatarNode(id, u.photo || '')
+    + '<input type="file" id="u-photo-input" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\'' + id + '\')">'
+    + '<div style="flex:1">'
+    +   '<div style="font-size:12.5px;font-weight:600;color:var(--text)">Profile photo</div>'
+    +   '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">Saved as soon as you choose it</div>'
+    + '</div>'
+    + (u.photo ? '<button class="btn btn-secondary btn-sm" onclick="removeWardenPhoto(\'' + id + '\')">Remove</button>' : '')
+    + '</div>';
+
+  var body =
+    avatarHtml
+    + '<div class="form-grid" style="gap:10px">'
+    + '<div class="field"><label style="font-size:11px">Full Name</label>'
+    + '<input id="u-name" class="form-control" value="' + escHtml(u.name || '') + '" placeholder="Full name"></div>'
+    + '<div class="field"><label style="font-size:11px">Username</label>'
+    + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="Lowercase, no spaces"></div>'
+    + '<div class="field"><label style="font-size:11px">' + (isNew ? 'Password' : 'New Password') + '</label>'
+    + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least ' + AUTH_CFG.minPwLen + ' characters' : 'Leave blank to keep current') + '"></div>'
+    + '<div class="field"><label style="font-size:11px">WhatsApp Number</label>'
+    + '<input id="u-phone" class="form-control" value="' + escHtml(u.phone || '') + '" placeholder="03XX-XXXXXXX"></div>'
+    + '</div>'
+    + '<label style="display:flex;gap:9px;align-items:center;margin:12px 0 4px;cursor:pointer">'
+    + '<input type="checkbox" id="u-active"' + (u.active !== false ? ' checked' : '') + '>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--text)">Account is active</span>'
+    + '<span style="font-size:11.5px;color:var(--text3)">&mdash; inactive accounts cannot sign in</span>'
+    + '</label>'
+    + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin:16px 0 8px">Permissions</div>'
+    + permRows;
+
+  var canDelete = !isNew && !(WARDENS[id] && WARDENS[id].builtin) && id !== CUR_ROLE;
+  var footer =
+    '<button class="btn btn-secondary" onclick="showUserMgmt()">Back</button>'
+    + (canDelete ? '<button class="btn btn-danger btn-sm" onclick="deleteUser(\'' + id + '\')">Delete</button>' : '')
+    + '<button class="btn btn-primary" onclick="saveUser(' + (isNew ? 'null' : '\'' + id + '\'') + ')">Save</button>';
+
+  showModal('modal-md', isNew ? 'Add User' : 'Edit User', body, footer);
+}
+
+async function saveUser(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+
+  var isNew = !id;
+  var name = (document.getElementById('u-name') || {}).value || '';
+  var username = (document.getElementById('u-username') || {}).value || '';
+  var pw = (document.getElementById('u-pw') || {}).value || '';
+  var phone = (document.getElementById('u-phone') || {}).value || '';
+  var active = !!(document.getElementById('u-active') || {}).checked;
+
+  name = name.trim();
+  username = username.trim().toLowerCase();
+  phone = phone.trim();
+
+  if (!name) { toast('Name cannot be empty', 'error'); return; }
+  if (!username) { toast('Username cannot be empty', 'error'); return; }
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    toast('Username can use letters, numbers, dot, dash and underscore only', 'error'); return;
+  }
+  var clash = findUserByUsername(username);
+  if (clash && clash !== id) { toast('That username is already taken', 'error'); return; }
+
+  var perms = {};
+  PERM_KEYS.forEach(function (k) {
+    var el = document.getElementById('up-' + k);
+    perms[k] = !!(el && el.checked);
   });
 
-  showModal('modal-md','&#x1F9D1;&#x200D;&#x1F4BC; Warden Management',
-    rows,
-    '<button class="btn btn-secondary" onclick="closeModal()">Close</button><button class="btn btn-danger btn-sm" onclick="logout()">&#x1F6AA; Logout</button>'
-  );
+  // Never let the last administrator be demoted or switched off — that would
+  // leave the install with no way to manage users at all.
+  if (!isNew) {
+    var was = WARDENS[id] || {};
+    var wasAdmin = was.active !== false && was.perms && was.perms.users === true;
+    var stillAdmin = active && perms.users === true;
+    if (wasAdmin && !stillAdmin && _adminCount() <= 1) {
+      toast('This is the only account that can manage users. Give another user that permission first.',
+        'error', 'Cannot remove');
+      return;
+    }
+  }
+
+  var newHash = null;
+  if (pw.trim()) {
+    try { newHash = await hashNewPassword(pw.trim()); }
+    catch (e) { toast(e.message || 'Invalid password', 'error'); return; }
+  } else if (isNew) {
+    toast('Set a password for the new user', 'error'); return;
+  }
+
+  if (isNew) {
+    // The storage key is independent of the username, so renaming a user later
+    // never orphans their session or their lockout record.
+    var newId = 'u' + Date.now().toString(36);
+    WARDENS[newId] = {
+      username: username, name: name, phone: phone,
+      perms: perms, active: active, pw: newHash, photo: ''
+    };
+  } else {
+    var t = WARDENS[id];
+    t.name = name; t.username = username; t.phone = phone;
+    t.perms = perms; t.active = active;
+    if (newHash) t.pw = newHash;
+    if (id === CUR_ROLE) {
+      CUR_USER = t;
+      if (typeof updateRoleBadge === 'function') updateRoleBadge();
+      if (typeof applyPermissionsToChrome === 'function') applyPermissionsToChrome();
+    }
+  }
+
+  saveWardenConfig();
+  if (typeof USERS !== 'undefined') USERS = WARDENS;
+  toast(name + (isNew ? ' added' : ' updated'), 'success');
+  showUserMgmt();
+}
+
+function deleteUser(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  var u = WARDENS[id];
+  if (!u) return;
+  if (id === CUR_ROLE) { toast('You cannot delete the account you are signed in as', 'error'); return; }
+  if (u.builtin) { toast('The built-in account cannot be deleted', 'error'); return; }
+  if (u.active !== false && u.perms && u.perms.users === true && _adminCount() <= 1) {
+    toast('This is the only account that can manage users', 'error', 'Cannot delete'); return;
+  }
+  showConfirm('Delete user?',
+    'Remove ' + escHtml(u.name || u.username) + '? They will no longer be able to sign in. '
+    + 'Records they already created are not affected.',
+    function () {
+      delete WARDENS[id];
+      saveWardenConfig();
+      if (typeof USERS !== 'undefined') USERS = WARDENS;
+      toast('User deleted', 'info');
+      showUserMgmt();
+    });
 }
 
 function handleWardenPhoto(event, key) {
@@ -684,18 +974,16 @@ function handleWardenPhoto(event, key) {
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      if(!WARDENS[key]) return;
       WARDENS[key].photo = dataUrl;
       saveWardenConfig();
-      // Live-update the avatar in the modal without closing it
-      var imgEl = document.getElementById('warden-avatar-img-'+key);
-      if(imgEl) {
-        imgEl.outerHTML = '<img src="'+dataUrl+'" id="warden-avatar-img-'+key+'" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer" onclick="document.getElementById(\'warden-photo-input-'+key+'\').click()" title="Click to change photo">';
-      }
-      // Update the role badge in header if it's the current user
       if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
-      // Update login screen avatar
-      updateLoginAvatar(key);
-      toast('Profile photo updated!','success');
+      toast('Profile photo updated','success');
+      // The editor is rebuilt rather than patched in place: it now carries
+      // unsaved field values, so re-rendering would discard them — instead only
+      // the avatar node is swapped.
+      var imgEl = document.getElementById('u-avatar');
+      if(imgEl) imgEl.outerHTML = _userAvatarNode(key, dataUrl);
     };
     img.src = e.target.result;
   };
@@ -703,74 +991,33 @@ function handleWardenPhoto(event, key) {
 }
 
 function removeWardenPhoto(key) {
+  if(!WARDENS[key]) return;
   WARDENS[key].photo = '';
   saveWardenConfig();
   if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
-  updateLoginAvatar(key);
   toast('Photo removed','info');
-  showUserMgmt(); // refresh modal
+  var imgEl = document.getElementById('u-avatar');
+  if(imgEl) imgEl.outerHTML = _userAvatarNode(key, '');
 }
 
-function updateLoginAvatar(key) {
-  // Update the warden selector card on the login screen
-  var num = key === 'warden1' ? '1' : '2';
-  var card = document.getElementById('rb-warden'+num);
-  if(!card) return;
-  var photoEl = card.querySelector('.warden-login-photo');
-  var w = WARDENS[key];
-  if(w.photo) {
-    if(photoEl) {
-      photoEl.src = w.photo;
-    } else {
-      var emojiEl = card.querySelector('.warden-login-emoji');
-      if(emojiEl) {
-        emojiEl.innerHTML = '<img class="warden-login-photo" src="'+w.photo+'" style="width:36px;height:36px;border-radius:9px;object-fit:cover;border:1.5px solid rgba(124,58,237,0.5)">';
-      }
-    }
-  } else {
-    if(photoEl) {
-      var parent = photoEl.parentElement;
-      parent.innerHTML = '<span class="warden-login-emoji" style="font-size:22px;margin-bottom:4px;">&#x1F9D1;&#x200D;&#x1F4BC;</span>';
-    }
+/**
+ * The avatar control inside the user editor. Clicking it opens the file picker.
+ * Kept as one function so handleWardenPhoto/removeWardenPhoto can swap the node
+ * without re-rendering the whole editor and losing unsaved input.
+ */
+function _userAvatarNode(key, photo) {
+  var open = 'document.getElementById(\'u-photo-input\').click()';
+  if (photo) {
+    return '<img id="u-avatar" src="' + photo + '" onclick="' + open + '" title="Click to change photo"'
+      + ' style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer">';
   }
-}
-
-async function saveWardenInfo(key) {
-  var nameEl = document.getElementById('wn-'+key);
-  var pwEl   = document.getElementById('wp-'+key);
-  var wwaEl  = document.getElementById('wwa-'+key);
-  if(!nameEl||!nameEl.value.trim()){toast('Name cannot be empty','error');return;}
-  // CRITICAL FIX: hash the new password with PBKDF2 (auth-nev.js) BEFORE storing.
-  // Previously this stored the raw plaintext string, which verifyPassword() rejects
-  // (it only accepts a v2 {hash,salt,v} object or a 64-char SHA-256 hex string) — so
-  // after any password change, NEITHER the new password NOR the default would log in,
-  // and the default credential was destroyed. Validate + hash first; abort on bad input.
-  let _newPwHash = null;
-  if(pwEl && pwEl.value.trim()){
-    try { _newPwHash = await hashNewPassword(pwEl.value.trim()); }
-    catch(e){ toast(e.message || 'Invalid password','error'); return; }
-  }
-  WARDENS[key].name = nameEl.value.trim();
-  if(_newPwHash) WARDENS[key].pw = _newPwHash;
-  if(pwEl) pwEl.value='';
-  if(wwaEl) {
-    WARDENS[key].phone = wwaEl.value.trim();
-    // Auto-update default WA number to the current logged-in warden's number
-    if(key===CUR_ROLE && wwaEl.value.trim()) {
-      DB.settings.defaultWANumber = wwaEl.value.trim();
-      await saveDB();
-    }
-  }
-  saveWardenConfig();
-  // Update display name label on login screen
-  var lbl = document.getElementById('wb'+(key==='warden1'?'1':'2')+'-name');
-  if(lbl) lbl.textContent=WARDENS[key].name;
-  if(key===CUR_ROLE) { CUR_USER=WARDENS[key]; updateRoleBadge(); }
-  toast(WARDENS[key].name+' updated','success');
+  return '<div id="u-avatar" onclick="' + open + '" title="Click to upload a photo"'
+    + ' style="width:56px;height:56px;border-radius:14px;background:var(--bg4);color:var(--text3);display:flex;'
+    + 'align-items:center;justify-content:center;cursor:pointer;border:2px dashed var(--border2);font-size:22px">+</div>';
 }
 
 
-// saveUPW replaced by saveWardenInfo
+// saveUPW and saveWardenInfo were both superseded by saveUser() above.
 
 // ══════════════════════════════════════════════════════════════════
 // STUDENT DOCUMENTS UPLOAD

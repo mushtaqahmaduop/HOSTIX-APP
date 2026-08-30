@@ -1,0 +1,75 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — COMPLAINTS & MAINTENANCE v5
+   Owner reference design: complaints.png
+
+   Loaded after listkit.css, which already supplies the stat strip, toolbar,
+   pager and empty state. This file adds only what is specific to the issue
+   feed: the two-up tab switch and the issue row itself. Prefixed `iss-*`, so
+   it declares no selector any other screen uses (CLAUDE.md rule 7).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab switch ──────────────────────────────────────────────────────────── */
+.iss-tabs {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-bottom:12px;
+    background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+}
+.iss-tab {
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    padding:14px 12px; cursor:pointer; border:none; border-right:1px solid var(--border);
+    background:var(--dash-sunk); color:var(--text2);
+    font-family:var(--font); font-size:13px; font-weight:700; transition:var(--transition);
+}
+.iss-tab:last-child { border-right:none; }
+.iss-tab:hover   { color:var(--text); }
+.iss-tab svg     { flex-shrink:0; }
+.iss-tab.is-on   { background:var(--accent-dim); color:var(--accent-strong); }
+
+/* ── Issue row ───────────────────────────────────────────────────────────── */
+.iss-list { margin-top:12px; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.iss-row {
+    display:flex; align-items:flex-start; gap:14px; padding:16px 18px;
+    border-bottom:1px solid var(--border); transition:background .12s ease;
+}
+.iss-row:last-child { border-bottom:none; }
+.iss-row:hover      { background:var(--dash-sunk); }
+
+.iss-row__i {
+    width:42px; height:42px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.iss-row__m   { flex:1; min-width:0; }
+.iss-row__top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.iss-row__t   { font-size:14px; font-weight:700; color:var(--text); }
+.iss-row__meta{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:5px;
+    font-size:11.5px; color:var(--text3);
+}
+.iss-row__meta b   { font-weight:600; color:var(--text2); }
+.iss-row__meta i   { font-style:normal; color:var(--border2); }
+.iss-row__d   { margin-top:7px; font-size:12.5px; line-height:1.55; color:var(--text2); }
+.iss-row__r   {
+    margin-top:8px; padding:9px 12px; border-radius:9px;
+    background:var(--dh-bg); border:1px solid var(--dh);
+    font-size:12px; line-height:1.5; color:var(--text2);
+}
+.iss-row__r b { color:var(--dh); }
+
+.iss-row__e   { display:flex; flex-direction:column; align-items:flex-end; gap:9px; flex-shrink:0; }
+.iss-row__acts{ display:flex; align-items:center; gap:6px; }
+.iss-row__id  {
+    font-size:10.5px; font-weight:600; color:var(--text3); white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+}
+.iss-row__id b { font-weight:800; color:var(--text2); }
+
+/* Status / priority pills reuse the listkit chip, hue-driven. */
+.iss-pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px;
+            font-size:11px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
+
+@media (max-width:820px) {
+    .iss-tabs   { grid-template-columns:1fr; }
+    .iss-tab    { border-right:none; border-bottom:1px solid var(--border); }
+    .iss-row    { flex-wrap:wrap; }
+    .iss-row__e { align-items:flex-start; width:100%; flex-direction:row; justify-content:space-between; }
+}

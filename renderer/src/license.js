@@ -1,11 +1,14 @@
-/* ─── DAMAM HOSTEL — LICENSE SYSTEM (renderer side — PATCHED) ───────────────
+/* ─── HOSTYLLO — LICENSE SYSTEM (renderer side — PATCHED) ───────────────
    Communicates with main process via window.electronAPI (preload.js).
    Runs at startup: if license invalid → shows activation screen, blocks app.
    Also provides deactivateLicense() for the Settings page.
 
    FIXES:
-   FIX-L1  maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars).
-   FIX-L2  licDoActivate validates key length using 21.
+   FIX-L1  maxlength is 26 — the current key has four body groups
+           (HOSTEL-XXXX-XXXX-XXXX-XXXX). The 21-char three-group key predates
+           it and still activates, so the field accepts both.
+   FIX-L2  licDoActivate accepts either length, rejecting only what is
+           shorter than the legacy 21.
    FIX-L3  Activate button double-click race condition fixed — disable on click.
    FIX-L4  licFormatKey rewritten — handles partial input and paste correctly.
    FIX-L5  Machine ID shown as truncated (first 16 chars + …) for privacy.
@@ -25,7 +28,7 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
   let status;
   try {
     status = await window.electronAPI.licenseCheck();
-    window._damam_license_cache = status;
+    window._hostyllo_license_cache = status;
   } catch(e) {
     status = { valid: false, reason: 'ipc_error' };
   }
@@ -38,14 +41,21 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
 })();
 
 // ── INJECT SMALL BADGE INTO LOGIN SCREEN (when valid) ────────────────────────
+// It goes INSIDE #login-screen, not on <body>. Appended to the body it outlived
+// the screen it was written for: a fixed, z-index 99990 label pinned to the
+// bottom-right corner of every page for the whole session, painting on top of
+// whatever sat in that corner — most visibly the last room card in the Rooms
+// grid. Inside the login screen it disappears when that screen does, which is
+// what "badge into login screen" always meant.
 function _injectLicenseBadge(status) {
   try {
     const exp   = new Date(status.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'});
     const badge = document.createElement('div');
+    badge.id = 'license-badge';
     badge.style.cssText = 'position:fixed;bottom:10px;right:12px;z-index:99990;'
       + 'font-size:9px;color:#2ec98a;font-family:monospace;opacity:0.6;pointer-events:none;';
     badge.textContent = '✅ Licensed · Exp: ' + exp;
-    document.body.appendChild(badge);
+    (document.getElementById('login-screen') || document.body).appendChild(badge);
   } catch(e) {}
 }
 
@@ -81,7 +91,7 @@ function _showActivationScreen(reason, expiry) {
     + '<div style="width:68px;height:68px;border-radius:17px;background:linear-gradient(135deg,#1e3c6a,#2a5298);'
     + 'display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:30px;">🔐</div>'
     + '<div style="font-size:20px;font-weight:900;color:#a78bfa;margin-bottom:6px;font-family:\'DM Serif Display\',serif;">License Activation</div>'
-    + '<div style="font-size:10px;color:#4d6a90;margin-bottom:20px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">HOSTIX — Hostel Management</div>'
+    + '<div style="font-size:10px;color:#4d6a90;margin-bottom:20px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">HOSTYLLO — Hostel Management</div>'
     + '<div style="background:' + (canActivate ? 'rgba(30,60,106,0.4)' : 'rgba(224,82,82,0.15)') + ';'
     + 'border:1px solid ' + (canActivate ? '#1e3c6a' : 'rgba(224,82,82,0.4)') + ';'
     + 'border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;'
@@ -90,8 +100,9 @@ function _showActivationScreen(reason, expiry) {
     + (canActivate
       ? '<div style="margin-bottom:10px;text-align:left;">'
         + '<div style="font-size:11px;color:#4d6580;margin-bottom:6px;font-weight:700;">LICENSE KEY</div>'
-        // [FIX-L1] maxlength corrected to 21 (HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 chars)
-        + '<input id="lic-key-input" type="text" maxlength="21" placeholder="HOSTEL-XXXX-XXXX-XXXX"'
+        // maxlength 26 — HOSTEL-XXXX-XXXX-XXXX-XXXX = 6+4*(1+4) = 26 chars. The
+        // older three-group key is 21 and still fits, so one field takes both.
+        + '<input id="lic-key-input" type="text" maxlength="26" placeholder="HOSTEL-XXXX-XXXX-XXXX-XXXX"'
         + ' oninput="licFormatKey(this)"'
         + ' style="width:100%;box-sizing:border-box;padding:12px 16px;background:#0f1a2e;'
         + 'border:1px solid #1e3050;border-radius:10px;color:#e8eef8;font-size:15px;'
@@ -134,10 +145,11 @@ function licFormatKey(inp) {
   // Ensure HOSTEL prefix
   var body  = raw.startsWith('HOSTEL') ? raw.slice(6) : raw;
 
-  // Build formatted parts (max 12 body chars = 3 groups of 4)
-  // This correctly reformats both partial input and fully-pasted keys
+  // Build formatted parts (max 16 body chars = 4 groups of 4). Sixteen, not
+  // twelve: a current key has four body groups and a 12-char cap would eat the
+  // last one as the user pasted it. Three-group legacy keys still format fine.
   var parts = [];
-  for (var i = 0; i < body.length && i < 12; i += 4) {
+  for (var i = 0; i < body.length && i < 16; i += 4) {
     parts.push(body.slice(i, i + 4));
   }
 
@@ -164,15 +176,16 @@ async function licDoActivate() {
   if (errEl) errEl.style.display = 'none';
   if (okEl)  okEl.style.display  = 'none';
 
-  // [FIX-L2] Correct length check: HOSTEL-XXXX-XXXX-XXXX = 6+1+4+1+4+1+4 = 21 characters
+  // 21 is the legacy three-group key; 26 the current four-group one. Anything
+  // shorter than the legacy form cannot be complete whichever it is.
   if (!key || key.length < 21) {
-    if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = 'Please enter a complete license key (HOSTEL-XXXX-XXXX-XXXX-XXXX).'; errEl.style.display = 'block'; }
     return;
   }
 
   // Basic format check before sending to main process
-  if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
-    if (errEl) { errEl.textContent = 'Key format is invalid. Expected: HOSTEL-XXXX-XXXX-XXXX'; errEl.style.display = 'block'; }
+  if (!/^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}(-[A-Z0-9]{4})?$/.test(key)) {
+    if (errEl) { errEl.textContent = 'Key format is invalid. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX'; errEl.style.display = 'block'; }
     return;
   }
 

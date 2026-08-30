@@ -1,4 +1,4 @@
-/* ─── HOSTIX — COMMAND PALETTE (Ctrl/Cmd + K) ───────────────────────────────
+/* ─── HOSTYLLO — COMMAND PALETTE (Ctrl/Cmd + K) ───────────────────────────────
    Quick keyboard launcher: jump to any page, run an action, or open a student.
    Self-contained overlay (own container), global Ctrl+K toggle, keyboard nav.
    Depends on globals: navigate, showViewStudentModal, escHtml, DB, CUR_USER,
@@ -13,8 +13,8 @@
     const navs = [
       ['dashboard', 'Dashboard', '🏠'], ['rooms', 'Rooms', '🚪'], ['students', 'Students', '🎓'],
       ['payments', 'Finance / Payments', '💳'], ['expenses', 'Expenses', '📉'],
-      ['cancellations', 'Cancellation List', '📋'], ['reports', 'Reports', '📊'],
-      ['issues', 'Complaints & Maintenance', '🛠'], ['activitylog', 'Activity Log', '🕑'],
+      ['cancellations', 'Cancellations', '📋'], ['reports', 'Reports', '📊'],
+      ['issues', 'Complaints', '🛠'], ['activitylog', 'Activity Log', '🕑'],
       ['settings', 'Settings', '⚙️'], ['archive', 'Annual Archive', '🗄']
     ];
     const cmds = navs.map(function (n) {
@@ -25,11 +25,10 @@
     };
     act('Add Student', '➕', 'showAddStudentModal');
     act('Add Room', '➕', 'showAddRoomModal');
-    act('Add Payment', '➕', 'showAddPaymentModal');
+    act('Add Payment', '➕', 'openAddPayment');
     act('Add Expense', '➕', 'showAddExpenseModal');
     act('Add Cancellation', '➕', 'showAddCancellationModal');
     act('Add Issue / Complaint', '➕', 'showAddIssueModal');
-    act('New Funds Transfer', '🏦', 'showAddTransferModal');
     act('Export Students CSV', '📥', 'exportStudentsCSV');
     act('Export Payments CSV', '📥', 'exportPaymentsCSV');
     act('Export Rooms CSV', '📥', 'exportRoomsCSV');
