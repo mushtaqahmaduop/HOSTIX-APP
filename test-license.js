@@ -57,26 +57,22 @@ const LAST_RUN_PATH = path.join(TMP_DIR, 'last_run.dat');
 fs.mkdirSync(TMP_DIR, { recursive: true });
 
 // ── Reproduce exact logic from main.js (v3) ──────────────────────────────────
-function _getWinMachineGuid() {
-  if (os.platform() !== 'win32') return '';
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync(
-      'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
-      { encoding: 'utf8', timeout: 2000, windowsHide: true }
-    );
-    const m = out.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/);
-    return m ? m[1].trim() : '';
-  } catch (e) { return ''; }
-}
+/* THE FINGERPRINT IS NOT COPIED HERE ANY MORE.
+ *
+ * This file used to carry its own getMachineId(), and it had drifted badly:
+ * it hashed  hostname | platform | arch | cpu | guid  — still including the
+ * hostname that FIX-04 removed from the real one years ago, and never
+ * including the drive or BIOS serials that FIX-05 and S5-FIX added. So every
+ * test below was exercising a fingerprint the app has not produced in a long
+ * time, which is the one thing a licence test must not do.
+ *
+ * It comes from services/machine-id.js now, the same module main.js calls.
+ * No stateDir is passed: these tests want the raw reading of this machine,
+ * with no machine.json written beside them and none consulted. */
+const { computeMachineId } = require('./services/machine-id');
 
 function getMachineId() {
-  const raw = [
-    os.hostname(), os.platform(), os.arch(),
-    (os.cpus()[0] && os.cpus()[0].model) || 'cpu',
-    _getWinMachineGuid()
-  ].join('|');
-  return crypto.createHash('sha256').update(raw).digest('hex'); // full 64 chars
+  return computeMachineId({}).id;                 // full 64 chars
 }
 
 function encryptLicense(data, machineId) {
