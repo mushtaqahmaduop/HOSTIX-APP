@@ -302,11 +302,27 @@
         var addr = document.getElementById('login-address');
         if (addr) addr.textContent = s.location;
       }
+      // DB.settings.version is a stored data field that has said 'v3.0' since
+      // long before this build, so it is only a fallback. The real answer is
+      // app.getVersion(), which is the number a warden reads out to support and
+      // the one the updater compares — see window.appInfo below.
       if (s && s.version) {
         var ver = document.getElementById('login-version');
         if (ver) ver.textContent = s.version;
       }
     }
+
+    // The build's real version, straight from package.json via the main
+    // process. Async, so the fallback above paints first and this corrects it
+    // a beat later — which beats showing nothing, and beats showing 'v3.0'.
+    try {
+      if (window.appInfo && window.appInfo.version) {
+        window.appInfo.version().then(function (v) {
+          var el = document.getElementById('login-version');
+          if (el && v) el.textContent = 'v' + v;
+        }).catch(function () {});
+      }
+    } catch (e) { /* browser, no bridge — the fallback stands */ }
 
     // ── Brand-panel figures ────────────────────────────────────────────────
     // Real counts from this hostel's own DB, using the SAME definitions as
