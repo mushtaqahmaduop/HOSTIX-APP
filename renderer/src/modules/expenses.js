@@ -404,6 +404,7 @@ function _expReturnPage() {
 }
 
 function showAddExpenseModal() {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const catOpts=DB.settings.expenseCategories.map(c=>`<option>${escHtml(c)}</option>`).join('');
   showModal('modal-md','Add Expense',`
     <div class="form-grid">
@@ -415,6 +416,7 @@ function showAddExpenseModal() {
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitAddExpense()">Add Expense</button>`);
 }
 async function submitAddExpense() {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const cat=document.getElementById('f-ecat').value;
   const amount=parseFloat(document.getElementById('f-eamt').value);
   if(!cat){toast('Pick a category','error');return;}
@@ -445,6 +447,7 @@ function showEditExpenseModal(id) {
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditExpense('${id}')">Save</button>`);
 }
 async function submitEditExpense(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const e=DB.expenses.find(x=>x.id===id); if(!e) return;
   const _newAmt=parseFloat(document.getElementById('f-eamt').value);
   // `|| e.amount` kept the old figure whenever the new one was 0 or negative,

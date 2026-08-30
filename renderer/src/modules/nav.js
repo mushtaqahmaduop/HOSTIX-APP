@@ -126,14 +126,23 @@ function navigate(page, isBack=false) {
   const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
   const _s=document.getElementById('hdr-sub');
   if(_s) { _s.textContent=cfg?.sub||''; _s.style.display = cfg?.sub ? 'block' : 'none'; }
+  /* The header's two green/blue buttons are Add <something> and Add Payment,
+     and both now lead to a gate. A button that always refuses is worse than no
+     button: the warden does not learn they lack the permission, they learn the
+     app is broken. _mayAdd/_mayCollect keep the chrome honest; the gates at the
+     entry points are still the boundary, because the command palette and a
+     direct navigate() reach those functions without passing through here. */
+  const _mayAdd     = typeof canDo !== 'function' || canDo('edit');
+  const _mayCollect = typeof canDo !== 'function' || canDo('payments');
   const actionBtn = document.getElementById('hdr-action');
   if(actionBtn) {
-    if(cfg && cfg.action) { actionBtn.style.display='flex'; document.getElementById('hdr-action-text').textContent=cfg.action; }
+    if(cfg && cfg.action && _mayAdd) { actionBtn.style.display='flex'; document.getElementById('hdr-action-text').textContent=cfg.action; }
     else { actionBtn.style.display='none'; }
   }
   // Show "Add Payment" button on Dashboard and Students pages
   const action2Btn = document.getElementById('hdr-action2');
-  if(action2Btn) action2Btn.style.display = (page === 'students' || page === 'dashboard') ? 'flex' : 'none';
+  if(action2Btn) action2Btn.style.display =
+    ((page === 'students' || page === 'dashboard') && _mayCollect) ? 'flex' : 'none';
   renderPage(page, true); // reset scroll on real navigation
 }
 
@@ -195,7 +204,8 @@ function renderPage(p, resetScroll=false) {
     const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
     const _s=document.getElementById('hdr-sub'); if(_s) _s.textContent=cfg?.sub||'';
     const actionBtn=document.getElementById('hdr-action');
-    if(cfg&&cfg.action){actionBtn.style.display='flex';document.getElementById('hdr-action-text').textContent=cfg.action;}
+    const _mayAdd2 = typeof canDo !== 'function' || canDo('edit');
+    if(cfg&&cfg.action&&_mayAdd2){actionBtn.style.display='flex';document.getElementById('hdr-action-text').textContent=cfg.action;}
     else{actionBtn.style.display='none';}
     const action2Btn=document.getElementById('hdr-action2');
     if(action2Btn) action2Btn.style.display='none';
