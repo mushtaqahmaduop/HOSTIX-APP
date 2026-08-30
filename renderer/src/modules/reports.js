@@ -1128,7 +1128,7 @@ function downloadReportDetailPDF(detailId) {
   // Escaped ONCE, here, because this value is interpolated into the print
   // document in four places (the <title>, the header, the footer and the
   // filename) and escaping it at each of those is how one gets missed.
-  const hostelRaw = DB.settings.hostelName || 'DAMAM Hostel';
+  const hostelRaw = DB.settings.hostelName || 'Hostel Name';
   const hostel = escHtml(hostelRaw);
   const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expenses by Category',payments:'Payment Transactions'};
   const title = titles[detailId] || 'Report';

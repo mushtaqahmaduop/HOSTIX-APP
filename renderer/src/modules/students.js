@@ -2084,7 +2084,7 @@ function downloadAllStudentsPDF() {
 function doGenerateStudentsPDF(monthKey) {
   if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
   var appName  = DB.settings.appName  || 'HOSTYLLO';
-  var hostel   = DB.settings.hostelName || 'DAMAM Boys Hostel';
+  var hostel   = DB.settings.hostelName || 'Hostel Name';
   var location = DB.settings.location  || '';
   var now      = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
   // Use day 2 to avoid UTC-offset shifting to previous month

@@ -22,9 +22,9 @@ const FUND_TRANSFER_CAT = 'Fund Transfer';
 let DB = {
   settings: {
     appName:         'HOSTYLLO',              // ← Customisable system/app name shown in UI & reports
-    hostelName:      'DAMAM Boys Hostel',
+    hostelName:      'Hostel Name',
     tagline:         'Safe & Comfortable Living',
-    location:        '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar',
+    location:        '',
     phone:           '',
     email:           '',
     version:         'v3.0',

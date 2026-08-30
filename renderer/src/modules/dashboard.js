@@ -905,7 +905,7 @@ function showRoomSeatDetailModal(roomId) {
 // ── SEAT AVAILABILITY PRINT REPORT ──────────────────────────────────────────
 function printSeatAvailability() {
   if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
-  const hostel = DB.settings.hostelName || 'DAMAM Boys Hostel';
+  const hostel = DB.settings.hostelName || 'Hostel Name';
   const location = DB.settings.location || '';
   const now2 = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
   const totalSeats = DB.rooms.reduce((s,r)=>{const t=DB.settings.roomTypes.find(x=>x.id===r.typeId);return s+(t?t.capacity:1);},0);

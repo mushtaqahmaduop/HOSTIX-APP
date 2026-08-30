@@ -1051,7 +1051,7 @@ function renderSettings() {
               </div>
               <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center">
                 <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Preview: </span>
-                <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--accent-strong)">${escHtml(s.hostelName||'DAMAM Boys Hostel')}</span>
+                <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--accent-strong)">${escHtml(s.hostelName||'Hostel Name')}</span>
               </div>
               </div><!-- /font-picker-grid-wrap -->
             </div>

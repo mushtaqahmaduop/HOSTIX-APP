@@ -90,7 +90,10 @@ make the real policy hard to reason about. Pick one (the header).
   > **RESOLVED 2026-08-30** (commit `04e73f2`). The canonical brand is **Hostyllo Offline** — note this
   > *reverses* the 2026-07-15 answer recorded in `REMEDIATION_KICKOFF.md`, which made HOSTIX canonical.
   > Zeerak Hostix is gone entirely; HOSTIX and DAMAM survive only as frozen identifiers (userData folder,
-  > db filename, appId, repo name, crypto salts, auth storage keys) and as the sample hostel name.
+  > db filename, appId, repo name, crypto salts, auth storage keys) that would destroy live data if renamed.
+  > "DAMAM Boys Hostel" is gone from the seeded defaults too — the audit missed that the same string was the
+  > fallback on five screens *and* the `restoreBackup()` identity backfill, so a restore of an
+  > identity-less backup stamped one customer's hostel name and street address onto another's install.
   > See `CLAUDE.md` for the table of what may never be renamed and why.
 
 Neither breaks functionality, but both signal that documentation and code have drifted apart — which is

@@ -70,7 +70,7 @@ function buildReceiptHTML(payId) {
 
   var student   = DB.students.find(function(s){ return s.id === p.studentId; });
   var room      = DB.rooms.find(function(r){ return r.id === p.roomId; });
-  var hostel    = (DB.settings.hostelName  || 'DAMAM Boys Hostel').toUpperCase();
+  var hostel    = (DB.settings.hostelName  || 'Hostel Name').toUpperCase();
   var phone     = DB.settings.phone        || '';
   var email     = DB.settings.email        || '';
   var location  = DB.settings.location     || '';

@@ -243,9 +243,9 @@ function _initDBFields(d) {
   if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
   // Core identity — previously missing from restoreBackup path
   if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
-  if (!d.settings.hostelName) d.settings.hostelName = 'DAMAM Boys Hostel';
+  if (!d.settings.hostelName) d.settings.hostelName = 'Hostel Name';
   if (!d.settings.tagline) d.settings.tagline = 'Safe & Comfortable Living';
-  if (!d.settings.location) d.settings.location = '4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar';
+  if (!d.settings.location) d.settings.location = '';
   if (!d.settings.phone) d.settings.phone = '';
   if (!d.settings.email) d.settings.email = '';
   if (!d.settings.version) d.settings.version = 'v1.0';
@@ -837,9 +837,9 @@ function showUserEditor(id) {
     avatarHtml
     + '<div class="form-grid" style="gap:10px">'
     + '<div class="field"><label style="font-size:11px">Full Name</label>'
-    + '<input id="u-name" class="form-control" value="' + escHtml(u.name || '') + '" placeholder="e.g. Faheem Ullah"></div>'
+    + '<input id="u-name" class="form-control" value="' + escHtml(u.name || '') + '" placeholder="Full name"></div>'
     + '<div class="field"><label style="font-size:11px">Username</label>'
-    + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="e.g. faheem"></div>'
+    + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="Lowercase, no spaces"></div>'
     + '<div class="field"><label style="font-size:11px">' + (isNew ? 'Password' : 'New Password') + '</label>'
     + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least ' + AUTH_CFG.minPwLen + ' characters' : 'Leave blank to keep current') + '"></div>'
     + '<div class="field"><label style="font-size:11px">WhatsApp Number</label>'

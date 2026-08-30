@@ -26,11 +26,21 @@ customer must never see two vendor names for one purchase. Write the wordmark as
 still returns `hostix-app`. That is the same behaviour behind the 2026-08-15
 dev-data incident, and the reason userData does not move.
 
-`DAMAM` is likewise frozen where it is load-bearing: `damam_salt_v1` (derives the
-licence AES key), `DAMAM_WARDEN_PW_SALT_v1_2025` (hashes warden passwords), the
-`damam_auth_*` localStorage keys (hold the user accounts), and the keygen history
-store. It also stays as the sample default hostel name — that is client data, not
-branding.
+`DAMAM` is likewise frozen — but **only** where it is load-bearing: `damam_salt_v1`
+(derives the licence AES key), `DAMAM_WARDEN_PW_SALT_v1_2025` (hashes warden
+passwords), the `damam_auth_*` localStorage keys (hold the user accounts), and the
+keygen history store. Those are storage keys nobody reads; renaming them destroys
+live data.
+
+**No seeded default may name a real hostel, person or address** (owner's ruling,
+2026-08-30). "DAMAM Boys Hostel" and the Kakakhel Street address used to be the
+seed values in `config.js`, the fallbacks behind `DB.settings.hostelName` on the
+dashboard, receipt, reports, students and settings screens, and — worst — the
+backfill `restoreBackup()` applies when a backup arrives missing its identity
+fields, which stamped one customer's hostel name and street address onto another's
+install. The neutral default is now `'Hostel Name'`, and `location` seeds empty.
+Placeholders follow the same rule: describe the field ("Full name"), never name a
+person.
 
 This is the offline desktop product. The separate cloud SaaS at `C:\hostyllo` is a
 **different repo with different rules, and nothing here depends on it.**

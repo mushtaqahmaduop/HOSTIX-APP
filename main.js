@@ -617,8 +617,8 @@ function doAbout() {
     type: 'info', title: 'About',
     message: 'Hostyllo — Offline Edition',
     detail: 'Hostel Management System\nVersion ' + app.getVersion() +
-      '\n4/1 Kakakhel Street, Danishabad Shaheen Town, Peshawar' +
-      '\n\nAll hostel data is stored locally on this device.\nDeveloped by: MUSHTAQ AHMAD'
+      '\n\nAll hostel data is stored locally on this device.' +
+      '\nSupport: ' + SUPPORT_CONTACT
   });
 }
 
