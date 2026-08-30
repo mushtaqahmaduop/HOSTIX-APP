@@ -70,12 +70,22 @@
 
   var menusHtml = menus.map(function (m) {
     var itemsHtml = m.items.map(function (it) {
-      if (it.sep) return '<hr>';
+      if (it.sep) return '<hr role="separator">';
       var acc = it.acc ? '<span class="hz-acc">' + it.acc + '</span>' : '';
-      return '<button type="button" data-action="' + it.action + '"><span>' + it.label + '</span>' + acc + '</button>';
+      // tabindex="-1": items are reached with the arrow keys once the menu is
+      // open, not by tabbing through every hidden item on the page.
+      return '<button type="button" role="menuitem" tabindex="-1" data-action="' + it.action +
+             '"><span>' + it.label + '</span>' + acc + '</button>';
     }).join('');
-    return '<div class="hz-menu"><button type="button" class="hz-menu-btn">' + m.label + '</button>' +
-           '<div class="hz-drop">' + itemsHtml + '</div></div>';
+    // Mnemonic = the label's first letter; File / View / Help are unique on it.
+    // Underlined only while Alt is held, which is what Windows does.
+    var mn  = m.label.charAt(0);
+    var lbl = '<u>' + mn + '</u>' + m.label.slice(1);
+    return '<div class="hz-menu" data-mn="' + mn.toLowerCase() + '">' +
+             '<button type="button" class="hz-menu-btn" aria-haspopup="true" aria-expanded="false">' +
+               lbl + '</button>' +
+             '<div class="hz-drop" role="menu">' + itemsHtml + '</div>' +
+           '</div>';
   }).join('');
 
   bar.innerHTML =
@@ -92,35 +102,137 @@
   document.body.insertAdjacentElement('afterbegin', bar);
   document.body.classList.add('has-titlebar');
 
-  // ── Menu open/close ────────────────────────────────────────────────────────
+  // ── Menu open/close, and the keyboard access frame:false took away ───────
+  // Dropping the native menu bar dropped Alt+F, the arrow keys and Escape with
+  // it. The accelerators in main.js survived (Ctrl+S/O/Q, F11, zoom) but the bar
+  // itself was mouse-only, so Export Backup and About had no keyboard route at
+  // all. What follows puts the menu-bar interaction model back on top of it.
+  var menuEls  = Array.prototype.slice.call(bar.querySelectorAll('.hz-menu'));
   var openMenu = null;
-  function closeMenus() {
-    if (openMenu) { openMenu.classList.remove('hz-open'); openMenu = null; }
+
+  function itemsOf(menuEl) {
+    return Array.prototype.slice.call(menuEl.querySelectorAll('.hz-drop button[data-action]'));
   }
-  bar.querySelectorAll('.hz-menu').forEach(function (menuEl) {
-    var btn = menuEl.querySelector('.hz-menu-btn');
+  function btnOf(menuEl) { return menuEl.querySelector('.hz-menu-btn'); }
+
+  function openMenuEl(menuEl, focusFirst) {
+    if (openMenu && openMenu !== menuEl) {
+      openMenu.classList.remove('hz-open');
+      btnOf(openMenu).setAttribute('aria-expanded', 'false');
+    }
+    menuEl.classList.add('hz-open');
+    btnOf(menuEl).setAttribute('aria-expanded', 'true');
+    openMenu = menuEl;
+    if (focusFirst) { var it = itemsOf(menuEl)[0]; if (it) it.focus(); }
+  }
+
+  // returnFocus is opt-in: the document click handler must NOT pull focus back
+  // into the bar every time the user clicks somewhere else in the app.
+  function closeMenus(returnFocus) {
+    if (openMenu) {
+      var btn = btnOf(openMenu);
+      openMenu.classList.remove('hz-open');
+      btn.setAttribute('aria-expanded', 'false');
+      openMenu = null;
+      if (returnFocus === true) btn.focus();
+    }
+    hideHints();
+  }
+
+  /** Step to the menu `dir` places away, wrapping — ArrowLeft/Right along the bar. */
+  function stepMenu(fromEl, dir, focusFirst) {
+    var i = menuEls.indexOf(fromEl);
+    if (i < 0 || menuEls.length < 2) return;
+    var next = menuEls[(i + dir + menuEls.length) % menuEls.length];
+    openMenuEl(next, focusFirst);
+    if (!focusFirst) btnOf(next).focus();
+  }
+
+  menuEls.forEach(function (menuEl) {
+    var btn = btnOf(menuEl);
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (openMenu === menuEl) { closeMenus(); return; }
-      closeMenus();
-      menuEl.classList.add('hz-open'); openMenu = menuEl;
+      if (openMenu === menuEl) { closeMenus(false); return; }
+      openMenuEl(menuEl, false);
     });
     // Hovering another menu while one is open switches to it (native-menu feel).
     btn.addEventListener('mouseenter', function () {
-      if (openMenu && openMenu !== menuEl) {
-        closeMenus(); menuEl.classList.add('hz-open'); openMenu = menuEl;
-      }
+      if (openMenu && openMenu !== menuEl) openMenuEl(menuEl, false);
+    });
+    // On the menu button: Down/Up drops the panel with an item focused, the
+    // side arrows move along the bar. Enter/Space are the button's own click.
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        openMenuEl(menuEl, true);
+        if (e.key === 'ArrowUp') {
+          var last = itemsOf(menuEl);
+          if (last.length) last[last.length - 1].focus();
+        }
+      } else if (e.key === 'ArrowRight') { e.preventDefault(); stepMenu(menuEl,  1, false); }
+      else if (e.key === 'ArrowLeft')    { e.preventDefault(); stepMenu(menuEl, -1, false); }
+      // Escape is deliberately absent here and below: the document listener
+      // handles it in the capture phase and stops propagation, so a branch on
+      // the element would be dead code that reads like a second implementation.
+    });
+
+    // Inside the panel: the standard menu keys. Enter and Space already fire a
+    // <button>'s click, which the handler below turns into the action.
+    var list = itemsOf(menuEl);
+    list.forEach(function (item, idx) {
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown')       { e.preventDefault(); list[(idx + 1) % list.length].focus(); }
+        else if (e.key === 'ArrowUp')    { e.preventDefault(); list[(idx - 1 + list.length) % list.length].focus(); }
+        else if (e.key === 'Home')       { e.preventDefault(); list[0].focus(); }
+        else if (e.key === 'End')        { e.preventDefault(); list[list.length - 1].focus(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); stepMenu(menuEl,  1, true); }
+        else if (e.key === 'ArrowLeft')  { e.preventDefault(); stepMenu(menuEl, -1, true); }
+        else if (e.key === 'Tab')        { closeMenus(false); }   // let Tab leave the bar
+      });
     });
   });
+
   bar.querySelectorAll('.hz-drop button[data-action]').forEach(function (b) {
     b.addEventListener('click', function (e) {
       e.stopPropagation();
-      closeMenus();
+      closeMenus(false);
       api.menu(b.getAttribute('data-action'));
     });
   });
-  document.addEventListener('click', closeMenus);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
+  document.addEventListener('click', function () { closeMenus(false); });
+
+  // ── Alt: mnemonic hints, and Alt+F / Alt+V / Alt+H to open a menu ────────
+  function showHints() { document.body.classList.add('hz-alt-hints'); }
+  function hideHints() { document.body.classList.remove('hz-alt-hints'); }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      // Only swallow Escape while a menu is actually open — the app uses it to
+      // close modals, and stealing it here would strand a warden in a dialog.
+      if (openMenu) { e.stopPropagation(); closeMenus(true); }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) return;
+    if (e.key === 'Alt') { showHints(); return; }   // holding Alt reveals them
+    if (!e.altKey) return;
+    // Single letters only: Alt+F4, Alt+Tab and the rest belong to the OS.
+    var k = (e.key || '').toLowerCase();
+    if (k.length !== 1) return;
+    for (var i = 0; i < menuEls.length; i++) {
+      if (menuEls[i].getAttribute('data-mn') === k) {
+        e.preventDefault();
+        showHints();
+        openMenuEl(menuEls[i], true);
+        return;
+      }
+    }
+  }, true);
+  document.addEventListener('keyup', function (e) {
+    if (e.key === 'Alt' && !openMenu) hideHints();
+  });
+  // Alt-Tabbing away with the hints up left them underlined until the next
+  // keystroke, and an open menu floating over an unfocused window.
+  window.addEventListener('blur', function () { closeMenus(false); });
 
   // ── Window controls ────────────────────────────────────────────────────────
   var maxBtn = bar.querySelector('.hz-max');

@@ -44,6 +44,25 @@
 .hz-menu > button:hover     { background: var(--dash-sunk); color: var(--text); }
 .hz-menu.hz-open > button   { background: var(--accent-dim); color: var(--accent-strong); }
 
+/* Mnemonics. Windows shows the underline only once Alt is down, and so does
+   this: titlebar.js puts .hz-alt-hints on <body> while Alt is held or a menu
+   was opened with it. An always-underlined letter reads as a typo. */
+.hz-menu > button u                        { text-decoration: none; }
+body.hz-alt-hints .hz-menu > button u      { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Focus ring. style.css draws a global :focus-visible ring at outline-offset:2px,
+   which on a 40px bar with edge-to-edge buttons is half-clipped by the window
+   edge — and license.html never loads style.css at all, so the bar carries its
+   own inset ring. */
+#hz-titlebar button:focus-visible {
+    outline: 2px solid var(--accent, #2563eb);
+    outline-offset: -3px;
+    border-radius: 7px;
+}
+/* A keyboard-focused menu item gets the same highlight the mouse gives it, so
+   the arrow keys have something to point at. */
+.hz-drop button:focus { background: var(--dash-sunk); }
+
 /* ── Dropdown panels ─────────────────────────────────────────────────────── */
 .hz-drop {
     position: absolute; top: 100%; left: 0; min-width: 224px;

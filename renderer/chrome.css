@@ -37,7 +37,11 @@
     --sb-divider:  rgba(255,255,255,.08);
     --sb-avatar:   var(--accent);
 
-    --sidebar-w:   244px;
+    /* Narrowed 244 -> 212 (13%) on the owner's call, 2026-08-30. The rail is
+       the widest fixed cost on every page, and 212 still clears the longest
+       label ("Backup & Restore") without the .nav-label ellipsis biting:
+       212 - 24 (.sb-nav) - 24 (.nav-item) - 31 (icon + gap) = 133px of text. */
+    --sidebar-w:   212px;
     --header-h:    66px;
 }
 
@@ -258,7 +262,7 @@ body.light-theme #header {
 @media (max-width: 900px) {
     #sidebar {
         position: sticky; transform: none !important;
-        width: 200px; min-width: 200px;
+        width: 190px; min-width: 190px;
     }
     #sidebar-overlay { display: none !important; }
     #main { margin-left: 0 !important; }
