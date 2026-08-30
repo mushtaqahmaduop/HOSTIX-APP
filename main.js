@@ -989,6 +989,7 @@ ipcMain.handle('license:prepareUninstall', async () => {
 
 ipcMain.handle('license:openSettings', () => openLicenseSettings());
 ipcMain.handle('license:machineId', () => getMachineId());
+ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('license:loadApp', () => {
   if (!mainWindow) return;

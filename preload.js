@@ -133,6 +133,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // ── Custom title bar API (used by index.html AND license.html) ─────────────
 // Frameless window controls + the File/View/Help actions, routed to the same
 // main-process handlers the native accelerators use.
+// The build's own version, for the login footer and for support calls. The
+// renderer had no way to ask: it was printing DB.settings.version, a stored
+// data field that has read 'v3.0' since long before this build.
+contextBridge.exposeInMainWorld('appInfo', {
+  version: () => ipcRenderer.invoke('app:version'),
+});
+
 contextBridge.exposeInMainWorld('titlebar', {
   minimize:         () => ipcRenderer.send('window:minimize'),
   toggleMaximize:   () => ipcRenderer.send('window:toggleMaximize'),
