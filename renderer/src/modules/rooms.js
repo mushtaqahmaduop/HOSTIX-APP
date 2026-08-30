@@ -1,4 +1,4 @@
-/* ─── HOSTIX — ROOMS MODULE ─────────────────────────────────────────────────
+/* ─── HOSTYLLO — ROOMS MODULE ─────────────────────────────────────────────────
    Contains: renderRooms, showRoomDetail, showAddRoomModal, submitAddRoom,
              showEditRoomModal, submitEditRoom, confirmDeleteRoom
    ─────────────────────────────────────────────────────────────────────────── */

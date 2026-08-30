@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — LICENSE SYSTEM (renderer side — PATCHED) ───────────────
+/* ─── HOSTYLLO — LICENSE SYSTEM (renderer side — PATCHED) ───────────────
    Communicates with main process via window.electronAPI (preload.js).
    Runs at startup: if license invalid → shows activation screen, blocks app.
    Also provides deactivateLicense() for the Settings page.
@@ -28,7 +28,7 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
   let status;
   try {
     status = await window.electronAPI.licenseCheck();
-    window._damam_license_cache = status;
+    window._hostyllo_license_cache = status;
   } catch(e) {
     status = { valid: false, reason: 'ipc_error' };
   }

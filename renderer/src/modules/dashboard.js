@@ -1,4 +1,4 @@
-/* ─── HOSTIX — DASHBOARD MODULE ────────────────────────────────────────────
+/* ─── HOSTYLLO — DASHBOARD MODULE ────────────────────────────────────────────
    Contains: calcRevenue, _payMatchesMonth, generateRooms, renderDashboard,
              all room detail modals, month detail modals, trend chart,
              global search, navigation helpers

@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// DAMAM Boys Hostel — Main Process  (Merged v3 — SECURITY PATCHED)
+// HOSTYLLO — Main Process  (Merged v3 — SECURITY PATCHED)
 //
 // SECURITY FIXES APPLIED:
 //  FIX-01  write-file IPC validates path — only allowed dirs (downloads/docs/desktop)
@@ -112,17 +112,17 @@ function initDatabase() {
       const bak = dbPath + '.pre-v1.bak';
       if (!fs.existsSync(bak)) {
         db.exec(`VACUUM INTO '${bak.replace(/'/g, "''")}'`);
-        console.log('[HOSTIX] Pre-migration backup written:', bak);
+        console.log('[HOSTYLLO] Pre-migration backup written:', bak);
       }
     }
     const migRes = migration001.migrateDatabase(db);
-    if (migRes.migrated) console.log('[HOSTIX] Schema migrated to v' + migRes.version);
+    if (migRes.migrated) console.log('[HOSTYLLO] Schema migrated to v' + migRes.version);
   } catch (e) {
-    console.error('[HOSTIX] Schema migration failed (continuing on existing schema):', e.message);
+    console.error('[HOSTYLLO] Schema migration failed (continuing on existing schema):', e.message);
   }
   _schemaMigrated = migration001.currentVersion(db) >= migration001.SCHEMA_VERSION;
 
-  console.log('[HOSTIX] SQLite DB initialized at:', dbPath, '| schema v' +
+  console.log('[HOSTYLLO] SQLite DB initialized at:', dbPath, '| schema v' +
     migration001.currentVersion(db));
   return db;
 }
@@ -144,7 +144,7 @@ try {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = require('electron').app ? null : console; // silent in prod
 } catch (e) {
-  console.warn('[DAMAM] electron-updater not available:', e.message);
+  console.warn('[HOSTYLLO] electron-updater not available:', e.message);
   console.error('Stack Trace:', e.stack);
 }
 
@@ -181,7 +181,7 @@ const IS_PROD = !process.argv.includes('--dev');
 
 // Anti-Debug: block --inspect / --inspect-brk in production
 if (IS_PROD && process.argv.some(a => /^--inspect(-brk)?/.test(a))) {
-  process.stderr.write('[DAMAM] Debugger attachment not permitted in production.\n');
+  process.stderr.write('[HOSTYLLO] Debugger attachment not permitted in production.\n');
   process.exit(1);
 }
 
@@ -256,7 +256,7 @@ async function _writeLastRun() {
   try {
     await fsPromises.writeFile(LAST_RUN_PATH, new Date().toISOString(), 'utf8');
   } catch (e) {
-    console.error('[DAMAM] Failed to write last run date:', e.message);
+    console.error('[HOSTYLLO] Failed to write last run date:', e.message);
   }
 }
 
@@ -523,7 +523,7 @@ function activateLicense(key) {
     };
   } catch (e) {
     // [FIX-07] Do NOT expose internal file paths in the error message sent to renderer
-    console.error('[DAMAM] License write error:', e.message);
+    console.error('[HOSTYLLO] License write error:', e.message);
     return { success: false, reason: 'Could not save license file. Please check app permissions or contact support.' };
   }
 }
@@ -556,7 +556,7 @@ function openLicenseSettings() {
     width: 780, height: 760,
     parent: mainWindow,
     modal: false,
-    title: 'License Settings — HOSTIX',
+    title: 'License Settings — Hostyllo',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -981,7 +981,7 @@ ipcMain.handle('license:prepareUninstall', async () => {
   await dialog.showMessageBox(mainWindow, {
     type: 'info', title: 'Ready to Uninstall',
     message: '✅ License data cleared',
-    detail: 'You can now safely uninstall the app from\nWindows Settings → Apps & Features.\n\nThank you for using HOSTIX!'
+    detail: 'You can now safely uninstall the app from\nWindows Settings → Apps & Features.\n\nThank you for using Hostyllo!'
   });
 
   return { success: true, results };
@@ -1031,7 +1031,7 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
   // FIX-PDF: Write HTML to a temp file instead of using data URI.
   // encodeURIComponent() on large HTML bloats size past Chromium's URL limit,
   // causing "PDF generation failed". loadFile() has no such limit.
-  const tmpFile = path.join(os.tmpdir(), 'damam_pdf_' + Date.now() + '.html');
+  const tmpFile = path.join(os.tmpdir(), 'hostyllo_pdf_' + Date.now() + '.html');
   try {
     fs.writeFileSync(tmpFile, htmlContent, 'utf8');
     await pdfWin.loadFile(tmpFile);
@@ -1042,7 +1042,7 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
     fs.writeFileSync(filePath, pdfData);
     return { success: true, filePath };
   } catch (e) {
-    console.error('[DAMAM] PDF generation failed:', e.message, e.code);
+    console.error('[HOSTYLLO] PDF generation failed:', e.message, e.code);
     // FIX-B4: Surface actionable disk/permission errors instead of a generic message
     let reason = 'PDF generation failed. Please try again.';
     if (e.code === 'ENOSPC') {
@@ -1073,7 +1073,7 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
     autoHideMenuBar: true
   });
 
-  const tmpFile = path.join(os.tmpdir(), 'damam_report_' + Date.now() + '.html');
+  const tmpFile = path.join(os.tmpdir(), 'hostyllo_report_' + Date.now() + '.html');
   try {
     fs.writeFileSync(tmpFile, htmlContent, 'utf8');
     pdfWin.loadFile(tmpFile);
@@ -1081,7 +1081,7 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
       try { fs.unlinkSync(tmpFile); } catch (_) {}
     });
   } catch (e) {
-    console.error('[DAMAM] open-pdf-window failed:', e.message);
+    console.error('[HOSTYLLO] open-pdf-window failed:', e.message);
     pdfWin.destroy();
     try { fs.unlinkSync(tmpFile); } catch (_) {}
   }
@@ -1092,17 +1092,17 @@ ipcMain.on('open-external', (_e, url) => {
   const ALLOWED_PROTOCOLS = ['https:', 'http:', 'whatsapp:', 'mailto:'];
   try {
     if (typeof url !== 'string' || url.length > 2048) {
-      console.warn('[DAMAM] open-external: rejected (invalid type or length)');
+      console.warn('[HOSTYLLO] open-external: rejected (invalid type or length)');
       return;
     }
     const parsed = new URL(url);
     if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
-      console.warn('[DAMAM] open-external: blocked protocol:', parsed.protocol);
+      console.warn('[HOSTYLLO] open-external: blocked protocol:', parsed.protocol);
       return;
     }
-    shell.openExternal(url).catch(e => console.error('[DAMAM] open-external failed:', e.message));
+    shell.openExternal(url).catch(e => console.error('[HOSTYLLO] open-external failed:', e.message));
   } catch (e) {
-    console.error('[DAMAM] open-external: invalid URL:', e.message);
+    console.error('[HOSTYLLO] open-external: invalid URL:', e.message);
   }
 });
 
@@ -1125,7 +1125,7 @@ ipcMain.on('write-file', (_e, filePath, data) => {
 
   const isAllowed = ALLOWED_DIRS.some(dir => norm.startsWith(dir + sep) || norm === dir);
   if (!isAllowed) {
-    console.error('[DAMAM] write-file: blocked unauthorized path:', norm);
+    console.error('[HOSTYLLO] write-file: blocked unauthorized path:', norm);
     if (mainWindow) mainWindow.webContents.send('pdf-saved', {
       success: false, error: 'File location not permitted. Please choose Downloads, Documents, or Desktop.'
     });
@@ -1136,7 +1136,7 @@ ipcMain.on('write-file', (_e, filePath, data) => {
     fs.writeFileSync(filePath, data, 'utf8');
     if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: true, filePath });
   } catch (e) {
-    console.error('[DAMAM] write-file failed:', e.message);
+    console.error('[HOSTYLLO] write-file failed:', e.message);
     if (mainWindow) mainWindow.webContents.send('pdf-saved', {
       success: false, error: 'Could not save file. Check folder permissions.' // [FIX-07]
     });
@@ -1173,7 +1173,7 @@ function setupAutoUpdater() {
 
   // No update — silent, no dialog needed
   autoUpdater.on('update-not-available', () => {
-    console.log('[DAMAM] App is up to date.');
+    console.log('[HOSTYLLO] App is up to date.');
   });
 
   // Download progress — send to renderer for optional progress bar
@@ -1194,7 +1194,7 @@ function setupAutoUpdater() {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Ready',
-      message: `HOSTIX v${info.version} is ready to install`,
+      message: `Hostyllo v${info.version} is ready to install`,
       detail: 'Restart now to apply the update, or it will install automatically when you next close the app.',
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
@@ -1206,7 +1206,7 @@ function setupAutoUpdater() {
 
   // Error — log only, no popup (avoid scaring users for network issues)
   autoUpdater.on('error', (err) => {
-    console.error('[DAMAM] Auto-update error:', err.message);
+    console.error('[HOSTYLLO] Auto-update error:', err.message);
   });
 }
 
@@ -1484,7 +1484,7 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     setTimeout(() => {
       setupAutoUpdater();
       autoUpdater.checkForUpdates().catch(e =>
-        console.warn('[DAMAM] Update check failed:', e.message)
+        console.warn('[HOSTYLLO] Update check failed:', e.message)
       );
     }, 3000);
   }

@@ -1,4 +1,4 @@
-/* ─── HOSTIX — SETTINGS MODULE ─────────────────────────────────────────────
+/* ─── HOSTYLLO — SETTINGS MODULE ─────────────────────────────────────────────
    Contains: renderSettings, bindSettingsEvents, renderLicenseSettingsPanel,
              openLicenseSettingsWindow, liveUpdateSetting, applyHostelFont,
              saveSettings, bulk rent update helpers, room type/payment method
@@ -1267,7 +1267,7 @@ async function connCheckNow(btn) {
 }
 
 function renderLicenseSettingsPanel() {
-  const licCache = window._damam_license_cache;
+  const licCache = window._hostyllo_license_cache;
   const hasLic   = licCache && licCache.valid;
   const expStr   = hasLic && licCache.expiry
     ? new Date(licCache.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})

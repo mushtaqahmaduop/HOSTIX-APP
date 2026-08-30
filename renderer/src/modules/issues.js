@@ -1,4 +1,4 @@
-/* ─── HOSTIX — ISSUES (Maintenance & Complaints) MODULE ────────────────────
+/* ─── HOSTYLLO — ISSUES (Maintenance & Complaints) MODULE ────────────────────
    Contains: renderIssues, showAddIssueModal, saveIssue (wrapper),
              resolveMaintenance, progressMaintenance, deleteMaintenance,
              resolveComplaint, deleteComplaint,

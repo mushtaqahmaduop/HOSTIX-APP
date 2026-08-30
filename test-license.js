@@ -1,7 +1,7 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════
  * PHASE 12 — LICENSE SYSTEM TEST SUITE v3  (Final)
- * DAMAM Boys Hostel Management System
+ * Hostyllo — Hostel Management System
  *
  * Run with:  node test-license.js
  *
@@ -50,7 +50,7 @@ const _SECRET = Buffer.from(
   '44344d344d5f483053543333545f5333435233545f5334344c545f7631', 'hex'
 ).toString();
 
-const TMP_DIR       = path.join(os.tmpdir(), 'damam_license_test_' + Date.now());
+const TMP_DIR       = path.join(os.tmpdir(), 'hostyllo_license_test_' + Date.now());
 const LICENSE_PATH  = path.join(TMP_DIR, 'license.enc');
 const LAST_RUN_PATH = path.join(TMP_DIR, 'last_run.dat');
 
@@ -194,7 +194,7 @@ function cleanFiles() {
   try {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
   } catch (e) {
-    console.error('[DAMAM] Failed to clean temporary files:', e.message);
+    console.error('[HOSTYLLO] Failed to clean temporary files:', e.message);
   }
   // Recreate temp directory for next test
   fs.mkdirSync(TMP_DIR, { recursive: true });

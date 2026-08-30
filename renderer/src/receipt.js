@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — RECEIPT SYSTEM (PATCHED) ───────────────────────────────
+/* ─── HOSTYLLO — RECEIPT SYSTEM (PATCHED) ───────────────────────────────
    FIXES:
    FIX-R1  Receipt counter moved OUT of buildReceiptHTML().
            Counter now only increments when receipt is FINALIZED (PDF save or print),

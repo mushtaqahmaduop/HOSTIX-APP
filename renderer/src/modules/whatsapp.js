@@ -1,4 +1,4 @@
-/* ─── HOSTIX — WHATSAPP REMINDERS ──────────────────────────────────────────
+/* ─── HOSTYLLO — WHATSAPP REMINDERS ──────────────────────────────────────────
    Contains: showRentReminderModal, waBuildLinks, waSaveDefaultNumber,
              waViewPendingStudents.
 

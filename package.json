@@ -1,7 +1,7 @@
 {
   "name": "hostix-app",
   "version": "4.0.1",
-  "description": "HOSTIX — Hostel Management System by Zeerak Hostix",
+  "description": "Hostyllo Offline — Hostel Management System",
   "author": {
     "name": "MUSHTAQ AHMAD",
     "email": "mushtaqahmadicp@gmail.com"
@@ -27,8 +27,8 @@
   },
   "build": {
     "appId": "com.zeerak.hostix",
-    "productName": "HOSTIX",
-    "copyright": "Copyright © 2025 Zeerak Hostix — MUSHTAQ AHMAD",
+    "productName": "Hostyllo Offline",
+    "copyright": "Copyright © 2026 Hostyllo — MUSHTAQ AHMAD",
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
@@ -101,7 +101,7 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HOSTIX",
+      "shortcutName": "Hostyllo Offline",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
@@ -109,12 +109,12 @@
       "displayLanguageSelector": false,
       "include": null,
       "license": null,
-      "artifactName": "HOSTIX-Setup-${version}-${arch}.exe",
+      "artifactName": "Hostyllo-Offline-Setup-${version}-${arch}.exe",
       "warningsAsErrors": false,
       "differentialPackage": false
     },
     "portable": {
-      "artifactName": "HOSTIX-Portable-${version}-${arch}.exe",
+      "artifactName": "Hostyllo-Offline-Portable-${version}-${arch}.exe",
       "useZip": false
     },
     "publish": {

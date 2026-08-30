@@ -1,4 +1,4 @@
-/* ─── HOSTIX — SIDEBAR CALENDAR MODULE ─────────────────────────────────────
+/* ─── HOSTYLLO — SIDEBAR CALENDAR MODULE ─────────────────────────────────────
    Contains: toggleSbCal, closeSbCal, renderSidebarCalendar,
              sbCalPrev, sbCalNext, sbCalSetYear
    ─────────────────────────────────────────────────────────────────────────── */

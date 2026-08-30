@@ -1,4 +1,4 @@
-/* ─── HOSTIX — Migration 001: JSON-blob tables → relational (indexed) schema ──
+/* ─── HOSTYLLO — Migration 001: JSON-blob tables → relational (indexed) schema ──
    Phase 2 §6.3 PROTOTYPE — NOT wired into the running app yet.
 
    Strategy (hybrid "search columns + document blob"):

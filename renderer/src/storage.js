@@ -1,4 +1,4 @@
-/* ─── HOSTIX — STORAGE / DATABASE (v4.0 — SQLite via better-sqlite3) ─────────
+/* ─── HOSTYLLO — STORAGE / DATABASE (v4.0 — SQLite via better-sqlite3) ─────────
    Loaded after config.js, utils.js, auth.js.
    Contains: loadDB, saveDB, logActivity, backup/restore.
 
@@ -45,7 +45,7 @@ async function loadDB() {
       // SQLite empty — attempt one-time migration from localStorage
       const lsRaw = localStorage.getItem(LS_KEY);
       if (lsRaw) {
-        console.info('[HOSTIX] Migrating localStorage → SQLite...');
+        console.info('[HOSTYLLO] Migrating localStorage → SQLite...');
         try {
           const lsData = JSON.parse(lsRaw);
           for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
@@ -70,13 +70,13 @@ async function loadDB() {
           localStorage.removeItem(LS_KEY);
           localStorage.removeItem(_LS_PENDING_KEY);
           localStorage.removeItem('dbh2_archive');
-          console.info('[HOSTIX] Migration complete.');
+          console.info('[HOSTYLLO] Migration complete.');
           setTimeout(function () {
             if (typeof toast === 'function')
               toast('Data migrated to SQLite — faster and safer.', 'success', 'Upgraded');
           }, 1500);
         } catch (e) {
-          console.error('[HOSTIX] Migration failed:', e);
+          console.error('[HOSTYLLO] Migration failed:', e);
           setTimeout(function () {
             if (typeof toast === 'function')
               toast('⚠️ Migration failed — existing data preserved in localStorage.', 'error');
@@ -143,7 +143,7 @@ function _loadFromLocalStorage() {
     const s = localStorage.getItem(LS_KEY);
     if (s) DB = JSON.parse(s);
   } catch (e) {
-    console.error('[HOSTIX] localStorage fallback load failed:', e);
+    console.error('[HOSTYLLO] localStorage fallback load failed:', e);
   }
 }
 
@@ -254,7 +254,7 @@ async function saveDB() {
       if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
       return true;
     } catch (e) {
-      console.error('[HOSTIX] surgical saveDB failed, falling back to full rewrite:', e);
+      console.error('[HOSTYLLO] surgical saveDB failed, falling back to full rewrite:', e);
       // Safety net: if anything goes wrong with the diff path, guarantee
       // consistency by rewriting everything the old way.
       return _saveDBFull();
@@ -279,7 +279,7 @@ async function _saveDBFull() {
       if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
       return true;
     } catch (e) {
-      console.error('[HOSTIX] SQLite saveDB failed:', e);
+      console.error('[HOSTYLLO] SQLite saveDB failed:', e);
       _showSaveFailure(e && e.message);
       return false;
     }
@@ -299,7 +299,7 @@ function _saveToLocalStorage() {
     if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
     return true;
   } catch (e) {
-    console.error('[HOSTIX] localStorage save failed:', e);
+    console.error('[HOSTYLLO] localStorage save failed:', e);
     _showSaveFailure('storage full');
     return false;
   }
@@ -423,7 +423,7 @@ if (window.electronAPI) {
       if (typeof toast         === 'function') toast('Backup imported successfully', 'success');
       markBackupDone();
     } catch (e) {
-      console.error('[HOSTIX] Import failed:', e);
+      console.error('[HOSTYLLO] Import failed:', e);
       if (typeof toast === 'function') toast('Import failed: ' + e.message, 'error');
     }
   });

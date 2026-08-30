@@ -1,4 +1,4 @@
-/* ─── HOSTIX — APP ENTRY POINT (slim orchestrator) ─────────────────────────
+/* ─── HOSTYLLO — APP ENTRY POINT (slim orchestrator) ─────────────────────────
    Modular structure (Phase E refactor):
    ┌─ src/config.js            ─ constants, DB schema default
    ├─ src/utils.js             ─ uid, escHtml, fmtDate, fmtPKR, debounce
@@ -131,7 +131,7 @@ updateSidebar(); // shows zeros/defaults until boot() completes
     const _fixed = repairStudentSnapshots();
     if (_fixed > 0) {
       await saveDB();
-      console.info('[HOSTIX] Re-synced ' + _fixed + ' stale student name(s) on payment records.');
+      console.info('[HOSTYLLO] Re-synced ' + _fixed + ' stale student name(s) on payment records.');
     }
   }
   // Records that describe themselves wrongly — mess counted twice inside a
@@ -144,7 +144,7 @@ updateSidebar(); // shows zeros/defaults until boot() completes
     const _rpTotal = _rp.drift + _rp.messFlag + _rp.students + _rp.dupEntries + _rp.ghostTrails;
     if (_rpTotal > 0) {
       await saveDB();
-      console.info('[HOSTIX] Repaired payment composition: ' + JSON.stringify(_rp));
+      console.info('[HOSTYLLO] Repaired payment composition: ' + JSON.stringify(_rp));
     }
   }
   await processAutoCancellations();

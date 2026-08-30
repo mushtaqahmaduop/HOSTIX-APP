@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — PRELOAD (Secure IPC Bridge — PATCHED) ────────────────
+/* ─── HOSTYLLO — PRELOAD (Secure IPC Bridge — PATCHED) ────────────────
    contextIsolation: true  |  nodeIntegration: false
    All renderer ↔ main communication goes through this file only.
 

@@ -1,4 +1,4 @@
-// Phase 0 safety-net — Playwright config for the HOSTIX Electron smoke test.
+// Phase 0 safety-net — Playwright config for the HOSTYLLO Electron smoke test.
 // Single worker, no retries, generous timeout (Electron cold-launches twice per run).
 const { defineConfig } = require('@playwright/test');
 

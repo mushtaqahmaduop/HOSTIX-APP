@@ -1,4 +1,4 @@
-// Ambient type declarations for HOSTIX's cross-file globals.
+// Ambient type declarations for Hostyllo's cross-file globals.
 //
 // The renderer shares ONE global script scope (no module system — files are
 // loaded in order via <script> tags), so functions/objects defined in one file
@@ -73,5 +73,5 @@ interface ElectronAPI {
 }
 interface Window {
   electronAPI: ElectronAPI;
-  _damam_license_cache?: any;
+  _hostyllo_license_cache?: any;
 }

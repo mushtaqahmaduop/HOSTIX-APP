@@ -1,4 +1,4 @@
-/* ─── HOSTIX — EXPENSES MODULE ─────────────────────────────────────────────
+/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
              showEditExpenseModal, submitEditExpense, deleteExpense,
              showClearAllMenu, clearPayments, clearExpenses, clearStudents,

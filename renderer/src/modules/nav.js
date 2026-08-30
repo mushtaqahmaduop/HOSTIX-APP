@@ -1,4 +1,4 @@
-/* ─── HOSTIX — NAVIGATION MODULE ───────────────────────────────────────────
+/* ─── HOSTYLLO — NAVIGATION MODULE ───────────────────────────────────────────
    Loaded by index.html after storage.js
    Contains: goBack, navigate, headerAction, headerAction2, renderPage,
              updateSidebar, searchRenderPage, toggleSidebar, closeSidebar

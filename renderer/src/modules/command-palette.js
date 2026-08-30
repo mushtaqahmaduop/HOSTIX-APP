@@ -1,4 +1,4 @@
-/* ─── HOSTIX — COMMAND PALETTE (Ctrl/Cmd + K) ───────────────────────────────
+/* ─── HOSTYLLO — COMMAND PALETTE (Ctrl/Cmd + K) ───────────────────────────────
    Quick keyboard launcher: jump to any page, run an action, or open a student.
    Self-contained overlay (own container), global Ctrl+K toggle, keyboard nav.
    Depends on globals: navigate, showViewStudentModal, escHtml, DB, CUR_USER,

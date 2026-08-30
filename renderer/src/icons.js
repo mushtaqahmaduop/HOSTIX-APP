@@ -1,4 +1,4 @@
-/* ─── HOSTIX — SHARED ICON SYSTEM (Lucide, offline-vendored) ────────────────
+/* ─── HOSTYLLO — SHARED ICON SYSTEM (Lucide, offline-vendored) ────────────────
    Premium outline icons from Lucide (https://lucide.dev, ISC license).
    Paths baked in at build time from `lucide-static` → fully offline, no CDN,
    no runtime dependency. The icon() API is unchanged, so every existing

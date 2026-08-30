@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   HOSTIX — UI v4  ·  Claude Dark  ·  Claude Light
+   HOSTYLLO — UI v4  ·  Claude Dark  ·  Claude Light
    Design tokens aligned to a clean, neutral dark/light aesthetic.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -2591,7 +2591,7 @@ extra-charge-row { display: flex; gap: 8px; align-items: center; margin-bottom: 
 #admin-panel { font-family: var(--font); }
 
 /* ╔═══════════════════════════════════════════════════════════════════════════╗
-   ║  HOSTIX — PREMIUM UPGRADE v2.0                                           ║
+   ║  HOSTYLLO — PREMIUM UPGRADE v2.0                                           ║
    ║  Mac-quality UI · Glassmorphism · Motion · Login · Micro-interactions    ║
    ╚═══════════════════════════════════════════════════════════════════════════╝ */
 
@@ -3804,7 +3804,7 @@ body.light-theme .modal {
 
 
 /* ╔═══════════════════════════════════════════════════════════════════════════╗
-   ║  HOSTIX — STITCH DESIGN SYSTEM v2                                        ║
+   ║  HOSTYLLO — STITCH DESIGN SYSTEM v2                                        ║
    ║  Material 3 · Chromium Glass · Premium 2026 SaaS                         ║
    ║  Built from Google Stitch prototypes — June 2026                          ║
    ╚═══════════════════════════════════════════════════════════════════════════╝ */
@@ -4638,7 +4638,7 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
    STITCH DESIGN SYSTEM v2 — END
    ═══════════════════════════════════════════════════════════════════════════ */
 /* ══════════════════════════════════════════════════════════════════════════
-   HOSTIX — ICON SYSTEM (v1)
+   HOSTYLLO — ICON SYSTEM (v1)
    Self-contained inline SVG icons. No CDN/network dependency — required
    for an offline-first desktop app. Replaces emoji-as-icon usage.
 

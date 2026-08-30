@@ -1,4 +1,4 @@
-/* ─── HOSTIX — THEME MODULE ─────────────────────────────────────────────────
+/* ─── HOSTYLLO — THEME MODULE ─────────────────────────────────────────────────
    Loaded by index.html after storage.js
    Contains: toggleTheme, updateThemeUI, applySavedSidebar, initTheme
    ─────────────────────────────────────────────────────────────────────────── */

@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — CENTRAL CONFIG ─────────────────────────────────────────
+/* ─── HOSTYLLO — CENTRAL CONFIG ─────────────────────────────────────────
    Loaded FIRST before all other scripts.
    Contains: localStorage key, active hostel ID, default DB schema.
    ─────────────────────────────────────────────────────────────────────────── */

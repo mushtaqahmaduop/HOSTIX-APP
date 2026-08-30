@@ -1,4 +1,4 @@
-/* ─── HOSTIX — PAYMENTS MODULE ─────────────────────────────────────────────
+/* ─── HOSTYLLO — PAYMENTS MODULE ─────────────────────────────────────────────
    Contains: renderPayments, generateMonthlyRents, markPaymentPaid,
              deletePayment, filterStudentDropdown, selectStudentForPayment,
              recalcUnpaid, renderAddPayment, openAddPayment, submitAddPayment,

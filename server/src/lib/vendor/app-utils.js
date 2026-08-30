@@ -7,7 +7,7 @@
 // Refresh:  npm run sync-shared
 // Drift is a test failure, not a silent fork — see test/run.js.
 // ══════════════════════════════════════════════════════════════════════════
-/* ─── DAMAM HOSTEL — UTILITY FUNCTIONS ──────────────────────────────────────
+/* ─── HOSTYLLO — UTILITY FUNCTIONS ──────────────────────────────────────
    Loaded after config.js. No dependencies on auth or storage.
    Contains: formatting helpers, DOM utilities, course autocomplete.
    ─────────────────────────────────────────────────────────────────────────── */
@@ -723,7 +723,7 @@ function validateKeyChecksum(key, secret) {
     if (!parsed) return false;
     return parsed.checksum === licenseChecksum(parsed, secret);
   } catch (e) {
-    console.error('[DAMAM] Key checksum validation failed:', e.message);
+    console.error('[HOSTYLLO] Key checksum validation failed:', e.message);
     return false;
   }
 }

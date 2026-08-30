@@ -1,4 +1,4 @@
-/* ─── DAMAM HOSTEL — AUTH SYSTEM v2.0 ────────────────────────────────────────
+/* ─── HOSTYLLO — AUTH SYSTEM v2.0 ────────────────────────────────────────
    Requires: config.js, utils.js (escHtml, toast).
  
    SECURITY MODEL:

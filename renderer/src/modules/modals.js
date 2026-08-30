@@ -1,4 +1,4 @@
-/* ─── HOSTIX — MODALS & UI MODULE ───────────────────────────────────────────
+/* ─── HOSTYLLO — MODALS & UI MODULE ───────────────────────────────────────────
    Contains: showModal, closeModal, showConfirm, toast, showCustomDatePicker,
              _cdpClose/_cdpClear/_cdpPrev/_cdpNext/_cdpRender/_cdpPick,
              _showCameraPermBanner, statusBadge, pmBadge,
@@ -101,7 +101,7 @@ async function showBackupRestoreModal() {
         <span class="bkp-safe__ico">${icon('lock','sm')}</span>
         <div>
           <div class="bkp-safe__t">Your data is stored on this computer</div>
-          <div class="bkp-safe__s">HOSTIX runs offline — nothing leaves this machine. Export a backup file to
+          <div class="bkp-safe__s">Hostyllo runs offline — nothing leaves this machine. Export a backup file to
             a USB or cloud drive so a disk failure can’t take the hostel’s records with it.</div>
         </div>
       </div>
@@ -182,7 +182,7 @@ async function showBackupRestoreModal() {
 async function exportBackup(mode) {
   const json = JSON.stringify(DB, null, 2);
   const now = new Date();
-  const filename = 'HOSTIX_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
+  const filename = 'Hostyllo_Backup_' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + '.json';
   if(mode==='json') {
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
