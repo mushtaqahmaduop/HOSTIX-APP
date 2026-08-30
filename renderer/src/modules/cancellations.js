@@ -15,7 +15,53 @@
    the authority, and renderCancellations mirrors it into `status` below so the
    toolbar can re-render into the same view. */
 let cancelFilter = { status:'All', search:'', type:'All', room:'All', from:'', to:'',
-                     page:1, pageSize:30, sortKey:null, sortDir:'asc' };
+                     month:thisMonth(), page:1, pageSize:30, sortKey:null, sortDir:'asc' };
+
+/* ── WHICH MONTH A CANCELLATION BELONGS TO ───────────────────────────────────
+   The month the student LEAVES, not the month the form was filled in. Here the
+   two are routinely different: the house rule is that notice is given by the
+   25th, so a request written on 20 July for a 31 August move-out is an August
+   departure. Filing it under July is what made July's leavers keep turning up
+   in August's list.
+
+   requestDate is only a fallback for records written before vacateDate was
+   captured; without it those rows would fall out of every month at once. */
+function _cancMonthKey(c) {
+  return _toMonthKey(c && c.vacateDate) || _toMonthKey(c && c.requestDate) || null;
+}
+
+/* '' matches everything, '2026' a whole year, '2026-08' one month — the same
+   prefix convention _inPeriod() uses on the dashboard. */
+function _cancInScope(c) {
+  const scope = cancelFilter.month;
+  if (!scope) return true;
+  return String(_cancMonthKey(c) || '').startsWith(scope);
+}
+
+/* Every month the data actually touches, newest first, plus the current one so
+   a hostel with no cancellations yet still has something to show. Each year
+   gets a whole-year entry of its own: the scope is matched as a string prefix,
+   so '2026' selects all of 2026 with no extra machinery. */
+function _cancMonthOptions() {
+  const months = new Set([thisMonth()]);
+  (DB.cancellations || []).forEach(c => { const k = _cancMonthKey(c); if (k) months.add(k); });
+  const years = new Set([...months].map(m => m.slice(0, 4)));
+  return [...months, ...years].sort().reverse();
+}
+
+function _cancMonthLabel(key) {
+  if (!key) return 'All months';
+  if (/^\d{4}$/.test(key)) return 'All of ' + key;
+  const d = new Date(key + '-01T00:00:00');
+  return isNaN(d) ? key
+    : d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function canSetMonth(v) {
+  cancelFilter.month = v;
+  cancelFilter.page = 1;
+  renderPage('cancellations_' + cancelFilter.status);
+}
 
 /* Display reference for a request.
    New records carry a persistent `seq` (assigned in saveCancellation). Records
@@ -45,7 +91,11 @@ function _cancInitials(name) {
 
 function renderCancellations(filterStatus='All') {
   cancelFilter.status = filterStatus;   // the route is the authority; mirror it
-  const list = DB.cancellations || [];
+  const all  = DB.cancellations || [];
+  // Everything below counts THIS MONTH's departures. Before this, the strip
+  // counted the whole database, so a hostel two years in read "All Records
+  // 214" on a page a warden opens to answer "who is going this month".
+  const list = all.filter(_cancInScope);
   const pending = list.filter(c=>c.status==='Pending');
   const confirmed = list.filter(c=>c.status==='Confirmed');
   const restored = list.filter(c=>c.status==='Restored');
@@ -159,10 +209,19 @@ function renderCancellations(filterStatus='All') {
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="lk-stats">
-    ${card('All','dh-violet','All Records','Total cancellations',list.length,'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>')}
-    ${card('Pending','dh-amber','Pending','Awaiting action',pending.length,'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>')}
-    ${card('Confirmed','dh-green','Confirmed','Students left',confirmed.length,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
-    ${card('Restored','dh-blue','Restored','Reversed cancels',restored.length,'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')}
+    ${/* THE NUMBER THAT MUST NOT SHRINK.
+          It used to be four status counts and nothing else, so as wardens
+          marked leavers Left the Pending card fell 20 -> 15 while the month's
+          real answer was still 20. An owner asking "you said twenty are going
+          this month" read 15 and concluded the warden was making it up. The
+          headline is now the month's departures — Pending plus Confirmed —
+          which only moves when a departure is added, cancelled or restored,
+          never when one merely progresses from one status to the other. */''}
+    ${card('Freed','dh-violet',cancelFilter.month?('Leaving '+(/^\d{4}$/.test(cancelFilter.month)?cancelFilter.month:_cancMonthLabel(cancelFilter.month).split(' ')[0])):'Leaving (all months)',
+        'Still in + already left',freed.length,'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>')}
+    ${card('Pending','dh-amber','Still in hostel','Notice given, not gone yet',pending.length,'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>')}
+    ${card('Confirmed','dh-green','Already left','Seat is free',confirmed.length,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
+    ${card('Restored','dh-blue','Restored','Notice withdrawn',restored.length,'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')}
   </div>
 
   <!-- ══ FREED SEATS ══ -->
@@ -170,8 +229,8 @@ function renderCancellations(filterStatus='All') {
     <div class="lk-banner__l">
       <div class="lk-banner__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg></div>
       <div>
-        <div class="lk-banner__t">Seats Leaving (Pending + Confirmed)</div>
-        <div class="lk-banner__s">Confirmed seats are free now; pending ones free on their vacate date</div>
+        <div class="lk-banner__t">${freed.length} leaving in ${escHtml(_cancMonthLabel(cancelFilter.month))}</div>
+        <div class="lk-banner__s">${confirmed.length} already left &middot; ${pending.length} still in the hostel, seat theirs until their vacate date</div>
       </div>
     </div>
     <div>
@@ -188,6 +247,14 @@ function renderCancellations(filterStatus='All') {
         <input id="canc-search" placeholder="Search student, room, reason, request ID…"
                value="${escHtml(cancelFilter.search)}" oninput="canSearch(this.value)">
       </div>
+
+      ${/* First control on the row on purpose: it governs every number above
+            it, so it has to be the first thing read, not a filter tucked in
+            among the room-type dropdowns. */''}
+      <select class="lk-select${cancelFilter.month?' is-set':''}" onchange="canSetMonth(this.value)" title="Show one month only">
+        <option value="" ${!cancelFilter.month?'selected':''}>All months</option>
+        ${_cancMonthOptions().map(k=>`<option value="${escHtml(k)}" ${cancelFilter.month===k?'selected':''}>${escHtml(_cancMonthLabel(k))}</option>`).join('')}
+      </select>
 
       <select class="lk-select${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)" title="Filter by status">
         ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
@@ -263,7 +330,7 @@ function canSet(key, val) {
 }
 const canSearch = debounce(function (v) { canSet('search', v); }, 220);
 function canClearFilters() {
-  cancelFilter.search = ''; cancelFilter.type = 'All'; cancelFilter.room = 'All';
+  cancelFilter.month = thisMonth(); cancelFilter.search = ''; cancelFilter.type = 'All'; cancelFilter.room = 'All';
   cancelFilter.from = ''; cancelFilter.to = '';
   canSet('page', 1);
 }

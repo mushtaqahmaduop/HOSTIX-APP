@@ -112,6 +112,39 @@ Master is what 50+ paying clients run. No exceptions.
 
 8. **CSS deduplication is dangerous.** Structural rules (position, display, grid, flex) look duplicate but often aren't. Manual review required for any CSS cleanup pass.
 
+9. **A bed has three numbers, and they are not interchangeable.** Owner's
+   ruling, 2026-08-30, from how notice actually works here: you tell the warden
+   by the 25th, and the next student wants that exact room the same week.
+
+   - `getRoomOccupancy(room)` — beds **slept in**. Counts `isResident()`, so a
+     student on notice still holds theirs and is still billed for it.
+   - `getRoomVacating(room)` — beds whose occupant has given notice.
+   - `roomFreeBeds(room)` — `capacity - occupancy + vacating`. **Every capacity
+     gate reads this one.** A bed on notice is not free, it is *reservable*.
+
+   `getRoomOccupancy()` counted `status==='Active'` until this ruling while
+   `renderRooms()` counted `isResident()`, so the Rooms page drew a room full
+   while the Add Student picker offered the same room a free bed — the answer
+   depended on which screen the warden happened to be looking at. Do not
+   reintroduce a second definition of "occupied"; `roomAvailLabel()` is the one
+   phrase every picker prints.
+
+10. **A month's data belongs to that month.** Owner's ruling, 2026-08-30.
+    Records belong to the month of the thing they describe, not the month the
+    form was filled in — a cancellation filed on 20 July for a 31 August
+    move-out is an **August** departure (`_cancMonthKey`).
+
+    People are the exception, and only in one direction: a student belongs to
+    every month they were living here (`_stuInMonth` — admitted on or before it,
+    not departed before it), so the roster carries forward. Someone admitted in
+    September must never appear in August.
+
+    A month total on a card must not move when a record merely changes status.
+    The Cancellations headline counts Pending **plus** Confirmed for exactly
+    this reason: it read Pending alone, so it fell 20 -> 15 as wardens marked
+    leavers Left, and an owner reading it concluded the warden was inventing
+    numbers.
+
 ## Before editing, always ask yourself
 - Which module file will this touch?
 - Does this change CSS structural rules? → Manual review required.

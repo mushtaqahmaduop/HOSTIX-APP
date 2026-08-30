@@ -137,12 +137,17 @@ test('a student on notice keeps their bed, the room says when it frees, and the 
       val:   Number(c.querySelector('.stu-stat__val')?.textContent.trim()),
     })));
   const by = n => cards.find(c => c.label === n);
+  // The first card names the month it is counting once the page is scoped to
+  // one ('Students in August'), and reverts to 'Total Students' on All months.
+  // Either way it is the roster total the other three have to add up to.
+  const total = cards.find(c => /^(Total Students|Students in )/.test(c.label || ''));
 
   expect(by('On Notice'), 'the On Notice card must appear once somebody is on notice').toBeTruthy();
   expect(by('On Notice').val).toBe(1);
-  expect(by('Total Students').val).toBe(2);
+  expect(total, 'no roster-total card on the strip').toBeTruthy();
+  expect(total.val).toBe(2);
   expect(by('Active').val + by('On Notice').val + by('Left').val + by('Blacklisted').val)
-    .toBe(by('Total Students').val);
+    .toBe(total.val);
 
   // Clicking it filters to exactly that student.
   await win.evaluate(() => stuSetStatus('Cancelling'));

@@ -15,11 +15,70 @@
 // roomId → room, built once per call instead of DB.rooms.find() per row.
 function _stuRoomMap() { return new Map(DB.rooms.map(r => [r.id, r])); }
 
+/* ── WHICH MONTHS A STUDENT BELONGS TO ───────────────────────────────────────
+   A student is not an event, so unlike a payment or a departure they do not
+   belong to one month. They belong to every month they were living here, which
+   is the owner's rule stated exactly: "the living student data should only be
+   promoted to next month, and next month['s] student and payments etc added
+   should not be shown in previous [month's] data".
+
+   So, for a scope of August:
+     - admitted in June, still here      -> in August  (carried forward)
+     - admitted 3 September              -> NOT in August (they were not here)
+     - left 20 August                    -> in August  (they were here for 20 days)
+     - left 28 July                      -> NOT in August (already gone)
+
+   A student with no join date recorded is kept rather than dropped: the field
+   was optional in older records, and dropping them would silently shrink the
+   roster of the hostels that have been running longest. */
+function _stuScopeBounds(mk) {
+  if (/^\d{4}$/.test(mk)) return [mk + '-01', mk + '-12'];
+  return [mk, mk];
+}
+function _stuInMonth(t) {
+  const mk = studentFilter.month;
+  if (!mk) return true;
+  const [from, to] = _stuScopeBounds(mk);
+  const joined = _toMonthKey(t && t.joinDate);
+  if (joined && joined > to) return false;          // not admitted yet
+  // Only a departure that has actually happened removes them. Someone on
+  // notice is still living here, which is the whole point of 'Cancelling'.
+  const left = (t && t.status === 'Left') ? _toMonthKey(t.leftDate) : null;
+  if (left && left < from) return false;            // already gone
+  return true;
+}
+
+function _stuMonthOptions() {
+  const months = new Set([thisMonth()]);
+  (DB.students || []).forEach(t => {
+    const j = _toMonthKey(t.joinDate); if (j) months.add(j);
+    const l = _toMonthKey(t.leftDate); if (l) months.add(l);
+  });
+  // A whole-year entry per year. _stuScopeBounds() already widens a bare year
+  // to January..December, so nothing else has to know about it.
+  const years = new Set([...months].map(m => m.slice(0, 4)));
+  return [...months, ...years].sort().reverse();
+}
+
+function _stuMonthLabel(key) {
+  if (!key) return 'All months';
+  if (/^\d{4}$/.test(key)) return 'All of ' + key;
+  const d = new Date(key + '-01T00:00:00');
+  return isNaN(d) ? key : d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function stuSetMonth(v) {
+  studentFilter.month = v;
+  studentFilter.page = 1;
+  renderPage('students');
+}
+
 // The one filter+sort pipeline. The table, the stat strip and the CSV export
 // all read from here, so they cannot drift apart.
 function studentsFiltered() {
   const byId = _stuRoomMap();
   let list = DB.students.filter(t => {
+    if (!_stuInMonth(t)) return false;
     if (studentFilter.status !== 'All' && t.status !== studentFilter.status) return false;
     const room = byId.get(t.roomId);
     if (studentFilter.room !== 'All' && String(room ? room.number : '') !== studentFilter.room) return false;
@@ -72,16 +131,32 @@ function renderStudents() {
       <button class="btn btn-primary" onclick="showAddStudentModal()">+ Add Student</button>
     </div>`;
 
+  // There ARE students — just none in the month being looked at. Saying "No
+  // Students Yet" here would tell a warden their roster had been wiped.
+  if (studentFilter.month && !DB.students.some(_stuInMonth)) return `
+    <div class="empty-state">
+      <div class="icon">${icon('student','sm')}</div>
+      <h3>Nobody was here in ${escHtml(_stuMonthLabel(studentFilter.month))}</h3>
+      <p style="margin-bottom:16px">${DB.students.length} student${DB.students.length===1?'':'s'} on record in other months.</p>
+      <button class="btn btn-primary" onclick="stuSetMonth('')">Show every month</button>
+    </div>`;
+
   const students = studentsFiltered();
   const _pg = paginate(students, studentFilter);
 
   // Stat strip — counts over the WHOLE roster, not the filtered view, so the
   // cards stay a stable summary you can filter *by* rather than a readout that
   // changes as you narrow the table.
-  const nTotal  = DB.students.length;
-  const nActive = DB.students.filter(t=>t.status==='Active').length;
-  const nLeft   = DB.students.filter(t=>t.status==='Left').length;
-  const nBlack  = DB.students.filter(t=>t.status==='Blacklisted').length;
+  // Scoped to the chosen month, not to the whole database. The cards still
+  // ignore the search box and the other dropdowns — they are a summary you
+  // filter BY, not a readout of the filtered table — but "Total Students" on a
+  // hostel three years old was counting everyone who had ever stayed, which is
+  // not a number anybody asks that page for.
+  const _roster = DB.students.filter(_stuInMonth);
+  const nTotal  = _roster.length;
+  const nActive = _roster.filter(t=>t.status==='Active').length;
+  const nLeft   = _roster.filter(t=>t.status==='Left').length;
+  const nBlack  = _roster.filter(t=>t.status==='Blacklisted').length;
   /* THE CARDS HAVE TO ADD UP TO TOTAL.
 
      'Cancelling' is a fourth status and no card counted it, so from the moment
@@ -93,7 +168,7 @@ function renderStudents() {
      status filter below already follows: an always-visible card reading 0 is
      clutter on the ~95% of days nobody is leaving, and with nobody on notice
      the other three sum to Total on their own anyway. */
-  const nCanc   = DB.students.filter(t=>t.status==='Cancelling').length;
+  const nCanc   = _roster.filter(t=>t.status==='Cancelling').length;
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
@@ -115,10 +190,10 @@ function renderStudents() {
     <div class="stu-stat stu-stat--click dh-blue" onclick="stuSetStatus('All')" title="Show every student">
       <div class="stu-stat__top">
         <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/><path d="m2 10 10-5 10 5-10 5z"/></svg></div>
-        <div class="stu-stat__label">Total Students</div>
+        <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total Students'}</div>
       </div>
       <div class="stu-stat__val">${nTotal}</div>
-      <div class="stu-stat__sub">Registered</div>
+      <div class="stu-stat__sub">${studentFilter.month?'On the roster that month':'Registered, all time'}</div>
     </div>
 
     <div class="stu-stat stu-stat--click dh-green" onclick="stuSetStatus('Active')" title="Show only active students">
@@ -176,6 +251,11 @@ function renderStudents() {
           value="${escHtml(studentFilter.search)}"
           oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents()">
       </div>
+
+      <select class="stu-select${studentFilter.month?' is-set':''}" onchange="stuSetMonth(this.value)" title="Show the roster for one month">
+        <option value="" ${!studentFilter.month?'selected':''}>All months</option>
+        ${_stuMonthOptions().map(k=>`<option value="${escHtml(k)}" ${studentFilter.month===k?'selected':''}>${escHtml(_stuMonthLabel(k))}</option>`).join('')}
+      </select>
 
       <select class="stu-select${studentFilter.room!=='All'?' is-set':''}" onchange="studentFilter.room=this.value;studentFilter.page=1;renderPage('students')" title="Filter by room">
         <option value="All">All Rooms</option>
@@ -344,7 +424,7 @@ function stuSetStatus(s) {
   renderPage('students');
 }
 function stuResetFilters() {
-  studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All';
+  studentFilter.month=thisMonth(); studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All';
   studentFilter.search=''; studentFilter.page=1;
   stuSelected.clear();
   renderPage('students');
@@ -396,8 +476,13 @@ function _stuWriteCsv(list, filename) {
 // so the file always matches what is on screen — the two previously kept
 // separate copies of the filter and could disagree.
 function exportStudentsCSV() {
+  // The month belongs in the filename. The export is scoped to it now, and a
+  // file called Students_All_2026-08-30.csv that actually holds only August's
+  // roster is the kind of thing that gets mailed to an owner as if it were
+  // everybody.
+  const scope = studentFilter.month ? studentFilter.month : 'AllMonths';
   _stuWriteCsv(studentsFiltered(),
-    'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+today()+'.csv');
+    'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+scope+'_'+today()+'.csv');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -571,8 +656,9 @@ function renderAddStudent() {
               onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
             <div id="room-search-drop" class="sf-drop-list">
               ${allRooms.map(r=>{
-                const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
-                const isFull = occ>=rt.capacity;
+                const rt=getRoomType(r); const occ=getRoomOccupancy(r);
+                const free=roomFreeBeds(r); const vac=getRoomVacating(r);
+                const isFull = free<=0;
                 const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
                 // Show the monthly charge on each room so the warden sees the
                 // price from Settings while picking, not first at the payment step.
@@ -581,8 +667,8 @@ function renderAddStudent() {
                   +' data-label="'+escHtml(lbl)+'"'
                   +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
                   +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
-                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
-                  +occ+'/'+rt.capacity+(isFull?' · FULL':' · '+free+' free')+'</span>'
+                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':vac>0||free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
+                  +escHtml(roomAvailLabel(r))+'</span>'
                   +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
                   +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
               }).join('')}
@@ -729,7 +815,10 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
   const selectedRoom = DB.rooms.find(r => r.id === roomId);
   if (selectedRoom) {
     const roomType = getRoomType(selectedRoom);
-    if (roomType && getRoomOccupancy(selectedRoom) >= roomType.capacity) {
+    // roomFreeBeds() already grants the bed that is on notice, so reaching this
+    // warning now means genuinely over capacity with nobody leaving to make
+    // room — which is what the warning has always claimed to mean.
+    if (roomType && roomFreeBeds(selectedRoom) <= 0) {
       const currentOcc = getRoomOccupancy(selectedRoom);
       showConfirm(
         '⚠️ Room Is At Full Capacity',
@@ -1280,7 +1369,7 @@ function printStudentCard(id) {
 }
 function showEditStudentModal(id) {
   const t=DB.students.find(x=>x.id===id); if(!t) return;
-  const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||getRoomOccupancy(r)<getRoomType(r).capacity));
+  const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||roomFreeBeds(r)>0));
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
   // The student's own status is always in the list. It used to be built from
   // three fixed values, so a student on the cancellation list ('Cancelling')
@@ -1413,16 +1502,17 @@ function showEditStudentModal(id) {
               onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
             <div id="room-search-drop" class="sf-drop-list">
               ${allRooms.map(r=>{
-                const rt=getRoomType(r); const occ=getRoomOccupancy(r); const free=rt.capacity-occ;
-                const isFull=occ>=rt.capacity;
+                const rt=getRoomType(r); const occ=getRoomOccupancy(r);
+                const free=roomFreeBeds(r); const vac=getRoomVacating(r);
+                const isFull=free<=0;
                 const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
                 const rc=resolveCharges({roomId:r.id});
                 return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+rc.rent+'"'
                   +' data-label="'+escHtml(lbl)+'"'
                   +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
                   +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
-                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
-                  +occ+'/'+rt.capacity+(isFull?' · FULL':' · '+free+' free')+'</span>'
+                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':vac>0||free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
+                  +escHtml(roomAvailLabel(r))+'</span>'
                   +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
                   +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
               }).join('')}
@@ -1582,7 +1672,7 @@ function showRoomShiftModal(studentId) {
   const available = DB.rooms.filter(r => {
     if (r.id === t.roomId) return false;
     const type = getRoomType(r);
-    return getRoomOccupancy(r) < type.capacity;
+    return roomFreeBeds(r) > 0;
   });
 
   if (!available.length) {
@@ -1593,7 +1683,7 @@ function showRoomShiftModal(studentId) {
   const roomOpts = available.map(r => {
     const type = getRoomType(r);
     const occ  = getRoomOccupancy(r);
-    return `<option value="${r.id}">#${escHtml(String(r.number))} — ${escHtml(type.name)} · ${escHtml(r.floor)} Floor (${occ}/${type.capacity} occupied)</option>`;
+    return `<option value="${r.id}">#${escHtml(String(r.number))} — ${escHtml(type.name)} · ${escHtml(r.floor)} Floor (${escHtml(roomAvailLabel(r))})</option>`;
   }).join('');
 
   showModal('modal-md', '🔀 Shift Student to Another Room', `
@@ -1654,7 +1744,7 @@ async function submitRoomShift(studentId) {
 
   // Check capacity again at submission time
   const type = getRoomType(toRoom);
-  if (getRoomOccupancy(toRoom) >= type.capacity) {
+  if (roomFreeBeds(toRoom) <= 0) {
     toast('That room is now full — please select a different room.', 'error');
     return;
   }

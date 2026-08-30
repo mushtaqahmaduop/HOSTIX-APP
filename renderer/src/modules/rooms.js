@@ -7,7 +7,71 @@
 function getTypeById(id) { return DB.settings.roomTypes.find(t=>t.id===id)||DB.settings.roomTypes[0]; }
 function getRoomType(room) { return getTypeById(room.typeId); }
 // getRoomOccupancy includes ALL active students (regular + force-added) — used for physical seat display
-function getRoomOccupancy(room) { return DB.students.filter(t=>t.roomId===room.id && t.status==='Active').length; }
+/* ── BEDS IN USE, BEDS ON NOTICE, BEDS YOU CAN STILL SELL ────────────────────
+   Three different questions, and the app was answering all of them with one
+   number that was wrong for two of them.
+
+   getRoomOccupancy() counted status==='Active'. renderRooms() had already been
+   moved to isResident(), which counts 'Cancelling' too, on the grounds that a
+   student who has given notice is still sleeping in the bed. This helper was
+   left behind, and EVERY capacity gate in the app reads it — so the Rooms page
+   drew a room as full while the Add Student picker offered the same room as
+   having a free bed, and the dashboard's occupancy disagreed with both.
+
+   The house rule the owner described (2026-08-30) is why the third number
+   exists: notice is given by the 25th for a month-end move-out, and the next
+   student turns up wanting that exact room the same week. So a bed on notice
+   is not free — it is RESERVABLE. The leaving student keeps it until their
+   vacate date and stays billed for it; the incoming student is booked against
+   it and moves in when it frees. */
+function getRoomOccupancy(room) {
+  return DB.students.filter(t => t.roomId === room.id && isResident(t)).length;
+}
+
+/** studentIds with a notice in flight — pending requests only. */
+function _studentsOnNotice() {
+  const ids = new Set();
+  for (const c of (DB.cancellations || []))
+    if (c && c.status === 'Pending' && c.studentId) ids.add(c.studentId);
+  return ids;
+}
+
+/** Beds in this room whose occupant has given notice. */
+function getRoomVacating(room) {
+  const leaving = _studentsOnNotice();
+  return DB.students.filter(t => t.roomId === room.id && isResident(t) && leaving.has(t.id)).length;
+}
+
+/** The date the next bed in this room frees, '' if none is on notice. */
+function roomNextFreeDate(room) {
+  const ids = DB.students.filter(t => t.roomId === room.id && isResident(t)).map(t => t.id);
+  const dates = (DB.cancellations || [])
+    .filter(c => c && c.status === 'Pending' && ids.includes(c.studentId) && c.vacateDate)
+    .map(c => c.vacateDate).sort();
+  return dates[0] || '';
+}
+
+/** How many more students this room can take, reservations included. */
+function roomFreeBeds(room) {
+  const cap = (getRoomType(room) || {}).capacity || 0;
+  return Math.max(0, cap - getRoomOccupancy(room) + getRoomVacating(room));
+}
+
+/** Human phrase for a room's availability, used in every room picker. */
+function roomAvailLabel(room) {
+  const cap  = (getRoomType(room) || {}).capacity || 0;
+  const occ  = getRoomOccupancy(room);
+  const vac  = getRoomVacating(room);
+  const free = roomFreeBeds(room);
+  const base = occ + '/' + cap;
+  if (free <= 0) return base + ' \u00b7 FULL';
+  if (vac > 0 && occ >= cap) {
+    const when = roomNextFreeDate(room);
+    return base + ' \u00b7 ' + free + ' bed' + (free === 1 ? '' : 's') +
+           ' free' + (when ? ' on ' + fmtDate(when) : ' soon') + ' \u2014 reservable';
+  }
+  return base + ' \u00b7 ' + free + ' free';
+}
 
 
 function setRoomSort(v) {
@@ -635,5 +699,10 @@ async function confirmDeleteRoom(id) {
 // Students v5 adds room / course selects, a page-size picker and a row-selection
 // set, matching the payments screen.
 let studentFilter = {status:'All', room:'All', course:'All', search:'',
+                     /* Scoped to one month by default. _stuInMonth() over in
+                        students.js carries living students forward into every
+                        month they were here for, and leaves departed ones
+                        behind in the month they left. */
+                     month:thisMonth(),
                      pageSize:30, page:1, sortKey:null, sortDir:'asc'};
 let stuSelected = new Set();
