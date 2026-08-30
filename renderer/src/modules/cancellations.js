@@ -225,7 +225,7 @@ function renderCancellations(filterStatus='All') {
   </div>
 
   <!-- ══ FREED SEATS ══ -->
-  <div class="lk-banner dh-violet${filterStatus==='Freed'?' is-on':''}" onclick="renderPage('cancellations_Freed')" title="Show the seats these cancellations have freed">
+  <div class="lk-banner dh-violet${filterStatus==='Freed'?' is-on':''}" onclick="renderPage('cancellations_Freed')" title="Show everyone leaving — those still here and those already gone">
     <div class="lk-banner__l">
       <div class="lk-banner__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg></div>
       <div>
@@ -258,7 +258,7 @@ function renderCancellations(filterStatus='All') {
 
       <select class="lk-select${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)" title="Filter by status">
         ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
-          `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'Freed Seats':s}</option>`).join('')}
+          `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'All Leaving':s}</option>`).join('')}
       </select>
 
       <select class="lk-select${cancelFilter.type!=='All'?' is-set':''}" onchange="canSet('type',this.value)" title="Filter by room type">

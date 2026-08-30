@@ -441,7 +441,11 @@ function renderDashboard() {
   });
 
   // Seats availability bar chart data
-  const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending');
+  // Soonest departure first: this is an act-on-it banner, so the student whose
+  // date arrives next is the one the warden needs to see.
+  const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending')
+    .slice().sort((a,b)=>String(a.vacateDate||'9999').localeCompare(String(b.vacateDate||'9999')));
+  const _nextVacate = (pendingCancels.find(c=>c.vacateDate)||{}).vacateDate || '';
 
   // Real 12-month series behind the KPI sparklines + the revenue MoM delta.
   const series   = _dashSeries();
@@ -453,7 +457,14 @@ function renderDashboard() {
     <span class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
     <div>
       <div class="dash-banner__msg">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — seats freed</div>
+      ${/* Said "seats freed", and they are not. A pending cancellation is a
+            student who has given notice and is still sleeping in the bed,
+            still billed for it, until their vacate date — which is the rule
+            the Rooms page and the Cancellations page have both followed since
+            2026-08-30 (CLAUDE.md rule 9). This line was the last screen still
+            telling a warden the opposite, and acting on it means booking a bed
+            somebody is still in. */''}
+      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — beds stay theirs until they leave${_nextVacate?' · first frees '+escHtml(fmtDate(_nextVacate)):''}</div>
     </div>
     <span class="dash-banner__go">View →</span>
   </div>`:''}
