@@ -301,9 +301,9 @@ function renderStudents() {
         </div>
       </div>
 
-      <button class="stu-btn stu-btn--primary" style="margin-left:auto" onclick="exportStudentsCSV()" title="Export the current list to CSV">
+      <button class="stu-btn stu-btn--primary" style="margin-left:auto" onclick="exportStudentsExcel()" title="Export the current list to Excel">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-        Export CSV
+        Export Excel
       </button>
     </div>
 
@@ -451,38 +451,144 @@ function stuToggleAll(on) {
 }
 function stuBulkExport() {
   const ids = [...stuSelected];
-  _stuWriteCsv(studentsFiltered().filter(t => ids.includes(t.id)), 'Students_Selected.csv');
+  _stuWriteWorkbook(studentsFiltered().filter(t => ids.includes(t.id)),
+    'Students_Selected_' + today() + '.xlsx',
+    'STUDENT RECORDS — ' + ids.length + ' selected');
 }
 
-// Single CSV writer, shared by the toolbar export and the bulk-selection
-// export so the two can never produce different columns.
-function _stuWriteCsv(list, filename) {
+/* ── THE EXPORT ──────────────────────────────────────────────────────────────
+   One workbook writer, shared by the toolbar export and the bulk-selection
+   export so the two can never produce different columns.
+
+   This writes a real .xlsx, not a CSV with a spreadsheet icon. The owner's
+   reference sheet has a title band, a line stating how many students it holds,
+   and columns wide enough to read a Waziristan address in. None of that can
+   live in a CSV: a CSV is text, and every column width belongs to whoever
+   opens it.
+
+   Two typing rules matter more than the layout:
+
+   • Phone, emergency phone and CNIC go out as TEXT. `03310045835` written as a
+     number loses its leading zero and comes back as 3,310,045,835 — the
+     warden's contact list quietly turned into arithmetic.
+   • Join date and date of birth go out as real DATES built at LOCAL midnight
+     via `_stuXlDate`. Handing the string to `new Date()` parses it as UTC, and
+     five hours east of Greenwich that lands the cell on the day before — the
+     same bug class as the `today()` fix in the 19 Aug audit.
+
+   Column widths are `wch` (character widths), which is what SheetJS 0.20
+   writes. Fonts, fills and frozen panes are not writable by the community
+   build we vendor, so the sheet is structured, not painted.
+   ──────────────────────────────────────────────────────────────────────── */
+
+// [header, character width] — one source for both, so a column can never be
+// added to the sheet without being given a width.
+const STU_EXPORT_COLUMNS = [
+  ['ID', 6], ['Name', 22], ['Father Name', 22], ['Room', 8], ['Floor', 10],
+  ['Phone', 16], ['Emergency Contact', 20], ['Emergency Phone', 16], ['CNIC', 18],
+  ['Date of Birth', 14], ['Gender', 9], ['Nationality', 13], ['Address', 28],
+  ['Course', 22], ['Session', 12], ['Blood Group', 12], ['Join Date', 13], ['Status', 11],
+];
+// Zero-based indexes into the row above that hold real dates.
+const STU_EXPORT_DATE_COLS = [9, 16];
+// The table starts here: title, meta, blank, header.
+const STU_EXPORT_HEADER_ROW = 3;
+
+// 'YYYY-MM-DD' → a Date at LOCAL midnight, so the cell cannot slip a day.
+// Anything that is not a plain date is passed through untouched rather than
+// guessed at.
+function _stuXlDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : (v || '');
+}
+
+// "58 students · 44 active, 14 left" — every figure counted from the rows
+// actually being written, never from DB totals the file does not contain.
+function _stuExportMeta(list) {
+  const byStatus = {};
+  list.forEach(t => { const s = t.status || 'Active'; byStatus[s] = (byStatus[s] || 0) + 1; });
+  const parts = Object.keys(byStatus).sort().map(s => byStatus[s] + ' ' + s.toLowerCase());
+  return [
+    DB.settings.hostelName || 'Hostel',
+    'Total Students: ' + list.length,
+    parts.join(', '),
+    'Exported ' + fmtDate(today()),
+  ].filter(Boolean).join('  ·  ');
+}
+
+function _stuWriteWorkbook(list, filename, title) {
+  if (!list || list.length === 0) { toast('No students to export', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('Spreadsheet library not loaded — export unavailable', 'error'); return; }
+
   const byId = _stuRoomMap();
-  const rows = [['ID','Name','Father Name','Room','Floor','Phone','Emergency Contact',
-                 'Emergency Phone','CNIC','Date of Birth','Gender','Nationality','Address',
-                 'Course','Session','Blood Group','Join Date','Status']];
+  const aoa = [
+    [title],
+    [_stuExportMeta(list)],
+    [],
+    STU_EXPORT_COLUMNS.map(c => c[0]),
+  ];
+
   list.forEach(t => {
     const r = byId.get(t.roomId);
-    rows.push([t.id, t.name||'', t.fatherName||'', r?'#'+r.number:'', r?r.floor:'',
-      t.phone||'', t.emergencyContact||'', t.emergencyPhone||'', t.cnic||'',
-      t.dob||'', t.gender||'', t.nationality||'', t.address||'',
-      t.occupation||t.course||'', t.session||'', t.bloodGroup||'',
-      t.joinDate||'', t.status||'Active']);
+    aoa.push([
+      t.id, t.name || '', t.fatherName || '',
+      r ? '#' + r.number : '', r ? r.floor : '',
+      String(t.phone || ''), t.emergencyContact || '', String(t.emergencyPhone || ''),
+      String(t.cnic || ''),
+      _stuXlDate(t.dob), t.gender || '', t.nationality || '', t.address || '',
+      t.occupation || t.course || '', t.session || '', t.bloodGroup || '',
+      _stuXlDate(t.joinDate), t.status || 'Active',
+    ]);
   });
-  downloadCSV(rows, filename);
+
+  const ws   = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+  const last = STU_EXPORT_COLUMNS.length - 1;
+  const end  = STU_EXPORT_HEADER_ROW + list.length;
+
+  // Dates print the way the app prints them everywhere else.
+  for (let i = 0; i < list.length; i++) {
+    STU_EXPORT_DATE_COLS.forEach(c => {
+      const cell = ws[XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW + 1 + i, c })];
+      // `w` is the cached display string aoa_to_sheet already wrote from the
+      // DEFAULT date format. Setting `z` without dropping it leaves a cell that
+      // writes as 01-Mar-2007 but still reads back as 3/1/07 to anything in
+      // this process that trusts `w`.
+      if (cell && cell.t === 'd') { cell.z = 'dd-mmm-yyyy'; delete cell.w; }
+    });
+  }
+
+  ws['!cols']   = STU_EXPORT_COLUMNS.map(c => ({ wch: c[1] }));
+  ws['!rows']   = [{ hpt: 22 }, { hpt: 16 }, { hpt: 6 }, { hpt: 18 }];
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: last } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: last } },
+  ];
+  // Filter over the header row and the data under it — not the title band,
+  // which would otherwise be swept into the filter range.
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW, c: 0 }) + ':' +
+         XLSX.utils.encode_cell({ r: end, c: last }),
+  };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Students');
+  XLSX.writeFile(wb, filename);
+  toast('Downloaded: ' + filename, 'success');
 }
 
 // Export the currently filtered + sorted students. Reuses studentsFiltered(),
 // so the file always matches what is on screen — the two previously kept
 // separate copies of the filter and could disagree.
-function exportStudentsCSV() {
-  // The month belongs in the filename. The export is scoped to it now, and a
-  // file called Students_All_2026-08-30.csv that actually holds only August's
-  // roster is the kind of thing that gets mailed to an owner as if it were
-  // everybody.
-  const scope = studentFilter.month ? studentFilter.month : 'AllMonths';
-  _stuWriteCsv(studentsFiltered(),
-    'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+scope+'_'+today()+'.csv');
+function exportStudentsExcel() {
+  // The scope belongs in the filename AND in the title band. A file called
+  // Students_All_2026-08-30.xlsx that actually holds only August's roster is
+  // the kind of thing that gets mailed to an owner as if it were everybody.
+  const scope  = studentFilter.month ? studentFilter.month : 'AllMonths';
+  const status = studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only';
+  _stuWriteWorkbook(
+    studentsFiltered(),
+    'Students_' + (studentFilter.status === 'All' ? 'All' : studentFilter.status) + '_' + scope + '_' + today() + '.xlsx',
+    'STUDENT RECORDS — ' + _stuMonthLabel(studentFilter.month) + status);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

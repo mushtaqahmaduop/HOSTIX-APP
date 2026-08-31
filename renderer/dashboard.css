@@ -346,3 +346,98 @@
        section heading rather than one of a set. */
     .dash-tile-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
+
+/* ── Recent Payments (row 5) ─────────────────────────────────────────────────
+   Owner reference: `recent payments.png` (30 Aug). The table inherits the base
+   `table` rules in style.css; everything here is the delta the reference asks
+   for, scoped to `.dash-rp` so no other table moves.
+   ────────────────────────────────────────────────────────────────────────── */
+.dash-rp-wrap        { margin:0 -16px; }
+.dash-rp             { width:100%; }
+.dash-rp th          { background:transparent; font-size:10px; letter-spacing:.9px; padding:0 16px 9px; }
+.dash-rp td          { padding:11px 16px; }
+.dash-rp-row         { cursor:pointer; }
+
+.dash-rp-who         { display:flex; align-items:center; gap:9px; min-width:0; }
+/* Solid accent, white letter — the reference's one filled element per row, and
+   the thing the eye lands on when scanning for a name. */
+.dash-rp-av {
+    width:30px; height:30px; border-radius:9px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--accent); color:#fff; font-size:12px; font-weight:800;
+}
+.dash-rp-name        { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dash-rp-room        { font-size:12.5px; font-weight:700; color:var(--text2); font-variant-numeric:tabular-nums; }
+.dash-rp-num         { font-size:12.5px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* Money still owed is the one figure on the row that asks somebody to act. */
+.dash-rp-num--due    { color:var(--red); }
+.dash-rp-nil         { color:var(--text3); }
+/* Why the paid figure is larger than the room rent beside it. */
+.dash-rp-extra       { margin-top:2px; font-size:10.5px; font-weight:700; color:var(--accent-strong); white-space:nowrap; }
+.dash-rp-date        { font-size:11.5px; color:var(--text3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+.dash-rp-method {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 9px; border:1px solid var(--border); border-radius:8px;
+    background:var(--bg3); color:var(--text2);
+    font-size:11.5px; font-weight:600; white-space:nowrap;
+}
+.dash-rp-method .icon { width:13px; height:13px; color:var(--text3); }
+
+/* ── Row menu ─────────────────────────────────────────────────────────────── */
+.dash-rp-more        { position:relative; width:1%; text-align:right; }
+.dash-rp-more__btn {
+    width:26px; height:26px; border-radius:7px; border:none; background:transparent;
+    color:var(--text3); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+}
+.dash-rp-more__btn:hover        { background:var(--bg3); color:var(--text); }
+/* Fixed, not absolute — see _dashToggleRowMenu(): an absolute menu is clipped
+   by the sideways scroll on `.table-wrap`. Coordinates are set in JS. */
+.dash-rp-menu {
+    display:none; position:fixed; z-index:60;
+    min-width:174px; padding:5px;
+    background:var(--card); border:1px solid var(--border2); border-radius:11px;
+    box-shadow:var(--shadow);
+}
+.dash-rp-more.is-open .dash-rp-menu { display:block; }
+.dash-rp-menu__item {
+    width:100%; display:flex; align-items:center; gap:9px;
+    padding:8px 10px; border:none; border-radius:8px; background:transparent;
+    color:var(--text2); font-size:12.5px; font-weight:600; text-align:left; cursor:pointer;
+}
+.dash-rp-menu__item:hover       { background:var(--bg3); color:var(--text); }
+.dash-rp-menu__item .icon       { width:14px; height:14px; flex-shrink:0; color:var(--text3); }
+.dash-rp-menu__item--go         { color:var(--green); }
+.dash-rp-menu__item--go .icon   { color:var(--green); }
+
+/* ── Summary strip ────────────────────────────────────────────────────────────
+   Describes the whole month, not the ten rows above it — so each tile says
+   which month it means rather than "This Month", which the month selector can
+   make untrue. */
+.dash-rp-foot {
+    display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0;
+    margin:12px -16px -14px; padding:14px 16px;
+    border-top:1px solid var(--border);
+}
+.dash-rp-stat        { display:flex; align-items:center; gap:11px; padding:0 16px; min-width:0; }
+.dash-rp-stat + .dash-rp-stat { border-left:1px solid var(--border); }
+.dash-rp-stat:first-child     { padding-left:0; }
+.dash-rp-stat__chip {
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.dash-rp-stat__chip .icon { width:18px; height:18px; }
+.dash-rp-stat__body  { min-width:0; }
+.dash-rp-stat__label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text3); }
+.dash-rp-stat__val   { font-size:17px; font-weight:800; color:var(--text); letter-spacing:-.01em; font-variant-numeric:tabular-nums; margin:2px 0 1px; white-space:nowrap; }
+.dash-rp-stat__sub   { font-size:11px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Four tiles need ~880px before the values start truncating. Below that they
+   pair up, and the vertical rule has to move with them or it lands mid-row. */
+@media (max-width:880px) {
+    .dash-rp-foot { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:14px; }
+    .dash-rp-stat:nth-child(odd)  { padding-left:0; border-left:none; }
+    .dash-rp-stat:nth-child(3)    { padding-top:14px; border-top:1px solid var(--border); }
+    .dash-rp-stat:nth-child(4)    { padding-top:14px; border-top:1px solid var(--border); }
+}
