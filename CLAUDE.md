@@ -181,3 +181,77 @@ case-insensitively or you will assert against text that is never produced.
 ## Communication
 - Reply concisely. Don't pad with explanations I didn't ask for.
 - When unsure between two approaches, ask — don't guess and commit.
+
+<!-- Appended 2026-08-31 from design-studio-install.md. The rules ABOVE this
+     line are the owner's and take precedence; nothing above was altered. -->
+
+## Design governance
+
+**`renderer/tokens.css` is the bound design system.** It is not a suggestion and
+it is not a starting point to riff on.
+
+> Reconciled 2026-08-31. The design studio shipped with its own `BASELINE.css`
+> and a rule set written for it. That file defined a DIFFERENT system — accent
+> `#cc785c`, `"Anthropic Sans"` — and collided with `tokens.css` on `--accent`,
+> `--surface` and `--font-sans`, so a stray `<link>` would have repainted the
+> whole app. It was removed rather than kept as a reference, and the rules below
+> are its rules restated against the system this app actually has. Four were
+> written about the other system and describe nothing here; they are recorded at
+> the end rather than deleted, so nobody re-adds them from the original manifest.
+
+### Hard rules
+
+- Never edit on master. Branch first, always.
+- Verify the app boots before declaring any refactor or redesign complete.
+- Colours come from `var()` tokens in `renderer/tokens.css`. A raw hex in a
+  renderer component is a bug — **except** in the print and PDF documents, whose
+  hex is deliberate: they render in a separate window with no stylesheet and
+  must not follow the app's theme onto a sheet of white paper.
+- Rebranding means overriding the `--accent-50 … --accent-900` ramp, from which
+  `--accent`, `--accent-strong`, `--accent-soft` and `--accent-dim` derive.
+  Nothing else. Never fork the token file.
+- One primary accent action per screen. Colour means "act", never "look".
+- Payment methods and other CATEGORIES are neutral. Hue is reserved for state —
+  see `pmBadge()` versus `statusBadge()`.
+- Use `fmtPKR()` for currency. Never duplicate it, never double-prefix.
+- Money a user might compare is `font-variant-numeric: tabular-nums`.
+- A monthly figure means the whole charge — rent **and** mess. `paymentCharges()`
+  for a record, `resolveCharges()` for a student. Quoting `monthlyRent` alone is
+  the bug fixed on 2026-08-31; it is not a shortcut.
+- Every list, table, export, report and PDF is ordered by room number ascending,
+  through `cmpRoomNo` / `studentsByRoom` / `roomsByNumber`. Room numbers are
+  strings — `Number(r.number)` is a bug, "A 01" is a legal room.
+- New CSS goes in the screen's own `renderer/<screen>.css` under a prefixed
+  class. Do not edit shared selectors in `style.css` to fix one screen.
+- 1366x768 is the QA floor. If it fails there, it does not ship.
+
+### Rules from the manifest that do NOT apply here
+
+Kept visible on purpose — each was true of `BASELINE.css` and false of this app,
+and deleting them silently invites their return.
+
+- ~~"No `box-shadow` for elevation, anywhere."~~ This app has **166** of them and
+  `--shadow` is a token. `dashboard.css` states the reasoning: cards on a tinted
+  workspace read as outlines rather than surfaces without one. If flat elevation
+  is ever wanted it is a design decision to take deliberately, not a lint rule.
+- ~~"Filled primary buttons keep the bottom-only 8px radius. It is the
+  signature."~~ It is `BASELINE.css`'s signature. This app has one occurrence.
+- ~~"Serif appears in three places only."~~ This app is sans throughout; the only
+  serif is the optional hostel-name display face in Settings.
+- ~~"No new inline `style` attributes. Ever."~~ The renderer builds its markup as
+  template strings and uses them extensively. Worth reducing over time, but as
+  an absolute rule it fails on the existing code the moment it is enforced.
+
+### When to reach for the studio
+
+Any screen, component, dashboard, table, form, or layout being designed,
+redesigned, or critiqued invokes the `design-studio` skill. A screenshot or
+reference image pasted into the session invokes it too — treat the reference as
+input to be challenged, never as a target to reproduce.
+
+Delegate read-heavy codebase analysis to `ux-analyst` rather than pulling forty
+files into the main context. Delegate scoring to `design-critic` so the verdict
+comes from a session with no stake in the proposals.
+
+Run `design-governance` and `qa-regression` before presenting any UI work as
+finished. Both, every time.
