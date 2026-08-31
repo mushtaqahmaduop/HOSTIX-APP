@@ -1147,11 +1147,65 @@ ipcMain.on('write-file', (_e, filePath, data) => {
 // ════════════════════════════════════════════════════════════════════════════
 // AUTO UPDATER
 // ════════════════════════════════════════════════════════════════════════════
+const RELEASES_URL = 'https://github.com/mushtaqahmaduop/HOSTIX-APP/releases';
+
+/* Which file "Download" should hand the browser.
+
+   Sending a warden to the releases PAGE was the wrong end of this. That page is
+   built for programmers — tags, commits, a collapsed Assets list, and GitHub's
+   sign-up popup for anyone not logged in. Nothing there blocks them (the repo
+   is public, and the installers download with no account — verified), but it
+   READS like it demands one, and it asks a hostel manager to choose between
+   three .exe files on the strength of the words "x64" and "ia32". The v5.0.0
+   installers sat at zero downloads.
+
+   So link the FILE, not the page: the browser starts downloading immediately
+   and GitHub is never seen. This changes no security property — same file, same
+   host, same absent signature. It removes a wall, not a check.
+
+   The filename is READ from the update feed rather than assembled from a
+   template. `info.files` is latest.yml's own list, so a later change to
+   `nsis.artifactName` in package.json cannot leave this pointing at a 404 that
+   would only surface on a client's machine, after a release, with nobody able
+   to see why.
+
+   Architecture: this hands back the SAME arch the running copy is, not the best
+   one the hardware could take. `process.arch` in Electron is the build's arch,
+   so a 32-bit install on 64-bit hardware reports ia32 — and staying on ia32 is
+   the predictable answer for an in-place upgrade. Moving a hostel from 32- to
+   64-bit is a deliberate migration, not something an update dialog does behind
+   their back.
+
+   Every unknown falls back to the releases page, which is where this started —
+   worse, but never broken. */
+function updateDownloadUrl(info) {
+  try {
+    if (!info || !info.version) return RELEASES_URL + '/latest';
+    const want  = process.arch === 'ia32' ? 'ia32' : 'x64';
+    const files = Array.isArray(info.files) ? info.files : [];
+    const named = f => String((f && f.url) || '');
+
+    const asset =
+      // the installer built for this architecture…
+      files.find(f => new RegExp('-' + want + '\\.exe$', 'i').test(named(f)))
+      // …or the combined installer, which carries no arch suffix at all
+      || files.find(f => /\.exe$/i.test(named(f)) && !/-(ia32|x64)\.exe$/i.test(named(f)));
+
+    const file = (asset && asset.url) || info.path;
+    if (!file || !/\.exe$/i.test(file)) return RELEASES_URL + '/latest';
+    return RELEASES_URL + '/download/v' + encodeURIComponent(info.version)
+         + '/' + encodeURIComponent(file);
+  } catch (e) {
+    console.error('[HOSTYLLO] update url build failed:', e.message);
+    return RELEASES_URL + '/latest';
+  }
+}
+
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
   // [D-2] Update available — announce only. Nothing downloads or installs by
-  // itself; the owner opens the release page and installs deliberately.
+  // itself; the owner starts the download and runs the installer deliberately.
   autoUpdater.on('update-available', (info) => {
     if (!mainWindow) return;
     dialog.showMessageBox(mainWindow, {
@@ -1159,15 +1213,18 @@ function setupAutoUpdater() {
       title: 'Update Available',
       message: `Hostyllo v${info.version} is available`,
       detail: 'Your current version keeps working normally.\n\n'
-            + 'Choose "Get Update" to open the download page in your browser, '
-            + 'then close Hostyllo and run the installer. Your data and licence '
-            + 'are not affected.',
-      buttons: ['Get Update', 'Later'],
+            + 'Choose "Download" and the installer starts downloading in your '
+            + 'browser. When it finishes, close Hostyllo and run it. Your data '
+            + 'and licence are not affected.\n\n'
+            + 'Windows will warn that the publisher is unknown — choose '
+            + 'More info, then Run anyway.',
+      buttons: ['Download', 'Later'],
       defaultId: 0,
       cancelId: 1
     }).then(({ response }) => {
       if (response === 0) {
-        shell.openExternal('https://github.com/mushtaqahmaduop/HOSTIX-APP/releases/latest');
+        shell.openExternal(updateDownloadUrl(info))
+          .catch(e => console.error('[HOSTYLLO] open update url failed:', e.message));
       }
     });
   });
