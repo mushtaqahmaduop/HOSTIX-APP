@@ -1252,6 +1252,31 @@ tr:hover td { background: rgba(59,130,246, 0.03); }
 .badge-gray   { background: var(--bg4);             border: 1px solid var(--border);     color: var(--text3);  }
 .badge-amber  { background: var(--amber-dim);  border: 1px solid rgba(251,191,36,0.25);  color: var(--amber);  }
 
+/* ── Payment-method chip ─────────────────────────────────────────────────────
+   The ONE way a payment method is drawn, on every screen that draws one:
+   payments, dashboard, students, reports, archive. It replaced three separate
+   renderings — `.badge-gray` here, `.pay-pill dh-slate` on the payments page,
+   and a dashboard-local chip — which had drifted into three different shapes
+   for the same fact.
+
+   Square-ish rather than a pill, and neutral rather than hued: a method is a
+   category, not a state, and the rounded hued pills in these tables mean
+   status. See pmBadge() in modals.js. */
+.pm-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg3);
+    color: var(--text2);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.pm-chip .icon { width: 13px; height: 13px; flex-shrink: 0; color: var(--text3); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    FORMS
    ══════════════════════════════════════════════════════════════════════════ */

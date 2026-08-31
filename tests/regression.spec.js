@@ -148,59 +148,15 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-test('security: clear-all is blocked without the correct warden password', async () => {
-  const app = await electron.launch(launchOpts());
-  const win = await app.firstWindow();
-  await win.waitForLoadState('domcontentloaded');
-  await login(win);
-
-  const preStuds = await win.evaluate(() => window.electronAPI.dbAll('students'));
-  expect(preStuds.length, 'SAFETY ABORT: isolated DB not empty').toBe(0);
-
-  const studentId = await seedRoomAndStudent(win);
-  expect(studentId).toBeTruthy();
-
-  // Open the password-gated clear-all modal.
-  await win.evaluate(() => clearAllDataWithPassword());
-  await win.waitForSelector('#clear-all-pwd');
-
-  // WRONG password → data intact, error shown, and the flow must NOT advance to
-  // the final "☢️ Clear ALL Data?" confirmation (clearAllData is never reached).
-  const afterWrong = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'definitely-wrong';
-    await confirmClearAllWithPassword();
-    return {
-      students: DB.students.length,
-      errShown: document.getElementById('clear-pwd-err')?.style.display === 'block',
-      stillOnPwStep: !!document.getElementById('clear-all-pwd'), // password modal still open
-    };
-  });
-  expect(afterWrong.students, 'SECURITY REGRESSION: clear-all wiped data with a WRONG password').toBeGreaterThan(0);
-  expect(afterWrong.errShown, 'wrong-password error not shown').toBeTruthy();
-  expect(afterWrong.stillOnPwStep, 'wrong password must not advance past the password step').toBeTruthy();
-
-  // CORRECT password → the gate passes and clearAllData() opens its final
-  // confirmation (proves the password check runs and gates the wipe).
-  const afterCorrect = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'admin123';
-    await confirmClearAllWithPassword();
-    return {
-      confirmReached: typeof _pendingConfirmCb === 'function', // clearAllData() showed its confirm
-      studentsBeforeConfirm: DB.students.length,               // not wiped until confirmed
-    };
-  });
-  expect(afterCorrect.confirmReached, 'correct password should reach the clear-all confirmation').toBeTruthy();
-  expect(afterCorrect.studentsBeforeConfirm, 'must not wipe before the final confirm').toBeGreaterThan(0);
-
-  // Confirm the final dialog → data is actually cleared.
-  const cleared = await win.evaluate(async () => {
-    await _pendingConfirmCb();
-    return DB.students.length;
-  });
-  expect(cleared, 'confirming clear-all should wipe students').toBe(0);
-
-  await app.close();
-});
+// The clear-all password-gate test that stood here is gone with the feature.
+// Clear All Data was retired on 2026-08-31 — the sidebar entry, the functions
+// in expenses.js and the `clearall` permission all went together, so there is
+// no longer a gate for this to guard. Deleting a security test is only safe
+// when the thing it protected no longer exists; that is the case here, and
+// tests/permissions.spec.js proves it: its guard reads the PERMS table out of
+// the source and fails on any permission declared but checked nowhere, so a
+// half-removal — the permission left behind, the feature gone — would have
+// failed the suite rather than passed it quietly.
 
 // ─────────────────────────────────────────────────────────────────────────────
 test('schema migration: indexed WHERE queries work end-to-end via dbAll', async () => {
@@ -395,16 +351,25 @@ test('payments: table pans by dragging, and CSV column order matches the table',
     return captured;
   });
   expect(csv, 'exportPaymentsCSV produced nothing').toBeTruthy();
-  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid',
-                          'Method','Status','Adm.Fee','Extra Charges','Concession','Date']);
-  // Values must have moved with their headers, not just the labels.
+  // Mess/Mo and Charge/Mo joined on 2026-08-31: a sheet that quoted the rent
+  // half alone could not be reconciled against what the student actually paid,
+  // because the mess is a separate field on the record.
+  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo',
+                          'Amount Paid','Unpaid','Method','Status','Adm.Fee',
+                          'Extra Charges','Concession','Date']);
+  // Values must have moved with their headers, not just the labels. Indexes are
+  // read off the header row rather than hardcoded, so the next column added
+  // fails on what it actually breaks instead of on arithmetic.
+  const at = name => csv[0].indexOf(name);
   const row = csv[1];
-  expect(row[4], 'Amount Paid column').toBe(12000);
-  expect(row[5], 'Unpaid column').toBe(4000);
-  expect(row[6], 'Method column').toBe('Cash');
-  expect(row[8], 'Adm.Fee column').toBe(5000);
-  expect(String(row[9]), 'Extra Charges column').toContain('Laundry');
-  expect(row[10], 'Concession column').toBe(1000);
+  expect(row[at('Rent/Mo')] + row[at('Mess/Mo')], 'the two halves must make the charge')
+    .toBe(row[at('Charge/Mo')]);
+  expect(row[at('Amount Paid')], 'Amount Paid column').toBe(12000);
+  expect(row[at('Unpaid')], 'Unpaid column').toBe(4000);
+  expect(row[at('Method')], 'Method column').toBe('Cash');
+  expect(row[at('Adm.Fee')], 'Adm.Fee column').toBe(5000);
+  expect(String(row[at('Extra Charges')]), 'Extra Charges column').toContain('Laundry');
+  expect(row[at('Concession')], 'Concession column').toBe(1000);
 
   await app.close();
 });

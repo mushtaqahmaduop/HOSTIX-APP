@@ -130,7 +130,9 @@ function renderRooms() {
   const floorOptions = DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${roomFilter.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
 
   rooms = applySort(rooms, roomFilter, {
-    number:    r => r.number,
+    // cmpRoomNo: 'A 01' is a legal room number here, and a plain compare
+    // orders 1, 10, 2.
+    number:    { get: r => r.number, cmp: cmpRoomNo },
     occupancy: r => _occOf(r.id),
     floor:     r => r.floor,
     type:      r => getRoomType(r).name
@@ -376,7 +378,7 @@ function exportRoomsCSV() {
     return true;
   });
   rooms = applySort(rooms, roomFilter, {
-    number:r=>r.number, occupancy:r=>occ(r.id),
+    number:{ get:r=>r.number, cmp:cmpRoomNo }, occupancy:r=>occ(r.id),
     floor:r=>r.floor, type:r=>getRoomType(r).name
   });
   const rows=[['Room','Type','Floor','Capacity','Occupied','Vacant','Status','Students']];
@@ -589,7 +591,9 @@ async function submitAddRoom() {
   const amenities=document.getElementById('f-ramen').value.split(',').map(s=>s.trim()).filter(Boolean);
   const notes=document.getElementById('f-rnotes').value;
   DB.rooms.push({id:'room_'+uid(),number:num,floor,typeId,rent,studentIds:[],amenities,notes});
-  DB.rooms.sort((a,b)=>String(a.number).localeCompare(String(b.number)));
+  // cmpRoomNo, not a plain compare: without numeric awareness this ordered
+  // 1, 10, 11, 2 — and it sorts DB.rooms itself, so every reader inherited it.
+  DB.rooms.sort((a,b)=>cmpRoomNo(a.number,b.number));
   logActivity('Room Added', 'Room #'+num+' ('+floor+' Floor)', 'Room');
   await saveDB(); closeModal(); renderPage('rooms'); toast('Room added successfully','success');
 }
@@ -708,5 +712,7 @@ let studentFilter = {status:'All', room:'All', course:'All', search:'',
                         month they were here for, and leaves departed ones
                         behind in the month they left. */
                      month:thisMonth(),
-                     pageSize:30, page:1, sortKey:null, sortDir:'asc'};
+                     // Room order is the app-wide default — owner's call,
+                     // 2026-08-31. Still user-sortable by any column.
+                     pageSize:30, page:1, sortKey:'room', sortDir:'asc'};
 let stuSelected = new Set();

@@ -247,7 +247,10 @@ function renderArchive() {
     case 'pending':       body = _arcPaymentsPanel(T, label, 'pending'); break;
     case 'expenses':      body = _arcExpensesPanel(T, label); break;
     case 'cancellations': body = _arcCancelsPanel(T, label); break;
-    default:              body = _arcOverviewPanel(T, label);
+    default:              body = _arcOverviewPanel(T, label) +
+                                 // A month has no year-over-year, and retention across
+                                 // thirty days is noise. Whole years only.
+                                 (_arcIsYear() ? _arcRetentionPanel() + _arcYoYPanel() : '');
   }
 
   return bar + kpis + tabs + body;
@@ -255,6 +258,151 @@ function renderArchive() {
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────────
 // A year at a glance, month by month, each row opening that month.
+/* ── YEAR AGAINST YEAR, AND WHO STAYED ────────────────────────────────────────
+   The archive could show one period in detail and could not answer the two
+   questions an owner actually opens it for:
+
+     "was this year better than last year?"
+     "how many of the people who were here in January were still here in
+      December?"
+
+   Both are computed from the same merged dataset the rest of this file uses, so
+   they cannot disagree with the figures above them. Neither is shown for a
+   single month — a month has no meaningful year-over-year, and retention across
+   thirty days is noise.                                                      */
+
+/* Every figure for one whole year, so the current year and the one before it
+   are produced by identical code rather than by a comparison written twice. */
+function _arcYearFigures(year) {
+  const y     = String(year);
+  const pays  = _arcPayments().filter(p => _payMatchesMonth(p, y));
+  const exps  = _arcExpenses().filter(e => String(e.date || '').startsWith(y));
+  const cans  = _arcCancellations().filter(c => String(_arcCancDate(c)).startsWith(y));
+  const rev   = _arcCollected(pays);
+  const exp   = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
+
+  // Admissions are dated by joinDate, departures by the date the notice was
+  // raised. A student who joined in one year and left in the next counts once
+  // in each, which is what actually happened.
+  const students = (DB.students || []);
+  const joined = students.filter(s => String(s.joinDate || '').startsWith(y)).length;
+  const left   = students.filter(s => s.status === 'Left' && String(s.leftDate || '').startsWith(y)).length
+                 || cans.filter(c => c.status === 'Confirmed').length;
+
+  return {
+    year: y, rev, exp, net: rev - exp,
+    pending: _arcOwed(pays),
+    payments: pays.length,
+    joined, left,
+    cancels: cans.length,
+    // Months with anything recorded at all — a year with two months of data
+    // must not be read as a bad year, and this is what says which it is.
+    active: new Set(pays.map(p => String(p.month || p.date || '').slice(0, 7)).filter(Boolean)).size,
+  };
+}
+
+/* A percentage change that refuses to lie. Growth from zero is not "infinite
+   growth", it is a first year, and printing +∞% or +100% next to it would be a
+   number the data cannot support. */
+function _arcDelta(now, before) {
+  if (!isFinite(now) || !isFinite(before)) return null;
+  if (before === 0) return now === 0 ? { pct: 0, from0: false } : { pct: null, from0: true };
+  return { pct: ((now - before) / Math.abs(before)) * 100, from0: false };
+}
+
+function _arcYoYPanel() {
+  const y    = Number(_arcYear());
+  const prev = String(y - 1);
+  if (!_arcYearsWithData().includes(prev)) {
+    return `<div class="arc-panel">
+      <div class="arc-panel__head"><span class="arc-panel__t">${escHtml(String(y))} against ${escHtml(prev)}</span></div>
+      <div class="arc-empty" style="padding:22px">Nothing is recorded for ${escHtml(prev)}, so there is nothing to compare
+        ${escHtml(String(y))} against yet. This panel fills itself in as soon as a second year has data.</div>
+    </div>`;
+  }
+
+  const A = _arcYearFigures(y), B = _arcYearFigures(prev);
+  const row = (label, nowV, beforeV, fmt, goodUp) => {
+    const d = _arcDelta(nowV, beforeV);
+    let cell = '<span class="arc-d is-flat">no change</span>';
+    if (d && d.from0) cell = `<span class="arc-d is-new">first recorded in ${escHtml(String(y))}</span>`;
+    else if (d && d.pct !== null && Math.abs(d.pct) >= 0.05) {
+      const up   = d.pct > 0;
+      const good = goodUp ? up : !up;
+      cell = `<span class="arc-d ${good ? 'is-up' : 'is-down'}">${up ? '▲' : '▼'} ${Math.abs(d.pct).toFixed(1)}%</span>`;
+    }
+    return `<tr>
+      <td>${escHtml(label)}</td>
+      <td class="num">${fmt(beforeV)}</td>
+      <td class="num"><b>${fmt(nowV)}</b></td>
+      <td class="num">${cell}</td>
+    </tr>`;
+  };
+  const money = v => fmtPKR(v);
+  const count = v => String(v);
+
+  return `<div class="arc-panel">
+    <div class="arc-panel__head">
+      <span class="arc-panel__t">${escHtml(String(y))} against ${escHtml(prev)}</span>
+      <span class="arc-panel__n">${A.active} month${A.active === 1 ? '' : 's'} with records
+        · ${B.active} in ${escHtml(prev)}</span>
+    </div>
+    <div class="arc-wrap"><table class="arc-table">
+      <thead><tr><th>Measure</th><th class="num">${escHtml(prev)}</th>
+        <th class="num">${escHtml(String(y))}</th><th class="num">Change</th></tr></thead>
+      <tbody>
+        ${row('Revenue collected', A.rev, B.rev, money, true)}
+        ${row('Expenses', A.exp, B.exp, money, false)}
+        ${row('Available fund', A.net, B.net, money, true)}
+        ${row('Still owed at year end', A.pending, B.pending, money, false)}
+        ${row('Payment records', A.payments, B.payments, count, true)}
+        ${row('Students admitted', A.joined, B.joined, count, true)}
+        ${row('Students who left', A.left, B.left, count, false)}
+      </tbody>
+    </table></div>
+    ${A.active < 12 || B.active < 12 ? `<div class="arc-note">A part-recorded year is not a worse year.
+      ${escHtml(String(y))} has ${A.active} month${A.active === 1 ? '' : 's'} of records and
+      ${escHtml(prev)} has ${B.active} — read the percentages with that in mind.</div>` : ''}
+  </div>`;
+}
+
+/* Turnover across the selected year: who arrived, who left, and what the roster
+   did as a result. "Retained" is deliberately the count still on the books at
+   the end, not a rate — a hostel with nine residents does not need a
+   percentage, it needs the nine. */
+function _arcRetentionPanel() {
+  const y   = _arcYear();
+  const F   = _arcYearFigures(y);
+  const all = (DB.students || []);
+  // On the roster at any point in the year, by the same rule the students panel
+  // uses: admitted on or before it ended, and not already gone before it began.
+  const inYear = all.filter(s => {
+    const j = String(s.joinDate || '').slice(0, 4);
+    if (j && j > y) return false;
+    const l = s.status === 'Left' ? String(s.leftDate || '').slice(0, 4) : '';
+    if (l && l < y) return false;
+    return true;
+  });
+  const stillHere = inYear.filter(s => s.status !== 'Left' && s.status !== 'Blacklisted').length;
+  const carried   = inYear.filter(s => String(s.joinDate || '').slice(0, 4) < y).length;
+
+  const tile = (hue, l, v, s) => `<div class="arc-kpi ${hue}">
+    <div class="arc-kpi__l">${l}</div><div class="arc-kpi__v">${v}</div><div class="arc-kpi__s">${s}</div></div>`;
+
+  return `<div class="arc-panel">
+    <div class="arc-panel__head">
+      <span class="arc-panel__t">Who was here in ${escHtml(y)}</span>
+      <span class="arc-panel__n">${inYear.length} resident${inYear.length === 1 ? '' : 's'} across the year</span>
+    </div>
+    <div class="arc-kpis" style="margin:0">
+      ${tile('dh-blue',  'Carried in',  String(carried),   'admitted before ' + escHtml(y))}
+      ${tile('dh-green', 'Admitted',    String(F.joined),  'joined during ' + escHtml(y))}
+      ${tile('dh-amber', 'Left',        String(F.left),    'departed during ' + escHtml(y))}
+      ${tile('dh-green', 'Still resident', String(stillHere), 'on the roster today')}
+    </div>
+  </div>`;
+}
+
 function _arcOverviewPanel(T, label) {
   const y = _arcYear();
   const MS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -351,7 +499,12 @@ function _arcStudentsPanel(T, label) {
     const room = (DB.rooms || []).find(r => r.id === s.roomId);
     const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
     return { s, f, room, charge: ch.total };
-  }).sort((a, b) => String(a.s.name||'').localeCompare(String(b.s.name||'')));
+  // Room order, then name inside a room — the same rule every other list and
+  // export follows since 2026-08-31.
+  }).sort((a, b) => {
+    const c = cmpRoomNo(a.room && a.room.number, b.room && b.room.number);
+    return c !== 0 ? c : String(a.s.name||'').localeCompare(String(b.s.name||''));
+  });
 
   const tot = rows.reduce((a, r) => ({ paid: a.paid + r.f.paid, pending: a.pending + r.f.pending }),
                           { paid: 0, pending: 0 });

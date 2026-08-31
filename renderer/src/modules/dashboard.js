@@ -335,29 +335,11 @@ function _dashDueState(p) {
 }
 
 function renderDashboard() {
-  // Alert system
-  const overduePayments = DB.payments.filter(p=>p.status==='Pending');
-  const openMaint = (DB.maintenance||[]).filter(m=>m.status==='Open').length;
-  const openComp = (DB.complaints||[]).filter(c=>c.status==='Open').length;
-  const totalOccupied = DB.students.filter(s=>s.status==='Active').length;
-  const totalBeds = DB.rooms.reduce((sum,r)=>{const rt=getRoomType(r);return sum+(rt?rt.capacity:0);},0);
-  const occRate = totalBeds>0?Math.round(totalOccupied/totalBeds*100):0;
-  const alerts = [];
-  const ICON_MONEY = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg>';
-  const ICON_WRENCH = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.7 17.3 16 11.6a6 6 0 0 0-7.4-7.4 1 1 0 0 0-.46 1.67l2.6 2.6-1.5 1.5-2.6-2.6A1 1 0 0 0 5 7.4a6 6 0 0 0 7.4 7.4l5.7 5.7a2.41 2.41 0 0 0 3.4 0l.2-.2a2.41 2.41 0 0 0 0-3.4Z"/></svg>';
-  const ICON_MESSAGE = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z"/></svg>';
-  const ICON_HOME = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg>';
-  if(overduePayments.length>0) alerts.push({type:'warning',icon:ICON_MONEY,msg:`${overduePayments.length} pending payment${overduePayments.length>1?'s':''} — ${fmtPKR(overduePayments.reduce((s,p)=>s+Number(p.amount||0),0))} uncollected`,action:"navigate('payments')"});
-  if(openMaint>0) alerts.push({type:'info',icon:ICON_WRENCH,msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
-  if(openComp>0) alerts.push({type:'danger',icon:ICON_MESSAGE,msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
-  if(occRate < 60) alerts.push({type:'warning',icon:ICON_HOME,msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
-  const alertHue = {warning:'dh-amber',info:'dh-blue',danger:'dh-red'};
-  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:12px">${alerts.map(a=>`
-    <div onclick="${a.action}" class="dash-banner ${alertHue[a.type]}">
-      <span class="dash-chip">${a.icon}</span>
-      <span class="dash-banner__msg">${a.msg}</span>
-      <span class="dash-banner__go">View →</span>
-    </div>`).join('')}</div>`:'';
+  /* The alert computation that opened this function is gone with the banners
+     it fed. Every one of its findings — pending payments, open maintenance,
+     unresolved complaints, low occupancy — is rebuilt by chromeAlerts() in
+     nav.js and rendered by the header bell, which is where they now live once
+     rather than twice. */
 
   const occ = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const vac = DB.rooms.length - occ;
@@ -452,22 +434,21 @@ function renderDashboard() {
   const revDelta = _dashDelta(series.rev);
 
   return `
-  ${pendingCancels.length>0?`
-  <div class="dash-banner dh-red" style="margin-bottom:12px" onclick="navigate('cancellations')">
-    <span class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
-    <div>
-      <div class="dash-banner__msg">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
-      ${/* Said "seats freed", and they are not. A pending cancellation is a
-            student who has given notice and is still sleeping in the bed,
-            still billed for it, until their vacate date — which is the rule
-            the Rooms page and the Cancellations page have both followed since
-            2026-08-30 (CLAUDE.md rule 9). This line was the last screen still
-            telling a warden the opposite, and acting on it means booking a bed
-            somebody is still in. */''}
-      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — beds stay theirs until they leave${_nextVacate?' · first frees '+escHtml(fmtDate(_nextVacate)):''}</div>
-    </div>
-    <span class="dash-banner__go">View →</span>
-  </div>`:''}
+  ${''/* The pending-cancellations banner that stood here is gone, and so is the
+         `alertHtml` strip that was computed below it. Owner's call, 2026-08-31:
+         "dont show the banners for cancellations or others because it lowers
+         the other screen content".
+
+         Nothing is lost. `chromeAlerts()` in nav.js already builds the SAME set
+         — pending payments, open maintenance, unresolved complaints, pending
+         cancellations, low occupancy — and the header bell renders it with a
+         count. These banners were a second copy of that feed, sitting above the
+         KPI row and pushing every figure on the dashboard toward the fold. A
+         duplicate that costs the primary content its position is not a second
+         chance to be seen; it is a tax on the screen that matters.
+
+         `alertHtml` was already dead — computed on every render and never once
+         interpolated. It is deleted rather than left to look load-bearing. */}
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   <div class="dash-kpi-grid">
@@ -801,44 +782,233 @@ function renderDashboard() {
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:9px;font-weight:600" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
+      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:#fff;border:none;border-radius:10px;font-weight:700;letter-spacing:.2px" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
     </div>
   </div><!-- end row3+4 grid -->
 
   <!-- ══ ROW 5: RECENT PAYMENTS ══ -->
-  <div class="dash-sec">
-    <div class="dash-sec__head">
-      <div class="dash-chip dh-green" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div>
-      <span class="dash-sec__title">Recent Payments</span>
-      <button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>
-    </div>
-    ${recentPay.length===0?'<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--text3)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/></svg></div><div style="font-size:14px;font-weight:600">No payments yet</div></div>':
-    '<div class="table-wrap" style="border:none">'
-    +'<table><thead><tr><th style="font-size:10px">Student</th><th style="font-size:10px">Room</th><th style="font-size:10px">Room Rent</th><th style="font-size:10px">Paid (+Extras)</th><th style="font-size:10px">Unpaid</th><th style="font-size:10px">Method</th><th style="font-size:10px">Status</th><th style="font-size:10px">Date</th></tr></thead><tbody>'
-    +recentPay.map(p=>{
-      const st2 = DB.students.find(s=>s.id===p.studentId);
-      const mRent = p.monthlyRent||p.totalRent||st2?.rent||0;
-      const admFee = Number(p.fee||0);
-      const extras = p.extraCharges||[];
-      const unpaidAmt2=p.unpaid!=null?p.unpaid:0;
-      let paidCell='<span style="color:var(--text);font-weight:700;font-size:12px">'+fmtPKR(p.amount)+'</span>';
-      if(admFee>0) paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(admFee)+' adm.</div>';
-      extras.forEach(c=>{paidCell+='<div style="font-size:10px;color:var(--text2);font-weight:700">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</div>';});
-      return '<tr style="cursor:pointer" onclick="showViewStudentModal(\''+p.studentId+'\')">'
-      +'<td><div style="display:flex;align-items:center;gap:7px">'
-      +'<div style="width:26px;height:26px;border-radius:7px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0">'+escHtml((p.studentName||'?')[0].toUpperCase())+'</div>'
-      +'<span style="font-weight:700;color:var(--text);font-size:12px">'+escHtml(p.studentName||'')+'</span></div></td>'
-      +'<td><span style="color:var(--text2);font-weight:700;font-size:12px">#'+escHtml(p.roomNumber||'')+'</span></td>'
-      +'<td><span style="font-weight:700;font-size:12px">'+(mRent>0?fmtPKR(mRent):'—')+'</span></td>'
-      +'<td>'+paidCell+'</td>'
-      +'<td><span style="color:'+(unpaidAmt2>0?'var(--text)':'var(--text3)')+';font-weight:700;font-size:12px">'+(unpaidAmt2>0?fmtPKR(unpaidAmt2):'—')+'</span></td>'
-      +'<td>'+pmBadge(p.method)+'</td>'
-      +'<td>'+statusBadge(p.status)+'</td>'
-      +'<td style="font-size:11px;color:var(--text3)">'+fmtDate(p.date)+'</td>'
-      +'</tr>';
-    }).join('')
-    +'</tbody></table></div>'}
-  </div>`;
+  ${_dashRecentPayments(recentPay, mo, collected)}`;
+}
+
+/* ══ RECENT PAYMENTS ═════════════════════════════════════════════════════════
+   Owner reference: `recent payments.png` (30 Aug).
+
+   The eight columns were already right; what the reference asks for is
+   legibility and a footing:
+
+   · The extras under a payment are drawn in the accent, not grey. They are the
+     answer to "why is PKR 16,500 sitting under a PKR 14,500 room rent" — the
+     one line on the row a reader actively goes looking for.
+   · An unpaid balance is red. It was `var(--text)`, the same weight as every
+     settled figure beside it, so the two rows that still owed money looked
+     exactly like the eight that did not.
+   · A ⋮ per row. settings.js records the house rule — no kebab for a single
+     action — and this row clears it: view the student, print the receipt,
+     edit the payment, and settle it while it is still pending.
+   · A summary strip under the table. The table shows ten rows; the strip
+     describes the whole month, which is why its captions say which month.
+
+   EVERY FIGURE IN THE STRIP IS COMPUTED, AND `collected` IS PASSED IN RATHER
+   THAN RECOMPUTED. It is the same variable the Total Revenue KPI card is drawn
+   from, so the two cannot disagree on one screen — the failure that teaches an
+   owner to stop trusting a dashboard.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Extras are a LIST, not a number, because the row prints them line by line and
+   the strip totals them. One reader for both, or the tile and the rows drift.
+
+   `p.fee` was the only field this section read for the admission fee. Every
+   other reader in the app — payments.js:508, :679, :698, :2272 — reads
+   `p.admissionFee || p.fee`, and `admissionFee` is what every writer since has
+   written. So the admission fee has never once appeared on this table. */
+function _dashExtraLines(p) {
+  const out = [];
+  const adm = Number(p.admissionFee || p.fee || 0);
+  if (adm > 0) out.push({ amount: adm, label: 'admission fee' });
+  (p.extraCharges || []).forEach(c => {
+    const amt = Number(c.amount || 0);
+    if (amt > 0) out.push({ amount: amt, label: c.description || c.desc || c.label || 'extra' });
+  });
+  return out;
+}
+function _dashExtrasTotal(p) { return _dashExtraLines(p).reduce((s, l) => s + l.amount, 0); }
+
+/* What the strip states, counted over the whole selected month — not over the
+   ten rows above it. `collected` comes from calcRevenue() via the caller. */
+function _dashPaymentTotals(mo, collected) {
+  const pays    = DB.payments.filter(p => _payMatchesMonth(p, mo));
+  const settled = pays.filter(p => p.status === 'Paid').length;
+  return {
+    collected: collected,
+    extras:    pays.reduce((s, p) => s + _dashExtrasTotal(p), 0),
+    settled:   settled,
+    count:     pays.length,
+    rate:      pays.length ? (settled / pays.length) * 100 : 0,
+  };
+}
+
+const _DASH_RP_ICO = {
+  card:    '<path d="M20 4H4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3ZM3 9h18V8H3Zm14 6h-3a1 1 0 0 1 0-2h3a1 1 0 0 1 0 2Z"/>',
+  money:   '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm.75 15.5v1h-1.5v-1a3 3 0 0 1-2.25-1.6 1 1 0 0 1 1.76-.95 1.3 1.3 0 0 0 1.16.6h.66a.9.9 0 0 0 .3-1.75l-2-.7A2.9 2.9 0 0 1 11.25 7V6h1.5v1a3 3 0 0 1 2.09 1.45 1 1 0 0 1-1.7 1.04A1.28 1.28 0 0 0 12.08 9h-.66a.9.9 0 0 0-.3 1.75l2 .7a2.9 2.9 0 0 1-.37 6.05Z"/>',
+  coins:   '<path d="M8 3c-3.9 0-7 1.34-7 3s3.1 3 7 3 7-1.34 7-3-3.1-3-7-3Zm0 8c-3.9 0-7-1.34-7-3v3c0 1.66 3.1 3 7 3s7-1.34 7-3V8c0 1.66-3.1 3-7 3Z"/><path d="M16 9v3.5c0 1.66-3.1 3-7 3-.34 0-.67 0-1-.03V17c0 1.66 3.1 3 7 3s7-1.34 7-3v-5c0-1.6-2.9-2.92-6.62-3Z"/>',
+  check:   '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/>',
+  people:  '<path d="M9 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.31 0-6 1.79-6 4v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1c0-2.21-2.69-4-6-4Zm8.5-2a3.5 3.5 0 1 0-3.5-3.5 3.5 3.5 0 0 0 3.5 3.5Zm0 2a6.6 6.6 0 0 0-1.7.22A5.5 5.5 0 0 1 18 17v2h4a1 1 0 0 0 1-1v-1c0-2.21-2.46-4-5.5-4Z"/>',
+  dots:    '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>',
+  eye:     '<path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7Zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5Z"/><circle cx="12" cy="12" r="2.2"/>',
+  receipt: '<path d="M6 2a1 1 0 0 0-1 1v18a1 1 0 0 0 1.45.9L9 20.6l2.55 1.28a1 1 0 0 0 .9 0L15 20.6l2.55 1.28A1 1 0 0 0 19 21V3a1 1 0 0 0-1-1Zm2 5h8v2H8Zm0 4h8v2H8Z"/>',
+  pencil:  '<path d="m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z"/>',
+};
+function _rpIco(k, cls) {
+  return '<svg class="' + (cls || 'icon icon-xs') + '" viewBox="0 0 24 24" fill="currentColor">' + _DASH_RP_ICO[k] + '</svg>';
+}
+
+function _dashRecentPayments(list, mo, collected) {
+  const head =
+    '<div class="dash-sec__head">'
+    + '<div class="dash-chip dh-green" style="width:30px;height:30px;border-radius:9px">' + _rpIco('card', 'icon') + '</div>'
+    + '<span class="dash-sec__title">Recent Payments</span>'
+    + '<button class="dash-link" style="margin-left:auto" onclick="navigate(\'payments\')">View All ›</button>'
+    + '</div>';
+
+  if (!list.length) {
+    return '<div class="dash-sec">' + head
+      + '<div style="padding:32px;text-align:center;color:var(--text3)">'
+      + '<div style="margin-bottom:10px">' + _rpIco('card', 'icon icon-xl') + '</div>'
+      + '<div style="font-size:14px;font-weight:600">No payments yet</div></div></div>';
+  }
+
+  const mayEdit = typeof canDo !== 'function' || canDo('payments');
+  const rows = list.map(p => {
+    const st     = DB.students.find(s => s.id === p.studentId);
+    // The MONTHLY CHARGE, not the rent half of it. This column read
+    // `p.monthlyRent` alone, so a student on 8,000 rent + 6,500 mess showed
+    // "PKR 8,000" beside a PKR 14,500 payment and the mess was nowhere.
+    const ch     = paymentCharges(p, st);
+    const unpaid = Number(p.unpaid != null ? p.unpaid : 0);
+    const name   = String(p.studentName || '?');
+    const menu =
+      '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showViewStudentModal\',\'' + p.studentId + '\')">' + _rpIco('eye') + 'View student</button>'
+      + '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'printReceipt\',\'' + p.id + '\')">' + _rpIco('receipt') + 'Print receipt</button>'
+      + (mayEdit
+          ? '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showEditPaymentModal\',\'' + p.id + '\')">' + _rpIco('pencil') + 'Edit payment</button>'
+            + (p.status === 'Pending'
+                ? '<button class="dash-rp-menu__item dash-rp-menu__item--go" onclick="_dashRowAct(event,\'markPaymentPaid\',\'' + p.id + '\',true)">' + _rpIco('check') + 'Mark paid</button>'
+                : '')
+          : '');
+
+    return '<tr class="dash-rp-row" onclick="showViewStudentModal(\'' + p.studentId + '\')">'
+      + '<td><div class="dash-rp-who"><div class="dash-rp-av">' + escHtml((name.trim()[0] || '?').toUpperCase()) + '</div>'
+        + '<span class="dash-rp-name">' + escHtml(name) + '</span></div></td>'
+      + '<td><span class="dash-rp-room">#' + escHtml(String(p.roomNumber || '')) + '</span></td>'
+      + '<td><span class="dash-rp-num">' + (ch.monthly > 0 ? fmtPKR(ch.monthly) : '—') + '</span>'
+        + (ch.messIncluded
+            ? '<div class="dash-rp-sub">' + fmtPKR(ch.rent) + ' rent + ' + fmtPKR(ch.mess) + ' mess</div>'
+            : ch.hasMess ? '<div class="dash-rp-sub">rent only · mess off</div>' : '')
+      + '</td>'
+      + '<td><span class="dash-rp-num">' + fmtPKR(p.amount) + '</span>'
+        + _dashExtraLines(p).map(l =>
+            '<div class="dash-rp-extra">+ ' + fmtPKR(l.amount) + ' ' + escHtml(l.label) + '</div>').join('')
+      + '</td>'
+      + '<td>' + (unpaid > 0
+          ? '<span class="dash-rp-num dash-rp-num--due">' + fmtPKR(unpaid) + '</span>'
+          : '<span class="dash-rp-nil">—</span>') + '</td>'
+      + '<td>' + pmBadge(p.method) + '</td>'
+      + '<td>' + statusBadge(p.status) + '</td>'
+      + '<td><span class="dash-rp-date">' + fmtDate(p.date) + '</span></td>'
+      + '<td class="dash-rp-more">'
+        + '<button class="dash-rp-more__btn" title="More" onclick="_dashToggleRowMenu(event)">' + _rpIco('dots') + '</button>'
+        + '<div class="dash-rp-menu">' + menu + '</div>'
+      + '</td></tr>';
+  }).join('');
+
+  const t = _dashPaymentTotals(mo, collected);
+  const stat = (hue, ico, label, value, sub) =>
+    '<div class="dash-rp-stat ' + hue + '">'
+    + '<div class="dash-rp-stat__chip">' + _rpIco(ico, 'icon') + '</div>'
+    + '<div class="dash-rp-stat__body"><div class="dash-rp-stat__label">' + label + '</div>'
+    + '<div class="dash-rp-stat__val">' + value + '</div>'
+    + '<div class="dash-rp-stat__sub">' + sub + '</div></div></div>';
+
+  // The strip says WHICH month, because the dashboard has a month selector and
+  // "This Month" would be a lie on every month but one.
+  const when = thisMonthLabel();
+  const foot =
+    '<div class="dash-rp-foot">'
+    + stat('dh-blue',   'money',  'Total Payments', fmtPKR(t.collected), when)
+    + stat('dh-violet', 'coins',  'Total Extras',   fmtPKR(t.extras),    'Charged in ' + when)
+    + stat('dh-green',  'check',  'Settled',        (t.count ? t.rate.toFixed(1) + '%' : '—'),
+           t.count ? t.settled + ' of ' + t.count + ' records' : 'No records')
+    + stat('dh-amber',  'people', 'Transactions',   String(t.count),     when)
+    + '</div>';
+
+  return '<div class="dash-sec">' + head
+    + '<div class="table-wrap dash-rp-wrap" style="border:none"><table class="dash-rp">'
+    + '<thead><tr><th>Student</th><th>Room</th><th>Charge / mo</th><th>Paid (+Extras)</th>'
+    + '<th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th></th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table></div>'
+    + foot + '</div>';
+}
+
+/* One menu open at a time, and never the row click underneath it.
+
+   The menu is `position:fixed` because the table sits in a `.table-wrap` that
+   scrolls sideways, and a dropdown inside a scroll container is clipped by it —
+   an absolutely positioned menu is sliced off at the card edge. Fixed escapes
+   the clip (nothing above it establishes a containing block), at the price of
+   coordinates that have to be computed and then kept up to date.
+
+   Kept up to date, NOT torn down on scroll. Closing on scroll looks equivalent
+   and is not: a click near the foot of the window makes the browser scroll the
+   row into view, and that scroll is delivered AFTER the click handler has
+   opened the menu — so the menu opened, then immediately closed, and the ⋮ read
+   as a dead button. It follows its row instead, and gives up only when the row
+   it belongs to has left the viewport. */
+let _dashMenuAnchor = null;
+
+function _dashCloseRowMenus() {
+  _dashMenuAnchor = null;
+  document.querySelectorAll('.dash-rp-more.is-open').forEach(n => n.classList.remove('is-open'));
+}
+
+function _dashPlaceRowMenu() {
+  if (!_dashMenuAnchor) return;
+  const cell = _dashMenuAnchor.parentNode;
+  const menu = cell && cell.querySelector('.dash-rp-menu');
+  if (!menu) return;
+  const r = _dashMenuAnchor.getBoundingClientRect();
+  if (r.bottom < 0 || r.top > window.innerHeight) { _dashCloseRowMenus(); return; }
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  const below = r.bottom + 4;
+  // Flip above the button when there is no room under it — the last rows of the
+  // table sit near the bottom of the window.
+  menu.style.top  = (below + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 4) : below) + 'px';
+  menu.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+}
+
+function _dashToggleRowMenu(ev) {
+  ev.stopPropagation();
+  const cell = ev.currentTarget.parentNode;
+  const open = cell.classList.contains('is-open');
+  _dashCloseRowMenus();
+  if (open) return;
+  cell.classList.add('is-open');
+  _dashMenuAnchor = ev.currentTarget;
+  _dashPlaceRowMenu();
+}
+document.addEventListener('click', _dashCloseRowMenus);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _dashCloseRowMenus(); });
+document.addEventListener('scroll', _dashPlaceRowMenu, true);
+window.addEventListener('resize', _dashPlaceRowMenu);
+
+/* Menu items dispatch by name so a module that has not loaded cannot throw
+   inside an inline handler and leave the menu stuck open. `rerender` is for the
+   one action that changes what the dashboard is showing. */
+function _dashRowAct(ev, fn, id, rerender) {
+  ev.stopPropagation();
+  _dashCloseRowMenus();
+  if (typeof window[fn] !== 'function') { toast('That action is unavailable', 'error'); return; }
+  window[fn](id);
+  if (rerender) renderPage('dashboard');
 }
 
 function showRoomSeatDetailModal(roomId) {
@@ -948,7 +1118,7 @@ function printSeatAvailability() {
     // Numeric-aware compare: room numbers are strings and some carry a suffix
     // ("6A"), which a-b turns into NaN and leaves the grid in insertion order.
     const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor)
-      .sort((a,b)=>String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+      .sort((a,b)=>cmpRoomNo(a.number,b.number));
     // Per-floor totals, so a warden can sign off one floor at a time instead of
     // holding the whole building in their head.
     const fSeats = floorRooms.reduce((s,r)=>{

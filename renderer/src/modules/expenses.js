@@ -1,8 +1,6 @@
 /* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
-             showEditExpenseModal, submitEditExpense, deleteExpense,
-             showClearAllMenu, clearPayments, clearExpenses, clearStudents,
-             clearAllData, clearAllDataWithPassword, confirmClearAllWithPassword
+             showEditExpenseModal, submitEditExpense, deleteExpense
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -69,13 +67,18 @@ function expSpark(values) {
     <polyline points="${pts}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function renderExpenses() {
-  const mo      = thisMonth();
-  const moLabel = thisMonthLabel();
-
+/* The one filter+sort pipeline for expenses. The table, the stat strip and
+   the PDF export all read from here, so they cannot drift apart — the same
+   rule studentsFiltered() and payFiltered() already follow. It was inline in
+   renderExpenses() until the export needed it too. */
+/* Returns the WHOLE scope, not only the rows: the stat strip above the table
+   is computed from the month's expenses before the category filter narrows
+   them, so it needs `scoped` as well as `rows`. Returning both from one call
+   is what stops the two being derived twice and disagreeing. */
+function expensesScoped() {
   // Month scope: '' means the current month, 'All' every month, otherwise a
   // specific YYYY-MM picked from the dropdown.
-  const scope = expFilter.showAll ? 'All' : (expFilter.month || mo);
+  const scope = expFilter.showAll ? 'All' : (expFilter.month || thisMonth());
   const inScope = e => scope === 'All' || String(e.date || '').startsWith(scope);
 
   /* Legacy funds-transfer records ride along as ordinary rows under the Fund
@@ -112,6 +115,93 @@ function renderExpenses() {
     amount:      e => Number(e.amount) || 0,
   });
   if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
+  return { scope, scoped, legacyTransfers: _legacyTransfers, rows: exps };
+}
+
+/* Just the rows — what the table and the PDF export both iterate. */
+function expensesFiltered() { return expensesScoped().rows; }
+
+/* Export the expenses on screen as a PDF.
+
+   Owner's requirement: print ONE category when one is selected, or every
+   category combined when none is. Those are genuinely two documents and this
+   builds both from the same rows:
+
+     · a category selected → one table, that category's records, its total
+     · All Categories      → a table PER category, each with its own subtotal,
+                             ordered by spend so the largest is on page one,
+                             and a grand total under them
+
+   "All categories combined" is not one flat table with a category column. A
+   warden checking last month's spending wants to know what went on electricity
+   as a figure, not to add fourteen scattered rows up by hand.
+
+   The rows are expensesFiltered(), so the month, the search box and the sort on
+   screen all carry into the document. */
+function exportExpensesPDF() {
+  const rows = expensesFiltered();
+  if (!rows.length) { toast('No expenses to export', 'error'); return; }
+
+  const one   = expFilter.cat !== 'All';
+  const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const scope = expFilter.showAll ? 'All months'
+              : (expFilter.month || thisMonth()) === thisMonth() ? thisMonthLabel()
+              : expFilter.month;
+
+  // Group, then order by spend — biggest first, because that is the order the
+  // question "where did the money go" is actually asked in.
+  const byCat = new Map();
+  rows.forEach(e => {
+    const k = e.category || 'Uncategorised';
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k).push(e);
+  });
+  const catTotal = list => list.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
+
+  const columns = [
+    { label: 'Date',        get: e => fmtDate(e.date) },
+    { label: 'Category',    get: e => escHtml(e.category || 'Uncategorised') },
+    { label: 'Description', get: e => escHtml(e.description || '—') +
+                                     (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Amount', align: 'right', get: e => `<b>${fmtPKR(e.amount)}</b>` },
+  ];
+
+  const groups = one
+    ? [{ rows, total: { label: expFilter.cat + ' total', value: fmtPKR(total) } }]
+    : ordered.map(([cat, list]) => ({
+        label: cat,
+        meta: list.length + ' record' + (list.length === 1 ? '' : 's') +
+              ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend',
+        rows: list,
+        total: { label: cat + ' total', value: fmtPKR(catTotal(list)) },
+      }));
+
+  const html = printListDocument({
+    title: one ? 'Expenses — ' + expFilter.cat : 'Expense Register',
+    subtitle: scope + (one ? '' : ' · ' + ordered.length + ' categor' + (ordered.length === 1 ? 'y' : 'ies')),
+    kpis: one
+      ? [{ label: 'Records', value: String(rows.length) },
+         { label: expFilter.cat, value: fmtPKR(total), cls: 'red' }]
+      : [{ label: 'Records',    value: String(rows.length) },
+         { label: 'Categories', value: String(ordered.length) },
+         { label: 'Largest',    value: ordered.length ? escHtml(ordered[0][0]) : '—' },
+         { label: 'Total spent', value: fmtPKR(total), cls: 'red' }],
+    columns,
+    groups,
+    grand: { label: one ? expFilter.cat + ' — total' : 'Total across all categories', value: fmtPKR(total) },
+  });
+
+  _electronPDF(html, printFileName('Expenses', one ? expFilter.cat : scope), { pageSize: 'A4' });
+}
+
+function renderExpenses() {
+  const mo      = thisMonth();
+  const moLabel = thisMonthLabel();
+
+  const _S = expensesScoped();
+  const scope = _S.scope, scoped = _S.scoped, _legacyTransfers = _S.legacyTransfers;
+  const exps = _S.rows;
 
   const total = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
   const _pg   = paginate(exps, expFilter);
@@ -218,6 +308,11 @@ function renderExpenses() {
         ${monthOpts}
       </select>
     </div>
+    <button class="exp-catadd" onclick="exportExpensesPDF()"
+            title="${expFilter.cat==='All'?'Print every category, each with its own total':'Print the '+expFilter.cat+' records'}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+      ${expFilter.cat==='All'?'Export PDF':'Export '+expFilter.cat}
+    </button>
     <div class="exp-count">${_pg.total} record${_pg.total!==1?'s':''} &middot; <b>${fmtPKR(total)}</b></div>
   </div>`;
 
@@ -329,7 +424,7 @@ function expPager(pg) {
    expense filed under one was invisible when filtering by the other. */
 function showAddExpenseCategoryModal() {
   // 'expenses' is not a permission. PERMS declares edit / delete / payments /
-  // reports / backup / settings / users / clearall, and canDo() fails closed on
+  // reports / backup / settings / users, and canDo() fails closed on
   // anything else — so this gate denied EVERY account, including the built-in
   // full-access one, and the toast read 'does not have permission to: expenses'
   // because requirePerm found no label to print either. Adding a category is an
@@ -473,146 +568,17 @@ async function deleteExpense(id) {
   }));
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// CLEAR DATA FUNCTIONS
-// ════════════════════════════════════════════════════════════════════════════
-function showClearAllMenu() {
-  if (typeof requirePerm === 'function' && !requirePerm('clearall')) return;
-  showModal('modal-md','🗑️ Clear Data',`
-    <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.35);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--text2)">
-      ⚠️ <strong style="color:var(--red)">Warning:</strong> This action is <strong>permanent and cannot be undone</strong>. Export a backup first!
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="background:linear-gradient(135deg,rgba(224,82,82,0.12),rgba(224,82,82,0.06));border:1px solid rgba(224,82,82,0.4);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-weight:800;color:var(--red);font-size:14px">☢️ Clear Everything</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">Removes ALL students, payments, expenses &amp; cancellations</div>
-        </div>
-        <button class="btn btn-danger btn-sm" style="background:var(--red);color:#fff" onclick="clearAllDataWithPassword()">🔒 CLEAR ALL</button>
-      </div>
-    </div>
-  `,`<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
-}
-
-async function clearPayments(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.payments=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='payments'?'payments':currentPage);
-    toast('All payment records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Payments?',`This will permanently delete all ${DB.payments.length} payment records.`,doIt);
-  } else {
-    showConfirm('Clear All Payments?',`This will permanently delete all ${DB.payments.length} payment records. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearExpenses(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.expenses=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='expenses'?'expenses':currentPage);
-    toast('All expense records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Expenses?',`This will permanently delete all ${DB.expenses.length} expense records.`,doIt);
-  } else {
-    showConfirm('Clear All Expenses?',`This will permanently delete all ${DB.expenses.length} expense records. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearStudents(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.students=[];
-    DB.payments=[];
-    DB.cancellations=[];
-    // FIX: DB.transfers are fund-level financial records, NOT student records.
-    // Clearing students must NOT wipe transfer history.
-    DB.fines=[];
-    DB.checkinlog=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='students'?'students':currentPage);
-    toast('All students and their records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved.`,doIt);
-  } else {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearAllData(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.students=[];
-    DB.payments=[];
-    DB.expenses=[];
-    DB.cancellations=[];
-    DB.transfers=[];
-    DB.maintenance=[];
-    DB.complaints=[];
-    DB.activityLog=[];
-    DB.fines=[];
-    DB.checkinlog=[];
-    DB.notices=[];
-    DB.inspections=[];
-    DB.billSplits=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    navigate('dashboard');
-    toast('All data cleared successfully','info');
-    renderSidebarCalendar();
-  };
-  showConfirm('☢️ Clear ALL Data?',
-    `This will permanently delete ALL students (${DB.students.length}), payments (${DB.payments.length}), expenses (${DB.expenses.length}) and cancellations. This CANNOT be undone! Make sure you have a backup.`,
-    doIt
-  );
-}
-
-// ── PASSWORD-PROTECTED CLEAR ALL (Fix #11) ───────────────────────────────────
-function clearAllDataWithPassword() {
-  showModal('modal-sm','🔒 Confirm: Clear All Data',`
-    <div style="background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ This action cannot be undone!</div>
-      <div style="font-size:12px;color:var(--text3)">All students, payments, expenses and cancellations will be permanently deleted. Enter your warden password to proceed.</div>
-    </div>
-    <div class="field">
-      <label>Warden Password</label>
-      <input class="form-control" id="clear-all-pwd" type="password" placeholder="Enter your password…" autocomplete="off">
-    </div>
-    <div id="clear-pwd-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">❌ Incorrect password. Try again.</div>
-  `,`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-danger" onclick="confirmClearAllWithPassword()">Delete Everything</button>`);
-  setTimeout(()=>{ const i=document.getElementById('clear-all-pwd'); if(i) i.focus(); },120);
-}
-async function confirmClearAllWithPassword() {
-  const pwd = document.getElementById('clear-all-pwd')?.value||'';
-  const errEl = document.getElementById('clear-pwd-err');
-  if (!pwd) {
-    if(errEl) errEl.style.display='block';
-    const inp = document.getElementById('clear-all-pwd');
-    if(inp) { inp.value=''; inp.focus(); }
-    return;
-  }
-  const user = CUR_USER;
-  if (!user || !user.pw) {
-    if(errEl) { errEl.textContent='❌ No user session found. Please re-login.'; errEl.style.display='block'; }
-    return;
-  }
-  const matches = await verifyPassword(pwd, user.pw);
-  if (!matches) {
-    if(errEl) errEl.style.display='block';
-    const inp = document.getElementById('clear-all-pwd');
-    if(inp) { inp.value=''; inp.focus(); }
-    return;
-  }
-  closeModal();
-  clearAllData(true);
-}
-// ─────────────────────────────────────────────────────────────────────────────
+// The CLEAR DATA block that stood here is gone. Owner's call, 2026-08-31:
+// "remove clear all data features from sidebar ... it is not a professional
+// feature". It was one button, behind one password, that emptied every table in
+// the database — written in the app's first weeks and never once needed by a
+// hostel. Backup & Restore is the supported way to reset an install, and it
+// leaves a file behind rather than a hole.
+//
+// Removed with it: the sidebar entry (index.html), the `clearall` permission
+// (auth-nev.js) — which the PR #19 guard test would otherwise have failed on,
+// correctly, for being declared and checked nowhere — and the regression spec
+// that covered its password gate.
 
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════

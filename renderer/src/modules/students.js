@@ -95,7 +95,9 @@ function studentsFiltered() {
   return applySort(list, studentFilter, {
     id:     t => t.id,
     name:   t => t.name,
-    room:   t => { const r = byId.get(t.roomId); return Number(r ? r.number : 0) || 0; },
+    // cmpRoomNo, not Number(): the Add Room form accepts 'A 01' and 'B 02-a',
+    // which Number() reads as NaN and a plain string compare orders 1, 10, 2.
+    room:   { get: t => { const r = byId.get(t.roomId); return r ? r.number : ''; }, cmp: cmpRoomNo },
     course: t => t.occupation || t.course || '',
     status: t => t.status
   });
@@ -172,8 +174,7 @@ function renderStudents() {
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
-  const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))]
-                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))].sort(cmpRoomNo);
   const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
   const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All'].filter(Boolean).length;
 
@@ -301,9 +302,13 @@ function renderStudents() {
         </div>
       </div>
 
-      <button class="stu-btn stu-btn--primary" style="margin-left:auto" onclick="exportStudentsCSV()" title="Export the current list to CSV">
+      <button class="stu-btn" style="margin-left:auto" onclick="exportStudentsPDF()" title="Print the current list">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        Export PDF
+      </button>
+      <button class="stu-btn stu-btn--primary" onclick="exportStudentsExcel()" title="Export the current list to Excel">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-        Export CSV
+        Export Excel
       </button>
     </div>
 
@@ -328,25 +333,24 @@ function renderStudents() {
           <th>CNIC</th>
           ${th('course','Course')}
           <th>Nationality</th>
+          <th>Rent + Mess / mo</th>
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="10"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
           const picked= stuSelected.has(t.id);
           const nm    = String(t.name||'?');
-          const ini   = nm.trim().split(/\s+/).slice(0,1).map(w=>w[0]||'').join('').toUpperCase()||'?';
-          const photo = t.docs && t.docs.photo;
           const status= t.status||'Active';
           return `<tr class="${picked?'is-picked dh-blue':''}">
             <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')"></td>
             <td><span class="stu-id">#${escHtml(t.id)}</span></td>
             <td onclick="showViewStudentModal('${t.id}')" style="cursor:pointer" title="Open full profile">
               <div class="stu-who">
-                <div class="stu-who__av ${stuAvatarHue(nm)}">${photo?`<img src="${escHtml(photo)}" alt="">`:escHtml(ini)}</div>
+                ${studentAvatar(t, 32, stuAvatarHue(nm))}
                 <div style="min-width:0">
                   <div class="stu-who__name">${escHtml(nm)}</div>
                   ${t.fatherName?`<div class="stu-who__sub">${escHtml(t.fatherName)}</div>`:''}
@@ -363,7 +367,13 @@ function renderStudents() {
             </td>
             <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
-            <td>${t.nationality?escHtml(t.nationality):'<span class="stu-dash">—</span>'}</td>
+            <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
+              return `<td>
+                <div class="stu-charge">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
+                <div class="stu-charge__sub">${c.messOptIn&&c.mess>0?'+ '+fmtPKR(c.mess)+' mess':c.mess>0?'Mess not included':'Rent only'}</div>
+                <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
+              </td>`;})()}
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
             <td>
               <div class="stu-acts">
@@ -451,38 +461,202 @@ function stuToggleAll(on) {
 }
 function stuBulkExport() {
   const ids = [...stuSelected];
-  _stuWriteCsv(studentsFiltered().filter(t => ids.includes(t.id)), 'Students_Selected.csv');
+  _stuWriteWorkbook(studentsFiltered().filter(t => ids.includes(t.id)),
+    'Students_Selected_' + today() + '.xlsx',
+    'STUDENT RECORDS — ' + ids.length + ' selected');
 }
 
-// Single CSV writer, shared by the toolbar export and the bulk-selection
-// export so the two can never produce different columns.
-function _stuWriteCsv(list, filename) {
+/* ── THE EXPORT ──────────────────────────────────────────────────────────────
+   One workbook writer, shared by the toolbar export and the bulk-selection
+   export so the two can never produce different columns.
+
+   This writes a real .xlsx, not a CSV with a spreadsheet icon. The owner's
+   reference sheet has a title band, a line stating how many students it holds,
+   and columns wide enough to read a Waziristan address in. None of that can
+   live in a CSV: a CSV is text, and every column width belongs to whoever
+   opens it.
+
+   Two typing rules matter more than the layout:
+
+   • Phone, emergency phone and CNIC go out as TEXT. `03310045835` written as a
+     number loses its leading zero and comes back as 3,310,045,835 — the
+     warden's contact list quietly turned into arithmetic.
+   • Join date and date of birth go out as real DATES built at LOCAL midnight
+     via `_stuXlDate`. Handing the string to `new Date()` parses it as UTC, and
+     five hours east of Greenwich that lands the cell on the day before — the
+     same bug class as the `today()` fix in the 19 Aug audit.
+
+   Column widths are `wch` (character widths), which is what SheetJS 0.20
+   writes. Fonts, fills and frozen panes are not writable by the community
+   build we vendor, so the sheet is structured, not painted.
+   ──────────────────────────────────────────────────────────────────────── */
+
+// [header, character width] — one source for both, so a column can never be
+// added to the sheet without being given a width.
+const STU_EXPORT_COLUMNS = [
+  ['ID', 6], ['Name', 22], ['Father Name', 22], ['Room', 8], ['Floor', 10],
+  ['Phone', 16], ['Emergency Contact', 20], ['Emergency Phone', 16], ['CNIC', 18],
+  ['Date of Birth', 14], ['Gender', 9], ['Nationality', 13], ['Address', 28],
+  ['Course', 22], ['Session', 12], ['Blood Group', 12], ['Join Date', 13], ['Status', 11],
+];
+// Zero-based indexes into the row above that hold real dates.
+const STU_EXPORT_DATE_COLS = [9, 16];
+// The table starts here: title, meta, blank, header.
+const STU_EXPORT_HEADER_ROW = 3;
+
+// 'YYYY-MM-DD' → a Date at LOCAL midnight, so the cell cannot slip a day.
+// Anything that is not a plain date is passed through untouched rather than
+// guessed at.
+function _stuXlDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : (v || '');
+}
+
+// "58 students · 44 active, 14 left" — every figure counted from the rows
+// actually being written, never from DB totals the file does not contain.
+function _stuExportMeta(list) {
+  const byStatus = {};
+  list.forEach(t => { const s = t.status || 'Active'; byStatus[s] = (byStatus[s] || 0) + 1; });
+  const parts = Object.keys(byStatus).sort().map(s => byStatus[s] + ' ' + s.toLowerCase());
+  return [
+    DB.settings.hostelName || 'Hostel',
+    'Total Students: ' + list.length,
+    parts.join(', '),
+    'Exported ' + fmtDate(today()),
+  ].filter(Boolean).join('  ·  ');
+}
+
+function _stuWriteWorkbook(list, filename, title) {
+  if (!list || list.length === 0) { toast('No students to export', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('Spreadsheet library not loaded — export unavailable', 'error'); return; }
+
   const byId = _stuRoomMap();
-  const rows = [['ID','Name','Father Name','Room','Floor','Phone','Emergency Contact',
-                 'Emergency Phone','CNIC','Date of Birth','Gender','Nationality','Address',
-                 'Course','Session','Blood Group','Join Date','Status']];
+  const aoa = [
+    [title],
+    [_stuExportMeta(list)],
+    [],
+    STU_EXPORT_COLUMNS.map(c => c[0]),
+  ];
+
   list.forEach(t => {
     const r = byId.get(t.roomId);
-    rows.push([t.id, t.name||'', t.fatherName||'', r?'#'+r.number:'', r?r.floor:'',
-      t.phone||'', t.emergencyContact||'', t.emergencyPhone||'', t.cnic||'',
-      t.dob||'', t.gender||'', t.nationality||'', t.address||'',
-      t.occupation||t.course||'', t.session||'', t.bloodGroup||'',
-      t.joinDate||'', t.status||'Active']);
+    aoa.push([
+      t.id, t.name || '', t.fatherName || '',
+      r ? '#' + r.number : '', r ? r.floor : '',
+      String(t.phone || ''), t.emergencyContact || '', String(t.emergencyPhone || ''),
+      String(t.cnic || ''),
+      _stuXlDate(t.dob), t.gender || '', t.nationality || '', t.address || '',
+      t.occupation || t.course || '', t.session || '', t.bloodGroup || '',
+      _stuXlDate(t.joinDate), t.status || 'Active',
+    ]);
   });
-  downloadCSV(rows, filename);
+
+  const ws   = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+  const last = STU_EXPORT_COLUMNS.length - 1;
+  const end  = STU_EXPORT_HEADER_ROW + list.length;
+
+  // Dates print the way the app prints them everywhere else.
+  for (let i = 0; i < list.length; i++) {
+    STU_EXPORT_DATE_COLS.forEach(c => {
+      const cell = ws[XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW + 1 + i, c })];
+      // `w` is the cached display string aoa_to_sheet already wrote from the
+      // DEFAULT date format. Setting `z` without dropping it leaves a cell that
+      // writes as 01-Mar-2007 but still reads back as 3/1/07 to anything in
+      // this process that trusts `w`.
+      if (cell && cell.t === 'd') { cell.z = 'dd-mmm-yyyy'; delete cell.w; }
+    });
+  }
+
+  ws['!cols']   = STU_EXPORT_COLUMNS.map(c => ({ wch: c[1] }));
+  ws['!rows']   = [{ hpt: 22 }, { hpt: 16 }, { hpt: 6 }, { hpt: 18 }];
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: last } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: last } },
+  ];
+  // Filter over the header row and the data under it — not the title band,
+  // which would otherwise be swept into the filter range.
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW, c: 0 }) + ':' +
+         XLSX.utils.encode_cell({ r: end, c: last }),
+  };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Students');
+  XLSX.writeFile(wb, filename);
+  toast('Downloaded: ' + filename, 'success');
 }
 
 // Export the currently filtered + sorted students. Reuses studentsFiltered(),
 // so the file always matches what is on screen — the two previously kept
 // separate copies of the filter and could disagree.
-function exportStudentsCSV() {
-  // The month belongs in the filename. The export is scoped to it now, and a
-  // file called Students_All_2026-08-30.csv that actually holds only August's
-  // roster is the kind of thing that gets mailed to an owner as if it were
-  // everybody.
-  const scope = studentFilter.month ? studentFilter.month : 'AllMonths';
-  _stuWriteCsv(studentsFiltered(),
-    'Students_'+(studentFilter.status==='All'?'All':studentFilter.status)+'_'+scope+'_'+today()+'.csv');
+/* Export the students on screen as a PDF.
+
+   The same list the table and the Excel export use — studentsFiltered() — so
+   all three answer with the same students in the same order. Room-ascending,
+   which for this document is not a preference: a warden reads a printed roster
+   while walking the building.
+
+   Landscape. Eighteen columns will not fit an A4 page in portrait and the
+   honest answer is fewer columns, not smaller type — so this prints what
+   someone standing in a corridor needs (who, where, how to reach them, what
+   they owe) and the Excel export remains the complete record. */
+function exportStudentsPDF() {
+  const list = studentsFiltered();
+  if (!list.length) { toast('No students to export', 'error'); return; }
+
+  const byId    = _stuRoomMap();
+  const active  = list.filter(t => (t.status || 'Active') === 'Active').length;
+  const left    = list.filter(t => t.status === 'Left').length;
+  const charged = list.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0);
+
+  const roomOf = t => { const r = byId.get(t.roomId); return r ? '#' + r.number : '—'; };
+  const html = printListDocument({
+    title: 'Student Roster',
+    subtitle: _stuMonthLabel(studentFilter.month) +
+              (studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only'),
+    kpis: [
+      { label: 'Students',        value: String(list.length) },
+      { label: 'Active',          value: String(active), cls: 'green' },
+      { label: 'Left',            value: String(left) },
+      { label: 'Charged / month', value: fmtPKR(charged) },
+    ],
+    columns: [
+      { label: '#',        get: t => escHtml(String(t.id || '')) },
+      { label: 'Student',  get: t => `<b>${escHtml(t.name || '')}</b>` +
+                                     (t.fatherName ? `<span class="sub">${escHtml(t.fatherName)}</span>` : '') },
+      { label: 'Room',     get: t => { const r = byId.get(t.roomId);
+                                       return `<b>${escHtml(roomOf(t))}</b>` +
+                                              (r && r.floor ? `<span class="sub">${escHtml(r.floor)} Floor</span>` : ''); } },
+      { label: 'Phone',    get: t => escHtml(t.phone || '—') +
+                                     (t.emergencyPhone ? `<span class="sub">${escHtml(t.emergencyPhone)}</span>` : '') },
+      { label: 'Course',   get: t => escHtml(t.occupation || t.course || '—') },
+      { label: 'Join',     get: t => fmtDate(t.joinDate) },
+      { label: 'Charge / mo', align: 'right', get: t => {
+          const c = resolveCharges(t);
+          if (!c.configured) return '<span style="color:#94a3b8">not set</span>';
+          return `<b>${fmtPKR(c.total)}</b><span class="sub">` +
+                 (c.messOptIn && c.mess > 0
+                    ? `${fmtPKR(c.rent)} rent + ${fmtPKR(c.mess)} mess`
+                    : c.mess > 0 ? 'rent only · mess off' : 'rent only') + '</span>'; } },
+      { label: 'Status',   get: t => escHtml(t.status || 'Active') },
+    ],
+    groups: [{ rows: list }],
+  });
+
+  _electronPDF(html, printFileName('Student-Roster',
+    studentFilter.status === 'All' ? '' : studentFilter.status), { pageSize: 'A4', landscape: true });
+}
+
+function exportStudentsExcel() {
+  // The scope belongs in the filename AND in the title band. A file called
+  // Students_All_2026-08-30.xlsx that actually holds only August's roster is
+  // the kind of thing that gets mailed to an owner as if it were everybody.
+  const scope  = studentFilter.month ? studentFilter.month : 'AllMonths';
+  const status = studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only';
+  _stuWriteWorkbook(
+    studentsFiltered(),
+    'Students_' + (studentFilter.status === 'All' ? 'All' : studentFilter.status) + '_' + scope + '_' + today() + '.xlsx',
+    'STUDENT RECORDS — ' + _stuMonthLabel(studentFilter.month) + status);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -894,7 +1068,6 @@ function showViewStudentModal(id) {
     + payHistory.filter(p=>p.status==='Pending'&&Number(p.amount)>0&&p.unpaid!=null&&Number(p.unpaid)>0).reduce((s,p)=>s+Number(p.amount),0);
   // Due = only actual unpaid remainder
   const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-  const av=t.name?t.name[0].toUpperCase():'?';
   const paidCount=payHistory.filter(p=>p.status==='Paid').length;
   // Admission fee is stored on the payment that collected it, under either key
   // depending on the app version that wrote the row.
@@ -914,9 +1087,7 @@ function showViewStudentModal(id) {
 
       <!-- PROFILE HEADER -->
       <div class="svw-hero">
-        <div class="svw-hero__av">
-          ${t.docs?.photo ? `<img src="${t.docs.photo}" alt="">` : escHtml(av)}
-        </div>
+        ${studentAvatar(t, 76, 'svw-hero__av')}
         <div class="svw-hero__id">
           <div class="svw-hero__name">${escHtml(t.name)}</div>
           <div class="svw-hero__no">#${escHtml(t.id)}</div>
@@ -992,7 +1163,10 @@ function showViewStudentModal(id) {
         </div>
         ${payHistory.length?(()=>{
           const rows=payHistory.map(p=>{
-            const mRent=p.monthlyRent||p.totalRent||t.rent||0;
+            // The monthly CHARGE. Reading `monthlyRent` alone hid the mess half
+            // — see paymentCharges() in utils.js.
+            const _ch=paymentCharges(p,t);
+            const mRent=_ch.monthly;
             const admFee=Number(p.admissionFee||p.fee||0);
             const extras=p.extraCharges||[];
             const conc=Number(p.concession||p.discount||0);
@@ -1002,7 +1176,7 @@ function showViewStudentModal(id) {
             if(conc>0) paidCell+='<span class="svw-sub is-conc">−'+fmtPKR(conc)+' concession</span>';
             return '<tr>'
             +'<td class="svw-t__month">'+escHtml(p.month||'—')+'</td>'
-            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+'</td>'
+            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+(_ch.messIncluded?'<span class="svw-sub">'+fmtPKR(_ch.rent)+' rent + '+fmtPKR(_ch.mess)+' mess</span>':_ch.hasMess?'<span class="svw-sub">rent only · mess off</span>':'')+'</td>'
             +'<td class="svw-t__conc">'+(conc>0?'−'+fmtPKR(conc):'<span class="is-empty">—</span>')+'</td>'
             +'<td>'+paidCell+'</td>'
             +'<td class="svw-t__unpaid'+((p.unpaid||0)>0?' is-due':'')+'">'+((p.unpaid||0)>0?fmtPKR(p.unpaid||0):'<span class="is-empty">—</span>')+'</td>'
@@ -1277,98 +1451,213 @@ async function quickCancelStudent(studentId) {
   if(currentPage==='dashboard') renderPage('dashboard');
 }
 
+/* The printed resident record. Owner reference: `student profile.png` (26 Aug).
+
+   This is the document a warden hands to a parent, files, or takes to the bank,
+   so it is laid out as a form rather than as a screen: a hero that identifies
+   the resident and states what they pay, four figures that answer the questions
+   asked about a resident, two panels of facts, and the full payment history.
+
+   Two things it states that the old card did not, and both were the reported
+   bug rather than decoration:
+
+     · MONTHLY CHARGE, not monthly rent. resolveCharges() gives rent and mess
+       separately and the old card printed the rent alone, so a resident on
+       8,000 + 6,500 received a document saying 8,000 above a payment history
+       full of 14,500s.
+     · What the charge COVERS, in words. "Rent + mess" and "rent only, mess not
+       included" are different agreements with a family, and a printed record
+       that does not say which is not a record of the agreement. */
 function printStudentCard(id) {
-  const t=DB.students.find(x=>x.id===id); if(!t) return;
-  const room=DB.rooms.find(r=>r.id===t.roomId);
-  const rtype=room?DB.settings.roomTypes.find(x=>x.id===room.typeId):null;
-  const payHistory=DB.payments.filter(p=>p.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const totalPaid=payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const _cardHtml = `<!DOCTYPE html><html><head><title>Student Profile — ${escHtml(t.name)}</title>
+  const t = DB.students.find(x => x.id === id); if (!t) return;
+  const room  = DB.rooms.find(r => r.id === t.roomId);
+  const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
+  const ch    = resolveCharges(t);
+
+  const payHistory = DB.payments.filter(p => p.studentId === id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const paidRecords = payHistory.filter(p => p.status === 'Paid');
+  const totalPaid = paidRecords.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalDue  = payHistory.filter(p => p.status === 'Pending')
+    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount || 0)), 0);
+  const admission = payHistory.reduce((s, p) => s + Number(p.admissionFee || p.fee || 0), 0);
+
+  const hostel = DB.settings.hostelName || 'Hostel';
+  const fact = (k, v) => `<div class="fact"><span class="fact__k">${escHtml(k)}</span>` +
+    `<span class="fact__v${(v === null || v === undefined || v === '') ? ' is-empty' : ''}">` +
+    `${(v === null || v === undefined || v === '') ? '—' : escHtml(String(v))}</span></div>`;
+
+  const coverage = ch.messOptIn && ch.mess > 0
+    ? `Rent + mess · ${fmtPKR(ch.rent)} + ${fmtPKR(ch.mess)}`
+    : ch.mess > 0 ? 'Rent only · mess not included' : 'Rent only';
+
+  const _cardHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Resident Record — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #7c3aed;margin-bottom:24px}
-    .hostel-name{font-size:22px;font-weight:800;color:#1a1a2e}
-    .hostel-sub{font-size:12px;color:#666;margin-top:3px}
-    .report-badge{background:#7c3aed22;border:1px solid #7c3aed55;color:#6d28d9;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700}
-    .profile-hero{background:linear-gradient(135deg,#0d1b2a,#1a2d4a);border-radius:12px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;color:#fff}
-    .avatar{width:64px;height:64px;border-radius:14px;background:#7c3aed33;border:2px solid #7c3aed88;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#7c3aed;flex-shrink:0}
-    .badges{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-    .badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
-    .badge-green{background:#dcfce7;color:#166534}
-    .badge-blue{background:#dbeafe;color:#1e40af}
-    .badge-gold{background:#fef9c3;color:#5b21b6}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:16px}
-    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .info-item label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:2px}
-    .info-item .val{font-size:13px;font-weight:600;color:#1e293b}
-    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-    .stat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
-    .stat-box .lbl{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
-    .stat-box .val{font-size:18px;font-weight:800;color:#1e293b}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700}
-    td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:12.5px}
+    .doc-head{display:flex;align-items:center;justify-content:space-between;
+              padding-bottom:14px;border-bottom:3px solid #2563eb;margin-bottom:18px}
+    .doc-head__t{font-size:20px;font-weight:800;color:#1e3a8a}
+    .doc-head__s{font-size:11px;color:#64748b;margin-top:2px}
+    .doc-head__d{font-size:11px;color:#64748b}
+
+    .hero{display:flex;align-items:center;gap:18px;background:#eff6ff;border:1px solid #dbeafe;
+          border-radius:14px;padding:18px 20px;margin-bottom:14px}
+    .hero__av{width:84px;height:84px;border-radius:50%;flex-shrink:0;overflow:hidden;
+              background:#fff;border:3px solid #bfdbfe;display:flex;align-items:center;justify-content:center;color:#60a5fa}
+    .hero__av img{width:100%;height:100%;object-fit:cover}
+    .hero__id{flex:1;min-width:0}
+    .hero__name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#1e3a8a}
+    .hero__no{font-size:12px;color:#64748b;margin-top:1px}
+    .chips{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+    .chip{padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid}
+    .chip--ok{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+    .chip--room{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
+    .chip--plain{background:#fff;color:#475569;border-color:#e2e8f0}
+    /* The charge panel. The figure a family asks about goes in the one block
+       of solid colour on the page. */
+    .rent{background:#1d4ed8;color:#fff;border-radius:12px;padding:16px 22px;text-align:center;min-width:230px}
+    .rent__l{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;opacity:.85}
+    .rent__v{font-size:27px;font-weight:900;margin:5px 0;letter-spacing:-.02em}
+    .rent__s{font-size:10.5px;opacity:.9;border-top:1px solid rgba(255,255,255,.28);padding-top:7px}
+
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}
+    .stat{border:1px solid #e2e8f0;border-radius:12px;padding:13px 15px}
+    .stat__l{font-size:9.5px;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;font-weight:700}
+    .stat__v{font-size:19px;font-weight:800;margin-top:4px}
+    .is-paid{color:#16a34a}.is-due{color:#dc2626}
+
+    .panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+    .panel{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
+    .panel__t{font-size:12.5px;font-weight:800;color:#1d4ed8;padding-bottom:8px;
+              border-bottom:2px solid #dbeafe;margin-bottom:10px}
+    .fact{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+    .fact:last-child{border-bottom:none}
+    .fact__k{font-size:11.5px;color:#64748b}
+    .fact__v{font-size:11.5px;font-weight:700;text-align:right}
+    .fact__v.is-empty{color:#cbd5e1;font-weight:500}
+
+    .hist{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+    .hist__head{display:flex;align-items:baseline;justify-content:space-between;
+                padding:13px 18px;border-bottom:1px solid #e2e8f0}
+    .hist__t{font-size:12.5px;font-weight:800;color:#1d4ed8}
+    .hist__m{font-size:11.5px;color:#64748b}
+    table{width:100%;border-collapse:collapse;font-size:11.5px}
+    th{background:#f8fafc;padding:9px 14px;text-align:left;font-size:9.5px;text-transform:uppercase;
+       letter-spacing:.6px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
+    td{padding:9px 14px;border-bottom:1px solid #f8fafc}
     tr:last-child td{border-bottom:none}
-    .paid{color:#16a34a;font-weight:700}
-    .overdue{color:#dc2626;font-weight:700}
-    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
-    @media print{body{padding:16px}}
+    .sub{display:block;font-size:9.5px;color:#64748b;font-weight:600;margin-top:1px}
+    .none{padding:26px;text-align:center;color:#94a3b8}
+
+    /* Signed by a person, so there has to be somewhere to sign. */
+    .foot{margin-top:22px;padding-top:14px;border-top:1px solid #e2e8f0;
+          display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:end;font-size:10.5px;color:#64748b}
+    .foot__mid{text-align:center}
+    .sig{margin-top:26px;border-top:1px dashed #94a3b8;padding-top:5px;font-weight:700;color:#475569}
+    .foot__r{text-align:right}
+    @media print{body{padding:14px} .hist,.panel,.stat{page-break-inside:avoid}}
   </style></head><body>
-  <div class="header">
-    <div><div class="hostel-name">${escHtml(t.name)}</div><div class="hostel-sub">${escHtml(DB.settings.hostelName)} · ${escHtml(DB.settings.location||'')}</div></div>
-    <div class="report-badge">Student Profile Report</div>
+
+  <div class="doc-head">
+    <div><div class="doc-head__t">${escHtml(hostel)}</div>
+         <div class="doc-head__s">Resident Record</div></div>
+    <div class="doc-head__d">${escHtml(fmtDate(today()))}</div>
   </div>
-  <div class="profile-hero">
-    <div class="avatar">${escHtml(t.name[0].toUpperCase())}</div>
-    <div>
-      <div style="font-size:20px;font-weight:800">${escHtml(t.name)}</div>
-      <div style="font-size:12px;opacity:0.6;font-family:monospace;margin-top:2px">#${t.id}</div>
-      <div class="badges">
-        <span class="badge badge-${t.status==='Active'?'green':'blue'}">${t.status}</span>
-        ${room?`<span class="badge badge-gold">Room #${room.number} · ${rtype?.name||''}</span>`:''}
+
+  <div class="hero">
+    <div class="hero__av">${t.docs && t.docs.photo
+      ? `<img src="${escHtml(t.docs.photo)}" alt="">`
+      : `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>`}</div>
+    <div class="hero__id">
+      <div class="hero__name">${escHtml(t.name)}</div>
+      <div class="hero__no">#${escHtml(String(t.id))}</div>
+      <div class="chips">
+        <span class="chip ${t.status === 'Active' ? 'chip--ok' : 'chip--plain'}">${escHtml(t.status || 'Active')}</span>
+        ${room ? `<span class="chip chip--room">Room #${escHtml(String(room.number))} · ${escHtml(rtype ? rtype.name : '')}</span>` : ''}
+        ${t.paymentMethod ? `<span class="chip chip--plain">${escHtml(t.paymentMethod)}</span>` : ''}
       </div>
     </div>
-  </div>
-  <div class="stats-row">
-    <div class="stat-box"><div class="lbl">Total Paid</div><div class="val" style="color:#16a34a;font-size:15px">${fmtPKR(totalPaid)}</div></div>
-    <div class="stat-box"><div class="lbl">Outstanding</div><div class="val" style="color:${totalDue>0?'#dc2626':'#16a34a'};font-size:15px">${fmtPKR(totalDue)}</div></div>
-    <div class="stat-box"><div class="lbl">Amt. Paid (Adm.)</div><div class="val" style="font-size:15px">${fmtPKR(t.deposit||0)}</div></div>
-    <div class="stat-box"><div class="lbl">Payments</div><div class="val">${payHistory.filter(p=>p.status==='Paid').length}</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
-    <div class="section">
-      <div class="section-title">${icon('student','sm')} Personal Information</div>
-      <div class="info-grid">
-        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${escHtml(v||'—')}</div></div>`).join('')}
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">🏠 Room & Accommodation</div>
-      <div class="info-grid">
-        ${room?[['Room Number','#'+room.number],['Room Type',rtype?.name||'—'],['Floor',room.floor||'—'],['Capacity',rtype?.capacity+' beds'||'—'],['Amenities',(room.amenities||[]).join(', ')||'—']].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v}</div></div>`).join(''):'<p style="color:#94a3b8">No room assigned</p>'}
-      </div>
+    <div class="rent">
+      <div class="rent__l">Monthly Charge</div>
+      <div class="rent__v">${ch.configured ? fmtPKR(ch.total) : '—'}</div>
+      <div class="rent__s">${escHtml(coverage)}</div>
     </div>
   </div>
-  <div class="section">
-    <div class="section-title">💳 Payment History</div>
-    ${payHistory.length?`<table><thead><tr><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Notes</th></tr></thead><tbody>
-    ${payHistory.map(p=>{
-      const _admF=Number(p.admissionFee||p.fee||0);
-      const _extras=(p.extraCharges||[]);
-      const _conc=Number(p.concession||p.discount||0);
-      const _extraHTML=_admF>0?`<div style='font-size:10px;color:#1e40af'>🎓 +${fmtPKR(_admF)} adm.</div>`:'';
-      const _xHTML=_extras.map(x=>`<div style='font-size:10px;color:#b45309'>+${fmtPKR(x.amount)} ${escHtml(x.label||'')}</div>`).join('');
-      const _concHTML=_conc>0?`<div style='font-size:10px;color:#dc2626'>−${fmtPKR(_conc)} concession</div>`:'';
-      return `<tr><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${fmtPKR(p.amount)}${_extraHTML}${_xHTML}${_concHTML}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${escHtml(p.status)}</td><td>${fmtDate(p.date)||'—'}</td><td style="color:#94a3b8">${escHtml(p.notes||'—')}</td></tr>`;
-    }).join('')}
-    </tbody></table>`:'<p style="color:#94a3b8;text-align:center;padding:12px">No payment records</p>'}
+
+  <div class="stats">
+    <div class="stat"><div class="stat__l">Total Paid</div><div class="stat__v is-paid">${fmtPKR(totalPaid)}</div></div>
+    <div class="stat"><div class="stat__l">Outstanding</div><div class="stat__v ${totalDue > 0 ? 'is-due' : 'is-paid'}">${fmtPKR(totalDue)}</div></div>
+    <div class="stat"><div class="stat__l">Join Date</div><div class="stat__v" style="font-size:15px">${escHtml(fmtDate(t.joinDate))}</div></div>
+    <div class="stat"><div class="stat__l">Payments Made</div><div class="stat__v">${paidRecords.length}</div></div>
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} Management System · ${escHtml(DB.settings.location||'')}</div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel__t">Personal Information</div>
+      ${fact('Father / Guardian', t.fatherName)}
+      ${fact('Occupation / Course', t.occupation || t.course)}
+      ${fact('CNIC / ID', t.cnic)}
+      ${fact('Nationality', t.nationality)}
+      ${fact('Phone Number', t.phone)}
+      ${fact('Email Address', t.email)}
+      ${fact('Emergency Contact', t.emergencyPhone || t.emergencyContact)}
+      ${fact('Home Address', t.address)}
+    </div>
+    <div class="panel">
+      <div class="panel__t">Room &amp; Accommodation</div>
+      ${fact('Room Number', room ? '#' + room.number : '')}
+      ${fact('Room Type', rtype ? rtype.name : '')}
+      ${fact('Floor', room ? room.floor : '')}
+      ${fact('Capacity', rtype ? rtype.capacity + ' bed' + (rtype.capacity === 1 ? '' : 's') : '')}
+      ${fact('Room Rent', ch.configured ? fmtPKR(ch.rent) : '')}
+      ${fact('Mess Charge', ch.mess > 0 ? fmtPKR(ch.mess) + (ch.messOptIn ? '' : ' (not billed)') : 'Not applicable')}
+      ${fact('Amenities', (room && (room.amenities || []).join(', ')) || '')}
+      ${fact('Room Notes', room ? room.notes : '')}
+    </div>
+  </div>
+
+  <div class="hist">
+    <div class="hist__head">
+      <span class="hist__t">Full Payment History (${payHistory.length} record${payHistory.length === 1 ? '' : 's'})</span>
+      <span class="hist__m">Total paid: <b style="color:#1d4ed8">${fmtPKR(totalPaid)}</b>${admission > 0 ? ` · Admission: ${fmtPKR(admission)}` : ''}</span>
+    </div>
+    ${payHistory.length ? `<table><thead><tr>
+      <th>Month</th><th>Charge / mo</th><th>Concession</th><th>Paid (+extras)</th>
+      <th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th>
+    </tr></thead><tbody>${payHistory.map(p => {
+      const c    = paymentCharges(p, t);
+      const conc = Number(p.concession != null ? p.concession : p.discount || 0);
+      const adm  = Number(p.admissionFee || p.fee || 0);
+      const extras = (p.extraCharges || []).filter(x => Number(x.amount) > 0);
+      const unpaid = Number(p.unpaid || 0);
+      return `<tr>
+        <td><b>${escHtml(p.month || '—')}</b></td>
+        <td>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}${c.messIncluded
+              ? `<span class="sub">${fmtPKR(c.rent)} + ${fmtPKR(c.mess)} mess</span>`
+              : c.hasMess ? '<span class="sub">mess not billed</span>' : ''}</td>
+        <td>${conc > 0 ? '−' + fmtPKR(conc) : '—'}</td>
+        <td><b class="is-paid">${fmtPKR(p.amount)}</b>${adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : ''}${
+          extras.map(x => `<span class="sub">+ ${fmtPKR(x.amount)} ${escHtml(x.description || x.desc || x.label || 'extra')}</span>`).join('')}</td>
+        <td>${unpaid > 0 ? `<b class="is-due">${fmtPKR(unpaid)}</b>` : '—'}</td>
+        <td>${escHtml(p.method || '—')}</td>
+        <td>${escHtml(p.status || '—')}</td>
+        <td>${escHtml(fmtDate(p.date))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`
+    : '<div class="none">No payment records for this resident yet.</div>'}
+  </div>
+
+  <div class="foot">
+    <div><b style="color:#1e3a8a">${escHtml(hostel)}</b>${DB.settings.location ? `<br>${escHtml(DB.settings.location)}` : ''}</div>
+    <div class="foot__mid">This is a computer generated document.<div class="sig">Authorised By</div></div>
+    <div class="foot__r">Generated ${new Date().toLocaleString('en-PK')}</div>
+  </div>
   </body></html>`;
-  var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + today() + '.pdf';
+
+  const _cardName = printFileName('Resident-' +
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), '');
   _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {
@@ -1821,7 +2110,7 @@ async function submitRoomShift(studentId) {
 // this month instead of forcing the warden to switch back to find it.
 let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
                  showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
-                 page:1, sortKey:null, sortDir:'asc'};
+                 page:1, sortKey:'room', sortDir:'asc'};
 let paySelected = new Set();
 
 // ── FORMER STUDENTS — search & restore ───────────────────────────────────────
@@ -2187,8 +2476,10 @@ function doGenerateStudentsPDF(monthKey) {
   var d        = new Date(monthKey+'-02');
   var monthLabel = d.toLocaleString('default',{month:'long',year:'numeric'});
 
-  // Sort all students by name
-  var allStudents = DB.students.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
+  // Room order, then name inside a room — the app-wide rule (owner, 2026-08-31).
+  // A warden reads this sheet while walking the building, so a name-ordered
+  // list sends them up and down the stairs for every second student.
+  var allStudents = studentsByRoom(DB.students);
 
   // PERF: group payments by studentId + index rooms by id ONCE, so the per-student
   // loop below is O(students) instead of O(students × payments) — this is what made

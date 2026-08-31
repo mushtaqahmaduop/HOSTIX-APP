@@ -138,3 +138,18 @@
                font-variant-numeric:tabular-nums; color:var(--text); }
 .arc-sd-sec { font-size:12px; font-weight:800; color:var(--text2);
               text-transform:uppercase; letter-spacing:.7px; margin:14px 0 6px; }
+
+/* Year-over-year change. Direction is not the same as good: expenses rising is
+   red and revenue rising is green, and the caller says which — so the colour
+   reports meaning rather than the sign of a number. */
+.arc-d          { font-size:11.5px; font-weight:800; white-space:nowrap; }
+.arc-d.is-up    { color:var(--green); }
+.arc-d.is-down  { color:var(--red); }
+.arc-d.is-flat  { color:var(--text3); font-weight:600; }
+.arc-d.is-new   { color:var(--text3); font-weight:600; font-style:italic; }
+/* The caveat under a comparison of two part-recorded years. */
+.arc-note {
+    margin-top:10px; padding:10px 14px; border-radius:10px;
+    background:var(--bg3); border:1px solid var(--border);
+    font-size:11.5px; color:var(--text3); line-height:1.55;
+}

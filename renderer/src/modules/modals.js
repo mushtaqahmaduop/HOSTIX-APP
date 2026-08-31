@@ -376,11 +376,36 @@ function statusBadge(s) {
   const icons={Active:MODAL_ICONS.statusActive,Left:MODAL_ICONS.statusLeft,Blacklisted:MODAL_ICONS.statusX,Cancelling:MODAL_ICONS.statusBan,Paid:MODAL_ICONS.statusCheck,Pending:MODAL_ICONS.statusClock};
   return `<span class="badge ${map[s]||'badge-gray'}">${icons[s]||''} ${escHtml(s||'—')}</span>`;
 }
+/* Which glyph a payment method gets.
+
+   The method list is EDITABLE in settings, so this cannot be a lookup table of
+   the five defaults — a hostel that adds "Raast" or "SadaPay" would get a blank
+   where every other row has an icon. It matches on what the name says instead,
+   and anything unrecognised falls back to the card.
+
+   Order is not cosmetic: 'JazzCash' contains 'cash'. The wallets have to be
+   tested before the note, or every mobile wallet in Pakistan draws a banknote. */
+function _pmIcon(m) {
+  const s = String(m || '').toLowerCase();
+  if (/jazz|easy ?paisa|paisa|wallet|sada|naya|raast|upaisa|mobile/.test(s)) return 'phone';
+  if (/bank|transfer|iban|online|deposit/.test(s))                           return 'building';
+  if (/cheque|check|draft|pay ?order/.test(s))                               return 'receipt';
+  if (/cash/.test(s))                                                        return 'money';
+  return 'card';
+}
+
+/* A payment method is a CATEGORY, not a state — so the chip stays neutral and
+   carries no hue. What it gains over the old bare pill is the glyph: in a table
+   of thirteen columns the method is read at a glance, and a shape is quicker to
+   scan than a word.
+
+   One definition for every screen that shows a method — payments, dashboard,
+   students, reports, archive. There were three before this: `.badge-gray` here,
+   `.pay-pill dh-slate` on the payments page, and a dashboard-local chip. */
 function pmBadge(m) {
   // BUG FIX: 'EasypaIsa' was a dead duplicate key with a capital-I typo that
   // could never match any real payment method. Removed. EasyPaisa is sufficient.
-  // Payment methods are categories, not status — neutral pills per the rebrand.
-  return `<span class="badge badge-gray">${escHtml(m||'—')}</span>`;
+  return `<span class="pm-chip">${icon(_pmIcon(m), 'xs')}${escHtml(m||'—')}</span>`;
 }
 
 

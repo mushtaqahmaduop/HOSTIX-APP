@@ -272,7 +272,7 @@ function payFiltered() {
 
   return applySort(pays, payFilter, {
     student: p => p.studentName,
-    room:    p => Number(p.roomNumber) || 0,
+    room:    { get: p => p.roomNumber, cmp: cmpRoomNo },
     month:   p => new Date((p.month || '') + ' 1').getTime() || 0,
     rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
     paid:    p => Number(p.amount || 0),
@@ -326,7 +326,7 @@ function renderPayments() {
   const downArrow = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7 17 17"/><path d="M17 9v8H9"/></svg>';
 
   const roomNums = [...new Set(DB.payments.map(p=>String(p.roomNumber||'')).filter(Boolean))]
-                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+                     .sort(cmpRoomNo);
   const monthOpts = payMonthOptions();
   const activeFilters = [payFilter.showAll, payFilter.unpaidOnly].filter(Boolean).length;
 
@@ -457,6 +457,10 @@ function renderPayments() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           CSV
         </button>
+        <button class="pay-btn" onclick="exportPaymentsPDF()" title="Print the current list">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+          PDF
+        </button>
         <button class="pay-btn pay-btn--hue dh-blue" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           Auto-Generate Month
@@ -486,7 +490,7 @@ function renderPayments() {
           ${th('student','Student')}
           ${th('room','Room')}
           ${th('month','Month')}
-          ${th('rent','Rent/Mo')}
+          ${th('rent','Charge/Mo')}
           ${th('paid','Amt Paid')}
           ${th('unpaid','Unpaid')}
           ${th('method','Method')}
@@ -541,10 +545,10 @@ function renderPayments() {
               ${escHtml(p.month||'—')}
               ${arrear?'<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>':''}
             </td>
-            <td class="pay-money">${fmtPKR(p.monthlyRent||p.totalRent||p.amount)}</td>
+            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));return `<td class="pay-money">${fmtPKR(_c.monthly||p.amount)}${_c.messIncluded?`<span class="pay-charge__sub">${fmtPKR(_c.rent)} rent + ${fmtPKR(_c.mess)} mess</span>`:_c.hasMess?`<span class="pay-charge__sub">rent only · mess off</span>`:''}</td>`;})()}
             <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
             <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
-            <td><span class="pay-pill dh-slate">${escHtml(p.method||'—')}</span></td>
+            <td>${pmBadge(p.method)}</td>
             <td>
               <span class="pay-pill ${sHue}">
                 ${sLabel==='Paid'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>':''}
@@ -674,13 +678,17 @@ async function payBulkMarkPaid() {
 
 function payBulkExport() {
   const ids = [...paySelected];
-  const rows = [['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
+  const rows = [['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
   payFiltered().filter(p => ids.includes(p.id)).forEach(p => {
     const admFee = Number(p.admissionFee||p.fee||0);
     const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const conc   = Number(p.concession||p.discount||0);
+    // The rent and the mess as their own columns, and the monthly CHARGE as a
+    // third — a sheet that quoted rent alone could not be reconciled against
+    // what the student actually paid. See paymentCharges() in utils.js.
+    const _c = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
     rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
-      p.monthlyRent||p.totalRent||p.amount||0,
+      _c.rent||0, _c.messIncluded?_c.mess:0, _c.monthly||0,
       p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p),
       admFee||'', extras||'', conc||'', p.date||'']);
   });
@@ -688,17 +696,79 @@ function payBulkExport() {
 }
 
 
+/* Export the payments on screen as a PDF.
+
+   payFiltered() again — the table, the CSV and this document cannot disagree
+   about which records are in scope or what order they are in.
+
+   The money columns are the point of this sheet, so it prints the monthly
+   charge with its rent/mess split underneath (paymentCharges), what was
+   collected, and what is still owed. `Collected` here is the sum of what these
+   rows actually took, which is deliberately NOT calcRevenue(): this document
+   describes a filtered set of records, not a month's books. */
+function exportPaymentsPDF() {
+  const list = payFiltered();
+  if (!list.length) { toast('No payments to export', 'error'); return; }
+
+  const stuById   = new Map((DB.students || []).map(s => [s.id, s]));
+  const collected = list.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const owing     = list.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const settled   = list.filter(p => payStatusOf(p) === 'Paid').length;
+
+  const scope = payFilter.month !== 'All' ? String(payFilter.month)
+              : payFilter.showAll ? 'All months' : thisMonthLabel();
+
+  const html = printListDocument({
+    title: 'Payment Register',
+    subtitle: scope +
+      (payFilter.status !== 'All' ? ' · ' + payFilter.status : '') +
+      (payFilter.unpaidOnly ? ' · unpaid only' : ''),
+    kpis: [
+      { label: 'Records',   value: String(list.length) },
+      { label: 'Settled',   value: settled + ' of ' + list.length, cls: 'green' },
+      { label: 'Collected', value: fmtPKR(collected), cls: 'green' },
+      { label: 'Still owed', value: fmtPKR(owing), cls: owing > 0 ? 'red' : '' },
+    ],
+    columns: [
+      { label: 'Room',    get: p => `<b>#${escHtml(String(p.roomNumber || ''))}</b>` },
+      { label: 'Student', get: p => `<b>${escHtml(p.studentName || '')}</b>` },
+      { label: 'Month',   get: p => escHtml(p.month || '—') },
+      { label: 'Charge / mo', align: 'right', get: p => {
+          const c = paymentCharges(p, stuById.get(p.studentId));
+          return `<b>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}</b><span class="sub">` +
+                 (c.messIncluded ? `${fmtPKR(c.rent)} rent + ${fmtPKR(c.mess)} mess`
+                  : c.hasMess ? 'rent only · mess off' : '') + '</span>'; } },
+      { label: 'Paid',    align: 'right', cls: 'green', get: p => {
+          const adm    = Number(p.admissionFee || p.fee || 0);
+          const extras = (p.extraCharges || []).filter(c => Number(c.amount) > 0);
+          return `<b>${fmtPKR(p.amount)}</b>` +
+            (adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : '') +
+            extras.map(c => `<span class="sub">+ ${fmtPKR(c.amount)} ${escHtml(c.description || c.desc || c.label || 'extra')}</span>`).join(''); } },
+      { label: 'Unpaid',  align: 'right', get: p => Number(p.unpaid || 0) > 0
+                            ? `<span class="red">${fmtPKR(p.unpaid)}</span>` : '—' },
+      { label: 'Method',  get: p => escHtml(p.method || '—') },
+      { label: 'Status',  get: p => escHtml(payStatusOf(p)) },
+      { label: 'Date',    get: p => fmtDate(p.date) },
+    ],
+    groups: [{ rows: list }],
+    grand: { label: 'Collected in this selection', value: fmtPKR(collected) },
+  });
+
+  _electronPDF(html, printFileName('Payments', scope), { pageSize: 'A4', landscape: true });
+}
+
 // Export the currently filtered + sorted payments to CSV. (Mirrors renderPayments' filter/sort.)
 function exportPaymentsCSV() {
   const mo = thisMonth();
   // Reuses payFiltered() — the export and the table can no longer drift apart,
   // which they previously could since each kept its own copy of the filter.
-  const rows=[['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
+  const rows=[['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
   payFiltered().forEach(p=>{
     const _paf=Number(p.admissionFee||p.fee||0);
     const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const _pc=Number(p.concession||p.discount||0);
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',p.monthlyRent||p.totalRent||p.amount||0,p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
+    const _pch = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
   });
   downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
 }

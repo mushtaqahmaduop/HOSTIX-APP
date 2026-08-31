@@ -154,12 +154,77 @@ ok('never returns raw input when redaction fails', () => {
 console.log('\nconfig.js — unconfigured is a first-class state');
 // ══════════════════════════════════════════════════════════════════════════
 
-ok('defaults to no control plane at all', () => {
+// ── The baked-in default (Phase 2) ──────────────────────────────────────────
+// `DEFAULT_API_BASE` is how a machine in the field learns the control plane's
+// address at all: nothing on a customer's PC will ever write an
+// online-config.json. Until it is filled in, every install is offline and
+// unreachable — which is the state every shipped build has been in.
+
+ok('the baked default, if set at all, is a usable https base', () => {
+  // The guard that matters most, because this string ships in 50+ installers
+  // and a typo cannot be fixed without a release. `_normaliseBase` refuses
+  // cleartext and anything unparseable, so a bad value here fails CLOSED —
+  // the app goes offline rather than talking to 50 machines over http. This
+  // test makes that failure loud at build time instead of silent in the field.
+  const baked = config.DEFAULT_API_BASE;
+  assert.strictEqual(typeof baked, 'string', 'DEFAULT_API_BASE must be a string');
+  if (baked !== '') {
+    const norm = config._normaliseBase(baked);
+    assert.ok(norm, 'DEFAULT_API_BASE is set but not a valid https base URL: ' + baked);
+    assert.ok(/^https:/.test(norm) || /^http:\/\/(localhost|127\.0\.0\.1)/.test(norm),
+      'DEFAULT_API_BASE must be https: ' + baked);
+  }
+});
+
+ok('with nothing overriding it, the baked default is what the app uses', () => {
+  // Two legitimate outcomes, and which one is correct depends entirely on
+  // whether the constant has been filled in. Filling it in flips this branch —
+  // deliberately, so that shipping an address is a visible change to a test
+  // and not something that slips out in a release nobody reviewed.
   const c = config.load({ userDataDir: TMP });
+  if (config.DEFAULT_API_BASE === '') {
+    assert.strictEqual(c.apiBase, null);
+    assert.strictEqual(c.apiBaseSource, 'none');
+    assert.strictEqual(config.isConfigured(), false);
+  } else {
+    assert.strictEqual(c.apiBase, config._normaliseBase(config.DEFAULT_API_BASE));
+    assert.strictEqual(c.apiBaseSource, 'default');
+    assert.strictEqual(config.isConfigured(), true);
+  }
+});
+
+ok('the environment variable outranks the file and the baked default', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-cfg-'));
+  fs.writeFileSync(path.join(dir, 'online-config.json'),
+    JSON.stringify({ apiBase: 'https://from-file.example.com/v1' }));
+  process.env.HOSTYLLO_API_BASE = 'https://from-env.example.com/v1';
+  try {
+    const c = config.load({ userDataDir: dir });
+    assert.strictEqual(c.apiBase, 'https://from-env.example.com/v1');
+    assert.strictEqual(c.apiBaseSource, 'env');
+  } finally {
+    delete process.env.HOSTYLLO_API_BASE;
+  }
+});
+
+ok('a per-machine file outranks the baked default', () => {
+  // This is the seam that lets ONE hostel be pointed at a staging server, or
+  // moved to a new address, without cutting a release for all of them.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-cfg-'));
+  fs.writeFileSync(path.join(dir, 'online-config.json'),
+    JSON.stringify({ apiBase: 'https://one-hostel.example.com/v1' }));
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, 'https://one-hostel.example.com/v1');
+  assert.strictEqual(c.apiBaseSource, 'file');
+});
+
+ok('a machine pointed at nothing still boots, and asks for nothing', () => {
+  // The Phase 1 gate, restated now that a default exists: an override of null
+  // must still mean zero requests, not a crash and not a fallback.
+  const c = config.load({ userDataDir: TMP, overrides: { apiBase: '' } });
   assert.strictEqual(c.apiBase, null);
-  assert.strictEqual(c.apiBaseSource, 'none');
   assert.strictEqual(config.isConfigured(), false);
-  assert.strictEqual(config.url('/healthz'), null);
+  assert.strictEqual(config.url('/v1/healthz'), null);
 });
 
 ok('telemetry is off by default (§38)', () => {
@@ -179,7 +244,12 @@ ok('a malformed override file does not stop the app booting', () => {
   const dir = fs.mkdtempSync(path.join(TMP, 'badcfg-'));
   fs.writeFileSync(path.join(dir, 'online-config.json'), '{ this is not json');
   const c = config.load({ userDataDir: dir });
-  assert.strictEqual(c.apiBase, null);
+  // What matters is that load() returned at all. An unreadable override falls
+  // through to whatever the build bakes in — which is `null` today and an
+  // address once one ships. Asserting `null` outright would make this test a
+  // tripwire on the day a URL is baked in, for a reason that has nothing to do
+  // with what it is testing.
+  assert.strictEqual(c.apiBase, config._normaliseBase(config.DEFAULT_API_BASE) || null);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -236,7 +306,10 @@ function fakeResponse(status, body, headers) {
 }
 
 await okAsync('makes NO request at all when unconfigured', async () => {
-  config.load({ userDataDir: TMP });
+  // Unconfigured EXPLICITLY. Relying on the build having no baked-in address
+  // made this test pass for a reason it was not testing, and it would flip to
+  // failing the day one shipped.
+  config.load({ userDataDir: TMP, overrides: { apiBase: '' } });
   let called = 0;
   api._setFetch(async () => { called++; return fakeResponse(200, {}); });
   const res = await api.request({ path: '/healthz' });
@@ -360,7 +433,7 @@ function connCfg(extra) {
 }
 
 await okAsync('unconfigured: reports it honestly and probes nothing', async () => {
-  config.load({ userDataDir: TMP });                 // no apiBase
+  config.load({ userDataDir: TMP, overrides: { apiBase: '' } });   // forced unconfigured
   let called = 0;
   api._setFetch(async () => { called++; return fakeResponse(200, {}); });
 

@@ -29,7 +29,7 @@
     act('Add Expense', '➕', 'showAddExpenseModal');
     act('Add Cancellation', '➕', 'showAddCancellationModal');
     act('Add Issue / Complaint', '➕', 'showAddIssueModal');
-    act('Export Students CSV', '📥', 'exportStudentsCSV');
+    act('Export Students Excel', '📥', 'exportStudentsExcel');
     act('Export Payments CSV', '📥', 'exportPaymentsCSV');
     act('Export Rooms CSV', '📥', 'exportRoomsCSV');
     if (typeof toggleTheme === 'function') cmds.push({ label: 'Toggle Dark / Light theme', icon: '🌓', kind: 'Action', run: function () { toggleTheme(); } });
