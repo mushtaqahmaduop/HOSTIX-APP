@@ -1438,6 +1438,8 @@ function addExtraChargeRow(descOrLabel='', amount='') {
 }
 
 function showAddPaymentForStudent(studentId) {
+  // Collecting money is its own permission, separate from 'edit'.
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const t = DB.students.find(s => s.id === studentId);
   if (!t) return;
   const c = resolveCharges(t);
@@ -1585,6 +1587,7 @@ function recalcUnpaidPS() {
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
 async function submitPaymentForStudent() {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const studentId   = document.getElementById('f-ps-studentId')?.value || '';
   const t           = DB.students.find(s => s.id === studentId);
   if (!t) { toast('Student not found', 'error'); return; }
@@ -1714,6 +1717,8 @@ function openAddPayment(studentId) {
 }
 
 function renderAddPayment() {
+  // Add Payment is a PAGE, so navigate() reaches it without the button.
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const pmOpts = DB.settings.paymentMethods.map(m => `<option>${escHtml(m)}</option>`).join('');
   const dueDefault = (() => { const d = new Date(); d.setDate(6); return ymd(d); })();
 
@@ -2243,6 +2248,7 @@ function printAndSubmitPaymentForStudent() {
   submitPaymentForStudent();
 }
 function showEditPaymentModal(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   const t = DB.students.find(s=>s.id===p.studentId);
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
@@ -2345,6 +2351,7 @@ function showEditPaymentModal(id) {
   }, 50);
 }
 async function submitEditPayment(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;

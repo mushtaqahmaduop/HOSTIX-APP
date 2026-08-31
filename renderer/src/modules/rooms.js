@@ -507,6 +507,7 @@ function syncRoomPreview() {
 }
 
 function showAddRoomModal(presetId='') {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const typeOpts = DB.settings.roomTypes.map(t=>`<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
   const floorOpts = DB.settings.floors.map(f=>`<option value="${escHtml(f)}">${escHtml(f)} Floor</option>`).join('');
   showModal('modal-lg', roomModalTitle('doorOpen','Add New Room','Register a new room or unit in your hostel'), `
@@ -576,6 +577,7 @@ function roomModalTitle(ico, title, sub) {
   </span>`;
 }
 async function submitAddRoom() {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
   const typeId=document.getElementById('f-rtype').value;
@@ -593,6 +595,7 @@ async function submitAddRoom() {
 }
 
 function showEditRoomModal(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const typeOpts=DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${r.typeId===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
   const floorOpts=DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${r.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
@@ -647,6 +650,7 @@ function showEditRoomModal(id) {
   syncRoomPreview();
 }
 async function submitEditRoom(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;
   // Read BEFORE the write. oldNumber used to be captured on the line after

@@ -135,7 +135,7 @@ async function _sha256v1(plain) {
 
 /** Every permission the app enforces. Order is the order shown in the UI. */
 const PERMS = [
-  { key: 'edit',     label: 'Add & edit records',   hint: 'Students, rooms, payments, expenses' },
+  { key: 'edit',     label: 'Add & edit records',   hint: 'Students, rooms and expenses' },
   { key: 'delete',   label: 'Delete records',       hint: 'Remove students, payments and rooms' },
   { key: 'payments', label: 'Collect payments',     hint: 'Record and edit payments' },
   { key: 'reports',  label: 'View reports',         hint: 'Reports page and PDF exports' },

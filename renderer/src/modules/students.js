@@ -496,6 +496,8 @@ function exportStudentsCSV() {
 let _addStudentPresetRoom = '';
 
 function showAddStudentModal(presetRoomId='') {
+  // Admitting a student is the archetypal 'add a record' action.
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   _addStudentPresetRoom = presetRoomId || '';
   closeModal();              // harmless when nothing is open; clears a caller's modal
   navigate('addstudent');
@@ -763,6 +765,8 @@ function sfDropPhoto(ev) {
 }
 
 async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
+  // Gated at the form AND at the submit: the page can be reached without the button.
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const name=document.getElementById('f-tname').value.trim();
   const roomId=document.getElementById('f-troom').value;
   // Rent is a property of the room, not of the student form — the form no
@@ -1368,6 +1372,7 @@ function printStudentCard(id) {
   _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||roomFreeBeds(r)>0));
   const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
@@ -1541,6 +1546,7 @@ function showEditStudentModal(id) {
 }
 
 async function submitEditStudent(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const _originalRoomId = t.roomId; // capture BEFORE any changes
 
