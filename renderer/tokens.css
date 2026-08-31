@@ -296,3 +296,50 @@ body.light-theme {
   --conn-unconfigured-fg: var(--text-tertiary);
   --conn-unconfigured-bg: var(--surface-muted);
 }
+
+/* ── ANTHROPIC CHROME ────────────────────────────────────────────────────────
+   Extracted 2026-09-01 from the Anthropic/Claude design-system teardown, for
+   the payments-table pilot. Additive only — nothing above was retuned.
+
+   What was taken: the semantic badge palette and the numeral treatment.
+   What was NOT taken, deliberately:
+     · the clay/orange accent (#d97757 / #cc785c) — this app is royal blue and
+       the owner rejected the orange outright. --accent* is untouched.
+     · the warm ivory surface ladder — it collides with this app's surfaces the
+       same way BASELINE.css would have (see CLAUDE.md § Design governance).
+     · the serif-body-at-20px move — it is the system's loudest signal, and it
+       is an editorial signal. A warden reading a 25-row ledger needs dense
+       sans chrome, which is what that system itself uses for tables.
+
+   Anthropic's semantics are warmer and ~20% less saturated than this app's
+   existing --success/--warning/--danger, which are Tailwind emerald/amber/red.
+   Held separately rather than overwriting those, so the pilot is revertible. */
+:root {
+  --ant-success-fg:  #5db872;
+  --ant-success-bg:  rgba(93, 184, 114, 0.14);
+  --ant-warning-fg:  #d4a017;
+  --ant-warning-bg:  rgba(212, 160, 23, 0.14);
+  --ant-danger-fg:   #c64545;
+  --ant-danger-bg:   rgba(198, 69, 69, 0.14);
+  --ant-teal:        #5db8a6;
+  --ant-amber:       #e8a55a;
+  --ant-neutral-fg:  #a09d96;
+  --ant-neutral-bg:  rgba(160, 157, 150, 0.14);
+
+  /* Numerals. The teardown sets anything a reader compares in mono; this app's
+     CLAUDE.md already says the same. JetBrains Mono is bundled, so this costs
+     no new font file. .06em is the teardown's tracking for mono at small size. */
+  --ant-num-font:    var(--font-mono);
+  --ant-num-track:   0.01em;
+  --ant-unit-track:  0.1em;
+}
+body.light-theme {
+  --ant-success-fg:  #3f8f52;
+  --ant-success-bg:  rgba(93, 184, 114, 0.13);
+  --ant-warning-fg:  #96710f;
+  --ant-warning-bg:  rgba(212, 160, 23, 0.15);
+  --ant-danger-fg:   #a53535;
+  --ant-danger-bg:   rgba(198, 69, 69, 0.11);
+  --ant-neutral-fg:  #6c6a64;
+  --ant-neutral-bg:  rgba(108, 106, 100, 0.10);
+}

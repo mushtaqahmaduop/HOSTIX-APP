@@ -330,10 +330,22 @@ function renderPayments() {
   const monthOpts = payMonthOptions();
   const activeFilters = [payFilter.showAll, payFilter.unpaidOnly].filter(Boolean).length;
 
-  const th = (key,label,extra) => {
+  /* CURRENCY LIVES IN THE HEADER, NOT IN EVERY CELL.
+
+     Repeating "PKR" down a 25-row column is 25 renderings of one fact, and it
+     was the widest thing in each money column. The unit is now stated once per
+     column and the cells carry bare tabular figures, which is how a ledger has
+     always been read. `cur` reads DB.settings.currency rather than hardcoding
+     PKR — a hostel configured to another currency would otherwise get a column
+     labelled in a currency it does not use. */
+  const curCode = (DB.settings && DB.settings.currency) || 'PKR';
+  const unit = `<span class="pay-th__unit">${escHtml(curCode)}</span>`;
+
+  const th = (key,label,extra,cls) => {
     const on = payFilter.sortKey===key;
     const arw = on ? (payFilter.sortDir==='asc'?'▲':'▼') : '⇅';
-    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(payFilter,'payments','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+    const money = cls === 'money';
+    return `<th class="is-sortable${on?' is-sorted':''}${money?' pay-col-money':''}" ${extra||''} onclick="toggleSort(payFilter,'payments','${key}')" title="Sort by ${label}">${label}${money?unit:''}<span class="arw">${arw}</span></th>`;
   };
 
   return `
@@ -490,17 +502,17 @@ function renderPayments() {
           ${th('student','Student')}
           ${th('room','Room')}
           ${th('month','Month')}
-          ${th('rent','Charge/Mo')}
-          ${th('paid','Amt Paid')}
-          ${th('unpaid','Unpaid')}
+          ${th('rent','Charge/Mo','','money')}
+          ${th('paid','Amt Paid','','money')}
+          ${th('unpaid','Unpaid','','money')}
           ${th('method','Method')}
           ${th('status','Status')}
           <!-- Secondary money columns sit after Status: they are usually "—", and
                keeping them left of it pushed the columns that matter off-screen.
                They are hidden until the sidebar is collapsed — see payments.css. -->
-          <th class="pay-col-x">Adm. Fee</th>
-          <th class="pay-col-x">Extra Chrgs</th>
-          <th class="pay-col-x">Concession</th>
+          <th class="pay-col-x pay-col-money">Adm. Fee${unit}</th>
+          <th class="pay-col-x pay-col-money">Extra Chrgs${unit}</th>
+          <th class="pay-col-x pay-col-money">Concession${unit}</th>
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
@@ -545,9 +557,9 @@ function renderPayments() {
               ${escHtml(p.month||'—')}
               ${arrear?'<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>':''}
             </td>
-            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));return `<td class="pay-money">${fmtPKR(_c.monthly||p.amount)}${_c.messIncluded?`<span class="pay-charge__sub">${fmtPKR(_c.rent)} rent + ${fmtPKR(_c.mess)} mess</span>`:_c.hasMess?`<span class="pay-charge__sub">rent only · mess off</span>`:''}</td>`;})()}
-            <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
-            <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
+            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));return `<td class="pay-money pay-col-money">${fmtNum(_c.monthly||p.amount)}${_c.messIncluded?`<span class="pay-charge__sub">${fmtNum(_c.rent)} rent + ${fmtNum(_c.mess)} mess</span>`:_c.hasMess?`<span class="pay-charge__sub">rent only · mess off</span>`:''}</td>`;})()}
+            <td class="pay-money pay-money--in pay-col-money">${fmtNum(p.amount)}</td>
+            <td class="pay-money pay-col-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtNum(unpaid)}</td>
             <td>${pmBadge(p.method)}</td>
             <td>
               <span class="pay-pill ${sHue}">
@@ -556,9 +568,9 @@ function renderPayments() {
               </span>
               ${payIsOverdue(p)?'<div style="font-size:10px;font-weight:700;color:var(--red);margin-top:3px">Overdue</div>':''}
             </td>
-            <td class="pay-col-x">${admFee>0?`<span class="pay-money">${fmtPKR(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
-            <td class="pay-col-x">${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtPKR(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
-            <td class="pay-col-x">${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtPKR(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x pay-col-money">${admFee>0?`<span class="pay-money">${fmtNum(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x pay-col-money">${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtNum(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x pay-col-money">${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtNum(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
             <td class="pay-col-act">
               <div class="pay-acts">
                 <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
