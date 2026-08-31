@@ -726,30 +726,15 @@
 .pay-charge__sub { display:block; margin-top:2px; font-size:10px; font-weight:600;
                    color:var(--text3); white-space:nowrap; }
 
-/* ── PILOT: CURRENCY IN THE HEADER, ANTHROPIC NUMERALS ───────────────────────
-   The unit is stated once per column instead of once per cell. Everything
-   below is scoped to .pay-table so the rest of the app is untouched while
-   this is being judged. See tokens.css § ANTHROPIC CHROME for what was and
-   was not taken from that system. */
+/* ── ANTHROPIC NUMERALS AND BADGE COLOURS ──────────────────────────────
+   What remains of the currency pilot after the owner reverted the PKR
+   decision on 2026-09-01. The unit is back beside every amount via fmtPKR();
+   the .pay-th__unit and .pay-col-money rules that carried it in the column
+   heading are gone with it, and so is the right-alignment they applied.
 
-/* The unit marker. Mono, wide-tracked, uppercase, and deliberately quieter
-   than the column name — it labels the column, it is not the column. */
-.pay-th__unit {
-  font-family: var(--ant-num-font);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: var(--ant-unit-track);
-  color: var(--text3);
-  margin-inline-start: 5px;
-  opacity: .8;
-}
-
-/* Money columns align right, header and cell together, so the digits stack on
-   their decimal edge. This is the reason a bare column is readable at all —
-   left-aligned bare numbers of different widths cannot be scanned down. */
-.pay-table thead th.pay-col-money,
-.pay-table tbody td.pay-col-money { text-align: right; }
-.pay-table thead th.pay-col-money .arw { margin-inline-start: 3px; }
+   Kept, because they were a separate request and not part of that decision:
+   the mono tabular numerals and the Anthropic semantic badge palette. See
+   tokens.css § ANTHROPIC CHROME. */
 
 /* Numerals in mono with tabular figures: every digit takes the same width, so
    rows line up column-wise and a changed value never shifts its neighbours. */
@@ -774,7 +759,7 @@
 .pay-table .pay-pill.dh-amber { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
 .pay-table .pay-pill.dh-slate { background: var(--ant-neutral-bg); color: var(--ant-neutral-fg); }
 
-/* The money hues follow the same retune, so a figure and its status badge do
-   not disagree about what "paid" and "owed" look like. */
+/* Money hues follow the same retune, so a figure and its status badge do not
+   disagree about what "paid" and "owed" look like. */
 .pay-table .pay-money--in  { color: var(--ant-success-fg); }
 .pay-table .pay-money--due { color: var(--ant-danger-fg); }
