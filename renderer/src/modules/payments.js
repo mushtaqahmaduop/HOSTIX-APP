@@ -544,7 +544,7 @@ function renderPayments() {
             <td class="pay-money">${fmtPKR(p.monthlyRent||p.totalRent||p.amount)}</td>
             <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
             <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
-            <td><span class="pay-pill dh-slate">${escHtml(p.method||'—')}</span></td>
+            <td>${pmBadge(p.method)}</td>
             <td>
               <span class="pay-pill ${sHue}">
                 ${sLabel==='Paid'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>':''}

@@ -881,14 +881,6 @@ function _rpIco(k, cls) {
   return '<svg class="' + (cls || 'icon icon-xs') + '" viewBox="0 0 24 24" fill="currentColor">' + _DASH_RP_ICO[k] + '</svg>';
 }
 
-/* The method is a category, not a state — a bordered neutral chip, per the
-   restyle rule. It is drawn here rather than in pmBadge() because pmBadge is
-   shared with the payments page, the student modal and the reports, and
-   restyling those four screens is not what was asked for. */
-function _dashMethodChip(m) {
-  return '<span class="dash-rp-method">' + _rpIco('card') + escHtml(m || '—') + '</span>';
-}
-
 function _dashRecentPayments(list, mo, collected) {
   const head =
     '<div class="dash-sec__head">'
@@ -932,7 +924,7 @@ function _dashRecentPayments(list, mo, collected) {
       + '<td>' + (unpaid > 0
           ? '<span class="dash-rp-num dash-rp-num--due">' + fmtPKR(unpaid) + '</span>'
           : '<span class="dash-rp-nil">—</span>') + '</td>'
-      + '<td>' + _dashMethodChip(p.method) + '</td>'
+      + '<td>' + pmBadge(p.method) + '</td>'
       + '<td>' + statusBadge(p.status) + '</td>'
       + '<td><span class="dash-rp-date">' + fmtDate(p.date) + '</span></td>'
       + '<td class="dash-rp-more">'
