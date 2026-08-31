@@ -1,19 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    HOSTYLLO — UI v4  ·  Claude Dark  ·  Claude Light
-   Design tokens aligned to a clean, neutral dark/light aesthetic.
+
+   Surfaces repainted 2026-09-01 onto the Anthropic/Claude TONAL LADDER: warm
+   ivory in light (canvas #f0eee6 under cards #faf9f5), warm near-black in dark
+   (canvas #181715 under cards #1f1e1b). They were cool — Tailwind slate over
+   pure white, and neutral #0f0f0f — which is what the ladder replaces.
+
+   Two rules that go with it, and that the old palette broke:
+     · Depth is a TONE STEP plus a 1px hairline. Never a colour wash. The blue
+       radial-gradient over #main is gone for this reason.
+     · Pure #ffffff is not a surface — it breaks the paper metaphor. 21 light
+       surfaces that hardcoded it now read --card.
+   The royal-blue --accent and the navy sidebar are deliberately UNCHANGED; the
+   owner keeps this app's identity and rejected that system's clay/orange.
+   Full extract + rules: ~/.claude/skills/design-studio/ANTHROPIC-CHROME.css
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
     /* ── CLAUDE DARK (default) ──────────────────────────────────────────── */
-    --bg:            #0f0f0f;
-    --bg2:           #161616;
-    --bg3:           #1e1e1e;
-    --bg4:           #282828;
-    --sidebar-bg:    #111111;
-    --card:          #161616;
-    --card2:         #1e1e1e;
-    --border:        rgba(255, 255, 255, 0.08);
-    --border2:       #3a3a3a;
+    --bg:            #181715;
+    --bg2:           #1f1e1b;
+    --bg3:           #252320;
+    --bg4:           #2f2c28;
+    --sidebar-bg:    #141413;
+    --card:          #1f1e1b;
+    --card2:         #252320;
+    --border:        rgba(250, 249, 245, 0.07);
+    --border2:       #35322d;
 
     /* Accent tokens (--gold/--royal) removed in Phase 1 §5.5b — the app now
        uses the single violet --accent set from tokens.css. */
@@ -33,9 +46,9 @@
     --purple-dim:    rgba(192, 132, 252, 0.12);
 
     /* Text */
-    --text:          #e5e2e1;
-    --text2:         #d7c3b5;
-    --text3:         #a08d81;
+    --text:          #faf9f5;
+    --text2:         #d8d5cd;
+    --text3:         #a09d96;
 
     /* Typography */
     --font:          'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif;
@@ -115,16 +128,16 @@ body.no-transition *::after {
    text on white is about 2.5:1; #059669 is the guide's own success-text.
    ══════════════════════════════════════════════════════════════════════════ */
 body.light-theme {
-    --bg:            #f4f7fc;   /* workspace ground */
-    --bg2:           #eef2f9;
-    --bg3:           #e8edf5;   /* progress-track / sunk surfaces */
-    --bg4:           #dde4ef;
+    --bg:            #f0eee6;   /* workspace ground */
+    --bg2:           #ebe7dd;
+    --bg3:           #e3dacc;   /* progress-track / sunk surfaces */
+    --bg4:           #d9cfc0;
     --sidebar-bg:    #071a3a;
-    --card:          #ffffff;
-    --card2:         #f8fafc;
-    --border:        #e2e8f0;
-    --border2:       #cbd5e1;
-    --divider:       #eef2f7;   /* soft row separator (guide §19) */
+    --card:          #faf9f5;
+    --card2:         #f5f0e8;
+    --border:        #e0dacd;
+    --border2:       #cccbc8;
+    --divider:       #ebe6df;   /* soft row separator (guide §19) */
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
@@ -141,9 +154,9 @@ body.light-theme {
     --purple:        #7c3aed;
     --purple-dim:    rgba(139, 92, 246, 0.10);
 
-    --text:          #0f172a;
-    --text2:         #334155;
-    --text3:         #64748b;
+    --text:          #141413;
+    --text2:         #3d3d3a;
+    --text3:         #6c6a64;
 
     /* Guide §21 — subtle and professional, never heavy. */
     --shadow:           0 8px 24px rgba(15, 23, 42, 0.045);
@@ -158,11 +171,12 @@ body.light-theme {
 /* Guide §4 — the atmosphere wash. Kept extremely subtle: it must read as a
    premium workspace, not a marketing page. Fixed so it does not scroll with
    the content and re-tint the page halfway down. */
+/* Flat ground, no wash. The blue radial-gradient that used to sit here tinted
+   the ivory canvas cool and was the reason the surface ladder did not read.
+   Depth in this system comes from the tone step between --bg / --card plus a
+   1px hairline, never from a colour wash or a light falloff. */
 body.light-theme #main {
-    background:
-      radial-gradient(circle at 80% 0%, rgba(37, 99, 235, 0.045), transparent 32%),
-      var(--bg);
-    background-attachment: fixed;
+    background: var(--bg);
 }
 
 /* Light — specific overrides */
@@ -197,7 +211,7 @@ body.light-theme .header {
 body.light-theme input,
 body.light-theme select,
 body.light-theme textarea {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -209,7 +223,7 @@ body.light-theme textarea:focus {
 }
 body.light-theme .modal-box,
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
@@ -262,7 +276,7 @@ body.light-theme .ftab.active {
     border-color: rgba(59,130,246, 0.2);
 }
 body.light-theme .form-control {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -275,12 +289,12 @@ body.light-theme .settings-tab.active {
     color: var(--accent);
 }
 body.light-theme .arch-hb {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
 }
 body.light-theme .stat-card::after {
@@ -2954,7 +2968,7 @@ body.light-theme .login-warden-btn.selected .login-warden-name {
 }
 
 body.light-theme #login-input {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -2968,7 +2982,7 @@ body.light-theme #login-input {
 body.light-theme #login-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px rgba(56,189,248,0.08);
-    background: #ffffff;
+    background: var(--card);
 }
 
 #login-input::placeholder { color: var(--text3); }
@@ -3684,7 +3698,7 @@ body.light-theme #main {
 }
 
 body.light-theme .stat-card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 20px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3693,7 +3707,7 @@ body.light-theme .stat-card:hover {
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3703,12 +3717,12 @@ body.light-theme #header {
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 1px 0 0 var(--border), 4px 0 24px rgba(0,0,0,0.04);
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 0 0 1px var(--border);
 }
 
@@ -3973,7 +3987,7 @@ body.light-theme ::-webkit-scrollbar-thumb { background: #d7c3b5; }
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     border-right: 1px solid #d7c3b5;
     box-shadow: 2px 0 16px rgba(0,0,0,0.04);
 }
@@ -4073,7 +4087,7 @@ body.light-theme #content { background: #f3f3f3; }
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
@@ -4275,14 +4289,14 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 .form-control::placeholder { color: var(--text3); opacity: 0.6; }
 
 body.light-theme .form-control {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
     color: #1c1b1b;
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
-    background: #ffffff;
+    background: var(--card);
 }
 
 /* ── FILTER BAR — Stitch ─────────────────────────────────────────────────── */
@@ -4295,7 +4309,7 @@ body.light-theme .form-control:focus {
 }
 
 body.light-theme .filter-bar {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4353,7 +4367,7 @@ body.light-theme .filter-bar {
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 16px 48px rgba(0,0,0,0.12);
 }
@@ -4401,7 +4415,7 @@ body.light-theme .btn-primary {
 .room-card.vacant   { border-color: rgba(0,0,0,0.1); }
 .room-card.maintenance { border-color: rgba(255,180,171,0.20); }
 
-body.light-theme .room-card { background: #ffffff; border: 1px solid #d7c3b5; }
+body.light-theme .room-card { background: var(--card); border: 1px solid #d7c3b5; }
 body.light-theme .room-card:hover { background: #f8f7f6; }
 
 /* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
@@ -4415,7 +4429,7 @@ body.light-theme .room-card:hover { background: #f8f7f6; }
 }
 
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4427,7 +4441,7 @@ body.light-theme .toast {
 }
 
 body.light-theme .settings-topnav-wrap {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     border-bottom-color: var(--border);
 }
@@ -4521,7 +4535,7 @@ body.light-theme .arch-month-card,
 body.light-theme .arch-s-card,
 body.light-theme .arch-ov-card,
 body.light-theme .dash-card {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
