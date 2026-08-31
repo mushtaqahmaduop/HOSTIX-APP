@@ -148,59 +148,15 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-test('security: clear-all is blocked without the correct warden password', async () => {
-  const app = await electron.launch(launchOpts());
-  const win = await app.firstWindow();
-  await win.waitForLoadState('domcontentloaded');
-  await login(win);
-
-  const preStuds = await win.evaluate(() => window.electronAPI.dbAll('students'));
-  expect(preStuds.length, 'SAFETY ABORT: isolated DB not empty').toBe(0);
-
-  const studentId = await seedRoomAndStudent(win);
-  expect(studentId).toBeTruthy();
-
-  // Open the password-gated clear-all modal.
-  await win.evaluate(() => clearAllDataWithPassword());
-  await win.waitForSelector('#clear-all-pwd');
-
-  // WRONG password → data intact, error shown, and the flow must NOT advance to
-  // the final "☢️ Clear ALL Data?" confirmation (clearAllData is never reached).
-  const afterWrong = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'definitely-wrong';
-    await confirmClearAllWithPassword();
-    return {
-      students: DB.students.length,
-      errShown: document.getElementById('clear-pwd-err')?.style.display === 'block',
-      stillOnPwStep: !!document.getElementById('clear-all-pwd'), // password modal still open
-    };
-  });
-  expect(afterWrong.students, 'SECURITY REGRESSION: clear-all wiped data with a WRONG password').toBeGreaterThan(0);
-  expect(afterWrong.errShown, 'wrong-password error not shown').toBeTruthy();
-  expect(afterWrong.stillOnPwStep, 'wrong password must not advance past the password step').toBeTruthy();
-
-  // CORRECT password → the gate passes and clearAllData() opens its final
-  // confirmation (proves the password check runs and gates the wipe).
-  const afterCorrect = await win.evaluate(async () => {
-    document.getElementById('clear-all-pwd').value = 'admin123';
-    await confirmClearAllWithPassword();
-    return {
-      confirmReached: typeof _pendingConfirmCb === 'function', // clearAllData() showed its confirm
-      studentsBeforeConfirm: DB.students.length,               // not wiped until confirmed
-    };
-  });
-  expect(afterCorrect.confirmReached, 'correct password should reach the clear-all confirmation').toBeTruthy();
-  expect(afterCorrect.studentsBeforeConfirm, 'must not wipe before the final confirm').toBeGreaterThan(0);
-
-  // Confirm the final dialog → data is actually cleared.
-  const cleared = await win.evaluate(async () => {
-    await _pendingConfirmCb();
-    return DB.students.length;
-  });
-  expect(cleared, 'confirming clear-all should wipe students').toBe(0);
-
-  await app.close();
-});
+// The clear-all password-gate test that stood here is gone with the feature.
+// Clear All Data was retired on 2026-08-31 — the sidebar entry, the functions
+// in expenses.js and the `clearall` permission all went together, so there is
+// no longer a gate for this to guard. Deleting a security test is only safe
+// when the thing it protected no longer exists; that is the case here, and
+// tests/permissions.spec.js proves it: its guard reads the PERMS table out of
+// the source and fails on any permission declared but checked nowhere, so a
+// half-removal — the permission left behind, the feature gone — would have
+// failed the suite rather than passed it quietly.
 
 // ─────────────────────────────────────────────────────────────────────────────
 test('schema migration: indexed WHERE queries work end-to-end via dbAll', async () => {

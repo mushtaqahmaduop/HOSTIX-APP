@@ -720,3 +720,8 @@
 }
 .pf-mstate.is-paid > svg,
 .pf-mstate.is-paid b:first-of-type { color:var(--green); }
+
+/* The two halves under a monthly charge — see paymentCharges() in utils.js.
+   Muted: the total above is the figure; this only explains it. */
+.pay-charge__sub { display:block; margin-top:2px; font-size:10px; font-weight:600;
+                   color:var(--text3); white-space:nowrap; }

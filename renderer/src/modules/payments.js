@@ -272,7 +272,7 @@ function payFiltered() {
 
   return applySort(pays, payFilter, {
     student: p => p.studentName,
-    room:    p => Number(p.roomNumber) || 0,
+    room:    { get: p => p.roomNumber, cmp: cmpRoomNo },
     month:   p => new Date((p.month || '') + ' 1').getTime() || 0,
     rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
     paid:    p => Number(p.amount || 0),
@@ -486,7 +486,7 @@ function renderPayments() {
           ${th('student','Student')}
           ${th('room','Room')}
           ${th('month','Month')}
-          ${th('rent','Rent/Mo')}
+          ${th('rent','Charge/Mo')}
           ${th('paid','Amt Paid')}
           ${th('unpaid','Unpaid')}
           ${th('method','Method')}
@@ -541,7 +541,7 @@ function renderPayments() {
               ${escHtml(p.month||'—')}
               ${arrear?'<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>':''}
             </td>
-            <td class="pay-money">${fmtPKR(p.monthlyRent||p.totalRent||p.amount)}</td>
+            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));return `<td class="pay-money">${fmtPKR(_c.monthly||p.amount)}${_c.messIncluded?`<span class="pay-charge__sub">${fmtPKR(_c.rent)} rent + ${fmtPKR(_c.mess)} mess</span>`:_c.hasMess?`<span class="pay-charge__sub">rent only · mess off</span>`:''}</td>`;})()}
             <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
             <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
             <td>${pmBadge(p.method)}</td>

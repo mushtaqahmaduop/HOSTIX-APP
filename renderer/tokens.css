@@ -175,8 +175,23 @@
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
+/* Native controls follow the theme.
+
+   Without this, Chromium paints every <select>'s DROPDOWN LIST with the OS
+   default — a white popup with dark text, opening out of a dark form. The
+   closed control looked right because the app styles it; the list underneath
+   did not, because a page cannot style a native popup at all. `color-scheme`
+   is the only lever there is, and it fixes scrollbars, date pickers and
+   autofill in the same stroke.
+
+   Reported on the Add Room form, where the Floor and Room Type dropdowns sit
+   beside each other and the mismatch is impossible to miss. It was never
+   specific to that form. */
+:root { color-scheme: dark; }
+
 /* Light mode overrides for new tokens */
 body.light-theme {
+  color-scheme: light;
   --surface:         #ffffff;
   --surface-muted:   var(--gray-50);
   --surface-sunken:  var(--gray-100);

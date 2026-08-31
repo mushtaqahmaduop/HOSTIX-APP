@@ -163,9 +163,9 @@ test('added users can sign in, and inactive ones cannot', async () => {
     document.getElementById('u-username').value = 'night';
     document.getElementById('u-pw').value = 'night-pass';
     document.getElementById('u-active').checked = true;
-    // Everyday access only — no settings, no users, no clear-all.
+    // Everyday access only — no settings, no users.
     ['edit', 'payments', 'reports'].forEach(k => { document.getElementById('up-' + k).checked = true; });
-    ['delete', 'backup', 'settings', 'users', 'clearall']
+    ['delete', 'backup', 'settings', 'users']
       .forEach(k => { document.getElementById('up-' + k).checked = false; });
     await saveUser(null);
   });
@@ -185,9 +185,9 @@ test('added users can sign in, and inactive ones cannot', async () => {
 
   const gate = await win.evaluate(() => ({
     edit: canDo('edit'), settings: canDo('settings'),
-    users: canDo('users'), clearall: canDo('clearall'),
+    users: canDo('users'),
   }));
-  expect(gate).toEqual({ edit: true, settings: false, users: false, clearall: false });
+  expect(gate).toEqual({ edit: true, settings: false, users: false });
 
   // The restricted page renders the refusal rather than the settings screen.
   await win.evaluate(() => navigate('settings'));

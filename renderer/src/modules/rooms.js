@@ -130,7 +130,9 @@ function renderRooms() {
   const floorOptions = DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${roomFilter.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
 
   rooms = applySort(rooms, roomFilter, {
-    number:    r => r.number,
+    // cmpRoomNo: 'A 01' is a legal room number here, and a plain compare
+    // orders 1, 10, 2.
+    number:    { get: r => r.number, cmp: cmpRoomNo },
     occupancy: r => _occOf(r.id),
     floor:     r => r.floor,
     type:      r => getRoomType(r).name
@@ -708,5 +710,7 @@ let studentFilter = {status:'All', room:'All', course:'All', search:'',
                         month they were here for, and leaves departed ones
                         behind in the month they left. */
                      month:thisMonth(),
-                     pageSize:30, page:1, sortKey:null, sortDir:'asc'};
+                     // Room order is the app-wide default — owner's call,
+                     // 2026-08-31. Still user-sortable by any column.
+                     pageSize:30, page:1, sortKey:'room', sortDir:'asc'};
 let stuSelected = new Set();

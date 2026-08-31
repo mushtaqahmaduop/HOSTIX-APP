@@ -142,7 +142,6 @@ const PERMS = [
   { key: 'backup',   label: 'Backup & restore',     hint: 'Export and import the database' },
   { key: 'settings', label: 'Change settings',      hint: 'Hostel details, room types, rent' },
   { key: 'users',    label: 'Manage users',         hint: 'Add users and set permissions' },
-  { key: 'clearall', label: 'Clear all data',       hint: 'Wipe the database. Rarely needed.' },
 ];
 const PERM_KEYS = PERMS.map(p => p.key);
 
@@ -195,7 +194,6 @@ function _migrateUsers(cfg) {
         // Only an account that could already reach settings inherits user
         // management — otherwise every warden could grant themselves anything.
         users:    u.canSettings !== false,
-        clearall: u.canDelete   !== false,
       };
       changed = true;
     }
@@ -671,7 +669,6 @@ function applyPermissionsToChrome() {
   // nav.js renderPage(). Keep the two in step or the rail offers a page that
   // then refuses to render.
   showNav('archive',  canDo('reports'));
-  showNav('clearall', canDo('clearall'));
   show('user-menu-manage',   canDo('users'));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.

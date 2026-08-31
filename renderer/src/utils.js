@@ -248,6 +248,69 @@ function resolveCharges(student, opts) {
   };
 }
 
+/* ── WHAT A PAYMENT RECORD SAYS THE MONTH COST ────────────────────────────────
+   resolveCharges() above answers "what does this student owe per month",
+   from settings. This answers "what did THIS RECORD bill" — from the record's
+   own fields, because a record is a historical fact and settings have moved
+   since it was written.
+
+   THE BUG THIS EXISTS TO CLOSE. A record stores the two halves separately:
+   `monthlyRent` is the rent ALONE, and `messCharge` + `messIncluded` sit beside
+   it (see repairPaymentComposition in payments.js, which spent a whole boot
+   pass getting that split right). Every screen that quoted a monthly figure
+   then quoted `monthlyRent` on its own — `p.monthlyRent || p.totalRent ||
+   t.rent`, copied into five files.
+
+   So a student on 8,000 rent and 6,500 mess, with the mess ticked in Settings
+   AND on the form, read:
+
+       Room Rent   PKR 8,000
+       Paid        PKR 14,500
+
+   and the 6,500 that explains the difference appeared nowhere on the screen.
+   Nothing was mis-billed — `amount` and `unpaid` were always right — but every
+   screen described the month wrongly, which is indistinguishable from a
+   collection error to the person reading it.
+
+   One reader now, so a screen cannot quote half a charge by accident. It falls
+   back to the student's current charges only when the record predates the
+   split and carries nothing of its own.                                     */
+function paymentCharges(p, student) {
+  const num = v => Number(v || 0);
+  const rec = p || {};
+
+  const rent = num(rec.monthlyRent) || num(rec.totalRent) ||
+               (student ? num(resolveCharges(student).rent) : 0);
+
+  // `messIncluded` is a tri-state in the data: true, false, or absent on
+  // records written before the flag existed. Absent-with-an-amount means the
+  // mess WAS billed — that is what those records meant — so only an explicit
+  // false turns it off. Same convention as repairPaymentComposition().
+  const mess        = num(rec.messCharge);
+  const messIncluded = mess > 0 && rec.messIncluded !== false;
+
+  return {
+    rent,
+    mess,
+    messIncluded,
+    /** The monthly charge — the figure a warden means by "how much per month". */
+    monthly: rent + (messIncluded ? mess : 0),
+    /** True when this record has a mess line at all, billed or not. */
+    hasMess: mess > 0,
+  };
+}
+
+/* The badge a row shows for what a month covers. Four states, and they are
+   genuinely four: a hostel that serves no food never sets a mess charge, which
+   is not the same fact as a student who has been taken off it. */
+function chargeCoverage(c) {
+  if (c.rent > 0 && c.messIncluded) return { key: 'both',     label: 'Rent + Mess', hue: 'dh-green' };
+  if (c.rent > 0 && c.hasMess)      return { key: 'rent',     label: 'Rent only',   hue: 'dh-amber' };
+  if (c.rent > 0)                   return { key: 'rentonly', label: 'Rent',        hue: 'dh-slate' };
+  if (c.messIncluded)               return { key: 'mess',     label: 'Mess only',   hue: 'dh-blue'  };
+  return { key: 'none', label: 'Not set', hue: 'dh-slate' };
+}
+
 /* One-line summary for the info strips: "PKR 16,000 rent + PKR 2,000 mess".
    Kept next to the resolver so the phrasing cannot drift between screens. */
 function chargesBreakdown(c) {
@@ -440,10 +503,16 @@ function gotoPage(filter, pageName, page) {
 // ── Sorting ──────────────────────────────────────────────────────────────────────
 // Sort a filtered array by filter.sortKey / filter.sortDir using a map of
 // key → accessor(row). Returns a NEW array (or the same array if no active sort).
+/* An accessor may be a plain getter, or `{ get, cmp }` when the column needs a
+   comparator of its own. Room numbers need one: `Number('A 01')` is NaN and a
+   plain string compare puts "10" before "2", so both of the obvious readings
+   are wrong for the one column every list in this app is now ordered by. */
 function applySort(arr, filter, accessors) {
   const key = filter && filter.sortKey;
   if (!key || !accessors || !accessors[key]) return arr;
-  const acc = accessors[key];
+  const spec = accessors[key];
+  const acc  = typeof spec === 'function' ? spec : spec.get;
+  const cmp  = typeof spec === 'function' ? null : spec.cmp;
   const dir = filter.sortDir === 'desc' ? -1 : 1;
   return arr.slice().sort(function (a, b) {
     let va = acc(a), vb = acc(b);
@@ -452,6 +521,7 @@ function applySort(arr, filter, accessors) {
     if (na && nb) return 0;
     if (na) return 1;   // blanks always sink to the bottom
     if (nb) return -1;
+    if (cmp) return cmp(va, vb) * dir;
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
     return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dir;
   });

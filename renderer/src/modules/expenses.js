@@ -1,8 +1,6 @@
 /* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
-             showEditExpenseModal, submitEditExpense, deleteExpense,
-             showClearAllMenu, clearPayments, clearExpenses, clearStudents,
-             clearAllData, clearAllDataWithPassword, confirmClearAllWithPassword
+             showEditExpenseModal, submitEditExpense, deleteExpense
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -329,7 +327,7 @@ function expPager(pg) {
    expense filed under one was invisible when filtering by the other. */
 function showAddExpenseCategoryModal() {
   // 'expenses' is not a permission. PERMS declares edit / delete / payments /
-  // reports / backup / settings / users / clearall, and canDo() fails closed on
+  // reports / backup / settings / users, and canDo() fails closed on
   // anything else — so this gate denied EVERY account, including the built-in
   // full-access one, and the toast read 'does not have permission to: expenses'
   // because requirePerm found no label to print either. Adding a category is an
@@ -473,146 +471,17 @@ async function deleteExpense(id) {
   }));
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// CLEAR DATA FUNCTIONS
-// ════════════════════════════════════════════════════════════════════════════
-function showClearAllMenu() {
-  if (typeof requirePerm === 'function' && !requirePerm('clearall')) return;
-  showModal('modal-md','🗑️ Clear Data',`
-    <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.35);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--text2)">
-      ⚠️ <strong style="color:var(--red)">Warning:</strong> This action is <strong>permanent and cannot be undone</strong>. Export a backup first!
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="background:linear-gradient(135deg,rgba(224,82,82,0.12),rgba(224,82,82,0.06));border:1px solid rgba(224,82,82,0.4);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-weight:800;color:var(--red);font-size:14px">☢️ Clear Everything</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">Removes ALL students, payments, expenses &amp; cancellations</div>
-        </div>
-        <button class="btn btn-danger btn-sm" style="background:var(--red);color:#fff" onclick="clearAllDataWithPassword()">🔒 CLEAR ALL</button>
-      </div>
-    </div>
-  `,`<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
-}
-
-async function clearPayments(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.payments=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='payments'?'payments':currentPage);
-    toast('All payment records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Payments?',`This will permanently delete all ${DB.payments.length} payment records.`,doIt);
-  } else {
-    showConfirm('Clear All Payments?',`This will permanently delete all ${DB.payments.length} payment records. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearExpenses(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.expenses=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='expenses'?'expenses':currentPage);
-    toast('All expense records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Expenses?',`This will permanently delete all ${DB.expenses.length} expense records.`,doIt);
-  } else {
-    showConfirm('Clear All Expenses?',`This will permanently delete all ${DB.expenses.length} expense records. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearStudents(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.students=[];
-    DB.payments=[];
-    DB.cancellations=[];
-    // FIX: DB.transfers are fund-level financial records, NOT student records.
-    // Clearing students must NOT wipe transfer history.
-    DB.fines=[];
-    DB.checkinlog=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    renderPage(currentPage==='students'?'students':currentPage);
-    toast('All students and their records cleared','info');
-  };
-  if(fromMenu) {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved.`,doIt);
-  } else {
-    showConfirm('Clear All Students?',`This removes ALL ${DB.students.length} students, their payments, fines, check-in log and cancellations permanently. Funds transfers are preserved. Cannot be undone!`,doIt);
-  }
-}
-
-async function clearAllData(fromMenu=false) {
-  const doIt = async ()=>{
-    DB.students=[];
-    DB.payments=[];
-    DB.expenses=[];
-    DB.cancellations=[];
-    DB.transfers=[];
-    DB.maintenance=[];
-    DB.complaints=[];
-    DB.activityLog=[];
-    DB.fines=[];
-    DB.checkinlog=[];
-    DB.notices=[];
-    DB.inspections=[];
-    DB.billSplits=[];
-    await saveDB();
-    if(fromMenu){closeModal();}
-    navigate('dashboard');
-    toast('All data cleared successfully','info');
-    renderSidebarCalendar();
-  };
-  showConfirm('☢️ Clear ALL Data?',
-    `This will permanently delete ALL students (${DB.students.length}), payments (${DB.payments.length}), expenses (${DB.expenses.length}) and cancellations. This CANNOT be undone! Make sure you have a backup.`,
-    doIt
-  );
-}
-
-// ── PASSWORD-PROTECTED CLEAR ALL (Fix #11) ───────────────────────────────────
-function clearAllDataWithPassword() {
-  showModal('modal-sm','🔒 Confirm: Clear All Data',`
-    <div style="background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.3);border-radius:10px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ This action cannot be undone!</div>
-      <div style="font-size:12px;color:var(--text3)">All students, payments, expenses and cancellations will be permanently deleted. Enter your warden password to proceed.</div>
-    </div>
-    <div class="field">
-      <label>Warden Password</label>
-      <input class="form-control" id="clear-all-pwd" type="password" placeholder="Enter your password…" autocomplete="off">
-    </div>
-    <div id="clear-pwd-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">❌ Incorrect password. Try again.</div>
-  `,`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-danger" onclick="confirmClearAllWithPassword()">Delete Everything</button>`);
-  setTimeout(()=>{ const i=document.getElementById('clear-all-pwd'); if(i) i.focus(); },120);
-}
-async function confirmClearAllWithPassword() {
-  const pwd = document.getElementById('clear-all-pwd')?.value||'';
-  const errEl = document.getElementById('clear-pwd-err');
-  if (!pwd) {
-    if(errEl) errEl.style.display='block';
-    const inp = document.getElementById('clear-all-pwd');
-    if(inp) { inp.value=''; inp.focus(); }
-    return;
-  }
-  const user = CUR_USER;
-  if (!user || !user.pw) {
-    if(errEl) { errEl.textContent='❌ No user session found. Please re-login.'; errEl.style.display='block'; }
-    return;
-  }
-  const matches = await verifyPassword(pwd, user.pw);
-  if (!matches) {
-    if(errEl) errEl.style.display='block';
-    const inp = document.getElementById('clear-all-pwd');
-    if(inp) { inp.value=''; inp.focus(); }
-    return;
-  }
-  closeModal();
-  clearAllData(true);
-}
-// ─────────────────────────────────────────────────────────────────────────────
+// The CLEAR DATA block that stood here is gone. Owner's call, 2026-08-31:
+// "remove clear all data features from sidebar ... it is not a professional
+// feature". It was one button, behind one password, that emptied every table in
+// the database — written in the app's first weeks and never once needed by a
+// hostel. Backup & Restore is the supported way to reset an install, and it
+// leaves a file behind rather than a hole.
+//
+// Removed with it: the sidebar entry (index.html), the `clearall` permission
+// (auth-nev.js) — which the PR #19 guard test would otherwise have failed on,
+// correctly, for being declared and checked nowhere — and the regression spec
+// that covered its password gate.
 
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════

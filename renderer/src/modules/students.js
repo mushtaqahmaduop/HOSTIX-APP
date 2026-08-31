@@ -95,7 +95,9 @@ function studentsFiltered() {
   return applySort(list, studentFilter, {
     id:     t => t.id,
     name:   t => t.name,
-    room:   t => { const r = byId.get(t.roomId); return Number(r ? r.number : 0) || 0; },
+    // cmpRoomNo, not Number(): the Add Room form accepts 'A 01' and 'B 02-a',
+    // which Number() reads as NaN and a plain string compare orders 1, 10, 2.
+    room:   { get: t => { const r = byId.get(t.roomId); return r ? r.number : ''; }, cmp: cmpRoomNo },
     course: t => t.occupation || t.course || '',
     status: t => t.status
   });
@@ -1098,7 +1100,10 @@ function showViewStudentModal(id) {
         </div>
         ${payHistory.length?(()=>{
           const rows=payHistory.map(p=>{
-            const mRent=p.monthlyRent||p.totalRent||t.rent||0;
+            // The monthly CHARGE. Reading `monthlyRent` alone hid the mess half
+            // — see paymentCharges() in utils.js.
+            const _ch=paymentCharges(p,t);
+            const mRent=_ch.monthly;
             const admFee=Number(p.admissionFee||p.fee||0);
             const extras=p.extraCharges||[];
             const conc=Number(p.concession||p.discount||0);
@@ -1108,7 +1113,7 @@ function showViewStudentModal(id) {
             if(conc>0) paidCell+='<span class="svw-sub is-conc">−'+fmtPKR(conc)+' concession</span>';
             return '<tr>'
             +'<td class="svw-t__month">'+escHtml(p.month||'—')+'</td>'
-            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+'</td>'
+            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+(_ch.messIncluded?'<span class="svw-sub">'+fmtPKR(_ch.rent)+' rent + '+fmtPKR(_ch.mess)+' mess</span>':_ch.hasMess?'<span class="svw-sub">rent only · mess off</span>':'')+'</td>'
             +'<td class="svw-t__conc">'+(conc>0?'−'+fmtPKR(conc):'<span class="is-empty">—</span>')+'</td>'
             +'<td>'+paidCell+'</td>'
             +'<td class="svw-t__unpaid'+((p.unpaid||0)>0?' is-due':'')+'">'+((p.unpaid||0)>0?fmtPKR(p.unpaid||0):'<span class="is-empty">—</span>')+'</td>'
@@ -1927,7 +1932,7 @@ async function submitRoomShift(studentId) {
 // this month instead of forcing the warden to switch back to find it.
 let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
                  showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
-                 page:1, sortKey:null, sortDir:'asc'};
+                 page:1, sortKey:'room', sortDir:'asc'};
 let paySelected = new Set();
 
 // ── FORMER STUDENTS — search & restore ───────────────────────────────────────

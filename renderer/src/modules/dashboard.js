@@ -335,29 +335,11 @@ function _dashDueState(p) {
 }
 
 function renderDashboard() {
-  // Alert system
-  const overduePayments = DB.payments.filter(p=>p.status==='Pending');
-  const openMaint = (DB.maintenance||[]).filter(m=>m.status==='Open').length;
-  const openComp = (DB.complaints||[]).filter(c=>c.status==='Open').length;
-  const totalOccupied = DB.students.filter(s=>s.status==='Active').length;
-  const totalBeds = DB.rooms.reduce((sum,r)=>{const rt=getRoomType(r);return sum+(rt?rt.capacity:0);},0);
-  const occRate = totalBeds>0?Math.round(totalOccupied/totalBeds*100):0;
-  const alerts = [];
-  const ICON_MONEY = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg>';
-  const ICON_WRENCH = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.7 17.3 16 11.6a6 6 0 0 0-7.4-7.4 1 1 0 0 0-.46 1.67l2.6 2.6-1.5 1.5-2.6-2.6A1 1 0 0 0 5 7.4a6 6 0 0 0 7.4 7.4l5.7 5.7a2.41 2.41 0 0 0 3.4 0l.2-.2a2.41 2.41 0 0 0 0-3.4Z"/></svg>';
-  const ICON_MESSAGE = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z"/></svg>';
-  const ICON_HOME = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg>';
-  if(overduePayments.length>0) alerts.push({type:'warning',icon:ICON_MONEY,msg:`${overduePayments.length} pending payment${overduePayments.length>1?'s':''} — ${fmtPKR(overduePayments.reduce((s,p)=>s+Number(p.amount||0),0))} uncollected`,action:"navigate('payments')"});
-  if(openMaint>0) alerts.push({type:'info',icon:ICON_WRENCH,msg:`${openMaint} open maintenance request${openMaint>1?'s':''}`,action:"navigate('maintenance')"});
-  if(openComp>0) alerts.push({type:'danger',icon:ICON_MESSAGE,msg:`${openComp} unresolved complaint${openComp>1?'s':''}`,action:"navigate('complaints')"});
-  if(occRate < 60) alerts.push({type:'warning',icon:ICON_HOME,msg:`Low occupancy: ${occRate}% — ${totalBeds-totalOccupied} beds vacant`,action:"navigate('rooms')"});
-  const alertHue = {warning:'dh-amber',info:'dh-blue',danger:'dh-red'};
-  const alertHtml = alerts.length>0?`<div style="display:grid;gap:8px;margin-bottom:12px">${alerts.map(a=>`
-    <div onclick="${a.action}" class="dash-banner ${alertHue[a.type]}">
-      <span class="dash-chip">${a.icon}</span>
-      <span class="dash-banner__msg">${a.msg}</span>
-      <span class="dash-banner__go">View →</span>
-    </div>`).join('')}</div>`:'';
+  /* The alert computation that opened this function is gone with the banners
+     it fed. Every one of its findings — pending payments, open maintenance,
+     unresolved complaints, low occupancy — is rebuilt by chromeAlerts() in
+     nav.js and rendered by the header bell, which is where they now live once
+     rather than twice. */
 
   const occ = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const vac = DB.rooms.length - occ;
@@ -452,22 +434,21 @@ function renderDashboard() {
   const revDelta = _dashDelta(series.rev);
 
   return `
-  ${pendingCancels.length>0?`
-  <div class="dash-banner dh-red" style="margin-bottom:12px" onclick="navigate('cancellations')">
-    <span class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 0 0-1 1v1.06A8 8 0 0 0 4 12v5l-1.71 1.71A1 1 0 0 0 3 20.5h18a1 1 0 0 0 .71-1.79L20 17v-5a8 8 0 0 0-7-7.94V3a1 1 0 0 0-1-1Zm0 20a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Z"/></svg></span>
-    <div>
-      <div class="dash-banner__msg">${pendingCancels.length} Pending Cancellation${pendingCancels.length!==1?'s':''}</div>
-      ${/* Said "seats freed", and they are not. A pending cancellation is a
-            student who has given notice and is still sleeping in the bed,
-            still billed for it, until their vacate date — which is the rule
-            the Rooms page and the Cancellations page have both followed since
-            2026-08-30 (CLAUDE.md rule 9). This line was the last screen still
-            telling a warden the opposite, and acting on it means booking a bed
-            somebody is still in. */''}
-      <div style="font-size:11px;color:var(--text3);margin-top:1px">${pendingCancels.map(c=>escHtml(c.studentName)).join(', ')} — beds stay theirs until they leave${_nextVacate?' · first frees '+escHtml(fmtDate(_nextVacate)):''}</div>
-    </div>
-    <span class="dash-banner__go">View →</span>
-  </div>`:''}
+  ${''/* The pending-cancellations banner that stood here is gone, and so is the
+         `alertHtml` strip that was computed below it. Owner's call, 2026-08-31:
+         "dont show the banners for cancellations or others because it lowers
+         the other screen content".
+
+         Nothing is lost. `chromeAlerts()` in nav.js already builds the SAME set
+         — pending payments, open maintenance, unresolved complaints, pending
+         cancellations, low occupancy — and the header bell renders it with a
+         count. These banners were a second copy of that feed, sitting above the
+         KPI row and pushing every figure on the dashboard toward the fold. A
+         duplicate that costs the primary content its position is not a second
+         chance to be seen; it is a tax on the screen that matters.
+
+         `alertHtml` was already dead — computed on every render and never once
+         interpolated. It is deleted rather than left to look load-bearing. */}
 
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   <div class="dash-kpi-grid">
@@ -801,7 +782,7 @@ function renderDashboard() {
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:9px;font-weight:600" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
+      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:#fff;border:none;border-radius:10px;font-weight:700;letter-spacing:.2px" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
     </div>
   </div><!-- end row3+4 grid -->
 
@@ -899,7 +880,10 @@ function _dashRecentPayments(list, mo, collected) {
   const mayEdit = typeof canDo !== 'function' || canDo('payments');
   const rows = list.map(p => {
     const st     = DB.students.find(s => s.id === p.studentId);
-    const rent   = p.monthlyRent || p.totalRent || st?.rent || 0;
+    // The MONTHLY CHARGE, not the rent half of it. This column read
+    // `p.monthlyRent` alone, so a student on 8,000 rent + 6,500 mess showed
+    // "PKR 8,000" beside a PKR 14,500 payment and the mess was nowhere.
+    const ch     = paymentCharges(p, st);
     const unpaid = Number(p.unpaid != null ? p.unpaid : 0);
     const name   = String(p.studentName || '?');
     const menu =
@@ -916,7 +900,11 @@ function _dashRecentPayments(list, mo, collected) {
       + '<td><div class="dash-rp-who"><div class="dash-rp-av">' + escHtml((name.trim()[0] || '?').toUpperCase()) + '</div>'
         + '<span class="dash-rp-name">' + escHtml(name) + '</span></div></td>'
       + '<td><span class="dash-rp-room">#' + escHtml(String(p.roomNumber || '')) + '</span></td>'
-      + '<td><span class="dash-rp-num">' + (rent > 0 ? fmtPKR(rent) : '—') + '</span></td>'
+      + '<td><span class="dash-rp-num">' + (ch.monthly > 0 ? fmtPKR(ch.monthly) : '—') + '</span>'
+        + (ch.messIncluded
+            ? '<div class="dash-rp-sub">' + fmtPKR(ch.rent) + ' rent + ' + fmtPKR(ch.mess) + ' mess</div>'
+            : ch.hasMess ? '<div class="dash-rp-sub">rent only · mess off</div>' : '')
+      + '</td>'
       + '<td><span class="dash-rp-num">' + fmtPKR(p.amount) + '</span>'
         + _dashExtraLines(p).map(l =>
             '<div class="dash-rp-extra">+ ' + fmtPKR(l.amount) + ' ' + escHtml(l.label) + '</div>').join('')
@@ -955,7 +943,7 @@ function _dashRecentPayments(list, mo, collected) {
 
   return '<div class="dash-sec">' + head
     + '<div class="table-wrap dash-rp-wrap" style="border:none"><table class="dash-rp">'
-    + '<thead><tr><th>Student</th><th>Room</th><th>Room Rent</th><th>Paid (+Extras)</th>'
+    + '<thead><tr><th>Student</th><th>Room</th><th>Charge / mo</th><th>Paid (+Extras)</th>'
     + '<th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th></th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table></div>'
     + foot + '</div>';

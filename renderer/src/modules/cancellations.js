@@ -15,7 +15,7 @@
    the authority, and renderCancellations mirrors it into `status` below so the
    toolbar can re-render into the same view. */
 let cancelFilter = { status:'All', search:'', type:'All', room:'All', from:'', to:'',
-                     month:thisMonth(), page:1, pageSize:30, sortKey:null, sortDir:'asc' };
+                     month:thisMonth(), page:1, pageSize:30, sortKey:'room', sortDir:'asc' };
 
 /* ── WHICH MONTH A CANCELLATION BELONGS TO ───────────────────────────────────
    The month the student LEAVES, not the month the form was filled in. Here the
@@ -114,14 +114,13 @@ function renderCancellations(filterStatus='All') {
       .some(v => String(v||'').toLowerCase().includes(q));
   });
   filtered = applySort(filtered, cancelFilter, {
-    student: c=>c.studentName||'', room: c=>Number(c.roomNumber)||0, type: c=>c.roomType||'',
+    student: c=>c.studentName||'', room: { get: c=>c.roomNumber||'', cmp: cmpRoomNo }, type: c=>c.roomType||'',
     request: c=>c.requestDate||'', vacate: c=>c.vacateDate||'',
     status:  c=>c.status||'',      reason: c=>c.reason||''
   });
   const _pg = paginate(filtered, cancelFilter);
 
-  const roomNums = [...new Set(list.map(c=>String(c.roomNumber||'')).filter(Boolean))]
-                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const roomNums = [...new Set(list.map(c=>String(c.roomNumber||'')).filter(Boolean))].sort(cmpRoomNo);
   const types    = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
   const nActive  = [cancelFilter.type!=='All', cancelFilter.room!=='All',
                     !!cancelFilter.from, !!cancelFilter.to, !!q].filter(Boolean).length;
@@ -654,7 +653,7 @@ async function restoreFromCancellation(cancId) {
 // ════════════════════════════════════════════════════════════════════════════
 // Rooms v5 adds a grid/list view switch.
 let roomFilter = {status:'All', type:'All', floor:'All', search:'', view:'grid',
-                  page:1, sortKey:null, sortDir:'asc'};
+                  page:1, sortKey:'number', sortDir:'asc'};
 
 function downloadCancellationReport() {
   const list = DB.cancellations || [];
