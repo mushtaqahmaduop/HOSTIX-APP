@@ -257,6 +257,113 @@ function resolveCharges(student, opts) {
   };
 }
 
+/* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
+   Every screen that shows a student drew its own fallback when there is no
+   photo, and they had drifted: the students table used one initial, the
+   dashboard used two, the profile modal used something else again — so the same
+   student was "H", "HU" and "Habibullah" depending on which screen you were on.
+
+   The owner asked for one default across the app, supplied as a picture. It is
+   drawn here as a VECTOR glyph rather than embedding that file, for three
+   reasons worth writing down because they will come up again:
+
+     · The supplied PNG has the words "Student Photo" printed inside it. It is
+       a screenshot of a form field, not an asset, and every avatar in the app
+       would carry that caption.
+     · It is 81x92 raster. The avatar renders at 26-30px in tables and 96px on
+       the printed profile; one bitmap cannot serve both without blurring at one
+       end or bloating at the other.
+     · A glyph takes the theme with it. A baked PNG has one background colour
+       forever, and this app has a light mode.
+
+   Swap in a real image here the moment there is a clean one — every caller goes
+   through this function, which is the whole point of it existing.
+
+   `size` is the pixel box. The glyph scales with it; nothing else has to.     */
+function studentAvatar(student, size, extraClass) {
+  const s   = student || {};
+  const px  = Number(size) || 30;
+  const cls = 'stu-av' + (extraClass ? ' ' + extraClass : '');
+  const box = `width:${px}px;height:${px}px`;
+
+  // A real photograph always wins. It is the thing the fallback stands in for.
+  const photo = s.docs && s.docs.photo;
+  if (photo) {
+    return `<span class="${cls}" style="${box}"><img src="${escHtml(photo)}" alt="" ` +
+           `style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></span>`;
+  }
+  // Lucide's student glyph — the same set the rest of the chrome draws from.
+  const g = Math.round(px * 0.58);
+  return `<span class="${cls} is-empty" style="${box}" aria-label="No photo">` +
+         `<svg viewBox="0 0 24 24" width="${g}" height="${g}" fill="none" stroke="currentColor" ` +
+         `stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+         `<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>` +
+         `<path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg></span>`;
+}
+
+/* ── WHAT A PAYMENT RECORD SAYS THE MONTH COST ────────────────────────────────
+   resolveCharges() above answers "what does this student owe per month",
+   from settings. This answers "what did THIS RECORD bill" — from the record's
+   own fields, because a record is a historical fact and settings have moved
+   since it was written.
+
+   THE BUG THIS EXISTS TO CLOSE. A record stores the two halves separately:
+   `monthlyRent` is the rent ALONE, and `messCharge` + `messIncluded` sit beside
+   it (see repairPaymentComposition in payments.js, which spent a whole boot
+   pass getting that split right). Every screen that quoted a monthly figure
+   then quoted `monthlyRent` on its own — `p.monthlyRent || p.totalRent ||
+   t.rent`, copied into five files.
+
+   So a student on 8,000 rent and 6,500 mess, with the mess ticked in Settings
+   AND on the form, read:
+
+       Room Rent   PKR 8,000
+       Paid        PKR 14,500
+
+   and the 6,500 that explains the difference appeared nowhere on the screen.
+   Nothing was mis-billed — `amount` and `unpaid` were always right — but every
+   screen described the month wrongly, which is indistinguishable from a
+   collection error to the person reading it.
+
+   One reader now, so a screen cannot quote half a charge by accident. It falls
+   back to the student's current charges only when the record predates the
+   split and carries nothing of its own.                                     */
+function paymentCharges(p, student) {
+  const num = v => Number(v || 0);
+  const rec = p || {};
+
+  const rent = num(rec.monthlyRent) || num(rec.totalRent) ||
+               (student ? num(resolveCharges(student).rent) : 0);
+
+  // `messIncluded` is a tri-state in the data: true, false, or absent on
+  // records written before the flag existed. Absent-with-an-amount means the
+  // mess WAS billed — that is what those records meant — so only an explicit
+  // false turns it off. Same convention as repairPaymentComposition().
+  const mess        = num(rec.messCharge);
+  const messIncluded = mess > 0 && rec.messIncluded !== false;
+
+  return {
+    rent,
+    mess,
+    messIncluded,
+    /** The monthly charge — the figure a warden means by "how much per month". */
+    monthly: rent + (messIncluded ? mess : 0),
+    /** True when this record has a mess line at all, billed or not. */
+    hasMess: mess > 0,
+  };
+}
+
+/* The badge a row shows for what a month covers. Four states, and they are
+   genuinely four: a hostel that serves no food never sets a mess charge, which
+   is not the same fact as a student who has been taken off it. */
+function chargeCoverage(c) {
+  if (c.rent > 0 && c.messIncluded) return { key: 'both',     label: 'Rent + Mess', hue: 'dh-green' };
+  if (c.rent > 0 && c.hasMess)      return { key: 'rent',     label: 'Rent only',   hue: 'dh-amber' };
+  if (c.rent > 0)                   return { key: 'rentonly', label: 'Rent',        hue: 'dh-slate' };
+  if (c.messIncluded)               return { key: 'mess',     label: 'Mess only',   hue: 'dh-blue'  };
+  return { key: 'none', label: 'Not set', hue: 'dh-slate' };
+}
+
 /* One-line summary for the info strips: "PKR 16,000 rent + PKR 2,000 mess".
    Kept next to the resolver so the phrasing cannot drift between screens. */
 function chargesBreakdown(c) {
@@ -350,6 +457,102 @@ function printHeader(hostelName, title, subtitle) {
   return `<div class="header"><div><div class="title">${escHtml(hostelName)}</div>` +
     (subtitle ? `<div class="subtitle">${title} · ${subtitle}</div>` : `<div class="subtitle">${title}</div>`) +
     `</div></div>`;
+}
+
+/* ── ONE BUILDER FOR THE APP'S TABULAR PRINT DOCUMENTS ────────────────────────
+   Students, Payments and Expenses all needed an Export PDF, and three separate
+   implementations of "a header, some totals and a table" is how the printed
+   documents in this app drifted apart the first time. This is the shape they
+   share; each caller supplies what is actually different — its columns, its
+   rows, and what it counts.
+
+   `groups` is what earns this being one function rather than a snippet. The
+   expenses export prints one category or every category, and "every category"
+   is not one table with a category column — it is a table per category, each
+   with its own subtotal, and a grand total under them. Students and Payments
+   pass a single unlabelled group and get a plain table.
+
+   Every column takes `get(row)` returning READY-TO-RENDER HTML or text. Escaping
+   is the caller's job, because half these columns are money and badges the
+   caller has already formatted and the other half are names typed by a warden.
+
+   opts:
+     title      document title, under the hostel name
+     subtitle   the scope in words — which month, which filter, how many rows
+     kpis       [{label, value, cls}] for printKpiGrid
+     columns    [{label, get, cls, align}]
+     groups     [{label, meta, rows, total}]  — label/meta/total optional
+     note       a closing line above the footer                            */
+function printListDocument(opts) {
+  const o        = opts || {};
+  const hostel   = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel';
+  const columns  = o.columns || [];
+  const groups   = o.groups  || [];
+  const rowCount = groups.reduce((n, g) => n + ((g.rows || []).length), 0);
+
+  const head = '<tr>' + columns.map(c =>
+    `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${escHtml(c.label)}</th>`).join('') + '</tr>';
+
+  const table = g => {
+    const rows = (g.rows || []).map(r => '<tr>' + columns.map(c =>
+      `<td${c.align ? ` style="text-align:${c.align}"` : ''}${c.cls ? ` class="${c.cls}"` : ''}>${c.get(r)}</td>`
+    ).join('') + '</tr>').join('');
+    // A subtotal row belongs INSIDE its table, not floating under it — on a
+    // page break the total must not end up on a different sheet from the rows
+    // it totals.
+    const foot = g.total
+      ? `<tr class="subtotal"><td colspan="${columns.length - 1}">${escHtml(g.total.label || 'Subtotal')}</td>` +
+        `<td style="text-align:right">${g.total.value}</td></tr>`
+      : '';
+    return `<table><thead>${head}</thead><tbody>${rows}${foot}</tbody></table>`;
+  };
+
+  const body = groups.map(g => {
+    if (!g.label) return table(g);
+    return `<div class="group">
+      <div class="group__head"><span class="group__t">${escHtml(g.label)}</span>` +
+      (g.meta ? `<span class="group__m">${g.meta}</span>` : '') + `</div>${table(g)}</div>`;
+  }).join('');
+
+  const empty = `<div class="empty">Nothing to print — the current filter matches no records.</div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>${escHtml(o.title || 'Report')} — ${escHtml(hostel)}</title>
+  ${printDocStyles()}
+  <style>
+    .group { margin-bottom: 18px; page-break-inside: avoid; }
+    .group__head { display:flex; align-items:baseline; justify-content:space-between;
+                   padding: 0 0 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 8px; }
+    .group__t { font-size: 13px; font-weight: 800; }
+    .group__m { font-size: 10.5px; color: #64748b; }
+    tr.subtotal td { border-top: 1px solid #cbd5e1; font-weight: 800; background: #f8fafc; }
+    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
+    .grand { display:flex; align-items:center; justify-content:space-between;
+             margin-top: 6px; padding: 12px 16px; border-radius: 12px;
+             background: #f1f5f9; border: 1px solid #e2e8f0; }
+    .grand__l { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: 700; }
+    .grand__v { font-size: 18px; font-weight: 900; }
+    .sub { display:block; font-size: 9.5px; color: #64748b; font-weight: 600; margin-top: 1px; }
+    /* Long tables repeat their header on every sheet — a warden reading page 3
+       of a roster otherwise has to flip back to find out what column four is. */
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+  </style></head><body>
+  ${printHeader(hostel, o.title || 'Report', o.subtitle || '')}
+  ${o.kpis && o.kpis.length ? printKpiGrid(o.kpis) : ''}
+  ${rowCount ? body : empty}
+  ${o.grand ? `<div class="grand"><span class="grand__l">${escHtml(o.grand.label)}</span><span class="grand__v">${o.grand.value}</span></div>` : ''}
+  <div class="footer">${escHtml(hostel)} · ${rowCount} record${rowCount === 1 ? '' : 's'} · Generated ${new Date().toLocaleString('en-PK')}${o.note ? ' · ' + escHtml(o.note) : ''}</div>
+  </body></html>`;
+}
+
+/* The filename these documents get. One rule, so a folder of them sorts by
+   hostel then by what they are then by date, instead of three conventions. */
+function printFileName(what, scope) {
+  const hostel = ((typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel')
+    .replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '');
+  const bit = scope ? '_' + String(scope).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '') : '';
+  return hostel + '_' + what + bit + '_' + today() + '.pdf';
 }
 
 // BUG FIX: new Date('YYYY-MM-DD') parses as UTC midnight → wrong day in PKT (UTC+5)
@@ -449,10 +652,16 @@ function gotoPage(filter, pageName, page) {
 // ── Sorting ──────────────────────────────────────────────────────────────────────
 // Sort a filtered array by filter.sortKey / filter.sortDir using a map of
 // key → accessor(row). Returns a NEW array (or the same array if no active sort).
+/* An accessor may be a plain getter, or `{ get, cmp }` when the column needs a
+   comparator of its own. Room numbers need one: `Number('A 01')` is NaN and a
+   plain string compare puts "10" before "2", so both of the obvious readings
+   are wrong for the one column every list in this app is now ordered by. */
 function applySort(arr, filter, accessors) {
   const key = filter && filter.sortKey;
   if (!key || !accessors || !accessors[key]) return arr;
-  const acc = accessors[key];
+  const spec = accessors[key];
+  const acc  = typeof spec === 'function' ? spec : spec.get;
+  const cmp  = typeof spec === 'function' ? null : spec.cmp;
   const dir = filter.sortDir === 'desc' ? -1 : 1;
   return arr.slice().sort(function (a, b) {
     let va = acc(a), vb = acc(b);
@@ -461,6 +670,7 @@ function applySort(arr, filter, accessors) {
     if (na && nb) return 0;
     if (na) return 1;   // blanks always sink to the bottom
     if (nb) return -1;
+    if (cmp) return cmp(va, vb) * dir;
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
     return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dir;
   });

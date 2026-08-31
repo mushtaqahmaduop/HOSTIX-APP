@@ -333,25 +333,24 @@ function renderStudents() {
           <th>CNIC</th>
           ${th('course','Course')}
           <th>Nationality</th>
+          <th>Rent + Mess / mo</th>
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="10"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
           const picked= stuSelected.has(t.id);
           const nm    = String(t.name||'?');
-          const ini   = nm.trim().split(/\s+/).slice(0,1).map(w=>w[0]||'').join('').toUpperCase()||'?';
-          const photo = t.docs && t.docs.photo;
           const status= t.status||'Active';
           return `<tr class="${picked?'is-picked dh-blue':''}">
             <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')"></td>
             <td><span class="stu-id">#${escHtml(t.id)}</span></td>
             <td onclick="showViewStudentModal('${t.id}')" style="cursor:pointer" title="Open full profile">
               <div class="stu-who">
-                <div class="stu-who__av ${stuAvatarHue(nm)}">${photo?`<img src="${escHtml(photo)}" alt="">`:escHtml(ini)}</div>
+                ${studentAvatar(t, 32, stuAvatarHue(nm))}
                 <div style="min-width:0">
                   <div class="stu-who__name">${escHtml(nm)}</div>
                   ${t.fatherName?`<div class="stu-who__sub">${escHtml(t.fatherName)}</div>`:''}
@@ -368,7 +367,13 @@ function renderStudents() {
             </td>
             <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
-            <td>${t.nationality?escHtml(t.nationality):'<span class="stu-dash">—</span>'}</td>
+            <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
+              return `<td>
+                <div class="stu-charge">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
+                <div class="stu-charge__sub">${c.messOptIn&&c.mess>0?'+ '+fmtPKR(c.mess)+' mess':c.mess>0?'Mess not included':'Rent only'}</div>
+                <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
+              </td>`;})()}
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
             <td>
               <div class="stu-acts">
@@ -1063,7 +1068,6 @@ function showViewStudentModal(id) {
     + payHistory.filter(p=>p.status==='Pending'&&Number(p.amount)>0&&p.unpaid!=null&&Number(p.unpaid)>0).reduce((s,p)=>s+Number(p.amount),0);
   // Due = only actual unpaid remainder
   const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-  const av=t.name?t.name[0].toUpperCase():'?';
   const paidCount=payHistory.filter(p=>p.status==='Paid').length;
   // Admission fee is stored on the payment that collected it, under either key
   // depending on the app version that wrote the row.
@@ -1083,9 +1087,7 @@ function showViewStudentModal(id) {
 
       <!-- PROFILE HEADER -->
       <div class="svw-hero">
-        <div class="svw-hero__av">
-          ${t.docs?.photo ? `<img src="${t.docs.photo}" alt="">` : escHtml(av)}
-        </div>
+        ${studentAvatar(t, 76, 'svw-hero__av')}
         <div class="svw-hero__id">
           <div class="svw-hero__name">${escHtml(t.name)}</div>
           <div class="svw-hero__no">#${escHtml(t.id)}</div>
@@ -1449,98 +1451,213 @@ async function quickCancelStudent(studentId) {
   if(currentPage==='dashboard') renderPage('dashboard');
 }
 
+/* The printed resident record. Owner reference: `student profile.png` (26 Aug).
+
+   This is the document a warden hands to a parent, files, or takes to the bank,
+   so it is laid out as a form rather than as a screen: a hero that identifies
+   the resident and states what they pay, four figures that answer the questions
+   asked about a resident, two panels of facts, and the full payment history.
+
+   Two things it states that the old card did not, and both were the reported
+   bug rather than decoration:
+
+     · MONTHLY CHARGE, not monthly rent. resolveCharges() gives rent and mess
+       separately and the old card printed the rent alone, so a resident on
+       8,000 + 6,500 received a document saying 8,000 above a payment history
+       full of 14,500s.
+     · What the charge COVERS, in words. "Rent + mess" and "rent only, mess not
+       included" are different agreements with a family, and a printed record
+       that does not say which is not a record of the agreement. */
 function printStudentCard(id) {
-  const t=DB.students.find(x=>x.id===id); if(!t) return;
-  const room=DB.rooms.find(r=>r.id===t.roomId);
-  const rtype=room?DB.settings.roomTypes.find(x=>x.id===room.typeId):null;
-  const payHistory=DB.payments.filter(p=>p.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const totalPaid=payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0);
-  const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const _cardHtml = `<!DOCTYPE html><html><head><title>Student Profile — ${escHtml(t.name)}</title>
+  const t = DB.students.find(x => x.id === id); if (!t) return;
+  const room  = DB.rooms.find(r => r.id === t.roomId);
+  const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
+  const ch    = resolveCharges(t);
+
+  const payHistory = DB.payments.filter(p => p.studentId === id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const paidRecords = payHistory.filter(p => p.status === 'Paid');
+  const totalPaid = paidRecords.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalDue  = payHistory.filter(p => p.status === 'Pending')
+    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount || 0)), 0);
+  const admission = payHistory.reduce((s, p) => s + Number(p.admissionFee || p.fee || 0), 0);
+
+  const hostel = DB.settings.hostelName || 'Hostel';
+  const fact = (k, v) => `<div class="fact"><span class="fact__k">${escHtml(k)}</span>` +
+    `<span class="fact__v${(v === null || v === undefined || v === '') ? ' is-empty' : ''}">` +
+    `${(v === null || v === undefined || v === '') ? '—' : escHtml(String(v))}</span></div>`;
+
+  const coverage = ch.messOptIn && ch.mess > 0
+    ? `Rent + mess · ${fmtPKR(ch.rent)} + ${fmtPKR(ch.mess)}`
+    : ch.mess > 0 ? 'Rent only · mess not included' : 'Rent only';
+
+  const _cardHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Resident Record — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #7c3aed;margin-bottom:24px}
-    .hostel-name{font-size:22px;font-weight:800;color:#1a1a2e}
-    .hostel-sub{font-size:12px;color:#666;margin-top:3px}
-    .report-badge{background:#7c3aed22;border:1px solid #7c3aed55;color:#6d28d9;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700}
-    .profile-hero{background:linear-gradient(135deg,#0d1b2a,#1a2d4a);border-radius:12px;padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;color:#fff}
-    .avatar{width:64px;height:64px;border-radius:14px;background:#7c3aed33;border:2px solid #7c3aed88;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#7c3aed;flex-shrink:0}
-    .badges{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-    .badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
-    .badge-green{background:#dcfce7;color:#166534}
-    .badge-blue{background:#dbeafe;color:#1e40af}
-    .badge-gold{background:#fef9c3;color:#5b21b6}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:16px}
-    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .info-item label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:2px}
-    .info-item .val{font-size:13px;font-weight:600;color:#1e293b}
-    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-    .stat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
-    .stat-box .lbl{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
-    .stat-box .val{font-size:18px;font-weight:800;color:#1e293b}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700}
-    td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:12.5px}
+    .doc-head{display:flex;align-items:center;justify-content:space-between;
+              padding-bottom:14px;border-bottom:3px solid #2563eb;margin-bottom:18px}
+    .doc-head__t{font-size:20px;font-weight:800;color:#1e3a8a}
+    .doc-head__s{font-size:11px;color:#64748b;margin-top:2px}
+    .doc-head__d{font-size:11px;color:#64748b}
+
+    .hero{display:flex;align-items:center;gap:18px;background:#eff6ff;border:1px solid #dbeafe;
+          border-radius:14px;padding:18px 20px;margin-bottom:14px}
+    .hero__av{width:84px;height:84px;border-radius:50%;flex-shrink:0;overflow:hidden;
+              background:#fff;border:3px solid #bfdbfe;display:flex;align-items:center;justify-content:center;color:#60a5fa}
+    .hero__av img{width:100%;height:100%;object-fit:cover}
+    .hero__id{flex:1;min-width:0}
+    .hero__name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#1e3a8a}
+    .hero__no{font-size:12px;color:#64748b;margin-top:1px}
+    .chips{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+    .chip{padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid}
+    .chip--ok{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+    .chip--room{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
+    .chip--plain{background:#fff;color:#475569;border-color:#e2e8f0}
+    /* The charge panel. The figure a family asks about goes in the one block
+       of solid colour on the page. */
+    .rent{background:#1d4ed8;color:#fff;border-radius:12px;padding:16px 22px;text-align:center;min-width:230px}
+    .rent__l{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;opacity:.85}
+    .rent__v{font-size:27px;font-weight:900;margin:5px 0;letter-spacing:-.02em}
+    .rent__s{font-size:10.5px;opacity:.9;border-top:1px solid rgba(255,255,255,.28);padding-top:7px}
+
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}
+    .stat{border:1px solid #e2e8f0;border-radius:12px;padding:13px 15px}
+    .stat__l{font-size:9.5px;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;font-weight:700}
+    .stat__v{font-size:19px;font-weight:800;margin-top:4px}
+    .is-paid{color:#16a34a}.is-due{color:#dc2626}
+
+    .panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+    .panel{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
+    .panel__t{font-size:12.5px;font-weight:800;color:#1d4ed8;padding-bottom:8px;
+              border-bottom:2px solid #dbeafe;margin-bottom:10px}
+    .fact{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+    .fact:last-child{border-bottom:none}
+    .fact__k{font-size:11.5px;color:#64748b}
+    .fact__v{font-size:11.5px;font-weight:700;text-align:right}
+    .fact__v.is-empty{color:#cbd5e1;font-weight:500}
+
+    .hist{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+    .hist__head{display:flex;align-items:baseline;justify-content:space-between;
+                padding:13px 18px;border-bottom:1px solid #e2e8f0}
+    .hist__t{font-size:12.5px;font-weight:800;color:#1d4ed8}
+    .hist__m{font-size:11.5px;color:#64748b}
+    table{width:100%;border-collapse:collapse;font-size:11.5px}
+    th{background:#f8fafc;padding:9px 14px;text-align:left;font-size:9.5px;text-transform:uppercase;
+       letter-spacing:.6px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
+    td{padding:9px 14px;border-bottom:1px solid #f8fafc}
     tr:last-child td{border-bottom:none}
-    .paid{color:#16a34a;font-weight:700}
-    .overdue{color:#dc2626;font-weight:700}
-    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
-    @media print{body{padding:16px}}
+    .sub{display:block;font-size:9.5px;color:#64748b;font-weight:600;margin-top:1px}
+    .none{padding:26px;text-align:center;color:#94a3b8}
+
+    /* Signed by a person, so there has to be somewhere to sign. */
+    .foot{margin-top:22px;padding-top:14px;border-top:1px solid #e2e8f0;
+          display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:end;font-size:10.5px;color:#64748b}
+    .foot__mid{text-align:center}
+    .sig{margin-top:26px;border-top:1px dashed #94a3b8;padding-top:5px;font-weight:700;color:#475569}
+    .foot__r{text-align:right}
+    @media print{body{padding:14px} .hist,.panel,.stat{page-break-inside:avoid}}
   </style></head><body>
-  <div class="header">
-    <div><div class="hostel-name">${escHtml(t.name)}</div><div class="hostel-sub">${escHtml(DB.settings.hostelName)} · ${escHtml(DB.settings.location||'')}</div></div>
-    <div class="report-badge">Student Profile Report</div>
+
+  <div class="doc-head">
+    <div><div class="doc-head__t">${escHtml(hostel)}</div>
+         <div class="doc-head__s">Resident Record</div></div>
+    <div class="doc-head__d">${escHtml(fmtDate(today()))}</div>
   </div>
-  <div class="profile-hero">
-    <div class="avatar">${escHtml(t.name[0].toUpperCase())}</div>
-    <div>
-      <div style="font-size:20px;font-weight:800">${escHtml(t.name)}</div>
-      <div style="font-size:12px;opacity:0.6;font-family:monospace;margin-top:2px">#${t.id}</div>
-      <div class="badges">
-        <span class="badge badge-${t.status==='Active'?'green':'blue'}">${t.status}</span>
-        ${room?`<span class="badge badge-gold">Room #${room.number} · ${rtype?.name||''}</span>`:''}
+
+  <div class="hero">
+    <div class="hero__av">${t.docs && t.docs.photo
+      ? `<img src="${escHtml(t.docs.photo)}" alt="">`
+      : `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>`}</div>
+    <div class="hero__id">
+      <div class="hero__name">${escHtml(t.name)}</div>
+      <div class="hero__no">#${escHtml(String(t.id))}</div>
+      <div class="chips">
+        <span class="chip ${t.status === 'Active' ? 'chip--ok' : 'chip--plain'}">${escHtml(t.status || 'Active')}</span>
+        ${room ? `<span class="chip chip--room">Room #${escHtml(String(room.number))} · ${escHtml(rtype ? rtype.name : '')}</span>` : ''}
+        ${t.paymentMethod ? `<span class="chip chip--plain">${escHtml(t.paymentMethod)}</span>` : ''}
       </div>
     </div>
-  </div>
-  <div class="stats-row">
-    <div class="stat-box"><div class="lbl">Total Paid</div><div class="val" style="color:#16a34a;font-size:15px">${fmtPKR(totalPaid)}</div></div>
-    <div class="stat-box"><div class="lbl">Outstanding</div><div class="val" style="color:${totalDue>0?'#dc2626':'#16a34a'};font-size:15px">${fmtPKR(totalDue)}</div></div>
-    <div class="stat-box"><div class="lbl">Amt. Paid (Adm.)</div><div class="val" style="font-size:15px">${fmtPKR(t.deposit||0)}</div></div>
-    <div class="stat-box"><div class="lbl">Payments</div><div class="val">${payHistory.filter(p=>p.status==='Paid').length}</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
-    <div class="section">
-      <div class="section-title">${icon('student','sm')} Personal Information</div>
-      <div class="info-grid">
-        ${[['Father/Guardian',t.fatherName],['CNIC / ID',t.cnic],['Nationality',t.nationality],['Phone Number',t.phone],['Email',t.email],['Home Address',t.address],['Emergency Contact',t.emergencyContact],['Join Date',fmtDate(t.joinDate)]].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${escHtml(v||'—')}</div></div>`).join('')}
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">🏠 Room & Accommodation</div>
-      <div class="info-grid">
-        ${room?[['Room Number','#'+room.number],['Room Type',rtype?.name||'—'],['Floor',room.floor||'—'],['Capacity',rtype?.capacity+' beds'||'—'],['Amenities',(room.amenities||[]).join(', ')||'—']].map(([k,v])=>`<div class="info-item"><label>${k}</label><div class="val">${v}</div></div>`).join(''):'<p style="color:#94a3b8">No room assigned</p>'}
-      </div>
+    <div class="rent">
+      <div class="rent__l">Monthly Charge</div>
+      <div class="rent__v">${ch.configured ? fmtPKR(ch.total) : '—'}</div>
+      <div class="rent__s">${escHtml(coverage)}</div>
     </div>
   </div>
-  <div class="section">
-    <div class="section-title">💳 Payment History</div>
-    ${payHistory.length?`<table><thead><tr><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Notes</th></tr></thead><tbody>
-    ${payHistory.map(p=>{
-      const _admF=Number(p.admissionFee||p.fee||0);
-      const _extras=(p.extraCharges||[]);
-      const _conc=Number(p.concession||p.discount||0);
-      const _extraHTML=_admF>0?`<div style='font-size:10px;color:#1e40af'>🎓 +${fmtPKR(_admF)} adm.</div>`:'';
-      const _xHTML=_extras.map(x=>`<div style='font-size:10px;color:#b45309'>+${fmtPKR(x.amount)} ${escHtml(x.label||'')}</div>`).join('');
-      const _concHTML=_conc>0?`<div style='font-size:10px;color:#dc2626'>−${fmtPKR(_conc)} concession</div>`:'';
-      return `<tr><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${fmtPKR(p.amount)}${_extraHTML}${_xHTML}${_concHTML}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'paid':'overdue'}">${escHtml(p.status)}</td><td>${fmtDate(p.date)||'—'}</td><td style="color:#94a3b8">${escHtml(p.notes||'—')}</td></tr>`;
-    }).join('')}
-    </tbody></table>`:'<p style="color:#94a3b8;text-align:center;padding:12px">No payment records</p>'}
+
+  <div class="stats">
+    <div class="stat"><div class="stat__l">Total Paid</div><div class="stat__v is-paid">${fmtPKR(totalPaid)}</div></div>
+    <div class="stat"><div class="stat__l">Outstanding</div><div class="stat__v ${totalDue > 0 ? 'is-due' : 'is-paid'}">${fmtPKR(totalDue)}</div></div>
+    <div class="stat"><div class="stat__l">Join Date</div><div class="stat__v" style="font-size:15px">${escHtml(fmtDate(t.joinDate))}</div></div>
+    <div class="stat"><div class="stat__l">Payments Made</div><div class="stat__v">${paidRecords.length}</div></div>
   </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} Management System · ${escHtml(DB.settings.location||'')}</div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel__t">Personal Information</div>
+      ${fact('Father / Guardian', t.fatherName)}
+      ${fact('Occupation / Course', t.occupation || t.course)}
+      ${fact('CNIC / ID', t.cnic)}
+      ${fact('Nationality', t.nationality)}
+      ${fact('Phone Number', t.phone)}
+      ${fact('Email Address', t.email)}
+      ${fact('Emergency Contact', t.emergencyPhone || t.emergencyContact)}
+      ${fact('Home Address', t.address)}
+    </div>
+    <div class="panel">
+      <div class="panel__t">Room &amp; Accommodation</div>
+      ${fact('Room Number', room ? '#' + room.number : '')}
+      ${fact('Room Type', rtype ? rtype.name : '')}
+      ${fact('Floor', room ? room.floor : '')}
+      ${fact('Capacity', rtype ? rtype.capacity + ' bed' + (rtype.capacity === 1 ? '' : 's') : '')}
+      ${fact('Room Rent', ch.configured ? fmtPKR(ch.rent) : '')}
+      ${fact('Mess Charge', ch.mess > 0 ? fmtPKR(ch.mess) + (ch.messOptIn ? '' : ' (not billed)') : 'Not applicable')}
+      ${fact('Amenities', (room && (room.amenities || []).join(', ')) || '')}
+      ${fact('Room Notes', room ? room.notes : '')}
+    </div>
+  </div>
+
+  <div class="hist">
+    <div class="hist__head">
+      <span class="hist__t">Full Payment History (${payHistory.length} record${payHistory.length === 1 ? '' : 's'})</span>
+      <span class="hist__m">Total paid: <b style="color:#1d4ed8">${fmtPKR(totalPaid)}</b>${admission > 0 ? ` · Admission: ${fmtPKR(admission)}` : ''}</span>
+    </div>
+    ${payHistory.length ? `<table><thead><tr>
+      <th>Month</th><th>Charge / mo</th><th>Concession</th><th>Paid (+extras)</th>
+      <th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th>
+    </tr></thead><tbody>${payHistory.map(p => {
+      const c    = paymentCharges(p, t);
+      const conc = Number(p.concession != null ? p.concession : p.discount || 0);
+      const adm  = Number(p.admissionFee || p.fee || 0);
+      const extras = (p.extraCharges || []).filter(x => Number(x.amount) > 0);
+      const unpaid = Number(p.unpaid || 0);
+      return `<tr>
+        <td><b>${escHtml(p.month || '—')}</b></td>
+        <td>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}${c.messIncluded
+              ? `<span class="sub">${fmtPKR(c.rent)} + ${fmtPKR(c.mess)} mess</span>`
+              : c.hasMess ? '<span class="sub">mess not billed</span>' : ''}</td>
+        <td>${conc > 0 ? '−' + fmtPKR(conc) : '—'}</td>
+        <td><b class="is-paid">${fmtPKR(p.amount)}</b>${adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : ''}${
+          extras.map(x => `<span class="sub">+ ${fmtPKR(x.amount)} ${escHtml(x.description || x.desc || x.label || 'extra')}</span>`).join('')}</td>
+        <td>${unpaid > 0 ? `<b class="is-due">${fmtPKR(unpaid)}</b>` : '—'}</td>
+        <td>${escHtml(p.method || '—')}</td>
+        <td>${escHtml(p.status || '—')}</td>
+        <td>${escHtml(fmtDate(p.date))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`
+    : '<div class="none">No payment records for this resident yet.</div>'}
+  </div>
+
+  <div class="foot">
+    <div><b style="color:#1e3a8a">${escHtml(hostel)}</b>${DB.settings.location ? `<br>${escHtml(DB.settings.location)}` : ''}</div>
+    <div class="foot__mid">This is a computer generated document.<div class="sig">Authorised By</div></div>
+    <div class="foot__r">Generated ${new Date().toLocaleString('en-PK')}</div>
+  </div>
   </body></html>`;
-  var _cardName = 'Student_' + (t.name||'Profile').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + today() + '.pdf';
+
+  const _cardName = printFileName('Resident-' +
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), '');
   _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {

@@ -133,8 +133,13 @@ test('annual archive: live + archived data, period scoping, sections, drill-down
   expect(y26['Cancellations']).toBe('1');
 
   // The year view lists every month and its own total row adds up.
+  //
+  // Scoped to the FIRST .arc-table on purpose. The overview grew a
+  // year-over-year table below the month table on 2026-08-31, and an
+  // unscoped `.arc-table tbody tr` counted both — 13 rows became 20. The
+  // assertion below is about the month table, so the selector has to be too.
   const monthTable = await win.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll('.arc-table tbody tr'));
+    const rows = Array.from(document.querySelectorAll('.arc-table')[0].querySelectorAll('tbody tr'));
     const last = rows[rows.length - 1];
     return {
       rowCount: rows.length,

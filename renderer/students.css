@@ -470,3 +470,36 @@
     .svw-split      { grid-template-columns:1fr; }
     .svw-hero__rent { margin-left:0; text-align:left; }
 }
+
+/* The one student avatar — see studentAvatar() in utils.js. Sized by the
+   caller via an inline width/height, so one rule serves a 26px table cell and
+   a 96px printed profile. */
+.stu-av {
+    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    border-radius:50%; overflow:hidden; background:var(--bg3); color:var(--text3);
+}
+.stu-av.is-empty { border:1px solid var(--border); }
+
+/* Rent + Mess / mo — the reference design's column. The total is the figure;
+   the line under it says what it is made of, and the badge says what the month
+   COVERS. Three levels because a warden asks three different questions of this
+   cell: how much, made of what, and does it include food. */
+.stu-charge      { font-size:12.5px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stu-charge__sub { font-size:10.5px; font-weight:600; color:var(--text3); margin-top:1px; white-space:nowrap; }
+.stu-cov {
+    display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px;
+    font-size:9.5px; font-weight:800; letter-spacing:.3px; text-transform:uppercase;
+    background:var(--dh-bg); color:var(--dh); white-space:nowrap;
+}
+/* Nationality is a category, so it reads as a neutral chip rather than as
+   plain text competing with the name beside it. */
+.stu-nat {
+    display:inline-block; padding:3px 9px; border-radius:8px;
+    background:var(--bg3); border:1px solid var(--border);
+    font-size:11.5px; font-weight:600; color:var(--text2); white-space:nowrap;
+}
+
+/* The profile hero keeps its accent ground. `.stu-av` is appended after
+   `.svw-hero__av` in this file, and both are single-class selectors, so source
+   order would otherwise hand the hero the muted table-cell palette. */
+.stu-av.svw-hero__av { background:var(--accent); color:#fff; border:none; }

@@ -248,6 +248,50 @@ function resolveCharges(student, opts) {
   };
 }
 
+/* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
+   Every screen that shows a student drew its own fallback when there is no
+   photo, and they had drifted: the students table used one initial, the
+   dashboard used two, the profile modal used something else again — so the same
+   student was "H", "HU" and "Habibullah" depending on which screen you were on.
+
+   The owner asked for one default across the app, supplied as a picture. It is
+   drawn here as a VECTOR glyph rather than embedding that file, for three
+   reasons worth writing down because they will come up again:
+
+     · The supplied PNG has the words "Student Photo" printed inside it. It is
+       a screenshot of a form field, not an asset, and every avatar in the app
+       would carry that caption.
+     · It is 81x92 raster. The avatar renders at 26-30px in tables and 96px on
+       the printed profile; one bitmap cannot serve both without blurring at one
+       end or bloating at the other.
+     · A glyph takes the theme with it. A baked PNG has one background colour
+       forever, and this app has a light mode.
+
+   Swap in a real image here the moment there is a clean one — every caller goes
+   through this function, which is the whole point of it existing.
+
+   `size` is the pixel box. The glyph scales with it; nothing else has to.     */
+function studentAvatar(student, size, extraClass) {
+  const s   = student || {};
+  const px  = Number(size) || 30;
+  const cls = 'stu-av' + (extraClass ? ' ' + extraClass : '');
+  const box = `width:${px}px;height:${px}px`;
+
+  // A real photograph always wins. It is the thing the fallback stands in for.
+  const photo = s.docs && s.docs.photo;
+  if (photo) {
+    return `<span class="${cls}" style="${box}"><img src="${escHtml(photo)}" alt="" ` +
+           `style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></span>`;
+  }
+  // Lucide's student glyph — the same set the rest of the chrome draws from.
+  const g = Math.round(px * 0.58);
+  return `<span class="${cls} is-empty" style="${box}" aria-label="No photo">` +
+         `<svg viewBox="0 0 24 24" width="${g}" height="${g}" fill="none" stroke="currentColor" ` +
+         `stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+         `<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>` +
+         `<path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg></span>`;
+}
+
 /* ── WHAT A PAYMENT RECORD SAYS THE MONTH COST ────────────────────────────────
    resolveCharges() above answers "what does this student owe per month",
    from settings. This answers "what did THIS RECORD bill" — from the record's
