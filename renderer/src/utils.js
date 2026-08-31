@@ -406,6 +406,102 @@ function printHeader(hostelName, title, subtitle) {
     `</div></div>`;
 }
 
+/* ── ONE BUILDER FOR THE APP'S TABULAR PRINT DOCUMENTS ────────────────────────
+   Students, Payments and Expenses all needed an Export PDF, and three separate
+   implementations of "a header, some totals and a table" is how the printed
+   documents in this app drifted apart the first time. This is the shape they
+   share; each caller supplies what is actually different — its columns, its
+   rows, and what it counts.
+
+   `groups` is what earns this being one function rather than a snippet. The
+   expenses export prints one category or every category, and "every category"
+   is not one table with a category column — it is a table per category, each
+   with its own subtotal, and a grand total under them. Students and Payments
+   pass a single unlabelled group and get a plain table.
+
+   Every column takes `get(row)` returning READY-TO-RENDER HTML or text. Escaping
+   is the caller's job, because half these columns are money and badges the
+   caller has already formatted and the other half are names typed by a warden.
+
+   opts:
+     title      document title, under the hostel name
+     subtitle   the scope in words — which month, which filter, how many rows
+     kpis       [{label, value, cls}] for printKpiGrid
+     columns    [{label, get, cls, align}]
+     groups     [{label, meta, rows, total}]  — label/meta/total optional
+     note       a closing line above the footer                            */
+function printListDocument(opts) {
+  const o        = opts || {};
+  const hostel   = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel';
+  const columns  = o.columns || [];
+  const groups   = o.groups  || [];
+  const rowCount = groups.reduce((n, g) => n + ((g.rows || []).length), 0);
+
+  const head = '<tr>' + columns.map(c =>
+    `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${escHtml(c.label)}</th>`).join('') + '</tr>';
+
+  const table = g => {
+    const rows = (g.rows || []).map(r => '<tr>' + columns.map(c =>
+      `<td${c.align ? ` style="text-align:${c.align}"` : ''}${c.cls ? ` class="${c.cls}"` : ''}>${c.get(r)}</td>`
+    ).join('') + '</tr>').join('');
+    // A subtotal row belongs INSIDE its table, not floating under it — on a
+    // page break the total must not end up on a different sheet from the rows
+    // it totals.
+    const foot = g.total
+      ? `<tr class="subtotal"><td colspan="${columns.length - 1}">${escHtml(g.total.label || 'Subtotal')}</td>` +
+        `<td style="text-align:right">${g.total.value}</td></tr>`
+      : '';
+    return `<table><thead>${head}</thead><tbody>${rows}${foot}</tbody></table>`;
+  };
+
+  const body = groups.map(g => {
+    if (!g.label) return table(g);
+    return `<div class="group">
+      <div class="group__head"><span class="group__t">${escHtml(g.label)}</span>` +
+      (g.meta ? `<span class="group__m">${g.meta}</span>` : '') + `</div>${table(g)}</div>`;
+  }).join('');
+
+  const empty = `<div class="empty">Nothing to print — the current filter matches no records.</div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>${escHtml(o.title || 'Report')} — ${escHtml(hostel)}</title>
+  ${printDocStyles()}
+  <style>
+    .group { margin-bottom: 18px; page-break-inside: avoid; }
+    .group__head { display:flex; align-items:baseline; justify-content:space-between;
+                   padding: 0 0 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 8px; }
+    .group__t { font-size: 13px; font-weight: 800; }
+    .group__m { font-size: 10.5px; color: #64748b; }
+    tr.subtotal td { border-top: 1px solid #cbd5e1; font-weight: 800; background: #f8fafc; }
+    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
+    .grand { display:flex; align-items:center; justify-content:space-between;
+             margin-top: 6px; padding: 12px 16px; border-radius: 12px;
+             background: #f1f5f9; border: 1px solid #e2e8f0; }
+    .grand__l { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: 700; }
+    .grand__v { font-size: 18px; font-weight: 900; }
+    .sub { display:block; font-size: 9.5px; color: #64748b; font-weight: 600; margin-top: 1px; }
+    /* Long tables repeat their header on every sheet — a warden reading page 3
+       of a roster otherwise has to flip back to find out what column four is. */
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+  </style></head><body>
+  ${printHeader(hostel, o.title || 'Report', o.subtitle || '')}
+  ${o.kpis && o.kpis.length ? printKpiGrid(o.kpis) : ''}
+  ${rowCount ? body : empty}
+  ${o.grand ? `<div class="grand"><span class="grand__l">${escHtml(o.grand.label)}</span><span class="grand__v">${o.grand.value}</span></div>` : ''}
+  <div class="footer">${escHtml(hostel)} · ${rowCount} record${rowCount === 1 ? '' : 's'} · Generated ${new Date().toLocaleString('en-PK')}${o.note ? ' · ' + escHtml(o.note) : ''}</div>
+  </body></html>`;
+}
+
+/* The filename these documents get. One rule, so a folder of them sorts by
+   hostel then by what they are then by date, instead of three conventions. */
+function printFileName(what, scope) {
+  const hostel = ((typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel')
+    .replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '');
+  const bit = scope ? '_' + String(scope).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '') : '';
+  return hostel + '_' + what + bit + '_' + today() + '.pdf';
+}
+
 // BUG FIX: new Date('YYYY-MM-DD') parses as UTC midnight → wrong day in PKT (UTC+5)
 // Appending 'T00:00:00' forces local-time parsing.
 function fmtDate(d) {

@@ -174,8 +174,7 @@ function renderStudents() {
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
-  const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))]
-                     .sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))].sort(cmpRoomNo);
   const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
   const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All'].filter(Boolean).length;
 
@@ -303,7 +302,11 @@ function renderStudents() {
         </div>
       </div>
 
-      <button class="stu-btn stu-btn--primary" style="margin-left:auto" onclick="exportStudentsExcel()" title="Export the current list to Excel">
+      <button class="stu-btn" style="margin-left:auto" onclick="exportStudentsPDF()" title="Print the current list">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        Export PDF
+      </button>
+      <button class="stu-btn stu-btn--primary" onclick="exportStudentsExcel()" title="Export the current list to Excel">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
         Export Excel
       </button>
@@ -581,6 +584,64 @@ function _stuWriteWorkbook(list, filename, title) {
 // Export the currently filtered + sorted students. Reuses studentsFiltered(),
 // so the file always matches what is on screen — the two previously kept
 // separate copies of the filter and could disagree.
+/* Export the students on screen as a PDF.
+
+   The same list the table and the Excel export use — studentsFiltered() — so
+   all three answer with the same students in the same order. Room-ascending,
+   which for this document is not a preference: a warden reads a printed roster
+   while walking the building.
+
+   Landscape. Eighteen columns will not fit an A4 page in portrait and the
+   honest answer is fewer columns, not smaller type — so this prints what
+   someone standing in a corridor needs (who, where, how to reach them, what
+   they owe) and the Excel export remains the complete record. */
+function exportStudentsPDF() {
+  const list = studentsFiltered();
+  if (!list.length) { toast('No students to export', 'error'); return; }
+
+  const byId    = _stuRoomMap();
+  const active  = list.filter(t => (t.status || 'Active') === 'Active').length;
+  const left    = list.filter(t => t.status === 'Left').length;
+  const charged = list.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0);
+
+  const roomOf = t => { const r = byId.get(t.roomId); return r ? '#' + r.number : '—'; };
+  const html = printListDocument({
+    title: 'Student Roster',
+    subtitle: _stuMonthLabel(studentFilter.month) +
+              (studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only'),
+    kpis: [
+      { label: 'Students',        value: String(list.length) },
+      { label: 'Active',          value: String(active), cls: 'green' },
+      { label: 'Left',            value: String(left) },
+      { label: 'Charged / month', value: fmtPKR(charged) },
+    ],
+    columns: [
+      { label: '#',        get: t => escHtml(String(t.id || '')) },
+      { label: 'Student',  get: t => `<b>${escHtml(t.name || '')}</b>` +
+                                     (t.fatherName ? `<span class="sub">${escHtml(t.fatherName)}</span>` : '') },
+      { label: 'Room',     get: t => { const r = byId.get(t.roomId);
+                                       return `<b>${escHtml(roomOf(t))}</b>` +
+                                              (r && r.floor ? `<span class="sub">${escHtml(r.floor)} Floor</span>` : ''); } },
+      { label: 'Phone',    get: t => escHtml(t.phone || '—') +
+                                     (t.emergencyPhone ? `<span class="sub">${escHtml(t.emergencyPhone)}</span>` : '') },
+      { label: 'Course',   get: t => escHtml(t.occupation || t.course || '—') },
+      { label: 'Join',     get: t => fmtDate(t.joinDate) },
+      { label: 'Charge / mo', align: 'right', get: t => {
+          const c = resolveCharges(t);
+          if (!c.configured) return '<span style="color:#94a3b8">not set</span>';
+          return `<b>${fmtPKR(c.total)}</b><span class="sub">` +
+                 (c.messOptIn && c.mess > 0
+                    ? `${fmtPKR(c.rent)} rent + ${fmtPKR(c.mess)} mess`
+                    : c.mess > 0 ? 'rent only · mess off' : 'rent only') + '</span>'; } },
+      { label: 'Status',   get: t => escHtml(t.status || 'Active') },
+    ],
+    groups: [{ rows: list }],
+  });
+
+  _electronPDF(html, printFileName('Student-Roster',
+    studentFilter.status === 'All' ? '' : studentFilter.status), { pageSize: 'A4', landscape: true });
+}
+
 function exportStudentsExcel() {
   // The scope belongs in the filename AND in the title band. A file called
   // Students_All_2026-08-30.xlsx that actually holds only August's roster is
@@ -2298,8 +2359,10 @@ function doGenerateStudentsPDF(monthKey) {
   var d        = new Date(monthKey+'-02');
   var monthLabel = d.toLocaleString('default',{month:'long',year:'numeric'});
 
-  // Sort all students by name
-  var allStudents = DB.students.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
+  // Room order, then name inside a room — the app-wide rule (owner, 2026-08-31).
+  // A warden reads this sheet while walking the building, so a name-ordered
+  // list sends them up and down the stairs for every second student.
+  var allStudents = studentsByRoom(DB.students);
 
   // PERF: group payments by studentId + index rooms by id ONCE, so the per-student
   // loop below is O(students) instead of O(students × payments) — this is what made

@@ -351,7 +351,12 @@ function _arcStudentsPanel(T, label) {
     const room = (DB.rooms || []).find(r => r.id === s.roomId);
     const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
     return { s, f, room, charge: ch.total };
-  }).sort((a, b) => String(a.s.name||'').localeCompare(String(b.s.name||'')));
+  // Room order, then name inside a room — the same rule every other list and
+  // export follows since 2026-08-31.
+  }).sort((a, b) => {
+    const c = cmpRoomNo(a.room && a.room.number, b.room && b.room.number);
+    return c !== 0 ? c : String(a.s.name||'').localeCompare(String(b.s.name||''));
+  });
 
   const tot = rows.reduce((a, r) => ({ paid: a.paid + r.f.paid, pending: a.pending + r.f.pending }),
                           { paid: 0, pending: 0 });

@@ -1118,7 +1118,7 @@ function printSeatAvailability() {
     // Numeric-aware compare: room numbers are strings and some carry a suffix
     // ("6A"), which a-b turns into NaN and leaves the grid in insertion order.
     const floorRooms = DB.rooms.filter(r=>(r.floor||'Unknown')===floor)
-      .sort((a,b)=>String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+      .sort((a,b)=>cmpRoomNo(a.number,b.number));
     // Per-floor totals, so a warden can sign off one floor at a time instead of
     // holding the whole building in their head.
     const fSeats = floorRooms.reduce((s,r)=>{

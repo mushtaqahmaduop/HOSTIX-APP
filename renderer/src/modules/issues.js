@@ -91,7 +91,7 @@ function renderIssues() {
                    : String(b.date).localeCompare(String(a.date)));
 
   const _pg = paginate(feed, issueFilter);
-  const roomNums = [...new Set(all.map(i=>i.roomNo).filter(Boolean))].sort((a,b)=>(Number(a)||0)-(Number(b)||0));
+  const roomNums = [...new Set(all.map(i=>i.roomNo).filter(Boolean))].sort(cmpRoomNo);
   const nActive  = [issueFilter.status!=='All', issueFilter.priority!=='All',
                     issueFilter.room!=='All', !!q].filter(Boolean).length;
 

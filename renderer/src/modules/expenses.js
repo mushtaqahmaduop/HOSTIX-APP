@@ -67,13 +67,18 @@ function expSpark(values) {
     <polyline points="${pts}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function renderExpenses() {
-  const mo      = thisMonth();
-  const moLabel = thisMonthLabel();
-
+/* The one filter+sort pipeline for expenses. The table, the stat strip and
+   the PDF export all read from here, so they cannot drift apart — the same
+   rule studentsFiltered() and payFiltered() already follow. It was inline in
+   renderExpenses() until the export needed it too. */
+/* Returns the WHOLE scope, not only the rows: the stat strip above the table
+   is computed from the month's expenses before the category filter narrows
+   them, so it needs `scoped` as well as `rows`. Returning both from one call
+   is what stops the two being derived twice and disagreeing. */
+function expensesScoped() {
   // Month scope: '' means the current month, 'All' every month, otherwise a
   // specific YYYY-MM picked from the dropdown.
-  const scope = expFilter.showAll ? 'All' : (expFilter.month || mo);
+  const scope = expFilter.showAll ? 'All' : (expFilter.month || thisMonth());
   const inScope = e => scope === 'All' || String(e.date || '').startsWith(scope);
 
   /* Legacy funds-transfer records ride along as ordinary rows under the Fund
@@ -110,6 +115,93 @@ function renderExpenses() {
     amount:      e => Number(e.amount) || 0,
   });
   if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
+  return { scope, scoped, legacyTransfers: _legacyTransfers, rows: exps };
+}
+
+/* Just the rows — what the table and the PDF export both iterate. */
+function expensesFiltered() { return expensesScoped().rows; }
+
+/* Export the expenses on screen as a PDF.
+
+   Owner's requirement: print ONE category when one is selected, or every
+   category combined when none is. Those are genuinely two documents and this
+   builds both from the same rows:
+
+     · a category selected → one table, that category's records, its total
+     · All Categories      → a table PER category, each with its own subtotal,
+                             ordered by spend so the largest is on page one,
+                             and a grand total under them
+
+   "All categories combined" is not one flat table with a category column. A
+   warden checking last month's spending wants to know what went on electricity
+   as a figure, not to add fourteen scattered rows up by hand.
+
+   The rows are expensesFiltered(), so the month, the search box and the sort on
+   screen all carry into the document. */
+function exportExpensesPDF() {
+  const rows = expensesFiltered();
+  if (!rows.length) { toast('No expenses to export', 'error'); return; }
+
+  const one   = expFilter.cat !== 'All';
+  const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const scope = expFilter.showAll ? 'All months'
+              : (expFilter.month || thisMonth()) === thisMonth() ? thisMonthLabel()
+              : expFilter.month;
+
+  // Group, then order by spend — biggest first, because that is the order the
+  // question "where did the money go" is actually asked in.
+  const byCat = new Map();
+  rows.forEach(e => {
+    const k = e.category || 'Uncategorised';
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k).push(e);
+  });
+  const catTotal = list => list.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
+
+  const columns = [
+    { label: 'Date',        get: e => fmtDate(e.date) },
+    { label: 'Category',    get: e => escHtml(e.category || 'Uncategorised') },
+    { label: 'Description', get: e => escHtml(e.description || '—') +
+                                     (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Amount', align: 'right', get: e => `<b>${fmtPKR(e.amount)}</b>` },
+  ];
+
+  const groups = one
+    ? [{ rows, total: { label: expFilter.cat + ' total', value: fmtPKR(total) } }]
+    : ordered.map(([cat, list]) => ({
+        label: cat,
+        meta: list.length + ' record' + (list.length === 1 ? '' : 's') +
+              ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend',
+        rows: list,
+        total: { label: cat + ' total', value: fmtPKR(catTotal(list)) },
+      }));
+
+  const html = printListDocument({
+    title: one ? 'Expenses — ' + expFilter.cat : 'Expense Register',
+    subtitle: scope + (one ? '' : ' · ' + ordered.length + ' categor' + (ordered.length === 1 ? 'y' : 'ies')),
+    kpis: one
+      ? [{ label: 'Records', value: String(rows.length) },
+         { label: expFilter.cat, value: fmtPKR(total), cls: 'red' }]
+      : [{ label: 'Records',    value: String(rows.length) },
+         { label: 'Categories', value: String(ordered.length) },
+         { label: 'Largest',    value: ordered.length ? escHtml(ordered[0][0]) : '—' },
+         { label: 'Total spent', value: fmtPKR(total), cls: 'red' }],
+    columns,
+    groups,
+    grand: { label: one ? expFilter.cat + ' — total' : 'Total across all categories', value: fmtPKR(total) },
+  });
+
+  _electronPDF(html, printFileName('Expenses', one ? expFilter.cat : scope), { pageSize: 'A4' });
+}
+
+function renderExpenses() {
+  const mo      = thisMonth();
+  const moLabel = thisMonthLabel();
+
+  const _S = expensesScoped();
+  const scope = _S.scope, scoped = _S.scoped, _legacyTransfers = _S.legacyTransfers;
+  const exps = _S.rows;
 
   const total = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
   const _pg   = paginate(exps, expFilter);
@@ -216,6 +308,11 @@ function renderExpenses() {
         ${monthOpts}
       </select>
     </div>
+    <button class="exp-catadd" onclick="exportExpensesPDF()"
+            title="${expFilter.cat==='All'?'Print every category, each with its own total':'Print the '+expFilter.cat+' records'}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+      ${expFilter.cat==='All'?'Export PDF':'Export '+expFilter.cat}
+    </button>
     <div class="exp-count">${_pg.total} record${_pg.total!==1?'s':''} &middot; <b>${fmtPKR(total)}</b></div>
   </div>`;
 

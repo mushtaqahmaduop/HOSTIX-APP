@@ -351,16 +351,25 @@ test('payments: table pans by dragging, and CSV column order matches the table',
     return captured;
   });
   expect(csv, 'exportPaymentsCSV produced nothing').toBeTruthy();
-  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Amount Paid','Unpaid',
-                          'Method','Status','Adm.Fee','Extra Charges','Concession','Date']);
-  // Values must have moved with their headers, not just the labels.
+  // Mess/Mo and Charge/Mo joined on 2026-08-31: a sheet that quoted the rent
+  // half alone could not be reconciled against what the student actually paid,
+  // because the mess is a separate field on the record.
+  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo',
+                          'Amount Paid','Unpaid','Method','Status','Adm.Fee',
+                          'Extra Charges','Concession','Date']);
+  // Values must have moved with their headers, not just the labels. Indexes are
+  // read off the header row rather than hardcoded, so the next column added
+  // fails on what it actually breaks instead of on arithmetic.
+  const at = name => csv[0].indexOf(name);
   const row = csv[1];
-  expect(row[4], 'Amount Paid column').toBe(12000);
-  expect(row[5], 'Unpaid column').toBe(4000);
-  expect(row[6], 'Method column').toBe('Cash');
-  expect(row[8], 'Adm.Fee column').toBe(5000);
-  expect(String(row[9]), 'Extra Charges column').toContain('Laundry');
-  expect(row[10], 'Concession column').toBe(1000);
+  expect(row[at('Rent/Mo')] + row[at('Mess/Mo')], 'the two halves must make the charge')
+    .toBe(row[at('Charge/Mo')]);
+  expect(row[at('Amount Paid')], 'Amount Paid column').toBe(12000);
+  expect(row[at('Unpaid')], 'Unpaid column').toBe(4000);
+  expect(row[at('Method')], 'Method column').toBe('Cash');
+  expect(row[at('Adm.Fee')], 'Adm.Fee column').toBe(5000);
+  expect(String(row[at('Extra Charges')]), 'Extra Charges column').toContain('Laundry');
+  expect(row[at('Concession')], 'Concession column').toBe(1000);
 
   await app.close();
 });
