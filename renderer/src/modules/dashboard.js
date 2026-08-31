@@ -1898,7 +1898,9 @@ function exportMonthCSV(monthKey, monthLabel) {
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
   csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
-  pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
+  // Ordered by room like every other roster, export and PDF in the app — the
+  // warden reads this sheet against the building, not against insertion order.
+  pays.slice().sort((a,b)=>cmpRoomNo(a.roomNumber,b.roomNumber)).forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
   // Grouped with a subtotal per category and a grand total, matching the
   // register the Reports screen and the PDFs now print.
   csv += `\nExpenses by Category\nCategory,Date,Description,Amount\n`;

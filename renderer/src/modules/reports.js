@@ -1105,8 +1105,8 @@ function downloadDetailPDF(type) {
     // three ways disagreed about who was on the roster. Matched against every
     // key in the window, not one — `key` is now a filename label and a custom
     // range spans several months.
-    const _roster = DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
-      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k))));
+    const _roster = studentsByRoom(DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
+      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
     body+=`<table><thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent/mo</th><th>Join Date</th><th>Status</th></tr></thead><tbody>${_roster.map(t=>{const room=_idx.roomById.get(t.roomId);return `<tr><td style="font-size:10px;color:#aaa">#${t.id}</td><td>${escHtml(t.name)}</td><td class="go">${room?'#'+room.number:'—'}</td><td>${escHtml(t.fatherName||'—')}</td><td>${escHtml(t.phone||'—')}</td><td class="gr">PKR ${Number(t.rent||0).toLocaleString()}</td><td>${t.joinDate||'—'}</td><td class="${t.status==='Active'?'gr':t.status==='Blacklisted'?'re':''}">${t.status}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No students</td></tr>'}</tbody></table>`;
   } else if(type==='rooms'){
     const _idx=_buildRoomStudentIndex();
@@ -1145,8 +1145,8 @@ function downloadReportDetailPDF(detailId) {
   } else if(detailId==='students') {
     const _idx=_buildRoomStudentIndex();
     // Same period scope as the on-screen table this PDF is printed from.
-    const _roster = DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
-      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k))));
+    const _roster = studentsByRoom(DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
+      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
     tableHTML = `<h3>Student Directory</h3><table><thead><tr><th>Name</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>${_roster.map(t=>{const r=_idx.roomById.get(t.roomId);return `<tr><td>${escHtml(t.name)}</td><td>${r?'#'+r.number:'—'}</td><td>${fmtDate(t.joinDate)}</td><td class="green">${fmtPKR(t.rent)}</td><td>${t.status}</td><td>${escHtml(t.phone||'—')}</td></tr>`;}).join('')}</tbody></table>`;
   } else if(detailId==='rooms') {
     const _idx=_buildRoomStudentIndex();

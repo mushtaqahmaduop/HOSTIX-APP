@@ -2135,7 +2135,7 @@ async function submitAddPayment() {
         const aMethod = document.getElementById('f-pmethod')?.value || 'Cash';
         const aDate   = document.getElementById('f-pdate')?.value   || today();
         const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate);
-        logActivity('Arrears Collected', `${escHtml(tName)} — ${aDesc}`, 'Finance');
+        logActivity('Arrears Collected', `${tName} — ${aDesc}`, 'Finance');
         await saveDB(); closeModal(); renderPage('payments');
         toast(`Arrears posted to ${arrearsOnly.length} earlier month(s) for ${tName} · `
             + `${enteredMonth2} was already settled and was not charged again`, 'success');
@@ -2148,7 +2148,7 @@ async function submitAddPayment() {
         }
         return;
       }
-      toast(escHtml(tName) + ' has ALREADY PAID for ' + escHtml(enteredMonth2) + ' ('
+      toast(tName + ' has ALREADY PAID for ' + enteredMonth2 + ' ('
         + fmtPKR(alreadyPaid2.amount) + '). To take money for an earlier month, enter it under "Receive Outstanding".', 'error');
       return;
     }
@@ -2230,8 +2230,8 @@ async function submitAddPayment() {
           }
           const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate) : '';
 
-          logActivity('Payment Updated', `${escHtml(tName)} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
-          if (arrearsUDesc) logActivity('Arrears Collected', `${escHtml(tName)} — ${arrearsUDesc}`, 'Finance');
+          logActivity('Payment Updated', `${tName} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
+          if (arrearsUDesc) logActivity('Arrears Collected', `${tName} — ${arrearsUDesc}`, 'Finance');
           await saveDB(); closeModal(); renderPage('payments');
           toast(arrearsUDesc
             ? `Payment updated for ${tName} · arrears posted to ${arrearsU.length} earlier month(s)`
