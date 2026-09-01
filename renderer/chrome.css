@@ -260,15 +260,23 @@ body.light-theme #header {
    stays on screen at every width and narrows instead. The in-sidebar collapse
    button still gives an icons-only rail when space is tight. */
 @media (max-width: 900px) {
+    /* `position: sticky` here was the bug: <body> is `display:block` at every
+       width (the desktop shell is a FIXED rail plus `#main{margin-left}`), so a
+       sticky sidebar sits in normal flow and stacks a full-height navy column
+       ABOVE the page instead of beside it. Nothing below 900px has ever laid
+       out — not a narrowed desktop window, not a phone browser. Keep the same
+       fixed-rail model the desktop uses and just narrow it, which is what the
+       comment above always said this branch did. */
     #sidebar {
-        position: sticky; transform: none !important;
+        position: fixed; transform: none !important;
         width: 190px; min-width: 190px;
     }
     #sidebar-overlay { display: none !important; }
-    #main { margin-left: 0 !important; }
+    #main { margin-left: 190px !important; }
 }
 @media (max-width: 640px) {
     #sidebar { width: 62px; min-width: 62px; }
+    #main { margin-left: 62px !important; }
     #sidebar .sb-logo-text,
     #sidebar .sb-section,
     #sidebar .nav-label,
@@ -277,6 +285,19 @@ body.light-theme #header {
     #sidebar .nav-item { justify-content: center; padding: 10px 0; }
     .sb-user { justify-content: center; padding: 8px; }
     .sb-user-menu { left: 6px; right: auto; width: 210px; }
+
+    /* The header is one non-wrapping flex row sized for a desktop window. At
+       this width its content is ~410px wide in a ~330px box, so #hdr-right —
+       the notification bell and the activity button — starts off the right
+       edge and cannot be reached at all (the page itself does not scroll
+       sideways). Let the row wrap and grow instead of clipping. The fixed
+       --header-h stays as a floor so nothing above 640px is affected. */
+    #header {
+        height: auto; min-height: var(--header-h);
+        flex-wrap: wrap; row-gap: 8px;
+        padding: 8px 12px;
+    }
+    #header .sb-calendar-wrap { order: 4; }
 }
 
 /* Search pill */
