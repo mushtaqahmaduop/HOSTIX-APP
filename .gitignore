@@ -33,3 +33,9 @@ blob-report/
 # Control-plane server — its own dependency tree, not the app's
 server/node_modules/
 server/.env
+
+# Single-file web bundle (scripts/build-web-bundle.js) — a browser preview of
+# the renderer, rebuilt on demand. The subset icon font is a build input for it
+# only; the shipped app keeps the full material-symbols-rounded.woff2.
+dist-web/
+renderer/vendor/fonts/*.subset.woff2
