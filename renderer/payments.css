@@ -34,14 +34,19 @@
    row produces; @container scales it up when there is genuinely room. The
    ellipsis is the backstop so the money can never spill past the card edge.
 
-   RE-MEASURED when the numerals moved to Roboto Mono. A monospaced digit is
-   wider than Inter's tabular one -- 125.4px against 120.6px for an 11-char
-   figure at 19px, and 171.6 against 165.0 at 26px. The tightest tier is 26px
-   in a 220px container: 203px of content in 220px of room, where Inter left
-   24px of slack and this leaves 17px. Still fits, but that margin is now the
-   budget. Anything that grows the figure -- a wider face, a longer currency
-   prefix, a 13-digit total -- spends it, and the ellipsis is what you will
-   see first. */
+   RE-MEASURED each time the numeral face has changed, because this is where a
+   face that is a few percent wider first shows up as an ellipsis:
+
+     Inter (tabular)   120.6px @19  ·  165.0px @26  ->  24px slack
+     Roboto Mono       125.4px @19  ·  171.6px @26  ->  17px slack
+     Barlow (tabular)  104.3px @19  ·  142.7px @26  ->  48px slack   <- current
+
+   Slack is measured in the tightest tier: 26px type in a 220px container,
+   against an 11-character figure plus the 28.8px "PKR" prefix. Barlow is
+   narrower than either face before it, so the budget is healthier now than it
+   has ever been -- but it is still a budget. Anything that grows the figure --
+   a wider face, a longer prefix, a 13-digit total -- spends it, and the
+   ellipsis is what you will see first. */
 .pay-stat__val   { font-size:19px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 @container (min-width:190px) { .pay-stat__val { font-size:22px; } }
 @container (min-width:220px) { .pay-stat__val { font-size:26px; } }

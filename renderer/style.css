@@ -37,9 +37,20 @@
     --text2:         #d7c3b5;
     --text3:         #a08d81;
 
-    /* Typography */
-    --font:          'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif;
-    --font-display:  'Inter', 'Outfit', system-ui, sans-serif;
+    /* Typography -- the type system from the Add Student design
+       (claude.ai/design "Add student form mockups"), bundled in
+       vendor/fonts.css because this app runs with no network.
+
+       Barlow for body, Barlow Condensed for display, exactly as that design's
+       --font-body / --font-heading. Inter and Outfit stay in the stack behind
+       them: they are still bundled, so a face that fails to load falls to a
+       real bundled font rather than to whatever the OS happens to have.
+
+       --font-mono is unchanged and stays JetBrains Mono -- it is the CODE
+       face (licence keys, machine ids), which is a different job from either
+       body text or numerals. */
+    --font:          'Barlow', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-display:  'Barlow Condensed', 'Barlow', 'Inter', system-ui, sans-serif;
     --font-mono:     'JetBrains Mono', 'Courier New', monospace;
 
     /* Shape */
@@ -546,7 +557,7 @@ input, select, textarea { font-family: var(--font); }
 .sb-logo-text { flex: 1; min-width: 0; }
 
 .sb-logo-text .name {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 800;
     color: var(--text);
@@ -1614,7 +1625,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text);
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     flex-shrink: 0;
 }
 
@@ -2788,7 +2799,7 @@ body.light-theme #login-card {
     margin-bottom: 6px;
 }
 .login-app-name {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 26px;
     font-weight: 800;
     color: var(--text);
@@ -3195,7 +3206,7 @@ body.light-theme .stat-card.glass {
     padding: 2px 7px;
     border-radius: 20px;
     margin-top: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
 }
 
 .stat-trend.up   { background: rgba(52,211,153,0.12);  color: var(--green); border: 1px solid rgba(52,211,153,0.2);  }
@@ -3404,9 +3415,9 @@ body.light-theme .stat-card.glass {
 .arch-t-badge-val,
 .arch-ms-val,
 .sb-stat .v {
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.5px;
+    letter-spacing: var(--ant-num-track);
 }
 
 /* PKR currency prefix */
@@ -3440,7 +3451,7 @@ body.light-theme .stat-card.glass {
     text-transform: uppercase;
 }
 .money-value .money-amt {
-    font-family: var(--font-mono);   /* distinct numeric font — money-grade, tabular */
+    font-family: var(--ant-num-font);   /* the numeral face, like every other figure in the app */
     font-weight: var(--fw-display);
     letter-spacing: -0.02em;
     color: inherit;
@@ -4170,7 +4181,10 @@ body.light-theme .card {
     font-weight: var(--fw-display);
     color: var(--text);
     line-height: 1;
-    letter-spacing: -0.5px;
+    /* A figure, so it follows the numeral tracking token like every other
+       one -- this rule sets the tracking but inherits tabular-nums from the
+       group rule above, which is why the sweep could not see it. */
+    letter-spacing: var(--ant-num-track);
     margin-bottom: 4px;
 }
 
@@ -4349,7 +4363,7 @@ body.light-theme .filter-bar {
 }
 
 .modal-title {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.2px;
@@ -4444,9 +4458,9 @@ body.light-theme .settings-tab.active::after {
     background: var(--accent);
 }
 
-/* ── PAGE TITLE — Outfit display style ───────────────────────────────────── */
+/* ── PAGE TITLE — display face, from --font-display ──────────────────────── */
 .hdr-left .page-title {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 700;
     letter-spacing: -0.2px;
@@ -4553,7 +4567,7 @@ h1, h2, h3,
 .modal-title,
 .stat-value,
 .sb-stat .v {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
 }
 
 /* ── STAT TREND CHIP ─────────────────────────────────────────────────────── */
@@ -4566,7 +4580,7 @@ h1, h2, h3,
     padding: 2px 7px;
     border-radius: var(--r-full);
     margin-top: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
 }
 
 .stat-trend.up   { background: rgba(69,223,164,0.12);  color: var(--green); border: 1px solid rgba(69,223,164,0.2); }
@@ -4820,7 +4834,7 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 
 /* ── KPI amounts: crisp fixed size, never clipped (cards wrap responsively) ───── */
 .kpi-amt {
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     font-variant-numeric: tabular-nums;
     font-size: 22px;
     white-space: nowrap;
