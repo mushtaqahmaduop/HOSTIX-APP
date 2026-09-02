@@ -203,6 +203,35 @@ function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number 
    `configured` is false when nothing has a rent set. Callers must show
    "not configured — set it in Settings" rather than inventing a number: a real
    amount on a screen must always trace back to something the warden typed. */
+/* -- THE SERVICE MODEL: ONE READER -------------------------------------------
+
+   Every screen that wants to know whether this hostel serves food asks these,
+   never DB.settings.serviceModel. An install that predates the setting has no
+   value at all, and an unknown value could arrive from a restored backup
+   written by a newer build; both must read as the OLD behaviour rather than
+   silently switching a paying hostel to a different billing model.
+
+   The rule the rest of the app follows: mess is a SETTING OF THE HOSTEL first
+   and a property of the student second. resolveCharges() applies the hostel
+   answer over the student one, so no screen can bill food at a hostel that
+   does not serve it, whatever is stored on the student record.               */
+function serviceModel() {
+  const v = DB && DB.settings && DB.settings.serviceModel;
+  return SERVICE_MODELS.some(m => m.id === v) ? v : SERVICE_MODEL_DEFAULT;
+}
+
+/** Does this hostel serve food at all? */
+function hostelServesMess() { return serviceModel() !== 'rent'; }
+
+/** Can an individual student be taken off the mess? */
+function messIsOptional() { return serviceModel() === 'rent_mess_optional'; }
+
+/** The chosen model's descriptor, for labels. */
+function serviceModelInfo() {
+  const id = serviceModel();
+  return SERVICE_MODELS.find(m => m.id === id) || SERVICE_MODELS[1];
+}
+
 function resolveCharges(student, opts) {
   opts = opts || {};
   const s     = student || {};
@@ -229,16 +258,32 @@ function resolveCharges(student, opts) {
     s.mess != null                 ? { v: Number(s.mess) || 0,            src: 'student'  } :
                                      { v: 0,                              src: 'none'     };
 
-  // Off the mess → the food charge is not billed, but the amount is kept so
-  // turning it back on restores what it was.
-  const messOptIn = s.messOptIn !== false;
-  const messBilled = messOptIn ? messFrom.v : 0;
+  /* THE HOSTEL'S ANSWER OVERRIDES THE STUDENT'S.
+
+     A rent-only hostel bills no food and shows none, whatever messOptIn says
+     on a record written before the setting existed. A bundled hostel bills it
+     for everyone, so a stale messOptIn:false cannot quietly under-bill anyone.
+     Only an "optional" hostel lets the student record decide.
+
+     `mess` is reported as 0 at a rent-only hostel on purpose: every screen
+     prints this value, and a food charge must not appear at a hostel that
+     serves no food. The configured amount is untouched in roomTypes, so
+     switching the model back restores it. */
+  const hostelMess = hostelServesMess();
+  const messOptIn =
+    !hostelMess       ? false :
+    !messIsOptional() ? true  :
+                        s.messOptIn !== false;
+  const messAmount = hostelMess ? messFrom.v : 0;
+  const messBilled = messOptIn ? messAmount : 0;
 
   return {
     rent:       rentFrom.v,
-    mess:       messFrom.v,      // the configured amount, billed or not
+    mess:       messAmount,      // the configured amount, billed or not
     messBilled,                  // what actually goes into the total
     messOptIn,
+    hostelMess,                  // does this hostel serve food at all
+    messOptional: hostelMess && messIsOptional(),  // may a student opt out
     total:      rentFrom.v + messBilled,   // the Monthly Charge
     rentSource: rentFrom.src,
     messSource: messFrom.src,

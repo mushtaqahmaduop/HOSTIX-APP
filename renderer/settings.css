@@ -442,3 +442,47 @@
 @media (max-width:820px) {
     .bkp-stats { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ── What this hostel offers ─────────────────────────────────────────────────
+   Three mutually exclusive choices, shown as cards rather than a <select>,
+   because the hint under each is the part that decides it and a dropdown hides
+   every option but one. */
+.svc-card {
+    border:1px solid var(--border); border-radius:14px; background:var(--card);
+    padding:14px 15px; margin:0 0 18px;
+}
+.svc-card__t { font-size:13px; font-weight:800; color:var(--text); margin-bottom:11px; }
+.svc-card__f { margin-top:11px; font-size:11.5px; color:var(--text3); line-height:1.45; }
+
+.svc-opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:9px; }
+
+.svc-opt {
+    display:flex; align-items:flex-start; gap:10px; text-align:left; cursor:pointer;
+    padding:11px 12px; border-radius:11px; background:var(--dash-sunk);
+    border:1px solid var(--border); color:var(--text2);
+    font-family:var(--font); transition:var(--transition);
+}
+.svc-opt:hover { border-color:var(--border2); color:var(--text); }
+.svc-opt.is-on { border-color:var(--accent); background:var(--accent-soft,var(--dash-sunk)); color:var(--text); }
+
+/* The radio mark is drawn rather than an <input type=radio>: the whole card is
+   the hit target, and a real radio inside a <button> is not focusable anyway. */
+.svc-opt__dot {
+    flex-shrink:0; width:15px; height:15px; margin-top:1px; border-radius:50%;
+    border:2px solid var(--border2); background:none; position:relative;
+    transition:var(--transition);
+}
+.svc-opt.is-on .svc-opt__dot { border-color:var(--accent); }
+.svc-opt.is-on .svc-opt__dot::after {
+    content:''; position:absolute; inset:2px; border-radius:50%; background:var(--accent);
+}
+
+.svc-opt__b { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.svc-opt__l { font-size:12.5px; font-weight:700; line-height:1.25; }
+.svc-opt__h { font-size:11.5px; font-weight:500; color:var(--text3); line-height:1.4; }
+
+/* Stands where the opt-out tick would be at a hostel that does not allow one,
+   so the field does not just silently lose a control. */
+.mess-fixed {
+    margin-top:6px; font-size:11px; font-weight:600; color:var(--text3);
+}

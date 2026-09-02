@@ -1533,13 +1533,15 @@ function showAddPaymentForStudent(studentId) {
       <!-- MESS — the food half of the monthly charge. This screen used to omit
            it entirely, so the same student was billed a different amount here
            than in the main Add Payment modal. -->
+      ${!c.hostelMess ? '' : `
       <div class="field"><label>Mess Charges (PKR)</label>
         <input class="form-control" id="f-ps-mess" type="number" min="0" value="${c.mess||''}" placeholder="0" ${c.messOptIn?'':'disabled'} oninput="recalcUnpaidPS()">
+        ${!c.messOptional ? `<div class="mess-fixed">Included for every student</div>` : `
         <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer" title="Untick for a student who takes the room but not the mess">
           <input type="checkbox" id="f-ps-mess-on" ${c.messOptIn?'checked':''} onchange="psMessToggle()">
           <span id="f-ps-mess-note">${c.messOptIn?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
-        </label>
-      </div>
+        </label>`}
+      </div>`}
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
@@ -1890,10 +1892,11 @@ function renderAddPayment() {
                      title="Room rent, plus mess when included. Set in Settings → Rent &amp; Mess.">
               <div class="pf-charge__note" id="f-pcharge-note">Pick a student to load the charge</div>
             </div>
+            ${!hostelServesMess() || !messIsOptional() ? '' : `
             <label class="pf-charge__tick" title="Untick for a student who takes the room but not the mess">
               <input type="checkbox" id="f-pmess-on" checked onchange="pfMessToggle()">
               <span>Include mess charges</span>
-            </label>
+            </label>`}
             <input type="hidden" id="f-prent" value="">
             <input type="hidden" id="f-pmess" value="">
           </div>
@@ -2360,13 +2363,15 @@ function showEditPaymentModal(id) {
       <!-- MESS — this modal used to omit it, so saving an edit recomputed the
            total without the food charge while leaving p.messCharge on the
            record: the balance and the printed receipt disagreed. -->
+      ${!hostelServesMess() ? '' : `
       <div class="field"><label>Mess Charges (PKR)</label>
         <input class="form-control" id="f-pmess" type="number" min="0" value="${messCharge||''}" placeholder="0" ${messIncluded?'':'disabled'} oninput="recalcUnpaid()">
+        ${!messIsOptional() ? `<div class="mess-fixed">Included for every student</div>` : `
         <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer">
           <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
           <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
-        </label>
-      </div>
+        </label>`}
+      </div>`}
       <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()"></div>
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-padmfee" type="number" placeholder="0" min="0" value="${admissionFee||0}" oninput="recalcUnpaid()"></div>
       <!-- Concession + Extra Charges side by side -->

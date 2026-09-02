@@ -57,6 +57,18 @@ declare function openExternalLink(url: string): void;
 // ── config.js ────────────────────────────────────────────────────────────────
 declare var _ACTIVE_HOSTEL: string;
 
+// -- config.js: the service model ---------------------------------------------
+// Declared here because config.js defines them with `const`/`let` at script
+// scope, which the checker cannot see across files the way it sees functions.
+interface ServiceModelDef { id: string; label: string; short: string; hint: string; }
+declare var SERVICE_MODELS: ServiceModelDef[];
+declare var SERVICE_MODEL_DEFAULT: string;
+declare function serviceModel(): string;
+declare function hostelServesMess(): boolean;
+declare function messIsOptional(): boolean;
+declare function serviceModelInfo(): ServiceModelDef;
+
+
 // ── modals.js ────────────────────────────────────────────────────────────────
 declare function showModal(size: string, title: string, body: string, footer?: string): void;
 declare function showConfirm(title: string, text: string, onConfirm?: Function, onCancel?: Function): void;

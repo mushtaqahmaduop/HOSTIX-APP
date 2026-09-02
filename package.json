@@ -23,6 +23,7 @@
     "test:migrate": "node migrations/001-relational-schema.test.js",
     "test:retention": "node tests/retention.test.js",
     "test:bulkrooms": "node tests/bulk-rooms.test.js",
+    "test:servicemodel": "node tests/service-model.test.js",
     "test:services": "node tests/services.test.js",
     "test:update": "node tests/update-url.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
