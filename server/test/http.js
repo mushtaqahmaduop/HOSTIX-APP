@@ -7,9 +7,10 @@
 
    WHAT THIS DOES NOT PROVE: that the SQL runs. The stub answers queries with
    canned rows; a typo in a column name or a missing constraint would sail
-   straight through. There is no Postgres on this machine and `pg-mem` is not a
-   Postgres. Those need a real database, and until one exists this file is
-   deliberately silent about them rather than reassuring.
+   straight through. That is `test/integration.js`, which runs this same app
+   against a real Postgres — see the README. This file stays stubbed on purpose:
+   it must keep running on a laptop with no database, because the authorisation
+   rules it holds are the ones worth proving first.
 
    What it does prove is the layer where an authorisation mistake lives — and
    an authorisation mistake is the one that matters, because the actions behind
@@ -442,6 +443,6 @@ test('the portal is served, and the API prefix still resolves to routes', async 
   await app.close();
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
-  console.log('  (SQL correctness is NOT covered here — that needs a real Postgres)\n');
+  console.log('  (SQL correctness is proven separately — npm run test:integration)\n');
   process.exit(fail === 0 ? 0 : 1);
 })();

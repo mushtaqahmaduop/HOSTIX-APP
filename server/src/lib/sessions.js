@@ -90,6 +90,19 @@ async function destroyAllFor(adminUserId) {
   await db.query('DELETE FROM admin_sessions WHERE admin_user_id = $1', [adminUserId]);
 }
 
+/**
+ * Constant-time comparison of a presented CSRF token against the session's.
+ *
+ * `!==` leaks, through timing, how many leading characters a guess got right,
+ * which is enough to walk a token out one character at a time. Cheap to do
+ * properly, so do it properly.
+ */
+function csrfMatches(presented, expected) {
+  if (typeof presented !== 'string' || typeof expected !== 'string') return false;
+  if (presented.length === 0 || presented.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(presented, 'utf8'), Buffer.from(expected, 'utf8'));
+}
+
 function cookieOptions(cfg, maxAgeSeconds) {
   return {
     httpOnly: true,
@@ -105,5 +118,5 @@ function cookieOptions(cfg, maxAgeSeconds) {
 
 module.exports = {
   SESSION_COOKIE, CSRF_COOKIE, CSRF_HEADER,
-  create, resolve, destroy, destroyAllFor, cookieOptions, hash
+  create, resolve, destroy, destroyAllFor, cookieOptions, hash, csrfMatches
 };

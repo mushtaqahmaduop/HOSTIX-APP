@@ -119,8 +119,34 @@ perfectly valid licence on day one. Tighten it once the unverified queue is actu
 ## Tests
 
 ```bash
-npm test        # 25 tests, no database required
+npm test                    # 47 without a database, 83 with one
+npm run test:integration    # the real-Postgres suite on its own
 ```
 
-They cover the key format, feature resolution, the licence lifecycle, the signing round-trip
-against the app's real verifier, and that `server/` cannot be packaged into the app.
+Three suites, and the split matters because they prove different things.
+
+`test/run.js` (26) is pure Node: the key format, feature resolution, the licence lifecycle, the
+signing round-trip against the app's real verifier, and that `server/` cannot be packaged into
+the app.
+
+`test/http.js` (21) drives the real Fastify app with `app.inject()` against a **stubbed**
+database. It proves the layer where an authorisation mistake lives — routing, cookies, CSRF,
+schema validation, the error envelope, and the separation between the machine surface and the
+human one. It proves nothing about the SQL: the stub answers with canned rows, so a wrong column
+name or an `ON CONFLICT` that updates the wrong thing would sail straight through.
+
+`test/integration.js` (36) closes that gap against a **real Postgres** — the registration upsert
+and the renewal it must not roll back, the device cap counted under the row lock, the rate-limit
+window and its reset, the `audit_log` insert-only trigger, the `updated_at` triggers, and the
+CHECK constraints. It **SKIPS loudly** when `TEST_DATABASE_URL` is unset, so `npm test` still
+runs end to end on a laptop with no database; silence would read as "covered".
+
+```bash
+createdb cp_test
+DATABASE_URL=postgres://localhost/cp_test npm run migrate
+TEST_DATABASE_URL=postgres://localhost/cp_test npm run test:integration
+```
+
+Every integration test **TRUNCATES every table**, so point `TEST_DATABASE_URL` at a scratch
+database and nothing else. The suite refuses to run against a URL whose name does not look
+disposable, because the cost of getting that wrong is the licence table for 50+ paying hostels.

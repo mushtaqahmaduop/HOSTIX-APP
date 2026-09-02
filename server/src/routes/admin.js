@@ -21,6 +21,49 @@ const audit = require('../lib/audit');
 
 const HOUR_SECONDS = 3600;
 
+/**
+ * Every :id on this router is a UUID column.
+ *
+ * Without this, `/admin/api/licenses/not-a-uuid` handed the string straight to
+ * Postgres, which raised 22P02 and surfaced as a 500 INTERNAL_ERROR — a
+ * mistyped id read as "the control plane is broken" rather than "no such
+ * licence". Fastify enforces `format: 'uuid'`, so the bad id is refused before
+ * any query runs.
+ */
+const UUID_PARAMS = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string', format: 'uuid' } }
+};
+
+/**
+ * Add whole calendar months, clamping to the end of the target month.
+ *
+ * `setMonth(getMonth() + n)` overflows: 31 January + 1 month became 3 MARCH,
+ * so renewing a month-end licence by one month silently granted an extra 31
+ * days and skipped February altogether. UTC throughout, so the result does not
+ * depend on the server's timezone.
+ */
+function addCalendarMonths(from, months) {
+  const y = from.getUTCFullYear();
+  const m = from.getUTCMonth();
+  const d = from.getUTCDate();
+  // Day 0 of the month AFTER the target is the target month's last day.
+  const lastDay = new Date(Date.UTC(y, m + months + 1, 0)).getUTCDate();
+  const next = new Date(from.getTime());
+  next.setUTCFullYear(y, m + months, Math.min(d, lastDay));
+  return next;
+}
+
+/**
+ * Escape the LIKE wildcards in an admin's search box.
+ *
+ * A search for "%" is a search for the character, not for every customer.
+ */
+function likeLiteral(v) {
+  return String(v).trim().replace(/[\\%_]/g, '\\$&');
+}
+
 async function bumpLogin(ip) {
   const { rows } = await db.query(
     `INSERT INTO rate_limits (bucket, ip, window_start, hits)
@@ -46,8 +89,22 @@ function presentLicense(row) {
     city: row.city,
     notes: row.notes,
     keyVersion: row.key_version,
-    // Enough to match against the issuance log by eye, never enough to rebuild
-    // the key: the checksum is not stored at all.
+    // Enough to match against the issuance log by eye. The checksum is never
+    // stored and never sent.
+    //
+    // It does NOT follow that the key cannot be rebuilt, and an earlier comment
+    // here claimed it did. A v4 checksum is HMAC(LEGACY_KEY_SECRET,
+    // 'V4:' + expPart + ':' + serial) — a pure function of the two parts this
+    // hint prints, under a secret that ships inside app.asar and is documented
+    // one file over as filtering typos and nothing more. So anyone holding the
+    // desktop app AND portal access can reconstruct a working key from what is
+    // on this screen; it was verified end to end, and the rebuilt key
+    // registered a device.
+    //
+    // That is bounded by portal access, which is the owner and whoever they
+    // trust. It is recorded here rather than quietly patched because narrowing
+    // the hint costs the "match it by eye" job it exists to do, and that is the
+    // owner's call to make.
     keyHint: 'HOSTEL-' + row.key_expiry_part + (row.serial ? '-' + row.serial : '') + '-····',
     serial: row.serial,
     status: row.status,
@@ -98,7 +155,7 @@ async function adminRoutes(app) {
     // nothing; if a GET here ever starts changing something, that is the bug.
     if (request.method !== 'GET') {
       const presented = request.headers[sessions.CSRF_HEADER];
-      if (!presented || presented !== session.csrf) {
+      if (!sessions.csrfMatches(presented, session.csrf)) {
         return reply.code(403).send({
           success: false, code: 'CSRF', message: 'Session check failed. Reload and try again.'
         });
@@ -235,7 +292,7 @@ async function adminRoutes(app) {
     if (q.verification) { params.push(q.verification); where.push('l.verification = $' + params.length); }
     if (q.expiring === 'true') where.push("l.expires_at < NOW() + INTERVAL '30 days'");
     if (q.search) {
-      params.push('%' + String(q.search).trim() + '%');
+      params.push('%' + likeLiteral(q.search) + '%');
       where.push('(l.hostel_name ILIKE $' + params.length
         + ' OR l.city ILIKE $' + params.length
         + ' OR l.contact_name ILIKE $' + params.length
@@ -258,7 +315,9 @@ async function adminRoutes(app) {
     return reply.send({ success: true, data: rows.map(presentLicense) });
   });
 
-  app.get('/licenses/:id', { onRequest: requireAdmin }, async (request, reply) => {
+  app.get('/licenses/:id', {
+    onRequest: requireAdmin, schema: { params: UUID_PARAMS }
+  }, async (request, reply) => {
     const { rows } = await db.query('SELECT * FROM licenses WHERE id = $1', [request.params.id]);
     if (rows.length === 0) {
       return reply.code(404).send({ success: false, code: 'NOT_FOUND', message: 'No such licence.' });
@@ -289,7 +348,27 @@ async function adminRoutes(app) {
   });
 
   /** Details the owner keeps about a customer — free text, no behaviour. */
-  app.patch('/licenses/:id', { onRequest: requireAdmin }, async (request, reply) => {
+  app.patch('/licenses/:id', {
+    onRequest: requireAdmin,
+    schema: {
+      params: UUID_PARAMS,
+      // Without a body schema an empty PATCH reached `k in request.body` with
+      // request.body undefined and came back as a 500. Naming the fields also
+      // means a typo is refused rather than silently dropped.
+      body: {
+        type: 'object',
+        minProperties: 1,
+        properties: {
+          hostelName: { type: ['string', 'null'], maxLength: 500 },
+          contactName: { type: ['string', 'null'], maxLength: 500 },
+          contactPhone: { type: ['string', 'null'], maxLength: 500 },
+          city: { type: ['string', 'null'], maxLength: 500 },
+          notes: { type: ['string', 'null'], maxLength: 500 }
+        },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
     const allowed = ['hostelName', 'contactName', 'contactPhone', 'city', 'notes'];
     const cols = { hostelName: 'hostel_name', contactName: 'contact_name',
                    contactPhone: 'contact_phone', city: 'city', notes: 'notes' };
@@ -297,7 +376,8 @@ async function adminRoutes(app) {
     const params = [request.params.id];
     for (const k of allowed) {
       if (k in request.body) {
-        params.push(request.body[k] === '' ? null : String(request.body[k]).slice(0, 500));
+        const v = request.body[k];
+        params.push(v === '' || v === null ? null : String(v).slice(0, 500));
         sets.push(cols[k] + ' = $' + params.length);
       }
     }
@@ -324,6 +404,7 @@ async function adminRoutes(app) {
   app.post('/licenses/:id/status', {
     onRequest: requireAdmin,
     schema: {
+      params: UUID_PARAMS,
       body: {
         type: 'object',
         properties: {
@@ -373,6 +454,7 @@ async function adminRoutes(app) {
   app.post('/licenses/:id/renew', {
     onRequest: requireAdmin,
     schema: {
+      params: UUID_PARAMS,
       body: {
         type: 'object',
         properties: {
@@ -401,8 +483,7 @@ async function adminRoutes(app) {
       // Extend from whichever is later: a licence that lapsed three months ago
       // should get its full period from today, not have it swallowed by the gap.
       const base = new Date(Math.max(Date.now(), new Date(current.rows[0].expires_at).getTime()));
-      next = new Date(base);
-      next.setMonth(next.getMonth() + addMonths);
+      next = addCalendarMonths(base, addMonths);
     } else {
       return reply.code(400).send({
         success: false, code: 'NOTHING_TO_UPDATE', message: 'Give a date or a number of months.'
@@ -438,8 +519,15 @@ async function adminRoutes(app) {
   app.post('/licenses/:id/devices-limit', {
     onRequest: requireAdmin,
     schema: {
+      params: UUID_PARAMS,
       body: {
+        // maxDevices is REQUIRED, and null is how "unlimited" is said out loud.
+        // It used to be optional, so an empty body — a portal bug, a truncated
+        // request — read as `undefined` and silently uncapped a one-computer
+        // licence. "I did not mention it" and "let them have every computer"
+        // must not be the same request.
         type: 'object',
+        required: ['maxDevices'],
         properties: { maxDevices: { type: ['integer', 'null'], minimum: 1, maximum: 1000 } },
         additionalProperties: false
       }
@@ -447,7 +535,7 @@ async function adminRoutes(app) {
   }, async (request, reply) => {
     const { rows } = await db.query(
       'UPDATE licenses SET max_devices = $2 WHERE id = $1 RETURNING *',
-      [request.params.id, request.body.maxDevices === undefined ? null : request.body.maxDevices]
+      [request.params.id, request.body.maxDevices]
     );
     if (rows.length === 0) {
       return reply.code(404).send({ success: false, code: 'NOT_FOUND', message: 'No such licence.' });
@@ -460,8 +548,23 @@ async function adminRoutes(app) {
   });
 
   /** Feature flags. Unknown keys are refused rather than stored. */
-  app.put('/licenses/:id/features', { onRequest: requireAdmin }, async (request, reply) => {
-    const checked = features.validateOverrides(request.body && request.body.features);
+  app.put('/licenses/:id/features', {
+    onRequest: requireAdmin,
+    schema: {
+      params: UUID_PARAMS,
+      // `features` is REQUIRED. A PUT with no body used to validate as "no
+      // overrides" and overwrite the row with {}, silently resetting every flag
+      // an admin had set. Clearing the overrides is now something you have to
+      // ask for, by sending {}.
+      body: {
+        type: 'object',
+        required: ['features'],
+        properties: { features: { type: 'object' } },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
+    const checked = features.validateOverrides(request.body.features);
     if (!checked.ok) {
       return reply.code(400).send({ success: false, code: 'INVALID_FEATURES', message: checked.error });
     }
@@ -485,6 +588,7 @@ async function adminRoutes(app) {
   app.post('/devices/:id/status', {
     onRequest: requireAdmin,
     schema: {
+      params: UUID_PARAMS,
       body: {
         type: 'object',
         required: ['status'],
@@ -523,7 +627,17 @@ async function adminRoutes(app) {
     return reply.send({ success: true, data: { id: out.id, status: out.status } });
   });
 
-  app.patch('/devices/:id', { onRequest: requireAdmin }, async (request, reply) => {
+  app.patch('/devices/:id', {
+    onRequest: requireAdmin,
+    schema: {
+      params: UUID_PARAMS,
+      body: {
+        type: 'object',
+        properties: { label: { type: ['string', 'null'], maxLength: 120 } },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
     const label = request.body && request.body.label;
     const { rows } = await db.query(
       'UPDATE devices SET label = $2 WHERE id = $1 RETURNING id, label',
@@ -629,8 +743,13 @@ async function adminRoutes(app) {
 
   // ── Audit ─────────────────────────────────────────────────────────────────
   app.get('/audit', { onRequest: requireAdmin }, async (request, reply) => {
-    const limit = Math.min(parseInt((request.query || {}).limit || '100', 10) || 100, 500);
-    const offset = parseInt((request.query || {}).offset || '0', 10) || 0;
+    // Clamped, not just capped. `?limit=-5` used to reach Postgres as
+    // `LIMIT -5`, which is a syntax error and surfaced as a 500.
+    const q = request.query || {};
+    const rawLimit = parseInt(q.limit, 10);
+    const rawOffset = parseInt(q.offset, 10);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
+    const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
     return reply.send({ success: true, data: await audit.recent(limit, offset) });
   });
 
@@ -640,7 +759,9 @@ async function adminRoutes(app) {
    * device. Answers "what will the customer actually see?" — the question an
    * admin has immediately after changing anything on this page.
    */
-  app.get('/licenses/:id/preview', { onRequest: requireAdmin }, async (request, reply) => {
+  app.get('/licenses/:id/preview', {
+    onRequest: requireAdmin, schema: { params: UUID_PARAMS }
+  }, async (request, reply) => {
     const { rows } = await db.query('SELECT * FROM licenses WHERE id = $1', [request.params.id]);
     if (rows.length === 0) {
       return reply.code(404).send({ success: false, code: 'NOT_FOUND', message: 'No such licence.' });
