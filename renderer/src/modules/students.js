@@ -677,12 +677,86 @@ function showAddStudentModal(presetRoomId='') {
   navigate('addstudent');
 }
 
+/* ══ ADD STUDENT — the intake sheet ═══════════════════════════════════════════
+
+   Rebuilt to the "Add Student" mockup in the claude.ai/design project
+   "Add student form mockups": a registry sheet rather than a stack of boxes.
+   Numbered plates with corner registration marks, uppercase micro-labels, a
+   left rail carrying the photo and the record's own facts, and a completion
+   meter in the header.
+
+   NOT ONE FIELD WAS ADDED OR REMOVED, and every id and handler is the one that
+   was here before. submitAddStudent() reads this form by element id, so a
+   rename here is a silent data loss there — the markup moved, the contract did
+   not.
+
+   THE MOCKUP'S SAMPLE DATA IS NOT COPIED IN. It names a student, a father and
+   a street address, and the owner's 2026-08-30 ruling is that no seeded default
+   may name a real person or address. The placeholders here describe the field
+   instead. The old markup had exactly that problem — "Muhammad Ali",
+   "Ikram Khan (Father)", "House # 25, Street 4, Peshawar" were placeholders in
+   the shipped form — and this pass closes it.
+
+   The "Record" panel states only things the app can prove: who is signed in,
+   how many beds are actually free, and the id this student will get. The
+   mockup's "Session · Fall 2026" is not modelled anywhere in this app, so it
+   is not shown; an invented number on a screen is the one thing that rule
+   forbids outright.                                                          */
+
+/* The fields the completion meter counts. Required ones are weighted the same
+   as optional ones deliberately: the meter answers "how much of this sheet is
+   filled in", not "may I save yet". Saving is gated by submitAddStudent(). */
+const ASF_TRACKED = [
+  'f-tname', 'f-tfname', 'f-tcnic', 'f-tdob', 'f-tgender', 'f-tmarital',
+  'f-tnationality', 'f-tocc', 'f-tsession', 'f-tphone', 'f-temerg',
+  'f-temergphone', 'f-temail', 'f-taddress', 'f-troom', 'f-tbed', 'f-tjoin',
+  'f-texpstay', 'f-tblood', 'f-tallergies', 'f-tnotes',
+];
+
+function asfCompletion() {
+  let filled = 0;
+  for (const id of ASF_TRACKED) {
+    const el = document.getElementById(id);
+    if (el && String(el.value || '').trim()) filled++;
+  }
+  const pct = Math.round(filled / ASF_TRACKED.length * 100);
+  const fill = document.getElementById('asf-meter-fill');
+  const val  = document.getElementById('asf-meter-pct');
+  if (fill) fill.style.width = pct + '%';
+  if (val)  val.textContent = pct + '%';
+}
+
+/** Post-render hook, called from renderPage the way bindSettingsEvents is. */
+function asfInit() {
+  asfCompletion();
+}
+
 function renderAddStudent() {
   const presetRoomId = _addStudentPresetRoom || '';
   const allRooms = roomsByNumber(DB.rooms);
   const preset = presetRoomId ? DB.rooms.find(r=>r.id===presetRoomId) : null;
   const presetType = preset ? getRoomType(preset) : null;
   const presetLabel = preset ? 'Room #'+preset.number+' · '+(presetType?presetType.name:'')+' · '+(preset.floor||'')+' Floor' : '';
+
+  // Facts for the Record plate. Every one of these is computed from the
+  // database — nothing here is illustrative.
+  const totalBeds = DB.rooms.reduce((s,r)=>{ const t=getRoomType(r); return s+((t&&t.capacity)||0); },0);
+  const freeBeds  = DB.rooms.reduce((s,r)=>s+Math.max(0, roomFreeBeds(r)), 0);
+  const openRooms = DB.rooms.filter(r=>roomFreeBeds(r)>0).length;
+  const enteredBy = (typeof CUR_USER === 'object' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '—';
+  const presetCharges = preset ? resolveCharges({ roomId: preset.id }) : null;
+
+  const corners = '<i class="asf-c tl"></i><i class="asf-c tr"></i><i class="asf-c bl"></i><i class="asf-c br"></i>';
+  const plate = (num, title, meta, body) => `
+    <section class="asf-plate">${corners}
+      <div class="asf-phead">
+        <span class="asf-pnum">${escHtml(num)}</span>
+        <h2 class="asf-ptitle">${escHtml(title)}</h2>
+        <span class="asf-prule"></span>
+        ${meta ? `<span class="asf-meta">${escHtml(meta)}</span>` : ''}
+      </div>
+      ${body}
+    </section>`;
 
   const sel = (id, label, opts, cur, req) => `
     <div class="sf-f">
@@ -693,212 +767,216 @@ function renderAddStudent() {
     </div>`;
 
   return `
-  <div class="sf-wrap">
+  <div class="asf" oninput="asfCompletion()" onchange="asfCompletion()">
 
-    <!-- ══ PHOTO + STUDENT ID ══ -->
-    <div class="sf-head">
-      <div class="sf-photo-block">
+    <!-- ══ HEADER ══ -->
+    <header class="asf-head">
+      <div>
+        <div class="asf-kicker">${escHtml(DB.settings.hostelName || 'Hostel')} / Intake</div>
+        <h1 class="asf-h1">Add Student</h1>
+      </div>
+      <div class="asf-head__end">
         <div>
-          <div style="font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px">Student Photo</div>
-          <div class="sf-photo" id="add-student-photo-preview" onclick="triggerStudentPhotoUpload()" title="Click to upload a photo">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+          <div class="asf-meta">Form completion</div>
+          <div class="asf-meter">
+            <div class="asf-meter__track"><i id="asf-meter-fill"></i></div>
+            <span class="asf-meter__v" id="asf-meter-pct">0%</span>
           </div>
         </div>
-        <div class="sf-photo-acts" style="margin-top:22px">
+        <span class="asf-vrule"></span>
+        <div style="text-align:right">
+          <div class="asf-meta">Student ID · auto</div>
+          <div class="asf-id">#${escHtml(nextStudentId())}</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="asf-body">
+
+      <!-- ══ LEFT RAIL ══ -->
+      <div class="asf-rail">
+        ${plate('00','Student photo','', `
+          <div class="asf-photo" id="add-student-photo-preview" onclick="triggerStudentPhotoUpload()" title="Click to upload a photo">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+          </div>
           <div class="sf-drop" id="sf-drop" onclick="triggerStudentPhotoUpload()"
                ondragover="event.preventDefault();this.classList.add('is-over')"
                ondragleave="this.classList.remove('is-over')"
                ondrop="sfDropPhoto(event)">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
-            <b>Upload Photo</b><span>or drag and drop</span>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
+            <b>Upload photo</b><span>or drag and drop</span>
           </div>
-          <button type="button" class="sf-btn sf-btn--ghost" id="add-student-cam-btn" style="width:190px;justify-content:center" onclick="openAddStudentCamera()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
-            Take Photo
-          </button>
-          <button type="button" class="sf-btn" id="add-student-clear-btn" style="width:190px;justify-content:center;display:none;color:var(--red)" onclick="clearAddStudentPhoto()">Remove photo</button>
+          <div class="asf-photo-acts">
+            <button type="button" class="sf-btn sf-btn--ghost" id="add-student-cam-btn" onclick="openAddStudentCamera()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              Take photo
+            </button>
+            <button type="button" class="sf-btn" id="add-student-clear-btn" style="display:none;color:var(--red)" onclick="clearAddStudentPhoto()">Remove</button>
+          </div>
           <input type="file" id="add-student-photo-file" accept="image/*" style="display:none" onchange="loadAddStudentPhoto(this)">
           <input type="hidden" id="add-student-photo-data" value="">
-          <div id="add-student-cam-box" style="display:none;width:190px">
-            <video id="add-student-cam-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000"></video>
+          <div id="add-student-cam-box" style="display:none">
+            <video id="add-student-cam-video" autoplay playsinline style="width:100%;background:#000"></video>
             <canvas id="add-student-cam-canvas" style="display:none"></canvas>
             <div style="display:flex;gap:6px;margin-top:6px">
-              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center;padding:0 10px" onclick="captureAddStudentPhoto()">Capture</button>
-              <button type="button" class="sf-btn" style="flex:1;justify-content:center;padding:0 10px" onclick="closeAddStudentCamera()">Close</button>
+              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center" onclick="captureAddStudentPhoto()">Capture</button>
+              <button type="button" class="sf-btn" style="flex:1;justify-content:center" onclick="closeAddStudentCamera()">Close</button>
             </div>
-          </div>
-        </div>
+          </div>`)}
+
+        ${plate('—','Record','', `
+          <div class="asf-rec">
+            <div class="asf-rec__r"><span class="asf-meta">Entered by</span><span>${escHtml(enteredBy)}</span></div>
+            <div class="asf-rec__r"><span class="asf-meta">Beds free</span><span class="asf-num">${freeBeds} of ${totalBeds}</span></div>
+            <div class="asf-rec__r"><span class="asf-meta">Rooms with space</span><span class="asf-num">${openRooms}</span></div>
+            <div class="asf-hr"></div>
+            <div class="asf-rec__r"><span class="asf-meta">Status</span><span class="asf-tag">New — unsaved</span></div>
+          </div>`)}
       </div>
 
-      <div class="sf-idcard">
-        <span class="sf-idcard__note">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4"/><circle cx="16" cy="10" r="2"/></svg>
-          ID will be auto-generated
-        </span>
-        <div class="sf-idcard__l">Student ID</div>
-        <div class="sf-idcard__v">#${escHtml(nextStudentId())}</div>
-      </div>
-    </div>
+      <!-- ══ RIGHT ══ -->
+      <div class="asf-main">
 
-    <!-- ══ STUDENT IDENTITY ══ -->
-    <div class="sf-sec">
-      <div class="sf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
-        Student Identity
-      </div>
-      <div class="sf-grid">
-        <div class="sf-f"><label for="f-tname">Full Name<span class="req">*</span></label>
-          <input class="sf-in" id="f-tname" placeholder="Muhammad Ali" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-        <div class="sf-f"><label for="f-tfname">Father's Name<span class="req">*</span></label>
-          <input class="sf-in" id="f-tfname" placeholder="Muhammad Ikram" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-        <div class="sf-f"><label for="f-tcnic">CNIC</label>
-          <div class="sf-wrapin">
-            <input class="sf-in" id="f-tcnic" placeholder="35202-1234567-1" maxlength="15" oninput="fmtCnic(this);sfCheckCnic()">
-            <svg class="sf-ok" id="f-tcnic-ok" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          </div>
-        </div>
-      </div>
-      <div class="sf-grid" style="margin-top:14px">
-        <div class="sf-f"><label for="f-tdob">Date of Birth</label>
-          <input class="sf-in" id="f-tdob" type="date"></div>
-        ${sel('f-tgender','Gender',['','Male','Female','Other'],'')}
-        ${sel('f-tmarital','Marital Status',['','Single','Married'],'Single')}
-        ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
-      </div>
-      <div class="sf-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr">
-        <div class="sf-f"><label for="f-tocc">Course / Study Field</label>
-          <div style="position:relative" id="f-tocc-wrap">
-            <input class="sf-in" id="f-tocc" placeholder="BS Computer Science" autocomplete="off"
-              oninput="courseAutocomplete(this)" onfocus="courseAutocomplete(this)" onkeydown="courseKeyNav(event)"
-              onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)">
-            <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:10px;z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
-          </div>
-          <input type="hidden" id="f-tocctype" value="Student">
-          <input type="hidden" id="f-tocccustom" value="">
-        </div>
-        <div class="sf-f"><label for="f-tsession">Session / Semester</label>
-          <input class="sf-in" id="f-tsession" placeholder="Fall 2026 / 1st Semester"></div>
-      </div>
-    </div>
-
-    <!-- ══ CONTACT INFORMATION ══ -->
-    <div class="sf-sec">
-      <div class="sf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>
-        Contact Information
-      </div>
-      <div class="sf-grid">
-        <div class="sf-f"><label for="f-tphone">Phone Number<span class="req">*</span></label>
-          <div style="display:flex"><span class="sf-prefix">+92</span>
-            <input class="sf-in" id="f-tphone" placeholder="301 1234567" maxlength="12" oninput="fmtPhone(this)"></div>
-        </div>
-        <div class="sf-f"><label for="f-temerg">Emergency Contact</label>
-          <input class="sf-in" id="f-temerg" placeholder="Ikram Khan (Father)"></div>
-        <div class="sf-f"><label for="f-temergphone">Emergency Phone</label>
-          <input class="sf-in" id="f-temergphone" placeholder="0300 1234567"></div>
-        <div class="sf-f"><label for="f-temail">Email Address</label>
-          <div class="sf-wrapin">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-            <input class="sf-in" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off">
-            <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
-          </div>
-        </div>
-      </div>
-      <div class="sf-grid" style="margin-top:14px">
-        <div class="sf-f sf-f--wide"><label for="f-taddress">Home Address</label>
-          <div class="sf-wrapin">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
-            <input class="sf-in" id="f-taddress" placeholder="House # 25, Street 4, Peshawar, KPK, Pakistan"
-              autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">
-          </div>
-          <div id="f-taddress-suggestions" class="city-suggestions"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ HOSTEL INFORMATION ══ -->
-    <div class="sf-sec">
-      <div class="sf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg>
-        Hostel Information
-      </div>
-      <div class="sf-grid sf-grid--5">
-        <div class="sf-f"><label for="f-troom-search">Room<span class="req">*</span></label>
-          <div style="position:relative">
-            <input type="hidden" id="f-troom" value="${escHtml(presetRoomId)}">
-            <input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor…" autocomplete="off"
-              value="${escHtml(presetLabel)}"
-              oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)"
-              onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
-            <div id="room-search-drop" class="sf-drop-list">
-              ${allRooms.map(r=>{
-                const rt=getRoomType(r); const occ=getRoomOccupancy(r);
-                const free=roomFreeBeds(r); const vac=getRoomVacating(r);
-                const isFull = free<=0;
-                const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
-                // Show the monthly charge on each room so the warden sees the
-                // price from Settings while picking, not first at the payment step.
-                const rc=resolveCharges({roomId:r.id});
-                return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+rc.rent+'"'
-                  +' data-label="'+escHtml(lbl)+'"'
-                  +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
-                  +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
-                  +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':vac>0||free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
-                  +escHtml(roomAvailLabel(r))+'</span>'
-                  +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
-                  +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
-              }).join('')}
-              ${allRooms.length===0?'<div class="sf-drop-item"><span>No rooms configured</span></div>':''}
+        ${plate('01','Student identity','9 fields · 2 required', `
+          <div class="asf-fg asf-fg--4">
+            <div class="sf-f"><label for="f-tname">Full name<span class="req">*</span></label>
+              <input class="sf-in" id="f-tname" placeholder="Full name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+            <div class="sf-f"><label for="f-tfname">Father's name<span class="req">*</span></label>
+              <input class="sf-in" id="f-tfname" placeholder="Father's name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+            <div class="sf-f"><label for="f-tcnic">CNIC / B-Form</label>
+              <div class="sf-wrapin">
+                <input class="sf-in" id="f-tcnic" placeholder="00000-0000000-0" maxlength="15" oninput="fmtCnic(this);sfCheckCnic()">
+                <svg class="sf-ok" id="f-tcnic-ok" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              </div>
             </div>
-          </div>
-          <div id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700;margin-top:4px"></div>
-        </div>
-        <div class="sf-f"><label for="f-tbed">Bed / Seat</label>
-          <select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select></div>
-        <div class="sf-f"><label for="f-tfloor">Floor</label>
-          <input class="sf-in" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly style="background:var(--dash-sunk);color:var(--text3)"></div>
-        <div class="sf-f"><label for="f-tjoin">Join Date<span class="req">*</span></label>
-          <input class="sf-in" id="f-tjoin" type="date" value="${today()}"></div>
-        <div class="sf-f"><label for="f-texpstay">Expected Stay Until</label>
-          <input class="sf-in" id="f-texpstay" type="date"></div>
-      </div>
+            <div class="sf-f"><label for="f-tdob">Date of birth</label>
+              <input class="sf-in" id="f-tdob" type="date"></div>
 
-      <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">
-    </div>
+            ${sel('f-tgender','Gender',['','Male','Female','Other'],'')}
+            ${sel('f-tmarital','Marital status',['','Single','Married'],'Single')}
+            ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
+            ${sel('f-tblood','Blood group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}
 
-    <!-- ══ ADDITIONAL INFORMATION ══ -->
-    <div class="sf-sec">
-      <div class="sf-sec__h">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        Additional Information
-      </div>
-      <div class="sf-grid" style="grid-template-columns:180px 1fr 1.4fr">
-        ${sel('f-tblood','Blood Group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}
-        <div class="sf-f"><label for="f-tallergies">Allergies / Medical Condition</label>
-          <input class="sf-in" id="f-tallergies" placeholder="No allergies"></div>
-        <div class="sf-f"><label for="f-tnotes">Notes</label>
-          <textarea class="sf-ta" id="f-tnotes" maxlength="250" rows="3"
-            placeholder="Anything the warden should know about this student…"
-            oninput="sfCount()"></textarea>
-          <div class="sf-count" id="f-tnotes-count">0/250</div>
+            <div class="sf-f" style="grid-column:span 2"><label for="f-tocc">Course / study field</label>
+              <div style="position:relative" id="f-tocc-wrap">
+                <input class="sf-in" id="f-tocc" placeholder="Course or field of study" autocomplete="off"
+                  oninput="courseAutocomplete(this)" onfocus="courseAutocomplete(this)" onkeydown="courseKeyNav(event)"
+                  onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)">
+                <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
+              </div>
+              <input type="hidden" id="f-tocctype" value="Student">
+              <input type="hidden" id="f-tocccustom" value="">
+            </div>
+            <div class="sf-f" style="grid-column:span 2"><label for="f-tsession">Session / semester</label>
+              <input class="sf-in" id="f-tsession" placeholder="Session or semester"></div>
+          </div>`)}
+
+        <div class="asf-row">
+          ${plate('02','Contact','5 fields · 1 required', `
+            <div class="asf-fg asf-fg--3">
+              <div class="sf-f"><label for="f-tphone">Phone number<span class="req">*</span></label>
+                <div style="display:flex"><span class="sf-prefix">+92</span>
+                  <input class="sf-in" id="f-tphone" placeholder="3xx xxxxxxx" maxlength="12" oninput="fmtPhone(this)"></div>
+              </div>
+              <div class="sf-f"><label for="f-temail">Email address</label>
+                <div class="sf-wrapin">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  <input class="sf-in" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off">
+                  <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
+                </div>
+              </div>
+              <div class="sf-f"><label for="f-temerg">Emergency contact</label>
+                <input class="sf-in" id="f-temerg" placeholder="Name and relation"></div>
+              <div class="sf-f"><label for="f-temergphone">Emergency phone</label>
+                <input class="sf-in" id="f-temergphone" placeholder="03xx xxxxxxx"></div>
+              <div class="sf-f" style="grid-column:span 2"><label for="f-taddress">Home address</label>
+                <div class="sf-wrapin">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+                  <input class="sf-in" id="f-taddress" placeholder="House, street, city"
+                    autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">
+                </div>
+                <div id="f-taddress-suggestions" class="city-suggestions"></div>
+              </div>
+            </div>`)}
+
+          ${plate('03','Hostel allotment','2 required', `
+            <div class="asf-fg asf-fg--2">
+              <div class="sf-f" style="grid-column:span 2"><label for="f-troom-search">Room<span class="req">*</span></label>
+                <div style="position:relative">
+                  <input type="hidden" id="f-troom" value="${escHtml(presetRoomId)}">
+                  <div class="sf-wrapin">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor" autocomplete="off"
+                      value="${escHtml(presetLabel)}"
+                      oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)"
+                      onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
+                  </div>
+                  <div id="room-search-drop" class="sf-drop-list">
+                    ${allRooms.map(r=>{
+                      const rt=getRoomType(r); const free=roomFreeBeds(r); const vac=getRoomVacating(r);
+                      const isFull = free<=0;
+                      const lbl='Room #'+r.number+' · '+rt.name+' · '+r.floor+' Floor';
+                      const rc=resolveCharges({roomId:r.id});
+                      return '<div class="sf-drop-item room-search-item" data-id="'+r.id+'" data-rent="'+rc.rent+'"'
+                        +' data-label="'+escHtml(lbl)+'"'
+                        +' onmousedown="pickRoomSearch(\''+r.id+'\','+rc.rent+',\''+escHtml(lbl).replace(/'/g,"\\'")+'\')">'
+                        +'<div><b>Room #'+escHtml(String(r.number))+'</b> <span>'+escHtml(rt.name)+' · '+escHtml(r.floor||'')+' Floor</span></div>'
+                        +'<div style="text-align:right"><span style="color:'+(isFull?'var(--red)':vac>0||free<=1?'var(--amber)':'var(--green)')+';font-weight:700">'
+                        +escHtml(roomAvailLabel(r))+'</span>'
+                        +'<div style="font-size:10px;color:'+(rc.configured?'var(--text3)':'var(--red)')+';font-weight:700">'
+                        +(rc.configured?fmtPKR(rc.total)+'/mo':'No rent set')+'</div></div></div>';
+                    }).join('')}
+                    ${allRooms.length===0?'<div class="sf-drop-item"><span>No rooms configured</span></div>':''}
+                  </div>
+                </div>
+                <div id="f-troom-selected-label" class="asf-picked"></div>
+              </div>
+              <div class="sf-f"><label for="f-tbed">Bed / seat</label>
+                <select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select></div>
+              <div class="sf-f"><label for="f-tfloor">Floor</label>
+                <input class="sf-in sf-in--ro" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly></div>
+              <div class="sf-f" style="grid-column:span 2"><label>Monthly charge</label>
+                <input class="sf-in sf-in--ro" id="f-trent-display" readonly placeholder="Set by room"
+                  value="${presetCharges && presetCharges.configured ? escHtml(fmtPKR(presetCharges.total)+' / month') : ''}"></div>
+              <div class="sf-f"><label for="f-tjoin">Join date<span class="req">*</span></label>
+                <input class="sf-in" id="f-tjoin" type="date" value="${today()}"></div>
+              <div class="sf-f"><label for="f-texpstay">Stay until</label>
+                <input class="sf-in" id="f-texpstay" type="date"></div>
+            </div>
+            <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">`)}
         </div>
+
+        ${plate('04','Health & notes','Optional', `
+          <div class="asf-fg" style="grid-template-columns:1.1fr 2.4fr">
+            <div class="sf-f"><label for="f-tallergies">Allergies / medical condition</label>
+              <input class="sf-in" id="f-tallergies" placeholder="None reported"></div>
+            <div class="sf-f"><label for="f-tnotes">Notes for the warden</label>
+              <textarea class="sf-ta" id="f-tnotes" maxlength="250" rows="3"
+                placeholder="Anything the warden should know about this student…"
+                oninput="sfCount()"></textarea>
+              <div class="sf-count" id="f-tnotes-count">0/250</div>
+            </div>
+          </div>`)}
       </div>
     </div>
 
     <!-- ══ ACTIONS ══ -->
-    <div class="sf-foot">
+    <footer class="asf-foot">
+      <span class="asf-foot__note">Payment is collected in the next step.</span>
+      <span style="flex:1"></span>
       <button class="sf-btn" onclick="navigate('students')">Cancel</button>
       ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        Save &amp; Add Another</button>`:''}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        Save &amp; add another</button>`:''}
       <button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}', false, true)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-        Save as Draft</button>
-      <button class="sf-btn sf-btn--go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
-        Save &amp; Proceed to Payment
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+        Save as draft</button>
+      <button class="sf-btn sf-btn--go asf-go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
+        ${corners}
+        Save &amp; proceed to payment
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </button>
-    </div>
+    </footer>
   </div>`;
 }
 
@@ -2853,7 +2931,19 @@ function pickRoomSearch(roomId, rent, label) {
   const bedEl = document.getElementById('f-tbed');
   if (bedEl && typeof sfBedOptions === 'function') bedEl.innerHTML = sfBedOptions(room);
 
+  /* The intake sheet shows the monthly charge as a read-only cell, so the
+     warden sees the price while assigning rather than first at the payment
+     step. resolveCharges() is the reader -- never rent alone, which would hide
+     the mess half. Absent on the other forms that share this function. */
+  const rentEl = document.getElementById('f-trent-display');
+  if (rentEl) {
+    const rc = roomId ? resolveCharges({ roomId }) : null;
+    rentEl.value = rc && rc.configured ? fmtPKR(rc.total) + ' / month' : '';
+    rentEl.placeholder = rc && !rc.configured ? 'No rent set for this room type' : 'Set by room';
+  }
+
   recalcStudentUnpaid();
+  if (typeof asfCompletion === 'function') asfCompletion();
 }
 function recalcStudentUnpaid() {
   // The v5 form dropped its rent input (f-trent), so this used to read 0 and

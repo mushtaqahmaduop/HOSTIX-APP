@@ -508,3 +508,165 @@
    `.svw-hero__av` in this file, and both are single-class selectors, so source
    order would otherwise hand the hero the muted table-cell palette. */
 .stu-av.svw-hero__av { background:var(--accent); color:#fff; border:none; }
+
+/* ══ ADD STUDENT — the intake sheet ═══════════════════════════════════════════
+   Built to the "Add Student" mockup in the claude.ai/design project "Add
+   student form mockups": numbered plates carrying corner registration marks,
+   uppercase micro-labels and cell-style fields, on a left rail + main split.
+
+   `asf-` is the page layout. The FIELDS keep their existing `sf-` classes on
+   purpose — students.js queries .room-search-item and .sf-drop-item by name,
+   and the edit-student form shares the same input styling, so renaming them
+   here would restyle a screen this change never touched.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.asf { display:flex; flex-direction:column; gap:15px; }
+
+/* — header — */
+.asf-head { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+.asf-kicker {
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--accent);
+}
+.asf-h1 {
+    font-family:var(--font-display); font-size:38px; font-weight:700;
+    line-height:1; margin:5px 0 0; letter-spacing:-.01em; color:var(--text);
+}
+.asf-head__end { display:flex; align-items:flex-end; gap:22px; margin-left:auto; }
+.asf-vrule { width:1px; height:44px; background:var(--border); }
+
+.asf-meta {
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text3); font-weight:600;
+}
+.asf-meter { display:flex; align-items:center; gap:9px; margin-top:6px; }
+.asf-meter__track {
+    position:relative; width:180px; height:7px;
+    border:1px solid var(--border); background:var(--dash-sunk);
+}
+.asf-meter__track i {
+    position:absolute; inset:0 auto 0 0; width:0;
+    background:var(--accent); transition:width .25s ease;
+}
+.asf-meter__v {
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+    font-variant-numeric:tabular-nums;
+    font-weight:800; font-size:15px; min-width:46px; color:var(--text);
+}
+.asf-id {
+    font-family:var(--font-display); font-weight:700; font-size:32px;
+    line-height:1; color:var(--accent);
+    font-variant-numeric:tabular-nums; letter-spacing:var(--ant-num-track);
+}
+
+/* — the two columns — */
+.asf-body { display:grid; grid-template-columns:262px 1fr; gap:15px; align-items:start; }
+.asf-rail { display:flex; flex-direction:column; gap:15px; min-width:0; }
+.asf-main { display:flex; flex-direction:column; gap:15px; min-width:0; }
+.asf-row  { display:grid; grid-template-columns:1.32fr 1fr; gap:15px; align-items:start; }
+
+/* — a plate: a bordered section with registration marks at its corners — */
+.asf-plate {
+    position:relative; padding:14px 16px 16px;
+    border:1px solid var(--border); background:var(--card);
+}
+.asf-c {
+    position:absolute; width:11px; height:11px; color:var(--border2);
+}
+.asf-c::before, .asf-c::after { content:""; position:absolute; background:currentColor; }
+.asf-c::before { left:5px; top:0; width:1px; height:100%; }
+.asf-c::after  { top:5px; left:0; width:100%; height:1px; }
+.asf-c.tl { top:-6px; left:-6px; }
+.asf-c.tr { top:-6px; right:-6px; }
+.asf-c.bl { bottom:-6px; left:-6px; }
+.asf-c.br { bottom:-6px; right:-6px; }
+
+.asf-phead { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+.asf-pnum {
+    font-family:var(--font-display); font-weight:700; font-size:12px;
+    letter-spacing:.14em; color:var(--accent);
+    font-variant-numeric:tabular-nums;
+}
+.asf-ptitle {
+    font-family:var(--font-display); font-weight:700; font-size:13px;
+    letter-spacing:.13em; text-transform:uppercase; margin:0; color:var(--text);
+}
+.asf-prule { flex:1; height:1px; background:var(--border); }
+
+/* — field grids — */
+.asf-fg { display:grid; gap:11px 14px; }
+.asf-fg--4 { grid-template-columns:repeat(4,1fr); }
+.asf-fg--3 { grid-template-columns:repeat(3,1fr); }
+.asf-fg--2 { grid-template-columns:repeat(2,1fr); }
+
+/* — photo plate — */
+.asf-photo {
+    width:100%; height:196px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); background:var(--dash-sunk);
+    color:var(--text3); overflow:hidden;
+}
+.asf-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+.asf-photo-acts { display:flex; gap:7px; margin-top:9px; }
+.asf-photo-acts .sf-btn { flex:1; justify-content:center; }
+
+/* — record plate — */
+.asf-rec { display:grid; gap:9px; font-size:12px; }
+.asf-rec__r { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.asf-rec__r > span:last-child { color:var(--text); font-weight:600; text-align:right; min-width:0; }
+.asf-num {
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+    font-variant-numeric:tabular-nums; font-weight:700;
+}
+.asf-hr { height:1px; background:var(--border); }
+.asf-tag {
+    display:inline-flex; align-items:center; padding:3px 9px; font-size:11px;
+    border:1px solid var(--accent); color:var(--accent); font-weight:600;
+}
+
+.asf-picked { font-size:11px; color:var(--green); font-weight:700; margin-top:4px; min-height:14px; }
+
+/* — footer — */
+.asf-foot {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding-top:14px; border-top:1px solid var(--border);
+}
+.asf-foot__note { font-size:11px; color:var(--text3); }
+.asf-go { position:relative; }
+
+/* — narrower windows — */
+@media (max-width:1200px) {
+    .asf-fg--4 { grid-template-columns:repeat(2,1fr); }
+    .asf-row   { grid-template-columns:1fr; }
+}
+@media (max-width:900px) {
+    .asf-body  { grid-template-columns:1fr; }
+    .asf-fg--3, .asf-fg--4 { grid-template-columns:1fr 1fr; }
+    .asf-head__end { margin-left:0; }
+}
+
+/* The intake sheet squares its fields to match its plates, and states its
+   labels as uppercase micro-labels. Scoped to .asf on purpose: the SAME
+   .sf-in classes dress the edit-student form, which this change does not
+   touch and must not restyle. */
+.asf .sf-in,
+.asf .sf-sel,
+.asf .sf-ta,
+.asf .sf-prefix,
+.asf .sf-btn { border-radius:0; }
+.asf .sf-prefix + .sf-in { border-radius:0; }
+
+.asf .sf-f > label {
+    display:flex; align-items:center; gap:4px;
+    font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+    margin-bottom:4px; color:var(--text3); font-weight:600;
+}
+.asf .sf-f > label .req { color:var(--accent); }
+
+/* Read-only cells -- floor and the monthly charge are set BY the room, so they
+   read as stated facts rather than empty inputs waiting to be filled. */
+.sf-in--ro {
+    background:transparent; color:var(--text2);
+    border-style:dashed;
+}
+.sf-in--ro::placeholder { color:var(--text3); }

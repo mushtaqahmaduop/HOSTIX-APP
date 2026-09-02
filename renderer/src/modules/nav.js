@@ -272,6 +272,7 @@ function renderPage(p, resetScroll=false) {
     // laid out before Chart.js measures them.
     if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
     if(basePage==='settings') bindSettingsEvents();
+    if(basePage==='addstudent') asfInit();
     if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);
   },80);
 }
