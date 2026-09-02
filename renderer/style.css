@@ -197,7 +197,11 @@ body.light-theme .header {
 body.light-theme input,
 body.light-theme select,
 body.light-theme textarea {
-    background: var(--card);
+    /* background-COLOR, not the shorthand: these rules match a <select>
+       whose chevron is a background-image (select.form-control, and
+       .arm-input > select). The shorthand resets background-image to
+       none, so the arrow vanished in light mode and only there. */
+    background-color: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -262,7 +266,7 @@ body.light-theme .ftab.active {
     border-color: rgba(59,130,246, 0.2);
 }
 body.light-theme .form-control {
-    background: var(--card);
+    background-color: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -4275,14 +4279,14 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 .form-control::placeholder { color: var(--text3); opacity: 0.6; }
 
 body.light-theme .form-control {
-    background: var(--card);
+    background-color: var(--card);
     border-color: #d7c3b5;
     color: #1c1b1b;
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
-    background: var(--card);
+    background-color: var(--card);
 }
 
 /* ── FILTER BAR — Stitch ─────────────────────────────────────────────────── */
