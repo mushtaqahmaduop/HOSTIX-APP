@@ -197,7 +197,7 @@ body.light-theme .header {
 body.light-theme input,
 body.light-theme select,
 body.light-theme textarea {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -209,7 +209,7 @@ body.light-theme textarea:focus {
 }
 body.light-theme .modal-box,
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
@@ -262,7 +262,7 @@ body.light-theme .ftab.active {
     border-color: rgba(59,130,246, 0.2);
 }
 body.light-theme .form-control {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -275,12 +275,12 @@ body.light-theme .settings-tab.active {
     color: var(--accent);
 }
 body.light-theme .arch-hb {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
 }
 body.light-theme .stat-card::after {
@@ -2954,7 +2954,7 @@ body.light-theme .login-warden-btn.selected .login-warden-name {
 }
 
 body.light-theme #login-input {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -2968,7 +2968,7 @@ body.light-theme #login-input {
 body.light-theme #login-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px rgba(56,189,248,0.08);
-    background: #ffffff;
+    background: var(--card);
 }
 
 #login-input::placeholder { color: var(--text3); }
@@ -3684,7 +3684,7 @@ body.light-theme #main {
 }
 
 body.light-theme .stat-card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 20px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3693,7 +3693,7 @@ body.light-theme .stat-card:hover {
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3703,12 +3703,12 @@ body.light-theme #header {
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 1px 0 0 var(--border), 4px 0 24px rgba(0,0,0,0.04);
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 0 0 1px var(--border);
 }
 
@@ -3973,7 +3973,7 @@ body.light-theme ::-webkit-scrollbar-thumb { background: #d7c3b5; }
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     border-right: 1px solid #d7c3b5;
     box-shadow: 2px 0 16px rgba(0,0,0,0.04);
 }
@@ -4073,7 +4073,7 @@ body.light-theme #content { background: #f3f3f3; }
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
@@ -4275,14 +4275,14 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 .form-control::placeholder { color: var(--text3); opacity: 0.6; }
 
 body.light-theme .form-control {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
     color: #1c1b1b;
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
-    background: #ffffff;
+    background: var(--card);
 }
 
 /* ── FILTER BAR — Stitch ─────────────────────────────────────────────────── */
@@ -4295,7 +4295,7 @@ body.light-theme .form-control:focus {
 }
 
 body.light-theme .filter-bar {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4353,7 +4353,7 @@ body.light-theme .filter-bar {
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 16px 48px rgba(0,0,0,0.12);
 }
@@ -4401,7 +4401,7 @@ body.light-theme .btn-primary {
 .room-card.vacant   { border-color: rgba(0,0,0,0.1); }
 .room-card.maintenance { border-color: rgba(255,180,171,0.20); }
 
-body.light-theme .room-card { background: #ffffff; border: 1px solid #d7c3b5; }
+body.light-theme .room-card { background: var(--card); border: 1px solid #d7c3b5; }
 body.light-theme .room-card:hover { background: #f8f7f6; }
 
 /* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
@@ -4415,7 +4415,7 @@ body.light-theme .room-card:hover { background: #f8f7f6; }
 }
 
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4427,7 +4427,7 @@ body.light-theme .toast {
 }
 
 body.light-theme .settings-topnav-wrap {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     border-bottom-color: var(--border);
 }
@@ -4521,7 +4521,7 @@ body.light-theme .arch-month-card,
 body.light-theme .arch-s-card,
 body.light-theme .arch-ov-card,
 body.light-theme .dash-card {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
