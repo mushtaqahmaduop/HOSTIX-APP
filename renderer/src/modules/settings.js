@@ -904,6 +904,19 @@ function renderDataManagementPanel() {
         </div>
       </div>
 
+      <div class="set-sub" style="margin-bottom:14px">
+        <div class="set-sub__top">
+          <div class="set-sub__ico dh-violet">${setIco(SET_ICO.settings || SET_ICO.info, 21)}</div>
+          <div style="min-width:0">
+            <div class="set-sub__t">Setup Guide</div>
+            <div class="set-sub__s">Walk through hostel details, what you offer, charges, rooms and your password again — nothing you have already entered is deleted</div>
+          </div>
+        </div>
+        <div class="set-sub__btns">
+          <button class="set-btn" onclick="openSetupAgain()">${setIco(SET_ICO.info, 16, 2)}Run the setup guide</button>
+        </div>
+      </div>
+
       <div class="set-split">
         <!-- IMPORT -->
         <div class="set-sub">

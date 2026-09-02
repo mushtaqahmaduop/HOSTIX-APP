@@ -68,6 +68,30 @@ declare function hostelServesMess(): boolean;
 declare function messIsOptional(): boolean;
 declare function serviceModelInfo(): ServiceModelDef;
 
+// -- rooms.js: bulk creation --------------------------------------------------
+declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };
+declare var ROOM_AMENITY_DEFAULTS: string[];
+declare function cmpRoomNo(a: any, b: any): number;
+declare function formatRoomNumber(inp: any): void;
+
+// -- onboarding.js ------------------------------------------------------------
+declare function needsSetup(): boolean;
+declare function maybeRunSetup(): boolean;
+declare function openSetupAgain(): void;
+
+// -- auth-nev.js --------------------------------------------------------------
+declare var CUR_USER: any;
+declare var CUR_ROLE: any;
+declare var WARDENS: any;
+declare var DEFAULT_PASSWORD: string;
+declare function verifyPassword(plain: string, stored: any): Promise<boolean>;
+declare function hashPassword(plain: string): Promise<any>;
+declare function hashNewPassword(plain: string): Promise<any>;
+declare function saveWardenConfig(): void;
+declare function requirePerm(p: string): boolean;
+declare function isResident(t: any): boolean;
+declare function escHtml(s: any): string;
+declare function renderPage(page: string, ...rest: any[]): void;
 
 // ── modals.js ────────────────────────────────────────────────────────────────
 declare function showModal(size: string, title: string, body: string, footer?: string): void;

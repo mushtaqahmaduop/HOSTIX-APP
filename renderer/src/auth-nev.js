@@ -576,6 +576,10 @@ async function checkLogin() {
         // is visible now, so it has somewhere to land.
         if (typeof flushToastQueue === 'function') flushToastQueue();
         if (typeof showSplashScreen === 'function') showSplashScreen();
+        /* First-run setup, after activation and after login -- never mid-session
+           and never over a hostel that already has data. maybeRunSetup() decides;
+           see needsSetup() in onboarding.js for why the flag alone is not enough. */
+        if (typeof maybeRunSetup === 'function') maybeRunSetup();
       }, 420);
  
     } else {

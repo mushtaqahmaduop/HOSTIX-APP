@@ -95,7 +95,12 @@ let DB = {
     defaultWANumber:    '',
     hostelNameFont:     'DM Serif Display',
     lastBackupReminder: null,  // ISO string — used by backup reminder toast
-    lastBackupExport:   null   // ISO string — when a backup was last written out
+    lastBackupExport:   null,  // ISO string — when a backup was last written out
+    // First-run setup. `setupCompletedAt` is only ever written by the wizard
+    // finishing; an install in the field has neither field and is recognised
+    // as already-set-up by its DATA, not by these. See needsSetup().
+    setupCompletedAt:   null,
+    setupStep:          null
   },
   rooms:         [],
   students:      [],

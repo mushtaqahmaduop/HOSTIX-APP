@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="whatsapp.css">
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="onboarding.css">
   <!-- App chrome v5 (sidebar + header) — loads last so it wins on ties -->
   <link rel="stylesheet" href="chrome.css">
   <!-- Custom frameless title bar (loads after chrome so its offsets win) -->
@@ -686,6 +687,8 @@
   <script src="src/modules/sidebar_calendar.js"></script>
   <script src="src/modules/issues.js"></script>
   <script src="src/modules/command-palette.js"></script>
+  <!-- First-run setup. After rooms.js (bulkRoomPlan) and settings.js. -->
+  <script src="src/modules/onboarding.js"></script>
   <!-- Custom title bar (self-contained; mounts the frameless window chrome) -->
   <script src="src/titlebar.js"></script>
   <!-- Boot & misc -->
