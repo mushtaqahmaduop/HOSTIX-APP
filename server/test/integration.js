@@ -112,11 +112,21 @@ async function makeAdmin(role) {
   return rows[0].id;
 }
 
+/** One account per role, so a single test can compare what each may do. */
+async function makeAdmins() {
+  const hash = bcrypt.hashSync(PASSWORD, 10);
+  for (const role of ['owner', 'admin', 'support']) {
+    await db.query(
+      `INSERT INTO admin_users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)`,
+      [role + '@example.com', hash, role, role]);
+  }
+}
+
 /** Sign in and return the headers a portal request carries. */
-async function signIn(app) {
+async function signIn(app, email) {
   const res = await app.inject({
     method: 'POST', url: '/admin/api/login',
-    payload: { email: 'owner@example.com', password: PASSWORD }
+    payload: { email: email || 'owner@example.com', password: PASSWORD }
   });
   assert.strictEqual(res.statusCode, 200, 'sign-in failed: ' + res.body);
   const jar = {};
@@ -870,6 +880,184 @@ test('a device token cannot reach the portal, and a session cannot mint one', as
   const sessionCookie = headers.cookie.match(/cp_session=([^;]+)/)[1];
   const asAdmin = await getEntitlement(app, sessionCookie);
   assert.strictEqual(asAdmin.statusCode, 401, asAdmin.body);
+});
+
+test('support can read everything and change nothing', async (app) => {
+  await wipe();
+  await makeAdmins();
+  const headers = await signIn(app, 'support@example.com');
+  const first = body(await register(app, V4_KEY, M1)).data;
+  const url = '/admin/api/licenses/' + first.licenseId;
+
+  // Answering the phone needs the whole picture, so reads are open.
+  for (const readable of ['/admin/api/summary', '/admin/api/licenses',
+                          url, url + '/preview', '/admin/api/audit']) {
+    const res = await app.inject({ method: 'GET', url: readable, headers });
+    assert.strictEqual(res.statusCode, 200, readable + ' -> ' + res.body);
+  }
+
+  // Every one of these used to go through: a support account could revoke a
+  // paying customer and grant itself ten free years.
+  const forbidden = [
+    ['PATCH', url, { hostelName: 'Renamed' }],
+    ['POST', url + '/status', { status: 'suspended' }],
+    ['POST', url + '/renew', { addMonths: 120 }],
+    ['POST', url + '/devices-limit', { maxDevices: 99 }],
+    ['PUT', url + '/features', { features: { reports: false } }],
+    ['POST', '/admin/api/issue-key', { expiresOn: '2030-12-31' }]
+  ];
+  for (const [method, u, payload] of forbidden) {
+    const res = await app.inject({ method, url: u, headers, payload });
+    assert.strictEqual(res.statusCode, 403, method + ' ' + u + ' -> ' + res.body);
+    assert.strictEqual(body(res).code, 'FORBIDDEN');
+  }
+
+  // Nothing moved.
+  const { rows } = await db.query('SELECT hostel_name, status, max_devices FROM licenses');
+  assert.strictEqual(rows[0].hostel_name, null);
+  assert.strictEqual(rows[0].status, 'active');
+  assert.strictEqual(rows[0].max_devices, 1);
+
+  // And a refusal is on the record, because "who TRIED to revoke this hostel"
+  // is worth as much as who did.
+  const denied = await db.query("SELECT actor FROM audit_log WHERE action = 'admin.denied'");
+  assert.strictEqual(denied.rows.length, forbidden.length);
+  assert.ok(denied.rows.every((r) => r.actor === 'support@example.com'));
+});
+
+test('admin can operate a licence but cannot issue or revoke one', async (app) => {
+  await wipe();
+  await makeAdmins();
+  const headers = await signIn(app, 'admin@example.com');
+  const first = body(await register(app, V4_KEY, M1)).data;
+  const url = '/admin/api/licenses/' + first.licenseId;
+
+  // The day-to-day work is theirs.
+  for (const [method, u, payload] of [
+    ['PATCH', url, { hostelName: 'Al-Noor' }],
+    ['POST', url + '/status', { status: 'suspended', reason: 'non-payment' }],
+    ['POST', url + '/renew', { addMonths: 6 }],
+    ['PUT', url + '/features', { features: { reports: false } }]
+  ]) {
+    const res = await app.inject({ method, url: u, headers, payload });
+    assert.strictEqual(res.statusCode, 200, method + ' ' + u + ' -> ' + res.body);
+  }
+
+  // Creating and destroying commercial value is not.
+  const issue = await app.inject({
+    method: 'POST', url: '/admin/api/issue-key', headers, payload: { expiresOn: '2030-12-31' } });
+  assert.strictEqual(issue.statusCode, 403, issue.body);
+
+  const revoke = await app.inject({
+    method: 'POST', url: url + '/status', headers, payload: { status: 'revoked' } });
+  assert.strictEqual(revoke.statusCode, 403, revoke.body);
+
+  // 'rejected' resolves to REVOKED in the entitlement — the same act, spelled
+  // differently, and it must not be the way around the rule.
+  const reject = await app.inject({
+    method: 'POST', url: url + '/status', headers, payload: { verification: 'rejected' } });
+  assert.strictEqual(reject.statusCode, 403, reject.body);
+
+  const { rows } = await db.query('SELECT status, verification FROM licenses');
+  assert.strictEqual(rows[0].status, 'suspended', 'the licence was revoked by an admin');
+  assert.notStrictEqual(rows[0].verification, 'rejected');
+});
+
+test('the owner can do the two things nobody else can', async (app) => {
+  await wipe();
+  await makeAdmins();
+  const headers = await signIn(app, 'owner@example.com');
+
+  const issued = await app.inject({
+    method: 'POST', url: '/admin/api/issue-key', headers,
+    payload: { expiresOn: '2030-12-31', hostelName: 'Owner Issued' } });
+  assert.strictEqual(issued.statusCode, 201, issued.body);
+
+  const revoke = await app.inject({
+    method: 'POST', url: '/admin/api/licenses/' + body(issued).data.license.id + '/status',
+    headers, payload: { status: 'revoked', reason: 'chargeback' } });
+  assert.strictEqual(revoke.statusCode, 200, revoke.body);
+});
+
+test('a machine the admin deactivated cannot let itself back in', async (app) => {
+  await wipe();
+  await makeAdmin();
+  const headers = await signIn(app);
+  const dev = await onboard(app, V4_KEY, M1);
+  const { rows } = await db.query('SELECT id FROM devices WHERE machine_id = $1', [M1]);
+
+  await app.inject({
+    method: 'POST', url: '/admin/api/devices/' + rows[0].id + '/status',
+    headers, payload: { status: 'deactivated', reason: 'stolen laptop' } });
+
+  // The upsert sets status = 'active' on conflict, which is right for a
+  // reinstall and was wrong here: the machine simply phoned home and took
+  // itself back, with nothing recording that it had.
+  const back = await register(app, V4_KEY, M1);
+  assert.strictEqual(back.statusCode, 403, back.body);
+  assert.strictEqual(body(back).code, 'DEVICE_DEACTIVATED');
+
+  const after = await db.query('SELECT status, admin_blocked FROM devices WHERE id = $1',
+    [rows[0].id]);
+  assert.strictEqual(after.rows[0].status, 'deactivated', 'the machine reactivated itself');
+  assert.strictEqual(after.rows[0].admin_blocked, true);
+  assert.strictEqual((await getToken(app, dev.deviceId, dev.deviceSecret)).statusCode, 401);
+});
+
+test('reactivating from the portal lets the machine back in, in one action', async (app) => {
+  await wipe();
+  await makeAdmin();
+  const headers = await signIn(app);
+  await register(app, V4_KEY, M1);
+  const { rows } = await db.query('SELECT id FROM devices WHERE machine_id = $1', [M1]);
+  const url = '/admin/api/devices/' + rows[0].id + '/status';
+
+  await app.inject({ method: 'POST', url, headers, payload: { status: 'deactivated' } });
+  await app.inject({ method: 'POST', url, headers, payload: { status: 'active' } });
+
+  // Restoring a machine must clear the block too, or it is two actions and the
+  // second one is invisible.
+  const cleared = await db.query('SELECT admin_blocked FROM devices WHERE id = $1', [rows[0].id]);
+  assert.strictEqual(cleared.rows[0].admin_blocked, false);
+  assert.strictEqual((await register(app, V4_KEY, M1)).statusCode, 201);
+});
+
+test('a blocked machine is told IT was deactivated, not that the seats are full', async (app) => {
+  await wipe();
+  await makeAdmin();
+  const headers = await signIn(app);
+  await register(app, V4_KEY, M1);
+  const { rows } = await db.query('SELECT id FROM devices WHERE machine_id = $1', [M1]);
+  await app.inject({
+    method: 'POST', url: '/admin/api/devices/' + rows[0].id + '/status',
+    headers, payload: { status: 'deactivated' } });
+
+  // The freed seat is taken by the replacement machine, so the licence is full
+  // again when the blocked one comes back. The cap is the FIRST thing that
+  // matches, and answering with it would send the customer off to deactivate
+  // the other computer — which would not help, because this one is blocked.
+  assert.strictEqual((await register(app, V4_KEY, M2)).statusCode, 201);
+  const back = await register(app, V4_KEY, M1);
+  assert.strictEqual(body(back).code, 'DEVICE_DEACTIVATED',
+    'the cap answered before the block did, giving advice that cannot work');
+});
+
+test('a blocked machine still does not hold its seat', async (app) => {
+  await wipe();
+  await makeAdmin();
+  const headers = await signIn(app);
+  await register(app, V4_KEY, M1);
+  const { rows } = await db.query('SELECT id FROM devices WHERE machine_id = $1', [M1]);
+
+  await app.inject({
+    method: 'POST', url: '/admin/api/devices/' + rows[0].id + '/status',
+    headers, payload: { status: 'deactivated', reason: 'replaced' } });
+
+  // Deactivating to free a computer for a REPLACEMENT machine is the everyday
+  // use, and it has to keep working — the cap counts active devices, and a
+  // blocked one is not active.
+  assert.strictEqual((await register(app, V4_KEY, M2)).statusCode, 201,
+    'blocking a device wrongly kept its seat');
 });
 
 // ══════════════════════════════════════════════════════════════════════════

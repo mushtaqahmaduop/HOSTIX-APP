@@ -116,10 +116,32 @@ perfectly valid licence on day one. Tighten it once the unverified queue is actu
 
 ---
 
+## Who can do what
+
+Three roles, enforced on the server and mirrored in the portal. They existed in the schema and
+were shown on screen long before anything checked them — a `support` account could issue keys,
+revoke a paying customer and grant ten free years.
+
+| | support | admin | owner |
+|---|---|---|---|
+| Read licences, devices, audit | yes | yes | yes |
+| Edit customer details, renew, suspend, feature flags, device limits | — | yes | yes |
+| Issue a licence key | — | — | yes |
+| Revoke a licence (or mark it `rejected`, which resolves to REVOKED) | — | — | yes |
+
+A refusal is written to the audit log: *who tried* to revoke a hostel is worth as much as who did.
+The portal hides what an account cannot use, but that is only courtesy — the server refuses the
+call either way, and that is the check that counts.
+
+`npm run create-admin <email> [name] [role]` defaults to `owner`, so the first account is never
+locked out of its own control plane.
+
+---
+
 ## Tests
 
 ```bash
-npm test                    # 47 without a database, 83 with one
+npm test                    # 47 without a database, 90 with one
 npm run test:integration    # the real-Postgres suite on its own
 ```
 
@@ -135,10 +157,10 @@ schema validation, the error envelope, and the separation between the machine su
 human one. It proves nothing about the SQL: the stub answers with canned rows, so a wrong column
 name or an `ON CONFLICT` that updates the wrong thing would sail straight through.
 
-`test/integration.js` (36) closes that gap against a **real Postgres** — the registration upsert
-and the renewal it must not roll back, the device cap counted under the row lock, the rate-limit
-window and its reset, the `audit_log` insert-only trigger, the `updated_at` triggers, and the
-CHECK constraints. It **SKIPS loudly** when `TEST_DATABASE_URL` is unset, so `npm test` still
+`test/integration.js` (43) closes that gap against a **real Postgres** — the registration upsert
+and the renewal it must not roll back, the device cap counted under the row lock, the role policy
+above, a deactivated machine that must not reactivate itself, the rate-limit window and its reset,
+the `audit_log` insert-only trigger, the `updated_at` triggers, and the CHECK constraints. It **SKIPS loudly** when `TEST_DATABASE_URL` is unset, so `npm test` still
 runs end to end on a laptop with no database; silence would read as "covered".
 
 ```bash

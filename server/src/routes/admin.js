@@ -64,6 +64,54 @@ function likeLiteral(v) {
   return String(v).trim().replace(/[\\%_]/g, '\\$&');
 }
 
+/**
+ * What each role may do.
+ *
+ * The three roles existed in the schema, were shown in the portal, and were
+ * enforced NOWHERE — `requireAdmin` checked that you were signed in and stopped
+ * there. A 'support' account could issue keys, revoke a paying customer and
+ * grant ten free years. Ranked rather than listed per-route, so a new route
+ * picks a floor instead of restating a matrix.
+ *
+ *   support   read everything. Answering the phone needs the whole picture.
+ *   admin     operate: renew, suspend, edit, feature flags, device limits.
+ *   owner     the two that create and destroy commercial value — issuing a
+ *             licence key, and revoking one.
+ */
+const ROLE_RANK = { support: 1, admin: 2, owner: 3 };
+
+function roleAtLeast(user, min) {
+  return (ROLE_RANK[user && user.role] || 0) >= ROLE_RANK[min];
+}
+
+const ROLE_MESSAGE = {
+  admin: 'Your account can view licences but not change them.',
+  owner: 'Only the account owner can issue or revoke a licence.'
+};
+
+/**
+ * preHandler guard. Runs after requireAdmin, so request.admin is set and the
+ * caller is already authenticated — this decides only whether they may.
+ *
+ * A refusal is audited. "Who tried to revoke this hostel" is worth as much as
+ * who did.
+ */
+function requireRole(min) {
+  return async function roleGuard(request, reply) {
+    if (roleAtLeast(request.admin, min)) return;
+    await audit.record({
+      user: request.admin, action: 'admin.denied',
+      details: { need: min, has: request.admin && request.admin.role,
+                 method: request.method, route: request.url },
+      ip: request.ip
+    });
+    return reply.code(403).send({
+      success: false, code: 'FORBIDDEN',
+      message: ROLE_MESSAGE[min] || 'Your account cannot do that.'
+    });
+  };
+}
+
 async function bumpLogin(ip) {
   const { rows } = await db.query(
     `INSERT INTO rate_limits (bucket, ip, window_start, hits)
@@ -323,7 +371,8 @@ async function adminRoutes(app) {
       return reply.code(404).send({ success: false, code: 'NOT_FOUND', message: 'No such licence.' });
     }
     const devices = await db.query(
-      `SELECT id, machine_id, label, status, app_version, os, first_seen_at, last_seen_at
+      `SELECT id, machine_id, label, status, admin_blocked,
+              app_version, os, first_seen_at, last_seen_at
          FROM devices WHERE license_id = $1 ORDER BY last_seen_at DESC`,
       [request.params.id]
     );
@@ -337,6 +386,9 @@ async function adminRoutes(app) {
           machineShort: String(d.machine_id).slice(0, 12),
           label: d.label,
           status: d.status,
+          // So the portal can say "deactivated by you" rather than leaving an
+          // admin wondering why a live hostel shows a dead computer.
+          adminBlocked: d.admin_blocked,
           appVersion: d.app_version,
           os: d.os,
           firstSeenAt: d.first_seen_at,
@@ -350,6 +402,7 @@ async function adminRoutes(app) {
   /** Details the owner keeps about a customer — free text, no behaviour. */
   app.patch('/licenses/:id', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       // Without a body schema an empty PATCH reached `k in request.body` with
@@ -403,6 +456,7 @@ async function adminRoutes(app) {
    */
   app.post('/licenses/:id/status', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       body: {
@@ -419,6 +473,23 @@ async function adminRoutes(app) {
     const { status, verification, reason } = request.body;
     if (!status && !verification) {
       return reply.code(400).send({ success: false, code: 'NOTHING_TO_UPDATE', message: 'No change given.' });
+    }
+
+    // Revoking is owner-only, and this route is the only way to reach it, so
+    // the check sits here rather than in the preHandler — the floor depends on
+    // the body, not on the route. `verification: 'rejected'` counts: it resolves
+    // to REVOKED in the entitlement, so it is revocation spelled differently.
+    const isRevocation = status === 'revoked' || verification === 'rejected';
+    if (isRevocation && !roleAtLeast(request.admin, 'owner')) {
+      await audit.record({
+        user: request.admin, action: 'admin.denied', targetType: 'license',
+        targetId: request.params.id,
+        details: { need: 'owner', has: request.admin.role, attempted: { status, verification } },
+        ip: request.ip
+      });
+      return reply.code(403).send({
+        success: false, code: 'FORBIDDEN', message: ROLE_MESSAGE.owner
+      });
     }
 
     const before = await db.query('SELECT status, verification FROM licenses WHERE id = $1', [request.params.id]);
@@ -453,6 +524,7 @@ async function adminRoutes(app) {
    */
   app.post('/licenses/:id/renew', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       body: {
@@ -518,6 +590,7 @@ async function adminRoutes(app) {
 
   app.post('/licenses/:id/devices-limit', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       body: {
@@ -550,6 +623,7 @@ async function adminRoutes(app) {
   /** Feature flags. Unknown keys are refused rather than stored. */
   app.put('/licenses/:id/features', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       // `features` is REQUIRED. A PUT with no body used to validate as "no
@@ -587,6 +661,7 @@ async function adminRoutes(app) {
   // ── Devices ───────────────────────────────────────────────────────────────
   app.post('/devices/:id/status', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       body: {
@@ -601,9 +676,14 @@ async function adminRoutes(app) {
     }
   }, async (request, reply) => {
     const out = await db.withTransaction(async (client) => {
+      // admin_blocked tracks the DECISION, which is what registration has to
+      // respect; status tracks the state. Reactivating from the portal clears
+      // the block, so restoring a machine is one action and not two.
       const { rows } = await client.query(
-        'UPDATE devices SET status = $2 WHERE id = $1 RETURNING id, license_id, machine_id, status',
-        [request.params.id, request.body.status]
+        `UPDATE devices SET status = $2, admin_blocked = $3
+          WHERE id = $1
+          RETURNING id, license_id, machine_id, status, admin_blocked`,
+        [request.params.id, request.body.status, request.body.status === 'deactivated']
       );
       if (rows.length === 0) return null;
       // Deactivating must end the device's live sessions, or it keeps working
@@ -629,6 +709,7 @@ async function adminRoutes(app) {
 
   app.patch('/devices/:id', {
     onRequest: requireAdmin,
+    preHandler: requireRole('admin'),
     schema: {
       params: UUID_PARAMS,
       body: {
@@ -666,6 +747,7 @@ async function adminRoutes(app) {
    */
   app.post('/issue-key', {
     onRequest: requireAdmin,
+    preHandler: requireRole('owner'),
     schema: {
       body: {
         type: 'object',

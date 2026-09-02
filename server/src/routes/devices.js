@@ -191,6 +191,25 @@ async function deviceRoutes(app) {
       // their app is read-only, and that answer arrives in the entitlement —
       // refusing here would leave the app saying nothing at all.
 
+      // A machine the ADMIN switched off stays off. The upsert below sets
+      // status = 'active' on conflict, which is right for a reinstall and wrong
+      // for a deliberate deactivation — it handed the machine straight back,
+      // and wrote nothing anywhere to say it had. Only the portal sets
+      // admin_blocked, so it is the intent that registration cannot forge.
+      //
+      // Checked BEFORE the cap: this machine's own block is the truer reason,
+      // and being told to go free a seat somewhere else would not help it.
+      //
+      // Safe to read-then-write: the FOR UPDATE above serialises every
+      // registration for this licence.
+      const blocked = await client.query(
+        `SELECT admin_blocked FROM devices WHERE license_id = $1 AND machine_id = $2`,
+        [license.id, machineId]
+      );
+      if (blocked.rows.length > 0 && blocked.rows[0].admin_blocked) {
+        return { kind: 'device_blocked' };
+      }
+
       if (license.max_devices !== null) {
         const count = await client.query(
           `SELECT COUNT(*) AS n FROM devices
@@ -238,6 +257,15 @@ async function deviceRoutes(app) {
       return reply.code(403).send({
         success: false, code: 'LICENSE_REVOKED',
         message: 'This licence has been revoked. Contact support.'
+      });
+    }
+    if (outcome.kind === 'device_blocked') {
+      // Distinct from DEVICE_LIMIT_REACHED: nothing the customer does at their
+      // end fixes this one, so the message must not send them to "deactivate it
+      // on the other computer".
+      return reply.code(403).send({
+        success: false, code: 'DEVICE_DEACTIVATED',
+        message: 'This computer has been deactivated for this licence. Contact support to restore it.'
       });
     }
     if (outcome.kind === 'device_limit') {

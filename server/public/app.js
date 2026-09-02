@@ -49,6 +49,18 @@ function esc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/**
+ * What the signed-in account may do — the same ranking the server enforces.
+ *
+ * This hides buttons; it does not secure anything. The server refuses the call
+ * regardless, and that is the check that counts. Mirroring it here only means a
+ * support user is not offered actions that would come back 403.
+ */
+const ROLE_RANK = { support: 1, admin: 2, owner: 3 };
+function can(min) {
+  return (ROLE_RANK[state.user && state.user.role] || 0) >= ROLE_RANK[min];
+}
+
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -269,33 +281,40 @@ async function openLicense(id) {
     '  </dl>',
     '</div>',
 
-    '<div class="sect">',
-    '  <div class="sect__h">Renew</div>',
-    everConnected
+    can('admin') ? '<div class="sect">' : '',
+    can('admin') ? '  <div class="sect__h">Renew</div>' : '',
+    !can('admin') ? '' : everConnected
       ? '<div class="msg msg--info">This hostel\'s app connects, so extending the date reaches them on their next sync.</div>'
       : '<div class="msg msg--info"><strong>This hostel has never connected.</strong> Extending the date here will not reach them — issue a renewal key and send it instead.</div>',
-    '  <div class="actions">',
-    '    <button class="btn" data-act="renew" data-months="1">+1 month</button>',
-    '    <button class="btn" data-act="renew" data-months="6">+6 months</button>',
-    '    <button class="btn" data-act="renew" data-months="12">+1 year</button>',
-    '    <button class="btn" data-act="renew-date">Pick a date…</button>',
-    '    <button class="btn btn--primary" data-act="renewal-key">Issue renewal key</button>',
-    '  </div>',
-    '</div>',
+    can('admin') ? '  <div class="actions">' : '',
+    can('admin') ? '    <button class="btn" data-act="renew" data-months="1">+1 month</button>' : '',
+    can('admin') ? '    <button class="btn" data-act="renew" data-months="6">+6 months</button>' : '',
+    can('admin') ? '    <button class="btn" data-act="renew" data-months="12">+1 year</button>' : '',
+    can('admin') ? '    <button class="btn" data-act="renew-date">Pick a date…</button>' : '',
+    // Issuing a key is the owner's alone, even the renewal kind.
+    can('owner') ? '    <button class="btn btn--primary" data-act="renewal-key">Issue renewal key</button>' : '',
+    can('admin') ? '  </div>' : '',
+    can('admin') ? '</div>' : '',
 
-    '<div class="sect">',
-    '  <div class="sect__h">Access</div>',
-    '  <div class="actions">',
-    l.verification === 'unverified'
+    can('admin') ? '<div class="sect">' : '',
+    can('admin') ? '  <div class="sect__h">Access</div>' : '',
+    can('admin') ? '  <div class="actions">' : '',
+    can('admin') && l.verification === 'unverified'
       ? '<button class="btn btn--primary" data-act="verify">Confirm this customer</button>'
-        + '<button class="btn btn--danger" data-act="reject">Not a customer</button>' : '',
-    l.status === 'active' ? '<button class="btn" data-act="suspend">Suspend</button>' : '',
-    l.status !== 'active' ? '<button class="btn btn--primary" data-act="reactivate">Reactivate</button>' : '',
-    l.status !== 'revoked' ? '<button class="btn btn--danger" data-act="revoke">Revoke</button>' : '',
-    '    <button class="btn" data-act="limit">Set computer limit…</button>',
-    '    <button class="btn" data-act="edit">Edit details…</button>',
-    '  </div>',
-    '</div>',
+        + (can('owner') ? '<button class="btn btn--danger" data-act="reject">Not a customer</button>' : '') : '',
+    can('admin') && l.status === 'active' ? '<button class="btn" data-act="suspend">Suspend</button>' : '',
+    can('admin') && l.status !== 'active' ? '<button class="btn btn--primary" data-act="reactivate">Reactivate</button>' : '',
+    // Revoking, and rejecting — which resolves to REVOKED — are owner-only.
+    can('owner') && l.status !== 'revoked' ? '<button class="btn btn--danger" data-act="revoke">Revoke</button>' : '',
+    can('admin') ? '    <button class="btn" data-act="limit">Set computer limit…</button>' : '',
+    can('admin') ? '    <button class="btn" data-act="edit">Edit details…</button>' : '',
+    can('admin') ? '  </div>' : '',
+    can('admin') ? '</div>' : '',
+
+    // Said once, plainly, rather than leaving a read-only account to wonder
+    // where the buttons went.
+    can('admin') ? '' :
+      '<div class="sect"><div class="msg msg--info">Your account can view licences but not change them.</div></div>',
 
     '<div class="sect">',
     '  <div class="sect__h">Features</div>',
@@ -305,16 +324,17 @@ async function openLicense(id) {
       const on = l.features[key];
       const overridden = Object.prototype.hasOwnProperty.call(l.featureOverrides, key);
       return '<label class="flag">'
-        + '<input type="checkbox" data-flag="' + esc(key) + '"' + (on ? ' checked' : '') + '>'
+        + '<input type="checkbox" data-flag="' + esc(key) + '"' + (on ? ' checked' : '')
+          + (can('admin') ? '' : ' disabled') + '>'
         + '<div><div class="flag__t">' + esc(c.label)
         + (overridden ? ' <span class="badge badge--mute">changed</span>' : '') + '</div>'
         + '<div class="flag__d">' + esc(c.description) + '</div>'
         + '<div class="flag__since">Needs app ' + esc(c.since) + ' or newer</div></div></label>';
     }).join(''),
     '  </div>',
-    '  <div class="actions" style="margin-top:12px">',
-    '    <button class="btn btn--primary" data-act="save-flags">Save features</button>',
-    '  </div>',
+    can('admin') ? '  <div class="actions" style="margin-top:12px">' : '',
+    can('admin') ? '    <button class="btn btn--primary" data-act="save-flags">Save features</button>' : '',
+    can('admin') ? '  </div>' : '',
     '</div>',
 
     '<div class="sect">',
@@ -328,10 +348,15 @@ async function openLicense(id) {
         + '<td>' + esc(d.label || '—') + '</td>'
         + '<td>' + (d.status === 'active'
             ? '<span class="badge badge--ok">Active</span>'
-            : '<span class="badge badge--mute">Off</span>') + '</td>'
+            // A blocked machine will NOT come back on its own — the app is
+            // refused at registration — so it must not read the same as one
+            // that is merely idle.
+            : d.adminBlocked
+              ? '<span class="badge badge--mute">Deactivated here</span>'
+              : '<span class="badge badge--mute">Off</span>') + '</td>'
         + '<td class="mono">' + esc(d.appVersion || '—') + '</td>'
         + '<td class="dim">' + esc(ago(d.lastSeenAt)) + '</td>'
-        + '<td>' + (d.status === 'active'
+        + '<td>' + (!can('admin') ? '' : d.status === 'active'
             ? '<button class="btn btn--sm btn--danger" data-device="' + esc(d.id) + '" data-device-act="deactivated">Deactivate</button>'
             : '<button class="btn btn--sm" data-device="' + esc(d.id) + '" data-device-act="active">Reactivate</button>')
           + '</td></tr>').join(''),
@@ -587,6 +612,13 @@ async function boot() {
   $('login').hidden = true;
   $('app').hidden = false;
   $('who').textContent = me.user.name || me.user.email;
+
+  // Issuing a key is owner-only on the server, so a tab that always 403s is
+  // just a trap. Hidden, not disabled — there is nothing to explain on a
+  // screen an account can never use.
+  document.querySelectorAll('.tab').forEach((t) => {
+    if (t.dataset.view === 'issue') t.hidden = !can('owner');
+  });
 
   // A control plane that cannot sign entitlements looks perfectly healthy —
   // devices register, tokens issue — and only fails at the one endpoint that
