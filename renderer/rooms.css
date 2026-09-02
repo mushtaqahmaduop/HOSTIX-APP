@@ -344,7 +344,52 @@
 
 /* ── Narrow windows ──────────────────────────────────────────────────────── */
 
+/* ── Bulk Add ────────────────────────────────────────────────────────────────
+   The one button on this toolbar that creates data rather than reading it, so
+   it carries the accent while CSV and Print stay quiet. */
+.rms-btn--go {
+    border-color:var(--accent); color:var(--accent);
+}
+.rms-btn--go:hover {
+    background:var(--accent); border-color:var(--accent); color:#fff;
+}
+
+.arm-opt { font-weight:500; opacity:.7; }
+
+/* From / To sit side by side under the prefix. Its own rule rather than
+   .arm-split, which is the modal's two-COLUMN layout and collapses to one
+   column on narrow screens -- a range that stacked would read as two
+   unrelated fields. */
+.brk-range { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+
+.brk-preview { min-height:64px; }
+
+.brk-sum {
+    font-size:13.5px; color:var(--text2); font-weight:500; margin-bottom:9px;
+}
+.brk-sum b { color:var(--text); font-weight:800; font-family:var(--ant-num-font);
+             letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+
+.brk-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.brk-chip {
+    display:inline-flex; align-items:center; height:24px; padding:0 8px;
+    border-radius:7px; background:var(--dash-sunk); border:1px solid var(--border);
+    color:var(--text2); font-size:11.5px; font-weight:600;
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+    font-variant-numeric:tabular-nums;
+}
+.brk-chip.is-more { background:none; border-style:dashed; color:var(--text3); }
+
+.brk-msg {
+    margin-top:10px; padding:9px 11px; border-radius:9px;
+    font-size:12.5px; font-weight:500; line-height:1.45;
+}
+.brk-msg b { font-weight:800; }
+.brk-msg.is-bad  { background:var(--ant-danger-bg);  color:var(--ant-danger-fg); }
+.brk-msg.is-warn { background:var(--ant-warning-bg); color:var(--ant-warning-fg); }
+
 @media (max-width:900px) {
     .arm-split     { grid-template-columns:1fr; }
+    .brk-range     { grid-template-columns:1fr 1fr; }   /* a range stays a range */
     .arm-amen-grid { grid-template-columns:repeat(2,1fr); }
 }
