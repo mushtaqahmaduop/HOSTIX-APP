@@ -59,6 +59,8 @@
 .iss-row__acts{ display:flex; align-items:center; gap:6px; }
 .iss-row__id  {
     font-size:10.5px; font-weight:600; color:var(--text3); white-space:nowrap;
+    font-family:var(--ant-num-font);
+    letter-spacing:var(--ant-num-track);
     font-variant-numeric:tabular-nums;
 }
 .iss-row__id b { font-weight:800; color:var(--text2); }

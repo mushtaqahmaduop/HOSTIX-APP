@@ -78,7 +78,7 @@ body.hz-alt-hints .hz-menu > button u      { text-decoration: underline; text-un
     padding: 8px 10px; border-radius: 7px; cursor: pointer;
 }
 .hz-drop button:hover { background: var(--dash-sunk); }
-.hz-drop .hz-acc      { color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.hz-drop .hz-acc      { color: var(--text3); font-size: 11px; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric: tabular-nums; }
 .hz-drop hr           { border: none; border-top: 1px solid var(--border); margin: 5px 4px; }
 
 /* ── Spacer + window controls ────────────────────────────────────────────── */

@@ -21,7 +21,8 @@
     background:var(--dh-bg); color:var(--dh);
 }
 .rms-stat__label { font-size:12px; font-weight:600; color:var(--text2); }
-.rms-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text);
+.rms-stat__val   { font-size:26px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text);
+                  font-family:var(--ant-num-font);
                   font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; }
 .rms-stat__val small { font-size:17px; font-weight:700; color:var(--text3); }
 .rms-stat__sub   { font-size:11px; color:var(--text3); margin-top:2px; }
@@ -116,11 +117,12 @@
     position:absolute; bottom:9px; right:9px;
     padding:4px 11px; border-radius:999px;
     background:var(--card); border:1px solid var(--border);
-    color:var(--text); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+    color:var(--text); font-size:11px; font-weight:700; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
 }
 
 .rms-card__body { padding:10px 12px; display:flex; flex-direction:column; flex:1; min-width:0; }
-.rms-card__num  { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text);
+.rms-card__num  { font-size:19px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text);
+                 font-family:var(--ant-num-font);
                  font-variant-numeric:tabular-nums; line-height:1.1; }
 .rms-card__type { display:inline-block; margin-top:5px; padding:3px 9px; border-radius:999px;
                  background:var(--dh-bg); color:var(--dh); font-size:10.5px; font-weight:700; align-self:flex-start; }
@@ -128,7 +130,7 @@
 .rms-row { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:11.5px; }
 .rms-row svg  { color:var(--text3); flex-shrink:0; }
 .rms-row .k   { color:var(--text3); }
-.rms-row .v   { margin-left:auto; color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.rms-row .v   { margin-left:auto; color:var(--text); font-weight:700; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 .rms-occ  { display:flex; flex-wrap:wrap; gap:5px; margin-top:11px; }
 .rms-occ__chip {
@@ -199,7 +201,7 @@
               font-size:12.5px; color:var(--text2); }
 .rms-list tr:last-child td { border-bottom:none; }
 .rms-list tbody tr:hover   { background:var(--dash-sunk); }
-.rms-list .num { font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.rms-list .num { font-size:13px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 
 .rms-empty { padding:52px 20px; text-align:center; color:var(--text3); font-size:13px; }
 .rms-empty svg { color:var(--text3); opacity:.5; margin-bottom:12px; }
@@ -341,6 +343,7 @@
 .arm-amen__free::placeholder { color:var(--text3); font-weight:600; }
 
 /* ── Narrow windows ──────────────────────────────────────────────────────── */
+
 @media (max-width:900px) {
     .arm-split     { grid-template-columns:1fr; }
     .arm-amen-grid { grid-template-columns:repeat(2,1fr); }

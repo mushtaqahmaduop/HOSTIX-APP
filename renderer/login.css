@@ -208,7 +208,7 @@ body.light-theme #login-screen { background:
    offline desktop app with nowhere for those links to go, so the slot carries
    the build version instead — which is what a warden on the phone to support
    actually needs to read out. */
-.lg-foot__v { margin-left: auto; font-weight: 600; color: var(--lg-ink2); font-variant-numeric: tabular-nums; }
+.lg-foot__v { margin-left: auto; font-weight: 600; color: var(--lg-ink2); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric: tabular-nums; }
 
 /* ── Left: brand panel ──────────────────────────────────────────────────── */
 .lg-side {
@@ -264,7 +264,7 @@ body.light-theme #login-screen { background:
     display: flex; align-items: center; justify-content: center;
     background: var(--lg-brand-soft); color: var(--lg-brand);
 }
-.lg-fact__v { font-size: 16px; font-weight: 800; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.lg-fact__v { font-size: 16px; font-weight: 800; color: var(--lg-ink); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric: tabular-nums; }
 .lg-fact__l { font-size: 11.5px; color: var(--lg-ink3); margin-top: 2px; }
 
 .lg-trust {

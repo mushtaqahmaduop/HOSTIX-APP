@@ -326,11 +326,25 @@ body.light-theme {
   --ant-neutral-fg:  #a09d96;
   --ant-neutral-bg:  rgba(160, 157, 150, 0.14);
 
-  /* Numerals. The teardown sets anything a reader compares in mono; this app's
-     CLAUDE.md already says the same. JetBrains Mono is bundled, so this costs
-     no new font file. .06em is the teardown's tracking for mono at small size. */
-  --ant-num-font:    var(--font-mono);
-  --ant-num-track:   0.01em;
+  /* Numerals. Anything a reader COMPARES is set in Roboto Mono with tabular
+     figures: every digit takes the same advance, so columns line up and a
+     changed value never shifts its neighbours. Bundled in vendor/fonts.css --
+     this app runs with no network, so a webfont link would fail in the field.
+
+     TRACKING IS ZERO, AND THAT IS THE POINT. Every stat in this app used to be
+     font-weight:800 at letter-spacing:-.02em, which crowds heavy digits until
+     a figure reads as smudged rather than crisp -- worst on the numbers that
+     matter most, because those are the biggest and boldest. A monospaced face
+     is drawn on a fixed pitch and needs no help closing its gaps: negative
+     tracking only takes away the space the design already accounted for.
+     Do not reintroduce a negative value here, or on any rule that sets
+     font-variant-numeric: tabular-nums.
+
+     --font-mono stays JetBrains Mono: it is the CODE face (licence keys,
+     machine ids, the key preview in chrome). Numerals and code are different
+     jobs, so they are different tokens. */
+  --ant-num-font:    'Roboto Mono', 'JetBrains Mono', 'Courier New', monospace;
+  --ant-num-track:   0;
   --ant-unit-track:  0.1em;
 }
 body.light-theme {

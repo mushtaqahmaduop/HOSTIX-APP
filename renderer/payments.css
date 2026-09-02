@@ -32,8 +32,17 @@
 .pay-stat__label { min-width:0; font-size:12px; font-weight:600; color:var(--text2); line-height:1.3; overflow-wrap:anywhere; }
 /* Base size fits an 11-character figure in the narrowest card the five-across
    row produces; @container scales it up when there is genuinely room. The
-   ellipsis is the backstop so the money can never spill past the card edge. */
-.pay-stat__val   { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+   ellipsis is the backstop so the money can never spill past the card edge.
+
+   RE-MEASURED when the numerals moved to Roboto Mono. A monospaced digit is
+   wider than Inter's tabular one -- 125.4px against 120.6px for an 11-char
+   figure at 19px, and 171.6 against 165.0 at 26px. The tightest tier is 26px
+   in a 220px container: 203px of content in 220px of room, where Inter left
+   24px of slack and this leaves 17px. Still fits, but that margin is now the
+   budget. Anything that grows the figure -- a wider face, a longer currency
+   prefix, a 13-digit total -- spends it, and the ellipsis is what you will
+   see first. */
+.pay-stat__val   { font-size:19px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 @container (min-width:190px) { .pay-stat__val { font-size:22px; } }
 @container (min-width:220px) { .pay-stat__val { font-size:26px; } }
 .pay-stat__val .cur { font-size:13px; font-weight:600; color:var(--text3); font-family:var(--font); margin-right:5px; }
@@ -148,16 +157,16 @@
 .pay-who__meta { font-size:10.5px; color:var(--text3); margin-top:2px; display:flex; align-items:center; gap:4px; white-space:nowrap; }
 .pay-who__meta svg { opacity:.7; flex-shrink:0; }
 
-.pay-room__n  { font-size:13px; font-weight:800; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; }
+.pay-room__n  { font-size:13px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .pay-room__t  { font-size:10.5px; color:var(--text3); margin-top:2px; }
 
-.pay-money      { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--font); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pay-money      { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .pay-money--in  { color:var(--green); }
 .pay-money--due { color:var(--red); }
 .pay-money--nil { color:var(--text3); font-weight:600; }
 .pay-dash       { color:var(--text3); }
 .pay-extra      { font-size:10.5px; color:var(--text3); line-height:1.5; }
-.pay-extra b    { display:block; color:var(--text2); font-weight:700; font-family:var(--font); font-variant-numeric:tabular-nums; }
+.pay-extra b    { display:block; color:var(--text2); font-weight:700; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 
 .pay-pill   { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
               font-size:10.5px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
@@ -472,7 +481,7 @@
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:5px 12px; font-size:11.5px; color:var(--text2);
 }
-.ap-sum__r b { font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ap-sum__r b { font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .ap-sum__r.is-minus b { color:var(--green); }
 .ap-sum__r.is-paid  b { color:var(--red); }
 .ap-sum__r.is-total   { font-weight:700; color:var(--text); }
@@ -483,7 +492,7 @@
     margin:5px 10px 10px; padding:9px 11px; border-radius:9px;
     font-size:12px; font-weight:700;
 }
-.ap-sum__bal b { font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ap-sum__bal b { font-size:15px; font-weight:800; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 /* Solid, per the reference — this is the figure the warden is looking for.
    The hue still carries the meaning the fill would otherwise flatten: accent
    while something is owed, green once the month is clear. */
@@ -499,7 +508,7 @@
 .ap-rec:last-child { border-bottom:none; }
 .ap-rec__m    { font-size:12.5px; font-weight:700; color:var(--text); }
 .ap-rec__meth { font-size:10.5px; color:var(--text3); }
-.ap-rec__amt  { font-size:12.5px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.ap-rec__amt  { font-size:12.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .ap-rec__st   { font-size:10px; }
 .ap-rec__st.is-paid { color:var(--green); }
 .ap-rec__st.is-due  { color:var(--red); }
@@ -546,6 +555,8 @@
 .pf-ledger__l { font-size:10px; color:var(--text3); white-space:nowrap; }
 .pf-ledger__v {
     font-size:14px; font-weight:800; color:var(--dh); margin-top:2px;
+    font-family:var(--ant-num-font);
+    letter-spacing:var(--ant-num-track);
     font-variant-numeric:tabular-nums; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis;
 }
@@ -563,7 +574,8 @@
 .pf-charge__main > label .req { color:var(--red); margin-left:2px; }
 .pf-charge__v {
     height:34px; font-size:16px; font-weight:800; color:var(--green);
-    font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+    font-family:var(--ant-num-font);
+    font-variant-numeric:tabular-nums; letter-spacing:var(--ant-num-track);
 }
 .pf-charge__note { font-size:10px; color:var(--text3); margin-top:3px; }
 .pf-charge__tick {
@@ -591,7 +603,7 @@
     font-size:11px; font-weight:700; color:var(--accent-strong);
 }
 .pf-out__h svg { flex-shrink:0; }
-.pf-out__tot { margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums; }
+.pf-out__tot { margin-left:auto; font-weight:800; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .pf-out__note { font-size:10.5px; color:var(--text3); margin-bottom:7px; }
 .pf-out__row {
     display:grid; grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) 110px auto;
@@ -601,7 +613,7 @@
 .pf-out__row:last-of-type { margin-bottom:0; }
 .pf-out__m { font-size:12.5px; font-weight:700; color:var(--text); }
 .pf-out__d { font-size:12px; color:var(--text3); }
-.pf-out__d b { color:var(--red); font-variant-numeric:tabular-nums; }
+.pf-out__d b { color:var(--red); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .pf-out__in { text-align:right; }
 /* Solid, per the reference. It is the one control in the panel that does
    something, and an outline button beside a filled input row disappeared. */
@@ -618,7 +630,7 @@
     margin-top:9px; padding-top:9px; border-top:1px solid var(--border);
     font-size:12px; color:var(--text2); text-align:right;
 }
-.pf-out__sum b { font-size:13px; font-weight:800; color:var(--green); font-variant-numeric:tabular-nums; }
+.pf-out__sum b { font-size:13px; font-weight:800; color:var(--green); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 @media (max-width:640px) {
     .pf-out__row { grid-template-columns:1fr 1fr; }
     .pf-out__btn { grid-column:1 / -1; }
@@ -640,7 +652,7 @@
     margin-top:10px; padding-top:10px; border-top:1px solid var(--border);
     font-size:12px; color:var(--text3);
 }
-.pf-extra__total b { font-size:13px; font-weight:800; color:var(--accent-strong); font-variant-numeric:tabular-nums; }
+.pf-extra__total b { font-size:13px; font-weight:800; color:var(--accent-strong); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 
 .pf-ta {
     width:100%; min-height:58px; padding:9px 11px; border-radius:10px; resize:vertical;
@@ -664,7 +676,7 @@
     background:var(--dh-bg); color:var(--dh);
 }
 .pf-sum__l { font-size:10.5px; color:var(--text3); }
-.pf-sum__v { font-size:14px; font-weight:800; color:var(--dh); font-variant-numeric:tabular-nums; margin-top:1px; }
+.pf-sum__v { font-size:14px; font-weight:800; color:var(--dh); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; margin-top:1px; }
 
 /* Footer actions */
 .pf-btn {
@@ -687,7 +699,7 @@
                 font-size:11px; font-weight:800; background:var(--dh-bg); color:var(--dh); }
 .pf-hit__name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pf-hit__sub  { font-size:11px; color:var(--text3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pf-hit__rent { font-size:12.5px; font-weight:800; color:var(--green); font-variant-numeric:tabular-nums; flex-shrink:0; }
+.pf-hit__rent { font-size:12.5px; font-weight:800; color:var(--green); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; flex-shrink:0; }
 
 /* Extra-charge rows built by addExtraChargeRow(). The remove button keeps its
    shared .rm-btn class — only the inputs are restyled, scoped to this list. */
@@ -709,7 +721,7 @@
     font-size:11.5px; line-height:1.55; color:var(--text2);
 }
 .pf-mstate > svg { flex-shrink:0; margin-top:1px; }
-.pf-mstate b { color:var(--text); font-variant-numeric:tabular-nums; }
+.pf-mstate b { color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .pf-mstate.is-partial {
     background:var(--accent-dim); border:1px solid var(--accent);
 }
@@ -739,16 +751,16 @@
 /* Numerals in mono with tabular figures: every digit takes the same width, so
    rows line up column-wise and a changed value never shifts its neighbours. */
 .pay-money {
-  font-family: var(--ant-num-font);
+  font-family:var(--ant-num-font);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--ant-num-track);
+  letter-spacing:var(--ant-num-track);
   font-size: 12px;
 }
 .pay-charge__sub,
 .pay-extra b {
-  font-family: var(--ant-num-font);
+  font-family:var(--ant-num-font);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--ant-num-track);
+  letter-spacing:var(--ant-num-track);
 }
 
 /* Status pills on the Anthropic semantic palette — warmer and less saturated

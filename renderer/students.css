@@ -33,7 +33,7 @@
 .stu-stat__label { min-width:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--text2); overflow-wrap:anywhere; }
 /* Base size fits the narrowest card the five-across row produces; @container
    scales up when there is room. Ellipsis is the backstop against spill. */
-.stu-stat__val   { font-size:21px; font-weight:800; letter-spacing:-.02em; color:var(--text); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stu-stat__val   { font-size:21px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 @container (min-width:190px) { .stu-stat__val { font-size:24px; } }
 @container (min-width:220px) { .stu-stat__val { font-size:28px; } }
 .stu-stat__val small { font-size:.62em; font-weight:700; color:var(--text3); }
@@ -119,6 +119,8 @@
 
 .stu-id  { display:inline-block; padding:4px 9px; border-radius:8px; background:var(--dash-sunk);
            border:1px solid var(--border); font-size:11px; font-weight:700; color:var(--text2);
+           font-family:var(--ant-num-font);
+           letter-spacing:var(--ant-num-track);
            font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 .stu-who       { display:flex; align-items:center; gap:10px; min-width:0; }
@@ -128,16 +130,16 @@
 .stu-who__name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; }
 .stu-who__sub  { font-size:11px; color:var(--text3); margin-top:2px; white-space:nowrap; }
 
-.stu-room__n { font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.stu-room__n { font-size:13px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 .stu-room__t { font-size:10.5px; color:var(--text3); margin-top:2px; white-space:nowrap; }
 
-.stu-contact      { font-size:12px; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stu-contact      { font-size:12px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-contact__em  { display:flex; align-items:center; gap:5px; margin-top:3px; font-size:11px; color:var(--text3); white-space:nowrap; }
 .stu-contact__em i{ width:14px; height:14px; border-radius:4px; background:#25d366; flex-shrink:0;
                     display:inline-flex; align-items:center; justify-content:center; }
 .stu-contact__em i svg { width:9px; height:9px; color:#fff; }
 
-.stu-money  { font-size:12.5px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stu-money  { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-money small { display:block; font-size:10px; font-weight:600; color:var(--text3); }
 .stu-dash   { color:var(--text3); }
 
@@ -230,7 +232,8 @@
     background:var(--accent-dim); color:var(--accent-strong); font-size:11px; font-weight:600;
 }
 .sf-idcard__l { font-size:11px; color:var(--text3); margin-top:11px; }
-.sf-idcard__v { font-size:24px; font-weight:800; letter-spacing:-.01em; color:var(--accent-strong);
+.sf-idcard__v { font-size:24px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--accent-strong);
+                font-family:var(--ant-num-font);
                 font-variant-numeric:tabular-nums; margin-top:2px; }
 
 /* Section cards */
@@ -283,7 +286,7 @@
 .sf-total {
     height:42px; display:flex; align-items:center; justify-content:center; border-radius:10px;
     background:var(--green-dim); border:1px solid var(--green);
-    color:var(--green); font-size:14px; font-weight:800; font-variant-numeric:tabular-nums;
+    color:var(--green); font-size:14px; font-weight:800; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
 }
 
 .sf-count { font-size:10.5px; color:var(--text3); text-align:right; margin-top:4px; }
@@ -350,8 +353,8 @@
 .svw-hero__tags     { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
 .svw-hero__rent     { text-align:right; margin-left:auto; }
 .svw-hero__rentk    { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:var(--text3); }
-.svw-hero__rentv    { margin-top:4px; font-size:26px; font-weight:800; letter-spacing:-.02em;
-                      color:var(--text); font-variant-numeric:tabular-nums; line-height:1.1; }
+.svw-hero__rentv    { margin-top:4px; font-size:26px; font-weight:800; letter-spacing:var(--ant-num-track);
+                      color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.1; }
 .svw-hero__rents    { margin-top:4px; font-size:11.5px; color:var(--text3); }
 
 /* ── Stat tiles ──────────────────────────────────────────────────────────── */
@@ -367,8 +370,8 @@
 }
 .svw-stat__k { display:block; font-size:10.5px; font-weight:700; text-transform:uppercase;
                letter-spacing:1.1px; color:var(--text3); }
-.svw-stat__v { display:block; margin-top:3px; font-size:20px; font-weight:800; letter-spacing:-.02em;
-               color:var(--dh); font-variant-numeric:tabular-nums; line-height:1.15;
+.svw-stat__v { display:block; margin-top:3px; font-size:20px; font-weight:800; letter-spacing:var(--ant-num-track);
+               color:var(--dh); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.15;
                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .svw-stat__v.is-text { font-size:15px; color:var(--text); }
 
@@ -430,10 +433,10 @@
 .svw-t tbody tr:hover         { background:var(--dash-sunk); }
 
 .svw-t__month  { font-weight:700; color:var(--text); white-space:nowrap; }
-.svw-t__num    { font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.svw-t__num    { font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .svw-t__num.is-muted { font-weight:500; color:var(--text3); }
-.svw-t__conc   { font-weight:700; color:var(--text2); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.svw-t__unpaid { font-weight:700; color:var(--text3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.svw-t__conc   { font-weight:700; color:var(--text2); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.svw-t__unpaid { font-weight:700; color:var(--text3); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .svw-t__unpaid.is-due { color:var(--danger-fg); }
 .svw-t__date   { font-size:12px; color:var(--text3); white-space:nowrap; }
 .svw-t__reason { color:var(--text2); }
@@ -441,6 +444,8 @@
 
 /* Paid cell: the figure that moved, then what made it up. */
 .svw-paid { display:block; font-size:13px; font-weight:800; color:var(--success-fg);
+            font-family:var(--ant-num-font);
+            letter-spacing:var(--ant-num-track);
             font-variant-numeric:tabular-nums; white-space:nowrap; }
 .svw-sub  { display:block; margin-top:2px; font-size:10.5px; font-weight:700; white-space:nowrap; }
 .svw-sub.is-adm   { color:var(--info-fg); }
@@ -484,7 +489,7 @@
    the line under it says what it is made of, and the badge says what the month
    COVERS. Three levels because a warden asks three different questions of this
    cell: how much, made of what, and does it include food. */
-.stu-charge      { font-size:12.5px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stu-charge      { font-size:12.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-charge__sub { font-size:10.5px; font-weight:600; color:var(--text3); margin-top:1px; white-space:nowrap; }
 .stu-cov {
     display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px;

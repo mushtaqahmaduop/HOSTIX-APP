@@ -48,7 +48,8 @@ body.light-theme { --dash-sunk:#f6f7f9;                --dash-track:#e9ecf1;    
    and `tabular-nums` keeps digits column-aligned without it. Same specificity
    as the style.css rule — this file loads later, so it wins. */
 .money-value .money-amt {
-    font-family: var(--font);
+    font-family:var(--ant-num-font);
+    letter-spacing:var(--ant-num-track);
     font-variant-numeric: tabular-nums;
 }
 
