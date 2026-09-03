@@ -16,9 +16,17 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-    /* Dark theme: the sidebar sits BELOW the page surface so it recedes.
-       #0A0A0A against the #0f0f0f page is a small delta, so the separation is
-       carried by an explicit border, not by fill alone (CLAUDE.md rule 6). */
+    /* DEAD TOKEN, kept only so the light block below has a counterpart to
+       override. The only consumer of --sb-bg is `body.light-theme #sidebar`
+       (chrome.css:76) — in DARK the rail is painted by `#sidebar` in style.css
+       from var(--sidebar-bg), so this value has never reached a pixel.
+
+       Its comment used to read "#0A0A0A against the #0f0f0f page is a small
+       delta". There has been no #0f0f0f page since the ladder went navy in
+       August, and there is certainly none now it is warm near-black — which is
+       how a dead token acquires a confidently wrong explanation. Left in place
+       rather than removed because deleting it changes the light rule's shape;
+       it is a Phase 4 cleanup, not a Phase 3 one. */
     --sb-bg:       #0A0A0A;
     --sb-border:   rgba(255,255,255,.09);
     --sb-fg:       #f5f5f5;

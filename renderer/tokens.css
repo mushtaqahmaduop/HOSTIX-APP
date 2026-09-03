@@ -165,20 +165,22 @@
      #0B111C (L 7.6) → #242D41 (L 20.2) = 12.6. The greys it replaces spanned
      9.7, so contrast between stacked dark surfaces improves rather than
      regresses. */
-  --surface:         #151C2B;
-  --surface-muted:   #1B2334;
-  --surface-sunken:  #0E1420;
-  --surface-border:  #2E3852;
-  --surface-divider: #232C40;
+  /* WARMED 2026-09-04 with the ladder in style.css — see the long note there.
+     Same rungs, same lightness relationships, warm hue. */
+  --surface:         #1F1E1B;
+  --surface-muted:   #252320;
+  --surface-sunken:  #181715;
+  --surface-border:  #35322D;
+  --surface-divider: #2A2724;
 
-  --text-primary:    #E6EAF2;
-  --text-secondary:  #A8B2C6;
+  --text-primary:    #FAF9F5;
+  --text-secondary:  #D8D5CD;
   /* #737E96 was the straight inverse of the light --ink-faint and measured
      4.18:1 on --card — below AA for normal text, and a REGRESSION on the warm
      #a08d81 it replaced (5.71:1). Lifted until it clears 4.5: this token
      carries 9.5-12px metadata (.ws__p i, .tsk-crumb, .tsk-foot__note), which
      is exactly the size that cannot afford to be borderline. */
-  --text-tertiary:   #7F8AA3;
+  --text-tertiary:   #A09D96;
 
   /* THE LABEL ON A FILLED ACCENT BUTTON IS NOT WHITE IN DARK MODE.
 
@@ -193,7 +195,7 @@
      solve. So the fill keeps the lift and the INK inverts: near-black on a
      bright accent, 4.89:1. This is why the token exists rather than a literal
      white at each call site. */
-  --text-on-accent:  #0E1420;
+  --text-on-accent:  #181715;
 
   /* Dark theme lifts the accent so it stays legible on near-black surfaces.
      Repointed with the ramp on 2026-09-03. #2451D6 is a deep ink blue chosen
@@ -201,7 +203,11 @@
      background, so dark takes two steps up the same hue rather than a
      different hue. --accent-700 stays the LIGHTER of the two here because in
      dark mode it is used for accent-coloured TEXT, which needs the contrast. */
-  --accent-600:      #4B7BFF;
+  /* Lifted one further step on 2026-09-04. #4B7BFF measured 4.52:1 against the
+     navy card and 4.43:1 against the warm one — the warm ground is fractionally
+     lighter, and that is enough to drop the accent under AA. This is the cost
+     of a cool accent on a warm ground, and it is small: two hex steps. */
+  --accent-600:      #4E7DFF;
   --accent-700:      #7BA0FF;
 
   /* Derived from the light semantics, not carried over from the old set. Each
@@ -328,7 +334,7 @@ body.light-theme {
 /* The dark wash. This block must come AFTER the alias block above: dark is the
    bare `:root` default, so at equal specificity the later rule is the one that
    wins. body.light-theme carries higher specificity and needs no repetition. */
-:root { --accent-dim: rgba(75, 123, 255, 0.16); }
+:root { --accent-dim: rgba(78, 125, 255, 0.16); }
 body.light-theme { --accent-dim: rgba(36, 81, 214, 0.08); }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -9,15 +9,31 @@
        the legacy names every screen still reads resolve to the same system the
        new tokens do. Neutral grey next to a #2451D6 accent read as dirty; the
        same steps in the accent's own hue family do not. */
-    --bg:            #0E1420;
-    --bg2:           #141B2A;
-    --bg3:           #1B2334;
-    --bg4:           #242D41;
-    --sidebar-bg:    #0B111C;
-    --card:          #151C2B;
-    --card2:         #1B2334;
+    /* Repointed WARM 2026-09-04, on the owner's call (brief section 7: the dark
+       mode should follow the Anthropic register, not a generic black SaaS one).
+       The ladder that was here was cool navy, derived as the inverse of the
+       light mockups so the two themes would read as one product. That reasoning
+       was sound and is now overridden deliberately: the two themes stay one
+       product through SHAPE, TYPE and the shared accent, not through hue.
+
+       Each rung keeps the LIGHTNESS RELATIONSHIP of the navy rung it replaces,
+       within 1.5 L* — this is a hue change, not a contrast change, so nothing
+       that depended on surface separation regresses. CLAUDE.md rule 6 (the
+       ladder must span more than 8 lightness points): navy spanned 13.5,
+       warm spans 12.7. Still comfortably clear.
+
+       Values are the Anthropic teardown's canvas / card / feature / hairline,
+       extended to the eight rungs this app needs (the extract declares four;
+       this app has progress tracks and hover grounds it does not). */
+    --bg:            #181715;
+    --bg2:           #1F1E1B;
+    --bg3:           #252320;
+    --bg4:           #2F2C28;
+    --sidebar-bg:    #131211;
+    --card:          #1F1E1B;
+    --card2:         #252320;
     --border:        rgba(255, 255, 255, 0.08);
-    --border2:       #2E3852;
+    --border2:       #35322D;
 
     /* Accent tokens (--gold/--royal) removed in Phase 1 §5.5b — the app now
        uses the single violet --accent set from tokens.css. */
@@ -47,11 +63,18 @@
     --purple-dim:    rgba(155, 140, 240, 0.14);
 
     /* Text */
-    /* These were WARM (#d7c3b5, #a08d81) — a leftover from the Anthropic ivory
-       pass. Warm secondary text on a navy card reads as a stain, so they are
-       now the cool inverse of the mockups' --ink-soft / --ink-faint. */
-    --text:          #E6EAF2;
-    --text2:         #A8B2C6;
+    /* WARM AGAIN, and the comment that used to sit here explains why better
+       than a new one could. It read: "These were WARM (#d7c3b5, #a08d81) — a
+       leftover from the Anthropic ivory pass. Warm secondary text on a navy
+       card reads as a stain, so they are now the cool inverse of the mockups'
+       --ink-soft / --ink-faint."
+
+       That was correct, and it is exactly why the inks turn back now the ground
+       is warm: the stain works in both directions, and cool ink on a warm card
+       is the same mistake mirrored. It also measures better — cool --text3
+       #7F8AA3 is 4.82:1 on the warm ground, the warm #A09D96 is 6.16:1. */
+    --text:          #FAF9F5;
+    --text2:         #D8D5CD;
     --text3:         var(--text-tertiary);   /* #7F8AA3, 4.92:1 on --card */
 
     /* Typography -- the type system from the Add Student design

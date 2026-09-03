@@ -46,9 +46,13 @@ body.light-theme .dh-violet { --dh:#5B4BC4; --dh-2:#7B6AE0; --dh-bg:#EDEBFA; }
 body.light-theme .dh-amber  { --dh:#AD7A1E; --dh-2:#BE8A2C; --dh-bg:#FBF2E2; }
 body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#EEF1F6; }
 
-/* Sunken surfaces used INSIDE cards. The dark values sit far enough off
-   --card (now #151C2B) to stay visible, and every consumer also draws a border
-   as a second cue (CLAUDE.md rule 6 — dark surfaces need real separation).
+/* Sunken surfaces used INSIDE cards. The dark values are TRANSLUCENT WHITE, not
+   a fixed colour, which is why they survived the ground being repointed from
+   neutral grey to navy and then to warm near-black without anyone touching
+   them — they take their hue from whatever is underneath. Every consumer also
+   draws a border as a second cue (CLAUDE.md rule 6 — dark surfaces need real
+   separation). This comment named --card as "#151C2B"; that was the navy card
+   and it is #1F1E1B now. The value is not repeated here again on purpose.
 
    Light is the reference system's --surface-sunk (#FAFBFD) rather than the
    #f6f7f9 that was here: a hair lighter and a hair cooler, so a sunk well
