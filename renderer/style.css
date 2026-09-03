@@ -85,9 +85,15 @@
     --glow-indigo:     0 0 16px rgba(0, 0, 0, 0.2);
     --glow-gold:       0 0 20px rgba(0, 0, 0, 0.3);
 
-    /* Layout */
-    --sidebar-w:     260px;
-    --header-h:      48px;
+    /* Layout — DEAD VALUES REMOVED 2026-09-04.
+
+       This said `--sidebar-w: 260px; --header-h: 48px;` and had said so for a
+       long time. chrome.css declares both at the same specificity and loads
+       AFTER this file, so the app's real values are 212px and 66px and these
+       two never reached a pixel. They are worse than harmless: every reader of
+       this file, which is the first place anyone looks, learned a header height
+       the app does not have. The live values live in chrome.css beside the
+       chrome they describe. */
 
     /* Motion — avoid 'all', specify properties for performance */
     --transition:          background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
@@ -95,18 +101,17 @@
 
     --font-icon: 'Material Symbols Rounded';
 
-    /* ── SEMANTIC DESIGN TOKENS (single source of truth — use these in new/edited code) ── */
-    --background:         var(--bg);
-    --surface:             var(--card);
-    --surface-secondary:   var(--card2);
-    --border-token:        var(--border);
-    --text-primary:        var(--text);
-    --text-secondary:      var(--text2);
-    --muted:               var(--text3);
-    --primary:             var(--accent);
-    --success:             var(--green);
-    --danger:              var(--red);
-    --warning:             var(--amber);
+    /* ── SEMANTIC DESIGN TOKENS — MOVED TO tokens.css, 2026-09-04 ────────────
+       These eleven were declared here under the header "single source of truth",
+       while tokens.css — the file CLAUDE.md names as the bound design system —
+       declared the same eleven names. Two files cannot both be the source; the
+       cascade silently picked one, and which one changed per token depending on
+       whether tokens.css also re-declared it on body.light-theme.
+
+       Both halves now live together in tokens.css. Nothing about their VALUES
+       changed: they are the same var() expressions pointing at the same --bg /
+       --card / --text / --accent / --green names, which are still declared in
+       this file. Only the ownership moved. */
 
     /* ── TYPOGRAPHY SCALE ── */
     --fs-display:   clamp(32px, 2.6vw, 38px); /* KPI / hero numbers */

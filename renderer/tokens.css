@@ -516,6 +516,31 @@ body.light-theme {
    getComputedStyle in both themes — see tests/theme-parity.spec.js, which
    fails if any of these ever resolves to the same value in both themes again.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* The DARK half of the same set. These eleven lived in style.css's :root under
+   a header calling them "SEMANTIC DESIGN TOKENS (single source of truth)" — a
+   claim two files cannot both make. They are moved here, unchanged, so the
+   bound design system owns both halves of every token and style.css owns none.
+
+   The var() targets (--bg, --card, --text, --accent, --green …) are still
+   declared in style.css. That is fine and not the bug from Phase 2: custom
+   properties resolve in a second pass AFTER the cascade settles, so a var()
+   written here picks up whatever those names finally compute to, regardless of
+   which file declared them or in what order. What broke before was scope — an
+   alias on :root reaching for a value overridden on body — not file order. */
+:root {
+  --background:          var(--bg);
+  --surface:             var(--card);
+  --surface-secondary:   var(--card2);
+  --border-token:        var(--border);
+  --text-primary:        var(--text);
+  --text-secondary:      var(--text2);
+  --muted:               var(--text3);
+  --primary:             var(--accent);
+  --success:             var(--green);
+  --danger:              var(--red);
+  --warning:             var(--amber);
+}
+
 body.light-theme {
   /* Accent aliases (tokens.css :root, "LEGACY ALIASES" block) */
   --accent:              var(--accent-600);
