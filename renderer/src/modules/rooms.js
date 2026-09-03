@@ -177,8 +177,10 @@ function renderRooms() {
         ${nVac?`<span class="rms-card__vac" title="${nVac} of these beds ${nVac===1?'is':'are'} on notice and will free up">${nVac} vacating</span>`:''}
       </div>
       <div class="rms-card__body ${stateHue}">
-        <div class="rms-card__num">#${escHtml(String(r.number))}</div>
-        <span class="rms-card__type">${escHtml(type.name)}</span>
+        <div class="rms-card__head">
+          <span class="rms-card__num">#${escHtml(String(r.number))}</span>
+          <span class="rms-card__type">${escHtml(type.name)}</span>
+        </div>
 
         <div class="rms-row">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/></svg>

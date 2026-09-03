@@ -328,7 +328,22 @@ function studentAvatar(student, size, extraClass) {
     return `<span class="${cls}" style="${box}"><img src="${escHtml(photo)}" alt="" ` +
            `style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></span>`;
   }
-  // Lucide's student glyph — the same set the rest of the chrome draws from.
+  /* INITIALS, not a glyph. Every student without a photo drew the identical
+     mortarboard, so a roster of forty read as forty copies of one icon and the
+     avatar column carried no information at all. Initials distinguish rows at
+     a glance and are what the reference design uses.
+
+     Falls back to the glyph only when the name yields no letter — a record
+     named "—" or "123" would otherwise show an empty tile. */
+  const initials = String(s.name || '')
+    .replace(/[^\p{L}\p{N} ]/gu, ' ')
+    .trim().split(/\s+/).filter(Boolean)
+    .slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+  if (initials) {
+    return `<span class="${cls} is-initials" style="${box};font-size:${Math.round(px * 0.37)}px" ` +
+           `aria-label="${escHtml(s.name || '')}">${escHtml(initials)}</span>`;
+  }
   const g = Math.round(px * 0.58);
   return `<span class="${cls} is-empty" style="${box}" aria-label="No photo">` +
          `<svg viewBox="0 0 24 24" width="${g}" height="${g}" fill="none" stroke="currentColor" ` +

@@ -5,37 +5,48 @@
 
 :root {
     /* ── CLAUDE DARK (default) ──────────────────────────────────────────── */
-    --bg:            #0f0f0f;
-    --bg2:           #161616;
-    --bg3:           #1e1e1e;
-    --bg4:           #282828;
-    --sidebar-bg:    #111111;
-    --card:          #161616;
-    --card2:         #1e1e1e;
+    /* Repointed 2026-09-03 onto the cool-navy ladder derived in tokens.css, so
+       the legacy names every screen still reads resolve to the same system the
+       new tokens do. Neutral grey next to a #2451D6 accent read as dirty; the
+       same steps in the accent's own hue family do not. */
+    --bg:            #0E1420;
+    --bg2:           #141B2A;
+    --bg3:           #1B2334;
+    --bg4:           #242D41;
+    --sidebar-bg:    #0B111C;
+    --card:          #151C2B;
+    --card2:         #1B2334;
     --border:        rgba(255, 255, 255, 0.08);
-    --border2:       #3a3a3a;
+    --border2:       #2E3852;
 
     /* Accent tokens (--gold/--royal) removed in Phase 1 §5.5b — the app now
        uses the single violet --accent set from tokens.css. */
 
     /* Semantic colours */
-    --teal:          #44e2cd;
-    --teal-dim:      rgba(68, 226, 205, 0.10);
-    --red:           #ffb4ab;
-    --red-dim:       rgba(255, 180, 171, 0.12);
-    --green:         #45dfa4;
-    --green-dim:     rgba(69, 223, 164, 0.10);
-    --amber:         #fbbf24;
-    --amber-dim:     rgba(251, 191, 36, 0.12);
-    --blue:          #60a5fa;
-    --blue-dim:      rgba(96, 165, 250, 0.12);
-    --purple:        #c084fc;
-    --purple-dim:    rgba(192, 132, 252, 0.12);
+    /* --red/--green/--amber/--blue now resolve to the SAME hues as
+       --danger-fg/--success-fg/--warning-fg/--info-fg in tokens.css. They were
+       a second, brighter palette saying the same things, which is how one
+       screen's "overdue" ended up a different red from another's. */
+    --teal:          #44d3c4;
+    --teal-dim:      rgba(68, 211, 196, 0.12);
+    --red:           #F0796A;
+    --red-dim:       rgba(240, 121, 106, 0.14);
+    --green:         #3FBF83;
+    --green-dim:     rgba(63, 191, 131, 0.14);
+    --amber:         #D9A441;
+    --amber-dim:     rgba(217, 164, 65, 0.14);
+    --blue:          #7BA0FF;
+    --blue-dim:      rgba(123, 160, 255, 0.14);
+    --purple:        #9B8CF0;
+    --purple-dim:    rgba(155, 140, 240, 0.14);
 
     /* Text */
-    --text:          #e5e2e1;
-    --text2:         #d7c3b5;
-    --text3:         #a08d81;
+    /* These were WARM (#d7c3b5, #a08d81) — a leftover from the Anthropic ivory
+       pass. Warm secondary text on a navy card reads as a stain, so they are
+       now the cool inverse of the mockups' --ink-soft / --ink-faint. */
+    --text:          #E6EAF2;
+    --text2:         #A8B2C6;
+    --text3:         #7F8AA3;   /* 4.92:1 on --card — see tokens.css */
 
     /* Typography -- the type system from the Add Student design
        (claude.ai/design "Add student form mockups"), bundled in
@@ -54,11 +65,14 @@
     --font-mono:     'JetBrains Mono', 'Courier New', monospace;
 
     /* Shape */
-    --radius:        14px;
-    --radius-sm:     8px;
+    /* The reference system is 8px, with 6-7px on controls. 14px cards read as
+       consumer software beside it; this is the single change that most moves
+       the app from "app" to "operations console". */
+    --radius:        8px;
+    --radius-sm:     6px;
 
     /* Shadows */
-    --shadow:          0 4px 32px rgba(0, 0, 0, 0.6);
+    --shadow:          0 4px 16px rgba(0, 0, 0, 0.45);
     --shadow-accent:     0 4px 20px rgba(0, 0, 0, 0.35);
     --shadow-royal:    0 4px 24px rgba(0, 0, 0, 0.4);
     --shadow-indigo-sm: 0 2px 12px rgba(0, 0, 0, 0.35);
@@ -126,38 +140,43 @@ body.no-transition *::after {
    text on white is about 2.5:1; #059669 is the guide's own success-text.
    ══════════════════════════════════════════════════════════════════════════ */
 body.light-theme {
-    --bg:            #f4f7fc;   /* workspace ground */
-    --bg2:           #eef2f9;
-    --bg3:           #e8edf5;   /* progress-track / sunk surfaces */
-    --bg4:           #dde4ef;
-    --sidebar-bg:    #071a3a;
-    --card:          #ffffff;
-    --card2:         #f8fafc;
-    --border:        #e2e8f0;
-    --border2:       #cbd5e1;
-    --divider:       #eef2f7;   /* soft row separator (guide §19) */
+    /* Verbatim from the reference mockups: --bg, --surface, --surface-sunk,
+       --border, --border-strong and --sidebar are theirs. --bg2/--bg4 sit
+       between their steps because the app needs two more rungs than the
+       mockups declare (progress tracks, hover grounds). */
+    --bg:            #F5F6F9;   /* workspace ground — their --bg */
+    --bg2:           #EEF1F6;
+    --bg3:           #E7EBF2;   /* progress-track / sunk surfaces */
+    --bg4:           #DCE1EA;
+    --sidebar-bg:    #131B2E;   /* their --sidebar */
+    --card:          #FFFFFF;
+    --card2:         #FAFBFD;   /* their --surface-sunk */
+    --border:        #E4E7EE;   /* their --border */
+    --border2:       #D3D8E2;   /* their --border-strong */
+    --divider:       #EDEFF4;   /* soft row separator (guide §19) */
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
-    --teal:          #0891b2;
-    --teal-dim:      rgba(8, 145, 178, 0.08);
-    --red:           #dc2626;
-    --red-dim:       rgba(239, 68, 68, 0.08);
-    --green:         #059669;
-    --green-dim:     rgba(16, 185, 129, 0.10);
-    --amber:         #d97706;
-    --amber-dim:     rgba(245, 158, 11, 0.10);
-    --blue:          #2563eb;
-    --blue-dim:      rgba(37, 99, 235, 0.10);
-    --purple:        #7c3aed;
-    --purple-dim:    rgba(139, 92, 246, 0.10);
+    /* Their --success / --danger / --warn, and the accent for --blue. */
+    --teal:          #0F8A94;
+    --teal-dim:      rgba(15, 138, 148, 0.08);
+    --red:           #C0402F;
+    --red-dim:       rgba(192, 64, 47, 0.08);
+    --green:         #1F8A5A;
+    --green-dim:     rgba(31, 138, 90, 0.09);
+    --amber:         #AD7A1E;
+    --amber-dim:     rgba(173, 122, 30, 0.09);
+    --blue:          #2451D6;
+    --blue-dim:      rgba(36, 81, 214, 0.08);
+    --purple:        #5B4BC4;
+    --purple-dim:    rgba(91, 75, 196, 0.09);
 
-    --text:          #0f172a;
-    --text2:         #334155;
-    --text3:         #64748b;
+    --text:          #152238;   /* their --ink */
+    --text2:         #5B647A;   /* their --ink-soft */
+    --text3:         #8A93A6;   /* their --ink-faint */
 
     /* Guide §21 — subtle and professional, never heavy. */
-    --shadow:           0 8px 24px rgba(15, 23, 42, 0.045);
+    --shadow:           0 8px 24px rgba(21, 34, 56, 0.10);
     --shadow-elevated:  0 14px 35px rgba(15, 23, 42, 0.08);
     --shadow-accent:      0 5px 14px rgba(37, 99, 235, 0.20);
     --shadow-royal:     0 12px 30px rgba(15, 23, 42, 0.075);
@@ -978,18 +997,23 @@ input, select, textarea { font-family: var(--font); }
 
 .btn:active { transform: scale(0.97); }
 
-/* Primary — Indigo gradient */
+/* Primary. Was a three-stop hardcoded Tailwind gradient — the app's actual
+   primary button in 14 modules, and after the accent repaint the most-clicked
+   surface in the product was the last one still wearing the old blue.
+
+   It is a FLAT accent now, not a gradient. The reference system paints its
+   primary as `background:var(--accent)` with `--accent-ink` on hover and no
+   lift, no glow, no text-shadow; a gradient plus a translate plus a shadow is
+   the "premium = more decoration" reading the brief rules out. */
 .btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
-    color: #fff;
-    box-shadow: var(--shadow-royal);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    background: var(--accent);
+    color: var(--text-on-accent);
+    box-shadow: none;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%);
-    transform: translateY(-2px);
-    box-shadow: var(--glow-indigo);
+    background: var(--accent-strong);
+    box-shadow: none;
 }
 
 /* Gold variant — for key hostel actions */

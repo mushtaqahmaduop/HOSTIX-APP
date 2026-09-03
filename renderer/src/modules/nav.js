@@ -68,14 +68,18 @@ const pageConfig = {
   // v5: the add/edit student form is a page, not a modal. `nav` keeps the
   // Students rail item lit while it is open, and `back` shows the header's
   // Back button — the form is a detour, not a destination.
-  addstudent:    { title:'Add / Edit Student', sub:'Add new student or update existing details',
-                   action:null, nav:'students', back:true },
+  // Chrome shows the section; the page itself carries the "Student intake"
+  // heading and breadcrumb, so naming the task here too just reads as a
+  // stutter — the same call Add Payment made below.
+  addstudent:    { title:'Students', sub:'', action:null, nav:'students', back:true },
   // Add/Edit Payment is a page too, for the same reason: it carries a live
   // summary and the student's recent history alongside the form, which a modal
   // has no room for.
   // Chrome shows the section; the page itself carries the "Add New Payment"
   // heading and breadcrumb, so repeating it in the header just reads as a stutter.
-  addpayment:    { title:'Finance', sub:'', action:null, nav:'payments', back:true }
+  // `chrome:'task'` retires the global header here entirely — see renderPage().
+  addpayment:    { title:'Finance', sub:'', action:null, nav:'payments', back:true,
+                   chrome:'task' }
 };
 
 function navigate(page, isBack=false) {
@@ -195,6 +199,27 @@ function renderPage(p, resetScroll=false) {
   // Handle cancellations sub-filter pages
   let cancFilter = 'All';
   let basePage = p;
+
+  /* ── CONTEXTUAL HEADER ────────────────────────────────────────────────────
+     A page declaring `chrome:'task'` is a TASK, not a destination: it is
+     reached from somewhere, it is finished or abandoned, and it goes back. The
+     global header's search box, date stepper, notification bell and Add
+     buttons are all destination controls — every one of them navigates AWAY
+     from a half-filled form — so a task page trades that 48px bar for its own
+     compact header carrying only what the task needs: where you are, what
+     record this is, and the way out. On a 1366x768 laptop that bar plus the
+     page's own title block cost ~110px before a single field was drawn.
+
+     THIS BELONGS IN renderPage(), NOT navigate(). Roughly fifteen call sites
+     re-render a page directly — every filter dropdown on the payments list,
+     and critically submitAddPayment(), which ends `renderPage('payments')`
+     after posting. Toggling in navigate() alone meant posting a payment left
+     `chrome-task` set, and the payments list then drew with its global header
+     display:none and its padding zeroed. Here the class is decided by the page
+     being rendered, so it cannot outlive the page that asked for it. */
+  document.body.classList.toggle(
+    'chrome-task', (pageConfig[p] || {}).chrome === 'task');
+
   if(p.startsWith('cancellations_')) {
     cancFilter = p.replace('cancellations_','');
     basePage = 'cancellations';

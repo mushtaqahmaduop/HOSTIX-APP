@@ -38,35 +38,50 @@
      selected states all follow from here. The token NAMES stay `--accent*`
      (CLAUDE.md rule 5); the deleted `--royal*` set is not coming back.
      ════════════════════════════════════════════════════════════════════════ */
-  --accent-50:  #eff6ff;
-  --accent-100: #dbeafe;
-  --accent-200: #bfdbfe;
-  --accent-300: #93c5fd;
-  --accent-400: #60a5fa;
-  --accent-500: #3b82f6;
-  --accent-600: #2563eb;
-  --accent-700: #1d4ed8;
-  --accent-800: #1e40af;
-  --accent-900: #1e3a8a;
+  /* Repointed 2026-09-03 to the accent of the owner's reference system (the
+     four Hostyllo mockups in Downloads: students, rooms, expenses, payment
+     worksheet — all of which declare --accent:#2451D6 / --accent-ink:#1B3FAE
+     / --accent-tint:#EAF0FE). It is a deeper, less cyan blue than the Tailwind
+     ramp that was here; against #F5F6F9 it reads as ink rather than as a link.
+
+     Per CLAUDE.md, rebranding means overriding THIS RAMP and nothing else —
+     --accent, --accent-strong, --accent-soft and --accent-dim all derive from
+     it, so every button, focus ring, nav pill, sort arrow and avatar in the
+     app followed from this one block. The token NAMES are unchanged. */
+  --accent-50:  #EAF0FE;
+  --accent-100: #D6E2FD;
+  --accent-200: #B3C8FA;
+  --accent-300: #86A5F5;
+  --accent-400: #5480EA;
+  --accent-500: #3A63DE;
+  --accent-600: #2451D6;
+  --accent-700: #1B3FAE;
+  --accent-800: #163289;
+  --accent-900: #132868;
 
   /* ════════════════════════════════════════════════════════════════════════
      SEMANTIC — only for status, never decoration
      ════════════════════════════════════════════════════════════════════════ */
-  --success-bg:     #ecfdf5;
-  --success-fg:     #047857;
-  --success-border: #a7f3d0;
+  /* The reference system's semantics. They are muted on purpose — the mockups
+     use a 1F8A5A green and a C0402F red, both several steps off full
+     saturation, so a status badge states a fact without shouting across a
+     dense table. Tints are their *-tint values verbatim; the borders are the
+     one part not given, derived at roughly the tint's own hue two steps down. */
+  --success-bg:     #E8F5EE;
+  --success-fg:     #1F8A5A;
+  --success-border: #BFE3D0;
 
-  --warning-bg:     #fffbeb;
-  --warning-fg:     #b45309;
-  --warning-border: #fde68a;
+  --warning-bg:     #FBF2E2;
+  --warning-fg:     #AD7A1E;
+  --warning-border: #EFD9A8;
 
-  --danger-bg:      #fef2f2;
-  --danger-fg:      #b91c1c;
-  --danger-border:  #fecaca;
+  --danger-bg:      #FBEBE8;
+  --danger-fg:      #C0402F;
+  --danger-border:  #F2C5BC;
 
-  --info-bg:        #eff6ff;
-  --info-fg:        #1d4ed8;
-  --info-border:    #bfdbfe;
+  --info-bg:        #EAF0FE;
+  --info-fg:        #1B3FAE;
+  --info-border:    #B3C8FA;
 
   /* ════════════════════════════════════════════════════════════════════════
      SURFACE
@@ -140,35 +155,59 @@
    DARK MODE — MORE desaturated, not less
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --surface:         #141414;
-  --surface-muted:   #1c1c1c;
-  --surface-sunken:  #0f0f0f;
-  --surface-border:  #2a2a2a;
-  --surface-divider: #262626;
+  /* DERIVED, not given. The reference mockups are light-only, so this ladder
+     is the cool-navy inverse of their #F5F6F9 / #FFFFFF / #152238 system —
+     same hue family as their --sidebar:#131B2E, so the two themes read as one
+     product. The old ladder was pure neutral grey (#141414…#2a2a2a), which
+     went muddy the moment the surrounding chrome turned blue.
 
-  --text-primary:    #e5e5e5;
-  --text-secondary:  #a3a3a3;
-  --text-tertiary:   #737373;
+     CLAUDE.md rule 6: the ladder must span more than 8 lightness points.
+     #0B111C (L 7.6) → #242D41 (L 20.2) = 12.6. The greys it replaces spanned
+     9.7, so contrast between stacked dark surfaces improves rather than
+     regresses. */
+  --surface:         #151C2B;
+  --surface-muted:   #1B2334;
+  --surface-sunken:  #0E1420;
+  --surface-border:  #2E3852;
+  --surface-divider: #232C40;
 
-  /* Dark theme lifts the accent so it stays legible on near-black surfaces. */
-  --accent-600:      #3b82f6;
-  --accent-700:      #60a5fa;
+  --text-primary:    #E6EAF2;
+  --text-secondary:  #A8B2C6;
+  /* #737E96 was the straight inverse of the light --ink-faint and measured
+     4.18:1 on --card — below AA for normal text, and a REGRESSION on the warm
+     #a08d81 it replaced (5.71:1). Lifted until it clears 4.5: this token
+     carries 9.5-12px metadata (.ws__p i, .tsk-crumb, .tsk-foot__note), which
+     is exactly the size that cannot afford to be borderline. */
+  --text-tertiary:   #7F8AA3;
 
-  --success-bg:      rgba(52, 211, 153, 0.1);
-  --success-fg:      #34d399;
-  --success-border:  rgba(52, 211, 153, 0.2);
+  /* Dark theme lifts the accent so it stays legible on near-black surfaces.
+     Repointed with the ramp on 2026-09-03. #2451D6 is a deep ink blue chosen
+     to sit on #F5F6F9; on a #0E1420 ground it is barely separable from the
+     background, so dark takes two steps up the same hue rather than a
+     different hue. --accent-700 stays the LIGHTER of the two here because in
+     dark mode it is used for accent-coloured TEXT, which needs the contrast. */
+  --accent-600:      #4B7BFF;
+  --accent-700:      #7BA0FF;
 
-  --warning-bg:      rgba(251, 191, 36, 0.1);
-  --warning-fg:      #fbbf24;
-  --warning-border:  rgba(251, 191, 36, 0.2);
+  /* Derived from the light semantics, not carried over from the old set. Each
+     hue is the mockups' own, lifted until it clears a #151C2B card, and the
+     washes go from 10% to 14% because the ground beneath them is now navy
+     rather than neutral black — 10% of a warm hue simply vanished on it. */
+  --success-bg:      rgba(63, 191, 131, 0.14);
+  --success-fg:      #3FBF83;
+  --success-border:  rgba(63, 191, 131, 0.26);
 
-  --danger-bg:       rgba(248, 113, 113, 0.1);
-  --danger-fg:       #f87171;
-  --danger-border:   rgba(248, 113, 113, 0.2);
+  --warning-bg:      rgba(217, 164, 65, 0.14);
+  --warning-fg:      #D9A441;
+  --warning-border:  rgba(217, 164, 65, 0.26);
 
-  --info-bg:         rgba(96, 165, 250, 0.1);
-  --info-fg:         #60a5fa;
-  --info-border:     rgba(96, 165, 250, 0.2);
+  --danger-bg:       rgba(240, 121, 106, 0.14);
+  --danger-fg:       #F0796A;
+  --danger-border:   rgba(240, 121, 106, 0.26);
+
+  --info-bg:         rgba(123, 160, 255, 0.14);
+  --info-fg:         #7BA0FF;
+  --info-border:     rgba(123, 160, 255, 0.26);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -192,35 +231,40 @@
 /* Light mode overrides for new tokens */
 body.light-theme {
   color-scheme: light;
-  --surface:         #ffffff;
-  --surface-muted:   var(--gray-50);
-  --surface-sunken:  var(--gray-100);
-  --surface-border:  var(--gray-200);
-  --surface-divider: var(--gray-200);
+  /* Taken verbatim from the reference mockups' :root — this is their system,
+     not an interpretation of it. --surface-border is their --border, and
+     --surface-divider their --border-strong. */
+  --surface:         #FFFFFF;
+  --surface-muted:   #FAFBFD;
+  --surface-sunken:  #F5F6F9;
+  --surface-border:  #E4E7EE;
+  --surface-divider: #D3D8E2;
 
-  --text-primary:    var(--gray-900);
-  --text-secondary:  var(--gray-600);
-  --text-tertiary:   var(--gray-400);
+  --text-primary:    #152238;
+  --text-secondary:  #5B647A;
+  --text-tertiary:   #8A93A6;
 
-  /* Light theme deepens it so accent-coloured TEXT keeps contrast on white. */
-  --accent-600:      #2563eb;
-  --accent-700:      #1d4ed8;
+  /* Their --accent and --accent-ink. Unlike the old pair these are already the
+     ramp's own 600/700, so light needs no deepening — the ramp was built on
+     them. Kept as explicit overrides so the dark lift above cannot leak. */
+  --accent-600:      #2451D6;
+  --accent-700:      #1B3FAE;
 
-  --success-bg:      #ecfdf5;
-  --success-fg:      #047857;
-  --success-border:  #a7f3d0;
+  --success-bg:      #E8F5EE;
+  --success-fg:      #1F8A5A;
+  --success-border:  #BFE3D0;
 
-  --warning-bg:      #fffbeb;
-  --warning-fg:      #b45309;
-  --warning-border:  #fde68a;
+  --warning-bg:      #FBF2E2;
+  --warning-fg:      #AD7A1E;
+  --warning-border:  #EFD9A8;
 
-  --danger-bg:       #fef2f2;
-  --danger-fg:       #b91c1c;
-  --danger-border:   #fecaca;
+  --danger-bg:       #FBEBE8;
+  --danger-fg:       #C0402F;
+  --danger-border:   #F2C5BC;
 
-  --info-bg:         #eff6ff;
-  --info-fg:         #1d4ed8;
-  --info-border:     #bfdbfe;
+  --info-bg:         #EAF0FE;
+  --info-fg:         #1B3FAE;
+  --info-border:     #B3C8FA;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -240,10 +284,19 @@ body.light-theme {
   --accent:           var(--accent-600);
   --accent-soft:      var(--accent-100);
   --accent-strong:    var(--accent-700);
-  /* Translucent accent wash — replaces the former --gold-dim/--royal-dim.
-     One value works on both themes (subtle accent wash on any surface). */
-  --accent-dim:       rgba(59, 130, 246, 0.12);
+  /* Translucent accent wash. It is now set PER THEME rather than once: the
+     reference system's tint (#EAF0FE) is a barely-there 8% wash on white, and
+     that same 8% is invisible on a near-black ground. One value cannot serve
+     both — it did before only because the old accent was light enough to
+     survive either way. Light stays here; dark is lifted below. */
+  --accent-dim:       rgba(36, 81, 214, 0.08);
 }
+
+/* The dark wash. This block must come AFTER the alias block above: dark is the
+   bare `:root` default, so at equal specificity the later rule is the one that
+   wins. body.light-theme carries higher specificity and needs no repetition. */
+:root { --accent-dim: rgba(75, 123, 255, 0.16); }
+body.light-theme { --accent-dim: rgba(36, 81, 214, 0.08); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PHASE 1 ADDITIONS — spec §31

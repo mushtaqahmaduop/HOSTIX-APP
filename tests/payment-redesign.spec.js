@@ -115,10 +115,12 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   expect(ticked.note.toLowerCase()).toContain('mess included');
   expect(Number(ticked.unpaid)).toBe(FULL);
   expect(ticked.summary, 'summary should carry the monthly charge').toContain('14,500');
-  expect(ticked.summary, 'summary should show the remaining balance').toContain('Remaining Balance');
+  // The stub's own wording is presentation and has changed once already — the
+  // assertion is that the remaining balance is on it, not how it is spelt.
+  expect(ticked.summary.toLowerCase(), 'summary should show the remaining balance').toContain('remaining');
 
   // Untick → rent only, immediately.
-  await win.uncheck('#f-pmess-on');
+  await win.click('.ws__seg-b[data-on="0"]');
   await win.waitForTimeout(200);
   const unticked = await win.evaluate(() => ({
     charge: document.getElementById('f-pcharge').value,
@@ -131,7 +133,7 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   expect(Number(unticked.unpaid)).toBe(RENT);
 
   // Re-tick → back to the full charge.
-  await win.check('#f-pmess-on');
+  await win.click('.ws__seg-b[data-on="1"]');
   await win.waitForTimeout(200);
   const reticked = await win.evaluate(() => document.getElementById('f-pcharge').value);
   expect(reticked.replace(/,/g, ''), 're-ticked charge').toBe(String(FULL));

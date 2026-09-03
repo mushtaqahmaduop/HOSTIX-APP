@@ -967,15 +967,23 @@ function useManualNameEntry(name) {
   document.getElementById('f-pstudent').value = '__manual__';
   document.getElementById('f-pstudent-search').value = name;
   document.getElementById('student-search-results').style.display = 'none';
+  const pick = document.getElementById('ap-pick');
+  if (pick) pick.style.display = 'none';
   const info = document.getElementById('selected-student-info');
-  info.style.display = 'block';
-  info.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:4px 0">
-    <span style="font-size:18px">✍️</span>
-    <div>
-      <div style="font-size:13px;font-weight:700;color:var(--amber)">Manual entry: <strong>${escHtml(name)}</strong></div>
-      <div style="font-size:11px;color:var(--text3)">Not linked to a registered student — fill in amounts manually below.</div>
+  info.style.display = 'flex';
+  info.innerHTML = `
+    <div class="ap-idn__who">
+      <div class="ap-idn__av dh-amber">&#9998;</div>
+      <div style="min-width:0">
+        <div class="ap-idn__n">${escHtml(name)}</div>
+        <div class="ap-idn__r">Manual entry &mdash; not linked to a registered student</div>
+      </div>
     </div>
-  </div>`;
+    <div class="ap-idn__s"><span class="ap-idn__l">Charges</span>
+      <b class="ap-idn__v is-muted">Enter below</b>
+      <i class="ap-idn__x">Nothing is resolved from Settings for a manual name</i></div>
+    <button type="button" class="ap-idn__chg" onclick="pfClearStudent()"
+            title="Search for a registered student instead">Change</button>`;
 }
 
 function selectStudentForPayment(studentId) {
@@ -1016,24 +1024,41 @@ function selectStudentForPayment(studentId) {
   pfLoadMonthContext();
   recalcUnpaid();
   const info = document.getElementById('selected-student-info');
-  info.style.display = 'block';
+  info.style.display = 'flex';
+  // The search box and the strip share one slot — see .ap-who in payments.css.
+  const pick = document.getElementById('ap-pick');
+  if (pick) pick.style.display = 'none';
   const _nm  = String(t.name || '?');
   const _ini = _nm.trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
-  const fld = (label, body) =>
-    `<div class="pf-picked__f"><span class="pf-picked__l">${label}</span>${body}</div>`;
-  info.innerHTML = `<div class="pf-picked__row">
-    <div class="pf-picked__who">
-      <div class="pf-picked__av ${payAvatarHue(_nm)}">${escHtml(_ini)}</div>
+  // Arrears here means OTHER months. The month being collected is not an arrear
+  // of itself — counting it made the same balance appear twice on one screen.
+  const _mNow = document.getElementById('f-pmonth')?.value || '';
+  const _arr  = DB.payments
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+              && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_mNow))
+    .reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const _j = t.joinDate ? new Date(t.joinDate) : null;
+  const _since = (_j && !isNaN(_j)) ? _j.toLocaleString('default', { month: 'short', year: 'numeric' }) : '—';
+  const _seat  = [rtype?.name, room?.floor ? room.floor + ' floor' : ''].filter(Boolean).join(', ');
+  const stat = (label, val, sub, cls) =>
+    `<div class="ap-idn__s"><span class="ap-idn__l">${label}</span>
+       <b class="ap-idn__v ${cls || ''}">${val}</b>${sub ? `<i class="ap-idn__x">${sub}</i>` : ''}</div>`;
+  info.innerHTML = `
+    <div class="ap-idn__who">
+      <div class="ap-idn__av ${payAvatarHue(_nm)}">${escHtml(_ini)}</div>
       <div style="min-width:0">
-        <div class="pf-picked__n">${escHtml(_nm)}</div>
-        <div class="pf-picked__r">Room #${escHtml(String(room?.number || '?'))}</div>
+        <div class="ap-idn__n">${escHtml(_nm)}</div>
+        <div class="ap-idn__r">#${escHtml(t.id)} &middot; Room ${escHtml(String(room?.number || '?'))}${
+          _seat ? ' &middot; ' + escHtml(_seat) : ''}</div>
       </div>
     </div>
-    ${fld('Student ID', `<div class="pf-picked__v" style="font-family:var(--font-mono);font-size:12px">${escHtml(t.id)}</div>`)}
-    ${fld('Room', `<div class="pf-picked__v" style="color:var(--accent-strong)">#${escHtml(String(room?.number||'?'))} · ${escHtml(rtype?.name||'')}</div><div class="pf-picked__s">${escHtml(room?.floor||'')} Floor</div>`)}
-    ${fld('Monthly Charge', `<div class="pf-picked__v" style="color:${c.configured?'var(--green)':'var(--red)'}">${c.configured?fmtPKR(c.total):'Not configured'}</div><div class="pf-picked__s">${chargesBreakdown(c)}</div>`)}
-    ${fld('Address', `<div class="pf-picked__v" style="font-weight:600;color:var(--text2)">${escHtml(t.address || t.emergencyContact || 'No address on file')}</div>`)}
-  </div>`;
+    ${stat('Charges', c.configured ? fmtPKR(c.total) : 'Not set',
+           chargesBreakdown(c), c.configured ? '' : 'is-bad')}
+    ${stat('Since', escHtml(_since), '')}
+    ${stat('Arrears', _arr > 0 ? fmtPKR(_arr) : '—', '', _arr > 0 ? 'is-bad' : 'is-muted')}
+    <button type="button" class="ap-idn__chg" onclick="pfClearStudent()"
+            title="Pick a different student">Change</button>`;
+  pfRenderMonthRail();
 }
 
 /* ── SUMMARY ──────────────────────────────────────────────────────────────────
@@ -1161,11 +1186,15 @@ function pfRefreshMonthOptions(studentId) {
 function pfReloadOutstandings() {
   const box = document.getElementById('pf-out');
   if (!box) return;
+  // Line 05 stays on the worksheet whether or not there are arrears — the
+  // numbering has to hold — so the panel and its empty state swap in place.
+  const none = document.getElementById('pf-out-none');
+  const showNone = on => { if (none) none.style.display = on ? '' : 'none'; };
   const sid = document.getElementById('f-pstudent')?.value || '';
-  if (!sid || sid === '__manual__') { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (!sid || sid === '__manual__') { box.style.display = 'none'; box.innerHTML = ''; showNone(true); return; }
   const month = document.getElementById('f-pmonth')?.value || '';
   const arrears = pfOutstandingRecords(sid, month);
-  if (!arrears.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (!arrears.length) { box.style.display = 'none'; box.innerHTML = ''; showNone(true); return; }
 
   const total = arrears.reduce((s, p) => s + Number(p.unpaid || 0), 0);
   // One arrear is the common case and the one the owner's reference draws: the
@@ -1174,6 +1203,7 @@ function pfReloadOutstandings() {
   // back the one that fills them all.
   const many = arrears.length > 1;
   box.style.display = '';
+  showNone(false);
   box.innerHTML =
     `<div class="pf-out__h">
        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
@@ -1321,6 +1351,10 @@ function pfOutstandingTotal() {
   // stays out of the way until there is something to total.
   const line = document.getElementById('pf-out-sumline');
   if (line) line.style.display = n > 0 ? '' : 'none';
+  const ws = document.getElementById('ws-a-05');
+  if (ws) ws.textContent = n > 0 ? fmtNum(n) : '—';
+  pfPostLine();
+  recalcUnpaid();          // the stub carries line 05 under the band
   apUpdateSteps();
   return n;
 }
@@ -1382,6 +1416,12 @@ function pfMessToggle() {
   if (amt && amt.type !== 'hidden') amt.disabled = !isOn;
   if (note) note.textContent = isOn ? 'Rent + mess = total monthly charge'
                                     : 'Room only — mess not charged this month';
+  // The Add Payment page shows the tick as a two-button segment. Repainted
+  // here, not in the click handler, so a programmatic change — a student whose
+  // mess is opted out — moves it too.
+  const seg = document.getElementById('f-pmess-seg');
+  if (seg) seg.querySelectorAll('.ws__seg-b').forEach(b =>
+    b.classList.toggle('is-on', (b.dataset.on === '1') === isOn));
   recalcUnpaid();
 }
 
@@ -1398,12 +1438,29 @@ function pfPaintCharge() {
   const on   = document.getElementById('f-pmess-on');
   const isOn = !on || on.checked;
 
+  // The worksheet shows the figure in its amount column; the box is the field.
+  /* The box IS the amount column's figure on this page. `size` is what makes it
+     shrink to its own digits, so the sign sits against them the way it does on
+     every other line — an input left at its default width put a finger's gap
+     between the "+" and the number. */
+  const wsPaint = hue => {
+    // ch, not the size attribute: size reserves an AVERAGE character and digits
+    // are narrower than the average, which left a finger's gap between the sign
+    // and the figure. With tabular-nums every digit is exactly 1ch.
+    box.style.width = (String(box.value).length + 0.4) + 'ch';
+    box.className = 'ws__amt ' + hue;
+    const sg = document.getElementById('ws-s-01');
+    if (sg) { sg.textContent = hue === 'is-plus' ? '+' : ''; sg.className = 'ws__sign ' + hue; }
+  };
+
   if (!rent && !messConfigured) {
     box.value = '—';
+    wsPaint('is-muted');
     if (note) note.textContent = 'Pick a student to load the charge';
     return;
   }
   box.value = fmtNum(rent + mess);
+  wsPaint((rent + mess) ? 'is-plus' : 'is-muted');
   if (note) {
     note.textContent = isOn && messConfigured
       ? 'Mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
@@ -1420,7 +1477,7 @@ function recalcUnpaid() {
   const extra   = getExtraChargesTotal();
   const admFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const conc    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
-  const total   = Math.max(0, mr + mess + extra + admFee - conc);
+  const total   = pfPayableTotal();
   // Cap paid amount — prevent accidental overpayment (e.g. 1600000 instead of 16000)
   const paidEl  = document.getElementById('f-ppaid');
   let pa = parseFloat(paidEl?.value)||0;
@@ -1456,6 +1513,27 @@ function recalcUnpaid() {
   setSum('pf-sum-extra', extra);
   setSum('pf-sum-paid',  pa);
   setSum('pf-sum-due',   u);
+
+  /* The Add Payment page's amount column — the same terms, one per line. A
+     zero carries no sign: a column of "+ 0  − 0" on an untouched form reads as
+     activity, and the eye then has to check every one of them to find it is
+     nothing. Line 01 is painted by pfPaintCharge(), which owns its note too. */
+  const wsLine = (n, val, dir) => {
+    const sg = document.getElementById('ws-s-' + n), a = document.getElementById('ws-a-' + n);
+    if (!sg || !a) return;
+    const hue = !val ? 'is-muted' : dir > 0 ? 'is-plus' : 'is-minus';
+    sg.textContent = !val ? '' : dir > 0 ? '+' : '\u2212';
+    sg.className   = 'ws__sign ' + hue;
+    a.className    = 'ws__amt ' + hue;
+    a.textContent  = fmtNum(val);
+  };
+  const net02 = admFee - conc;
+  wsLine('02', Math.abs(net02), net02);
+  wsLine('03', extra,  1);
+  wsLine('04', pa,    -1);
+  const qf = document.getElementById('ws-q-full');
+  if (qf) qf.textContent = fmtNum(total);
+  pfPostLine();
 
   // The Add Payment page's right-hand summary is the same arithmetic, itemised.
   pfRenderSummary({
@@ -1788,16 +1866,36 @@ function openAddPayment(studentId) {
   navigate('addpayment');
 }
 
+/* Who is filling this in. The task header states it because a payment record
+   is attributable — logActivity() records it after the fact, and this is the
+   same fact before the fact. Falls back to a dash rather than to a name. */
+function _apEnteredBy() {
+  return (typeof CUR_USER === 'object' && CUR_USER
+          && (CUR_USER.name || CUR_USER.username)) || '—';
+}
+
 function renderAddPayment() {
   // Add Payment is a PAGE, so navigate() reaches it without the button.
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const pmOpts = DB.settings.paymentMethods.map(m => `<option>${escHtml(m)}</option>`).join('');
   const dueDefault = (() => { const d = new Date(); d.setDate(6); return ymd(d); })();
 
+  // Line 01's only control. A hostel that bills mess with the rent, or does not
+  // serve it at all, has nothing to switch — the cell then carries the note
+  // instead of a dead segmented control.
+  const messSeg = (!hostelServesMess() || !messIsOptional())
+    ? `<div class="ws__muted">Set in Settings &rarr; Rent &amp; Mess</div>`
+    : `<input type="checkbox" id="f-pmess-on" class="ws__hid" checked onchange="pfMessToggle()">
+       <div class="ws__seg" id="f-pmess-seg">
+         <button type="button" class="ws__seg-b is-on" data-on="1" onclick="pfMessSet(true)">Rent + mess</button>
+         <button type="button" class="ws__seg-b" data-on="0" onclick="pfMessSet(false)">Rent only</button>
+       </div>`;
+
   // Fill the form once the markup is in the DOM. renderPage() assigns
   // innerHTML inside a setTimeout, so defer past it.
   setTimeout(function () {
     recalcUnpaid();
+    pfRenderMonthRail();
     if (_apPreselect) {
       const sid = _apPreselect; _apPreselect = '';
       if (DB.students.some(s => s.id === sid)) selectStudentForPayment(sid);
@@ -1805,244 +1903,440 @@ function renderAddPayment() {
   }, 60);
 
   return `
-  <div class="ap-wrap" id="ap-wrap">
-    <!-- The title block is back (owner reference). Nothing on this page is
-         scaled: the type stays the size it was designed at and the page
-         scrolls on a short window, which costs a flick of the wheel instead of
-         a quarter of the letter height. -->
-    <div class="ap-head">
-      <div class="ap-head__l">
-        <nav class="ap-crumb">
-          <span>Finance</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          <a onclick="navigate('payments')">Payments</a>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          <b>Add Payment</b>
-        </nav>
-        <h2 class="ap-title">Add New Payment</h2>
-        <div class="ap-sub">Record a new payment and update student outstanding balance</div>
-      </div>
-      <button class="ap-back" onclick="navigate('payments')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        Back to Payments
+  <!-- ══ TASK HEADER ══
+       The global header is hidden on this page (body.chrome-task, set by
+       navigate() from pageConfig.addpayment.chrome). What stood here before —
+       a breadcrumb line plus a 22px "Payment worksheet" heading — is folded
+       into the 50px bar, because the bar already says Payments / New Entry and
+       saying it twice cost 46px of a 768px laptop screen. -->
+  <header class="tsk-head">
+    <div class="tsk-head__l">
+      <button type="button" class="tsk-back" title="Back to Payments" aria-label="Back to Payments"
+              onclick="navigate('payments')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
+      <nav class="tsk-crumb" aria-label="Breadcrumb">
+        <a href="#" onclick="event.preventDefault();navigate('payments')">Payments</a>
+        <span class="sep">/</span>
+        <b aria-current="page">New Entry</b>
+      </nav>
     </div>
+    <div class="tsk-head__r">
+      <!-- The mockup shows "RC-2026-0418 · Draft · Warden desk" here. The
+           receipt number is NOT reproduced: _assignReceiptNo() in receipt.js
+           only issues one when a receipt is printed, and it increments a
+           shared counter — so any number shown before posting is a guess that
+           another print would invalidate. That is an invented number on a
+           screen, which is the one thing the house rule forbids outright.
 
-    <!-- ══════════ PROGRESS ══════════
-         Driven by the form, not by the page. A stepper that always reads
-         "step 2" is decoration pretending to be information; this one answers
-         a question the warden actually has — is there a student on this form
-         yet, and has an amount been entered. apUpdateSteps() moves it. -->
-    <div class="ap-steps" id="ap-steps">
-      <div class="ap-step is-on" data-step="1">
-        <span class="ap-step__n">1</span>
-        <span class="ap-step__t"><b>Student &amp; Room</b><i>Select student &amp; room</i></span>
-      </div>
-      <svg class="ap-step__sep" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-      <div class="ap-step" data-step="2">
-        <span class="ap-step__n">2</span>
-        <span class="ap-step__t"><b>Payment Details</b><i>Enter payment information</i></span>
-      </div>
-      <svg class="ap-step__sep" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-      <div class="ap-step" data-step="3">
-        <span class="ap-step__n">3</span>
-        <span class="ap-step__t"><b>Payment Information</b><i>Review &amp; confirm</i></span>
-      </div>
+           What stands here instead are two facts the app can prove: who is
+           signed in, and that nothing has been written yet. -->
+      <span class="tsk-chip">${escHtml(_apEnteredBy())}</span>
+      <span class="tsk-chip tsk-chip--state">Draft &middot; not yet posted</span>
     </div>
+  </header>
 
+  <div class="tsk-body">
+  <div class="ap-wrap" id="ap-wrap">
     <div class="ap-cols">
-      <!-- ══════════ LEFT: THE FORM ══════════ -->
+      <!-- ══════════ LEFT: WHO, THEN THE SIX LINES ══════════ -->
       <div class="ap-main">
 
-        <!-- 1. STUDENT & ROOM -->
-        <div class="pf-sec">
-          <div class="pf-sec__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            Student &amp; Room Information
-          </div>
-          <div style="position:relative;min-width:0">
+        <!-- WHO. The search box and the identity strip occupy the same slot:
+             one is the question, the other is its answer, and showing both at
+             once left a stale search string sitting above the student it had
+             already found. -->
+        <div class="ap-who">
+          <div class="ap-who__pick" id="ap-pick">
             <div class="pf-wrapin">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-              <input class="pf-in" id="f-pstudent-search" placeholder="Search and select student"
+              <input class="pf-in" id="f-pstudent-search" placeholder="Search a student by name, room, ID or phone"
                      oninput="filterStudentDropdown(this.value)" autocomplete="off">
               <svg class="pf-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </div>
-            <input type="hidden" id="f-pstudent" value="">
             <div class="pf-results" id="student-search-results"></div>
           </div>
-          <!-- The picked student's readout. selectStudentForPayment() and
-               useManualNameEntry() both write straight into this element, so it
-               has to exist on the page — without it picking a student threw
-               and the card never appeared. -->
-          <div class="pf-picked" id="selected-student-info"></div>
+          <!-- The pick itself. Outside .ap-who__pick on purpose: the search box
+               is hidden once a student is chosen, and the id has to stay
+               readable to submitAddPayment() either way. -->
+          <input type="hidden" id="f-pstudent" value="">
+          <!-- selectStudentForPayment() and useManualNameEntry() both write
+               straight into this element, so it has to exist on the page. -->
+          <div class="ap-idn" id="selected-student-info" style="display:none"></div>
         </div>
 
-        <!-- 2. PAYMENT DETAILS -->
-        <div class="pf-sec">
-          <div class="pf-sec__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-            Payment Details
-          </div>
-
-          <!-- MONTHLY CHARGE — one derived figure; the tick is the only control. -->
-          <div class="pf-charge">
-            <div class="pf-charge__main">
-              <label for="f-pcharge">Monthly Charge (PKR)<span class="req">*</span></label>
-              <input class="pf-in pf-charge__v" id="f-pcharge" type="text" readonly value="—"
-                     title="Room rent, plus mess when included. Set in Settings → Rent &amp; Mess.">
-              <div class="pf-charge__note" id="f-pcharge-note">Pick a student to load the charge</div>
-            </div>
-            ${!hostelServesMess() || !messIsOptional() ? '' : `
-            <label class="pf-charge__tick" title="Untick for a student who takes the room but not the mess">
-              <input type="checkbox" id="f-pmess-on" checked onchange="pfMessToggle()">
-              <span>Include mess charges</span>
-            </label>`}
-            <input type="hidden" id="f-prent" value="">
-            <input type="hidden" id="f-pmess" value="">
+        <!-- ══ THE WORKSHEET ══
+             Six numbered lines, each one a term of the same equation: what is
+             charged, what is deducted, what was handed over. The amount column
+             reads top to bottom and lands on the figure in the stub beside it,
+             so the arithmetic is checkable by eye without leaving the form. -->
+        <div class="ws">
+          <div class="ws__head">
+            <span>#</span><span>Particulars</span><span>Details</span><span class="ws__ha">Amount (PKR)</span>
           </div>
 
           <!-- What the selected month already holds. Stays hidden until there
                is a record behind it. -->
           <div class="pf-mstate" id="pf-month-state" style="display:none"></div>
 
-          <div class="pf-grid" style="margin-top:13px">
-            <div class="pf-f"><label for="f-padmfee">Admission Fees (PKR)</label>
-              <input class="pf-in" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
-            <div class="pf-f"><label for="f-ppaid">To Pay / Amount Paid (PKR)<span class="req">*</span></label>
-              <input class="pf-in" id="f-ppaid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaid()"></div>
-            <div class="pf-f"><label for="f-punpaid">Unpaid / Remaining (PKR)</label>
-              <input class="pf-in pf-in--due" id="f-punpaid" type="number" value="0" readonly
-                title="Monthly Charge + Admission Fees + Extra Charges − Concession − Paid"></div>
+          <!-- 01 — MONTHLY CHARGE. One derived figure; the segment is the only
+               control, and both halves come from Settings. -->
+          <div class="ws__row">
+            <div class="ws__n">01</div>
+            <div class="ws__p">
+              <b>Monthly charge<span class="req">*</span></b>
+              <i id="f-pcharge-note">Pick a student to load the charge</i>
+            </div>
+            <div class="ws__d">${messSeg}</div>
+            <div class="ws__a" title="Room rent, plus mess when included. Set in Settings &rarr; Rent &amp; Mess.">
+              <span class="ws__sign" id="ws-s-01"></span>
+              <input class="ws__amt is-muted" id="f-pcharge" type="text" readonly value="&mdash;" size="2">
+              <input type="hidden" id="f-prent" value="">
+              <input type="hidden" id="f-pmess" value="">
+            </div>
           </div>
 
-          <!-- RECEIVE OUTSTANDINGS — arrears posted back to their own month. -->
-          <div class="pf-out" id="pf-out" style="display:none"></div>
-
-          <div class="pf-grid" style="margin-top:13px;grid-template-columns:1fr 1fr;align-items:start">
-            <div>
-              <div class="pf-f"><label for="f-pconcession">Concession / Discount (PKR)</label>
-                <input class="pf-in" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></div>
-              <div class="pf-f" style="margin-top:13px"><label for="f-pconcession-desc">Concession Description <span class="opt">(optional)</span></label>
-                <input class="pf-in" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship, Early payment…"></div>
+          <!-- 02 — ADMISSION FEE & CONCESSION. One line because they are one
+               net figure: a fee added to, and a discount taken off, the same
+               month. -->
+          <div class="ws__row">
+            <div class="ws__n">02</div>
+            <div class="ws__p">
+              <b>Admission fee &amp; concession</b>
+              <i>Fee is charged once; the concession comes off this month</i>
             </div>
-            <div class="pf-extra">
-              <div class="pf-extra__h">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></svg>
-                Extra Charges / Add-ons
-                <button type="button" class="pf-extra__add" onclick="addExtraChargeRow()">+ Add</button>
+            <div class="ws__d">
+              <div class="ws__minis">
+                <label class="ws__mini"><span>Adm</span>
+                  <input class="pf-in" id="f-padmfee" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></label>
+                <label class="ws__mini"><span>Conc</span>
+                  <input class="pf-in" id="f-pconcession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaid()"></label>
               </div>
-              <div id="extra-charges-list"></div>
-              <div class="pf-extra__total"><span>Total Extras:</span><b id="extra-charges-total">PKR 0</b></div>
+              <input class="pf-in ws__wide" id="f-pconcession-desc" placeholder="Reason for the concession (optional)">
+            </div>
+            <div class="ws__a">
+              <span class="ws__sign" id="ws-s-02"></span>
+              <span class="ws__amt is-muted" id="ws-a-02">0</span>
             </div>
           </div>
-        </div>
 
-        <!-- 4. NOTES -->
-        <div class="pf-sec" id="ap-sec-notes">
-          <div class="pf-sec__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-            Notes
+          <!-- 03 — EXTRA CHARGES. Rows are built by addExtraChargeRow(), which
+               the payment modals share; only the styling here is page-scoped. -->
+          <div class="ws__row">
+            <div class="ws__n">03</div>
+            <div class="ws__p">
+              <b>Extra charges</b>
+              <i>Laundry, cooler, fines &mdash; anything billed on top</i>
+            </div>
+            <div class="ws__d">
+              <div id="extra-charges-list"></div>
+              <button type="button" class="ws__add" onclick="addExtraChargeRow()">+ Add charge</button>
+              <!-- recalcUnpaid() writes the total here for the modals; on this
+                   page the amount column is the one that shows it. -->
+              <span class="ws__hid" id="extra-charges-total">PKR 0</span>
+            </div>
+            <div class="ws__a">
+              <span class="ws__sign" id="ws-s-03"></span>
+              <span class="ws__amt is-muted" id="ws-a-03">0</span>
+            </div>
           </div>
-          <textarea class="pf-ta" id="f-pnotes-main" maxlength="250" placeholder="Add any notes about this payment…" oninput="pfCount()"></textarea>
-          <div class="pf-count" id="f-pnotes-count">0/250</div>
+
+          <!-- 04 — AMOUNT PAID. The running total for the month, not today's
+               instalment; pfLoadMonthContext() seeds it with what is already in. -->
+          <div class="ws__row">
+            <div class="ws__n">04</div>
+            <div class="ws__p">
+              <b>Amount paid &mdash; this month<span class="req">*</span></b>
+              <i>The month's running total, not today's instalment alone</i>
+            </div>
+            <div class="ws__d">
+              <label class="ws__mini ws__mini--wide"><span>PKR</span>
+                <input class="pf-in" id="f-ppaid" type="number" placeholder="Amount collected" value="" oninput="recalcUnpaid()"></label>
+              <div class="ws__chips">
+                <button type="button" class="ws__chip" onclick="pfPayQuick('full')">Full <b id="ws-q-full">0</b></button>
+                <button type="button" class="ws__chip" onclick="pfPayQuick('half')">Half</button>
+                <button type="button" class="ws__chip" onclick="pfPayQuick('rent')">Rent only</button>
+              </div>
+              <input type="hidden" id="f-punpaid" value="0">
+            </div>
+            <div class="ws__a">
+              <span class="ws__sign" id="ws-s-04"></span>
+              <span class="ws__amt is-muted" id="ws-a-04">0</span>
+            </div>
+          </div>
+
+          <!-- 05 — ARREARS. Its own line because it is its own posting: the
+               money goes to the month it belongs to, never to this one. -->
+          <div class="ws__row">
+            <div class="ws__n">05</div>
+            <div class="ws__p">
+              <b>Arrears collected</b>
+              <i>Posted to the month it belongs to, not to this one</i>
+            </div>
+            <div class="ws__d">
+              <div class="ws__none" id="pf-out-none">Nothing outstanding from earlier months</div>
+              <div class="pf-out" id="pf-out" style="display:none"></div>
+            </div>
+            <div class="ws__a"><span class="ws__amt is-muted" id="ws-a-05">&mdash;</span></div>
+          </div>
+
+          <!-- 06 — METHOD, DATES & NOTE. No amount of its own: it says how the
+               money on lines 01-05 arrived, so it spans the amount column. -->
+          <div class="ws__row">
+            <div class="ws__n">06</div>
+            <div class="ws__p">
+              <b>Method, dates &amp; note</b>
+              <i>Status follows the figures &mdash; <span id="f-pnotes-count">0/250</span> characters</i>
+            </div>
+            <div class="ws__d ws__d--span">
+              <div class="ws__fields">
+                <div class="pf-f"><label for="f-pmethod">Pay mode<span class="req">*</span></label>
+                  <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
+                <div class="pf-f"><label for="f-pdate">Paid on<span class="req">*</span></label>
+                  <input class="pf-in cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
+                <div class="pf-f"><label for="f-pdue">Due on</label>
+                  <input class="pf-in cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${dueDefault}"></div>
+                <div class="pf-f"><label for="f-pstat">Status <span class="opt">/ auto</span></label>
+                  <select class="pf-sel" id="f-pstat">
+                    <option value="Paid">Paid</option>
+                    <option value="Pending" selected>Pending</option>
+                  </select></div>
+              </div>
+              <textarea class="pf-ta" id="f-pnotes-main" maxlength="250"
+                        placeholder="Note for the receipt &mdash; who handed the money over, what was promised&hellip;"
+                        oninput="pfCount()"></textarea>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- ══════════ RIGHT: SUMMARY + HISTORY ══════════ -->
+      <!-- ══════════ RIGHT: THE MONTH, THE STUB, THE LEDGER ══════════ -->
       <aside class="ap-side" id="ap-side">
-        <div class="pf-sec ap-card">
-          <div class="ap-card__h ap-card__h--fill">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
-            Payment Summary
+
+        <!-- The month this worksheet posts to. The select is the real field —
+             pfRefreshMonthOptions() rebuilds it and submitAddPayment() reads it —
+             so the arrows and the chips only ever move its value, and no chip
+             can name a month the select would not accept. -->
+        <div class="ap-mrail">
+          <div class="ap-mrail__top">
+            <span class="ap-mrail__ico">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
+            </span>
+            <select class="ap-mrail__sel" id="f-pmonth" onchange="pfMonthChanged()">${payMonthPickerOptions(thisMonthLabel(), '')}</select>
+            <button type="button" class="ap-mrail__nav" title="Earlier month" onclick="pfMonthStep(-1)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <button type="button" class="ap-mrail__nav" title="Later month" onclick="pfMonthStep(1)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+          <div class="ap-chips" id="ap-chips"></div>
+          <div class="ap-key">
+            <span class="ap-key__i"><i class="is-charged"></i>Charged</span>
+            <span class="ap-key__i"><i class="is-settled"></i>Settled</span>
+            <span class="ap-key__i"><i class="is-now"></i>This month</span>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card__h">
+            Receipt stub
+            <span class="ap-live" title="Follows the worksheet as you type">Live</span>
           </div>
           <div id="ap-summary"></div>
         </div>
-        <div class="pf-sec ap-card">
-          <div class="ap-card__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
-            Recent Payments
-            <button class="pf-extra__add" onclick="navigate('payments')">View all</button>
-          </div>
-          <div id="ap-recent"><div class="ap-empty">Pick a student to see their history</div></div>
-        </div>
 
-        <!-- 3. PAYMENT INFORMATION — how the money arrived, not what is owed.
-             It lives in this column permanently. The left column holds the two
-             long sections; putting the four short date/method fields here is
-             what keeps the two columns roughly the same height, instead of the
-             form ending halfway up the page with a hole under it. -->
-        <div class="pf-sec" id="ap-sec-info">
-          <div class="pf-sec__h">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>
-            Payment Information
+        <div class="ap-card">
+          <div class="ap-card__h">
+            Ledger
+            <button class="ap-card__lnk" onclick="navigate('payments')">View all</button>
           </div>
-          <div class="pf-grid">
-            <div class="pf-f"><label for="f-pmethod">Payment Method<span class="req">*</span></label>
-              <select class="pf-sel" id="f-pmethod">${pmOpts}</select></div>
-            <div class="pf-f"><label for="f-pmonth">Payment Month<span class="req">*</span></label>
-              <select class="pf-sel" id="f-pmonth" onchange="pfMonthChanged()">${payMonthPickerOptions(thisMonthLabel(), '')}</select></div>
-            <div class="pf-f"><label for="f-pdate">Payment Date<span class="req">*</span></label>
-              <div class="pf-wrapin">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-                <input class="pf-in cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}">
-              </div></div>
-            <div class="pf-f"><label for="f-pdue">Due Date</label>
-              <div class="pf-wrapin">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-                <input class="pf-in cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${dueDefault}">
-              </div></div>
-            <div class="pf-f"><label for="f-pstat">Status<span class="req">*</span></label>
-              <select class="pf-sel" id="f-pstat">
-                <option value="Paid">Paid</option>
-                <option value="Pending" selected>Unpaid / Pending</option>
-              </select></div>
-          </div>
+          <div class="ap-led__head"><span>Month</span><span>Method</span><span>Paid</span></div>
+          <div id="ap-recent"><div class="ap-empty">Pick a student to see their history</div></div>
         </div>
       </aside>
     </div>
 
-    <!-- FOOTER ACTIONS -->
-    <div class="ap-foot">
+  </div>
+  </div><!-- /.tsk-body -->
+
+  <!-- ══ STICKY ACTION BAR ══
+       It follows the form down. The worksheet is taller than a 768px laptop
+       once a student is picked, so an in-flow footer meant scrolling to the
+       bottom to find out you could not save yet — and the caption below is the
+       ONLY place that says lines 01-04 and line 05 land on two different
+       months, which is exactly the thing to read before pressing Post. -->
+  <footer class="tsk-foot">
+      <div class="tsk-foot__note" id="ap-postline"></div>
+      <div class="tsk-foot__acts">
       <button class="pf-btn" onclick="navigate('payments')">Cancel</button>
       <button class="pf-btn" onclick="printAndSubmitAddPayment()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-        Print &amp; Save</button>
+        Print &amp; save</button>
       <button class="pf-btn pf-btn--go" onclick="submitAddPayment()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-        Save Payment</button>
-    </div>
-  </div>`;
+        Post payment
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
+      </div>
+  </footer>`;
 }
 
-/* The right-hand Payment Summary. Every line is a term of the same equation the
-   form computes, laid out so the arithmetic is checkable by eye:
-     Monthly Charge + Admission Fees + Extra − Discount = Total Payable
-     Total Payable − Amount Paid = Remaining Balance                          */
+/* ── THE MONTH RAIL ──────────────────────────────────────────────────────────
+   Three controls over one select. Nothing here holds state of its own: the
+   arrows step its index, a chip sets its value, and every month drawn is a
+   month the select already offers — so a chip can never post to a month
+   submitAddPayment() would not accept. */
+function pfMonthStep(dir) {
+  const sel = document.getElementById('f-pmonth');
+  if (!sel) return;
+  // The options run newest first, so a later month is one index UP the list.
+  const i = sel.selectedIndex - dir;
+  if (i < 0 || i >= sel.options.length) return;
+  sel.selectedIndex = i;
+  pfMonthChanged();
+}
+
+function pfPickMonth(label) {
+  const sel = document.getElementById('f-pmonth');
+  if (!sel || !label) return;
+  sel.value = label;
+  pfMonthChanged();
+}
+
+/* Six chips ending on the selected month, marked from the student's own
+   records: charged means a record exists for that month, settled means nothing
+   is left owing on it. A chip with no marker is a month this student has no
+   record for — that is information, not an empty slot. */
+function pfRenderMonthRail() {
+  const box = document.getElementById('ap-chips');
+  const sel = document.getElementById('f-pmonth');
+  if (!box || !sel) return;
+  const at  = Math.max(0, sel.selectedIndex);
+  const win = [...sel.options].slice(at, at + 6).map(o => o.value).reverse();
+  const sid = document.getElementById('f-pstudent')?.value || '';
+  const now = _normPayMonthLabel(thisMonthLabel());
+  const cur = _normPayMonthLabel(sel.value);
+  box.innerHTML = win.map(l => {
+    const key  = _normPayMonthLabel(l);
+    const recs = (sid && sid !== '__manual__')
+      ? DB.payments.filter(p => p.studentId === sid && _normPayMonthLabel(p.month) === key)
+      : [];
+    const settled = recs.length > 0 && recs.every(p => p.status === 'Paid' || !(Number(p.unpaid) > 0));
+    const cls = ['ap-chip',
+                 key === cur ? 'is-on' : '',
+                 settled ? 'is-settled' : recs.length ? 'is-charged' : '',
+                 key === now ? 'is-now' : ''].filter(Boolean).join(' ');
+    // this.title, not an interpolated argument: escHtml() does not escape the
+    // apostrophe, and a legacy hand-typed month label may carry one.
+    return `<button type="button" class="${cls}" title="${escHtml(l)}"
+              onclick="pfPickMonth(this.title)">${escHtml(String(l).slice(0, 3))}</button>`;
+  }).join('');
+}
+
+/* ── LINE 04 SHORTCUTS ───────────────────────────────────────────────────────
+   Each is a figure the form already knows, so none of them can disagree with
+   the stub: full is the payable total, rent is the room half of the charge. */
+function pfPayQuick(which) {
+  const el = document.getElementById('f-ppaid');
+  if (!el) return;
+  const total = pfPayableTotal();
+  el.value = which === 'rent' ? pfRentAmount()
+           : which === 'half' ? Math.round(total / 2)
+           : total;
+  recalcUnpaid();
+}
+
+/* Monthly charge + admission fee + extras − concession. One definition, read by
+   both recalcUnpaid() and the line-04 shortcuts, so the chips and the stub
+   cannot drift apart. */
+function pfPayableTotal() {
+  const num = id => parseFloat(document.getElementById(id)?.value) || 0;
+  return Math.max(0, pfRentAmount() + pfMessAmount() + getExtraChargesTotal()
+                   + num('f-padmfee') - num('f-pconcession'));
+}
+
+// The segmented control on line 01 sets the checkbox the rest of the form reads.
+function pfMessSet(on) {
+  const el = document.getElementById('f-pmess-on');
+  if (!el) return;
+  el.checked = !!on;
+  pfMessToggle();
+}
+
+/* Undo a pick without leaving the form. The identity strip replaces the search
+   box once a student is chosen, so this is how the warden gets the box back. */
+function pfClearStudent() {
+  const hid  = document.getElementById('f-pstudent');
+  const box  = document.getElementById('f-pstudent-search');
+  const info = document.getElementById('selected-student-info');
+  const pick = document.getElementById('ap-pick');
+  if (hid)  hid.value = '';
+  if (box)  box.value = '';
+  if (info) { info.style.display = 'none'; info.innerHTML = ''; }
+  if (pick) pick.style.display = '';
+  ['f-prent', 'f-pmess'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  pfRenderRecent(null);
+  pfReloadOutstandings();
+  pfRenderMonthRail();
+  recalcUnpaid();
+  if (box) box.focus();
+}
+
+/* The caption under the footer. It names where the money on this form is about
+   to land, because lines 01-06 and line 05 are two different postings and the
+   warden has no other way to see that before saving. */
+function pfPostLine() {
+  const el = document.getElementById('ap-postline');
+  if (!el) return;
+  const month  = document.getElementById('f-pmonth')?.value || '';
+  const months = [...new Set(pfOutstandingAllocations().map(a => a.payment.month || '—'))];
+  el.innerHTML = `Lines 01&ndash;06 post to <b>${escHtml(month || '—')}</b>`
+    + (months.length ? ` &nbsp;&middot;&nbsp; line 05 to <b>${escHtml(months.join(', '))}</b>` : '');
+}
+
+/* The receipt stub. Every line is a term of the same equation the worksheet
+   computes, numbered to match it, so a figure on the rail can always be traced
+   back to the line that produced it:
+     01 charge + 02 net fee/concession + 03 extras = Payable
+     Payable − 04 paid                             = Remaining
+   Line 05 sits BELOW the band on purpose — arrears are a second posting to an
+   earlier month, not a term of this month's balance. */
 function pfRenderSummary(vals) {
   const box = document.getElementById('ap-summary');
   if (!box) return;
-  const row = (label, val, cls, sign) =>
-    `<div class="ap-sum__r ${cls || ''}"><span>${label}</span>
-       <b>${sign || ''}${fmtPKR(val)}</b></div>`;
+  // A zero takes no sign and no hue -- see the worksheet column for why.
+  const row = (n, label, val, sign, cls) =>
+    `<div class="ap-stub__r ${val ? (cls || '') : ''}"><span><i>${n}</i>${label}</span>
+       <b>${val ? (sign || '') : ''}${fmtNum(val)}</b></div>`;
 
   // Every term is listed even at zero (owner reference). A row that appears and
   // disappears as figures are typed makes the panel jump under the cursor, and
   // a missing line reads as "not counted" rather than "counted as nothing".
+  const net = (vals.admFee || 0) - (vals.concession || 0);
+  const arr = pfOutstandingAllocations();
+  const arrTotal  = arr.reduce((s, a) => s + a.amount, 0);
+  const arrMonths = [...new Set(arr.map(a => a.payment.month || '—'))].join(', ');
+
   box.innerHTML =
-      row('Monthly Charge', vals.charge)
-    + row('Admission Fees', vals.admFee)
-    + row('Concession / Discount', vals.concession, 'is-minus', '- ')
-    + row('Extra Charges', vals.extra, '', '+ ')
-    + `<div class="ap-sum__sep"></div>`
-    + row('Total Payable', vals.total, 'is-total')
-    + row('Amount Paid', vals.paid, 'is-paid', '- ')
-    + `<div class="ap-sum__bal ${vals.unpaid > 0 ? 'is-due' : 'is-clear'}">
-         <span>Remaining Balance</span><b>${fmtPKR(vals.unpaid)}</b>
-       </div>`;
+      row('01', 'Monthly charge', vals.charge, '', 'is-plus')
+    + row('02', 'Admission &amp; concession', Math.abs(net), net > 0 ? '+ ' : net < 0 ? '&minus; ' : '',
+          net > 0 ? 'is-plus' : net < 0 ? 'is-minus' : '')
+    + row('03', 'Extra charges', vals.extra, '+ ', 'is-plus')
+    + row('04', 'Paid this month', vals.paid, '&minus; ', 'is-minus')
+    + `<div class="ap-stub__pay"><span>Payable</span><b>${fmtPKR(vals.total)}</b></div>`
+    + `<div class="ap-stub__bal ${
+         !vals.total && !vals.paid ? 'is-none' : vals.unpaid > 0 ? 'is-due' : 'is-clear'}">
+         <span>Remaining</span><b>${fmtPKR(vals.unpaid)}</b>
+       </div>`
+    + (arrTotal > 0
+        ? `<div class="ap-stub__r is-arr"><span><i>05</i>Arrears to ${escHtml(arrMonths)}</span>
+             <b>${fmtNum(arrTotal)}</b></div>`
+        : '');
 }
 
-/* The student's last few payments, so the warden can see what has already been
-   collected without leaving the form. */
+/* The student's ledger — what has already been collected, month by month, so
+   the warden can check this worksheet against their history without leaving
+   the form. Records only: nothing is drawn for a month with no record. */
 function pfRenderRecent(t) {
   const box = document.getElementById('ap-recent');
   if (!box) return;
@@ -2050,24 +2344,22 @@ function pfRenderRecent(t) {
   const rows = DB.payments
     .filter(p => p.studentId === t.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 5);
+    .slice(0, 6);
   if (!rows.length) { box.innerHTML = '<div class="ap-empty">No payments recorded yet</div>'; return; }
   box.innerHTML = rows.map(p => {
-    const paid = p.status === 'Paid';
-    return `<div class="ap-rec">
-      <div style="min-width:0">
-        <div class="ap-rec__m">${escHtml(p.month || '—')}</div>
-        <div class="ap-rec__meth">${escHtml(p.method || '—')}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div class="ap-rec__amt">${fmtPKR(p.amount)}</div>
-        <div class="ap-rec__st ${paid ? 'is-paid' : 'is-due'}">${
-          paid ? 'Paid on ' + escHtml(p.paidDate || p.date || '—')
-               : fmtPKR(p.unpaid || 0) + ' pending'}</div>
-      </div>
+    const owed  = Number(p.unpaid || 0);
+    const clear = p.status === 'Paid' || owed <= 0;
+    return `<div class="ap-led__r">
+      <span class="ap-led__m">${escHtml(p.month || '—')}</span>
+      <span class="ap-led__meth">${escHtml(p.method || '—')}</span>
+      <span class="ap-led__v">${fmtNum(p.amount)}
+        <i class="${clear ? 'is-clear' : 'is-due'}">${clear
+          ? (p.paidDate ? 'Cleared ' + escHtml(fmtDate(p.paidDate)) : 'Cleared')
+          : fmtNum(owed) + ' owing'}</i></span>
     </div>`;
   }).join('');
 }
+
 // Notes counter for the payment modal.
 /* ── PROGRESS ────────────────────────────────────────────────────────────────
    Reads the form and marks how far it has got: a student picked closes step 1,

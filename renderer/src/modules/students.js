@@ -188,56 +188,38 @@ function renderStudents() {
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="stu-stats">
-    <div class="stu-stat stu-stat--click dh-blue" onclick="stuSetStatus('All')" title="Show every student">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/><path d="m2 10 10-5 10 5-10 5z"/></svg></div>
-        <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total Students'}</div>
-      </div>
+    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('All')" title="Show every student">
+      <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total Students'}</div>
       <div class="stu-stat__val">${nTotal}</div>
       <div class="stu-stat__sub">${studentFilter.month?'On the roster that month':'Registered, all time'}</div>
     </div>
 
-    <div class="stu-stat stu-stat--click dh-green" onclick="stuSetStatus('Active')" title="Show only active students">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
-        <div class="stu-stat__label">Active</div>
-      </div>
-      <div class="stu-stat__val">${nActive}</div>
+    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Active')" title="Show only active students">
+      <div class="stu-stat__label">Active</div>
+      <div class="stu-stat__val is-good">${nActive}</div>
       <div class="stu-stat__sub">Students</div>
     </div>
 
-    ${nCanc?`<div class="stu-stat stu-stat--click dh-amber" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg></div>
-        <div class="stu-stat__label">On Notice</div>
-      </div>
+    ${nCanc?`<div class="stu-stat stu-stat--click" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
+      <div class="stu-stat__label">On Notice</div>
       <div class="stu-stat__val">${nCanc}</div>
       <div class="stu-stat__sub">Bed held till vacate date</div>
     </div>`:''}
 
-    <div class="stu-stat stu-stat--click dh-slate" onclick="stuSetStatus('Left')" title="Show only students who have left">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <div class="stu-stat__label">Left</div>
-      </div>
+    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Left')" title="Show only students who have left">
+      <div class="stu-stat__label">Left</div>
       <div class="stu-stat__val">${nLeft}</div>
       <div class="stu-stat__sub">Students</div>
     </div>
 
-    <div class="stu-stat stu-stat--click dh-red" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></div>
-        <div class="stu-stat__label">Blacklisted</div>
-      </div>
-      <div class="stu-stat__val">${nBlack}</div>
+    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
+      <div class="stu-stat__label">Blacklisted</div>
+      <div class="stu-stat__val is-bad">${nBlack}</div>
       <div class="stu-stat__sub">Students</div>
     </div>
 
-    <div class="stu-stat stu-stat--click dh-violet" onclick="navigate('rooms')" title="Go to Rooms">
-      <div class="stu-stat__top">
-        <div class="stu-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M9 17h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg></div>
-        <div class="stu-stat__label">Occupied Rooms</div>
-      </div>
+    <div class="stu-stat stu-stat--click" onclick="navigate('rooms')" title="Go to Rooms">
+      <div class="stu-stat__label">Occupied Rooms</div>
       <div class="stu-stat__val">${occRooms}<small> / ${DB.rooms.length}</small></div>
       <div class="stu-stat__sub">${occPct}% occupied</div>
     </div>
@@ -677,29 +659,38 @@ function showAddStudentModal(presetRoomId='') {
   navigate('addstudent');
 }
 
-/* ══ ADD STUDENT — the intake sheet ═══════════════════════════════════════════
+/* ══ ADD STUDENT — the intake page ═══════════════════════════════════════════
 
-   Rebuilt to the "Add Student" mockup in the claude.ai/design project
-   "Add student form mockups": a registry sheet rather than a stack of boxes.
-   Numbered plates with corner registration marks, uppercase micro-labels, a
-   left rail carrying the photo and the record's own facts, and a completion
-   meter in the header.
+   Relaid out 2026-09-03, because the previous pass made this the one screen in
+   the app that did not look like the app. It was built to the "Add Student"
+   mockup as a registry sheet: square corners, corner registration marks on
+   every panel, a 38px Barlow Condensed headline over the chrome bar's own page
+   title, a 32px display numeral for the id, and uppercase micro-labels. Held
+   next to Edit Student — which shows THESE VERY FIELDS through .sf-sec /
+   .sf-grid / .sf-in — one record had two unrelated-looking forms depending on
+   whether it existed yet.
+
+   So the grammar is the app's now and the skeleton is still the owner's:
+   numbered sections, a completion meter, a left rail carrying the photo and
+   the record's provable facts, a footer action bar. What changed is that the
+   sections ARE .sf-sec cards, the header is the breadcrumb + 22px title that
+   Add Payment uses, and the fields are the shared sf- set with no page-local
+   overrides. See renderer/students.css for the full reasoning.
 
    NOT ONE FIELD WAS ADDED OR REMOVED, and every id and handler is the one that
    was here before. submitAddStudent() reads this form by element id, so a
    rename here is a silent data loss there — the markup moved, the contract did
    not.
 
-   THE MOCKUP'S SAMPLE DATA IS NOT COPIED IN. It names a student, a father and
+   THE MOCKUPS' SAMPLE DATA IS NOT COPIED IN. They name a student, a father and
    a street address, and the owner's 2026-08-30 ruling is that no seeded default
    may name a real person or address. The placeholders here describe the field
-   instead. The old markup had exactly that problem — "Muhammad Ali",
-   "Ikram Khan (Father)", "House # 25, Street 4, Peshawar" were placeholders in
-   the shipped form — and this pass closes it.
+   instead. The shipped form once had exactly that problem — "Muhammad Ali",
+   "Ikram Khan (Father)", "House # 25, Street 4, Peshawar" were its placeholders.
 
    The "Record" panel states only things the app can prove: who is signed in,
    how many beds are actually free, and the id this student will get. The
-   mockup's "Session · Fall 2026" is not modelled anywhere in this app, so it
+   mockups' "Session · Fall 2026" is not modelled anywhere in this app, so it
    is not shown; an invented number on a screen is the one thing that rule
    forbids outright.                                                          */
 
@@ -728,7 +719,36 @@ function asfCompletion() {
 
 /** Post-render hook, called from renderPage the way bindSettingsEvents is. */
 function asfInit() {
+  asfCountFields();
   asfCompletion();
+}
+
+/* Fill in each section's "N fields · M required" from the fields it actually
+   renders. Counting the DOM rather than trusting a hand-typed string is the
+   whole point — see the note on sec() in renderAddStudent(). */
+function asfCountFields() {
+  document.querySelectorAll('.asf [data-asf-count]').forEach(el => {
+    const card = el.closest('.sf-sec');
+    if (!card) return;
+    const fields = card.querySelectorAll('.sf-f').length;
+    const req    = card.querySelectorAll('.sf-f .req').length;
+    el.textContent = fields + (fields === 1 ? ' field' : ' fields')
+                   + (req ? ' · ' + req + ' required' : '');
+  });
+}
+
+/* The empty state of the photo well. It is a function because THREE places
+   need the identical markup: the initial render, and clearAddStudentPhoto()
+   putting it back — which used to write a bare 🧑‍🎓 emoji, so removing a
+   photo left a screen that matched nothing else in the app. The well is also
+   the drop target now; it used to be a picture frame with a second, separate
+   "Upload photo / or drag and drop" box stacked under it asking for the same
+   file twice. */
+function asfPhotoPlaceholder() {
+  return `<div class="asf-photo__empty">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
+    <b>Upload photo</b><span>or drag and drop</span>
+  </div>`;
 }
 
 function renderAddStudent() {
@@ -738,7 +758,7 @@ function renderAddStudent() {
   const presetType = preset ? getRoomType(preset) : null;
   const presetLabel = preset ? 'Room #'+preset.number+' · '+(presetType?presetType.name:'')+' · '+(preset.floor||'')+' Floor' : '';
 
-  // Facts for the Record plate. Every one of these is computed from the
+  // Facts for the Record card. Every one of these is computed from the
   // database — nothing here is illustrative.
   const totalBeds = DB.rooms.reduce((s,r)=>{ const t=getRoomType(r); return s+((t&&t.capacity)||0); },0);
   const freeBeds  = DB.rooms.reduce((s,r)=>s+Math.max(0, roomFreeBeds(r)), 0);
@@ -746,17 +766,26 @@ function renderAddStudent() {
   const enteredBy = (typeof CUR_USER === 'object' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '—';
   const presetCharges = preset ? resolveCharges({ roomId: preset.id }) : null;
 
-  const corners = '<i class="asf-c tl"></i><i class="asf-c tr"></i><i class="asf-c bl"></i><i class="asf-c br"></i>';
-  const plate = (num, title, meta, body) => `
-    <section class="asf-plate">${corners}
-      <div class="asf-phead">
-        <span class="asf-pnum">${escHtml(num)}</span>
-        <h2 class="asf-ptitle">${escHtml(title)}</h2>
-        <span class="asf-prule"></span>
-        ${meta ? `<span class="asf-meta">${escHtml(meta)}</span>` : ''}
+  // A section is the app's .sf-sec — the same card the Edit Student form is
+  // built from. The number and the field count ride inside its existing head.
+  //
+  // meta === 'auto' means asfCountFields() writes the count after render, from
+  // the fields the section actually holds. It was a hand-typed string until
+  // 2026-09-03, and it had already drifted: identity was labelled "9 fields"
+  // while rendering ten. A stated count nobody recomputes is an invented
+  // number on a screen, which is the one thing the house rule forbids.
+  const sec = (num, icon, title, meta, body) => `
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        ${icon}
+        ${num ? `<span class="asf-n">${escHtml(num)}</span>` : ''}
+        ${escHtml(title)}
+        ${meta === 'auto'
+          ? '<span class="asf-secmeta" data-asf-count="1"></span>'
+          : (meta ? `<span class="asf-secmeta">${escHtml(meta)}</span>` : '')}
       </div>
       ${body}
-    </section>`;
+    </div>`;
 
   const sel = (id, label, opts, cur, req) => `
     <div class="sf-f">
@@ -766,46 +795,55 @@ function renderAddStudent() {
       </select>
     </div>`;
 
+  const ico = {
+    photo:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+    record:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
+    person:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>',
+    contact: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2z"/></svg>',
+    room:    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M3 21h18"/><path d="M9 21v-6h6v6"/></svg>',
+    health:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A5.5 5.5 0 0 0 12 5.4 5.5 5.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7z"/></svg>',
+    chev:    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  };
+
   return `
   <div class="asf" oninput="asfCompletion()" onchange="asfCompletion()">
 
-    <!-- ══ HEADER ══ -->
-    <header class="asf-head">
-      <div>
-        <div class="asf-kicker">${escHtml(DB.settings.hostelName || 'Hostel')} / Intake</div>
-        <h1 class="asf-h1">Add Student</h1>
-      </div>
-      <div class="asf-head__end">
+    <!-- ══ HEADER ══
+         The chrome bar names the section; this names the task. One page title,
+         at the size Add Payment sets — the 38px display headline that used to
+         sit here stuttered against the header three centimetres above it. -->
+    <div>
+      <nav class="asf-crumb" aria-label="Breadcrumb">
+        <span>Students</span>${ico.chev}
+        <!-- href, not a bare onclick: an <a> with no href is not in the tab
+             order and cannot be pressed from the keyboard at all. .ap-crumb
+             on Add Payment has that gap; this is not the place to copy it. -->
+        <a href="#" onclick="event.preventDefault();navigate('students')">Roster</a>${ico.chev}
+        <b aria-current="page">New admission</b>
+      </nav>
+      <div class="asf-head">
         <div>
-          <div class="asf-meta">Form completion</div>
-          <div class="asf-meter">
-            <div class="asf-meter__track"><i id="asf-meter-fill"></i></div>
-            <span class="asf-meter__v" id="asf-meter-pct">0%</span>
-          </div>
+          <h2 class="asf-title">Student intake</h2>
+          <div class="asf-sub">Register a new student — payment is collected in the next step.</div>
         </div>
-        <span class="asf-vrule"></span>
-        <div style="text-align:right">
-          <div class="asf-meta">Student ID · auto</div>
-          <div class="asf-id">#${escHtml(nextStudentId())}</div>
+        <div class="asf-meter">
+          <span class="asf-meter__l">Completed</span>
+          <div class="asf-meter__track"><i id="asf-meter-fill"></i></div>
+          <span class="asf-meter__v" id="asf-meter-pct">0%</span>
         </div>
       </div>
-    </header>
+    </div>
 
     <div class="asf-body">
 
       <!-- ══ LEFT RAIL ══ -->
       <div class="asf-rail">
-        ${plate('00','Student photo','', `
-          <div class="asf-photo" id="add-student-photo-preview" onclick="triggerStudentPhotoUpload()" title="Click to upload a photo">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-          </div>
-          <div class="sf-drop" id="sf-drop" onclick="triggerStudentPhotoUpload()"
+        ${sec('01', ico.photo, 'Student photo', '', `
+          <div class="asf-photo" id="add-student-photo-preview" title="Click to upload a photo"
+               onclick="triggerStudentPhotoUpload()"
                ondragover="event.preventDefault();this.classList.add('is-over')"
                ondragleave="this.classList.remove('is-over')"
-               ondrop="sfDropPhoto(event)">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
-            <b>Upload photo</b><span>or drag and drop</span>
-          </div>
+               ondrop="sfDropPhoto(event)">${asfPhotoPlaceholder()}</div>
           <div class="asf-photo-acts">
             <button type="button" class="sf-btn sf-btn--ghost" id="add-student-cam-btn" onclick="openAddStudentCamera()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
@@ -815,29 +853,34 @@ function renderAddStudent() {
           </div>
           <input type="file" id="add-student-photo-file" accept="image/*" style="display:none" onchange="loadAddStudentPhoto(this)">
           <input type="hidden" id="add-student-photo-data" value="">
-          <div id="add-student-cam-box" style="display:none">
-            <video id="add-student-cam-video" autoplay playsinline style="width:100%;background:#000"></video>
+          <div id="add-student-cam-box" style="display:none;margin-top:9px">
+            <video id="add-student-cam-video" autoplay playsinline style="width:100%;border-radius:12px;background:#000"></video>
             <canvas id="add-student-cam-canvas" style="display:none"></canvas>
-            <div style="display:flex;gap:6px;margin-top:6px">
-              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center" onclick="captureAddStudentPhoto()">Capture</button>
-              <button type="button" class="sf-btn" style="flex:1;justify-content:center" onclick="closeAddStudentCamera()">Close</button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center;padding:0 12px" onclick="captureAddStudentPhoto()">Capture</button>
+              <button type="button" class="sf-btn" style="flex:1;justify-content:center;padding:0 12px" onclick="closeAddStudentCamera()">Close</button>
             </div>
           </div>`)}
 
-        ${plate('—','Record','', `
+        ${sec('', ico.record, 'Record', '', `
           <div class="asf-rec">
-            <div class="asf-rec__r"><span class="asf-meta">Entered by</span><span>${escHtml(enteredBy)}</span></div>
-            <div class="asf-rec__r"><span class="asf-meta">Beds free</span><span class="asf-num">${freeBeds} of ${totalBeds}</span></div>
-            <div class="asf-rec__r"><span class="asf-meta">Rooms with space</span><span class="asf-num">${openRooms}</span></div>
-            <div class="asf-hr"></div>
-            <div class="asf-rec__r"><span class="asf-meta">Status</span><span class="asf-tag">New — unsaved</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Student ID</span>
+              <span class="asf-rec__v asf-num asf-num--id">#${escHtml(nextStudentId())}</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Entered by</span>
+              <span class="asf-rec__v">${escHtml(enteredBy)}</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Beds free</span>
+              <span class="asf-rec__v asf-num">${freeBeds} of ${totalBeds}</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Rooms with space</span>
+              <span class="asf-rec__v asf-num">${openRooms}</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Status</span>
+              <span class="badge badge-blue">New — unsaved</span></div>
           </div>`)}
       </div>
 
-      <!-- ══ RIGHT ══ -->
+      <!-- ══ MAIN ══ -->
       <div class="asf-main">
 
-        ${plate('01','Student identity','9 fields · 2 required', `
+        ${sec('02', ico.person, 'Student identity', 'auto', `
           <div class="asf-fg asf-fg--4">
             <div class="sf-f"><label for="f-tname">Full name<span class="req">*</span></label>
               <input class="sf-in" id="f-tname" placeholder="Full name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
@@ -851,36 +894,40 @@ function renderAddStudent() {
             </div>
             <div class="sf-f"><label for="f-tdob">Date of birth</label>
               <input class="sf-in" id="f-tdob" type="date"></div>
+          </div>
 
+          <div class="asf-fg asf-fg--4">
             ${sel('f-tgender','Gender',['','Male','Female','Other'],'')}
             ${sel('f-tmarital','Marital status',['','Single','Married'],'Single')}
             ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
             ${sel('f-tblood','Blood group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}
+          </div>
 
-            <div class="sf-f" style="grid-column:span 2"><label for="f-tocc">Course / study field</label>
+          <div class="asf-fg asf-fg--2">
+            <div class="sf-f"><label for="f-tocc">Course / study field</label>
               <div style="position:relative" id="f-tocc-wrap">
                 <input class="sf-in" id="f-tocc" placeholder="Course or field of study" autocomplete="off"
                   oninput="courseAutocomplete(this)" onfocus="courseAutocomplete(this)" onkeydown="courseKeyNav(event)"
                   onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)">
-                <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
+                <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:11px;z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
               </div>
               <input type="hidden" id="f-tocctype" value="Student">
               <input type="hidden" id="f-tocccustom" value="">
             </div>
-            <div class="sf-f" style="grid-column:span 2"><label for="f-tsession">Session / semester</label>
+            <div class="sf-f"><label for="f-tsession">Session / semester</label>
               <input class="sf-in" id="f-tsession" placeholder="Session or semester"></div>
           </div>`)}
 
         <div class="asf-row">
-          ${plate('02','Contact','5 fields · 1 required', `
-            <div class="asf-fg asf-fg--3">
+          ${sec('03', ico.contact, 'Contact', 'auto', `
+            <div class="asf-fg asf-fg--2">
               <div class="sf-f"><label for="f-tphone">Phone number<span class="req">*</span></label>
                 <div style="display:flex"><span class="sf-prefix">+92</span>
                   <input class="sf-in" id="f-tphone" placeholder="3xx xxxxxxx" maxlength="12" oninput="fmtPhone(this)"></div>
               </div>
               <div class="sf-f"><label for="f-temail">Email address</label>
                 <div class="sf-wrapin">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                   <input class="sf-in" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off">
                   <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
                 </div>
@@ -899,7 +946,7 @@ function renderAddStudent() {
               </div>
             </div>`)}
 
-          ${plate('03','Hostel allotment','2 required', `
+          ${sec('04', ico.room, 'Hostel allotment', 'auto', `
             <div class="asf-fg asf-fg--2">
               <div class="sf-f" style="grid-column:span 2"><label for="f-troom-search">Room<span class="req">*</span></label>
                 <div style="position:relative">
@@ -946,8 +993,8 @@ function renderAddStudent() {
             <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">`)}
         </div>
 
-        ${plate('04','Health & notes','Optional', `
-          <div class="asf-fg" style="grid-template-columns:1.1fr 2.4fr">
+        ${sec('05', ico.health, 'Health & notes', 'Optional', `
+          <div class="asf-fg asf-fg--notes">
             <div class="sf-f"><label for="f-tallergies">Allergies / medical condition</label>
               <input class="sf-in" id="f-tallergies" placeholder="None reported"></div>
             <div class="sf-f"><label for="f-tnotes">Notes for the warden</label>
@@ -962,8 +1009,6 @@ function renderAddStudent() {
 
     <!-- ══ ACTIONS ══ -->
     <footer class="asf-foot">
-      <span class="asf-foot__note">Payment is collected in the next step.</span>
-      <span style="flex:1"></span>
       <button class="sf-btn" onclick="navigate('students')">Cancel</button>
       ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
@@ -971,8 +1016,7 @@ function renderAddStudent() {
       <button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}', false, true)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
         Save as draft</button>
-      <button class="sf-btn sf-btn--go asf-go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
-        ${corners}
+      <button class="sf-btn sf-btn--go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
         Save &amp; proceed to payment
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </button>
@@ -1004,8 +1048,11 @@ function sfCheckCnic() {
 
 function sfDropPhoto(ev) {
   ev.preventDefault();
-  const el = document.getElementById('sf-drop');
-  if (el) el.classList.remove('is-over');
+  // currentTarget, not a fixed id: the drop target IS the photo well now, and
+  // the well has to keep #add-student-photo-preview so loadAddStudentPhoto()
+  // can replace its contents with the image.
+  const el = ev.currentTarget || document.getElementById('add-student-photo-preview');
+  if (el && el.classList) el.classList.remove('is-over');
   const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
   if (!file || !/^image\//.test(file.type)) { toast('Drop an image file','error'); return; }
   const input = document.getElementById('add-student-photo-file');
@@ -1325,7 +1372,7 @@ function loadAddStudentPhoto(input) {
   reader.onload = function(e) {
     const prev = document.getElementById('add-student-photo-preview');
     const data = document.getElementById('add-student-photo-data');
-    if(prev) prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+    if(prev) prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
     if(data) data.value = e.target.result;
     const clr = document.getElementById('add-student-clear-btn'); if(clr) clr.style.display='';
     toast('Photo loaded','success');
@@ -1334,7 +1381,7 @@ function loadAddStudentPhoto(input) {
 }
 function clearAddStudentPhoto() {
   const prev = document.getElementById('add-student-photo-preview');
-  if(prev) prev.innerHTML = '🧑‍🎓';
+  if(prev) prev.innerHTML = asfPhotoPlaceholder();
   const data = document.getElementById('add-student-photo-data'); if(data) data.value='';
   const clr = document.getElementById('add-student-clear-btn'); if(clr) clr.style.display='none';
 }
@@ -1397,7 +1444,7 @@ function captureAddStudentPhoto() {
   cvs.getContext('2d').drawImage(vid,0,0);
   const dataUrl = cvs.toDataURL('image/jpeg',0.85);
   const prev = document.getElementById('add-student-photo-preview');
-  if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+  if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
   const d = document.getElementById('add-student-photo-data'); if(d) d.value=dataUrl;
   const clr = document.getElementById('add-student-clear-btn'); if(clr) clr.style.display='';
   closeAddStudentCamera();
@@ -1417,7 +1464,7 @@ function loadEditStudentPhoto(input) {
   reader.onload = function(e) {
     const prev = document.getElementById('edit-student-photo-preview');
     const data = document.getElementById('edit-student-photo-data');
-    if(prev) prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+    if(prev) prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
     if(data) data.value = e.target.result;
     const clr = document.getElementById('edit-student-clear-btn'); if(clr) clr.style.display='';
     toast('Photo loaded','success');
@@ -1488,7 +1535,7 @@ function captureEditStudentPhoto() {
   cvs.getContext('2d').drawImage(vid,0,0);
   const dataUrl = cvs.toDataURL('image/jpeg',0.85);
   const prev = document.getElementById('edit-student-photo-preview');
-  if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`;
+  if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
   const d = document.getElementById('edit-student-photo-data'); if(d) d.value=dataUrl;
   const clr = document.getElementById('edit-student-clear-btn'); if(clr) clr.style.display='';
   closeEditStudentCamera();
