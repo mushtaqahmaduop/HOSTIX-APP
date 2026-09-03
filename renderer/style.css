@@ -29,11 +29,17 @@
        screen's "overdue" ended up a different red from another's. */
     --teal:          #44d3c4;
     --teal-dim:      rgba(68, 211, 196, 0.12);
-    --red:           #F0796A;
+    /* Aliased to the semantic set for the same reason as the light block far
+       below: these are the names the app renders with, and a second copy of a
+       value is a second thing to forget. The dark values were already correct
+       and are UNCHANGED — --danger-fg is #F0796A, --success-fg #3FBF83,
+       --warning-fg #D9A441 in this theme, so this swap moves no pixel. It
+       removes the possibility of drift, which is what actually bit. */
+    --red:           var(--danger-fg);
     --red-dim:       rgba(240, 121, 106, 0.14);
-    --green:         #3FBF83;
+    --green:         var(--success-fg);
     --green-dim:     rgba(63, 191, 131, 0.14);
-    --amber:         #D9A441;
+    --amber:         var(--warning-fg);
     --amber-dim:     rgba(217, 164, 65, 0.14);
     --blue:          #7BA0FF;
     --blue-dim:      rgba(123, 160, 255, 0.14);
@@ -46,7 +52,7 @@
        now the cool inverse of the mockups' --ink-soft / --ink-faint. */
     --text:          #E6EAF2;
     --text2:         #A8B2C6;
-    --text3:         #7F8AA3;   /* 4.92:1 on --card — see tokens.css */
+    --text3:         var(--text-tertiary);   /* #7F8AA3, 4.92:1 on --card */
 
     /* Typography -- the type system from the Add Student design
        (claude.ai/design "Add student form mockups"), bundled in
@@ -157,15 +163,31 @@ body.light-theme {
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
-    /* Their --success / --danger / --warn, and the accent for --blue. */
-    --teal:          #0F8A94;
-    --teal-dim:      rgba(15, 138, 148, 0.08);
-    --red:           #C0402F;
+    /* Their --success / --danger / --warn, and the accent for --blue.
+
+       THESE ARE THE TOKENS THE APP ACTUALLY RENDERS WITH, and that is why they
+       now read from the semantic set instead of repeating its values.
+
+       The count is the whole argument: --green is used 128 times and
+       --success-fg 7; --amber 49 against --warning-fg 8; --text3 552 against
+       --text-tertiary 5. When the semantic tokens were corrected for contrast
+       on 2026-09-03, these were left holding the old values — so every settled
+       figure, every amount due and every line of metadata in light mode kept
+       failing AA while the token audit reported green. Two names for one idea
+       will always drift; the fix is one name, not two careful people.
+
+       Same-scope aliasing is safe: these resolve on body.light-theme, and so do
+       their targets (tokens.css). The freeze bug that started all of this came
+       from aliasing ACROSS a theme boundary — :root reaching for a value that
+       body overrides — which is a different thing and still forbidden. */
+    --teal:          #0E7D87;   /* was #0F8A94 — 3.82:1 on the workspace ground */
+    --teal-dim:      rgba(14, 125, 135, 0.08);
+    --red:           var(--danger-fg);
     --red-dim:       rgba(192, 64, 47, 0.08);
-    --green:         #1F8A5A;
-    --green-dim:     rgba(31, 138, 90, 0.09);
-    --amber:         #AD7A1E;
-    --amber-dim:     rgba(173, 122, 30, 0.09);
+    --green:         var(--success-fg);
+    --green-dim:     rgba(29, 128, 84, 0.09);
+    --amber:         var(--warning-fg);
+    --amber-dim:     rgba(149, 105, 26, 0.09);
     --blue:          #2451D6;
     --blue-dim:      rgba(36, 81, 214, 0.08);
     --purple:        #5B4BC4;
@@ -173,7 +195,12 @@ body.light-theme {
 
     --text:          #152238;   /* their --ink */
     --text2:         #5B647A;   /* their --ink-soft */
-    --text3:         #8A93A6;   /* their --ink-faint */
+    /* WAS #8A93A6, the mockups' --ink-faint, at 2.86:1 on the workspace ground.
+       This is the single most-read token in the app — 552 uses, under every
+       timestamp, room subtitle, table subtext and helper line — and it was the
+       one that made light mode look washed out. It now follows --text-tertiary
+       so there is one faint-ink value, not two. */
+    --text3:         var(--text-tertiary);
 
     /* Guide §21 — subtle and professional, never heavy. */
     --shadow:           0 8px 24px rgba(21, 34, 56, 0.10);
@@ -258,7 +285,9 @@ body.light-theme table tbody td          { border-bottom-color: var(--border); }
 body.light-theme .btn-primary {
     background: var(--accent);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    color: #fff;
+    /* Same value it always was — --text-on-accent is #FFFFFF in light — but
+       read from the token so the button has ONE source of ink across themes. */
+    color: var(--text-on-accent);
 }
 body.light-theme .btn-primary:hover { background: var(--accent-strong); }
 
@@ -4405,24 +4434,25 @@ body.light-theme .modal-header {
     border-bottom: 1px solid #d7c3b5;
 }
 
-/* ── BUTTONS — Stitch gradient system ────────────────────────────────────── */
-.btn-primary {
-    background: linear-gradient(135deg, var(--accent-strong) 0%, #1d4ed8 100%);
-    color: #fff;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
+/* ── BUTTONS — the Stitch gradient system, REMOVED 2026-09-03 ─────────────
 
-.btn-primary:hover {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-}
+   Three .btn-primary rules lived here: a gradient fill with a hardcoded #fff
+   label, a text-shadow and a 12px shadow; a hover that gradient-swapped and
+   lifted the button 2px; and a light-theme gradient. Every one of them was
+   already dead — chrome.css:416 and :423 load afterwards and set background,
+   colour, box-shadow, text-shadow and transform on the same selectors — so
+   deleting them changes no rendered pixel. Verified by the full suite and the
+   responsive floor.
 
-body.light-theme .btn-primary {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
+   They are deleted rather than left dead because they were a loaded gun: the
+   moment anyone reorders the <link> tags in index.html, the app grows gradient
+   buttons with drop-shadowed text and a 2px hover lift, none of which this
+   design system permits. A dead rule that contradicts the system is worse than
+   no rule, because it reads as intent to the next person.
+
+   The surviving definitions are style.css:1008 (token-correct, the fallback if
+   chrome.css ever goes) and chrome.css:416 (what actually renders). Both now
+   take their label from var(--text-on-accent). */
 
 /* ── ROOM CARDS — Stitch surface style ───────────────────────────────────── */
 .room-card {

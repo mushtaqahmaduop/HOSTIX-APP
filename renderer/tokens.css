@@ -180,6 +180,21 @@
      is exactly the size that cannot afford to be borderline. */
   --text-tertiary:   #7F8AA3;
 
+  /* THE LABEL ON A FILLED ACCENT BUTTON IS NOT WHITE IN DARK MODE.
+
+     The accent is LIFTED here (#4B7BFF) so accent-coloured text stays legible
+     on a near-black card. That lift is correct for text and wrong for a fill:
+     white on #4B7BFF is 3.77:1, below AA, so the app's most important button
+     had the least readable label on it in dark mode.
+
+     Darkening the fill back until white works gives #346AFF, which measures
+     3.77:1 against the #151C2B card — it would fix the label by making the
+     button itself disappear, which is the exact problem the lift was raised to
+     solve. So the fill keeps the lift and the INK inverts: near-black on a
+     bright accent, 4.89:1. This is why the token exists rather than a literal
+     white at each call site. */
+  --text-on-accent:  #0E1420;
+
   /* Dark theme lifts the accent so it stays legible on near-black surfaces.
      Repointed with the ramp on 2026-09-03. #2451D6 is a deep ink blue chosen
      to sit on #F5F6F9; on a #0E1420 ground it is barely separable from the
@@ -242,7 +257,18 @@ body.light-theme {
 
   --text-primary:    #152238;
   --text-secondary:  #5B647A;
-  --text-tertiary:   #8A93A6;
+  /* WAS #8A93A6 — the mockups' --ink-faint, and 2.86:1 on the workspace
+     ground. The dark theme was given exactly this treatment (see --text-tertiary
+     above, lifted "until it clears 4.5" because it carries 9.5-12px metadata);
+     light was not, and it is the lighter theme that needs it more. Darkened
+     along its own hue until it clears AA on the harder of the two grounds:
+     4.53:1 on #F5F6F9, 4.87:1 on a white card. This token is a large part of
+     what reads as "washed out" — it is under every timestamp, every room
+     subtitle and every helper line in the app. */
+  --text-tertiary:   #677187;
+  /* White is right on the light accent (#FFFFFF on #2451D6 = 6.52:1) and wrong
+     on the dark lift — see the dark block, where this is near-black. */
+  --text-on-accent:  #FFFFFF;
 
   /* Their --accent and --accent-ink. Unlike the old pair these are already the
      ramp's own 600/700, so light needs no deepening — the ramp was built on
@@ -250,12 +276,19 @@ body.light-theme {
   --accent-600:      #2451D6;
   --accent-700:      #1B3FAE;
 
+  /* The two *-fg values below are nudged off the mockups' own, and only these
+     two. Both are STATUS text carrying money — a settled figure and an amount
+     due — so they are the last things in the app that may be borderline, and
+     both were: #1F8A5A measured 4.01:1 and #AD7A1E 3.48:1 on the workspace
+     ground. Darkened along their own hue to the smallest value that clears AA
+     on the harder ground, so the palette still reads as the reference system's
+     muted green and amber rather than as saturated alert colours. */
   --success-bg:      #E8F5EE;
-  --success-fg:      #1F8A5A;
+  --success-fg:      #1D8054;   /* was #1F8A5A — 4.01:1 */
   --success-border:  #BFE3D0;
 
   --warning-bg:      #FBF2E2;
-  --warning-fg:      #AD7A1E;
+  --warning-fg:      #95691A;   /* was #AD7A1E — 3.48:1 */
   --warning-border:  #EFD9A8;
 
   --danger-bg:       #FBEBE8;
@@ -422,4 +455,107 @@ body.light-theme {
   --ant-danger-bg:   rgba(198, 69, 69, 0.11);
   --ant-neutral-fg:  #6c6a64;
   --ant-neutral-bg:  rgba(108, 106, 100, 0.10);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME-SCOPED ALIASES — the rule this file kept breaking
+
+   ── THE MECHANISM ─────────────────────────────────────────────────────────
+
+   A custom property whose value is `var(--other)` is SUBSTITUTED WHERE IT IS
+   DECLARED, not where it is read. Declare `--primary: var(--accent)` on :root
+   and it resolves against :root's --accent, once. Everything below :root then
+   inherits that finished value.
+
+   This theme switches on `body.light-theme`, and body is a CHILD of :root. So
+   every light override lands one level BELOW where the aliases were resolved,
+   and cannot reach back up to change them. The alias keeps the dark value in
+   light mode, silently, for as long as nobody measures it.
+
+   ── WHAT IT COST ──────────────────────────────────────────────────────────
+
+   `--accent` was the expensive one. The light block above sets --accent-600 to
+   #2451D6 and says, in its own comment, that it is "kept as an explicit
+   override so the dark lift above cannot leak". The lift leaked anyway —
+   through `--accent: var(--accent-600)`, declared on :root fifty lines later.
+   Light mode was painting every accent surface in the DARK lift #4B7BFF:
+
+       white label on a filled button   #4B7BFF  3.77:1   FAILS WCAG AA
+                                        #2451D6  6.52:1   passes
+
+   The primary button in light mode was below AA, and the cause was not the
+   colour anyone chose — both values are fine — but a variable resolving one
+   element too high. Seven more aliases were frozen the same way: --background,
+   --surface-secondary, --border-token, --muted, --primary, --success,
+   --danger, --warning.
+
+   ── THE RULE ──────────────────────────────────────────────────────────────
+
+   AN ALIAS IS DECLARED IN EVERY THEME SCOPE, NOT JUST THE DEFAULT ONE.
+
+   Every alias is repeated below, including the ones that are not currently
+   broken because their target happens not to be themed (--accent-soft,
+   --border-strong, --text-disabled). "Every alias, always" is a rule someone
+   can follow; "the subset whose target is themed today" is a rule that breaks
+   the day a grey becomes themeable, and breaks silently.
+
+   The expressions are deliberately IDENTICAL to the :root ones — same var(),
+   no hardcoded hex. Re-stating the expression on body is the whole fix,
+   because it makes it resolve against body's palette. It also means the light
+   values track the light ramp automatically; nothing here needs editing when
+   the ramp is repointed.
+
+   Two precedents in this file got it right and are the reason the pattern was
+   findable at all: `--accent-dim` carries an explicit body.light-theme line,
+   and so does the whole --ant-* block. They were treated as one-offs. They
+   were the general case.
+
+   Specificity, not file order, is what makes this work: body.light-theme is
+   (0,1,1) against :root's (0,1,0), so these win over the alias declarations in
+   style.css even though style.css loads after this file. Verified by reading
+   getComputedStyle in both themes — see tests/theme-parity.spec.js, which
+   fails if any of these ever resolves to the same value in both themes again.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.light-theme {
+  /* Accent aliases (tokens.css :root, "LEGACY ALIASES" block) */
+  --accent:              var(--accent-600);
+  --accent-soft:         var(--accent-100);
+  --accent-strong:       var(--accent-700);
+
+  /* Brand aliases (tokens.css :root, "PHASE 1 ADDITIONS") */
+  --brand-primary:       var(--accent-600);
+  --brand-primary-hover: var(--accent-700);
+  --brand-primary-soft:  var(--accent-100);
+  --brand-primary-dark:  var(--accent-800);
+
+  /* Border + text aliases */
+  --border-default:      var(--surface-border);
+  --border-strong:       var(--gray-400);
+  --border-focus:        var(--accent-600);
+  --text-disabled:       var(--gray-400);
+
+  /* Connectivity (§29). Every one of these aliases a themed token, so every
+     one of them was frozen: an offline chip in light mode was drawing its
+     text and ground from the DARK ladder, on a white card. */
+  --conn-online-fg:       var(--success-fg);
+  --conn-online-bg:       var(--success-bg);
+  --conn-degraded-fg:     var(--warning-fg);
+  --conn-degraded-bg:     var(--warning-bg);
+  --conn-offline-fg:      var(--text-secondary);
+  --conn-offline-bg:      var(--surface-sunken);
+  --conn-unconfigured-fg: var(--text-tertiary);
+  --conn-unconfigured-bg: var(--surface-muted);
+
+  /* The semantic set declared in style.css's :root. They are repeated HERE
+     rather than there because this file is the bound design system, and one
+     block that can be read start to finish beats the same rule split across
+     two files 4,000 lines apart. */
+  --background:          var(--bg);
+  --surface-secondary:   var(--card2);
+  --border-token:        var(--border);
+  --muted:               var(--text3);
+  --primary:             var(--accent);
+  --success:             var(--green);
+  --danger:              var(--red);
+  --warning:             var(--amber);
 }

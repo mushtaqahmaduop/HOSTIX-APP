@@ -416,7 +416,16 @@ body.light-theme #header {
 .btn-primary,
 body.light-theme .btn-primary {
     background: var(--sb-active);
-    color: #fff;
+    /* WAS #fff, and this rule is the one that WINS — chrome.css loads after
+       style.css, and it matches both the bare and the light-theme selector on
+       purpose (see the comment above). So the hardcoded white here, not the
+       token in style.css:1008, was the app's real primary-button label.
+
+       In dark mode --sb-active is the LIFTED accent #4B7BFF, and white on it
+       measures 3.77:1 — below AA on the most important button in the app.
+       --text-on-accent is white in light and near-black in dark for exactly
+       this reason; reading it here is what makes the token mean anything. */
+    color: var(--text-on-accent);
     box-shadow: none;
     text-shadow: none;
 }
