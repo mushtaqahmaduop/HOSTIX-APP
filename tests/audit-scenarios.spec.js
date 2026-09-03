@@ -47,6 +47,26 @@ test.beforeAll(() => {
 
 const RENT = 9000, MESS = 5000, FULL = RENT + MESS;
 
+/* A SETTLED payment dated outside the retention window deletes itself.
+
+   enforceDataRetention() runs at the top of every saveDB() and archives any
+   payment whose status is not Pending and whose paidDate/date falls before the
+   first of the month six months back (settings.js). A fixture that hardcodes a
+   paid date is therefore carried out of DB.payments by the same saveDB() that
+   seeds it, and the test then reads undefined off a record it believes it just
+   created — which surfaces as a TypeError in the middle of an assertion, not as
+   anything resembling "your fixture expired".
+
+   The month LABELS in these fixtures are meaningful (they are the drifted
+   months the repair is being asked to fix) and stay exactly as written. Only
+   the paid/entered DATES are pinned to today, because those are the only fields
+   retention reads. Dates INSIDE partialPayments are left alone: two identical
+   ones are the duplicate this test exists to detect. */
+const _now = new Date();
+const TODAY = _now.getFullYear() + '-'
+  + String(_now.getMonth() + 1).padStart(2, '0') + '-'
+  + String(_now.getDate()).padStart(2, '0');
+
 async function boot() {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
@@ -350,22 +370,22 @@ test('the boot repair fixes how records describe themselves without moving money
   const { app, win, pageErrors } = await boot();
   await seed(win);
 
-  const r = await win.evaluate(async ([rent, mess, full]) => {
+  const r = await win.evaluate(async ([rent, mess, full, today]) => {
     const n = v => Number(v || 0);
     const base = { studentId: '901', studentName: 'Audit Student', roomId: 'rmA',
       roomNumber: 'B7', extraCharges: [], extraTotal: 0, admissionFee: 0,
-      concession: 0, method: 'Cash', date: '2026-05-04' };
+      concession: 0, method: 'Cash', date: today };
 
     DB.payments.push(
       // 1 ─ pre-split drift: the all-in figure in monthlyRent AND a mess line
       //     beside it, so the month reads rent+mess+mess.
       Object.assign({}, base, { id: 'rDrift', month: 'March 2026',
         monthlyRent: full, totalRent: full, messCharge: mess, messIncluded: true,
-        amount: full, unpaid: 0, status: 'Paid', paidDate: '2026-05-04' }),
+        amount: full, unpaid: 0, status: 'Paid', paidDate: today }),
       // 2 ─ rent half correct, mess ticked, but billed rent-only.
       Object.assign({}, base, { id: 'rRentOnly', month: 'April 2026',
         monthlyRent: rent, totalRent: rent, messCharge: mess, messIncluded: true,
-        amount: rent, unpaid: 0, status: 'Paid', paidDate: '2026-05-04' }),
+        amount: rent, unpaid: 0, status: 'Paid', paidDate: today }),
       // 3 ─ nothing collected, yet the trail claims two full collections.
       Object.assign({}, base, { id: 'rGhost', month: 'May 2026',
         monthlyRent: rent, totalRent: rent, messCharge: 0, messIncluded: false,
@@ -376,14 +396,14 @@ test('the boot repair fixes how records describe themselves without moving money
       // 4 ─ the same instalment pushed twice, byte for byte.
       Object.assign({}, base, { id: 'rDup', month: 'June 2026',
         monthlyRent: rent, totalRent: rent, messCharge: 0, messIncluded: false,
-        amount: rent, unpaid: 0, status: 'Paid', paidDate: '2026-06-02',
+        amount: rent, unpaid: 0, status: 'Paid', paidDate: today,
         partialPayments: [
           { date: '2026-06-01', amount: rent, method: 'Cash', collectedBy: 'W', note: 'Instalment' },
           { date: '2026-06-01', amount: rent, method: 'Cash', collectedBy: 'W', note: 'Instalment' }] }),
       // 5 ─ healthy. Must come out untouched.
       Object.assign({}, base, { id: 'rOk', month: 'February 2026',
         monthlyRent: rent, totalRent: rent, messCharge: mess, messIncluded: true,
-        amount: full, unpaid: 0, status: 'Paid', paidDate: '2026-02-04' }));
+        amount: full, unpaid: 0, status: 'Paid', paidDate: today }));
     await saveDB();
 
     const before = {

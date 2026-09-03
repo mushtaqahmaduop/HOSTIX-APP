@@ -52,6 +52,26 @@ test.beforeAll(() => {
 
 const RENT = 8000, MESS = 6500, FULL = RENT + MESS;   // 14,500
 
+/* A SETTLED payment dated outside the retention window deletes itself.
+
+   enforceDataRetention() runs at the top of every saveDB(), and archives any
+   payment whose status is not Pending and whose paidDate/date falls before the
+   first of the month six months back (settings.js). So a fixture that hardcodes
+   a paid date does not merely go stale — it is silently carried out of
+   DB.payments by the very saveDB() that seeds it, and the test then measures a
+   month with no record in it.
+
+   That is exactly what happened here: 'paidDate: 2026-02-02' fell outside the
+   window once the calendar reached September 2026, the settled September record
+   vanished during seeding, and the banner assertion failed as though the banner
+   were broken. The month LABELS below were already derived from now for this
+   very reason (see months()); the dates were not. Anything that has to stay in
+   the live table is dated today. */
+const _now = new Date();
+const TODAY = _now.getFullYear() + '-'
+  + String(_now.getMonth() + 1).padStart(2, '0') + '-'
+  + String(_now.getDate()).padStart(2, '0');
+
 // The month the app itself considers "now" — the fixtures are built around it
 // so the test does not go stale the moment the calendar turns over.
 async function months(win) {
@@ -78,7 +98,7 @@ test('a settled month does not block collecting the previous month', async () =>
   const M = await months(win);
 
   // Fixture: this month PAID in full, last month still owing the lot.
-  await win.evaluate(async ([rent, mess, full, cur, prev]) => {
+  await win.evaluate(async ([rent, mess, full, cur, prev, today]) => {
     const rt = DB.settings.roomTypes.find(x => x.id === '2s');
     rt.defaultRent = rent; rt.defaultMess = mess;
     DB.rooms.push({ id: 'rm1', number: 'A1', floor: 'Ground', typeId: '2s',
@@ -93,10 +113,10 @@ test('a settled month does not block collecting the previous month', async () =>
     DB.payments.push({ id: 'p_cur', studentId: '600', studentName: 'Settled Student',
       roomId: 'rm1', roomNumber: 'A1', month: cur, monthlyRent: rent,
       messCharge: mess, messIncluded: true, amount: full, unpaid: 0,
-      status: 'Paid', paidDate: '2026-02-02', date: '2026-02-02',
+      status: 'Paid', paidDate: today, date: today,
       extraCharges: [], extraTotal: 0 });
     await saveDB();
-  }, [RENT, MESS, FULL, M.cur, M.prev]);
+  }, [RENT, MESS, FULL, M.cur, M.prev, TODAY]);
 
   await win.evaluate(() => openAddPayment('600'));
   await win.waitForSelector('#f-pcharge', { timeout: 8000 });
@@ -157,6 +177,23 @@ test('a part paid month arrives part paid, and the balance adds to it', async ()
 
   // Fixture: this month part paid — 4,000 of 14,500 collected, 10,500 owing.
   await win.evaluate(async ([rent, mess, full, cur, sofar]) => {
+    /* SEED THE PRICE, DO NOT INHERIT IT. This student's charge is resolved from
+       the room type, not from the fields on the student record — resolveCharges()
+       only reads s.rent when _rentManuallySet pins it, while s.mess does fall
+       through. So a student in a room this DB has never heard of resolves to
+       rent 0 + mess 6,500, and the form quotes 6,500 against a banner reading
+       10,500 still owing: one screen, two balances.
+
+       That is what this test measured for a while. It was reading the room and
+       the room-type defaults left behind by the test above, so the moment that
+       test failed first, this one failed too — pointing at the payment form
+       rather than at its own missing fixture. Idempotent because the DB is reset
+       per file, not per test. */
+    const rt = DB.settings.roomTypes.find(x => x.id === '2s');
+    rt.defaultRent = rent; rt.defaultMess = mess;
+    if (!DB.rooms.some(r => r.id === 'rm1'))
+      DB.rooms.push({ id: 'rm1', number: 'A1', floor: 'Ground', typeId: '2s',
+        studentIds: [], amenities: [], notes: '', rent });
     DB.students.push({ id: '700', name: 'Partial Student', roomId: 'rm1',
       rent, mess, messOptIn: true, status: 'Active', joinDate: '2026-01-01',
       paymentMethod: 'Cash' });
