@@ -399,6 +399,34 @@
 
   <!-- SCROLLABLE MIDDLE — Main + Finance + System nav groups -->
   <nav class="sb-nav sidebar__middle">
+    <!-- SECTION ORDER IS BY FREQUENCY. Owner's call, 2026-09-04, taken against
+         a measurement rather than a preference: this list SCROLLS on every
+         laptop the app ships to. At 1366x768 with Windows at 125% - the common
+         OEM default - the scroller is 418px tall and the content 674px, so
+         SEVEN of twelve items are visible and five sit below the fold.
+
+         The order therefore decides what a warden reaches without scrolling,
+         and the daily screens win. Students and Payments are opened many times
+         a day; Rooms is weekly and Settings monthly. An earlier draft followed
+         the section order exactly as the brief lists it (Main, Operations,
+         Finance, People, System) and that put Students at position ten - below
+         the fold, on the screen wardens open most.
+
+         FOLLOWED THROUGH 2026-09-04. The frequency rule was stated here but
+         one item did not obey it: Annual Archive is opened once a YEAR and sat
+         at position seven, above Rooms. At 125% it was the last item that fit,
+         so a yearly screen was occupying the fold and a weekly one was below
+         it. Archive now sits in System, with the other things nobody opens on
+         a normal day.
+
+         With that and the group-gap trim in chrome.css, all five daily screens
+         - Dashboard, Students, Rooms, Payments, Expenses - are reachable
+         without scrolling at every size measured, 125% included. Content came
+         down 674 -> 640px; the rail still scrolls, and still should.
+
+         Adding an item: put it in the section it belongs to, keep this order,
+         and re-measure with tests/rail-reach.spec.js instead of assuming it
+         still fits. -->
     <div class="sb-section">Main</div>
     <div class="nav-item active" onclick="navigate('dashboard')" data-page="dashboard" title="Dashboard">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -409,13 +437,7 @@
       </svg>
       <span class="nav-label">Dashboard</span>
     </div>
-    <div class="nav-item" onclick="navigate('rooms')" data-page="rooms" title="Rooms">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
-        <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      </svg>
-      <span class="nav-label">Rooms</span>
-    </div>
+    <div class="sb-section">People</div>
     <div class="nav-item" onclick="navigate('students')" data-page="students" title="Students">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -434,14 +456,7 @@
       <span class="nav-label">Cancellations</span>
       <span id="cancel-badge" class="nav-badge" style="display:none;background:var(--red)">0</span>
     </div>
-    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
-      </svg>
-      <span class="nav-label">Complaints</span>
-      <span id="issues-badge" class="nav-badge" style="display:none;background:var(--amber)">0</span>
-    </div>
-    <div class="sb-section" style="margin-top:8px">Finance</div>
+    <div class="sb-section">Finance</div>
     <div class="nav-item" onclick="navigate('payments')" data-page="payments" title="Payments">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect width="20" height="14" x="2" y="5" rx="2" />
@@ -466,6 +481,22 @@
       </svg>
       <span class="nav-label">Reports</span>
     </div>
+    <div class="sb-section">Operations</div>
+    <div class="nav-item" onclick="navigate('rooms')" data-page="rooms" title="Rooms">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+        <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      </svg>
+      <span class="nav-label">Rooms</span>
+    </div>
+    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
+      </svg>
+      <span class="nav-label">Complaints</span>
+      <span id="issues-badge" class="nav-badge" style="display:none;background:var(--amber)">0</span>
+    </div>
+    <div class="sb-section">System</div>
     <div class="nav-item" onclick="navigate('archive')" data-page="archive" title="Annual Archive">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="3" width="20" height="5" rx="1" />
@@ -474,10 +505,6 @@
       </svg>
       <span class="nav-label">Annual Archive</span>
     </div>
-    <div class="sb-section" style="margin-top:8px">System</div>
-    <!-- Settings lives here, in System, alongside the other configuration
-         items. It used to sit in the account menu, where it read as a personal
-         preference rather than what it is — hostel-wide configuration. -->
     <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
