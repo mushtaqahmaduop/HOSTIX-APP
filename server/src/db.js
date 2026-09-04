@@ -43,8 +43,78 @@ function pool() {
   return _pool;
 }
 
+// ── Waking a sleeping database ──────────────────────────────────────────────
+//
+// Managed Postgres goes to sleep when idle and takes a few seconds to accept
+// connections again. The first request after that window does not get a slow
+// answer — it gets no connection at all, and the route turns that into a 500.
+//
+// Observed in production on 2026-09-04: `POST /v1/devices/register` failed with
+// an AggregateError pairing `ETIMEDOUT` on the database's IPv6 address with
+// `ECONNREFUSED` on its IPv4 one, and returned 500 in 256ms. A device
+// activating for the first time saw an outright failure; it only recovered
+// because the desktop client happened to try again on its next tick. The same
+// error hit `bumpLogin` the day before, so the admin portal's login was
+// answering 500 to a correct password.
+//
+// `connectionTimeoutMillis` does not help: nothing timed out. Both addresses
+// answered immediately — one refusing, one unreachable — so the pool gave up in
+// a quarter of a second while the database was still on its way up.
+//
+// So retry, but ONLY on the connect. A statement that reached Postgres and
+// failed there must never be resent: at this layer we cannot tell a duplicate
+// INSERT from a genuine one, and `/devices/register` writes.
+const CONNECT_ERRNOS = new Set([
+  'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH',
+  'ECONNRESET', 'EAI_AGAIN'
+]);
+
+/**
+ * True only for a failure that happened BEFORE any statement was sent.
+ *
+ * node-postgres raises an AggregateError when a host resolves to several
+ * addresses and every one of them fails, so the code worth reading is often on
+ * the children rather than the error itself.
+ */
+function isConnectError(err) {
+  if (!err) return false;
+  if (err.code && CONNECT_ERRNOS.has(err.code)) return true;
+  const kids = err.errors || err.aggregateErrors;
+  if (Array.isArray(kids)) return kids.some(e => e && CONNECT_ERRNOS.has(e.code));
+  return false;
+}
+
+// Three attempts over ~1.8s. Deliberately short: it has to fit inside the
+// deploy gate's 30s healthcheck and inside the desktop client's 15s request
+// timeout, and a database that is genuinely down should be reported as down
+// rather than held open while every request waits on it.
+const CONNECT_ATTEMPTS   = 3;
+const CONNECT_BACKOFF_MS = [400, 1400];
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Run `fn`, retrying only connection-level failures.
+ * Anything Postgres itself rejected is rethrown on the first try.
+ */
+async function _withConnectRetry(fn) {
+  let lastErr;
+  for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isConnectError(err) || attempt === CONNECT_ATTEMPTS) throw err;
+      lastErr = err;
+      console.warn('[db] connect failed (' + (err.code || 'unknown') +
+        '), attempt ' + attempt + '/' + CONNECT_ATTEMPTS + ' — waking?');
+      await sleep(CONNECT_BACKOFF_MS[attempt - 1]);
+    }
+  }
+  throw lastErr;
+}
+
 function query(text, params) {
-  return pool().query(text, params);
+  return _withConnectRetry(() => pool().query(text, params));
 }
 
 /**
@@ -57,7 +127,9 @@ function query(text, params) {
  * real.
  */
 async function withTransaction(fn) {
-  const client = await pool().connect();
+  // Only the checkout is retried. Once BEGIN is sent the unit of work is in
+  // flight and resending it is a duplicate write, not a recovery.
+  const client = await _withConnectRetry(() => pool().connect());
   try {
     await client.query('BEGIN');
     const result = await fn(client);
@@ -90,4 +162,8 @@ async function close() {
   }
 }
 
-module.exports = { pool, query, withTransaction, healthCheck, close };
+// isConnectError is exported for its test. It is the whole safety argument for
+// the retry — if it ever returns true for an error Postgres raised, a write
+// gets resent — so it is worth pinning directly rather than only through a
+// route.
+module.exports = { pool, query, withTransaction, healthCheck, close, isConnectError };

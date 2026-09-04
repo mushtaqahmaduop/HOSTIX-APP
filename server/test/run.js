@@ -326,6 +326,47 @@ ok('the app ships the PUBLIC key only', () => {
   assert.ok(!src.includes('PRIVATE'), 'a private key reached the shipped key module');
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\ndatabase — a sleeping database must wake, a failed statement must not resend');
+// ══════════════════════════════════════════════════════════════════════════
+
+// Requiring db.js does NOT connect — the pool is lazy — so this runs with no
+// Postgres, like everything else in this file.
+const db = require('../src/db');
+
+ok('a bare connect errno is treated as retryable', () => {
+  for (const code of ['ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET']) {
+    assert.strictEqual(db.isConnectError(Object.assign(new Error('x'), { code })), true, code);
+  }
+});
+
+ok('an AggregateError is judged by its children', () => {
+  // The real production shape: a host with both an IPv6 and an IPv4 address,
+  // where one times out and the other refuses. The AggregateError's own code
+  // is not always the useful one, so the children have to be read.
+  const agg = new Error('');
+  agg.errors = [
+    Object.assign(new Error('connect ETIMEDOUT'),   { code: 'ETIMEDOUT' }),
+    Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+  ];
+  assert.strictEqual(db.isConnectError(agg), true);
+});
+
+ok('an error Postgres raised is NOT retryable', () => {
+  // This is the safety property. `/devices/register` writes, and the retry sits
+  // below the route with no way to tell a duplicate INSERT from a real one — so
+  // anything that reached the server and came back must be rethrown at once.
+  // Postgres errors carry SQLSTATEs here, not errnos.
+  const dup = Object.assign(new Error('duplicate key value'), { code: '23505' });
+  const syntax = Object.assign(new Error('syntax error'), { code: '42601' });
+  const readOnly = Object.assign(new Error('cannot execute INSERT'), { code: '25006' });
+  for (const e of [dup, syntax, readOnly]) {
+    assert.strictEqual(db.isConnectError(e), false, e.code);
+  }
+  assert.strictEqual(db.isConnectError(new Error('plain')), false);
+  assert.strictEqual(db.isConnectError(null), false);
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail === 0 ? 0 : 1);
