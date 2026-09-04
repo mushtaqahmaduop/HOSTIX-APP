@@ -332,10 +332,28 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   // is drawn only while FEATURES.fundsTransferCard is on (it plots money that
   // calcExpenses, and so the Expenses line, already carries), so hard-coding
   // four datasets made this fail for a deliberate change rather than a defect.
-  expect(dash.tension, 'dashboard trend lines must be straight too')
-    .toEqual(dash.tension.map(() => 0));
-  expect(dash.series, 'dashboard must draw Revenue, Expenses and Pending')
-    .toEqual(expect.arrayContaining(['Revenue', 'Expenses', 'Pending']));
+  /* THE DASHBOARD TREND IS BARS NOW (design 1c, "bars instead of lines").
+     Updated 2026-09-04 for a deliberate design change, not to quiet a failure.
+
+     `tension` was asserted as all-zero to keep the line straight — a bar
+     dataset has no tension at all, so the property reads null and the old
+     assertion failed on the absence of a thing that no longer applies. The
+     straightness it was defending is now structural: bars cannot interpolate
+     between months, which was the whole reason the line had to be pinned flat.
+
+     Pending is deliberately no longer drawn. It is not a monthly flow like the
+     other two — it is what has NOT arrived — so a third bar beside collected
+     revenue invited adding them into a figure the ledger never held. It keeps
+     its KPI card and its line in the hover badge.
+
+     The assertion that MATTERS is the last one, and it is unchanged: whatever
+     is drawn, the legend must say exactly that. A legend describing a series
+     that is not on screen is how a reader stops trusting the panel, and this
+     chart has had that bug before. */
+  expect(dash.series, 'dashboard must draw Revenue and Expenses')
+    .toEqual(expect.arrayContaining(['Revenue', 'Expenses']));
+  expect(dash.series, 'Pending is a balance, not a monthly flow — do not bar it')
+    .not.toContain('Pending');
   expect(dash.legend, 'legend must match the drawn series').toEqual(dash.series);
   expect(dash.kpiOrder, 'KPI row order: people, in, out, left, owed')
     .toEqual(['TotalResidents', 'TotalRevenue', 'Expenses', 'AvailableFund', 'Pending']);

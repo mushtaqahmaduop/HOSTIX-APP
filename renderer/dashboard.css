@@ -443,3 +443,112 @@
     .dash-rp-stat:nth-child(3)    { padding-top:14px; border-top:1px solid var(--border); }
     .dash-rp-stat:nth-child(4)    { padding-top:14px; border-top:1px solid var(--border); }
 }
+
+/* ══ THE LEDGER ROW — design 1c ═══════════════════════════════════════════════
+   Today at a Glance · Collection by Method · Upcoming Reminders · Quick Actions.
+
+   "Mono-blue discipline" is the direction's own phrase and it is a real
+   constraint, not a mood: the accent is the ONLY hue in these four panels.
+   Nothing here is a lifecycle state — a payment method is a category, a quick
+   action is a destination — and CLAUDE.md reserves colour for state. So the
+   method bars, the glance icons and the action tiles are all one accent, and
+   the only figures that take another colour are the ones that genuinely report
+   one (money received).
+
+   Every colour is a token. The design doc's own palette is raw hex (#2563EB,
+   #F4F7FC …) because it renders standalone with no stylesheet; pasting those in
+   would fork the accent and survive a rebrand, which is the exact failure the
+   nav pill had before it was tokenised.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dl-row {
+    display:grid; gap:14px; margin-top:14px;
+    /* 1c runs these four across the full width at 1366. Below that they wrap in
+       pairs rather than shrinking: a method row is a name, a bar, a percentage
+       and an amount, and there is no useful narrow version of that line. */
+    grid-template-columns:repeat(4,minmax(0,1fr));
+}
+@media (max-width:1240px) { .dl-row { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:720px)  { .dl-row { grid-template-columns:minmax(0,1fr); } }
+
+.dl-panel { display:flex; flex-direction:column; min-width:0; }
+.dl-head__total {
+    margin-left:auto; font-size:12px; font-weight:700; color:var(--text2);
+    font-variant-numeric:tabular-nums;
+}
+.dl-empty { padding:22px 14px; text-align:center; font-size:12px; color:var(--text3); line-height:1.6; }
+.dl-ico { width:15px; height:15px; flex:none; }
+
+/* ── Today at a Glance ───────────────────────────────────────────────────── */
+.dl-glance { display:flex; flex-direction:column; padding:4px 0 2px; }
+.dl-glance__row {
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:8px 14px; background:none; border:0; cursor:pointer; text-align:left;
+    border-bottom:1px solid var(--border); color:var(--text2);
+    transition:background .14s ease;
+}
+.dl-glance__row:last-child { border-bottom:0; }
+.dl-glance__row:hover { background:var(--dash-sunk); }
+.dl-glance__ic { display:flex; color:var(--accent); }
+.dl-glance__body { display:flex; flex-direction:column; gap:1px; flex:1 1 auto; min-width:0; }
+.dl-glance__label { font-size:12.5px; font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dl-glance__sub { font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+.dl-glance__n {
+    margin-left:auto; flex:0 0 auto; font-size:13px; font-weight:700; color:var(--text);
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+/* Money received is the one figure in the panel that is not a count, so it is
+   the one allowed to look different. */
+.dl-money { color:var(--green); font-weight:800; }
+
+/* ── Collection by Method ────────────────────────────────────────────────── */
+.dl-meth { display:flex; flex-direction:column; gap:9px; padding:12px 14px 14px; }
+.dl-meth__row { display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px; }
+.dl-meth__name { font-size:12px; font-weight:600; color:var(--text2); white-space:nowrap; }
+.dl-meth__bar { height:6px; border-radius:4px; background:var(--dash-track); overflow:hidden; min-width:24px; }
+.dl-meth__bar > i { display:block; height:100%; background:var(--accent); border-radius:4px; }
+.dl-meth__pct { font-size:11px; color:var(--text3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dl-meth__amt {
+    font-size:12px; font-weight:700; color:var(--text);
+    font-variant-numeric:tabular-nums; white-space:nowrap; min-width:74px; text-align:right;
+}
+
+/* ── Upcoming Reminders ──────────────────────────────────────────────────── */
+.dl-rem { display:flex; flex-direction:column; padding:4px 0 2px; }
+.dl-rem__row {
+    display:flex; align-items:flex-start; gap:10px; width:100%;
+    padding:10px 14px; background:none; border:0; border-bottom:1px solid var(--border);
+    cursor:pointer; text-align:left; transition:background .14s ease;
+}
+.dl-rem__row:last-child { border-bottom:0; }
+.dl-rem__row:hover { background:var(--dash-sunk); }
+.dl-rem__ic {
+    display:flex; align-items:center; justify-content:center; flex:none;
+    width:26px; height:26px; border-radius:8px;
+    background:var(--accent-soft); color:var(--accent);
+}
+/* Arrears are the one reminder that reports a STATE — money is owed — so this
+   is the single place in the row entitled to leave the accent. */
+.dl-rem__ic--due { background:var(--dash-track); color:var(--red); }
+.dl-rem__body { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.dl-rem__body > b { font-size:12.5px; font-weight:600; color:var(--text); line-height:1.35; }
+.dl-rem__sub { font-size:11px; color:var(--text3); }
+
+/* ── Quick Actions ───────────────────────────────────────────────────────── */
+.dl-acts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding:12px 14px 14px; }
+.dl-act {
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
+    padding:13px 6px; border:1px solid var(--border); border-radius:10px;
+    background:var(--card); color:var(--text2); cursor:pointer;
+    transition:border-color .14s ease, color .14s ease, background .14s ease;
+}
+.dl-act:hover { border-color:var(--accent); color:var(--accent); background:var(--dash-sunk); }
+.dl-act__ic { display:flex; color:var(--accent); }
+.dl-act__label { font-size:11px; font-weight:600; text-align:center; line-height:1.25; }
+
+/* A row with nowhere to go keeps the layout and drops every affordance: no
+   pointer, no hover lift. It reports a number, which is all it ever did. */
+.dl-glance__row--static,
+.dl-rem__row--static { cursor:default; }
+.dl-glance__row--static:hover,
+.dl-rem__row--static:hover { background:none; }
