@@ -148,7 +148,13 @@ function start(opts) {
   // module, so a machine that learns its address at 09:00:02 does not have to
   // be relaunched before anything reaches the control plane — the first thing
   // a customer does after activating a licence is use the app, not restart it.
-  discovery.refresh({ userDataDir: o.userDataDir })
+  //
+  // Skipped under HOSTIX_TEST_PROFILE. The Playwright suite launches the app
+  // ~85 times, and a suite that reaches raw.githubusercontent.com on every
+  // launch is a suite that goes red when the network does — for a reason that
+  // has nothing to do with the change under test.
+  const wantDiscovery = o.discovery !== false && !process.env.HOSTIX_TEST_PROFILE;
+  if (wantDiscovery) discovery.refresh({ userDataDir: o.userDataDir })
     .then((r) => {
       if (!r || !r.ok || !r.base) return;
       if (!config.adoptDiscoveredBase(r.base)) return;
