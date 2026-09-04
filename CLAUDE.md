@@ -181,7 +181,7 @@ long after it stopped being true, which is how a regression reaches a client.
 $env:HOSTIX_TEST_PROFILE = "<scratch>\hostix-profile"
 Copy-Item C:\HOSTIX-APP\.devdata\license.enc $env:HOSTIX_TEST_PROFILE\
 npx playwright test          # 23 spec files
-npm run test:services        # 135
+npm run test:services        # 136
 npm run test:retention       # 13
 npm run test:license         # licence system
 npm run test:update          # the update channel + the "Check for Updates" dialog

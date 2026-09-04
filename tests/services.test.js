@@ -504,6 +504,60 @@ ok('a corrupt cache reads as no cache rather than stopping the boot', () => {
   assert.strictEqual(config.isConfigured(), false);
 });
 
+// ── index.js: the wiring that turns a discovered address into a live client ─
+// The tests above prove discovery resolves an address. This proves the thing
+// that actually matters to a customer: that the online machinery then comes
+// UP, in the same session, without a relaunch. It is the seam most likely to
+// rot — a service that started caching apiBase instead of re-reading it would
+// pass every test above and fail this one.
+
+await okAsync('a machine that learns its address comes online without a relaunch', async () => {
+  const services = require('../services/index.js');
+  const dir = tmpdir();
+  const qdb = new Database(path.join(dir, 'q.db'));
+
+  let started = null;
+  try {
+    started = services.start({
+      db: qdb,
+      userDataDir: dir,
+      isDev: false,
+      // No Electron here. index.js guards the IPC registration itself; the
+      // empty surface keeps that guard out of what is under test.
+      electron: {},
+      machineIdProvider: () => 'a'.repeat(64),
+      licenceProvider: () => null,
+      // The real fetch is index.js's own business and is covered above. A unit
+      // test must not reach the network to prove a wiring question.
+      discovery: false
+    });
+
+    assert.strictEqual(config.isConfigured(), false,
+      'a machine with no cache must start offline');
+
+    // Drive the adoption exactly as index.js does on a successful refresh.
+    await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+    assert.strictEqual(config.adoptDiscoveredBase(LIVE), true);
+    assert.strictEqual(config.isConfigured(), true);
+
+    // The services captured cfg by reference at construction. This is the
+    // assertion that in-place mutation exists for: the URL they build now
+    // points at the discovered address, with nothing reconstructed.
+    assert.strictEqual(config.url('/devices/register'), LIVE + '/devices/register');
+
+    started.queue.start();
+    started.connectivity.start();
+    started.device.start();
+    const timer = started.device._timer;
+    started.device.start();          // twice on purpose
+    assert.strictEqual(started.device._timer, timer,
+      'device.start() is not idempotent — a second call left two sync intervals running');
+  } finally {
+    if (started) started.stop();
+    try { qdb.close(); } catch (_) {}
+  }
+});
+
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\napi-client.js — §36 reliability');
