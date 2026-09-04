@@ -27,6 +27,9 @@
     "test:servicemodel": "node tests/service-model.test.js",
     "test:services": "node tests/services.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
+    "fixtures": "node tests/fixtures/make-fixtures.js",
+    "fixtures:verify": "node tests/fixtures/make-fixtures.js --verify",
+    "test:fixtures": "node tests/fixtures.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {

@@ -33,3 +33,8 @@ blob-report/
 # Control-plane server — its own dependency tree, not the app's
 server/node_modules/
 server/.env
+
+# Generated test fixtures — rebuild with `npm run fixtures`, never commit.
+# They are large (the scale baseline is ~6 MB) and regenerable from
+# tests/fixtures/make-fixtures.js, which IS committed.
+tests/fixtures/out/
