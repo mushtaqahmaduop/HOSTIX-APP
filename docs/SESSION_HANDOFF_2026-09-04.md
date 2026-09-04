@@ -256,7 +256,7 @@ than the bug it is imitating.
 
 ## 7. Working tree
 
-Committed on `design/anthropic-pass`, none of it touching the files below:
+Committed on `design/anthropic-pass`:
 
 | Commit | What |
 |---|---|
@@ -264,8 +264,16 @@ Committed on `design/anthropic-pass`, none of it touching the files below:
 | `2266e5a` | this document |
 | `3d40ae6` | daily-flow sweep + the occupancy comment |
 | `c72aa4e` | titlebar spec de-flaked |
+| `8d57551` | the rail fix of §5.1, with `rail-reach.spec.js` |
 
-**Uncommitted, and deliberately so** — the rail fix lands in the same files as
-the in-flight redesign work, and committing it would sweep that work into a
-commit its author did not choose: `renderer/chrome.css`, `renderer/index.html`,
-`renderer/src/modules/nav.js`, and untracked `tests/rail-reach.spec.js`.
+**Still uncommitted:** `renderer/chrome.css` only — the Phase 4 theme work
+(the dead `--sb-bg` token, and the light-theme rail gradient the brief rules
+out). That is a separate body of work from the rail, so `8d57551` was staged
+hunk-by-hunk to take the rail change and leave the theme change behind, rather
+than sweeping two unrelated concerns into one commit.
+
+**One thing that commit does not carry proof of.** The suite was run against
+the working tree, which is `8d57551` PLUS the theme work. The rail commit has
+not been tested in isolation. Nothing in it reads a theme token, so the risk is
+small — but "small" is not "measured", and if the theme work is ever dropped
+rather than committed, re-run before trusting the rail on its own.
