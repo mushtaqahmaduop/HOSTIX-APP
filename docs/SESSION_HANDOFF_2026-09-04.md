@@ -1,7 +1,10 @@
 # Handoff — control plane proven live, demo runbook
 
-**Date:** 2026-09-04 · **Branch:** `design/anthropic-pass` · **Commit:** `2d3e7ea`
+**Date:** 2026-09-04 · **Branch:** `design/anthropic-pass`
+**Commits:** `2d3e7ea`, `3d40ae6`, `c72aa4e` (+ this doc) · see §7
 **Context:** client demo on 2026-09-05, full stack including the control plane.
+**Gate:** full suite green — **84 passed, 2 skipped, 0 failed**, with the rail
+fix of §5.1 in the tree.
 
 ---
 
@@ -92,7 +95,7 @@ But that copy is what production runs. Regenerated with `npm run sync-shared`.
 | `npm run test:services` | 115 passed, 0 failed |
 | `npm run test:license` | 39 passed, 0 failed |
 | `npm run test:retention` | 13 passed, 0 failed |
-| `npx playwright test` | **81 passed, 2 skipped, 0 failed** |
+| `npx playwright test` | **84 passed, 2 skipped, 0 failed** (10.7 min) |
 | `npm run typecheck` | 0 errors |
 
 ---
@@ -142,31 +145,55 @@ But that copy is what production runs. Regenerated with `npm run sync-shared`.
 
 ---
 
-## 5. Known, not fixed — deliberately
+## 5. The rail, and the one blocker that remains
 
-### 5.1 Rooms falls below the fold on a common laptop
+### 5.1 Rooms fell below the fold on a common laptop — now fixed
 
-`tests/rail-reach.spec.js` measures the rail budget at six sizes. At
-**1366x768 @125%** — the common OEM default — and at **1024x768**, the nav
-scroller overflows by ~250px and five of twelve items sit below the fold,
-**including Rooms**, which is a daily screen.
+`tests/rail-reach.spec.js` measures the rail budget at six sizes. It found that
+at **1366x768 @125%** — the common OEM default — and at **1024x768**, five of
+twelve items sat below the fold **including Rooms**, a daily screen. A warden on
+a standard laptop had to scroll the rail to reach it.
 
-The spec asserts only at the stated QA floor (1366x768 @100%), where the daily
-five do fit. The tighter sizes are measured and printed but not gated, so this is
-visible rather than silent.
+Two changes, both taking space from chrome rather than from type size, which
+`chrome.css` rules out ("section 9 rules out buying space with type size"):
 
-Not fixed tonight on purpose: redensifying the rail means editing `chrome.css`
-and `index.html`, which are exactly the files carrying uncommitted redesign work,
-the night before a demo. The auto-scroll added to `nav.js` mitigates the worst of
-it — the lit item is always scrolled into view — but does not help discovery.
+1. **The group gap was being paid for twice.** `.sb-section` carried 10px of
+   padding above the label AND four inline `style="margin-top:6px"` attributes
+   in `index.html` — 16px of blank rail per group break before a pixel of text.
+   Now one rule in `chrome.css`: 6+4 padding, 4px margin. Seven pixels back per
+   break. This alone fixed 1024x768 and 150%, but not 125%.
 
-### 5.2 `rail-reach.spec.js` was unfinished
+2. **Annual Archive was breaking the frequency rule the file states.** The nav
+   comment orders by frequency — "Rooms is weekly and Settings monthly" — but
+   Archive, opened once a YEAR, sat at position seven and was the last item that
+   fit at 125%. A yearly screen was occupying the fold while a weekly one sat
+   below it. Moved to System.
 
-It failed with `ReferenceError: reach is not defined`, and despite a header
-claiming it "pins" the daily screens above the fold, it had **no assertion at
-all**. Now: `reach` is declared, it collects stable `data-page` keys rather than
-label text, and it asserts the daily five at the QA floor. It is still untracked
-— it belongs to the in-flight design work, not to this commit.
+Content came down **674 -> 640px**. At 125% the visible seven are now Dashboard,
+Students, Cancellations, Payments, Expenses, Reports, **Rooms**. Complaints is
+the first item below the fold there, and is half-visible, which reads as the
+scroll affordance it is.
+
+**One approach that looks obvious and is wrong:** moving the System items into a
+pinned bottom block. The CSS for it still exists (`#sidebar .sidebar__bottom`),
+so it invites the attempt. The rail is fixed-height — a pinned block steals
+~110px of scroller while removing ~142px of content, a net gain of ~30px against
+a 440-vs-418px problem. It would have pushed Rooms further down, not up.
+
+### 5.2 `rail-reach.spec.js` — finished, and now gates every size
+
+It arrived failing with `ReferenceError: reach is not defined`, and despite a
+header claiming it "pins" the daily screens above the fold it had **no assertion
+at all**. Now `reach` is declared, it collects stable `data-page` keys rather
+than label text — labels are copy and get reworded — and it asserts.
+
+It first gated the QA floor only, on the reasoning that 125% could not hold the
+daily five and pinning it would freeze the design against the hardest case.
+After the fix above that is no longer true, so it now gates **all six sizes**.
+The claim is the plain one: the rail may scroll to reach Archive or the Activity
+Log, never to record a payment or look up a room.
+
+Still untracked — it belongs with the in-flight design work.
 
 ### 5.3 The domain is still the real blocker
 
@@ -181,8 +208,64 @@ changed by cutting a release.
 
 ---
 
-## 6. Working tree
+## 6. The app-side sweep
 
-`2d3e7ea` contains **server files only**. Left untouched and uncommitted:
-`renderer/chrome.css`, `renderer/index.html`, `renderer/src/modules/nav.js`, and
-untracked `tests/rail-reach.spec.js`.
+A sweep of the daily flows found **no defect a client would see**, which is
+worth recording as a result rather than leaving as an absence.
+
+Held under test: the three bed numbers (a bed on notice reads
+`2/2 · 1 bed free on 30-Sept-2026 — reservable`); "never invent a number" (an
+unpriced student prints **not set**, never `PKR 0`); room numbers sort as
+strings, so `"A 01"` lands after `"12"`; every `showModal`/`showConfirm` title
+carrying user data is escaped; no `fmtPKR` inside a `.pkr` span; and the service
+model defaults to `rent_mess_optional`, which is the OLD behaviour — so no
+install's billing moves when it upgrades.
+
+Two things that looked like bugs were bad test seeds, not code. Both are worth
+knowing before someone else chases them:
+
+- **Notice is a Pending `DB.cancellations` row**, not a `noticeDate` field on
+  the student. Seeding the field alone leaves `getRoomVacating()` at 0, which
+  looks exactly like the bug it is not.
+- The real flow also sets `student.status = 'Cancelling'`.
+
+**The one real finding was a comment that had inverted its own meaning.**
+`cancellations.js` said marking a student `Cancelling` "removes from occupancy".
+Since the 2026-08-30 ruling `Cancelling` is one of `RESIDENT_STATUSES`, so they
+are still counted and still billed; what the status changes is
+`getRoomVacating()`. Left alone it invites someone to "fix" an occupancy count
+that is already right. Corrected in `3d40ae6`.
+
+`tests/daily-flow-sweep.spec.js` is the net that came out of it: it walks all
+twelve screens twice — once on seeded data, once on the records a live hostel
+accumulates — and fails on rendered `NaN` / `undefined` / `[object Object]` /
+`Invalid Date` or any console error. Both passes are clean.
+
+### `titlebar-keyboard` was flaky, not broken
+
+It failed a full-suite run and passed 3/3 in isolation. The assertion that lost
+says why: `open` read `['Help']`, so the menu HAD opened, while `focusText` read
+`''` because `activeElement` was still the body. Every step sampled state
+immediately after the keypress. Each now waits for the focus it expects
+(`c72aa4e`).
+
+Worth the fix beyond tidiness: a flaky red in a pre-demo test run costs more
+than the bug it is imitating.
+
+---
+
+## 7. Working tree
+
+Committed on `design/anthropic-pass`, none of it touching the files below:
+
+| Commit | What |
+|---|---|
+| `2d3e7ea` | control plane: sleeping-DB 500 fix (**deployed**) |
+| `2266e5a` | this document |
+| `3d40ae6` | daily-flow sweep + the occupancy comment |
+| `c72aa4e` | titlebar spec de-flaked |
+
+**Uncommitted, and deliberately so** — the rail fix lands in the same files as
+the in-flight redesign work, and committing it would sweep that work into a
+commit its author did not choose: `renderer/chrome.css`, `renderer/index.html`,
+`renderer/src/modules/nav.js`, and untracked `tests/rail-reach.spec.js`.
