@@ -259,6 +259,22 @@ function getMachineId() {
     so a support call can tell "wrong PC" apart from "the probes failed". */
 function getMachineIdReason() { return _lastMachineIdReason; }
 
+/* Throw away the cached fingerprint and read the hardware again.
+
+   getMachineId() caches for the life of the process, which is right for every
+   other caller — but it means a probe that failed once has failed for as long
+   as the app stays open. On the activation screen that is the difference
+   between "click Activate again" working and it being guaranteed not to, so
+   the guard below re-reads rather than re-asking the cache the same question.
+
+   Only the activation path uses this. Nothing else should: re-probing after a
+   licence is already open would let a transient probe failure change the id
+   out from under a running session. */
+function _reprobeMachineId() {
+  _cachedMachineId = null;
+  return getMachineId();
+}
+
 /** The same, in words a warden reading it down a phone line can repeat. */
 function _machineIdReasonLabel(reason) {
   switch (reason) {
@@ -493,12 +509,67 @@ function activateLicense(key) {
     const expStr = expiry.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
     return { success: false, reason: `This key expired on ${expStr}. Contact support for a new key.` };
   }
+  /* NEVER SEAL A LICENCE AGAINST A FINGERPRINT THIS MACHINE CANNOT REPRODUCE.
+
+     The licence is AES-encrypted with a key derived from the machine id, and
+     checked on every boot with `data.machineId !== getMachineId()`. So the id
+     read HERE, once, is the one this install has to produce for the rest of its
+     life.
+
+     On a brand-new install there is no machine.json yet, so resolveFactors()
+     has nothing to corroborate a missing reading against and returns `degraded`
+     the moment any one probe fails — and a degraded reading is deliberately NOT
+     written to machine.json, so nothing remembers it either. Activation would
+     succeed, the customer would use the app all day, and the next boot — with
+     the probes working normally — would compute a different id, fail the
+     comparison above, and refuse to start with `wrong_machine`. A valid licence,
+     a correct machine, and an app that will not open.
+
+     Proven, not theorised: the same factors minus the BIOS serial hash to a
+     different digest (tests/activation-guard.test.js).
+
+     So refuse. A retry costs the customer thirty seconds; sealing a licence to
+     a fingerprint that only existed once costs a support call and a re-issued
+     key. The re-probe is what makes the retry meaningful — see
+     _reprobeMachineId(). */
+  let machineId = getMachineId();
+  if (getMachineIdReason() === 'degraded' || getMachineIdReason() === 'error') {
+    machineId = _reprobeMachineId();
+  }
+  const idReason = getMachineIdReason();
+  if (idReason === 'degraded' || idReason === 'error') {
+    console.error('[HOSTYLLO] Refusing to activate on a ' + idReason + ' hardware reading.');
+    return { success: false, reason:
+      'Could not read the hardware details of this PC reliably, so the '
+    + 'license was NOT activated - activating now would stop the app '
+    + 'opening later. Please close the app, wait a few seconds, open it '
+    + 'again and enter the key. If it keeps failing, contact support.' };
+  }
+
   try {
-    const machineId   = getMachineId();
     const licenseData = { key: k, machineId, expiry: expiry.toISOString(),
       activatedAt: new Date().toISOString() };
     fs.writeFileSync(LICENSE_PATH, encryptLicense(licenseData, machineId), 'utf8');
     _writeLastRun();
+
+    /* The clean reading above is what every future boot has to match, and
+       machine.json is the only thing that lets a LATER degraded boot recover it
+       by corroboration. computeMachineId() writes it on a clean read, but
+       writeKnownFactors() swallows its own failures by design (it is a safety
+       net, never fatal) — which would leave this install with no net at all,
+       silently. We know the reading was clean, so make sure it landed. */
+    try {
+      const stateDir = app.getPath('userData');
+      if (!_machineId.readKnownFactors(stateDir)) {
+        const again = _machineId.computeMachineId({ stateDir, logger: console });
+        if (again.reason === 'clean') _machineId.writeKnownFactors(stateDir, again.factors);
+        if (!_machineId.readKnownFactors(stateDir))
+          console.error('[HOSTYLLO] Activated, but could not record the hardware ' +
+                        'fingerprint — a future probe failure will not self-recover.');
+      }
+    } catch (e) {
+      console.error('[HOSTYLLO] Fingerprint record check failed:', e.message);
+    }
     // The cached decision is now stale by definition — a moment ago this
     // machine was unlicensed.
     refreshEnforcement();
@@ -625,13 +696,38 @@ async function doCheckUpdates() {
     return;
   }
   try {
+    // `isUpdateAvailable`, NOT `updateInfo`. checkForUpdates() resolves with
+    // `{ isUpdateAvailable: false, updateInfo }` when the app is CURRENT
+    // (electron-updater AppUpdater.js — it returns the parsed feed either way),
+    // so a truthiness test on `updateInfo` is true in both cases and this
+    // dialog was unreachable. `update-not-available` only writes to the
+    // console, so the menu item did nothing visible at all — which is what a
+    // client sees today, since 5.0.0 is also the latest release.
     const result = await autoUpdater.checkForUpdates();
-    if (!result || !result.updateInfo) {
+    if (!result) {
+      // `null` means the updater declined to run at all (isUpdaterActive() is
+      // false — an unpackaged copy, or no feed configured). It is NOT the same
+      // as "no newer version exists", and answering "you have the latest" to
+      // a check that never happened is the one thing this dialog must not do.
       dialog.showMessageBox(mainWindow, {
-        type: 'info', title: 'Up to Date',
-        message: '✅ You have the latest version of Hostyllo.'
+        type: 'warning', title: 'Update Check Failed',
+        message: 'Could not check for updates.',
+        detail: 'Please check your internet connection and try again.'
       });
+      return;
     }
+    if (result.isUpdateAvailable) {
+      // The `update-available` handler has already shown its own dialog from
+      // inside this call. Saying it twice is worse than saying it once.
+      return;
+    }
+    dialog.showMessageBox(mainWindow, {
+      type: 'info', title: 'Up to Date',
+      message: 'You have the latest version of Hostyllo.',
+      detail: result.updateInfo && result.updateInfo.version
+        ? 'Version ' + result.updateInfo.version + ' is the newest release, and it is the one you are running.'
+        : undefined
+    });
   } catch (e) {
     dialog.showMessageBox(mainWindow, {
       type: 'warning', title: 'Update Check Failed',
@@ -1253,7 +1349,13 @@ function setupAutoUpdater() {
       type: 'info',
       title: 'Update Ready',
       message: `Hostyllo v${info.version} is ready to install`,
-      detail: 'Restart now to apply the update, or it will install automatically when you next close the app.',
+      // [D-2] `autoInstallOnAppQuit` is false, so the old second clause —
+      // the one promising an install on the next quit — was a
+      // promise the build does not keep. This handler is unreachable while
+      // `autoDownload` is false and nothing calls downloadUpdate(); it is kept
+      // correct so that enabling downloads alongside code signing does not
+      // ship a lie with them.
+      detail: 'Restart now to apply the update. Nothing installs by itself.',
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
       cancelId: 1
@@ -1272,8 +1374,15 @@ function setupAutoUpdater() {
 ipcMain.handle('update:check', async () => {
   if (!autoUpdater) return { available: false, reason: 'updater_not_available' };
   try {
+    // Same trap as doCheckUpdates: `!!result` is true even when the app is
+    // current, so this used to report every up-to-date machine as having an
+    // update waiting. Nothing in the renderer calls this yet; it is fixed
+    // rather than deleted because the next caller would inherit the lie.
     const result = await autoUpdater.checkForUpdates();
-    return { available: !!result, version: result?.updateInfo?.version };
+    return {
+      available: !!(result && result.isUpdateAvailable),
+      version: result?.updateInfo?.version
+    };
   } catch (e) {
     return { available: false, reason: e.message };
   }

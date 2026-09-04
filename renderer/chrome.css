@@ -16,9 +16,17 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-    /* Dark theme: the sidebar sits BELOW the page surface so it recedes.
-       #0A0A0A against the #0f0f0f page is a small delta, so the separation is
-       carried by an explicit border, not by fill alone (CLAUDE.md rule 6). */
+    /* DEAD TOKEN, kept only so the light block below has a counterpart to
+       override. The only consumer of --sb-bg is `body.light-theme #sidebar`
+       (chrome.css:76) — in DARK the rail is painted by `#sidebar` in style.css
+       from var(--sidebar-bg), so this value has never reached a pixel.
+
+       Its comment used to read "#0A0A0A against the #0f0f0f page is a small
+       delta". There has been no #0f0f0f page since the ladder went navy in
+       August, and there is certainly none now it is warm near-black — which is
+       how a dead token acquires a confidently wrong explanation. Left in place
+       rather than removed because deleting it changes the light rule's shape;
+       it is a Phase 4 cleanup, not a Phase 3 one. */
     --sb-bg:       #0A0A0A;
     --sb-border:   rgba(255,255,255,.09);
     --sb-fg:       #f5f5f5;
@@ -119,15 +127,43 @@ body.light-theme #sidebar {
 
 /* Nav */
 #sidebar .sb-nav { padding: 14px 12px; }
+/* TIGHTENED to pay for the fifth and fourth section headers (Phase 4).
+
+   Going from three groups to five is better information architecture and costs
+   80px of pure chrome, which on a rail that already scrolls means two more
+   items below the fold — measured at the QA floor as 9 visible before and 7
+   after. The IA is not worth a regression in reach, so the headers and rows
+   give the space back.
+
+   14px/6px -> 10px/5px, and the inter-group margin 8px -> 6px. The label is
+   unchanged at 10px/700/1.4px tracking; this takes padding, not legibility. */
+/* TIGHTENED AGAIN 2026-09-04, and this time the group gap lives here rather
+   than on four inline `style="margin-top:6px"` attributes in index.html.
+
+   The gap was being paid for twice: 10px of padding above the label AND a 6px
+   margin above that, so every group break cost 16px of blank rail before a
+   single pixel of text. One separation is enough to read as a break; two is
+   just the arithmetic that puts Rooms below the fold at 125% scaling.
+
+   Per non-first header: 10+5 padding + 6 margin -> 6+4 padding + 4 margin.
+   Seven pixels each, four of them above Rooms. Again padding, never the label:
+   10px/700/1.4px tracking is unchanged, per brief section 9. */
 #sidebar .sb-section {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.4px; color: var(--sb-fg3); padding: 14px 10px 6px;
+    letter-spacing: 1.4px; color: var(--sb-fg3); padding: 6px 10px 4px;
+    margin-top: 4px;
 }
-#sidebar .sb-nav > .sb-section:first-child { padding-top: 2px; }
+#sidebar .sb-nav > .sb-section:first-child { padding-top: 2px; margin-top: 0; }
 
+/* 10px -> 8px vertical padding and 3px -> 2px gap: a 42px row becomes 38px.
+   Twelve rows, so it returns 60px to the scroller. 38px is still a comfortable
+   click target (brief section 37 allows compact density on operational screens,
+   and this is the most operational surface in the app); it is the PADDING that
+   shrinks, never the 13.5px label, because section 9 rules out buying space
+   with type size. */
 #sidebar .nav-item {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 12px; margin-bottom: 3px;
+    padding: 8px 12px; margin-bottom: 2px;
     border-radius: 10px; border: 1px solid transparent;
     color: var(--sb-fg2); font-size: 13.5px; font-weight: 500;
     cursor: pointer; overflow: hidden;
@@ -143,11 +179,16 @@ body.light-theme #sidebar {
 /* Active navigation — design guide §5.1. A premium blue gradient with a soft
    glow, not a flat fill: on a navy rail a solid block reads as a hole, while
    the gradient plus the shadow lifts the pill off the surface. */
+/* Repointed 2026-09-03. This was hardcoded Tailwind blue (#2563EB→#3B82F6) and
+   had never been tokenized, so after the accent repaint the one element on
+   screen at all times — the lit nav item — was the only thing still painted in
+   the OLD accent. It now reads the ramp like everything else, which also means
+   a future rebrand moves it with one token instead of missing it again. */
 #sidebar .nav-item.active {
-    background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%);
+    background: linear-gradient(135deg, var(--accent-600) 0%, var(--accent-500) 100%);
     color: var(--sb-active-fg);
     border-color: rgba(255, 255, 255, .10);
-    box-shadow: 0 8px 20px rgba(37, 99, 235, .22);
+    box-shadow: 0 8px 20px rgba(27, 63, 174, .28);
     font-weight: 600;
 }
 #sidebar .nav-item.active .nav-icon { color: var(--sb-active-fg); }
@@ -411,7 +452,16 @@ body.light-theme #header {
 .btn-primary,
 body.light-theme .btn-primary {
     background: var(--sb-active);
-    color: #fff;
+    /* WAS #fff, and this rule is the one that WINS — chrome.css loads after
+       style.css, and it matches both the bare and the light-theme selector on
+       purpose (see the comment above). So the hardcoded white here, not the
+       token in style.css:1008, was the app's real primary-button label.
+
+       In dark mode --sb-active is the LIFTED accent #4B7BFF, and white on it
+       measures 3.77:1 — below AA on the most important button in the app.
+       --text-on-accent is white in light and near-black in dark for exactly
+       this reason; reading it here is what makes the token mean anything. */
+    color: var(--text-on-accent);
     box-shadow: none;
     text-shadow: none;
 }
@@ -440,4 +490,115 @@ body.light-theme .btn-primary:hover {
 @media (max-width: 1100px) {
     #hdr-search-wrap { display: none; }
     .hdr-user__name  { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXTUAL HEADER — the task shell  ·  `tsk-*`
+   Added 2026-09-03 from the owner's reference mockup
+   (Downloads/hostix-payment-worksheet.html).
+
+   THE PROBLEM IT SOLVES. On a 1366x768 laptop the app spent its first ~110
+   vertical pixels on chrome that a half-filled form cannot use: a 48px global
+   header carrying a search box, a date stepper, a notification bell and two
+   "Add …" buttons — every one of which navigates AWAY from the task — and
+   then the page's own title block underneath repeating the same words.
+
+   WHAT REPLACES IT. A 50px bar carrying only what a task needs: the way out,
+   where you are, and which record this is. It is worth 60px of form on every
+   task page, and it stops the header offering four ways to lose your work.
+
+   HOW IT ATTACHES. renderPage() toggles `body.chrome-task` from the page's
+   `chrome:'task'` flag — renderPage(), NOT navigate(), because ~15 call sites
+   re-render a page directly and submitAddPayment() is one of them. So this is
+   a shell capability, not a payments feature
+   — any page that declares the flag gets it. index.html is NOT restructured:
+   #main is already a flex column (#header / #content), and the task header and
+   action bar are sticky children of #content instead. That keeps one scroll
+   container and one DOM shape for every page.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The global header goes away, and #content stops padding itself — in task
+   mode the page owns its own gutters so the header and action bar can run
+   full-bleed to the border, as the mockup draws them. */
+body.chrome-task #header  { display: none; }
+body.chrome-task #content { padding: 0; display: flex; flex-direction: column; }
+
+.tsk-head {
+    position: sticky; top: 0; z-index: 30;
+    flex: none; height: 50px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 0 20px;
+    background: var(--card); border-bottom: 1px solid var(--border);
+}
+.tsk-head__l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tsk-head__r { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* The way out. A real <button>: this is the primary escape from a task page
+   and it has to be reachable from the keyboard. */
+.tsk-back {
+    width: 28px; height: 28px; border-radius: 6px; flex: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text2);
+    transition: var(--transition);
+}
+.tsk-back:hover { background: var(--dash-sunk); color: var(--text); }
+.tsk-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tsk-crumb      { display: flex; align-items: center; gap: 8px; min-width: 0;
+                  font-size: 13px; color: var(--text3); }
+.tsk-crumb a    { cursor: pointer; color: inherit; text-decoration: none; border-radius: 5px; }
+.tsk-crumb a:hover { color: var(--accent-strong); }
+.tsk-crumb a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tsk-crumb b    { color: var(--text); font-weight: 600; }
+.tsk-crumb .sep { color: var(--border2); }
+
+/* Which record this is, and what state it is in. */
+.tsk-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 24px; padding: 0 10px; border-radius: 999px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-size: 11.5px; font-weight: 600; color: var(--text2);
+    font-variant-numeric: tabular-nums;
+}
+.tsk-chip--state::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber); flex: none;
+}
+
+/* The scrolling middle. flex:1 0 auto is what pins the action bar to the
+   bottom of the viewport when the form is shorter than the screen — without
+   it, `position:sticky` would leave the bar floating directly under the last
+   field on a short form. */
+.tsk-body { flex: 1 0 auto; padding: 16px 20px 20px; }
+
+/* The action bar. Sticky, not fixed: fixed would need to know the sidebar's
+   width and would drift the moment the sidebar collapses. */
+.tsk-foot {
+    position: sticky; bottom: 0; z-index: 30;
+    flex: none; min-height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 9px 20px;
+    background: var(--card); border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 14px rgba(21, 34, 56, .05);
+}
+body:not(.light-theme) .tsk-foot { box-shadow: 0 -4px 14px rgba(0, 0, 0, .30); }
+
+.tsk-foot__note {
+    display: flex; align-items: center; gap: 7px; min-width: 0;
+    font-size: 12px; color: var(--text3);
+}
+.tsk-foot__note b { color: var(--text2); font-weight: 700; }
+.tsk-foot__note::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text3); flex: none;
+}
+.tsk-foot__acts { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+/* Narrow windows: the record chips are the first thing to go — they are
+   context, and the crumb already says where you are. */
+@media (max-width: 900px) {
+    .tsk-head__r { display: none; }
+    .tsk-body    { padding: 14px 14px 18px; }
+    .tsk-head, .tsk-foot { padding: 0 14px; }
+    .tsk-foot    { padding: 9px 14px; }
 }

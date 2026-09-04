@@ -5,58 +5,118 @@
 
 :root {
     /* ── CLAUDE DARK (default) ──────────────────────────────────────────── */
-    --bg:            #0f0f0f;
-    --bg2:           #161616;
-    --bg3:           #1e1e1e;
-    --bg4:           #282828;
-    --sidebar-bg:    #111111;
-    --card:          #161616;
-    --card2:         #1e1e1e;
+    /* Repointed 2026-09-03 onto the cool-navy ladder derived in tokens.css, so
+       the legacy names every screen still reads resolve to the same system the
+       new tokens do. Neutral grey next to a #2451D6 accent read as dirty; the
+       same steps in the accent's own hue family do not. */
+    /* Repointed WARM 2026-09-04, on the owner's call (brief section 7: the dark
+       mode should follow the Anthropic register, not a generic black SaaS one).
+       The ladder that was here was cool navy, derived as the inverse of the
+       light mockups so the two themes would read as one product. That reasoning
+       was sound and is now overridden deliberately: the two themes stay one
+       product through SHAPE, TYPE and the shared accent, not through hue.
+
+       Each rung keeps the LIGHTNESS RELATIONSHIP of the navy rung it replaces,
+       within 1.5 L* — this is a hue change, not a contrast change, so nothing
+       that depended on surface separation regresses. CLAUDE.md rule 6 (the
+       ladder must span more than 8 lightness points): navy spanned 13.5,
+       warm spans 12.7. Still comfortably clear.
+
+       Values are the Anthropic teardown's canvas / card / feature / hairline,
+       extended to the eight rungs this app needs (the extract declares four;
+       this app has progress tracks and hover grounds it does not). */
+    --bg:            #181715;
+    --bg2:           #1F1E1B;
+    --bg3:           #252320;
+    --bg4:           #2F2C28;
+    --sidebar-bg:    #131211;
+    --card:          #1F1E1B;
+    --card2:         #252320;
     --border:        rgba(255, 255, 255, 0.08);
-    --border2:       #3a3a3a;
+    --border2:       #35322D;
 
     /* Accent tokens (--gold/--royal) removed in Phase 1 §5.5b — the app now
        uses the single violet --accent set from tokens.css. */
 
     /* Semantic colours */
-    --teal:          #44e2cd;
-    --teal-dim:      rgba(68, 226, 205, 0.10);
-    --red:           #ffb4ab;
-    --red-dim:       rgba(255, 180, 171, 0.12);
-    --green:         #45dfa4;
-    --green-dim:     rgba(69, 223, 164, 0.10);
-    --amber:         #fbbf24;
-    --amber-dim:     rgba(251, 191, 36, 0.12);
-    --blue:          #60a5fa;
-    --blue-dim:      rgba(96, 165, 250, 0.12);
-    --purple:        #c084fc;
-    --purple-dim:    rgba(192, 132, 252, 0.12);
+    /* --red/--green/--amber/--blue now resolve to the SAME hues as
+       --danger-fg/--success-fg/--warning-fg/--info-fg in tokens.css. They were
+       a second, brighter palette saying the same things, which is how one
+       screen's "overdue" ended up a different red from another's. */
+    --teal:          #44d3c4;
+    --teal-dim:      rgba(68, 211, 196, 0.12);
+    /* Aliased to the semantic set for the same reason as the light block far
+       below: these are the names the app renders with, and a second copy of a
+       value is a second thing to forget. The dark values were already correct
+       and are UNCHANGED — --danger-fg is #F0796A, --success-fg #3FBF83,
+       --warning-fg #D9A441 in this theme, so this swap moves no pixel. It
+       removes the possibility of drift, which is what actually bit. */
+    --red:           var(--danger-fg);
+    --red-dim:       rgba(240, 121, 106, 0.14);
+    --green:         var(--success-fg);
+    --green-dim:     rgba(63, 191, 131, 0.14);
+    --amber:         var(--warning-fg);
+    --amber-dim:     rgba(217, 164, 65, 0.14);
+    --blue:          #7BA0FF;
+    --blue-dim:      rgba(123, 160, 255, 0.14);
+    --purple:        #9B8CF0;
+    --purple-dim:    rgba(155, 140, 240, 0.14);
 
     /* Text */
-    --text:          #e5e2e1;
-    --text2:         #d7c3b5;
-    --text3:         #a08d81;
+    /* WARM AGAIN, and the comment that used to sit here explains why better
+       than a new one could. It read: "These were WARM (#d7c3b5, #a08d81) — a
+       leftover from the Anthropic ivory pass. Warm secondary text on a navy
+       card reads as a stain, so they are now the cool inverse of the mockups'
+       --ink-soft / --ink-faint."
 
-    /* Typography */
-    --font:          'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif;
-    --font-display:  'Inter', 'Outfit', system-ui, sans-serif;
+       That was correct, and it is exactly why the inks turn back now the ground
+       is warm: the stain works in both directions, and cool ink on a warm card
+       is the same mistake mirrored. It also measures better — cool --text3
+       #7F8AA3 is 4.82:1 on the warm ground, the warm #A09D96 is 6.16:1. */
+    --text:          #FAF9F5;
+    --text2:         #D8D5CD;
+    --text3:         var(--text-tertiary);   /* #7F8AA3, 4.92:1 on --card */
+
+    /* Typography -- the type system from the Add Student design
+       (claude.ai/design "Add student form mockups"), bundled in
+       vendor/fonts.css because this app runs with no network.
+
+       Barlow for body, Barlow Condensed for display, exactly as that design's
+       --font-body / --font-heading. Inter and Outfit stay in the stack behind
+       them: they are still bundled, so a face that fails to load falls to a
+       real bundled font rather than to whatever the OS happens to have.
+
+       --font-mono is unchanged and stays JetBrains Mono -- it is the CODE
+       face (licence keys, machine ids), which is a different job from either
+       body text or numerals. */
+    --font:          'Barlow', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-display:  'Barlow Condensed', 'Barlow', 'Inter', system-ui, sans-serif;
     --font-mono:     'JetBrains Mono', 'Courier New', monospace;
 
     /* Shape */
-    --radius:        14px;
-    --radius-sm:     8px;
+    /* The reference system is 8px, with 6-7px on controls. 14px cards read as
+       consumer software beside it; this is the single change that most moves
+       the app from "app" to "operations console". */
+    --radius:        8px;
+    --radius-sm:     6px;
 
     /* Shadows */
-    --shadow:          0 4px 32px rgba(0, 0, 0, 0.6);
+    --shadow:          0 4px 16px rgba(0, 0, 0, 0.45);
     --shadow-accent:     0 4px 20px rgba(0, 0, 0, 0.35);
     --shadow-royal:    0 4px 24px rgba(0, 0, 0, 0.4);
     --shadow-indigo-sm: 0 2px 12px rgba(0, 0, 0, 0.35);
     --glow-indigo:     0 0 16px rgba(0, 0, 0, 0.2);
     --glow-gold:       0 0 20px rgba(0, 0, 0, 0.3);
 
-    /* Layout */
-    --sidebar-w:     260px;
-    --header-h:      48px;
+    /* Layout — DEAD VALUES REMOVED 2026-09-04.
+
+       This said `--sidebar-w: 260px; --header-h: 48px;` and had said so for a
+       long time. chrome.css declares both at the same specificity and loads
+       AFTER this file, so the app's real values are 212px and 66px and these
+       two never reached a pixel. They are worse than harmless: every reader of
+       this file, which is the first place anyone looks, learned a header height
+       the app does not have. The live values live in chrome.css beside the
+       chrome they describe. */
 
     /* Motion — avoid 'all', specify properties for performance */
     --transition:          background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
@@ -64,18 +124,17 @@
 
     --font-icon: 'Material Symbols Rounded';
 
-    /* ── SEMANTIC DESIGN TOKENS (single source of truth — use these in new/edited code) ── */
-    --background:         var(--bg);
-    --surface:             var(--card);
-    --surface-secondary:   var(--card2);
-    --border-token:        var(--border);
-    --text-primary:        var(--text);
-    --text-secondary:      var(--text2);
-    --muted:               var(--text3);
-    --primary:             var(--accent);
-    --success:             var(--green);
-    --danger:              var(--red);
-    --warning:             var(--amber);
+    /* ── SEMANTIC DESIGN TOKENS — MOVED TO tokens.css, 2026-09-04 ────────────
+       These eleven were declared here under the header "single source of truth",
+       while tokens.css — the file CLAUDE.md names as the bound design system —
+       declared the same eleven names. Two files cannot both be the source; the
+       cascade silently picked one, and which one changed per token depending on
+       whether tokens.css also re-declared it on body.light-theme.
+
+       Both halves now live together in tokens.css. Nothing about their VALUES
+       changed: they are the same var() expressions pointing at the same --bg /
+       --card / --text / --accent / --green names, which are still declared in
+       this file. Only the ownership moved. */
 
     /* ── TYPOGRAPHY SCALE ── */
     --fs-display:   clamp(32px, 2.6vw, 38px); /* KPI / hero numbers */
@@ -115,38 +174,64 @@ body.no-transition *::after {
    text on white is about 2.5:1; #059669 is the guide's own success-text.
    ══════════════════════════════════════════════════════════════════════════ */
 body.light-theme {
-    --bg:            #f4f7fc;   /* workspace ground */
-    --bg2:           #eef2f9;
-    --bg3:           #e8edf5;   /* progress-track / sunk surfaces */
-    --bg4:           #dde4ef;
-    --sidebar-bg:    #071a3a;
-    --card:          #ffffff;
-    --card2:         #f8fafc;
-    --border:        #e2e8f0;
-    --border2:       #cbd5e1;
-    --divider:       #eef2f7;   /* soft row separator (guide §19) */
+    /* Verbatim from the reference mockups: --bg, --surface, --surface-sunk,
+       --border, --border-strong and --sidebar are theirs. --bg2/--bg4 sit
+       between their steps because the app needs two more rungs than the
+       mockups declare (progress tracks, hover grounds). */
+    --bg:            #F5F6F9;   /* workspace ground — their --bg */
+    --bg2:           #EEF1F6;
+    --bg3:           #E7EBF2;   /* progress-track / sunk surfaces */
+    --bg4:           #DCE1EA;
+    --sidebar-bg:    #131B2E;   /* their --sidebar */
+    --card:          #FFFFFF;
+    --card2:         #FAFBFD;   /* their --surface-sunk */
+    --border:        #E4E7EE;   /* their --border */
+    --border2:       #D3D8E2;   /* their --border-strong */
+    --divider:       #EDEFF4;   /* soft row separator (guide §19) */
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
-    --teal:          #0891b2;
-    --teal-dim:      rgba(8, 145, 178, 0.08);
-    --red:           #dc2626;
-    --red-dim:       rgba(239, 68, 68, 0.08);
-    --green:         #059669;
-    --green-dim:     rgba(16, 185, 129, 0.10);
-    --amber:         #d97706;
-    --amber-dim:     rgba(245, 158, 11, 0.10);
-    --blue:          #2563eb;
-    --blue-dim:      rgba(37, 99, 235, 0.10);
-    --purple:        #7c3aed;
-    --purple-dim:    rgba(139, 92, 246, 0.10);
+    /* Their --success / --danger / --warn, and the accent for --blue.
 
-    --text:          #0f172a;
-    --text2:         #334155;
-    --text3:         #64748b;
+       THESE ARE THE TOKENS THE APP ACTUALLY RENDERS WITH, and that is why they
+       now read from the semantic set instead of repeating its values.
+
+       The count is the whole argument: --green is used 128 times and
+       --success-fg 7; --amber 49 against --warning-fg 8; --text3 552 against
+       --text-tertiary 5. When the semantic tokens were corrected for contrast
+       on 2026-09-03, these were left holding the old values — so every settled
+       figure, every amount due and every line of metadata in light mode kept
+       failing AA while the token audit reported green. Two names for one idea
+       will always drift; the fix is one name, not two careful people.
+
+       Same-scope aliasing is safe: these resolve on body.light-theme, and so do
+       their targets (tokens.css). The freeze bug that started all of this came
+       from aliasing ACROSS a theme boundary — :root reaching for a value that
+       body overrides — which is a different thing and still forbidden. */
+    --teal:          #0E7D87;   /* was #0F8A94 — 3.82:1 on the workspace ground */
+    --teal-dim:      rgba(14, 125, 135, 0.08);
+    --red:           var(--danger-fg);
+    --red-dim:       rgba(192, 64, 47, 0.08);
+    --green:         var(--success-fg);
+    --green-dim:     rgba(29, 128, 84, 0.09);
+    --amber:         var(--warning-fg);
+    --amber-dim:     rgba(149, 105, 26, 0.09);
+    --blue:          #2451D6;
+    --blue-dim:      rgba(36, 81, 214, 0.08);
+    --purple:        #5B4BC4;
+    --purple-dim:    rgba(91, 75, 196, 0.09);
+
+    --text:          #152238;   /* their --ink */
+    --text2:         #5B647A;   /* their --ink-soft */
+    /* WAS #8A93A6, the mockups' --ink-faint, at 2.86:1 on the workspace ground.
+       This is the single most-read token in the app — 552 uses, under every
+       timestamp, room subtitle, table subtext and helper line — and it was the
+       one that made light mode look washed out. It now follows --text-tertiary
+       so there is one faint-ink value, not two. */
+    --text3:         var(--text-tertiary);
 
     /* Guide §21 — subtle and professional, never heavy. */
-    --shadow:           0 8px 24px rgba(15, 23, 42, 0.045);
+    --shadow:           0 8px 24px rgba(21, 34, 56, 0.10);
     --shadow-elevated:  0 14px 35px rgba(15, 23, 42, 0.08);
     --shadow-accent:      0 5px 14px rgba(37, 99, 235, 0.20);
     --shadow-royal:     0 12px 30px rgba(15, 23, 42, 0.075);
@@ -197,7 +282,11 @@ body.light-theme .header {
 body.light-theme input,
 body.light-theme select,
 body.light-theme textarea {
-    background: #ffffff;
+    /* background-COLOR, not the shorthand: these rules match a <select>
+       whose chevron is a background-image (select.form-control, and
+       .arm-input > select). The shorthand resets background-image to
+       none, so the arrow vanished in light mode and only there. */
+    background-color: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -209,7 +298,7 @@ body.light-theme textarea:focus {
 }
 body.light-theme .modal-box,
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
@@ -224,7 +313,9 @@ body.light-theme table tbody td          { border-bottom-color: var(--border); }
 body.light-theme .btn-primary {
     background: var(--accent);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    color: #fff;
+    /* Same value it always was — --text-on-accent is #FFFFFF in light — but
+       read from the token so the button has ONE source of ink across themes. */
+    color: var(--text-on-accent);
 }
 body.light-theme .btn-primary:hover { background: var(--accent-strong); }
 
@@ -262,7 +353,7 @@ body.light-theme .ftab.active {
     border-color: rgba(59,130,246, 0.2);
 }
 body.light-theme .form-control {
-    background: #ffffff;
+    background-color: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -275,12 +366,12 @@ body.light-theme .settings-tab.active {
     color: var(--accent);
 }
 body.light-theme .arch-hb {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
 }
 body.light-theme .stat-card::after {
@@ -542,7 +633,7 @@ input, select, textarea { font-family: var(--font); }
 .sb-logo-text { flex: 1; min-width: 0; }
 
 .sb-logo-text .name {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 800;
     color: var(--text);
@@ -963,18 +1054,23 @@ input, select, textarea { font-family: var(--font); }
 
 .btn:active { transform: scale(0.97); }
 
-/* Primary — Indigo gradient */
+/* Primary. Was a three-stop hardcoded Tailwind gradient — the app's actual
+   primary button in 14 modules, and after the accent repaint the most-clicked
+   surface in the product was the last one still wearing the old blue.
+
+   It is a FLAT accent now, not a gradient. The reference system paints its
+   primary as `background:var(--accent)` with `--accent-ink` on hover and no
+   lift, no glow, no text-shadow; a gradient plus a translate plus a shadow is
+   the "premium = more decoration" reading the brief rules out. */
 .btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
-    color: #fff;
-    box-shadow: var(--shadow-royal);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    background: var(--accent);
+    color: var(--text-on-accent);
+    box-shadow: none;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%);
-    transform: translateY(-2px);
-    box-shadow: var(--glow-indigo);
+    background: var(--accent-strong);
+    box-shadow: none;
 }
 
 /* Gold variant — for key hostel actions */
@@ -1610,7 +1706,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text);
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     flex-shrink: 0;
 }
 
@@ -2784,7 +2880,7 @@ body.light-theme #login-card {
     margin-bottom: 6px;
 }
 .login-app-name {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 26px;
     font-weight: 800;
     color: var(--text);
@@ -2954,7 +3050,7 @@ body.light-theme .login-warden-btn.selected .login-warden-name {
 }
 
 body.light-theme #login-input {
-    background: #ffffff;
+    background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
@@ -2968,7 +3064,7 @@ body.light-theme #login-input {
 body.light-theme #login-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px rgba(56,189,248,0.08);
-    background: #ffffff;
+    background: var(--card);
 }
 
 #login-input::placeholder { color: var(--text3); }
@@ -3191,7 +3287,7 @@ body.light-theme .stat-card.glass {
     padding: 2px 7px;
     border-radius: 20px;
     margin-top: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
 }
 
 .stat-trend.up   { background: rgba(52,211,153,0.12);  color: var(--green); border: 1px solid rgba(52,211,153,0.2);  }
@@ -3400,9 +3496,9 @@ body.light-theme .stat-card.glass {
 .arch-t-badge-val,
 .arch-ms-val,
 .sb-stat .v {
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.5px;
+    letter-spacing: var(--ant-num-track);
 }
 
 /* PKR currency prefix */
@@ -3436,7 +3532,7 @@ body.light-theme .stat-card.glass {
     text-transform: uppercase;
 }
 .money-value .money-amt {
-    font-family: var(--font-mono);   /* distinct numeric font — money-grade, tabular */
+    font-family: var(--ant-num-font);   /* the numeral face, like every other figure in the app */
     font-weight: var(--fw-display);
     letter-spacing: -0.02em;
     color: inherit;
@@ -3684,7 +3780,7 @@ body.light-theme #main {
 }
 
 body.light-theme .stat-card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 20px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3693,7 +3789,7 @@ body.light-theme .stat-card:hover {
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
@@ -3703,12 +3799,12 @@ body.light-theme #header {
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 1px 0 0 var(--border), 4px 0 24px rgba(0,0,0,0.04);
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 0 0 1px var(--border);
 }
 
@@ -3973,7 +4069,7 @@ body.light-theme ::-webkit-scrollbar-thumb { background: #d7c3b5; }
 }
 
 body.light-theme #sidebar {
-    background: #ffffff;
+    background: var(--card);
     border-right: 1px solid #d7c3b5;
     box-shadow: 2px 0 16px rgba(0,0,0,0.04);
 }
@@ -4073,7 +4169,7 @@ body.light-theme #content { background: #f3f3f3; }
 }
 
 body.light-theme .card {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
@@ -4166,7 +4262,10 @@ body.light-theme .card {
     font-weight: var(--fw-display);
     color: var(--text);
     line-height: 1;
-    letter-spacing: -0.5px;
+    /* A figure, so it follows the numeral tracking token like every other
+       one -- this rule sets the tracking but inherits tabular-nums from the
+       group rule above, which is why the sweep could not see it. */
+    letter-spacing: var(--ant-num-track);
     margin-bottom: 4px;
 }
 
@@ -4275,14 +4374,14 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 .form-control::placeholder { color: var(--text3); opacity: 0.6; }
 
 body.light-theme .form-control {
-    background: #ffffff;
+    background-color: var(--card);
     border-color: #d7c3b5;
     color: #1c1b1b;
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
-    background: #ffffff;
+    background-color: var(--card);
 }
 
 /* ── FILTER BAR — Stitch ─────────────────────────────────────────────────── */
@@ -4295,7 +4394,7 @@ body.light-theme .form-control:focus {
 }
 
 body.light-theme .filter-bar {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4345,7 +4444,7 @@ body.light-theme .filter-bar {
 }
 
 .modal-title {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.2px;
@@ -4353,7 +4452,7 @@ body.light-theme .filter-bar {
 }
 
 body.light-theme .modal {
-    background: #ffffff;
+    background: var(--card);
     border: 1px solid #d7c3b5;
     box-shadow: 0 16px 48px rgba(0,0,0,0.12);
 }
@@ -4363,24 +4462,25 @@ body.light-theme .modal-header {
     border-bottom: 1px solid #d7c3b5;
 }
 
-/* ── BUTTONS — Stitch gradient system ────────────────────────────────────── */
-.btn-primary {
-    background: linear-gradient(135deg, var(--accent-strong) 0%, #1d4ed8 100%);
-    color: #fff;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
+/* ── BUTTONS — the Stitch gradient system, REMOVED 2026-09-03 ─────────────
 
-.btn-primary:hover {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-}
+   Three .btn-primary rules lived here: a gradient fill with a hardcoded #fff
+   label, a text-shadow and a 12px shadow; a hover that gradient-swapped and
+   lifted the button 2px; and a light-theme gradient. Every one of them was
+   already dead — chrome.css:416 and :423 load afterwards and set background,
+   colour, box-shadow, text-shadow and transform on the same selectors — so
+   deleting them changes no rendered pixel. Verified by the full suite and the
+   responsive floor.
 
-body.light-theme .btn-primary {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
+   They are deleted rather than left dead because they were a loaded gun: the
+   moment anyone reorders the <link> tags in index.html, the app grows gradient
+   buttons with drop-shadowed text and a 2px hover lift, none of which this
+   design system permits. A dead rule that contradicts the system is worse than
+   no rule, because it reads as intent to the next person.
+
+   The surviving definitions are style.css:1008 (token-correct, the fallback if
+   chrome.css ever goes) and chrome.css:416 (what actually renders). Both now
+   take their label from var(--text-on-accent). */
 
 /* ── ROOM CARDS — Stitch surface style ───────────────────────────────────── */
 .room-card {
@@ -4401,7 +4501,7 @@ body.light-theme .btn-primary {
 .room-card.vacant   { border-color: rgba(0,0,0,0.1); }
 .room-card.maintenance { border-color: rgba(255,180,171,0.20); }
 
-body.light-theme .room-card { background: #ffffff; border: 1px solid #d7c3b5; }
+body.light-theme .room-card { background: var(--card); border: 1px solid #d7c3b5; }
 body.light-theme .room-card:hover { background: #f8f7f6; }
 
 /* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
@@ -4415,7 +4515,7 @@ body.light-theme .room-card:hover { background: #f8f7f6; }
 }
 
 body.light-theme .toast {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4427,7 +4527,7 @@ body.light-theme .toast {
 }
 
 body.light-theme .settings-topnav-wrap {
-    background: #ffffff;
+    background: var(--card);
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     border-bottom-color: var(--border);
 }
@@ -4440,9 +4540,9 @@ body.light-theme .settings-tab.active::after {
     background: var(--accent);
 }
 
-/* ── PAGE TITLE — Outfit display style ───────────────────────────────────── */
+/* ── PAGE TITLE — display face, from --font-display ──────────────────────── */
 .hdr-left .page-title {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 700;
     letter-spacing: -0.2px;
@@ -4521,7 +4621,7 @@ body.light-theme .arch-month-card,
 body.light-theme .arch-s-card,
 body.light-theme .arch-ov-card,
 body.light-theme .dash-card {
-    background: #ffffff;
+    background: var(--card);
     border-color: #d7c3b5;
 }
 
@@ -4549,7 +4649,7 @@ h1, h2, h3,
 .modal-title,
 .stat-value,
 .sb-stat .v {
-    font-family: 'Outfit', var(--font-display);
+    font-family: var(--font-display);
 }
 
 /* ── STAT TREND CHIP ─────────────────────────────────────────────────────── */
@@ -4562,7 +4662,7 @@ h1, h2, h3,
     padding: 2px 7px;
     border-radius: var(--r-full);
     margin-top: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
 }
 
 .stat-trend.up   { background: rgba(69,223,164,0.12);  color: var(--green); border: 1px solid rgba(69,223,164,0.2); }
@@ -4816,7 +4916,7 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 
 /* ── KPI amounts: crisp fixed size, never clipped (cards wrap responsively) ───── */
 .kpi-amt {
-    font-family: var(--font-mono);
+    font-family: var(--ant-num-font);
     font-variant-numeric: tabular-nums;
     font-size: 22px;
     white-space: nowrap;

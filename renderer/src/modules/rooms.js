@@ -177,8 +177,10 @@ function renderRooms() {
         ${nVac?`<span class="rms-card__vac" title="${nVac} of these beds ${nVac===1?'is':'are'} on notice and will free up">${nVac} vacating</span>`:''}
       </div>
       <div class="rms-card__body ${stateHue}">
-        <div class="rms-card__num">#${escHtml(String(r.number))}</div>
-        <span class="rms-card__type">${escHtml(type.name)}</span>
+        <div class="rms-card__head">
+          <span class="rms-card__num">#${escHtml(String(r.number))}</span>
+          <span class="rms-card__type">${escHtml(type.name)}</span>
+        </div>
 
         <div class="rms-row">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/></svg>
@@ -315,7 +317,11 @@ function renderRooms() {
         ${sortOpt('floor|asc','Floor ↑')}
       </select>
 
-      <button class="rms-btn" style="margin-left:auto" onclick="exportRoomsCSV()" title="Export the current list to CSV">
+      <button class="rms-btn rms-btn--go" style="margin-left:auto" onclick="showBulkRoomModal()" title="Create a whole floor of rooms at once">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M17.5 14.5v6"/><path d="M14.5 17.5h6"/></svg>
+        Bulk Add
+      </button>
+      <button class="rms-btn" onclick="exportRoomsCSV()" title="Export the current list to CSV">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
         CSV
       </button>
@@ -596,6 +602,221 @@ async function submitAddRoom() {
   DB.rooms.sort((a,b)=>cmpRoomNo(a.number,b.number));
   logActivity('Room Added', 'Room #'+num+' ('+floor+' Floor)', 'Room');
   await saveDB(); closeModal(); renderPage('rooms'); toast('Room added successfully','success');
+}
+
+/* ══ BULK ROOM CREATION ══════════════════════════════════════════════════════
+
+   A 40-room hostel set up one modal at a time is 40 modals, and that is the
+   very first thing a new customer does with this app. This adds a whole floor
+   in one pass.
+
+   THE PLANNER IS SEPARATE FROM THE COMMIT on purpose. bulkRoomPlan() is pure --
+   it reads DB.rooms and returns what WOULD happen -- so the preview the warden
+   approves and the batch that actually gets written are computed by the same
+   function, and there is no second implementation to drift out of step.
+
+   COLLISIONS ARE SHOWN, NEVER SILENT. submitAddRoom() rejects a duplicate
+   outright, which is right for one room and useless for sixty: asking for 1-40
+   when room 6 already exists must not fail the whole batch, and must not
+   quietly skip 6 either, because nobody would notice the gap until a student
+   had nowhere to sleep. The plan lists what it will skip before anything is
+   written.                                                                    */
+
+/* A typo in the "to" box should not be able to create ten thousand rooms. */
+const BULK_ROOM_MAX = 200;
+
+/* How many numbers to name individually in the preview before summarising. */
+const BULK_ROOM_PREVIEW = 48;
+
+/**
+ * What a bulk add WOULD do. Pure: reads DB.rooms, writes nothing.
+ * Returns { create:[numbers], skip:[numbers], error:'' }.
+ */
+function bulkRoomPlan(o) {
+  o = o || {};
+  const out = { create: [], skip: [], error: '' };
+  const prefix  = String(o.prefix == null ? '' : o.prefix).trim();
+  const rawFrom = String(o.from   == null ? '' : o.from).trim();
+  const rawTo   = String(o.to     == null ? '' : o.to).trim();
+  const from = parseInt(rawFrom, 10);
+  const to   = parseInt(rawTo, 10);
+
+  if (!rawFrom || !rawTo || isNaN(from) || isNaN(to)) {
+    out.error = 'Enter a start and an end number.'; return out;
+  }
+  if (from < 0 || to < 0) { out.error = 'Room numbers cannot be negative.'; return out; }
+  if (to < from)          { out.error = 'The end number comes before the start number.'; return out; }
+  const span = to - from + 1;
+  if (span > BULK_ROOM_MAX) {
+    out.error = 'That is ' + span + ' rooms. The most this adds at once is ' + BULK_ROOM_MAX + '.';
+    return out;
+  }
+
+  /* Zero padding is inferred from how the start was typed -- "01" means the
+     hostel numbers its rooms 01..12, "1" means 1..12. One less control to
+     explain, and it matches what the warden already wrote. */
+  const pad = /^0\d+$/.test(rawFrom) ? rawFrom.length : 0;
+
+  // The same comparison submitAddRoom uses, so bulk and single agree on what
+  // counts as a duplicate.
+  const taken = new Set((DB.rooms || []).map(r => String(r.number).trim().toUpperCase()));
+  const seen  = new Set();
+
+  for (let n = from; n <= to; n++) {
+    let num = String(n);
+    if (pad) num = num.padStart(pad, '0');
+    if (prefix) num = prefix + ' ' + num;
+    num = num.trim().toUpperCase();
+    if (taken.has(num) || seen.has(num)) { out.skip.push(num); continue; }
+    seen.add(num);
+    out.create.push(num);
+  }
+  return out;
+}
+
+function showBulkRoomModal() {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const typeOpts  = DB.settings.roomTypes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+  const floorOpts = DB.settings.floors.map(f => `<option value="${escHtml(f)}">${escHtml(f)} Floor</option>`).join('');
+
+  showModal('modal-lg', roomModalTitle('doorOpen', 'Add Rooms in Bulk',
+    'Create a whole floor at once, then edit any room individually afterwards'), `
+    <div class="arm">
+      <div class="arm-guide">
+        <span class="arm-guide__ico">${icon('info','sm')}</span>
+        <div>
+          <div class="arm-guide__t">How the numbering works</div>
+          <div class="arm-guide__b">Rooms run from the start to the end, inclusive. Start at
+            <b>01</b> to keep a leading zero (01, 02, 03…); start at <b>1</b> for plain numbers.
+            Add an optional prefix for a wing — <b>A</b> gives A 01, A 02. Any number that already
+            exists is left exactly as it is.</div>
+        </div>
+      </div>
+
+      <div class="arm-split">
+        <div class="arm-card">
+          <label class="arm-label" for="f-brk-floor">Floor <i>*</i></label>
+          <div class="arm-input dh-blue">
+            <span class="arm-input__ico">${icon('building','sm')}</span>
+            <select id="f-brk-floor" onchange="syncBulkRoomPreview()">${floorOpts}</select>
+          </div>
+          <label class="arm-label" for="f-brk-type" style="margin-top:16px">Room Type <i>*</i></label>
+          <div class="arm-input dh-violet">
+            <span class="arm-input__ico">${icon('bed','sm')}</span>
+            <select id="f-brk-type" onchange="syncBulkRoomPreview()">${typeOpts}</select>
+          </div>
+        </div>
+
+        <div class="arm-card">
+          <label class="arm-label" for="f-brk-prefix">Prefix <span class="arm-opt">(optional)</span></label>
+          <div class="arm-input dh-amber">
+            <span class="arm-input__ico">${icon('doorOpen','sm')}</span>
+            <input id="f-brk-prefix" maxlength="4" autocomplete="off" placeholder="e.g. A"
+                   oninput="formatRoomNumber(this);syncBulkRoomPreview()">
+          </div>
+          <div class="brk-range">
+            <div>
+              <label class="arm-label" for="f-brk-from">From <i>*</i></label>
+              <div class="arm-input dh-green">
+                <input id="f-brk-from" autocomplete="off" placeholder="01" maxlength="5"
+                       inputmode="numeric" oninput="syncBulkRoomPreview()">
+              </div>
+            </div>
+            <div>
+              <label class="arm-label" for="f-brk-to">To <i>*</i></label>
+              <div class="arm-input dh-green">
+                <input id="f-brk-to" autocomplete="off" placeholder="12" maxlength="5"
+                       inputmode="numeric" oninput="syncBulkRoomPreview()">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arm-card">
+        <label class="arm-label">Preview</label>
+        <div id="f-brk-preview" class="brk-preview"></div>
+      </div>
+    </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">${icon('close','sm')} Cancel</button>
+     <button class="btn btn-primary" id="f-brk-go" onclick="submitBulkRooms()" disabled>${icon('plus','sm')} Add Rooms</button>`);
+  syncBulkRoomPreview();
+}
+
+/** Read the form and run the planner against the database as it stands now. */
+function _bulkRoomRead() {
+  const v = id => (document.getElementById(id) || {}).value || '';
+  return bulkRoomPlan({ prefix: v('f-brk-prefix'), from: v('f-brk-from'), to: v('f-brk-to') });
+}
+
+function syncBulkRoomPreview() {
+  const box = document.getElementById('f-brk-preview');
+  const go  = document.getElementById('f-brk-go');
+  if (!box) return;
+  const plan = _bulkRoomRead();
+  const type = DB.settings.roomTypes.find(t => t.id === ((document.getElementById('f-brk-type') || {}).value));
+  const cap  = (type && type.capacity) || 0;
+
+  const stop = msg => {
+    box.innerHTML = '<div class="brk-msg is-bad">' + escHtml(msg) + '</div>';
+    if (go) go.disabled = true;
+  };
+  if (plan.error)          return stop(plan.error);
+  if (!plan.create.length) return stop('Every room in that range already exists — nothing to add.');
+
+  const shown = plan.create.slice(0, BULK_ROOM_PREVIEW);
+  const more  = plan.create.length - shown.length;
+  const beds  = plan.create.length * cap;
+
+  box.innerHTML =
+    '<div class="brk-sum"><b>' + plan.create.length + '</b> room' + (plan.create.length > 1 ? 's' : '') +
+      (cap ? ' · <b>' + beds + '</b> bed' + (beds !== 1 ? 's' : '') : '') +
+      (type ? ' · ' + escHtml(type.name) : '') + '</div>' +
+    '<div class="brk-chips">' +
+      shown.map(n => '<span class="brk-chip">' + escHtml(n) + '</span>').join('') +
+      (more > 0 ? '<span class="brk-chip is-more">+' + more + ' more</span>' : '') +
+    '</div>' +
+    (plan.skip.length
+      ? '<div class="brk-msg is-warn"><b>' + plan.skip.length + '</b> already exist' +
+        (plan.skip.length > 1 ? '' : 's') + ' and will be left alone: ' +
+        escHtml(plan.skip.slice(0, 12).join(', ')) + (plan.skip.length > 12 ? ' …' : '') + '</div>'
+      : '');
+  if (go) go.disabled = false;
+}
+
+async function submitBulkRooms() {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const floor  = (document.getElementById('f-brk-floor') || {}).value || '';
+  const typeId = (document.getElementById('f-brk-type')  || {}).value || '';
+  const type   = DB.settings.roomTypes.find(t => t.id === typeId);
+  if (!floor || !type) { toast('Pick a floor and a room type', 'error'); return; }
+
+  /* Recomputed rather than read back off the preview: DB.rooms can change
+     under an open modal, and the duplicate check has to be against the
+     database as it is at the moment of writing. */
+  const plan = _bulkRoomRead();
+  if (plan.error)          { toast(plan.error, 'error'); return; }
+  if (!plan.create.length) { toast('Nothing to add — every room in that range exists', 'error'); return; }
+
+  const rent = Number(type.defaultRent) || 0;
+  for (const num of plan.create) {
+    DB.rooms.push({ id: 'room_' + uid(), number: num, floor, typeId, rent,
+                    studentIds: [], amenities: ROOM_AMENITY_DEFAULTS.slice(), notes: '' });
+  }
+  /* The same sort submitAddRoom applies, for the same reason: DB.rooms itself
+     is ordered, so every reader inherits the order. */
+  DB.rooms.sort((a, b) => cmpRoomNo(a.number, b.number));
+
+  // One log line for the batch. Sixty is noise nobody can read past.
+  logActivity('Rooms Added', plan.create.length + ' rooms on ' + floor + ' Floor (' +
+    plan.create[0] + '-' + plan.create[plan.create.length - 1] + ')', 'Room');
+
+  await saveDB();
+  closeModal();
+  renderPage('rooms');
+  toast(plan.create.length + ' rooms added' +
+    (plan.skip.length ? ' — ' + plan.skip.length + ' already existed and were left alone' : ''),
+    'success');
 }
 
 function showEditRoomModal(id) {

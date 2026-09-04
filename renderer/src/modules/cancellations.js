@@ -609,7 +609,16 @@ async function saveCancellation() {
     status: 'Pending',
     createdAt: today()
   });
-  // Immediately mark student as Cancelling — removes from occupancy
+  /* On notice, and STILL IN THE ROOM. `Cancelling` is one of
+     RESIDENT_STATUSES, so isResident() is still true and this student is still
+     counted by getRoomOccupancy() and still billed — they keep the bed until
+     the vacate date. What the status changes is getRoomVacating(), which makes
+     the bed RESERVABLE rather than free (see the rules at the top of rooms.js).
+
+     This comment used to say the status "removes from occupancy". That was the
+     behaviour before the 2026-08-30 ruling and is now the opposite of the
+     truth; left as it was, it invites someone to "fix" an occupancy count that
+     is already right. */
   student.status = 'Cancelling';
   await saveDB();
   closeModal();

@@ -627,16 +627,23 @@ function renderDashboard() {
     <!-- Header: title + legend -->
     <div class="dash-sec__head">
       <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
-      <span class="dash-sec__title">Revenue Trend</span>
+      <span class="dash-sec__title">Revenue vs Expenses</span>
       <span class="dash-sec__sub">Jan – Dec</span>
       <div class="dash-legend" style="margin-left:auto">
-        <!-- Pending was dh-violet here while both the line and the hover badge
-             draw it in --accent; the chip is dh-blue so all three agree. -->
-        <!-- Chips must match the drawn series (guide §12): Revenue blue,
-             Expenses red, Pending purple. -->
+        <!-- TWO SERIES, and the legend says two (design 1c, "bars instead of
+             lines"). Pending was dropped from the chart rather than redrawn as
+             a third bar: it is not a monthly flow like the other two — it is
+             what has NOT arrived yet, so a bar of it sitting beside collected
+             revenue invites adding them together into a figure the ledger never
+             held. It keeps its own KPI card, and the hover badge still reports
+             it per month.
+
+             The chips must match what is actually drawn (guide §12). This
+             legend advertised four series for a long time while one line was
+             drawn; a legend that describes something else is how a reader stops
+             trusting the panel. -->
         <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
         <span class="dash-legend__k dh-red"><i></i>Expenses</span>
-        <span class="dash-legend__k dh-violet"><i></i>Pending</span>
       </div>
     </div>
     <!-- This-month figures -->
@@ -786,8 +793,215 @@ function renderDashboard() {
     </div>
   </div><!-- end row3+4 grid -->
 
-  <!-- ══ ROW 5: RECENT PAYMENTS ══ -->
+  <!-- ══ ROW 5: THE LEDGER ROW (design 1c) ══ -->
+  ${_dashLedgerRow(mo, pending, pendingCount)}
+
+  <!-- ══ ROW 6: RECENT PAYMENTS ══ -->
   ${_dashRecentPayments(recentPay, mo, collected)}`;
+}
+
+/* ══ THE LEDGER ROW — design 1c ══════════════════════════════════════════════
+   Four panels the dashboard did not have, from the "Ledger" direction of the
+   Hostyllo Dashboard design doc: Today at a Glance, Collection by Method,
+   Upcoming Reminders, Quick Actions.
+
+   ONE RULE GOVERNS ALL FOUR, and it is the reason this section is longer than
+   the markup it produces: every figure here is COMPUTED FROM A RECORD THIS
+   HOSTEL ACTUALLY HOLDS. The reference render shows a "Mess Committee Meeting"
+   and an "Electricity Bill Due" that no table in this app can produce; a
+   dashboard that prints those because a mockup did is exactly the failure that
+   put the reconstruction mandate in place. Where a source does not exist the
+   panel says so and shows nothing.
+
+   The one place the mockup was followed and should NOT have been: it lists an
+   upcoming "Room Inspection". `DB.inspections` rows record an inspection that
+   HAS HAPPENED — they carry a condition, an inspector and findings, and have no
+   scheduled-date field at all. There is no upcoming inspection to read, so
+   reminders are built from notices and real rent arrears instead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Counts for "Today at a Glance" — six figures, each from its own table. */
+function _dlGlance() {
+  const td = today();
+  const isToday = d => String(d || '').slice(0, 10) === td;
+  const log = DB.checkinlog || [];
+  // A payment's `date` is when it was taken. Pending rows have no date yet, so
+  // they cannot be "received today" and must not be counted here.
+  const paidToday = (DB.payments || []).filter(p => p.status === 'Paid' && isToday(p.date));
+  /* `page: null` means THERE IS NOWHERE TO GO, and the row is rendered as plain
+     text rather than a button.
+
+     The check-in log is reachable from Settings but is not a page in nav.js's
+     PAGES table, so `navigate('checkinlog')` lights nothing in the rail and
+     lands on a screen with no title. A row that looks clickable and does
+     nothing is worse than a row that never offered — especially on a dashboard,
+     where a warden learns in one click whether the numbers are wired to
+     anything. Same for notices in _dlReminders(). */
+  return [
+    { k: 'in',    label: 'Check-ins',           n: log.filter(c => isToday(c.date) && c.type !== 'Check-out').length, page: null },
+    { k: 'out',   label: 'Check-outs',          n: log.filter(c => isToday(c.date) && c.type === 'Check-out').length, page: null },
+    { k: 'new',   label: 'New Admissions',      n: (DB.students || []).filter(s => isToday(s.joinDate)).length,       page: 'students' },
+    { k: 'money', label: 'Payments Received',   n: paidToday.length, money: paidToday.reduce((s, p) => s + Number(p.amount || 0), 0), page: 'payments' },
+    { k: 'issue', label: 'Complaints Raised',   n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
+    { k: 'wrench',label: 'Maintenance Requests',n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },
+  ];
+}
+
+/** Payments settled this month, grouped by method. Shares `calcRevenue`'s month test. */
+function _dlMethods(mo) {
+  const paid = (DB.payments || []).filter(p => p.status === 'Paid' && _payMatchesMonth(p, mo));
+  const total = paid.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const byName = new Map();
+  for (const p of paid) {
+    // An empty method is "Other" rather than a blank row: the figure is real
+    // money and must still be shown, just not under an invented name.
+    const name = String(p.method || '').trim() || 'Other';
+    byName.set(name, (byName.get(name) || 0) + Number(p.amount || 0));
+  }
+  const rows = [...byName.entries()]
+    .map(([name, amount]) => ({ name, amount, pct: total > 0 ? (amount / total * 100) : 0 }))
+    .sort((a, b) => b.amount - a.amount);
+  return { rows, total };
+}
+
+/**
+ * Upcoming reminders — notices dated from today onward, plus this month's real
+ * arrears as a single line.
+ *
+ * Sorted soonest-first and capped, because this is a "what is coming" panel and
+ * a list long enough to scroll stops being one.
+ */
+function _dlReminders(mo, pending, pendingCount) {
+  const td = today();
+  const out = [];
+  if (pending > 0) {
+    out.push({
+      when: '', whenLabel: 'This month',
+      title: 'Rent due — ' + pendingCount + ' payment' + (pendingCount === 1 ? '' : 's'),
+      sub: fmtPKR(pending) + ' outstanding',
+      tone: 'due', page: 'payments'
+    });
+  }
+  for (const n of (DB.notices || [])) {
+    const d = String(n.date || '').slice(0, 10);
+    if (!d || d < td) continue;          // past notices are history, not reminders
+    out.push({
+      when: d,
+      whenLabel: d === td ? 'Today' : fmtDate(d),
+      title: String(n.title || 'Notice'),
+      sub: String(n.type || ''), tone: 'note', page: null   // no notices page in nav.js
+    });
+  }
+  out.sort((a, b) => String(a.when || '').localeCompare(String(b.when || '')));
+  return out.slice(0, 5);
+}
+
+function _dlIco(k) {
+  const P = {
+    in:    '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+    out:   '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    new:   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
+    money: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
+    issue: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    due:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    note:  '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+    add:   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
+    card:  '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
+    spend: '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    room:  '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    report:'<path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="13" width="9" height="4" rx="1"/><rect x="7" y="5" width="12" height="4" rx="1"/>',
+  };
+  return '<svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (P[k] || '') + '</svg>';
+}
+
+function _dashLedgerRow(mo, pending, pendingCount) {
+  const glance    = _dlGlance();
+  const methods   = _dlMethods(mo);
+  const reminders = _dlReminders(mo, pending, pendingCount);
+
+  const glanceRows = glance.map(g => {
+    /* The payments row reports TWO facts — how many arrived and how much they
+       came to — and at a quarter of 1366px they do not fit on one line: the
+       label truncated to "Payments Recei…" beside the figure. Stacking the
+       amount under the label keeps both, and keeps the right-hand column a
+       column of counts, so the six rows still read down as one list rather than
+       five counts and one sum. */
+    const inner =
+      '<span class="dl-glance__ic">' + _dlIco(g.k) + '</span>'
+      + '<span class="dl-glance__body">'
+        + '<span class="dl-glance__label">' + escHtml(g.label) + '</span>'
+        + (g.money != null && g.money > 0
+            ? '<span class="dl-glance__sub dl-money">' + fmtPKR(g.money) + '</span>' : '')
+      + '</span>'
+      + '<span class="dl-glance__n">' + fmtNum(g.n) + '</span>';
+    return g.page
+      ? '<button class="dl-glance__row" onclick="navigate(\'' + g.page + '\')">' + inner + '</button>'
+      : '<div class="dl-glance__row dl-glance__row--static">' + inner + '</div>';
+  }).join('');
+
+  const methodRows = methods.rows.length
+    ? methods.rows.map(m =>
+        '<div class="dl-meth__row">'
+        + '<span class="dl-meth__name">' + escHtml(m.name) + '</span>'
+        + '<span class="dl-meth__bar"><i style="width:' + m.pct.toFixed(1) + '%"></i></span>'
+        + '<span class="dl-meth__pct">' + m.pct.toFixed(1) + '%</span>'
+        + '<span class="dl-meth__amt">' + fmtPKR(m.amount) + '</span>'
+        + '</div>').join('')
+    : '<div class="dl-empty">No payments settled this month yet.</div>';
+
+  const reminderRows = reminders.length
+    ? reminders.map(r => {
+        const inner =
+          '<span class="dl-rem__ic dl-rem__ic--' + r.tone + '">' + _dlIco(r.tone) + '</span>'
+          + '<span class="dl-rem__body"><b>' + escHtml(r.title) + '</b>'
+          + '<span class="dl-rem__sub">' + escHtml(r.whenLabel) + (r.sub ? ' · ' + escHtml(r.sub) : '') + '</span></span>';
+        return r.page
+          ? '<button class="dl-rem__row" onclick="navigate(\'' + r.page + '\')">' + inner + '</button>'
+          : '<div class="dl-rem__row dl-rem__row--static">' + inner + '</div>';
+      }).join('')
+    /* Not a decorated empty state. Nothing is due and nothing is posted is a
+       real, good answer, and dressing it up as an error would be a lie. */
+    : '<div class="dl-empty">Nothing due, and no notices posted ahead.</div>';
+
+  const actions = [
+    { k: 'add',    label: 'Add Student',  fn: "navigate('students')" },
+    { k: 'card',   label: 'Add Payment',  fn: "navigate('payments')" },
+    { k: 'spend',  label: 'Add Expense',  fn: "navigate('expenses')" },
+    { k: 'issue',  label: 'Complaints',   fn: "navigate('issues')"   },
+    { k: 'room',   label: 'Rooms',        fn: "navigate('rooms')"    },
+    { k: 'report', label: 'Reports',      fn: "navigate('reports')"  },
+  ].map(a =>
+    '<button class="dl-act" onclick="' + a.fn + '">'
+    + '<span class="dl-act__ic">' + _dlIco(a.k) + '</span>'
+    + '<span class="dl-act__label">' + escHtml(a.label) + '</span></button>').join('');
+
+  return ''
+  + '<div class="dl-row">'
+
+    + '<div class="dash-sec dl-panel">'
+      + '<div class="dash-sec__head"><span class="dash-sec__title">Today at a Glance</span></div>'
+      + '<div class="dl-glance">' + glanceRows + '</div>'
+    + '</div>'
+
+    + '<div class="dash-sec dl-panel">'
+      + '<div class="dash-sec__head"><span class="dash-sec__title">Collection by Method</span>'
+      + (methods.total > 0 ? '<span class="dl-head__total">' + fmtPKR(methods.total) + '</span>' : '')
+      + '</div>'
+      + '<div class="dl-meth">' + methodRows + '</div>'
+    + '</div>'
+
+    + '<div class="dash-sec dl-panel">'
+      + '<div class="dash-sec__head"><span class="dash-sec__title">Upcoming Reminders</span></div>'
+      + '<div class="dl-rem">' + reminderRows + '</div>'
+    + '</div>'
+
+    + '<div class="dash-sec dl-panel">'
+      + '<div class="dash-sec__head"><span class="dash-sec__title">Quick Actions</span></div>'
+      + '<div class="dl-acts">' + actions + '</div>'
+    + '</div>'
+
+  + '</div>';
 }
 
 /* ══ RECENT PAYMENTS ═════════════════════════════════════════════════════════
@@ -1898,7 +2112,9 @@ function exportMonthCSV(monthKey, monthLabel) {
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
   csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
-  pays.forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
+  // Ordered by room like every other roster, export and PDF in the app — the
+  // warden reads this sheet against the building, not against insertion order.
+  pays.slice().sort((a,b)=>cmpRoomNo(a.roomNumber,b.roomNumber)).forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
   // Grouped with a subtotal per category and a grand total, matching the
   // register the Reports screen and the PDFs now print.
   csv += `\nExpenses by Category\nCategory,Date,Description,Amount\n`;
@@ -2125,44 +2341,49 @@ function drawTrendChart() {
     return {
       label: label,
       data: arr,
-      borderColor: hex,
-      borderWidth: 1.8,
-      pointBackgroundColor: hex, pointBorderColor: hex,
-      pointRadius: 2.5, pointHoverRadius: 5,
-      tension: 0,
-      fill: false,
+      // The companion bar. Deliberately quieter than revenue — this panel is
+      // 178px tall, and two equally loud bar series in that space is a pattern
+      // rather than a comparison. Same faint treatment for months with no
+      // record, so both series describe the gap the same way.
+      backgroundColor: function (c) { return real[c.dataIndex] ? hex : hex + '33'; },
+      borderColor: 'transparent', borderWidth: 0,
+      borderRadius: 3, borderSkipped: false,
+      categoryPercentage: 0.72, barPercentage: 0.92,
       datalabels: { display: false }
     };
   }
 
   if(_dashTrendChart){_dashTrendChart.destroy();_dashTrendChart=null;}
 
+  /* BARS, NOT LINES — design 1c ("Ledger").
+
+     A line implies a value between the points. These are twelve discrete
+     monthly totals, and the months with nothing recorded are marked in `real[]`
+     precisely because there is no value to interpolate there. A bar chart says
+     what this data actually is: twelve separate figures, side by side.
+
+     Which also removes the awkwardness the line version carried — a point drawn
+     at zero for a month the hostel recorded nothing, sitting on the axis
+     looking like a month of no income. A bar of zero height is simply absent. */
   _dashTrendChart = new Chart(canvas.getContext('2d'),{
-    type:'line',
+    type:'bar',
     data:{
       labels:months.map(function(m){return m.label;}),
       datasets:[{
         label:'Revenue',
         data:plotRev,
-        borderColor:cRevenue,
-        borderWidth:2.5,
-        pointBackgroundColor:ptColors, pointBorderColor:ptColors,
-        pointRadius:function(c){return real[c.dataIndex]?5:3;}, pointHoverRadius:8,
-        // Straight point-to-point, matching the Reports trend. Smoothing bows
-        // the line between months and implies figures the ledger never held —
-        // doubly wrong here, where `real[]` already marks some points as
-        // months with nothing recorded.
-        tension:0,
-        // Soft area wash under the revenue line (owner reference design).
-        // chartArea is undefined on the very first layout pass — bail to
-        // transparent then, Chart.js re-invokes this once the area is known.
-        fill:{target:'origin'},
         backgroundColor:function(c){
-          var area=c.chart.chartArea; if(!area) return 'transparent';
-          var g=c.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
-          g.addColorStop(0,cRevenue+'3d'); g.addColorStop(1,cRevenue+'00');
-          return g;
+          // Months with no record are drawn faint rather than skipped: the gap
+          // in the year is itself information, and a missing bar reads as a
+          // rendering fault.
+          return real[c.dataIndex] ? cRevenue : cRevenue+'33';
         },
+        borderColor:'transparent', borderWidth:0,
+        borderRadius:3, borderSkipped:false,
+        // Bars carry the category width between them; a category percentage
+        // near 1 with a bar percentage below it puts the air INSIDE the pair,
+        // which is what makes a two-series comparison readable.
+        categoryPercentage:0.72, barPercentage:0.92,
         datalabels:{
           // Only the peak and the latest month are called out. Labelling every
           // real month stacked eight overlapping badges across the middle of a
@@ -2171,6 +2392,18 @@ function drawTrendChart() {
           // answer the rest.
           display:function(c){
             var i=c.dataIndex; if(!real[i]) return false;
+            /* THE BADGE IS DRAWN BY `display`, THE TEXT BY `formatter`, AND THEY
+               HAD DIFFERENT OPINIONS. The formatter returns '' when there is no
+               earlier month to measure against — no baseline, no percentage —
+               but display had already said yes, so the chart painted an empty
+               bordered pill hovering over the first month with data. Invisible
+               on a busy year; unmissable on a hostel's opening month, which is
+               exactly when a new customer is looking at it.
+
+               So ask the same question here: is there an earlier real month? */
+            var hasBaseline=false;
+            for(var k=i-1;k>=0;k--){ if(real[k]){ hasBaseline=true; break; } }
+            if(!hasBaseline) return false;
             var last=-1, peak=-1, peakV=-Infinity;
             for(var j=0;j<real.length;j++){ if(!real[j]) continue;
               last=j; if((plotRev[j]||0)>peakV){peakV=plotRev[j]||0; peak=j;} }
@@ -2217,11 +2450,10 @@ function drawTrendChart() {
       // deliberately quieter — thinner stroke, no fill, no labels — because
       // this panel is 178px tall and four equally-weighted filled lines in
       // that space is noise, not a comparison.
-      // No Transfers line: expD already CONTAINS the transfers, so a second
-      // line drew the same money twice and a reader adding the two got a figure
+      // No Transfers series: expD already CONTAINS the transfers, so a second
+      // one drew the same money twice and a reader adding the two got a figure
       // the ledger never held.
-      secondary('Expenses',  expD,  cRed),
-      secondary('Pending',   pendD, cPending)]
+      secondary('Expenses',  expD,  cRed)]
     },
     options:{
       responsive:true, maintainAspectRatio:false,

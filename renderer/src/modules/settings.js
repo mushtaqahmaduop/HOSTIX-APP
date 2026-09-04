@@ -622,18 +622,27 @@ function renderRentMessPanel() {
       <div class="set-head">
         <div class="set-head__ico dh-amber">${setIco(SET_ICO.coins, 24)}</div>
         <div style="min-width:0">
-          <div class="set-head__t">Rent &amp; Mess</div>
-          <div class="set-head__s">Set the bed charge and the food charge separately. A student who takes the room without the mess is billed rent only.</div>
+          <div class="set-head__t">${hostelServesMess() ? 'Rent &amp; Mess' : 'Rent'}</div>
+          <div class="set-head__s">${
+            !hostelServesMess()
+              ? 'This hostel rents rooms only. Set the bed charge for each room type.'
+              : messIsOptional()
+                ? 'Set the bed charge and the food charge separately. A student who takes the room without the mess is billed rent only.'
+                : 'Every student pays rent and mess together. Set both for each room type.'
+          }</div>
         </div>
       </div>
+
+      ${svcModelCard()}
 
       <div class="set-strip" style="margin:0 0 18px">
         <div class="set-strip__c dh-blue"><div class="set-strip__i">${setIco(SET_ICO.users,18)}</div>
           <div style="min-width:0"><div class="set-strip__l">Active Students</div><div class="set-strip__v">${active.length}</div></div></div>
+        ${!messIsOptional() ? '' : `
         <div class="set-strip__c dh-green"><div class="set-strip__i">${setIco(SET_ICO.check,18)}</div>
           <div style="min-width:0"><div class="set-strip__l">On Mess</div><div class="set-strip__v">${onMess}</div></div></div>
         <div class="set-strip__c dh-slate"><div class="set-strip__i">${setIco(SET_ICO.bed,18)}</div>
-          <div style="min-width:0"><div class="set-strip__l">Rent Only</div><div class="set-strip__v">${active.length - onMess}</div></div></div>
+          <div style="min-width:0"><div class="set-strip__l">Rent Only</div><div class="set-strip__v">${active.length - onMess}</div></div></div>`}
         <div class="set-strip__c dh-amber"><div class="set-strip__i">${setIco(SET_ICO.coins,18)}</div>
           <div style="min-width:0"><div class="set-strip__l">Billed / Month</div><div class="set-strip__v"><small>${cur}</small>${fmtNum(billed)}</div></div></div>
       </div>
@@ -892,6 +901,19 @@ function renderDataManagementPanel() {
             ${setIco(SET_ICO.info, 16, 2)}
             <span>For backup &amp; restore, use the <strong>Backup &amp; Restore</strong> option in the sidebar menu.</span>
           </div>
+        </div>
+      </div>
+
+      <div class="set-sub" style="margin-bottom:14px">
+        <div class="set-sub__top">
+          <div class="set-sub__ico dh-violet">${setIco(SET_ICO.settings || SET_ICO.info, 21)}</div>
+          <div style="min-width:0">
+            <div class="set-sub__t">Setup Guide</div>
+            <div class="set-sub__s">Walk through hostel details, what you offer, charges, rooms and your password again — nothing you have already entered is deleted</div>
+          </div>
+        </div>
+        <div class="set-sub__btns">
+          <button class="set-btn" onclick="openSetupAgain()">${setIco(SET_ICO.info, 16, 2)}Run the setup guide</button>
         </div>
       </div>
 
@@ -1389,6 +1411,62 @@ async function saveSettings() {
    Paid records are deliberately left alone: they are a receipt of what the
    student was actually charged at the time, and rewriting them would silently
    restate collected history — the same class of bug as the month mixing. */
+/* ── WHAT THIS HOSTEL SELLS ──────────────────────────────────────────────────
+
+   The choice lives here rather than buried in a general Settings list because
+   it changes what the rest of this very screen shows: a rent-only hostel has
+   no mess column, and a bundled one has no per-student toggle.
+
+   Switching is not destructive and the card says so. Mess amounts stay in
+   roomTypes whichever model is picked, so a hostel that tries rent-only and
+   changes its mind gets its figures back rather than retyping them.          */
+function svcModelCard() {
+  const cur = serviceModel();
+  return `<div class="svc-card">
+    <div class="svc-card__t">What does this hostel offer?</div>
+    <div class="svc-opts">
+      ${SERVICE_MODELS.map(m => `
+        <button class="svc-opt${m.id === cur ? ' is-on' : ''}" onclick="setServiceModel('${m.id}')">
+          <span class="svc-opt__dot"></span>
+          <span class="svc-opt__b">
+            <span class="svc-opt__l">${escHtml(m.label)}</span>
+            <span class="svc-opt__h">${escHtml(m.hint)}</span>
+          </span>
+        </button>`).join('')}
+    </div>
+    <div class="svc-card__f">Changing this never deletes a mess amount — the figures stay on your room types either way.</div>
+  </div>`;
+}
+
+async function setServiceModel(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('settings')) return;
+  if (!SERVICE_MODELS.some(m => m.id === id)) return;
+  if (id === serviceModel()) return;
+
+  const info = SERVICE_MODELS.find(m => m.id === id);
+  const onMessNow = (DB.students || []).filter(t => isResident(t) && t.messOptIn !== false).length;
+
+  /* Spell out the consequence in students, not in settings-speak. Going to
+     rent-only stops billing food for people who are on it today, and that is a
+     change to what every one of them owes next month. */
+  const warn =
+    id === 'rent' && onMessNow
+      ? `<div style="margin-top:8px">${onMessNow} student${onMessNow > 1 ? 's are' : ' is'} on the mess today. Their monthly charge becomes rent only.</div>`
+      : id === 'rent_mess_bundled' && messIsOptional()
+        ? '<div style="margin-top:8px">Anyone currently taken off the mess will be billed for it again.</div>'
+        : '';
+
+  showConfirm('Change what this hostel offers?',
+    escHtml(info.label) + ' — ' + escHtml(info.hint) + warn,
+    async () => {
+      DB.settings.serviceModel = id;
+      await saveDB();
+      logActivity('Settings Changed', 'Hostel offering set to: ' + info.label, 'Settings');
+      renderPage('settings');
+      toast('This hostel is now: ' + info.label, 'success');
+    });
+}
+
 function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
   student.rent = newRent;
   student.mess = newMess;

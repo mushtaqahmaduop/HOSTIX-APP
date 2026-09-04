@@ -68,14 +68,18 @@ const pageConfig = {
   // v5: the add/edit student form is a page, not a modal. `nav` keeps the
   // Students rail item lit while it is open, and `back` shows the header's
   // Back button — the form is a detour, not a destination.
-  addstudent:    { title:'Add / Edit Student', sub:'Add new student or update existing details',
-                   action:null, nav:'students', back:true },
+  // Chrome shows the section; the page itself carries the "Student intake"
+  // heading and breadcrumb, so naming the task here too just reads as a
+  // stutter — the same call Add Payment made below.
+  addstudent:    { title:'Students', sub:'', action:null, nav:'students', back:true },
   // Add/Edit Payment is a page too, for the same reason: it carries a live
   // summary and the student's recent history alongside the form, which a modal
   // has no room for.
   // Chrome shows the section; the page itself carries the "Add New Payment"
   // heading and breadcrumb, so repeating it in the header just reads as a stutter.
-  addpayment:    { title:'Finance', sub:'', action:null, nav:'payments', back:true }
+  // `chrome:'task'` retires the global header here entirely — see renderPage().
+  addpayment:    { title:'Finance', sub:'', action:null, nav:'payments', back:true,
+                   chrome:'task' }
 };
 
 function navigate(page, isBack=false) {
@@ -120,9 +124,29 @@ function navigate(page, isBack=false) {
   // A detour page (the add-student form) keeps its parent's rail item lit,
   // otherwise nothing in the sidebar is highlighted while the form is open.
   const navKey = cfg.nav || page;
+  let _lit = null;
   document.querySelectorAll('.nav-item').forEach(el=>{
-    el.classList.toggle('active', el.dataset.page===navKey);
+    const on = el.dataset.page===navKey;
+    el.classList.toggle('active', on);
+    if (on) _lit = el;
   });
+  /* KEEP THE LIT ITEM ON SCREEN.
+
+     The rail scrolls on every laptop this ships to — measured, not assumed: at
+     1366x768 with Windows at 125% (the common OEM default) the scroller is
+     418px tall against 674px of content, so five of twelve items sit below the
+     fold. Without this, opening Settings from the command palette or a deep
+     link lights a row the warden cannot see, and the rail looks like nothing
+     is selected at all.
+
+     `nearest` rather than `center`: it scrolls only when the item is actually
+     out of view, so clicking a visible item does not jerk the list under the
+     cursor. Guarded because scrollIntoView with options is unsupported in
+     older engines and this must never take navigation down with it. */
+  if (_lit) {
+    try { _lit.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    catch (_) { /* a rail that does not auto-scroll still navigates fine */ }
+  }
   const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
   const _s=document.getElementById('hdr-sub');
   if(_s) { _s.textContent=cfg?.sub||''; _s.style.display = cfg?.sub ? 'block' : 'none'; }
@@ -195,6 +219,27 @@ function renderPage(p, resetScroll=false) {
   // Handle cancellations sub-filter pages
   let cancFilter = 'All';
   let basePage = p;
+
+  /* ── CONTEXTUAL HEADER ────────────────────────────────────────────────────
+     A page declaring `chrome:'task'` is a TASK, not a destination: it is
+     reached from somewhere, it is finished or abandoned, and it goes back. The
+     global header's search box, date stepper, notification bell and Add
+     buttons are all destination controls — every one of them navigates AWAY
+     from a half-filled form — so a task page trades that 48px bar for its own
+     compact header carrying only what the task needs: where you are, what
+     record this is, and the way out. On a 1366x768 laptop that bar plus the
+     page's own title block cost ~110px before a single field was drawn.
+
+     THIS BELONGS IN renderPage(), NOT navigate(). Roughly fifteen call sites
+     re-render a page directly — every filter dropdown on the payments list,
+     and critically submitAddPayment(), which ends `renderPage('payments')`
+     after posting. Toggling in navigate() alone meant posting a payment left
+     `chrome-task` set, and the payments list then drew with its global header
+     display:none and its padding zeroed. Here the class is decided by the page
+     being rendered, so it cannot outlive the page that asked for it. */
+  document.body.classList.toggle(
+    'chrome-task', (pageConfig[p] || {}).chrome === 'task');
+
   if(p.startsWith('cancellations_')) {
     cancFilter = p.replace('cancellations_','');
     basePage = 'cancellations';
@@ -272,6 +317,7 @@ function renderPage(p, resetScroll=false) {
     // laid out before Chart.js measures them.
     if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
     if(basePage==='settings') bindSettingsEvents();
+    if(basePage==='addstudent') asfInit();
     if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);
   },80);
 }

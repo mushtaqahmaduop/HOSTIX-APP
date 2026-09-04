@@ -48,9 +48,29 @@ This is the offline desktop product. The separate cloud SaaS at `C:\hostyllo` is
 That sentence used to end the paragraph, and it is still true of the SaaS — but
 this repo now has a cloud half of its own. `server/` is the **control plane**:
 licences, devices, feature flags and key issuing, deployed to Railway. The app
-talks to it only when `apiBase` is set, and every machine in the field has it
-unset, so the desktop app still runs start to finish with no network. Treat any
-change that makes the app *require* the control plane as a breaking change.
+talks to it only when `apiBase` is set, so the desktop app still runs start to
+finish with no network. Treat any change that makes the app *require* the
+control plane as a breaking change.
+
+**`control-plane.json` on `master` is the rollout lever, and it is live
+infrastructure — not a config file.** `services/discovery.js` fetches it from
+raw.githubusercontent.com once a day; it is how a shipped build learns the
+address at all, because `DEFAULT_API_BASE` is baked empty and cannot be changed
+without a release. Editing that one file re-points every install.
+
+Three things follow from that, and each is a way to break 50 hostels quietly:
+
+- Setting `"apiBase": null` is the **kill switch** — it clears every install's
+  cache and returns them to offline-only. That is a supported state, not a
+  fault, but do not reach for it by accident.
+- Change the file **before** deleting or re-provisioning a Railway service, and
+  give it a day. Generated `*.up.railway.app` names are recycled, and an install
+  still pointing at one sends its licence key and machine id to whoever claims
+  it. Nothing can be granted that way — entitlements are signed by a key that is
+  not on that host — but it would be received.
+- Resolution order is `env > online-config.json > DEFAULT_API_BASE > discovered`.
+  Discovery sits *below* the baked default deliberately, so a build that
+  eventually bakes `license.hostyllo.com` trusts itself and this goes dormant.
 
 ## Code structure
 - `app.js` was a 9,270-line monolith — now split into 13 modular feature files.
@@ -160,10 +180,11 @@ long after it stopped being true, which is how a regression reaches a client.
 ```powershell
 $env:HOSTIX_TEST_PROFILE = "<scratch>\hostix-profile"
 Copy-Item C:\HOSTIX-APP\.devdata\license.enc $env:HOSTIX_TEST_PROFILE\
-npx playwright test          # 23 spec files
-npm run test:services        # 102
+npx playwright test          # 39 spec files, 84 pass + 2 skip
+npm run test:services        # 136
 npm run test:retention       # 13
 npm run test:license         # licence system
+npm run test:update          # the update channel + the "Check for Updates" dialog
 npm run typecheck            # must be 0 errors
 ```
 

@@ -55,6 +55,41 @@ const STATE = () => {
   };
 };
 
+/**
+ * STATE, sampled once focus has actually landed somewhere.
+ *
+ * Opening a menu and focusing its first item are not the same tick. Reading
+ * STATE straight after a keypress therefore races: on a loaded machine the
+ * menu is already open — `open` reads `['Help']` — while `document.activeElement`
+ * is still the body, so `focusText` comes back as `''` and the assertion fails
+ * on timing rather than on behaviour.
+ *
+ * That is exactly how this spec failed in a full-suite run on 2026-09-04 while
+ * passing every time in isolation. A flake in a pre-demo test run costs more
+ * than the bug it is pretending to be, so the wait is explicit rather than a
+ * sleep: it blocks until focus holds something with text, then samples once.
+ *
+ * Only for the steps that expect focus to be ON something. The final step
+ * deliberately checks that focus is NOT parked on a menu, and still uses a
+ * plain evaluate.
+ */
+async function stateWithFocus(win, want) {
+  // `want` is what focus is expected to be holding. Waiting for merely
+  // "something focused" is not enough on its own: moving from a menu item to a
+  // menu button is text-to-text, so a stale read satisfies it and the race
+  // survives. Waiting for the expected text closes both directions.
+  //
+  // Passing nothing keeps the weaker condition — used for the one step that
+  // asserts the open menu and the focus ROLE rather than any particular label.
+  await win.waitForFunction((expected) => {
+    const a = document.activeElement;
+    const t = a && a.textContent ? a.textContent.replace(/\s+/g, ' ').trim() : '';
+    if (!t) return false;
+    return expected ? t.includes(expected) : true;
+  }, want || null, { timeout: 5000 });
+  return win.evaluate(STATE);
+}
+
 test('the title-bar menus open, walk and close from the keyboard alone', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
@@ -86,7 +121,7 @@ test('the title-bar menus open, walk and close from the keyboard alone', async (
 
   // ── Alt+F opens File with its first item focused ──────────────────────────
   await win.keyboard.press('Alt+f');
-  let s = await win.evaluate(STATE);
+  let s = await stateWithFocus(win, 'Export Backup');
   expect(s.open, 'Alt+F did not open the File menu').toEqual(['File']);
   expect(s.expanded).toEqual(['File']);
   expect(s.hints, 'the mnemonic underlines stayed hidden').toBe(true);
@@ -95,27 +130,27 @@ test('the title-bar menus open, walk and close from the keyboard alone', async (
 
   // ── ArrowDown walks the panel ─────────────────────────────────────────────
   await win.keyboard.press('ArrowDown');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win, 'Import Backup');
   expect(s.focusText).toContain('Import Backup');
 
   // ── End / Home reach the ends ─────────────────────────────────────────────
   await win.keyboard.press('End');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win, 'Quit');
   expect(s.focusText).toContain('Quit');
   await win.keyboard.press('Home');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win, 'Export Backup');
   expect(s.focusText).toContain('Export Backup');
 
   // ── ArrowRight moves along the bar, the way a menu bar does ───────────────
   await win.keyboard.press('ArrowRight');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win);
   expect(s.open, 'ArrowRight did not move to the next menu').toEqual(['View']);
   expect(s.expanded).toEqual(['View']);
   expect(s.focusRole).toBe('menuitem');
 
   // ── Escape closes and hands focus back to the button it came from ─────────
   await win.keyboard.press('Escape');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win, 'View');
   expect(s.open, 'Escape left a menu open').toEqual([]);
   expect(s.expanded).toEqual([]);
   expect(s.hints, 'the underlines outlived the menu').toBe(false);
@@ -123,7 +158,7 @@ test('the title-bar menus open, walk and close from the keyboard alone', async (
 
   // ── Alt+H reaches Help, which is the licence + support corner ─────────────
   await win.keyboard.press('Alt+h');
-  s = await win.evaluate(STATE);
+  s = await stateWithFocus(win, 'About Hostyllo');
   expect(s.open).toEqual(['Help']);
   expect(s.focusText).toContain('About Hostyllo');
   await win.keyboard.press('Escape');

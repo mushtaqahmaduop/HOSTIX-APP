@@ -284,6 +284,11 @@ class DeviceService {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   start() {
+    // Idempotent because it is now called twice on a machine that learns its
+    // address after boot: once here with no configuration (returns below), and
+    // again from index.js when discovery lands one. Without this guard that
+    // second call would leave two sync intervals running forever.
+    if (this._timer) return;
     if (!config.isConfigured()) {
       log.info('device_service_idle', { reason: 'not_configured' });
       return;

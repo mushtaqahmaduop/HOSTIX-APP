@@ -12,53 +12,73 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Stat strip ──────────────────────────────────────────────────────────── */
-.rms-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:12px; margin-bottom:10px; }
-.rms-stat  { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:10px 16px; }
-.rms-stat__top   { display:flex; align-items:center; gap:12px; margin-bottom:3px; }
+ /* Densified to the reference mockup 2026-09-03: 26px figures and 16px radii
+    on a four-card strip cost height the room grid underneath needs on a
+    laptop. The icon chips STAY here, unlike the students strip — these hues
+    are states of a room (occupied, vacant) or neutral counts, not a colour
+    invented per card. See the students.css note for that distinction. */
+.rms-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; margin-bottom:12px; }
+/* .rms-stat stays a BLOCK. Making it a flex row put .rms-stat__bar — which is
+   a sibling of __top, not a child — beside the text as a third column, and the
+   occupancy bars vanished into a 4px-wide sliver. The row lives one level in,
+   at __top, which is the chip and the text beside it. */
+.rms-stat  { background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+             padding:14px 16px; }
+.rms-stat__top   { display:flex; align-items:flex-start; gap:12px; }
+.rms-stat__top > div:last-child { flex:1; min-width:0; }
 .rms-stat__chip  {
-    width:34px; height:34px; border-radius:11px; flex-shrink:0;
+    width:36px; height:36px; border-radius:8px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
-.rms-stat__label { font-size:12px; font-weight:600; color:var(--text2); }
-.rms-stat__val   { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--text);
-                  font-variant-numeric:tabular-nums; line-height:1.15; margin-top:2px; }
-.rms-stat__val small { font-size:17px; font-weight:700; color:var(--text3); }
-.rms-stat__sub   { font-size:11px; color:var(--text3); margin-top:2px; }
-.rms-stat__bar   { height:6px; border-radius:999px; background:var(--dash-track); overflow:hidden; margin-top:7px; }
-.rms-stat__bar > i { display:block; height:100%; border-radius:999px;
-                    background:linear-gradient(90deg,var(--dh-2),var(--dh)); transition:width .5s ease; }
+.rms-stat__label { font-size:11px; font-weight:600; color:var(--text3); margin-bottom:3px; }
+.rms-stat__val   { font-size:20px; font-weight:700; letter-spacing:var(--ant-num-track); color:var(--text);
+                  font-family:var(--ant-num-font);
+                  font-variant-numeric:tabular-nums; line-height:1.1; }
+.rms-stat__val small { font-size:12px; font-weight:600; color:var(--text3); }
+.rms-stat__sub   { font-size:10.5px; color:var(--text3); margin-top:3px; }
+.rms-stat__bar   { height:4px; border-radius:3px; background:var(--dash-track); overflow:hidden; margin-top:8px; }
+/* Flat fill, not a gradient. A 4px bar is too thin to read a ramp, and the
+   gradient only made one value look like two. */
+.rms-stat__bar > i { display:block; height:100%; border-radius:3px;
+                    background:var(--dh); transition:width .4s ease; }
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
-.rms-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:12px 16px; margin-bottom:10px; }
+.rms-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:11px 12px; margin-bottom:12px; }
 .rms-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
+/* 34px controls, matching students. Rooms carries nine toolbar items — search,
+   three segment buttons, two selects, sort, and three actions — and at 40px
+   they wrapped. */
 .rms-search {
-    display:flex; align-items:center; gap:8px; flex:1 1 170px; min-width:150px; max-width:200px;
-    height:40px; padding:0 12px; border-radius:11px;
+    display:flex; align-items:center; gap:8px; flex:1 1 180px; min-width:160px; max-width:250px;
+    height:34px; padding:0 10px; border-radius:7px;
     background:var(--card); border:1px solid var(--border2);
     transition:border-color .15s ease, box-shadow .15s ease;
 }
 .rms-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .rms-search svg   { color:var(--text3); flex-shrink:0; }
-.rms-search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font-family:var(--font); font-size:13px; }
+.rms-search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font-family:var(--font); font-size:12.5px; }
 .rms-search input::placeholder { color:var(--text3); }
 
 /* Segmented All / Occupied / Vacant */
-.rms-seg { display:flex; align-items:center; gap:4px; padding:4px; border-radius:12px;
-          background:var(--dash-sunk); border:1px solid var(--border); }
+/* One bordered group with hairline dividers, as the reference draws it — the
+   padded pill-inside-a-pill was 8px taller and read as two nested controls. */
+.rms-seg { display:inline-flex; border-radius:7px; overflow:hidden;
+          background:var(--card); border:1px solid var(--border2); }
 .rms-seg button {
-    height:32px; padding:0 12px; border-radius:9px; cursor:pointer; white-space:nowrap;
-    background:none; border:none; color:var(--text2);
-    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
+    height:32px; padding:0 12px; cursor:pointer; white-space:nowrap;
+    background:none; border:none; border-right:1px solid var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:12px; font-weight:600; transition:var(--transition);
 }
+.rms-seg button:last-child { border-right:none; }
 .rms-seg button:hover     { color:var(--text); }
 .rms-seg button.is-on     { background:var(--accent-dim); color:var(--accent-strong); }
 
 .rms-select {
-    height:40px; min-width:118px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
+    height:34px; min-width:0; padding:0 28px 0 10px; border-radius:7px; cursor:pointer;
     background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:13px; font-weight:500;
+    font-family:var(--font); font-size:12.5px; font-weight:500;
     appearance:none; -webkit-appearance:none;
     background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 12px center;
@@ -67,10 +87,10 @@
 .rms-select.is-set { border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
 
 .rms-btn {
-    height:40px; padding:0 14px; border-radius:11px; cursor:pointer; white-space:nowrap;
-    display:inline-flex; align-items:center; gap:7px;
+    height:34px; padding:0 11px; border-radius:7px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:6px;
     background:var(--card); border:1px solid var(--border2); color:var(--text2);
-    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
+    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
 }
 .rms-btn:hover { background:var(--dash-sunk); color:var(--text); }
 
@@ -88,47 +108,58 @@
 .rms-view button:hover  { color:var(--text); }
 .rms-view button.is-on  { background:var(--accent-dim); color:var(--accent-strong); }
 
-.rms-shell { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
+.rms-shell { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
 
 /* ── Room cards ──────────────────────────────────────────────────────────── */
 .rms-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:11px; }
 
 .rms-card {
     display:flex; flex-direction:column;
-    background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden;
-    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden;
+    transition:border-color .15s ease;
 }
-.rms-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
+/* No lift, no shadow. Forty-two cards each rising 3px and casting a shadow is
+   motion for its own sake across a whole screen; the border says it. */
+.rms-card:hover { border-color:var(--accent); }
 
 .rms-card__pic {
-    position:relative; height:96px; flex-shrink:0; cursor:pointer;
+    position:relative; height:112px; flex-shrink:0; cursor:pointer;
     background:var(--dash-sunk); border-bottom:1px solid var(--border);
     display:flex; align-items:center; justify-content:center; color:var(--text3);
 }
 .rms-card__pic img { width:100%; height:100%; object-fit:cover; display:block; }
 .rms-card__state {
-    position:absolute; top:9px; right:9px;
-    padding:4px 11px; border-radius:999px;
+    position:absolute; top:9px; left:9px;
+    padding:3px 9px; border-radius:6px;
     background:var(--dh-bg); color:var(--dh); font-size:11px; font-weight:700;
     backdrop-filter:blur(4px);
 }
+/* The bed count is a caption ON the picture, as the reference draws it — as a
+   bordered pill it was a second badge competing with the state above it. The
+   dark ground is fixed rather than tokenised because it sits on the picture
+   well, which is the same tint in both themes. */
 .rms-card__beds {
     position:absolute; bottom:9px; right:9px;
-    padding:4px 11px; border-radius:999px;
-    background:var(--card); border:1px solid var(--border);
-    color:var(--text); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+    display:inline-flex; align-items:center; gap:4px;
+    padding:3px 8px; border-radius:6px;
+    background:rgba(21,34,56,.72); border:none;
+    color:#fff; font-size:10.5px; font-weight:600; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
 }
 
-.rms-card__body { padding:10px 12px; display:flex; flex-direction:column; flex:1; min-width:0; }
-.rms-card__num  { font-size:19px; font-weight:800; letter-spacing:-.02em; color:var(--text);
-                 font-variant-numeric:tabular-nums; line-height:1.1; }
-.rms-card__type { display:inline-block; margin-top:5px; padding:3px 9px; border-radius:999px;
-                 background:var(--dh-bg); color:var(--dh); font-size:10.5px; font-weight:700; align-self:flex-start; }
+.rms-card__body { padding:12px 13px 13px; display:flex; flex-direction:column; flex:1; min-width:0; }
+/* Number and type share one baseline row. The type pill on its own line below
+   pushed every card ~20px taller for nothing the same row does not say. */
+.rms-card__head { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; }
+.rms-card__num  { font-size:15px; font-weight:700; letter-spacing:var(--ant-num-track); color:var(--text);
+                 font-family:var(--ant-num-font);
+                 font-variant-numeric:tabular-nums; line-height:1.2; }
+.rms-card__type { display:inline-block; padding:1px 7px; border-radius:10px;
+                 background:var(--accent-dim); color:var(--accent-strong); font-size:11px; font-weight:600; }
 
 .rms-row { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:11.5px; }
 .rms-row svg  { color:var(--text3); flex-shrink:0; }
 .rms-row .k   { color:var(--text3); }
-.rms-row .v   { margin-left:auto; color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.rms-row .v   { margin-left:auto; color:var(--text); font-weight:700; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 .rms-occ  { display:flex; flex-wrap:wrap; gap:5px; margin-top:11px; }
 .rms-occ__chip {
@@ -199,7 +230,7 @@
               font-size:12.5px; color:var(--text2); }
 .rms-list tr:last-child td { border-bottom:none; }
 .rms-list tbody tr:hover   { background:var(--dash-sunk); }
-.rms-list .num { font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.rms-list .num { font-size:13px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 
 .rms-empty { padding:52px 20px; text-align:center; color:var(--text3); font-size:13px; }
 .rms-empty svg { color:var(--text3); opacity:.5; margin-bottom:12px; }
@@ -341,7 +372,53 @@
 .arm-amen__free::placeholder { color:var(--text3); font-weight:600; }
 
 /* ── Narrow windows ──────────────────────────────────────────────────────── */
+
+/* ── Bulk Add ────────────────────────────────────────────────────────────────
+   The one button on this toolbar that creates data rather than reading it, so
+   it carries the accent while CSV and Print stay quiet. */
+.rms-btn--go {
+    border-color:var(--accent); color:var(--accent);
+}
+.rms-btn--go:hover {
+    background:var(--accent); border-color:var(--accent); color:#fff;
+}
+
+.arm-opt { font-weight:500; opacity:.7; }
+
+/* From / To sit side by side under the prefix. Its own rule rather than
+   .arm-split, which is the modal's two-COLUMN layout and collapses to one
+   column on narrow screens -- a range that stacked would read as two
+   unrelated fields. */
+.brk-range { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+
+.brk-preview { min-height:64px; }
+
+.brk-sum {
+    font-size:13.5px; color:var(--text2); font-weight:500; margin-bottom:9px;
+}
+.brk-sum b { color:var(--text); font-weight:800; font-family:var(--ant-num-font);
+             letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+
+.brk-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.brk-chip {
+    display:inline-flex; align-items:center; height:24px; padding:0 8px;
+    border-radius:7px; background:var(--dash-sunk); border:1px solid var(--border);
+    color:var(--text2); font-size:11.5px; font-weight:600;
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+    font-variant-numeric:tabular-nums;
+}
+.brk-chip.is-more { background:none; border-style:dashed; color:var(--text3); }
+
+.brk-msg {
+    margin-top:10px; padding:9px 11px; border-radius:9px;
+    font-size:12.5px; font-weight:500; line-height:1.45;
+}
+.brk-msg b { font-weight:800; }
+.brk-msg.is-bad  { background:var(--ant-danger-bg);  color:var(--ant-danger-fg); }
+.brk-msg.is-warn { background:var(--ant-warning-bg); color:var(--ant-warning-fg); }
+
 @media (max-width:900px) {
     .arm-split     { grid-template-columns:1fr; }
+    .brk-range     { grid-template-columns:1fr 1fr; }   /* a range stays a range */
     .arm-amen-grid { grid-template-columns:repeat(2,1fr); }
 }

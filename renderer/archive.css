@@ -54,7 +54,8 @@
             padding:14px 16px; min-width:0; }
 .arc-kpi__l { font-size:11px; font-weight:700; text-transform:uppercase;
               letter-spacing:.8px; color:var(--text3); margin-bottom:6px; }
-.arc-kpi__v { font-size:24px; font-weight:800; letter-spacing:-.02em; color:var(--text);
+.arc-kpi__v { font-size:24px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text);
+              font-family:var(--ant-num-font);
               font-variant-numeric:tabular-nums; line-height:1.15; }
 .arc-kpi__s { font-size:11px; color:var(--text3); margin-top:3px; }
 .arc-kpi.dh-green .arc-kpi__v { color:var(--green); }
@@ -88,6 +89,8 @@
 .arc-panel__t { font-size:13.5px; font-weight:800; color:var(--text); }
 .arc-panel__n { font-size:11px; color:var(--text3); }
 .arc-panel__end { margin-left:auto; font-size:13px; font-weight:800;
+                  font-family:var(--ant-num-font);
+                  letter-spacing:var(--ant-num-track);
                   font-variant-numeric:tabular-nums; }
 
 .arc-wrap  { overflow-x:auto; }
@@ -103,7 +106,7 @@
 .arc-table tbody tr:last-child td { border-bottom:none; }
 .arc-table tbody tr.is-click { cursor:pointer; }
 .arc-table tbody tr.is-click:hover { background:var(--dash-sunk); }
-.arc-table .num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+.arc-table .num { font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
 .arc-table .nm  { font-weight:700; color:var(--text); }
 .arc-table tr.arc-sub td { background:var(--dash-sunk); font-weight:800; color:var(--text); }
 
@@ -114,6 +117,8 @@
 .arc-grand__l { font-size:11px; text-transform:uppercase; letter-spacing:1.2px;
                 color:var(--text3); font-weight:700; }
 .arc-grand__v { margin-left:auto; font-size:21px; font-weight:900;
+                font-family:var(--ant-num-font);
+                letter-spacing:var(--ant-num-track);
                 font-variant-numeric:tabular-nums; }
 
 .arc-empty { padding:44px 20px; text-align:center; color:var(--text3); font-size:13px; }
@@ -135,6 +140,8 @@
 .arc-sd-k__l { font-size:10px; font-weight:700; text-transform:uppercase;
                letter-spacing:.7px; color:var(--text3); }
 .arc-sd-k__v { font-size:17px; font-weight:800; margin-top:3px;
+               font-family:var(--ant-num-font);
+               letter-spacing:var(--ant-num-track);
                font-variant-numeric:tabular-nums; color:var(--text); }
 .arc-sd-sec { font-size:12px; font-weight:800; color:var(--text2);
               text-transform:uppercase; letter-spacing:.7px; margin:14px 0 6px; }

@@ -19,11 +19,14 @@
     "build:installer": "electron-builder --win nsis --x64 --ia32 && node scripts/pin-latest-yml.js",
     "build:all": "electron-builder --win --x64 --ia32 && node scripts/pin-latest-yml.js",
     "test:license": "node test-license.js",
+    "test:activation": "node tests/activation-guard.test.js",
     "test:e2e": "playwright test",
     "test:migrate": "node migrations/001-relational-schema.test.js",
     "test:retention": "node tests/retention.test.js",
+    "test:bulkrooms": "node tests/bulk-rooms.test.js",
+    "test:servicemodel": "node tests/service-model.test.js",
     "test:services": "node tests/services.test.js",
-    "test:update": "node tests/update-url.test.js",
+    "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {

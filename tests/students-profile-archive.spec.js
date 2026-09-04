@@ -139,10 +139,18 @@ test('one avatar everywhere, and a photo always beats the fallback', async () =>
       { docs: { photo: 'data:image/png;base64,iVBORw0KGgo=' } });
     wrap.innerHTML = studentAvatar(noPhoto, 30) + studentAvatar(withPhoto, 76);
     const a = wrap.children[0], b = wrap.children[1];
+    // A name that yields no letter at all must still draw something.
+    const nameless = Object.assign({}, DB.students[0], { name: '—', docs: {} });
+    wrap.insertAdjacentHTML('beforeend', studentAvatar(nameless, 30));
+    const c = wrap.children[2];
     return {
-      // No photo → the glyph, and nothing that could be mistaken for initials.
-      fallbackIsGlyph: !!a.querySelector('svg') && !a.querySelector('img'),
+      // No photo → the student's initials, never a photo and never a glyph.
+      fallbackIsInitials: !a.querySelector('svg') && !a.querySelector('img'),
       fallbackText: a.textContent.trim(),
+      expectedInitials: String(noPhoto.name || '').trim().split(/\s+/)
+        .slice(0, 2).map(w => w[0]).join('').toUpperCase(),
+      // …and a name with no letters in it still falls back to the glyph.
+      namelessIsGlyph: !!c.querySelector('svg') && c.textContent.trim() === '',
       // A photo → the photo, and no glyph competing with it.
       photoWins: !!b.querySelector('img') && !b.querySelector('svg'),
       // Size is the caller's, so one rule serves a table cell and a print hero.
@@ -153,8 +161,24 @@ test('one avatar everywhere, and a photo always beats the fallback', async () =>
     };
   });
 
-  expect(out.fallbackIsGlyph).toBe(true);
-  expect(out.fallbackText, 'the fallback should not be a letter').toBe('');
+  /* CONTRACT CHANGED 2026-09-03, deliberately. This asserted the fallback was
+     a glyph with "nothing that could be mistaken for initials". Reading the
+     commit that added it (e6dcd61), the glyph was a stand-in for an unusable
+     supplied asset — "a clean image can replace the glyph in one line" — and
+     the invariant that actually mattered was ONE helper drawing ONE thing
+     everywhere, because three screens had been drawing one initial, two
+     initials and the full name for the same person.
+
+     That invariant is untouched and still asserted below (onPage === rows).
+     What changed is what the single helper draws: the owner's reference design
+     for the students roster uses two-letter initials, and a roster of forty
+     students drew forty identical mortarboards, so the avatar column carried
+     no information at all. */
+  expect(out.fallbackIsInitials, 'no photo → initials, not a glyph').toBe(true);
+  expect(out.fallbackText, "and they are this student's initials")
+    .toBe(out.expectedInitials);
+  expect(out.namelessIsGlyph, 'a name with no letters still draws something')
+    .toBe(true);
   expect(out.photoWins).toBe(true);
   expect(out.sized).toEqual(['30px', '76px']);
   expect(out.onPage).toBe(out.rows);

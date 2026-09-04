@@ -20,18 +20,36 @@
 //             service keeps a high-water mark of the latest one it has ever
 //             seen. A clock behind that watermark is provably wrong.
 //
-// ── THIS PHASE ENFORCES NOTHING ─────────────────────────────────────────────
+// ── THIS FILE STILL DECIDES NOTHING — BUT SOMETHING ELSE NOW DOES ───────────
 //
-// Read that again before extending this file. The service verifies, caches and
-// REPORTS. It does not gate a single feature, and `main.js`'s
-// `checkLicenseValidity()` remains the sole authority over whether the app
-// runs. There is no device registration yet, so no machine in the field can
-// hold an entitlement — wiring enforcement now would gate 50+ production
-// installs on a credential none of them can obtain.
+// This heading used to read "THIS PHASE ENFORCES NOTHING", and it went on to
+// say the app behaved byte-for-byte as it did before. That stopped being true
+// when enforcement was wired, and a comment that confidently states the
+// opposite of the code is worse than no comment: it invites the next reader to
+// extend this file as if nothing downstream were listening.
 //
-// The cutover happens when `/desktop/v1/devices/register` exists AND a machine
-// has successfully registered. Until then this reports `NONE` and the app
-// behaves byte-for-byte as it does today.
+// What is still true, and is the reason to keep a note here at all: this
+// service VERIFIES, CACHES and REPORTS. It gates nothing itself. Keep it that
+// way — the split is what makes the trust boundary reviewable in one file.
+//
+// What changed:
+//
+//   services/enforcement.js   turns this report into a decision. REVOKED
+//                             blocks the app; SUSPENDED and EXPIRED make it
+//                             read-only (D-3: view everything, create nothing,
+//                             never destructive).
+//   main.js                   blocks the write at the IPC layer, so reaching a
+//                             control that slipped past the UI still fails.
+//   services/device.js        registers the machine and fetches what this file
+//                             verifies. `/v1/devices/register` exists and has
+//                             been exercised against the live control plane.
+//
+// `checkLicenseValidity()` in main.js is therefore no longer the sole
+// authority. A fresh entitlement outranks the local licence file, because it
+// is the only thing that can know about a suspension, revocation or renewal
+// decided after this machine activated. With no apiBase — still the state of
+// every build shipped before services/discovery.js — this reports `NONE` and
+// the licence file decides everything, exactly as it always did.
 //
 // ── Offline is the normal case, not the error case ──────────────────────────
 //
@@ -39,8 +57,9 @@
 // Rule 6 is absolute: the control plane being unreachable must never stop
 // hostel operations. So the entitlement is cached on disk and keeps answering
 // from cache while offline, up to `notAfter`. Past `notAfter` it reports STALE
-// — which, once enforcement exists, means "fall back to the local licence",
-// never "stop working".
+// — which means "fall back to the local licence", never "stop working". That
+// is not aspirational any more; it is what enforcement.js does with a STALE
+// report.
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';

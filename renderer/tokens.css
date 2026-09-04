@@ -38,35 +38,50 @@
      selected states all follow from here. The token NAMES stay `--accent*`
      (CLAUDE.md rule 5); the deleted `--royal*` set is not coming back.
      ════════════════════════════════════════════════════════════════════════ */
-  --accent-50:  #eff6ff;
-  --accent-100: #dbeafe;
-  --accent-200: #bfdbfe;
-  --accent-300: #93c5fd;
-  --accent-400: #60a5fa;
-  --accent-500: #3b82f6;
-  --accent-600: #2563eb;
-  --accent-700: #1d4ed8;
-  --accent-800: #1e40af;
-  --accent-900: #1e3a8a;
+  /* Repointed 2026-09-03 to the accent of the owner's reference system (the
+     four Hostyllo mockups in Downloads: students, rooms, expenses, payment
+     worksheet — all of which declare --accent:#2451D6 / --accent-ink:#1B3FAE
+     / --accent-tint:#EAF0FE). It is a deeper, less cyan blue than the Tailwind
+     ramp that was here; against #F5F6F9 it reads as ink rather than as a link.
+
+     Per CLAUDE.md, rebranding means overriding THIS RAMP and nothing else —
+     --accent, --accent-strong, --accent-soft and --accent-dim all derive from
+     it, so every button, focus ring, nav pill, sort arrow and avatar in the
+     app followed from this one block. The token NAMES are unchanged. */
+  --accent-50:  #EAF0FE;
+  --accent-100: #D6E2FD;
+  --accent-200: #B3C8FA;
+  --accent-300: #86A5F5;
+  --accent-400: #5480EA;
+  --accent-500: #3A63DE;
+  --accent-600: #2451D6;
+  --accent-700: #1B3FAE;
+  --accent-800: #163289;
+  --accent-900: #132868;
 
   /* ════════════════════════════════════════════════════════════════════════
      SEMANTIC — only for status, never decoration
      ════════════════════════════════════════════════════════════════════════ */
-  --success-bg:     #ecfdf5;
-  --success-fg:     #047857;
-  --success-border: #a7f3d0;
+  /* The reference system's semantics. They are muted on purpose — the mockups
+     use a 1F8A5A green and a C0402F red, both several steps off full
+     saturation, so a status badge states a fact without shouting across a
+     dense table. Tints are their *-tint values verbatim; the borders are the
+     one part not given, derived at roughly the tint's own hue two steps down. */
+  --success-bg:     #E8F5EE;
+  --success-fg:     #1F8A5A;
+  --success-border: #BFE3D0;
 
-  --warning-bg:     #fffbeb;
-  --warning-fg:     #b45309;
-  --warning-border: #fde68a;
+  --warning-bg:     #FBF2E2;
+  --warning-fg:     #AD7A1E;
+  --warning-border: #EFD9A8;
 
-  --danger-bg:      #fef2f2;
-  --danger-fg:      #b91c1c;
-  --danger-border:  #fecaca;
+  --danger-bg:      #FBEBE8;
+  --danger-fg:      #C0402F;
+  --danger-border:  #F2C5BC;
 
-  --info-bg:        #eff6ff;
-  --info-fg:        #1d4ed8;
-  --info-border:    #bfdbfe;
+  --info-bg:        #EAF0FE;
+  --info-fg:        #1B3FAE;
+  --info-border:    #B3C8FA;
 
   /* ════════════════════════════════════════════════════════════════════════
      SURFACE
@@ -114,8 +129,8 @@
   /* ════════════════════════════════════════════════════════════════════════
      TYPOGRAPHY
      ════════════════════════════════════════════════════════════════════════ */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-               "Helvetica Neue", Arial, sans-serif;
+  --font-sans: 'Barlow', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, "Helvetica Neue", Arial, sans-serif;
 
   --text-xs:   11px;
   --text-sm:   13px;
@@ -140,35 +155,80 @@
    DARK MODE — MORE desaturated, not less
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --surface:         #141414;
-  --surface-muted:   #1c1c1c;
-  --surface-sunken:  #0f0f0f;
-  --surface-border:  #2a2a2a;
-  --surface-divider: #262626;
+  /* DERIVED, not given. The reference mockups are light-only, so this ladder
+     is the cool-navy inverse of their #F5F6F9 / #FFFFFF / #152238 system —
+     same hue family as their --sidebar:#131B2E, so the two themes read as one
+     product. The old ladder was pure neutral grey (#141414…#2a2a2a), which
+     went muddy the moment the surrounding chrome turned blue.
 
-  --text-primary:    #e5e5e5;
-  --text-secondary:  #a3a3a3;
-  --text-tertiary:   #737373;
+     CLAUDE.md rule 6: the ladder must span more than 8 lightness points.
+     #0B111C (L 7.6) → #242D41 (L 20.2) = 12.6. The greys it replaces spanned
+     9.7, so contrast between stacked dark surfaces improves rather than
+     regresses. */
+  /* WARMED 2026-09-04 with the ladder in style.css — see the long note there.
+     Same rungs, same lightness relationships, warm hue. */
+  --surface:         #1F1E1B;
+  --surface-muted:   #252320;
+  --surface-sunken:  #181715;
+  --surface-border:  #35322D;
+  --surface-divider: #2A2724;
 
-  /* Dark theme lifts the accent so it stays legible on near-black surfaces. */
-  --accent-600:      #3b82f6;
-  --accent-700:      #60a5fa;
+  --text-primary:    #FAF9F5;
+  --text-secondary:  #D8D5CD;
+  /* #737E96 was the straight inverse of the light --ink-faint and measured
+     4.18:1 on --card — below AA for normal text, and a REGRESSION on the warm
+     #a08d81 it replaced (5.71:1). Lifted until it clears 4.5: this token
+     carries 9.5-12px metadata (.ws__p i, .tsk-crumb, .tsk-foot__note), which
+     is exactly the size that cannot afford to be borderline. */
+  --text-tertiary:   #A09D96;
 
-  --success-bg:      rgba(52, 211, 153, 0.1);
-  --success-fg:      #34d399;
-  --success-border:  rgba(52, 211, 153, 0.2);
+  /* THE LABEL ON A FILLED ACCENT BUTTON IS NOT WHITE IN DARK MODE.
 
-  --warning-bg:      rgba(251, 191, 36, 0.1);
-  --warning-fg:      #fbbf24;
-  --warning-border:  rgba(251, 191, 36, 0.2);
+     The accent is LIFTED here (#4B7BFF) so accent-coloured text stays legible
+     on a near-black card. That lift is correct for text and wrong for a fill:
+     white on #4B7BFF is 3.77:1, below AA, so the app's most important button
+     had the least readable label on it in dark mode.
 
-  --danger-bg:       rgba(248, 113, 113, 0.1);
-  --danger-fg:       #f87171;
-  --danger-border:   rgba(248, 113, 113, 0.2);
+     Darkening the fill back until white works gives #346AFF, which measures
+     3.77:1 against the #151C2B card — it would fix the label by making the
+     button itself disappear, which is the exact problem the lift was raised to
+     solve. So the fill keeps the lift and the INK inverts: near-black on a
+     bright accent, 4.89:1. This is why the token exists rather than a literal
+     white at each call site. */
+  --text-on-accent:  #181715;
 
-  --info-bg:         rgba(96, 165, 250, 0.1);
-  --info-fg:         #60a5fa;
-  --info-border:     rgba(96, 165, 250, 0.2);
+  /* Dark theme lifts the accent so it stays legible on near-black surfaces.
+     Repointed with the ramp on 2026-09-03. #2451D6 is a deep ink blue chosen
+     to sit on #F5F6F9; on a #0E1420 ground it is barely separable from the
+     background, so dark takes two steps up the same hue rather than a
+     different hue. --accent-700 stays the LIGHTER of the two here because in
+     dark mode it is used for accent-coloured TEXT, which needs the contrast. */
+  /* Lifted one further step on 2026-09-04. #4B7BFF measured 4.52:1 against the
+     navy card and 4.43:1 against the warm one — the warm ground is fractionally
+     lighter, and that is enough to drop the accent under AA. This is the cost
+     of a cool accent on a warm ground, and it is small: two hex steps. */
+  --accent-600:      #4E7DFF;
+  --accent-700:      #7BA0FF;
+
+  /* Derived from the light semantics, not carried over from the old set. Each
+     hue is the mockups' own, lifted until it clears a #151C2B card, and the
+     washes go from 10% to 14% because the ground beneath them is now navy
+     rather than neutral black — 10% of a warm hue simply vanished on it. */
+  --success-bg:      rgba(63, 191, 131, 0.14);
+  --success-fg:      #3FBF83;
+  --success-border:  rgba(63, 191, 131, 0.26);
+
+  --warning-bg:      rgba(217, 164, 65, 0.14);
+  --warning-fg:      #D9A441;
+  --warning-border:  rgba(217, 164, 65, 0.26);
+
+  --danger-bg:       rgba(240, 121, 106, 0.14);
+  --danger-fg:       #F0796A;
+  --danger-border:   rgba(240, 121, 106, 0.26);
+
+  --info-bg:         rgba(123, 160, 255, 0.14);
+  --info-fg:         #7BA0FF;
+  --info-border:     rgba(123, 160, 255, 0.26);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -192,35 +252,58 @@
 /* Light mode overrides for new tokens */
 body.light-theme {
   color-scheme: light;
-  --surface:         #ffffff;
-  --surface-muted:   var(--gray-50);
-  --surface-sunken:  var(--gray-100);
-  --surface-border:  var(--gray-200);
-  --surface-divider: var(--gray-200);
+  /* Taken verbatim from the reference mockups' :root — this is their system,
+     not an interpretation of it. --surface-border is their --border, and
+     --surface-divider their --border-strong. */
+  --surface:         #FFFFFF;
+  --surface-muted:   #FAFBFD;
+  --surface-sunken:  #F5F6F9;
+  --surface-border:  #E4E7EE;
+  --surface-divider: #D3D8E2;
 
-  --text-primary:    var(--gray-900);
-  --text-secondary:  var(--gray-600);
-  --text-tertiary:   var(--gray-400);
+  --text-primary:    #152238;
+  --text-secondary:  #5B647A;
+  /* WAS #8A93A6 — the mockups' --ink-faint, and 2.86:1 on the workspace
+     ground. The dark theme was given exactly this treatment (see --text-tertiary
+     above, lifted "until it clears 4.5" because it carries 9.5-12px metadata);
+     light was not, and it is the lighter theme that needs it more. Darkened
+     along its own hue until it clears AA on the harder of the two grounds:
+     4.53:1 on #F5F6F9, 4.87:1 on a white card. This token is a large part of
+     what reads as "washed out" — it is under every timestamp, every room
+     subtitle and every helper line in the app. */
+  --text-tertiary:   #677187;
+  /* White is right on the light accent (#FFFFFF on #2451D6 = 6.52:1) and wrong
+     on the dark lift — see the dark block, where this is near-black. */
+  --text-on-accent:  #FFFFFF;
 
-  /* Light theme deepens it so accent-coloured TEXT keeps contrast on white. */
-  --accent-600:      #2563eb;
-  --accent-700:      #1d4ed8;
+  /* Their --accent and --accent-ink. Unlike the old pair these are already the
+     ramp's own 600/700, so light needs no deepening — the ramp was built on
+     them. Kept as explicit overrides so the dark lift above cannot leak. */
+  --accent-600:      #2451D6;
+  --accent-700:      #1B3FAE;
 
-  --success-bg:      #ecfdf5;
-  --success-fg:      #047857;
-  --success-border:  #a7f3d0;
+  /* The two *-fg values below are nudged off the mockups' own, and only these
+     two. Both are STATUS text carrying money — a settled figure and an amount
+     due — so they are the last things in the app that may be borderline, and
+     both were: #1F8A5A measured 4.01:1 and #AD7A1E 3.48:1 on the workspace
+     ground. Darkened along their own hue to the smallest value that clears AA
+     on the harder ground, so the palette still reads as the reference system's
+     muted green and amber rather than as saturated alert colours. */
+  --success-bg:      #E8F5EE;
+  --success-fg:      #1D8054;   /* was #1F8A5A — 4.01:1 */
+  --success-border:  #BFE3D0;
 
-  --warning-bg:      #fffbeb;
-  --warning-fg:      #b45309;
-  --warning-border:  #fde68a;
+  --warning-bg:      #FBF2E2;
+  --warning-fg:      #95691A;   /* was #AD7A1E — 3.48:1 */
+  --warning-border:  #EFD9A8;
 
-  --danger-bg:       #fef2f2;
-  --danger-fg:       #b91c1c;
-  --danger-border:   #fecaca;
+  --danger-bg:       #FBEBE8;
+  --danger-fg:       #C0402F;
+  --danger-border:   #F2C5BC;
 
-  --info-bg:         #eff6ff;
-  --info-fg:         #1d4ed8;
-  --info-border:     #bfdbfe;
+  --info-bg:         #EAF0FE;
+  --info-fg:         #1B3FAE;
+  --info-border:     #B3C8FA;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -240,10 +323,19 @@ body.light-theme {
   --accent:           var(--accent-600);
   --accent-soft:      var(--accent-100);
   --accent-strong:    var(--accent-700);
-  /* Translucent accent wash — replaces the former --gold-dim/--royal-dim.
-     One value works on both themes (subtle accent wash on any surface). */
-  --accent-dim:       rgba(59, 130, 246, 0.12);
+  /* Translucent accent wash. It is now set PER THEME rather than once: the
+     reference system's tint (#EAF0FE) is a barely-there 8% wash on white, and
+     that same 8% is invisible on a near-black ground. One value cannot serve
+     both — it did before only because the old accent was light enough to
+     survive either way. Light stays here; dark is lifted below. */
+  --accent-dim:       rgba(36, 81, 214, 0.08);
 }
+
+/* The dark wash. This block must come AFTER the alias block above: dark is the
+   bare `:root` default, so at equal specificity the later rule is the one that
+   wins. body.light-theme carries higher specificity and needs no repetition. */
+:root { --accent-dim: rgba(78, 125, 255, 0.16); }
+body.light-theme { --accent-dim: rgba(36, 81, 214, 0.08); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PHASE 1 ADDITIONS — spec §31
@@ -295,4 +387,206 @@ body.light-theme {
   --conn-offline-bg:      var(--surface-sunken);
   --conn-unconfigured-fg: var(--text-tertiary);
   --conn-unconfigured-bg: var(--surface-muted);
+}
+
+/* ── ANTHROPIC CHROME ────────────────────────────────────────────────────────
+   Extracted 2026-09-01 from the Anthropic/Claude design-system teardown, for
+   the payments-table pilot. Additive only — nothing above was retuned.
+
+   What was taken: the semantic badge palette and the numeral treatment.
+   What was NOT taken, deliberately:
+     · the clay/orange accent (#d97757 / #cc785c) — this app is royal blue and
+       the owner rejected the orange outright. --accent* is untouched.
+     · the warm ivory surface ladder — it collides with this app's surfaces the
+       same way BASELINE.css would have (see CLAUDE.md § Design governance).
+     · the serif-body-at-20px move — it is the system's loudest signal, and it
+       is an editorial signal. A warden reading a 25-row ledger needs dense
+       sans chrome, which is what that system itself uses for tables.
+
+   Anthropic's semantics are warmer and ~20% less saturated than this app's
+   existing --success/--warning/--danger, which are Tailwind emerald/amber/red.
+   Held separately rather than overwriting those, so the pilot is revertible. */
+:root {
+  --ant-success-fg:  #5db872;
+  --ant-success-bg:  rgba(93, 184, 114, 0.14);
+  --ant-warning-fg:  #d4a017;
+  --ant-warning-bg:  rgba(212, 160, 23, 0.14);
+  --ant-danger-fg:   #c64545;
+  --ant-danger-bg:   rgba(198, 69, 69, 0.14);
+  --ant-teal:        #5db8a6;
+  --ant-amber:       #e8a55a;
+  --ant-neutral-fg:  #a09d96;
+  --ant-neutral-bg:  rgba(160, 157, 150, 0.14);
+
+  /* Numerals. Anything a reader COMPARES is set in Barlow with TABULAR
+     figures: every digit takes the same advance, so columns line up and a
+     changed value never shifts its neighbours. Bundled in vendor/fonts.css --
+     this app runs with no network, so a webfont link would fail in the field.
+
+     THE FACE IS THE DESIGN'S; THE TABULAR FIGURES ARE NOT, AND THAT IS
+     DELIBERATE. The Add Student design sets no font-variant-numeric anywhere,
+     which costs nothing in a mockup whose numbers never change and is wrong in
+     a ledger. Measured: plain Barlow spreads its digit widths 33.97px across
+     0-9 and moves a money column's right edge 13.53px between 11,111 and
+     88,888. Barlow carries tabular figures, and with font-variant-numeric that
+     spread is 0.00px. So this app takes the design's typeface and keeps the
+     alignment; do not remove tabular-nums to "match the design more closely".
+
+     It is also NARROWER than the Roboto Mono it replaces -- 103.11px against
+     125.42px for an 11-character figure at 19px -- which widens the KPI
+     truncation budget rather than tightening it. See payments.css.
+
+     TRACKING IS ZERO, AND THAT IS THE POINT. Every stat in this app used to be
+     font-weight:800 at letter-spacing:-.02em, which crowds heavy digits until
+     a figure reads as smudged rather than crisp -- worst on the numbers that
+     matter most, because those are the biggest and boldest. A monospaced face
+     is drawn on a fixed pitch and needs no help closing its gaps: negative
+     tracking only takes away the space the design already accounted for.
+     Do not reintroduce a negative value here, or on any rule that sets
+     font-variant-numeric: tabular-nums.
+
+     --font-mono stays JetBrains Mono: it is the CODE face (licence keys,
+     machine ids, the key preview in chrome). Numerals and code are different
+     jobs, so they are different tokens. */
+  --ant-num-font:    'Barlow', 'Inter', system-ui, sans-serif;
+  --ant-num-track:   0;
+  --ant-unit-track:  0.1em;
+}
+body.light-theme {
+  --ant-success-fg:  #3f8f52;
+  --ant-success-bg:  rgba(93, 184, 114, 0.13);
+  --ant-warning-fg:  #96710f;
+  --ant-warning-bg:  rgba(212, 160, 23, 0.15);
+  --ant-danger-fg:   #a53535;
+  --ant-danger-bg:   rgba(198, 69, 69, 0.11);
+  --ant-neutral-fg:  #6c6a64;
+  --ant-neutral-bg:  rgba(108, 106, 100, 0.10);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME-SCOPED ALIASES — the rule this file kept breaking
+
+   ── THE MECHANISM ─────────────────────────────────────────────────────────
+
+   A custom property whose value is `var(--other)` is SUBSTITUTED WHERE IT IS
+   DECLARED, not where it is read. Declare `--primary: var(--accent)` on :root
+   and it resolves against :root's --accent, once. Everything below :root then
+   inherits that finished value.
+
+   This theme switches on `body.light-theme`, and body is a CHILD of :root. So
+   every light override lands one level BELOW where the aliases were resolved,
+   and cannot reach back up to change them. The alias keeps the dark value in
+   light mode, silently, for as long as nobody measures it.
+
+   ── WHAT IT COST ──────────────────────────────────────────────────────────
+
+   `--accent` was the expensive one. The light block above sets --accent-600 to
+   #2451D6 and says, in its own comment, that it is "kept as an explicit
+   override so the dark lift above cannot leak". The lift leaked anyway —
+   through `--accent: var(--accent-600)`, declared on :root fifty lines later.
+   Light mode was painting every accent surface in the DARK lift #4B7BFF:
+
+       white label on a filled button   #4B7BFF  3.77:1   FAILS WCAG AA
+                                        #2451D6  6.52:1   passes
+
+   The primary button in light mode was below AA, and the cause was not the
+   colour anyone chose — both values are fine — but a variable resolving one
+   element too high. Seven more aliases were frozen the same way: --background,
+   --surface-secondary, --border-token, --muted, --primary, --success,
+   --danger, --warning.
+
+   ── THE RULE ──────────────────────────────────────────────────────────────
+
+   AN ALIAS IS DECLARED IN EVERY THEME SCOPE, NOT JUST THE DEFAULT ONE.
+
+   Every alias is repeated below, including the ones that are not currently
+   broken because their target happens not to be themed (--accent-soft,
+   --border-strong, --text-disabled). "Every alias, always" is a rule someone
+   can follow; "the subset whose target is themed today" is a rule that breaks
+   the day a grey becomes themeable, and breaks silently.
+
+   The expressions are deliberately IDENTICAL to the :root ones — same var(),
+   no hardcoded hex. Re-stating the expression on body is the whole fix,
+   because it makes it resolve against body's palette. It also means the light
+   values track the light ramp automatically; nothing here needs editing when
+   the ramp is repointed.
+
+   Two precedents in this file got it right and are the reason the pattern was
+   findable at all: `--accent-dim` carries an explicit body.light-theme line,
+   and so does the whole --ant-* block. They were treated as one-offs. They
+   were the general case.
+
+   Specificity, not file order, is what makes this work: body.light-theme is
+   (0,1,1) against :root's (0,1,0), so these win over the alias declarations in
+   style.css even though style.css loads after this file. Verified by reading
+   getComputedStyle in both themes — see tests/theme-parity.spec.js, which
+   fails if any of these ever resolves to the same value in both themes again.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* The DARK half of the same set. These eleven lived in style.css's :root under
+   a header calling them "SEMANTIC DESIGN TOKENS (single source of truth)" — a
+   claim two files cannot both make. They are moved here, unchanged, so the
+   bound design system owns both halves of every token and style.css owns none.
+
+   The var() targets (--bg, --card, --text, --accent, --green …) are still
+   declared in style.css. That is fine and not the bug from Phase 2: custom
+   properties resolve in a second pass AFTER the cascade settles, so a var()
+   written here picks up whatever those names finally compute to, regardless of
+   which file declared them or in what order. What broke before was scope — an
+   alias on :root reaching for a value overridden on body — not file order. */
+:root {
+  --background:          var(--bg);
+  --surface:             var(--card);
+  --surface-secondary:   var(--card2);
+  --border-token:        var(--border);
+  --text-primary:        var(--text);
+  --text-secondary:      var(--text2);
+  --muted:               var(--text3);
+  --primary:             var(--accent);
+  --success:             var(--green);
+  --danger:              var(--red);
+  --warning:             var(--amber);
+}
+
+body.light-theme {
+  /* Accent aliases (tokens.css :root, "LEGACY ALIASES" block) */
+  --accent:              var(--accent-600);
+  --accent-soft:         var(--accent-100);
+  --accent-strong:       var(--accent-700);
+
+  /* Brand aliases (tokens.css :root, "PHASE 1 ADDITIONS") */
+  --brand-primary:       var(--accent-600);
+  --brand-primary-hover: var(--accent-700);
+  --brand-primary-soft:  var(--accent-100);
+  --brand-primary-dark:  var(--accent-800);
+
+  /* Border + text aliases */
+  --border-default:      var(--surface-border);
+  --border-strong:       var(--gray-400);
+  --border-focus:        var(--accent-600);
+  --text-disabled:       var(--gray-400);
+
+  /* Connectivity (§29). Every one of these aliases a themed token, so every
+     one of them was frozen: an offline chip in light mode was drawing its
+     text and ground from the DARK ladder, on a white card. */
+  --conn-online-fg:       var(--success-fg);
+  --conn-online-bg:       var(--success-bg);
+  --conn-degraded-fg:     var(--warning-fg);
+  --conn-degraded-bg:     var(--warning-bg);
+  --conn-offline-fg:      var(--text-secondary);
+  --conn-offline-bg:      var(--surface-sunken);
+  --conn-unconfigured-fg: var(--text-tertiary);
+  --conn-unconfigured-bg: var(--surface-muted);
+
+  /* The semantic set declared in style.css's :root. They are repeated HERE
+     rather than there because this file is the bound design system, and one
+     block that can be read start to finish beats the same rule split across
+     two files 4,000 lines apart. */
+  --background:          var(--bg);
+  --surface-secondary:   var(--card2);
+  --border-token:        var(--border);
+  --muted:               var(--text3);
+  --primary:             var(--accent);
+  --success:             var(--green);
+  --danger:              var(--red);
+  --warning:             var(--amber);
 }

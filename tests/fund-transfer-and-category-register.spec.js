@@ -234,8 +234,22 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   });
   console.log('TREND ' + JSON.stringify(trend));
   expect(trend.datasets).not.toBeNull();
+  // THE POINT OF THIS BLOCK: no Transfers series. calcExpenses() already carries
+  // the transfers, so a separate one draws the same money twice and a reader
+  // adding the two gets a figure the ledger never held.
   expect(trend.datasets.some(d => /Transfer/i.test(d || ''))).toBe(false);
-  expect(trend.datasets).toEqual(['Revenue', 'Expenses', 'Pending']);
+  /* Updated 2026-09-04: the dashboard trend is now two bars, not three lines
+     (design 1c). Pending was dropped deliberately — it is a balance, not a
+     monthly flow, so barring it beside collected revenue invited adding them
+     together.
+
+     Kept as exact equality rather than loosened to "contains Revenue and
+     Expenses". This assertion's neighbour above only rules out a series called
+     "Transfer"; exact equality is what would also catch a fourth series
+     arriving under any other name, which is the failure this spec exists to
+     prevent. Loosening it here would have quietly retired that guard while
+     looking like a routine update. */
+  expect(trend.datasets).toEqual(['Revenue', 'Expenses']);
   expect(trend.legend.some(l => /Transfer/i.test(l))).toBe(false);
   // The seeded transfer is 8000, so the two must differ — proving the
   // assertion above is actually discriminating.
