@@ -180,7 +180,7 @@ long after it stopped being true, which is how a regression reaches a client.
 ```powershell
 $env:HOSTIX_TEST_PROFILE = "<scratch>\hostix-profile"
 Copy-Item C:\HOSTIX-APP\.devdata\license.enc $env:HOSTIX_TEST_PROFILE\
-npx playwright test          # 23 spec files
+npx playwright test          # 39 spec files, 84 pass + 2 skip
 npm run test:services        # 136
 npm run test:retention       # 13
 npm run test:license         # licence system
