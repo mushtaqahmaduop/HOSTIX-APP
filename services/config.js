@@ -5,15 +5,26 @@
 //   1. HOSTYLLO_API_BASE                  environment variable (dev / tests)
 //   2. <userData>/online-config.json      per-machine override, key "apiBase"
 //   3. DEFAULT_API_BASE                   baked into the build — see below
-//   4. null                               → offline-only, ZERO network requests
+//   4. <userData>/control-plane.json      DISCOVERED — see services/discovery.js
+//   5. null                               → offline-only, ZERO network requests
 //
 // Steps 1 and 2 exist so a single machine can be pointed at a staging server
-// without a release. Step 3 is how the ~50 machines in the field learn the
-// address at all: nothing on a customer's PC will ever create an
-// online-config.json, so without a baked default they resolve to `null`, make
-// no requests, and can never be told anything — which is exactly the state
-// every shipped build has been in until now. A licence could be revoked in the
-// portal all day and no app was listening.
+// without a release. Neither is a rollout mechanism: nothing on a customer's
+// PC will ever create an online-config.json.
+//
+// Step 4 is how the ~50 machines in the field actually learn the address.
+// Until it existed they resolved to `null`, made no requests, and could never
+// be told anything — a licence could be revoked in the portal all day with no
+// app listening. It is a cache written by services/discovery.js from a JSON
+// document in the GitHub repository, so the estate can be re-pointed with one
+// commit instead of a release. Read that file for what the document can and
+// cannot do; the short version is that it supplies an ADDRESS and nothing
+// else, because entitlements are signed by a key it does not have.
+//
+// Step 4 sits BELOW step 3 on purpose. A build that bakes in a project-owned
+// domain should trust its own build; discovery is what carries builds that
+// shipped before that domain existed, and it goes dormant the moment one is
+// baked in.
 //
 // ── WHY THIS CONSTANT IS EMPTY, AND WHAT TO PUT IN IT ───────────────────────
 //
@@ -60,6 +71,9 @@ const path = require('path');
  *   'https://licence.hostyllo.com/v1'
  */
 const DEFAULT_API_BASE = '';
+
+/** Written by services/discovery.js, read by load(). See that file. */
+const DISCOVERY_CACHE_FILE = 'control-plane.json';
 
 const DEFAULTS = {
   // ── ApiClient (§36) ───────────────────────────────────────────────────────
@@ -125,6 +139,65 @@ function _normaliseBase(value) {
 }
 
 /**
+ * The cache services/discovery.js writes. Read here rather than there so that
+ * "where does apiBase come from" has exactly one owner and there is no require
+ * cycle between the two files — discovery.js imports this, not the reverse.
+ *
+ * Total, like _readFileConfig: any problem reads as "no cache". The file sits
+ * in a directory the customer can edit, so what comes off disk is re-checked
+ * by _normaliseBase rather than trusted.
+ *
+ * @returns {{apiBase:string|null, fetchedAt:number}|null}
+ */
+function readDiscoveryCache(userDataDir) {
+  if (!userDataDir) return null;
+  try {
+    const file = path.join(userDataDir, DISCOVERY_CACHE_FILE);
+    if (!fs.existsSync(file)) return null;
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!raw || typeof raw !== 'object' || raw.v !== 1) return null;
+    return {
+      apiBase: _normaliseBase(raw.apiBase),
+      fetchedAt: Number.isFinite(raw.fetchedAt) ? raw.fetchedAt : 0
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Adopt an address discovered AFTER load() ran, without re-running it.
+ *
+ * A fresh install has no cache, so its first boot resolves to `null` and the
+ * discovery fetch lands a second or two later. Without this the machine would
+ * sit offline until the next launch — which for a customer activating their
+ * licence is the whole of the first session.
+ *
+ * It mutates the resolved object IN PLACE rather than replacing it, because
+ * the services captured `cfg` by reference at construction. That is safe only
+ * because every URL-critical path re-reads through `isConfigured()` and
+ * `url()` at call time (api-client.js, device.js, connectivity.js) — the
+ * captured copy is used for numeric tunables. Do not start caching apiBase in
+ * a service without revisiting this.
+ *
+ * @returns {boolean} whether anything changed
+ */
+function adoptDiscoveredBase(value) {
+  const cfg = get();
+  // Never override a more specific source. env, the per-machine file and a
+  // baked default all outrank discovery, and a machine deliberately pointed at
+  // staging must not be dragged back to production by a background fetch.
+  if (cfg.apiBaseSource === 'env' || cfg.apiBaseSource === 'file' || cfg.apiBaseSource === 'default') {
+    return false;
+  }
+  const base = _normaliseBase(value);
+  if (cfg.apiBase === base) return false;
+  cfg.apiBase = base;
+  cfg.apiBaseSource = base ? 'discovered' : 'none';
+  return true;
+}
+
+/**
  * @param {object} opts
  * @param {string} [opts.userDataDir] app.getPath('userData')
  * @param {object} [opts.overrides]   test injection
@@ -133,10 +206,13 @@ function load(opts) {
   const o = opts || {};
   const fileCfg = _readFileConfig(o.userDataDir);
 
+  const discovered = readDiscoveryCache(o.userDataDir);
+
   const base =
     _normaliseBase(process.env.HOSTYLLO_API_BASE) ||
     _normaliseBase(fileCfg.apiBase) ||
     _normaliseBase(DEFAULT_API_BASE) ||
+    (discovered && discovered.apiBase) ||
     null;
 
   const numeric = {};
@@ -155,6 +231,7 @@ function load(opts) {
     apiBaseSource: process.env.HOSTYLLO_API_BASE ? 'env'
                  : fileCfg.apiBase ? 'file'
                  : _normaliseBase(DEFAULT_API_BASE) ? 'default'
+                 : (discovered && discovered.apiBase) ? 'discovered'
                  : 'none'
   });
 
@@ -182,4 +259,8 @@ function url(pathname) {
   return base + (p.startsWith('/') ? p : '/' + p);
 }
 
-module.exports = { load, get, isConfigured, url, DEFAULTS, DEFAULT_API_BASE, _normaliseBase };
+module.exports = {
+  load, get, isConfigured, url,
+  readDiscoveryCache, adoptDiscoveredBase,
+  DEFAULTS, DEFAULT_API_BASE, DISCOVERY_CACHE_FILE, _normaliseBase
+};

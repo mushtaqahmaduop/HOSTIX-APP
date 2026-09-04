@@ -9,17 +9,25 @@
 // or database primitive is exposed to the renderer — the renderer can ask for
 // a status snapshot and nothing else).
 //
-// Everything here is inert until a control plane URL exists. With none set —
-// which is the state today — nothing polls, nothing dials out, and the app
-// behaves exactly as the version running in production.
+// Everything here is inert until a control plane URL exists. With none set,
+// nothing polls, nothing dials out, and the app behaves exactly as the version
+// running in production.
+//
+// A build can now LEARN that URL after boot — services/discovery.js fetches it
+// from the repository, and `config.adoptDiscoveredBase()` applies it in place.
+// That is the one thing here that starts subsystems outside `start()`, and it
+// is why every start() below has to be idempotent. It stays fire-and-forget:
+// no boot path waits on it, and every failure leaves the app offline-only,
+// which is a supported state rather than an error.
 // ════════════════════════════════════════════════════════════════════════════
 
 'use strict';
 
 const path = require('path');
 
-const config = require('./config');
-const logger = require('./logger');
+const config    = require('./config');
+const discovery = require('./discovery');
+const logger    = require('./logger');
 const api    = require('./api-client');
 const { ConnectivityService, MODE } = require('./connectivity');
 const { OnlineQueue, STATUS } = require('./online-queue');
@@ -125,6 +133,33 @@ function start(opts) {
     }
   });
   if (config.isConfigured()) queue.start();
+
+  // ── Learning the address, for builds that shipped without one ─────────────
+  //
+  // Every installer in the field bakes an empty DEFAULT_API_BASE, so without
+  // this they resolve to `null` for the life of the build and no portal action
+  // can ever reach them. The document is fetched at most once a day; read
+  // services/discovery.js for what it can and cannot say.
+  //
+  // Never awaited. A hostel with no internet takes the `catch` and boots
+  // exactly as it does today, which is the normal case here, not a fault.
+  //
+  // Adoption re-enters the three lifecycles above rather than restarting the
+  // module, so a machine that learns its address at 09:00:02 does not have to
+  // be relaunched before anything reaches the control plane — the first thing
+  // a customer does after activating a licence is use the app, not restart it.
+  discovery.refresh({ userDataDir: o.userDataDir })
+    .then((r) => {
+      if (!r || !r.ok || !r.base) return;
+      if (!config.adoptDiscoveredBase(r.base)) return;
+      log.info('control_plane_address_adopted', {
+        apiBaseSource: cfg.apiBaseSource, changed: r.changed
+      });
+      queue.start();
+      connectivity.start();
+      device.start();
+    })
+    .catch(() => {});
 
   _services = {
     config, logger, api, connectivity, queue, entitlement, device, MODE, STATUS,
