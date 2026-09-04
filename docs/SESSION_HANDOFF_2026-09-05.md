@@ -223,27 +223,70 @@ forever.
 `HOSTIX_TEST_PROFILE`: the Playwright suite launches the app ~85 times, and a
 suite that reaches GitHub on every launch goes red when the network does.
 
-### 4.5 It does not resolve anything yet
+### 4.5 MERGED — and it resolves
 
-`control-plane.json` is on this branch. **Discovery returns `http_404` until it
-is merged to master**, and behaves exactly as designed while it does — verified
-against the live URL. Nothing changes for anyone until that merge.
+Merged as **PR #22** (`324a5fc`), and the chain was then run for real rather
+than declared done.
+
+```
+GET raw.githubusercontent…/master/control-plane.json   200
+refresh()  → {ok:true, base:"…railway.app/v1", changed:true}
+config     → apiBaseSource "discovered"
+GET  that address /healthz                             200
+```
+
+And in a real Electron boot, from a cold profile with no cache:
+
+```
+online_services_starting        configured:false  apiBaseSource:"none"
+discovery_changed               null → https://…railway.app/v1     (+1.5s)
+control_plane_address_adopted   apiBaseSource:"discovered"
+device_service_started
+device_register_failed          E_RATE_LIMITED  429
+```
+
+The app configured itself, in one session, with no relaunch and nothing written
+by hand. The 429 is the budget this session spent testing (see the runbook
+warning); it is the rate limiter working, and the app logged it at WARN, kept
+running, and will retry on its next tick.
+
+The cache it wrote names its own source, so someone finding it in `%APPDATA%`
+can tell what put it there:
+
+```json
+{ "v": 1, "apiBase": "https://…/v1", "fetchedAt": …,
+  "source": "https://raw.githubusercontent.com/…/master/control-plane.json" }
+```
 
 ---
 
 ## 5. Two things that are true and were not written down
 
-### 5.1 The deployed server fix is not on master
+### 5.1 The deployed server fix was not on master — it is now
 
-`2d3e7ea` — the sleeping-Postgres retry — is deployed to Railway and demonstrably
-running (§2), but it exists only on branches. **Anyone redeploying the control
-plane from master reintroduces the 500-on-wake bug**, which is the one that
-answered 500 to a correct portal password on 2026-09-03.
+`2d3e7ea` — the sleeping-Postgres retry — was deployed to Railway and running in
+production, but existed only on branches. Anyone redeploying the control plane
+from master would have reintroduced the 500-on-wake bug, the one that answered
+500 to a *correct* portal password on 2026-09-03.
 
-More broadly, `origin/master` is **32 commits and 81 files** behind this branch:
-the rail fix, the Anthropic design pass, the daily-flow sweep, the server fix,
-and everything in this document. Master is what a release is cut from and what
-50+ clients run.
+It came across with **PR #22**, along with the other 33: the rail fix, the
+Anthropic design pass, the daily-flow sweep, and all of the licensing work.
+`origin/master` had been 34 commits and 81 files behind.
+
+**What made that merge safe to do, since master is what 50+ clients run:**
+
+- PRs #19 and #20 changed **no files** relative to the merge base — their
+  content was already in this lineage — so the merged tree is byte-identical to
+  the branch head, and every suite run against that head applies to master.
+- The suite had run against a tree that ALSO held in-flight uncommitted Phase 4
+  theme work, which is not in the merge. That gap was closed rather than
+  assumed: `theme-parity`, `rail-reach`, `students-export`,
+  `students-profile-archive`, `zz-v6-redesign` and `zz-boot-diag` were re-run in
+  a throwaway worktree at the exact merge commit — **13/13**.
+- The owner's four uncommitted files were never touched. The worktree's
+  `node_modules` junction was removed with `rmdir` **before** the worktree was,
+  and the real `node_modules` was counted afterwards to prove it survived — that
+  exact deletion cost an `npm ci` on 2026-09-03.
 
 ### 5.2 A hostel still on v4.0.0 auto-installs whatever you publish next
 
@@ -360,12 +403,31 @@ changing. Nothing here reads them.
 
 ## 9. In order, what to do next
 
-1. **Get the portal credentials and run `e2e-admin.js`** (§6). It is the last
-   unproven link in the chain, and it is one command.
-2. **Merge to master** — at minimum `2297a9c` for `control-plane.json`, and
-   `2d3e7ea` so master matches what is deployed (§5.1). Nothing discovers an
-   address until the first of those lands.
-3. **Decide about 5.0.1 before publishing it** (§5.2), since it reaches every
+Merged to master as PR #22, so the two blocking items on the old list are gone.
+What is left:
+
+1. **Run `scripts/e2e-admin-portal.js`** (§6) once portal credentials are to
+   hand. It is the last unproven link in the chain, and it is one command.
+   Wait out the registration window first — see the runbook warning.
+2. **Decide about 5.0.1 before publishing it** (§5.2). It reaches every
    remaining v4 machine unattended.
-4. Only then bake `DEFAULT_API_BASE` — and only once `license.hostyllo.com`
+3. **Build and launch a packaged installer** with all of this in it. Nothing in
+   this session was tested from an installer, and `electron-builder`'s `files`
+   allowlist has caught a missing `services/**` before.
+4. Only then bake `DEFAULT_API_BASE`, and only once `license.hostyllo.com`
    answers `/v1/healthz`. Discovery removes the urgency, which is the point.
+
+### A follow-up worth someone's time, found in the boot log
+
+**A machine coming online for the first time registers TWICE**, 1.4s apart —
+once from the connectivity probe's status change (`index.js` syncs on every
+transition into reachable) and once from `device.start()`'s five-second timer.
+`sync()`'s `_syncing` flag only guards *overlapping* calls, so two sequential
+ones both proceed.
+
+This predates the discovery work; adoption merely made both fire close enough
+together to see. It is self-correcting — each `/devices/register` rotates the
+secret, so the second wins — and it only happens on the first online boot,
+because afterwards `_ensureToken()` uses `/devices/token` instead. But it spends
+two of a 20-per-hour budget instead of one, and there is a short window where
+the first sync's token has been deleted by the second registration.
