@@ -33,15 +33,24 @@ nothing anywhere in this document is marked VERIFIED.
 
 ## Verified
 
-Nothing is marked VERIFIED in this pass.
+Executed on this tip, 2026-09-05: **203 passed, 0 failed** across seven node
+suites, plus a clean typecheck. Full results in *Tests Executed* below. Only
+what those suites actually assert is promoted here.
 
-Spec §3 forbids marking a requirement VERIFIED from source inspection alone, and
-**no test was executed during this session**. The last recorded green run is in
-`docs/SESSION_HANDOFF_2026-09-04.md` (Playwright 84 passed / 2 skipped / 0
-failed; services 115; license 39; retention 13; server 29 + 21; typecheck clean)
-— but that run predates the 38-commit tip and the four uncommitted files, so it
-cannot carry a VERIFIED status forward on its own. Re-running it is the first
-action in Phase B.
+| § | Requirement | Executed evidence |
+|---|---|---|
+| 8 | Licence integrity — machine binding, tamper rejection, device limits, reinstall | `npm run test:license` — **39/39**. |
+| 8 | A degraded machine-ID probe cannot fake a licence failure *or* rescue a real one | `npm run test:activation` — **6/6**, including "a degraded reading is never recorded", "once recorded, the same missing fact is substituted and the id holds", and "a genuinely different machine is not rescued by substitution". This closes the `getMachineId()` fragility where three `wmic` calls timing out could read a valid licence as TAMPERED. |
+| 14 | `resolveCharges()` is the charge authority, and the service model cannot move an existing install's billing | `npm run test:servicemodel` — **16/16**, including "a pinned student keeps their own rent under every model" and "a pinned mess is still refused by a rent-only hostel". |
+| 15 | A migration preserves unknown fields | `npm run test:migrate` — **6/6**: "missing fields → null column, still preserved in data blob". This is 1 of §15's 12 required properties — see Partial. |
+| 21 | The update check degrades safely | `npm run test:update` — **8/8**: a malformed feed does not throw out of the click handler, URL-hostile characters are encoded, and an empty feed falls back to the releases page. This is the §2 "already up to date" correction, still present and still passing. |
+| 16 | Archive/retention pruning preserves records | `npm run test:retention` — **13/13**, including "an existing archive is appended to, not replaced". |
+| 11 | Connectivity/device/entitlement probe behaviour | `npm run test:services` — **115/115**, including "a probe falls back to a second mechanism before giving up" and "a first-ever boot with a failing probe is reported, not hidden". |
+
+Everything else in this document remains unverified. In particular **no
+Playwright run** was made on this tip — the 84-passed run in
+`docs/SESSION_HANDOFF_2026-09-04.md` predates it by 38 commits and the four
+uncommitted files, so it carries no status forward.
 
 ---
 
@@ -238,9 +247,21 @@ Recorded per the owner's instruction to flag stale premises rather than obey the
 
 ## Tests Executed
 
+Executed 2026-09-05 on `feature/dashboard-1c` @ `c63ff5f`.
+
 | Test | Result | Evidence |
 |---|---|---|
-| *(none)* | — | No test was run in this session. Per §3 and §32.13, nothing above is marked VERIFIED. The 2026-09-04 green run is prior evidence only, and predates the current tip. |
+| `npm run test:services` | **115 passed, 0 failed** | executed |
+| `npm run test:license` | **39 passed, 0 failed** | executed |
+| `npm run test:servicemodel` | **16 passed, 0 failed** | executed |
+| `npm run test:retention` | **13 passed, 0 failed** | executed |
+| `npm run test:update` | **8 passed, 0 failed** | executed |
+| `npm run test:migrate` | **6 passed, 0 failed** | executed |
+| `npm run test:activation` | **6 passed, 0 failed** | executed |
+| `npm run typecheck` | **0 errors** | executed |
+| **Total** | **203 passed, 0 failed** | |
+| `npx playwright test` | **NOT RUN** | ~11 min, needs a licensed `HOSTIX_TEST_PROFILE`. Required before Phase B is signed off. |
+| `node server/test/run.js`, `server/test/http.js` | **NOT RUN** | control-plane suites; last known 29 + 21 on 2026-09-04. |
 
 ---
 
