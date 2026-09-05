@@ -18,11 +18,16 @@
 
 ## Current Phase
 
-**Phase A — Live-State Reconciliation.** Spec §28 is correct that implementation
-is well advanced; it is *not* correct that Phase A had begun — this file did not
-exist before today.
+**Phase A — Live-State Reconciliation — COMPLETE.** Spec §28 was correct that
+implementation is well advanced; it was *not* correct that Phase A had begun —
+this file did not exist before today.
 
-Phases B–I have not started. Nothing in §29/§33 has been signed off.
+Every Phase A section is now reconciled, including the full §27 failure matrix.
+**Next is Phase B (Remaining Data Safety)**, whose scope is now known: the
+pre-restore backup, the §17 recovery workflow, and **D-2**.
+
+Phases B–I have not started. Nothing in §29/§33 has been signed off, and
+nothing anywhere in this document is marked VERIFIED.
 
 ---
 
@@ -83,6 +88,52 @@ action in Phase B.
 | 16 | Scheduled local backup | §16 requires four backup types (scheduled local, manual export, pre-migration, pre-restore). Only two exist: manual export (`db:exportFull`) and pre-migration (`main.js:115`). No scheduler was found. |
 | 17 | DB corruption detection and recovery | Absent. `integrity_check` appears nowhere in the codebase. There is no corruption detector, no recovery screen, no restore-to-temporary-DB, and no atomic switch. §17's entire chain is unimplemented, and §27's "DB corruption → recovery workflow" row cannot hold. |
 | 14 | Financial test matrix | §14 names 15 required cases (exact, partial, overpayment, multiple months, concessions, extras, cancellation, checkout, reversal, refund, zero, invalid/negative, large amounts, rounding boundaries). Reversal and refund have no implementation to test; rounding boundaries and large amounts have no policy to test against. |
+
+---
+
+## §22 — support and diagnostics
+
+| Element | Status | Detail |
+|---|---|---|
+| Diagnostic bundle | **MISSING** | No `createDiagnosticsBundle` exists, and none of §22's eight files (`diagnostics.json`, `app.log`, `error.log`, `environment.json`, `license-status.json`, `db-health.json`, `migration-status.json`, `update-status.json`) is produced. |
+| Support ID | **MISSING** | Nothing generates or displays one. §5 lists it as part of what the customer receives. |
+| The 13 support fields | **PARTIAL — 4 of 13** | The Connection panel reports Internet, Hostyllo API, License and Application state (`tests/connection-panel.spec.js:91-94`, which also asserts the panel makes no network requests). Absent: app version, OS, architecture, schema version, DB health, truncated machine identifier, backup health, update health, support ID. |
+| Logging substrate | **IMPLEMENTED-UNVERIFIED** | `services/logger.js` is a real rotating file logger — levels, 7-file retention, 5 MB rotation — with `redact` and `redactString` imported at `:29`, so redaction is wired into the log path rather than bolted on. |
+| Centralized redaction | **IMPLEMENTED-UNVERIFIED** | `services/redact.js` is substantial and clearly considered. But §22 forbids exposing licence keys and CNICs specifically, and **no test feeds it either one**. |
+
+> **Trap worth recording.** `tests/diag.spec.js` reads like diagnostics coverage
+> and is not — its only test is `diagnose account menu`, a UI check. Do not
+> count it as §22 evidence.
+
+---
+
+## §27 — failure matrix, row by row
+
+| Failure | Required result | Status |
+|---|---|---|
+| Internet unavailable | Local operations continue | IMPLEMENTED-UNVERIFIED — structural, see §11 |
+| DNS failure | Backoff; no data loss | IMPLEMENTED-UNVERIFIED |
+| API 500 | Preserve cached entitlement | **PARTIAL** — this fired for real on 2026-09-04. A POST without an idempotency key is deliberately non-retryable, so `willRetry` was `false`; it survived only because `DeviceService` happened to retry on its next tick. Recovery is incidental, not designed. |
+| Timeout | Backoff | IMPLEMENTED-UNVERIFIED |
+| Expired entitlement | Deterministic restricted state | IMPLEMENTED-UNVERIFIED |
+| Remote suspension | Enforce after authenticated receipt | IMPLEMENTED-UNVERIFIED — exercised by hand 2026-09-04 |
+| Remote revocation | Enforce after authenticated receipt | IMPLEMENTED-UNVERIFIED |
+| Wrong machine | Reject | IMPLEMENTED-UNVERIFIED — see the `getMachineId()` fragility note |
+| Tampered entitlement | Reject | IMPLEMENTED-UNVERIFIED |
+| Disk full | No false success | **PARTIAL** — PDF path only |
+| Permission denied | Actionable failure | **PARTIAL** — PDF path only |
+| Invalid/corrupt backup | Reject before mutation | **PARTIAL** — renderer only (**D-2**) |
+| Interrupted restore | Live DB remains safe | IMPLEMENTED-UNVERIFIED — `db.transaction()` |
+| DB corruption | Recovery workflow | **MISSING** |
+| Migration crash | Transaction/recovery | IMPLEMENTED-UNVERIFIED — pre-migration backup + transactions |
+| Update interruption | DB preserved | **MISSING** — no pre-update backup |
+| Unsigned artifact | Release blocked | **MISSING** — nothing is signed |
+| Signature mismatch | Update rejected | **MISSING** — `verifyUpdateCodeSignature: false` |
+| XSS payload | Inert | IMPLEMENTED-UNVERIFIED — escaping sweep + `tests/html-escaping.spec.js` |
+| Invalid IPC | Rejected | **PARTIAL** — see **D-2** |
+| Unknown schema | Safe recovery | **NOT ASSESSED** — §15 also requires never auto-downgrading an unsupported schema |
+
+Nine of twenty-one rows are PARTIAL, MISSING or unassessed.
 
 ---
 
@@ -227,9 +278,12 @@ Uncommitted in-flight design work, left exactly as found:
 - **Medium — no pre-restore backup (§16).** Restoring the wrong file is
   transactional and therefore *irreversible on success*: it commits cleanly over
   live data with no snapshot to return to.
-- **Still unreconciled:** §22's 13 support fields and 8-file diagnostic bundle,
-  and the full 21-row §27 failure matrix. Everything else in the Phase A scope
-  is now assessed.
+- **Medium — no support bundle (§22).** When a customer's install misbehaves
+  there is currently no way to get its state off their machine. That is a
+  support-cost risk rather than a data risk, but §5 sells a support identifier
+  as part of the product.
+- **Nothing in the Phase A scope is now unassessed.** The one row left open is
+  §27's "unknown schema → safe recovery", which belongs to Phase B.
 
 ---
 
