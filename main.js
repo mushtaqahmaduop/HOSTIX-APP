@@ -45,6 +45,125 @@ let dbPath = null;
 const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
   'maintenance','complaints','checkinlog','notices','fines',
   'activitylog','inspections','billsplits','transfers','archive'];
+
+/* DATABASE HEALTH  —  spec §17.
+ *
+ * Until now a corrupt database was an unhandled crash. initDatabase() was
+ * called bare inside app.whenReady(), so `new Database()` throwing on a damaged
+ * file took the whole boot with it: no window, no message, no way for the
+ * warden to tell a broken file apart from a broken app. §17 asks for the
+ * opposite — detect, stop writing, and show somebody what to do about it.
+ *
+ * HEALTHY   the file opened and passed PRAGMA integrity_check
+ * CORRUPT   it did not, and nothing may write to it
+ * DISK_FULL a write failed for space; reads still work, the data is intact
+ *
+ * The state is deliberately separate from licence enforcement. A suspended
+ * hostel has a healthy database it is not allowed to write to; a corrupt one is
+ * a licensed hostel that CANNOT write. Collapsing them would tell a customer
+ * with a damaged disk that their licence expired.
+ */
+let dbHealth = { state: 'HEALTHY', reason: null, detail: null, at: null };
+
+function _setDbHealth(state, reason, detail) {
+  dbHealth = { state, reason: reason || null, detail: detail || null,
+               at: new Date().toISOString() };
+  if (state !== 'HEALTHY') console.error('[HOSTYLLO] DB health →', state, '—', reason);
+  return dbHealth;
+}
+
+/* PRAGMA integrity_check, not quick_check.
+ *
+ * quick_check skips the index-vs-table consistency pass, which is exactly the
+ * damage a half-written page produces and exactly what silently returns wrong
+ * query results afterwards. A hostel database is a few megabytes; the extra
+ * time is not worth the class of corruption it would miss. */
+function _integrityCheck(handle) {
+  try {
+    const rows = handle.pragma('integrity_check');
+    // better-sqlite3 returns [{ integrity_check: 'ok' }] when the file is sound.
+    const first = rows && rows[0] &&
+      (rows[0].integrity_check !== undefined ? rows[0].integrity_check : rows[0]);
+    if (String(first).toLowerCase() === 'ok') return { ok: true };
+    return { ok: false, reason: 'integrity_check reported damage',
+             detail: JSON.stringify(rows).slice(0, 2000) };
+  } catch (e) {
+    return { ok: false, reason: e.message, detail: e.code || null };
+  }
+}
+
+/* WHAT A FAILED WRITE ACTUALLY MEANS.
+ *
+ * §17's rule is "no false success", and §12's is that a success message may
+ * only follow durable persistence. Both were already honoured — every write
+ * handler returns { ok:false, error } — but the error was a raw SQLite string,
+ * so a full disk and a damaged file reached the warden as the same
+ * indistinguishable sentence. They need opposite actions: one is "free some
+ * space and try again", the other is "stop, and restore".
+ *
+ * Classifying here also lets a full disk flip dbHealth to DISK_FULL, so the
+ * next write is refused with guidance instead of failing the same way again. */
+function _classifyWriteError(e) {
+  const code = (e && e.code) || '';
+  const msg  = String((e && e.message) || '');
+
+  if (code === 'ENOSPC' || /SQLITE_FULL|database or disk is full/i.test(code + msg)) {
+    _setDbHealth('DISK_FULL', 'the disk is full', msg);
+    return { code: 'DISK_FULL',
+      error: 'Not saved — this computer has run out of disk space. Free up space, then try again.' };
+  }
+  if (code === 'EACCES' || code === 'EPERM' ||
+      /SQLITE_READONLY|SQLITE_PERM|attempt to write a readonly/i.test(code + msg)) {
+    return { code: 'PERMISSION_DENIED',
+      error: 'Not saved — Hostyllo cannot write to its data folder. Check the folder’s permissions, or run Hostyllo as the same user who installed it.' };
+  }
+  if (/SQLITE_CORRUPT|SQLITE_NOTADB|malformed|not a database/i.test(code + msg)) {
+    _setDbHealth('CORRUPT', 'a write reported corruption', msg);
+    return { code: 'DB_CORRUPT',
+      error: 'Not saved — the database file is damaged. Hostyllo has stopped writing to it to prevent further loss. Restart to open the recovery screen.' };
+  }
+  if (code === 'SQLITE_IOERR' || /disk I\/O error/i.test(msg)) {
+    return { code: 'IO_ERROR',
+      error: 'Not saved — the disk reported a read/write error. If this repeats, back up immediately and check the drive.' };
+  }
+  return { code: 'WRITE_FAILED', error: msg || 'The change could not be saved.' };
+}
+
+/* The single shape a failed write comes back in.
+ *
+ * A licence refusal and a full disk must not be run through the same
+ * classifier: the licence errors are deliberate decisions carrying their own
+ * message, and re-describing "this licence is suspended" as "the change could
+ * not be saved" would lose the only sentence that explains anything. So the
+ * sentinels pass through untouched and everything else gets classified. */
+const _SENTINEL_CODES = ['LICENCE_READ_ONLY', 'DB_CORRUPT', 'DB_UNAVAILABLE', 'INVALID_BACKUP'];
+
+function _writeFailure(e) {
+  if (e && _SENTINEL_CODES.includes(e.code)) {
+    return { ok: false, error: e.message, code: e.code,
+             licenceState: e.licenceState || undefined };
+  }
+  const c = _classifyWriteError(e);
+  return { ok: false, error: c.error, code: c.code };
+}
+
+/* The gate every write passes before it is attempted.
+ *
+ * Reads are never gated — the same reasoning as the licence read-only rule.
+ * A hostel whose database is damaged still needs to look up a student and
+ * print what it can while it recovers. */
+function _assertDbWritable() {
+  if (dbHealth.state === 'CORRUPT') {
+    const err = new Error('The database file is damaged. Hostyllo has stopped writing to it to prevent further loss.');
+    err.code = 'DB_CORRUPT';
+    throw err;
+  }
+  if (!db) {
+    const err = new Error('The database is not open.');
+    err.code = 'DB_UNAVAILABLE';
+    throw err;
+  }
+}
 let _schemaMigrated = false;
 
 // ── Online services (Phase 1) ─────────────────────────────────────────────────
@@ -77,9 +196,42 @@ function _dbInsert(table, id, record) {
 function initDatabase() {
   dbPath = path.join(app.getPath('userData'), 'hostix.db');
   const dbExisted = fs.existsSync(dbPath);
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+
+  /* OPEN, THEN PROVE IT IS SOUND, BEFORE WRITING A SINGLE BYTE.
+     The CREATE TABLE block below is a write. Running it against a damaged file
+     is how a recoverable problem becomes an unrecoverable one, so the integrity
+     check has to come first — and a failure has to return rather than throw,
+     because throwing here is what used to kill the boot outright. */
+  /* THE HANDLE IS CLOSED ON EVERY FAILURE PATH, AND THAT IS NOT TIDINESS.
+     new Database() can succeed on a damaged file and the failure surface a
+     moment later on the first pragma. Dropping the reference without closing
+     leaves the file open, and on Windows an open file cannot be renamed — so
+     recovery failed with EBUSY at the exact moment it mattered, on the one
+     machine that needed it. Caught by db-recovery.spec.js, which is the whole
+     argument for testing the recovery path rather than reasoning about it. */
+  let handle = null;
+  try {
+    handle = new Database(dbPath);
+    handle.pragma('journal_mode = WAL');
+    handle.pragma('foreign_keys = ON');
+  } catch (e) {
+    if (handle) { try { handle.close(); } catch (_) {} }
+    db = null;
+    _setDbHealth('CORRUPT', 'the database file could not be opened', e.message);
+    return null;
+  }
+
+  if (dbExisted) {
+    const chk = _integrityCheck(handle);
+    if (!chk.ok) {
+      try { handle.close(); } catch (_) {}
+      db = null;
+      _setDbHealth('CORRUPT', chk.reason, chk.detail);
+      return null;
+    }
+  }
+
+  db = handle;
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -139,6 +291,125 @@ function initDatabase() {
   console.log('[HOSTYLLO] SQLite DB initialized at:', dbPath, '| schema v' +
     migration001.currentVersion(db));
   return db;
+}
+
+/* ── RECOVERY  —  spec §17 ────────────────────────────────────────────────────
+ *
+ *   detect → stop unsafe writes → recovery screen → verified backup
+ *          → restore to a TEMPORARY db → integrity checks → atomic switch
+ *
+ * The temporary-database step is the whole point and the easy one to skip. A
+ * recovery that writes straight over the live file has, for the length of the
+ * copy, destroyed the evidence and not yet produced a working replacement — and
+ * if the snapshot turns out to be damaged too, that is where the hostel's data
+ * ends. So: restore beside it, prove the copy is sound, and only then move it
+ * into place. The damaged original is kept, renamed, never deleted.
+ */
+
+/** Every snapshot this app has ever written, newest first. */
+function _listRecoverySnapshots() {
+  if (!dbPath) return [];
+  const dir  = path.dirname(dbPath);
+  const base = path.basename(dbPath);
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch (_) { return []; }
+
+  return names
+    .filter(f => f.startsWith(base + '.') && f.endsWith('.bak'))
+    .map(f => {
+      const full = path.join(dir, f);
+      let size = null, mtime = null;
+      try { const st = fs.statSync(full); size = st.size; mtime = st.mtime.toISOString(); }
+      catch (_) { /* listed but unreadable — still worth showing, marked below */ }
+      // What produced it, so the screen can say more than a filename.
+      const kind = f.includes('.pre-restore-') ? 'Before a restore'
+                 : f.includes('.pre-v1')       ? 'Before the schema upgrade'
+                 : f.includes('.corrupt-')     ? 'The damaged file (kept, not a backup)'
+                 :                               'Backup';
+      return { file: f, path: full, size, mtime, kind,
+               restorable: !f.includes('.corrupt-') && size !== null };
+    })
+    .sort((a, b) => String(b.mtime).localeCompare(String(a.mtime)));
+}
+
+/** Is this file a database we could actually run on? */
+function _verifySnapshot(file) {
+  let h = null;
+  try {
+    h = new Database(file, { readonly: true });
+    const chk = _integrityCheck(h);
+    if (!chk.ok) return { ok: false, reason: 'This backup is itself damaged.' };
+
+    // Structure, not just integrity: an intact file of somebody else's schema
+    // passes integrity_check and would still leave the app broken.
+    const have = new Set(h.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name));
+    const missing = ['settings', ...BACKUP_TABLES].filter(t => !have.has(t));
+    if (missing.length) {
+      return { ok: false, reason: `This backup is missing ${missing.length} table(s): ${missing.slice(0, 4).join(', ')}.` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  } finally {
+    if (h) { try { h.close(); } catch (_) {} }
+  }
+}
+
+/**
+ * Restore one snapshot. Returns { ok, error? } and, on success, the caller is
+ * expected to restart — the app has been running against a database that is
+ * no longer the file on disk.
+ */
+function _recoverFromSnapshot(snapshotPath) {
+  if (!dbPath) return { ok: false, error: 'No database path is known.' };
+
+  const known = _listRecoverySnapshots().find(s => s.path === snapshotPath);
+  if (!known)      return { ok: false, error: 'That backup is not one Hostyllo wrote.' };
+  if (!known.restorable) return { ok: false, error: 'That file is the damaged database, not a backup.' };
+
+  const tmp = dbPath + '.recovery-tmp';
+  try { fs.rmSync(tmp, { force: true }); } catch (_) {}
+
+  try {
+    // 1. Restore BESIDE the live file.
+    fs.copyFileSync(snapshotPath, tmp);
+
+    // 2. Prove the copy is sound before it is allowed anywhere near the original.
+    const v = _verifySnapshot(tmp);
+    if (!v.ok) {
+      try { fs.rmSync(tmp, { force: true }); } catch (_) {}
+      return { ok: false, error: v.reason };
+    }
+
+    // 3. Let go of the damaged file, and of the WAL beside it — a stale -wal or
+    //    -shm belongs to the old database and would be applied on top of the new
+    //    one, which is a corruption of its own.
+    if (db) { try { db.close(); } catch (_) {} db = null; }
+    for (const side of ['-wal', '-shm']) {
+      try { fs.rmSync(dbPath + side, { force: true }); } catch (_) {}
+    }
+
+    // 4. Keep the original. It is the only copy of whatever was written since
+    //    the snapshot, and a damaged SQLite file is often still partly readable
+    //    by someone who knows how. Deleting it here would be the one
+    //    irreversible act in an operation that exists to avoid those.
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}` +
+                  `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    const kept = `${dbPath}.corrupt-${stamp}.bak`;
+    if (fs.existsSync(dbPath)) fs.renameSync(dbPath, kept);
+
+    // 5. The switch itself. rename within one directory is as close to atomic
+    //    as this filesystem offers.
+    fs.renameSync(tmp, dbPath);
+
+    console.log('[HOSTYLLO] Recovered from', known.file, '— damaged file kept at', path.basename(kept));
+    return { ok: true, restoredFrom: known.file, damagedFileKept: path.basename(kept) };
+  } catch (e) {
+    try { fs.rmSync(tmp, { force: true }); } catch (_) {}
+    return { ok: false, error: e.message };
+  }
 }
 
 
@@ -788,6 +1059,35 @@ const TITLEBAR_ACTIONS = {
   forceReload:   () => doReload(true),
   devTools:      doToggleDevTools
 };
+
+/* The window a warden sees instead of a crash.
+   Framed on purpose — the custom title bar lives in the main renderer, and a
+   frameless window with no way to close it is the last thing somebody needs
+   when they are already looking at an error. */
+let recoveryWindow = null;
+
+function createRecoveryWindow() {
+  recoveryWindow = new BrowserWindow({
+    width: 760, height: 620, minWidth: 620, minHeight: 480,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    title: 'Hostyllo — Recovery',
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      devTools: !IS_PROD
+    },
+    backgroundColor: '#1a1c1e',
+    show: false
+  });
+  recoveryWindow.loadFile(path.join(__dirname, 'renderer', 'recovery.html'));
+  recoveryWindow.once('ready-to-show', () => recoveryWindow.show());
+  recoveryWindow.on('closed', () => { recoveryWindow = null; });
+  return recoveryWindow;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -1550,24 +1850,27 @@ function _preRestoreSnapshot() {
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
     _assertRendererTable(table);
+    _assertDbWritable();
     _assertWritable(table);
     _dbInsert(table, id, record);
     return { ok: true };
-  } catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
+  } catch (e) { return _writeFailure(e); }
 });
 
 ipcMain.handle('db:delete', (_e, table, id) => {
   try {
     _assertRendererTable(table);
+    _assertDbWritable();
     _assertWritable(table);
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
     return { ok: true };
-  } catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
+  } catch (e) { return _writeFailure(e); }
 });
 
 ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   try {
     _assertRendererTable(table);
+    _assertDbWritable();
     _assertWritable(table);
     const transaction = db.transaction((rows) => {
       db.prepare(`DELETE FROM ${table}`).run();
@@ -1575,7 +1878,7 @@ ipcMain.handle('db:bulkReplace', (_e, table, records) => {
     });
     transaction(records);
     return { ok: true };
-  } catch (e) { console.error('[DB] bulkReplace:', e.message); return { ok: false, error: e.message }; }
+  } catch (e) { console.error('[DB] bulkReplace:', e.message); return _writeFailure(e); }
 });
 
 ipcMain.handle('db:getSetting', (_e, key) => {
@@ -1587,10 +1890,47 @@ ipcMain.handle('db:getSetting', (_e, key) => {
 
 ipcMain.handle('db:setSetting', (_e, key, value) => {
   try {
+    // Health only. The LICENCE gate on this handler is D-3 and belongs to
+    // Phase D — a suspended hostel can still change settings today, and that
+    // is recorded rather than quietly changed here, because it needs the
+    // read-only specs run against it.
+    _assertDbWritable();
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
       .run(key, JSON.stringify(value));
     return { ok: true };
-  } catch (e) { return { ok: false, error: e.message }; }
+  } catch (e) { return _writeFailure(e); }
+});
+
+/* ── Health and recovery IPC ────────────────────────────────────────────────
+   db:health is read by the support screen and by the recovery window. It is
+   deliberately available even when the database is not: that is the case it
+   exists to describe. */
+ipcMain.handle('db:health', () => ({
+  state:   dbHealth.state,
+  reason:  dbHealth.reason,
+  at:      dbHealth.at,
+  dbPath:  dbPath || null,
+  schemaVersion: (() => {
+    try { return db ? migration001.currentVersion(db) : null; } catch (_) { return null; }
+  })(),
+}));
+
+ipcMain.handle('recovery:list', () => {
+  try { return { ok: true, snapshots: _listRecoverySnapshots() }; }
+  catch (e) { return { ok: false, error: e.message, snapshots: [] }; }
+});
+
+/* Restore and restart are two calls, not one.
+   A successful recovery leaves the process running against a database that is
+   no longer the file on disk, so the restart is mandatory — but doing it inside
+   the restore means the only way to check that the swap was correct is to watch
+   an app disappear. Separating them lets the recovery screen drive both while
+   a test can verify the filesystem in between. */
+ipcMain.handle('recovery:restore', (_e, snapshotPath) => _recoverFromSnapshot(snapshotPath));
+
+ipcMain.handle('recovery:restart', () => {
+  setTimeout(() => { app.relaunch(); app.exit(0); }, 200);
+  return { ok: true };
 });
 
 ipcMain.handle('db:exportFull', () => {
@@ -1609,8 +1949,8 @@ ipcMain.handle('db:exportFull', () => {
 });
 
 ipcMain.handle('db:importFull', (_e, data) => {
-  try { _assertWritable('import'); }
-  catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
+  try { _assertDbWritable(); _assertWritable('import'); }
+  catch (e) { return _writeFailure(e); }
 
   // Refuse before anything is deleted. The renderer checks this too; that check
   // is the one the user sees, this is the one that cannot be bypassed.
@@ -1718,6 +2058,17 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     return _permitted(permission, details);
   });
   initDatabase();
+
+  /* A damaged database stops the boot here, deliberately.
+     Online services want a live handle, createWindow() loads a UI whose every
+     screen reads from one, and the licence flow writes. None of that is safe or
+     meaningful against a file we have just proved is broken — and pressing on
+     regardless is how a warden ends up staring at a wall of render errors with
+     nothing telling them their data is intact in a backup beside it. */
+  if (dbHealth.state === 'CORRUPT') {
+    createRecoveryWindow();
+    return;
+  }
 
   // ── Online services (Phase 1) ─────────────────────────────────────────────
   // After initDatabase (the queue needs the handle), before createWindow (so

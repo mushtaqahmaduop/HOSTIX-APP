@@ -98,6 +98,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbBulkReplace: (table, records)    => ipcRenderer.invoke('db:bulkReplace', table, records),
   dbGetSetting:  (key)               => ipcRenderer.invoke('db:getSetting',  key),
   dbSetSetting:  (key, value)        => ipcRenderer.invoke('db:setSetting',  key, value),
+  // §17. dbHealth answers even when the database does not open — that is the
+  // situation it exists to describe — so it must never be gated on a live handle.
+  dbHealth:        ()      => ipcRenderer.invoke('db:health'),
+  recoveryList:    ()      => ipcRenderer.invoke('recovery:list'),
+  recoveryRestore: (p)     => ipcRenderer.invoke('recovery:restore', p),
+  recoveryRestart: ()      => ipcRenderer.invoke('recovery:restart'),
   dbExportFull:  ()                  => ipcRenderer.invoke('db:exportFull'),
   dbImportFull:  (data)              => ipcRenderer.invoke('db:importFull',  data),
   // Open PDF report in a separate window
