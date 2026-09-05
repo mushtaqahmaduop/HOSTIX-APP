@@ -185,8 +185,12 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
                ? _dashTrendChart.data.datasets.map(d => d.label) : null,
     legend: [...document.querySelectorAll('.dash-legend__k')].map(e => e.textContent.trim()),
     // KPI row order is the argument the row makes: people, money in, money out,
-    // what is left, what is owed. Available Fund states itself as
-    // "collected − expenses" and must not precede the expenses it subtracts.
+    // what is left, what is owed, what actually arrived. Available Fund states
+    // itself as "collected − expenses" and must not precede the expenses it
+    // subtracts. Cash Received closes the row deliberately: it is the same
+    // money as Total Revenue counted on a different basis (when it physically
+    // arrived rather than which month it settles), so it reads as a footnote to
+    // the row rather than a competing headline at the front of it.
     kpiOrder: [...document.querySelectorAll('.dash-kpi-grid .dash-kpi__label')]
       .map(l => l.textContent.replace(/\s+/g, '')),
     // Every money card carries its own 12-month history; the first (a headcount
@@ -355,10 +359,10 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   expect(dash.series, 'Pending is a balance, not a monthly flow — do not bar it')
     .not.toContain('Pending');
   expect(dash.legend, 'legend must match the drawn series').toEqual(dash.series);
-  expect(dash.kpiOrder, 'KPI row order: people, in, out, left, owed')
-    .toEqual(['TotalResidents', 'TotalRevenue', 'Expenses', 'AvailableFund', 'Pending']);
+  expect(dash.kpiOrder, 'KPI row order: people, in, out, left, owed, arrived')
+    .toEqual(['TotalResidents', 'TotalRevenue', 'Expenses', 'AvailableFund', 'Pending', 'CashReceived']);
   expect(dash.kpiSparks, 'Available Fund lost its history sparkline')
-    .toEqual([false, false, true, true, true]);
+    .toEqual([false, false, true, true, true, true]);
   expect(dash.futureNulls, 'past months must plot, future months must be null')
     .toEqual(dash.series.map(() => ({ past: true, future: true })));
   expect(backup.stats).toBe(4);

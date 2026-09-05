@@ -343,7 +343,9 @@
    independently once they can no longer line up anyway. The threshold is where
    five KPI columns still clear the 196px the density block asks for. */
 @media (min-width:1330px) {
-    .dash-kpi-grid  { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    /* Five, historically. The six-across rule further down supersedes this and
+       is what actually applies — left here only because the .dash-tile-grid
+       rule below it is still live. */
     /* Four equal tiles. This used to be a 5-column grid with 2/1/2 spans for
        three tiles; adding Cash Received made the arithmetic wrong and wrapped
        the fourth onto a row of its own, where a lone full-width tile read as a
@@ -552,3 +554,457 @@
 .dl-rem__row--static { cursor:default; }
 .dl-glance__row--static:hover,
 .dl-rem__row--static:hover { background:none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE SKETCH LAYOUT — rows B and C
+   ═══════════════════════════════════════════════════════════════════════════
+   Row B is the trend, the seat grid and Today at a Glance. Row C is occupancy
+   by type, occupancy overall, what needs doing and what you can do about it.
+
+   Row C IS THE FOLD. The brief is that Needs Action and Quick Actions are on
+   screen without scrolling, so the widths below are chosen to keep row C on
+   one line for as long as possible — the moment it wraps to two lines, the
+   fold is lost. That is also why the duplicate stat-tile row was removed from
+   the markup rather than restyled: no amount of CSS buys back a whole row.
+
+   The columns are uneven on purpose. The trend needs the most width to keep
+   twelve months legible; Glance is a list of six short rows and needs the
+   least. In row C the room-type breakdown carries the longest labels and the
+   quick actions are a fixed 2×2 of square buttons, so the space goes to the
+   left. */
+.dash-row-b,
+.dash-row-c { display:grid; gap:10px; margin-bottom:10px; align-items:stretch; }
+.dash-row-b > .dash-sec,
+.dash-row-c > .dash-sec { display:flex; flex-direction:column; min-width:0; }
+
+/* TODAY AT A GLANCE IS EXACTLY ONE KPI TILE WIDE (owner, 2026-09-05).
+
+   Not "about a sixth" — the same arithmetic the KPI grid does, so the card's
+   right edge lands on the Cash Received tile's right edge and the two columns
+   read as one edge down the page. Six tiles and five 10px gaps, so a tile is
+   (100% − 50px)/6; row B's own two gaps come out of what is left, which the
+   trend and the seat grid share.
+
+   The glance is six short label/number rows and was the widest thing on the
+   row for no reason — it is a list of counts, and a list of counts does not
+   get wider by being given room. */
+.dash-row-b { grid-template-columns:1.45fr 1fr calc((100% - 50px) / 6); }
+.dash-row-c { grid-template-columns:1.3fr .95fr 1.1fr .95fr; }
+
+/* Below ~1400 the four-across row cannot hold its content without the method
+   and need rows truncating, so it folds to 2×2 rather than shrinking. The fold
+   promise is for the sizes the app is actually used at; past that, legibility
+   wins over it. */
+/* 1366 IS A REAL SIZE HERE, not a tablet edge case — it is the width the rest
+   of this file is tuned against. Holding three across in row B and four in row
+   C down to 1200 is what keeps the fold promise there; at 1400 the rows folded
+   to two and pushed Needs Action a full screen down. */
+@media (max-width:1200px) {
+  .dash-row-b { grid-template-columns:1.25fr 1fr; }
+  .dash-row-b > *:nth-child(3) { grid-column:1 / -1; }
+  .dash-row-c { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:980px) {
+  .dash-row-b { grid-template-columns:minmax(0,1fr); }
+  .dash-row-b > *:nth-child(3) { grid-column:auto; }
+}
+@media (max-width:720px) { .dash-row-c { grid-template-columns:minmax(0,1fr); } }
+
+/* ── NEEDS ACTION ────────────────────────────────────────────────────────────
+   Four columns: hue dot, count, what it is, what to do. The verb is the point
+   of the card, so it is the only thing in the accent colour — a reader scanning
+   down the right edge gets View / Collect / Resolve / Assign as a to-do list. */
+.dl-needs { display:flex; flex-direction:column; gap:2px; padding:6px 8px 10px; }
+.dl-need {
+    display:grid; grid-template-columns:auto auto 1fr auto; align-items:center; gap:9px;
+    width:100%; padding:8px; border:0; border-radius:9px; background:transparent;
+    text-align:left; cursor:pointer; color:var(--text2);
+    transition:background .14s ease;
+}
+.dl-need:hover { background:var(--dash-sunk); }
+.dl-need__ic {
+    display:flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px;
+    background:var(--dh-bg); color:var(--dh);
+}
+.dl-need__ic .dl-ico { width:14px; height:14px; }
+.dl-need__n {
+    font-size:15px; font-weight:800; color:var(--text);
+    font-variant-numeric:tabular-nums;
+}
+.dl-need__label {
+    font-size:12px; color:var(--text2);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.dl-need__verb { font-size:11px; font-weight:700; color:var(--accent); white-space:nowrap; }
+.dl-need:hover .dl-need__verb { text-decoration:underline; }
+
+/* ── OCCUPANCY OVERVIEW ──────────────────────────────────────────────────────
+   One number, one bar, three rows. The percentage is the headline because it
+   is the figure a warden quotes; the bed counts under it are what they check
+   when the percentage looks wrong. */
+.dl-occ { display:flex; flex-direction:column; gap:12px; padding:14px; }
+.dl-occ__top { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.dl-occ__pct {
+    font-size:30px; font-weight:800; color:var(--text);
+    letter-spacing:-.5px; line-height:1; font-variant-numeric:tabular-nums;
+}
+.dl-occ__of { font-size:12px; color:var(--text3); font-variant-numeric:tabular-nums; }
+.dl-occ__bar { height:10px; border-radius:6px; background:var(--dash-track); overflow:hidden; }
+.dl-occ__bar > i { display:block; height:100%; background:var(--accent); border-radius:6px; }
+.dl-occ__legend { display:flex; flex-direction:column; gap:7px; }
+.dl-occ__row { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); }
+.dl-occ__row b {
+    margin-left:auto; font-size:13px; font-weight:700; color:var(--text);
+    font-variant-numeric:tabular-nums;
+}
+.dl-occ__sw { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+.dl-occ__sw--track { background:var(--dash-track); }
+.dl-occ__sw--fill  { background:var(--accent); }
+.dl-occ__sw--free  { background:var(--amber); }
+
+/* ── QUICK ACTIONS, 2×2 ──────────────────────────────────────────────────────
+   Four actions in a square block rather than six in a 3-wide strip, per the
+   owner's quick.png. A 2×2 also stops the panel dictating the height of row C. */
+.dl-acts--4 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+
+/* ── SIX KPI TILES ACROSS ────────────────────────────────────────────────────
+   The grid was `auto-fit, minmax(258px, 1fr)`. That fitted five; the sketch's
+   sixth (Cash Received) wrapped onto a line of its own and cost a whole row of
+   height — the exact thing removing the stat-tile row was meant to buy back.
+
+   So the count is stated rather than inferred. Six across down to 1500, then
+   3×2, then 2×3: the tiles stay equal and the row never leaves one card
+   stranded on a line by itself. */
+.dash-kpi-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+@media (max-width:1200px) { .dash-kpi-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:900px)  { .dash-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* ── OCCUPANCY BY ROOM TYPE, RESIZED FOR ROW C ───────────────────────────────
+   The card was authored for a half-width slot: `.rt-body` is `190px 1fr`, so
+   in row C's ~390px column the right-hand list was squeezed to ~160px and its
+   room/percentage columns were clipped. The sketch is the layout, so the card
+   fits the slot rather than the slot bending to the card.
+
+   What goes, and why it is not a loss:
+
+   · `.rt-stat` and `.rt-avail` state Occupied, Total Seats and Seats Available.
+     Occupancy Overview is now the card immediately to its right and those are
+     its three legend rows. Printing them twice, side by side, is what made this
+     card tall — and if the two ever disagreed the reader would have no way to
+     tell which was right.
+   · `.rt-note` explains that the percentage counts seats rather than rooms.
+     True and worth saying, but it is a sentence of small print in a card whose
+     job here is the breakdown; it survives as the title attribute on each row.
+
+   The donut stays, smaller. It is the one thing in the card that Occupancy
+   Overview does NOT duplicate — the split BETWEEN types — and the sketch draws
+   it. The list scrolls past four types instead of growing the card, which is
+   what holds the fold on a hostel with many room types. */
+.dash-row-c .rt-body { grid-template-columns:100px 1fr; gap:12px; padding:4px 0 2px; }
+.dash-row-c .rt-donut { width:100px; height:100px; }
+.dash-row-c .rt-donut__n { font-size:15px; }
+.dash-row-c .rt-donut__n span { font-size:11px; }
+.dash-row-c .rt-donut__l { font-size:8px; margin-top:2px; }
+.dash-row-c .rt-stat,
+.dash-row-c .rt-avail,
+.dash-row-c .rt-note { display:none; }
+.dash-row-c .rt-right { max-height:158px; overflow-y:auto; padding-right:2px; }
+.dash-row-c .rt-row { margin-bottom:5px; }
+.dash-row-c .dash-sec__sub { display:none; }
+
+/* ── THE LAST 90 PIXELS ──────────────────────────────────────────────────────
+   At 1366x768 — the size this file is tuned against — everything above row C
+   came to 631px, leaving 137 for a row whose cards were 165. Quick Actions and
+   Occupancy Overview were clipped by about 70px each.
+
+   The owner's instruction is that the sketch is the layout and anything too
+   large is resized to fit, so the height comes out of the three places that
+   can spare it rather than out of the row:
+
+   · The trend chart. 178px is generous for twelve bars; 138 still resolves
+     every month and its gridlines. It is a shape, not a table of figures — the
+     exact numbers are in the summary strip directly above it.
+   · Quick Action buttons. 13px of vertical padding around a 2x2 of icons is
+     reference spacing for a 3-wide strip; at half the width the block does not
+     need it.
+   · Occupancy Overview's internal rhythm, by 2-3px a row.
+
+   Applied only where height is actually scarce. On a tall window the cards keep
+   the reference proportions. */
+@media (max-height:900px) {
+  /* The chart's fixed height was set here at 138px. It is now `height:auto`
+     and flexed to fill the card (see ROW B CARDS FILL THEIR OWN HEIGHT at the
+     end of this file), so there is nothing to pin — the row's height decides,
+     and on a short window that is what makes the chart smaller. */
+  .dash-row-c .dl-acts { padding:10px 12px 12px; gap:7px; }
+  .dash-row-c .dl-act { padding:9px 6px; gap:5px; }
+  .dash-row-c .dl-occ { gap:9px; padding:12px 14px; }
+  .dash-row-c .dl-occ__pct { font-size:26px; }
+  .dash-row-c .dl-occ__legend { gap:5px; }
+  .dash-row-c .rt-right { max-height:132px; }
+  .dash-kpi-grid .dash-spark { height:18px; }
+
+  /* Today at a Glance is what actually sets row B's height — six rows at 8px
+     of vertical padding each, which outgrows both the trend and the seat grid
+     (that one already caps itself at 104px and scrolls). Taking 3px a row off
+     is invisible next to losing the row off the bottom of the screen. */
+  /* Measured at 1366x768 with a real month's data: row B is 277px and Today at
+     a Glance is the card that sets it (241px of content against the trend's
+     and the seat card's, both of which flex). Six rows at 5px of padding is
+     30px of air; at 2px it is 12px, and rowC lands inside the viewport instead
+     of 17px under it. The rows are a label and a number — they do not need the
+     spacing a list of paragraphs would. */
+  .dash-row-b .dl-glance__row { padding:2px 14px; }
+  .dash-row-b .dl-glance { padding:0; }
+  .dash-row-b .dl-glance__sub { line-height:1.2; }
+
+  /* Measured, not guessed: at 1366x768 the three row-B cards carry 202, 244 and
+     190px of content, so SEAT AVAILABILITY sets the row and the other two were
+     never the problem. Its room grid already scrolls at 104px; two rows of
+     chips instead of three, and a tighter summary strip, is where the last of
+     the fold comes from. The grid keeps scrolling, so no room is lost — and
+     "tap any room" was always a scroll for a hostel with more than ~20. */
+  .dash-row-b .dash-room-wrap { max-height:76px; }
+  .dash-row-b .dash-seat-sum { margin-bottom:7px; }
+  .dash-row-b .dash-seat-sum > div { padding:6px; }
+  .dash-row-b .dash-seat-sum .n { font-size:20px; }
+  .dash-row-c .dl-needs { padding:4px 8px 8px; }
+  .dash-row-c .dl-need { padding:6px 8px; }
+}
+
+/* ── SIX ACROSS, WITHOUT CLIPPING THE LABELS ─────────────────────────────────
+   At 1366 six tiles are ~190px each, and "EXPENSES" was arriving as "EXPENS":
+   the label competes with a fixed-width pill stack and a 34px chip for the top
+   row, and it is the only one of the three that shrinks.
+
+   The label is the part that says what the number IS, so it wins. The pill and
+   the chip give back the ~25px it needs — the pill is a secondary count and
+   the chip is decoration. Only in the band where six tiles are actually tight;
+   past ~1600 the reference sizes return. */
+@media (min-width:1201px) and (max-width:1600px) {
+  .dash-kpi-grid .dash-kpi__top { gap:7px; }
+  .dash-kpi-grid .dash-kpi__label { font-size:10px; letter-spacing:.3px; }
+  .dash-kpi-grid .dash-chip { width:28px; height:28px; }
+  .dash-kpi-grid .dash-pill { font-size:9px; padding:2px 6px; }
+}
+
+/* ── ROOM TYPE: ONE COLUMN IN ROW C ──────────────────────────────────────────
+   The 100px donut left ~210px for a list whose row is icon + name + room count
+   + bar + percentage, and the bar and percentage were being cut off the right
+   edge. Something had to go, and it is the donut.
+
+   The donut and the bar list say the SAME thing — how the beds divide between
+   room types — and of the two only the list also names the types and gives
+   each one a number. A ring with no labels beside a labelled list is the
+   decorative half of a duplicate. Removing it gives the list the full width
+   and drops the card's height at the same time, which is the other thing row C
+   needed. The overall occupancy figure it carried in the middle is the
+   headline of the card immediately to its right. */
+.dash-row-c .rt-body { grid-template-columns:1fr; gap:0; }
+.dash-row-c .rt-left { display:none; }
+
+/* The row is a flex line of fixed parts — a 32px icon, a 70px room count, an
+   86px bar and a 44px percentage, plus 11px gaps and 13px padding. That is
+   302px of committed width before the NAME, which is the only flexible part,
+   so in row C's 322px card the name was squeezed to nothing: the rows rendered
+   as an icon, a blank, "9 rooms" and a percentage hard against the edge.
+
+   Everything fixed gives a little back so the name always has room. It is the
+   one column that cannot be inferred from the others. */
+.dash-row-c .rt-row { gap:8px; padding:8px 10px; }
+.dash-row-c .rt-row__ic { width:24px; height:24px; border-radius:8px; }
+.dash-row-c .rt-row__ic svg { width:13px; height:13px; }
+.dash-row-c .rt-row__name { font-size:12px; }
+.dash-row-c .rt-row__rooms { width:50px; font-size:11px; }
+.dash-row-c .rt-row__bar { width:50px; }
+.dash-row-c .rt-row__pct { width:32px; font-size:12px; }
+.dash-row-c .rt-list__hd { gap:8px; padding:0 10px 6px; font-size:10px; }
+.dash-row-c .rt-list__hd-rooms { width:50px; }
+.dash-row-c .rt-list__hd-occ { width:90px; }
+
+/* ── GLANCE LABELS AT ONE-TILE WIDTH ─────────────────────────────────────────
+   Narrowing the card to a KPI tile left "New Admissions" as "New Admissi…" and
+   "Maintenance Requests" as "Maintenance …". The labels are the card — the
+   numbers beside them mean nothing without one — so they wrap to a second line
+   instead of truncating. The rows are label + count with nothing else on them,
+   so a two-line row costs height the card has and reads fine; ellipsis does
+   not. */
+.dash-row-b .dl-glance__label {
+    white-space:normal; overflow:visible; text-overflow:clip;
+    font-size:11.5px; line-height:1.25;
+}
+.dash-row-b .dl-glance__row { align-items:flex-start; gap:8px; }
+.dash-row-b .dl-glance__ic { margin-top:1px; }
+
+/* ── ROW B CARDS FILL THEIR OWN HEIGHT ───────────────────────────────────────
+   The three cards in row B are stretched to the tallest of them, but their
+   CONTENT was fixed: the chart wrap was a hard 198px and the room grid a hard
+   104px cap. So the tallest card set the row and the other two drew their
+   content at the top with a band of empty card underneath — the chart floating
+   above a third of a panel of nothing, and the seat grid showing two rows of
+   rooms with the legend stranded at the bottom.
+
+   Both now flex into whatever height the row gives them. The chart grows (it
+   is `maintainAspectRatio:false`, so it fills its box), and the room grid shows
+   as many rooms as fit and scrolls past that — which is the owner's ask: more
+   rooms, by giving the grid the space the legend was floating in.
+
+   min-height keeps both honest on a short window: a chart under ~120px is a
+   smear, and a room grid under ~64px cannot show a full row of chips. */
+.dash-row-b > .dash-sec { overflow: hidden; }
+
+#trend-chart-wrap {
+    flex: 1 1 0;
+    height: auto !important;      /* beats the density block's fixed 198px */
+    min-height: 120px;
+}
+
+/* `flex-basis:0` and `min-height:0`, NOT `1 1 auto`.
+
+   With `auto` the grid contributes its natural height, so a hostel with forty
+   rooms made the seat card ~410px tall, that set the whole row, and row C —
+   Needs Action and Quick Actions — went under the fold again. The grid must
+   take the space that is LEFT, not ask for the space it wants.
+
+   At basis 0 the row's height comes from the other two cards, the grid fills
+   whatever that leaves, and rooms past it scroll. More rooms are visible than
+   before either way, because the space the legend used to float in is now
+   grid. */
+.dash-row-b .dash-room-wrap {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: flex-start;
+}
+.dash-row-b > .dash-sec { min-height: 0; }
+
+/* The legend sits under the grid rather than floating: `margin-top:auto` was
+   pushing it to the card floor and opening the gap the grid should have had. */
+.dash-row-b .dash-seat-legend,
+.dash-row-b .dash-sec > *:last-child { margin-top: 0; }
+
+/* ── db3's SEGMENTED RANGE CONTROL ───────────────────────────────────────────
+   Quarter / 6 Months / Year, in the trend card's header where the reference
+   puts it. One track, the active segment raised out of it — the same shape as
+   the reference, which is a control that reads as a set of alternatives rather
+   than three separate buttons. */
+.trend-range {
+    display:flex; align-items:center; gap:2px; margin-left:10px; flex-shrink:0;
+    background:var(--dash-sunk); border:1px solid var(--border); border-radius:9px; padding:2px;
+}
+.trend-range__b {
+    border:0; background:none; cursor:pointer; white-space:nowrap;
+    padding:4px 9px; border-radius:7px;
+    font-size:11px; font-weight:600; color:var(--text3);
+    transition:background .14s ease, color .14s ease;
+}
+.trend-range__b:hover { color:var(--text2); }
+.trend-range__b.is-on { background:var(--card); color:var(--text); box-shadow:none; }
+
+/* ── SEAT COUNTS, INLINE IN THE HEADER ───────────────────────────────────────
+   Replaces the three-tile block. db3 sets the number bold and its label small
+   and grey beside it, all on the header line, which is why it costs a line
+   instead of a panel. Still buttons — each opens the same list it always did. */
+.seat-inline { display:flex; align-items:baseline; gap:10px; margin-left:auto; flex-shrink:0; }
+.seat-inline__k {
+    display:inline-flex; align-items:baseline; gap:4px;
+    border:0; background:none; padding:2px 3px; border-radius:6px; cursor:pointer;
+    transition:background .14s ease;
+}
+.seat-inline__k:hover { background:var(--dash-sunk); }
+.seat-inline__k b {
+    font-size:14px; font-weight:800; color:var(--text);
+    font-variant-numeric:tabular-nums; line-height:1;
+}
+.seat-inline__k.dh-green b { color:var(--dh); }
+.seat-inline__k span {
+    font-size:9.5px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.7px; color:var(--text3);
+}
+
+/* The header now carries a title, a legend, a control and (on the seat card)
+   three counts. It has to be allowed to wrap on a narrow card rather than
+   pushing any of them off the edge. */
+.dash-row-b .dash-sec__head { flex-wrap:wrap; row-gap:6px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHORT AND NARROW VIEWPORTS — 1366@125% (1093x614) and 1920@150% (1280x660)
+   ═══════════════════════════════════════════════════════════════════════════
+   Both are common Windows defaults and both are SHORTER than a 1366x768 laptop
+   at 100%. Measured before this block: row C ended at 1318px on the first and
+   812px on the second, against viewports of 614 and 660.
+
+   Two separate problems, so two separate fixes.
+
+   NARROW (1000-1200px): the grid was collapsing to 3 KPI columns and 2-across
+   rows, which turns one KPI row into two and one card row into two — four extra
+   rows of height on the viewport that can least afford them. Holding the full
+   6/3/4 shape down to 1000px costs width per card but saves far more height
+   than it costs. Below 1000 it still collapses; at that point the cards really
+   are too narrow to read and stacking is the honest answer. */
+@media (min-width: 1000px) and (max-width: 1200px) {
+  .dash-kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .dash-row-b { grid-template-columns: 1.4fr 1fr calc((100% - 50px) / 6); }
+  .dash-row-b > *:nth-child(3) { grid-column: auto; }
+  .dash-row-c { grid-template-columns: 1.25fr .95fr 1.05fr .95fr; }
+
+  /* Room count drops out of the room-type rows. At ~210px per card the name,
+     the bar and the percentage all have to fit, and of the four the room count
+     is the one the card is not about — the header says "Occupancy". */
+  .dash-row-c .rt-row__rooms,
+  .dash-row-c .rt-list__hd-rooms { display: none; }
+  .dash-kpi-grid .dash-kpi__label { font-size: 9.5px; letter-spacing: .2px; }
+  .dash-kpi-grid .dash-chip { width: 24px; height: 24px; }
+  .dash-kpi-grid .dash-pill { font-size: 8.5px; padding: 1px 5px; }
+}
+
+/* SHORT (under ~700px tall): the KPI tiles lose their supporting detail.
+   A tile is a chip, a label, a pill, the VALUE, a progress track, a sub-line
+   and a sparkline. On a 660px screen the value is the only part that earns its
+   height — the track and the sparkline are texture, and the sub-line repeats
+   what the pill beside it already says. Dropping the three of them takes ~60px
+   off the row, which is most of what these viewports are missing, and takes it
+   from decoration rather than from information.
+
+   Nothing here changes a number or a label. */
+@media (max-height: 700px) {
+  .dash-kpi-grid .dash-spark,
+  .dash-kpi-grid .dash-track,
+  .dash-kpi-grid .dash-kpi__sub { display: none; }
+  .dash-kpi-grid > .dsh-card { padding: 10px 12px; }
+  .dash-kpi-grid .dash-kpi__top { margin-bottom: 6px; }
+  .dash-kpi-grid .dash-kpi__value { margin-bottom: 0; }
+
+  #trend-chart-wrap { min-height: 96px; }
+  .dash-row-b .dl-glance__row { padding: 1px 12px; }
+  .dash-row-b .dash-sec__head,
+  .dash-row-c .dash-sec__head { margin-bottom: 4px; }
+
+  .dash-row-c .dl-acts { padding: 8px 10px 10px; gap: 6px; }
+  .dash-row-c .dl-act { padding: 7px 5px; gap: 4px; }
+  .dash-row-c .dl-occ { gap: 7px; padding: 10px 12px; }
+  .dash-row-c .dl-occ__pct { font-size: 22px; }
+  .dash-row-c .rt-right { max-height: 108px; }
+  .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 8px; }
+}
+
+/* The hardest case: 1366x768 @125% gives 1093x614 — 154px less height than the
+   same laptop at 100%. Everything above still applies; this is the last 70px,
+   and it comes from the two cards that can still give it without losing a
+   figure: the chart shrinks to a shape rather than a plot, and the room grid
+   shows one row of chips and scrolls. Both still answer their question; they
+   just answer it smaller. */
+@media (max-height: 640px) {
+  #trend-chart-wrap { min-height: 76px; }
+  .dash-row-b .dash-room-wrap { min-height: 34px; }
+  .dash-row-b .dl-glance__row { padding: 0 12px; }
+  .dash-row-c .rt-right { max-height: 82px; }
+  .dash-row-c .dl-need { padding: 4px 8px; }
+  .dash-row-c .dl-act { padding: 5px 4px; }
+  .dash-row-c .dl-occ { gap: 5px; padding: 8px 12px; }
+  .dash-row-c .dl-occ__pct { font-size: 19px; }
+  .dash-kpi-grid > .dsh-card { padding: 8px 10px; }
+  .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 6px; }
+}

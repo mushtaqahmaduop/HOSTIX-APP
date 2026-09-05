@@ -343,12 +343,20 @@ test('cash received counts the drawer, not the books, and money is conserved', a
   expect(bad.apr).toBe(0);
   expect(bad.total, 'still exactly what the ledger holds').toBe(f.ledgerTotal + 1000);
 
-  // The tile renders and opens a reconciliation that balances.
+  /* The card renders and opens a reconciliation that balances.
+     Cash Received moved from the stat-tile row into the KPI row on 2026-09-05
+     (the sketch's sixth tile) and .dash-tile-grid no longer exists. What is
+     asserted is unchanged and is the part that matters: the figure is on the
+     dashboard, and it opens the reconciliation rather than just linking to
+     Payments — that modal is the only screen explaining why cash and revenue
+     differ. */
   await win.evaluate(() => navigate('dashboard'));
-  await win.waitForSelector('.dash-tile-grid', { timeout: 8000 });
+  await win.waitForSelector('.dash-kpi-grid', { timeout: 8000 });
   const tile = await win.evaluate(() => {
-    const t = [...document.querySelectorAll('.dash-tile-grid .dsh-card')]
-      .find(c => /cash received/i.test(c.innerText));   // rendered uppercase by CSS
+    const t = [...document.querySelectorAll('.dash-kpi-grid .dsh-card')]
+      // \s+, not a literal space: the KPI label is "Cash<br>Received" so that it
+      // wraps predictably in a narrow tile, which puts a newline in innerText.
+      .find(c => /cash\s+received/i.test(c.innerText));   // rendered uppercase by CSS
     return t ? { text: t.innerText.replace(/\s+/g, ' ').trim(),
                  opens: /showCashReceivedModal/.test(t.getAttribute('onclick') || '') } : null;
   });

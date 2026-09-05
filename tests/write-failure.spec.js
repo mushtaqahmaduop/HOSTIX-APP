@@ -53,7 +53,12 @@ function setReadOnly(yes) {
 
 test.describe.configure({ mode: 'serial' });
 
-test.afterAll(() => { setReadOnly(false); });
+/* Belt and braces around a spec that deliberately makes a SHARED file
+   unwritable: clear it going in as well as coming out. If a previous run died
+   between the two, the profile is still read-only and every spec that resets
+   after this one fails with EPERM on a file it has no reason to suspect. */
+test.beforeAll(() => { setReadOnly(false); });
+test.afterAll(()  => { setReadOnly(false); });
 
 test('a healthy database accepts a write, so the refusal below means something', async () => {
   resetProfile();

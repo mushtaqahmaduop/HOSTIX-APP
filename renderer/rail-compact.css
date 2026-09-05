@@ -1,0 +1,47 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   RAIL COMPACT — paying for the month picker's move into the sidebar
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The sketch puts the month selector in the sidebar, and it now lives there.
+   That costs the rail about 41px of sticky-top height, and the rail has no
+   spare: tests/rail-reach.spec.js measures it at six sizes and pins the rule
+   that the DAILY five — Dashboard, Students, Rooms, Payments, Expenses — stay
+   above the fold at every one of them. Moving the picker pushed Rooms under at
+   1366x768 @125%, the common OEM default, which is exactly the case that spec
+   exists to defend.
+
+   The height is bought back from CHROME, never from type size — that is the
+   standing rule for this rail, and it is why nothing here touches a font size
+   on a nav item.
+
+   WHY THIS IS ITS OWN FILE. These rules belong in chrome.css beside the rest
+   of the sidebar, and style.css owns .sb-logo. Both of those files currently
+   carry uncommitted in-flight design work and are protected, so overriding
+   from a later stylesheet keeps this change out of them entirely. Fold these
+   into chrome.css once that work lands, and delete this file.
+
+   Loaded last in index.html so it wins on equal specificity without needing
+   !important anywhere. */
+
+/* The brand block. `#sidebar .sb-logo` in chrome.css is the rule that actually
+   applies (a bare `.sb-logo` loses to it on specificity, id + class), so this
+   has to answer at the same weight. 18/16 of vertical padding was set when the
+   block held only the brand; it now holds the picker too and reads as one
+   unit. −18px. */
+#sidebar .sb-logo { padding: 10px 16px 6px; }
+
+/* Section headers. Five of them, and the spec above measures a header at 21px.
+   4px off each is 20px of rail — the single largest saving available that is
+   not a type size, and the labels are unchanged. */
+#sidebar .sb-section { padding: 4px 10px 2px; margin-top: 2px; }
+
+/* The picker itself, as a single compact row. It was styled for a sidebar that
+   had room to spare — 28px arrows inside 6px of padding. −17px, and it still
+   clears the 24px minimum touch target on its arrows. */
+.sb-month-picker__header { padding: 2px 8px 4px; gap: 1px; }
+.sb-month-picker__arrow  { width: 24px; height: 24px; }
+.sb-month-picker__display { padding: 0 4px; }
+.sb-month-picker__label { font-size: 12px; }
+
+/* The calendar popover is unchanged — it opens over the page, so its size
+   costs the rail nothing. */

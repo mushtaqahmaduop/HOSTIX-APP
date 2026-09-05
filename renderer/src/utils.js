@@ -167,6 +167,40 @@ function isResident(t) { return !!t && RESIDENT_STATUSES.indexOf(t.status) !== -
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
 function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
+/* ── BIG NUMBERS, SHORT ENOUGH TO FIT ────────────────────────────────────────
+   A KPI tile is about 190px wide with six across, which holds roughly
+   "PKR 9,999,999" and no more. A hostel billing in whole rupees reaches eight
+   and nine digits easily — a year of a 150-bed house is tens of millions — and
+   past that the tile simply clipped: "PKR 1,000,000,17" with the rest of the
+   number, and any sense of its size, cut off at the card edge. A figure you
+   cannot read the end of is worse than a rounded one.
+
+   So: exact up to 9,999,999, abbreviated above it. The threshold is where the
+   tile actually runs out, not a round-looking number — under it nothing
+   changes, which is why ordinary hostels see no difference at all.
+
+   Two decimals, because one is not enough at this scale: 1.2B and 1.24B are
+   forty million rupees apart.
+
+   THE EXACT FIGURE IS NEVER LOST. Every caller pairs this with a title
+   attribute carrying the full number (moneyValue does it automatically), so
+   the rounding is a display choice a hover undoes, not a discarded fact. */
+function fmtCompact(n) {
+  const v = Number(n || 0);
+  const abs = Math.abs(v);
+  if (abs < 1e7) return fmtNum(v);                 // exact while it still fits
+  const sign = v < 0 ? '-' : '';
+  /* Divisor and suffix as separate values rather than a [suffix, divisor]
+     tuple: a mixed array types as (string|number)[], so the division fails
+     `npm run typecheck` — utils.js is one of the four files in its scope. */
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M';
+  /* Trailing zeros trimmed: "5B" reads better than "5.00B", and the two mean
+     the same thing. Only the zeros go — 5.20B keeps its 2. */
+  const num = (abs / div).toFixed(2).replace(/\.?0+$/, '');
+  return sign + num + suffix;
+}
+
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
    charge is a reader, and reads it through here.
@@ -523,9 +557,16 @@ function moneyValue(amount, opts) {
   const currency = opts.currency || 'PKR';
   const color = opts.color ? `style="color:${opts.color}"` : '';
   const cls = opts.className ? ' ' + opts.className : '';
-  return `<span class="money-value money-value--${size}${cls}" ${color}>`
+  /* `compact` shortens the digits and keeps the exact figure in the title, so
+     a clipped card becomes a readable one without the precise number going
+     anywhere. Used by the KPI row, where the space is fixed and the values are
+     unbounded. */
+  const shown = opts.compact ? fmtCompact(amount) : fmtNum(amount);
+  const exact = opts.compact && shown !== fmtNum(amount)
+    ? ` title="${currency} ${fmtNum(amount)}"` : '';
+  return `<span class="money-value money-value--${size}${cls}" ${color}${exact}>`
        + `<span class="money-cur">${currency}</span>`
-       + `<span class="money-amt">${fmtNum(amount)}</span>`
+       + `<span class="money-amt">${shown}</span>`
        + `</span>`;
 }
 
