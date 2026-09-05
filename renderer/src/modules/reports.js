@@ -109,7 +109,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         </div>
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Partially Paid</div>
-          <div style="font-size:26px;font-weight:900;color:var(--blue)">${pendingPays.filter(p=>p.unpaid!=null&&Number(p.amount)>0).length}</div>
+          <div style="font-size:26px;font-weight:900;color:var(--blue)">${pendingPays.filter(p=>Number(p.amount)>0).length}</div>
         </div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th><th>Action</th></tr></thead><tbody>
@@ -117,7 +117,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal('${p.studentId}')">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${escHtml(p.roomNumber||'—')}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
-        <td class="${Number(p.amount)>0&&p.unpaid!=null?'text-green fw-700':'text-muted'}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td>
+        <td class="${Number(p.amount)>0?'text-green fw-700':'text-muted'}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td>
         <td class="text-red fw-700">${fmtPKR(outstandingOf(p))}</td>
         <td>${pmBadge(p.method)}</td>
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
@@ -1141,7 +1141,7 @@ function downloadReportDetailPDF(detailId) {
   } else if(detailId==='pending') {
     // Period-scoped like the on-screen table this PDF is printed from.
     const pendPays = pays.filter(p=>p.status==='Pending');
-    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'green':''}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='students') {
     const _idx=_buildRoomStudentIndex();
     // Same period scope as the on-screen table this PDF is printed from.
@@ -1268,7 +1268,7 @@ function downloadDetailCSV(type) {
     rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
     _inPeriodPays.filter(p=>p.status==='Pending').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        p.unpaid!=null?p.amount:0, outstandingOf(p),
+        Number(p.amount||0), outstandingOf(p),
         p.method||'—', p.date||'—']);
     });
   } else if (type === 'expenses') {

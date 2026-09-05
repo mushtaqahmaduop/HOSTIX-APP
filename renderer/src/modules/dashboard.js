@@ -15,8 +15,17 @@ function calcRevenue(datePrefix) {
   const paid    = DB.payments
     .filter(p => p.status==='Paid' && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
+  /* D-4. This used to require `p.unpaid != null`, so a part-payment written
+     before that field existed contributed NOTHING to revenue — the money was
+     collected, banked and simply absent from the books.
+
+     The guard was a relic of reading `amount` as the sum still owed. It is not:
+     _cashEvents() below says it outright — "p.amount is the total collected on
+     that record" — and carries no such condition, so calcCashReceived() has
+     been counting these records all along. The cash figure and the accrual
+     figure disagreed about the same rupees. */
   const partial = DB.payments
-    .filter(p => p.status==='Pending' && Number(p.amount||0)>0 && p.unpaid!=null
+    .filter(p => p.status==='Pending' && Number(p.amount||0)>0
       && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
   return paid + partial;

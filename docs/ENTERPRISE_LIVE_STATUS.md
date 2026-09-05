@@ -29,7 +29,8 @@ items are closed: **D-2** (validation moved to the main process), the
 and is the single answer to "what is still owed on this record", consumed at 52
 sites across eight modules. Proved by `tests/outstanding.test.js` — 18/18.
 
-Phase C is **not** complete: §14's `applyPayment()` / `reversePayment()` /
+**Phase B is now COMPLETE**, and **D-3** and **D-4** are closed. Phase C is
+**not** complete: §14's `applyPayment()` / `reversePayment()` /
 `calculateRefund()` still do not exist, money is still IEEE-754 `Number` with no
 rounding policy, and the §14 financial test matrix is still 15 named cases with
 no home. **D-4** (below) is the immediate next item.
@@ -61,6 +62,9 @@ what those suites actually assert is promoted here.
 | 11 | Connectivity/device/entitlement probe behaviour | `npm run test:services` — **115/115**, including "a probe falls back to a second mechanism before giving up" and "a first-ever boot with a failing probe is reported, not hidden". |
 
 | 14 | One answer to "what is still owed", derived from the charge authority | `npm run test:outstanding` — **18/18**, including "a recorded balance survives a Paid status", "a legacy Pending record is priced from resolveCharges, not from amount" and "a bundled hostel still bills mess when the record says otherwise". This closes **D-1**. |
+| 27 / 15 | Unknown schema → safe recovery, and never an auto-downgrade | `tests/schema-guard.spec.js` — **5/5**. A database stamped newer than this build refuses to open, routes to the recovery screen, and is left byte-for-byte alone: no migration, no rename, no `.corrupt-` artefact, version still 99 afterwards. |
+| 27 / 17 | Permission denied → actionable failure, and no false success | `tests/write-failure.spec.js` — **3/3**, against a genuinely read-only file, not an injected error. Refused with `PERMISSION_DENIED`, a message naming permissions, no raw SQLite string, and the record provably absent afterwards. |
+| 18 | A read-only install cannot mutate configuration | `tests/licence-enforcement.spec.js` — `db:setSetting` is now refused with `LICENCE_READ_ONLY` under an expired licence. Closes **D-3**. |
 | 16 | Restore refuses a bad document at the privileged handler, and snapshots before it commits | `tests/backup-main-guard.spec.js` — **4/4**, calling `dbImportFull()` directly rather than through the renderer. |
 | 17 | The whole corruption-recovery chain | `tests/db-recovery.spec.js` — **6/6**: detection, writes refused, verified restore, atomic switch, the damaged file kept, the app healthy afterwards, and a damaged backup refused without touching the live database. |
 
@@ -144,7 +148,7 @@ Everything else in this document remains unverified.
 | Wrong machine | Reject | IMPLEMENTED-UNVERIFIED — see the `getMachineId()` fragility note |
 | Tampered entitlement | Reject | IMPLEMENTED-UNVERIFIED |
 | Disk full | No false success | **PARTIAL** — classified and surfaced on the DB path too, but never tested against a genuinely full disk |
-| Permission denied | Actionable failure | **PARTIAL** — classified on the DB path, untested |
+| Permission denied | Actionable failure | **VERIFIED** — `write-failure.spec.js`, against a real read-only file |
 | Invalid/corrupt backup | Reject before mutation | **VERIFIED** — main-process guard, `backup-main-guard.spec.js` |
 | Interrupted restore | Live DB remains safe | IMPLEMENTED-UNVERIFIED — `db.transaction()` |
 | DB corruption | Recovery workflow | **VERIFIED** — `db-recovery.spec.js` 6/6 |
@@ -154,9 +158,10 @@ Everything else in this document remains unverified.
 | Signature mismatch | Update rejected | **MISSING** — `verifyUpdateCodeSignature: false` |
 | XSS payload | Inert | IMPLEMENTED-UNVERIFIED — escaping sweep + `tests/html-escaping.spec.js` |
 | Invalid IPC | Rejected | **PARTIAL** — the backup surface is closed; the other handlers are unaudited |
-| Unknown schema | Safe recovery | **NOT ASSESSED** — §15 also requires never auto-downgrading an unsupported schema |
+| Unknown schema | Safe recovery | **VERIFIED** — `schema-guard.spec.js`. A real gap, not a paperwork one: migrateDatabase() only migrates UP, so a newer file used to be opened and written by an older build |
 
-Six of twenty-one rows are now PARTIAL, MISSING or unassessed — down from nine.
+Four of twenty-one rows are now PARTIAL or MISSING — down from nine at Phase A.
+Nothing is unassessed.
 The remaining MISSING rows are all downstream of code signing.
 
 ---
@@ -345,13 +350,20 @@ Related: the 15-table list is duplicated as a literal in both `db:exportFull`
 matching, and a table added to one but not the other is silently dropped on
 every restore.
 
-### D-3 — Read-only does not block configuration changes
+### D-3 — Read-only does not block configuration changes — **FIXED**
 
 `_assertWritable()` guards four handlers but **not `db:setSetting`**
 (`main.js:1453`). §18 explicitly lists "configuration mutation" among the
 operations a read-only install must block, so a suspended customer can still
-change hostel settings. One line to fix; recorded rather than fixed because
-§32.2 says inspect before changing and Phase D owns this surface.
+change hostel settings. **Closed.** `_assertWritable('settings')` now guards it — `settings` is not in
+enforcement's `ALWAYS_WRITABLE` set (only the activity log is, so a lockout is
+never the one period without an audit trail), so the licence gate applies in
+full. Proved inside `tests/licence-enforcement.spec.js`, which already builds a
+real expired licence.
+
+Worth recording: **`db:setSetting` has no callers.** Nothing in the renderer
+invokes `dbSetSetting`, though `preload.js:100` exposes it. It is guarded
+because it is reachable, not because a screen depends on it.
 
 ---
 
@@ -379,9 +391,14 @@ the D-1 fix — before, both halves were wrong (owed = the full amount, collecte
 halves no longer reconcile against the charge: for a legacy record billed
 14,500 with 4,000 taken, owed now reads 10,500 and collected still reads 0.
 
-**Financial correctness risk: medium.** No data is written wrongly and no debt
-is lost — the money is under-reported as *income*, not dropped from *arrears*.
-Contained to one function and three display columns.
+**FIXED.** The guard is gone from `calcRevenue()` (`dashboard.js:18`),
+`_arcCollected()` (`archive.js:71`) and the three `reports.js` collected columns.
+
+The evidence that settled it was already in the tree: `_cashEvents()` states
+outright that "`p.amount` is the total collected on that record" and carries no
+such condition, so `calcCashReceived()` had been counting these records all
+along. **The cash-basis figure and the accrual figure disagreed about the same
+rupees** — revenue silently omitted money the cash reconciliation counted.
 
 ## Blocked
 

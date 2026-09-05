@@ -78,6 +78,22 @@ function _setDbHealth(state, reason, detail) {
  * damage a half-written page produces and exactly what silently returns wrong
  * query results afterwards. A hostel database is a few megabytes; the extra
  * time is not worth the class of corruption it would miss. */
+/* What schema version does this file claim, WITHOUT writing to it?
+ *
+ * migration001.currentVersion() cannot be used here: it does
+ * `CREATE TABLE IF NOT EXISTS schema_meta` first, which is a write, and the
+ * whole point of this check is to run before we have decided the file is one
+ * we may write to. Reading sqlite_master instead keeps it inert. */
+function _readSchemaVersion(handle) {
+  try {
+    const t = handle.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'").get();
+    if (!t) return 0;
+    const row = handle.prepare("SELECT value FROM schema_meta WHERE key='version'").get();
+    return row ? (Number(row.value) || 0) : 0;
+  } catch (_) { return 0; }
+}
+
 function _integrityCheck(handle) {
   try {
     const rows = handle.pragma('integrity_check');
@@ -153,6 +169,16 @@ function _writeFailure(e) {
  * A hostel whose database is damaged still needs to look up a student and
  * print what it can while it recovers. */
 function _assertDbWritable() {
+  /* Refused for the opposite reason to CORRUPT: the file is intact and it is
+     this build that cannot be trusted with it. Writing would quietly strip
+     whatever a newer version added, so the way out is to update the app, not
+     to restore over the data. */
+  if (dbHealth.state === 'UNSUPPORTED_SCHEMA') {
+    const err = new Error(dbHealth.reason ||
+      'This data was created by a newer version of Hostyllo. Update the app to open it.');
+    err.code = 'UNSUPPORTED_SCHEMA';
+    throw err;
+  }
   if (dbHealth.state === 'CORRUPT') {
     const err = new Error('The database file is damaged. Hostyllo has stopped writing to it to prevent further loss.');
     err.code = 'DB_CORRUPT';
@@ -227,6 +253,36 @@ function initDatabase() {
       try { handle.close(); } catch (_) {}
       db = null;
       _setDbHealth('CORRUPT', chk.reason, chk.detail);
+      return null;
+    }
+
+    /* §27 "unknown schema → safe recovery", and §15's "never auto-downgrade an
+       unsupported schema".
+
+       migrateDatabase() only ever migrates UP: it returns early when the file
+       is already at or beyond SCHEMA_VERSION. So a database written by a NEWER
+       build used to sail straight past it and be opened normally — an older
+       client reading and WRITING a shape it does not know. That is worse than
+       refusing: nothing looks wrong, and every record this build saves is
+       written without whatever the newer one added.
+
+       It is a reachable state, not a hypothetical. An update installs, the
+       customer reinstalls an older build or rolls one back, or a backup taken
+       on an updated machine is restored onto a stale one.
+
+       Checked HERE, before `db = handle` and before the CREATE TABLE block for
+       the same reason the integrity check is: that block is a write, and this
+       file is one we have just decided we do not understand. The data is fine —
+       it is the app that is behind — so nothing is migrated, renamed or
+       touched. */
+    const found = _readSchemaVersion(handle);
+    if (found > migration001.SCHEMA_VERSION) {
+      try { handle.close(); } catch (_) {}
+      db = null;
+      _setDbHealth('UNSUPPORTED_SCHEMA',
+        'This data was created by a newer version of Hostyllo (database format v' +
+        found + '; this version understands up to v' + migration001.SCHEMA_VERSION + ').',
+        'schema v' + found + ' > supported v' + migration001.SCHEMA_VERSION);
       return null;
     }
   }
@@ -1890,11 +1946,20 @@ ipcMain.handle('db:getSetting', (_e, key) => {
 
 ipcMain.handle('db:setSetting', (_e, key, value) => {
   try {
-    // Health only. The LICENCE gate on this handler is D-3 and belongs to
-    // Phase D — a suspended hostel can still change settings today, and that
-    // is recorded rather than quietly changed here, because it needs the
-    // read-only specs run against it.
+    /* D-3, closed. §18 names "configuration mutation" among the operations a
+       read-only install must block, and this handler was the one write path
+       that checked health but never the licence — so a suspended hostel could
+       still change its settings.
+
+       `settings` is not in enforcement's ALWAYS_WRITABLE set (only the activity
+       log is, so a lockout is not the one period with no audit trail), so the
+       licence gate applies to it in full.
+
+       Worth knowing: this handler currently has NO callers — nothing in the
+       renderer invokes `dbSetSetting`, though preload.js:100 exposes it. It is
+       guarded because it is reachable, not because a screen depends on it. */
     _assertDbWritable();
+    _assertWritable('settings');
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
       .run(key, JSON.stringify(value));
     return { ok: true };
@@ -2065,7 +2130,7 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
      meaningful against a file we have just proved is broken — and pressing on
      regardless is how a warden ends up staring at a wall of render errors with
      nothing telling them their data is intact in a backup beside it. */
-  if (dbHealth.state === 'CORRUPT') {
+  if (dbHealth.state === 'CORRUPT' || dbHealth.state === 'UNSUPPORTED_SCHEMA') {
     createRecoveryWindow();
     return;
   }

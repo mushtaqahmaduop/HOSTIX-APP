@@ -355,7 +355,22 @@ function outstandingOf(p) {
         : c.messBilled)
     : (p.messIncluded !== false ? Number(p.messCharge || 0) : 0);
 
-  return Math.max(0, rent + mess
+  /* Extra charges are part of the bill. Every place that WRITES a balance
+     computes it as monthlyRent + mess + extraTotal + admissionFee − concession
+     (payments.js:1816, :2552, :2732), so a derivation that drops extraTotal
+     reports less than the record owes. That omission is a real, recorded
+     defect — the Phase 0 fixture `m_legacy_no_unpaid` exists to catch it, and
+     `payments.js:2640` had it before this helper replaced that expression.
+
+     The recorded total wins; the line items are the fallback for a record that
+     carries them without it. */
+  const extras = p.extraTotal != null
+    ? Number(p.extraTotal) || 0
+    : (Array.isArray(p.extraCharges)
+        ? p.extraCharges.reduce((s, c) => s + (Number(c && c.amount) || 0), 0)
+        : 0);
+
+  return Math.max(0, rent + mess + extras
                    + Number(p.admissionFee || p.fee || 0)
                    - Number(p.concession   || p.discount || 0)
                    - Number(p.amount       || 0));

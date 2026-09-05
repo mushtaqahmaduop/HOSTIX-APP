@@ -68,7 +68,10 @@ function _arcFines()         { return DB.fines || []; }
 function _arcCollected(list) {
   return (list || []).reduce((s, p) => {
     if (p.status === 'Paid') return s + Number(p.amount || 0);
-    if (p.status === 'Pending' && Number(p.amount || 0) > 0 && p.unpaid != null)
+    // D-4: no `p.unpaid != null` here. A part-payment from before that field
+    // existed is still money that came in, and this function's contract is to
+    // match calcRevenue() — which no longer drops it either.
+    if (p.status === 'Pending' && Number(p.amount || 0) > 0)
       return s + Number(p.amount || 0);
     return s;
   }, 0);

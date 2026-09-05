@@ -147,6 +147,50 @@ ok('an optional hostel lets the record decide, because there it is a fact', () =
   assert.strictEqual(outstandingOf(pay({ status: 'Pending', amount: 0, messIncluded: true  })), 14500);
 });
 
+console.log('\nextra charges are part of the bill (Phase 0 F-1)');
+
+/* These two are the Phase 0 fixtures `m_extras` and `m_legacy_no_unpaid` from
+   `edge-money.db`, copied field for field. They are the same record twice —
+   once with a recorded balance, once from before the field existed — and they
+   exist precisely to prove the derivation reaches the same figure both ways.
+
+   The fixture set itself lives on the unmerged `enterprise/phase-0-baseline`
+   branch (7605122) and is NOT on this one, so the shapes are inlined here
+   rather than loaded. Phase 0's note on the second record: "the edit-payment
+   modal recomputes the fallback without extraTotal (payments.js:2640), so this
+   record is the one that reads a smaller balance than it owes." That was true
+   of this helper too until extras were added — it returned 7000, not 8500. */
+const F1 = extra => Object.assign({
+  studentId: 'gone', studentName: 'Resident 005', month: 'August 2026',
+  amount: 5000, monthlyRent: 9000, totalRent: 9000,
+  messCharge: 3000, messIncluded: true,
+  extraCharges: [{ label: 'Laundry', amount: 1500 }], extraTotal: 1500,
+  admissionFee: 0, concession: 0, discount: 0, status: 'Pending', paidDate: ''
+}, extra || {});
+
+ok('the modern shape reports its recorded balance', () => {
+  setup();
+  DB.students = [];                       // fixture students are not in this DB
+  // 9000 rent + 3000 mess + 1500 extras = 13500 billed, 5000 collected.
+  assert.strictEqual(outstandingOf(F1({ unpaid: 8500 })), 8500);
+});
+
+ok('the legacy shape derives the SAME figure, extras included', () => {
+  setup();
+  DB.students = [];
+  // Without extraTotal this returns 7000 — the canonical-8500-vs-fallback-7000
+  // gap Phase 0 recorded as F-1.
+  assert.strictEqual(outstandingOf(F1()), 8500);
+});
+
+ok('extras are summed from the line items when no total was recorded', () => {
+  setup();
+  DB.students = [];
+  const p = F1();
+  delete p.extraTotal;
+  assert.strictEqual(outstandingOf(p), 8500);
+});
+
 console.log('\nrecords whose student is gone still print a number');
 
 ok('a deleted student falls back to the rent recorded on the payment', () => {

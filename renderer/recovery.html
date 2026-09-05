@@ -56,8 +56,8 @@
 </head>
 <body>
 
-<h1>Your data is safe. This file is not.</h1>
-<p class="sub">
+<h1 id="head">Your data is safe. This file is not.</h1>
+<p class="sub" id="sub">
   Hostyllo checked its database when it started and found damage, so it has
   <strong>stopped writing to it</strong> rather than risk making things worse.
   Nothing has been deleted.
@@ -69,7 +69,7 @@
   <div class="note" id="dbpath"></div>
 </div>
 
-<div class="panel">
+<div class="panel" id="restore-panel">
   <h2>Restore from a backup</h2>
   <ul class="snaps" id="snaps"><li class="empty">Looking for backups…</li></ul>
   <div class="note">
@@ -80,7 +80,7 @@
   <div class="msg" id="msg"></div>
 </div>
 
-<p class="note">
+<p class="note" id="foot">
   If none of these work, contact support and quote the file name above. The
   damaged file can often still be read by hand, so do not delete it.
 </p>
@@ -121,13 +121,44 @@
     for (var i = 0; i < bs.length; i++) bs[i].disabled = yes;
   }
 
+  /* Two states arrive here and they need opposite advice.
+
+     CORRUPT: the file is damaged, and restoring a backup over it is the fix.
+
+     UNSUPPORTED_SCHEMA: the file is perfectly intact and NEWER than this build
+     understands. Restoring an older backup over it would not recover anything
+     — it would be the data loss. So the restore list is removed entirely and
+     the only instruction is to update the app. */
+  var UNSUPPORTED = false;
+
   window.electronAPI.dbHealth().then(function (h) {
-    $('reason').textContent = h.reason || 'The database file could not be read.';
-    if (h.dbPath) $('dbpath').textContent = h.dbPath;
+    UNSUPPORTED = h && h.state === 'UNSUPPORTED_SCHEMA';
+    $('reason').textContent = (h && h.reason) || 'The database file could not be read.';
+    if (h && h.dbPath) $('dbpath').textContent = h.dbPath;
+
+    if (UNSUPPORTED) {
+      $('head').textContent = 'Your data is newer than this version of Hostyllo.';
+      $('sub').innerHTML =
+        'This database was written by a <strong>newer version</strong> of Hostyllo. ' +
+        'Nothing is wrong with it, and nothing has been changed — but this build ' +
+        'does not understand its format, so it has <strong>not opened or written to ' +
+        'it</strong> rather than save records with pieces missing.';
+      var rp = $('restore-panel');
+      if (rp) rp.parentNode.removeChild(rp);
+      $('foot').textContent =
+        'Install the current version of Hostyllo and your data will open as normal. '
+        + 'Do not restore an older backup over it — that would replace good data '
+        + 'with older data. If you are not sure which version you had, contact support '
+        + 'and quote the file name above.';
+      return;
+    }
+    loadSnapshots();
   }).catch(function () {
     $('reason').textContent = 'The database file could not be read.';
+    loadSnapshots();
   });
 
+  function loadSnapshots() {
   window.electronAPI.recoveryList().then(function (r) {
     var list = (r && r.snapshots) || [];
     var ul = $('snaps');
@@ -173,6 +204,7 @@
     $('snaps').innerHTML = '<li class="empty">Backups could not be listed.</li>';
     show('err', String(e && e.message || e));
   });
+  }
 })();
 </script>
 </body>
