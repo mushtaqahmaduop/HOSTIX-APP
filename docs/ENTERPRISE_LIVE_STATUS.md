@@ -5,11 +5,14 @@
 **Branch:** `feature/dashboard-1c` — 38 commits ahead of `master`, 0 behind (it is the tip)
 **App version:** 5.0.0 · Electron 43.4.0
 
-> **Scope of this pass.** This is a *targeted* Phase A reconciliation, not an
-> exhaustive per-requirement sweep of all 35 spec sections. It establishes the
-> spec's load-bearing claims against the real tree and settles the items that
-> gate release. Sections marked "not yet reconciled" below are honest gaps in
-> this document, not implied passes.
+> **Scope of this pass.** Phase A is now substantially complete: §7, §8, §10,
+> §11, §13, §14, §16, §17, §18, §20, §21, §23, §24 and §25 are reconciled
+> against the real tree. Two items remain open and are named at the end of
+> *Customer-Data Risk*. Anything not stated here is not implied to pass.
+>
+> Three concrete defects (**D-1**, **D-2**, **D-3**) were found and are recorded
+> below. None has been fixed — §32.2 says inspect before changing, and these
+> belong to Phases B–D.
 
 ---
 
@@ -47,6 +50,9 @@ action in Phase B.
 | 23 | Electron security baseline | `contextIsolation: true` / `nodeIntegration: false` on **all four** BrowserWindows (`main.js:625, 792, 1100, 1143`); `webSecurity: true` at `:795`. |
 | 15 | Pre-migration backup exists | `main.js:115` writes a snapshot before migrating. |
 | 7 | Control-plane bootstrap holds no secrets and does not block local work | `services/config.js` `DEFAULT_API_BASE` is deliberately empty; every field install resolves `apiBase` to `null` and makes no network calls. |
+| 11 | **No ordinary business operation depends on an API call** | The strongest result in this pass. A sweep of all 18 business modules in `renderer/src/modules/` for `fetch(`, `XMLHttpRequest` and any `api-client` reference returns **zero hits**. `services/api-client.js` is reachable only from `connectivity.js`, `device.js`, `entitlement.js` and `services/index.js` — the entitlement layer alone. The offline architecture §11 asks for is real and structural, not incidental. |
+| 20 | Revocation is data-preserving | No `REVOKED → delete` path exists. Nothing in the licence or enforcement code deletes, moves or truncates the database. |
+| 16 | Restore rolls back cleanly on interruption | `db:importFull` (`main.js:1478`) wraps all 15 table replacements in a single `db.transaction()`. |
 
 ---
 
@@ -56,6 +62,12 @@ action in Phase B.
 |---|---|---|
 | 23 | "Strict CSP" | A CSP **is** enforced (`main.js:1533`, plus per-page meta in `renderer/license.html` and `renderer/license-settings.html`), but it carries `script-src 'unsafe-inline'`. This is a *documented, deliberate* decision (comment at `main.js:1525-1532`): the UI is built from inline `onclick`/`oninput` handlers across every module, and the escaping sweep is the compensating control. It is defensible — but it is not "strict CSP" as §23 words it, and the spec should be reconciled to the decision rather than the code to the spec. |
 | 13 | Typed IPC operations | **8 of 24** `ipcMain.handle` registrations are the generic primitives §13 names as migration targets: `db:all` (1377), `db:upsert` (1415), `db:delete` (1424), `db:bulkReplace` (1433), `db:getSetting` (1446), `db:setSetting` (1453), `db:exportFull` (1461), `db:importFull` (1478). None of the typed operations (`students.create`, `payments.create`, …) exist yet. §13 itself says *do not* big-bang this — so it is a sequenced backlog item, not a defect. |
+| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). But **`reports.js` calls it zero times** and recomputes every figure inline (~10 independent `reduce` expressions). §14's "reports must reconcile against the same financial authority" therefore fails, and it fails concretely — see **D-1** below. §14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form: reversal exists only as a *cancellation status* (`cancellations.js:129,145`), refund not at all. |
+| 14 | Money representation | Money is JS `Number` — IEEE-754 binary floating point — which §14 explicitly rules out. In practice PKR is billed in whole rupees so the exposure is small, but no canonical representation, precision or rounding policy is defined anywhere. The only `Math.round` on a money path is a half-payment split (`payments.js:2244`); the rest round percentages. Rounding boundaries are untested. |
+| 16 | Restore is safe against a bad file | The protections exist and are genuinely tested — `tests/backup-hostile-input.spec.js` asserts every malformed or hostile shape is **refused with a reason** (:98-100), that a refused import leaves the live data **byte-identical** (:145), that `Object.prototype` is not polluted (:149), and that a genuine backup is still accepted (:103). `db:importFull` is wrapped in `db.transaction()`, so an interrupted restore rolls back and §27's "interrupted restore → live DB remains safe" holds. **But every one of those checks lives in the renderer** (`restoreBackup()`, `modals.js:305`). The privileged handler itself validates nothing beyond `Array.isArray` — see **D-2**. |
+| 17 | Disk full → no false success | Handled, with genuinely actionable messages for `ENOSPC` / `EACCES` / `EPERM` / `ENOENT` — but **only on the PDF path** (`main.js:1119-1125`). The database write path has no equivalent, which is where §17 actually points. |
+| 18 | Read-only blocks writes at the IPC layer | Enforced in the **main process**, not merely by greying out buttons — which is the stronger of the two and worth recording as a pass. `_assertWritable()` (`main.js:1403`) guards `db:upsert` (:1418), `db:delete` (:1427), `db:bulkReplace` (:1436) and `db:importFull` (:1479). **One hole — see D-3.** |
+| 22 | Centralized redaction | Real machinery exists: `services/redact.js` provides `isSensitiveKey`, `redactPaths`, `redactString`, `redactMachineId`, a recursive `walk` and a top-level `redact`. Not yet checked against §22's 13 required support fields or its 8-file diagnostic bundle. |
 
 ---
 
@@ -67,6 +79,67 @@ action in Phase B.
 | 21 / 29 | **Signed production installer** | Not signed. `package.json` `build.win` sets `verifyUpdateCodeSignature: false` **and** `signAndEditExecutable: false`, and there is no certificate configuration. Every shipped installer and every update artifact is unsigned, so §27's "unsigned artifact → release blocked" and "signature mismatch → update rejected" rows cannot hold. |
 | 21 | **Pre-update DB backup** | A pre-*migration* backup exists (`main.js:115`); no pre-*update* backup was found. §21 and the §29 Updates gate both require one before installation. |
 | 31 | Live status document | Was missing. This file closes it. |
+| 16 | **Pre-restore backup** | Not implemented. §16 requires `… → verify financial invariants → pre-restore backup → restore safely → validate → commit`. `db:importFull` runs `DELETE FROM <table>` for all 15 tables and re-inserts, with no snapshot taken first. The transaction protects against a *crash*; it does not protect against a **successfully restored wrong file**, which is the case §16's pre-restore backup exists for. |
+| 16 | Scheduled local backup | §16 requires four backup types (scheduled local, manual export, pre-migration, pre-restore). Only two exist: manual export (`db:exportFull`) and pre-migration (`main.js:115`). No scheduler was found. |
+| 17 | DB corruption detection and recovery | Absent. `integrity_check` appears nowhere in the codebase. There is no corruption detector, no recovery screen, no restore-to-temporary-DB, and no atomic switch. §17's entire chain is unimplemented, and §27's "DB corruption → recovery workflow" row cannot hold. |
+| 14 | Financial test matrix | §14 names 15 required cases (exact, partial, overpayment, multiple months, concessions, extras, cancellation, checkout, reversal, refund, zero, invalid/negative, large amounts, rounding boundaries). Reversal and refund have no implementation to test; rounding boundaries and large amounts have no policy to test against. |
+
+---
+
+## Defects found during reconciliation
+
+These are concrete, reproducible, and were not previously recorded. They belong
+to Phases B/C but were surfaced by Phase A, so they are logged here.
+
+### D-1 — Payments and Reports disagree on what is outstanding
+
+Two screens answer the same question with different arithmetic, on a record
+whose `unpaid` field is absent:
+
+| Site | Expression | A legacy record contributes |
+|---|---|---|
+| `renderer/src/modules/payments.js:311` | `p.unpaid != null ? Number(p.unpaid) : 0` | **0** |
+| `renderer/src/modules/reports.js:94` | `p.unpaid != null ? Number(p.unpaid) : Number(p.amount)` | **the full amount** |
+| `renderer/src/modules/reports.js:488` | same as `:94` | **the full amount** |
+
+So a hostel carrying pre-`unpaid` Pending payments sees them as **nothing owed**
+on the Payments screen and as **fully owed** in Reports. Neither figure is
+labelled as an estimate.
+
+This is not hypothetical: the Phase 0 fixture `edge-money.db` already encodes
+`m_legacy_no_unpaid` precisely because records without `unpaid` exist in the
+field. **Customer-data risk: none** (nothing is written wrongly) — **financial
+correctness risk: high**, and §14 places financial correctness second only to
+data integrity.
+
+Fix direction: one `outstandingOf(payment)` helper beside `resolveCharges()`,
+with the fallback decided once and deliberately, and both call sites routed
+through it. Small, contained, and it is the natural first step of Phase C.
+
+### D-2 — Backup validation is renderer-side only
+
+Every guarantee `tests/backup-hostile-input.spec.js` proves is enforced in
+`restoreBackup()` (`modals.js:305`), not in the handler. `db:importFull`
+(`main.js:1478`) checks `_assertWritable` and then trusts its payload
+completely — `Array.isArray(data[t])` is the only shape check. Because
+`DELETE FROM <table>` runs unconditionally per table and the insert is
+conditional, a payload that merely *omits* a table empties it and commits.
+
+Against §13's "every privileged handler validates all inputs in the main
+process", the tested safety net sits on the wrong side of the trust boundary.
+
+Related: the 15-table list is duplicated as a literal in both `db:exportFull`
+(`:1462`) and `db:importFull` (`:1481`). They match today; nothing keeps them
+matching, and a table added to one but not the other is silently dropped on
+every restore.
+
+### D-3 — Read-only does not block configuration changes
+
+`_assertWritable()` guards four handlers but **not `db:setSetting`**
+(`main.js:1453`). §18 explicitly lists "configuration mutation" among the
+operations a read-only install must block, so a suspended customer can still
+change hostel settings. One line to fix; recorded rather than fixed because
+§32.2 says inspect before changing and Phase D owns this surface.
 
 ---
 
@@ -147,9 +220,16 @@ Uncommitted in-flight design work, left exactly as found:
 - **Medium — the 42-room seed.** It writes invented records into a real customer
   database on first boot. Not destructive, but it is customer data the customer
   did not enter, and it must be gone before a paid install.
-- **Not yet reconciled:** §14 financial authority, §16/§17 backup–restore–recovery,
-  §11 offline matrix, §18–20 read-only enforcement depth, §22 support redaction.
-  These carry the highest residual risk precisely because they are unassessed.
+- **Financial correctness — high (D-1).** No data is written wrongly, but the
+  Payments and Reports screens report different amounts owed for the same
+  records. A warden chasing arrears from one screen collects a different set
+  than a warden chasing them from the other.
+- **Medium — no pre-restore backup (§16).** Restoring the wrong file is
+  transactional and therefore *irreversible on success*: it commits cleanly over
+  live data with no snapshot to return to.
+- **Still unreconciled:** §22's 13 support fields and 8-file diagnostic bundle,
+  and the full 21-row §27 failure matrix. Everything else in the Phase A scope
+  is now assessed.
 
 ---
 
@@ -160,6 +240,9 @@ Uncommitted in-flight design work, left exactly as found:
 3. No pre-update database backup (§21, §29).
 4. `license.hostyllo.com` does not resolve — no shippable control-plane address (§7).
 5. No §26 commercial E2E has ever been run.
+6. **D-1** — Payments and Reports disagree on outstanding amounts (§14, §29 "reports reconcile").
+7. **No pre-restore backup**, and no DB-corruption recovery workflow at all (§16, §17, §29 "restore safe").
+8. **D-3** — read-only does not block configuration mutation (§18, §29 "suspension tested").
 
 ---
 
@@ -172,6 +255,10 @@ Uncommitted in-flight design work, left exactly as found:
    §10 room-setup step instead.
 3. **Decide the code-signing path** (certificate + signing step), since blockers
    1 and 3 cannot close without it.
-4. **Reconcile the remaining sections** — §14 financial, §16/§17 backup and
-   recovery, §11 offline, §18–20 entitlement lifecycle, §22 support redaction —
-   into this document before Phase B is declared started.
+4. **Fix D-3** (one line: guard `db:setSetting` with `_assertWritable`) and
+   **D-1** (one `outstandingOf()` helper, two call sites). Both are contained,
+   both are release blockers, and D-1 is the natural opening move of Phase C.
+5. **Design the pre-restore backup** (§16) — the largest genuine hole in the
+   data-safety story, and Phase B's main piece of work.
+6. **Finish the last of Phase A** — §22's 13 support fields and 8-file bundle,
+   and the 21-row §27 failure matrix.
