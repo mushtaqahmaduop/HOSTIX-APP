@@ -31,6 +31,20 @@ const os = require('os');
 const Database = require('better-sqlite3');
 const migration001 = require('./migrations/001-relational-schema');
 let db = null;
+// The live database file. Held at module scope because the restore path needs
+// to snapshot it before it mutates it, and initDatabase() is long finished by
+// then. Set once, in initDatabase().
+let dbPath = null;
+
+/* THE TABLE LIST, ONCE.
+   It used to be written out twice — once in db:exportFull and once in
+   db:importFull — with nothing keeping the two in step. A table added to the
+   export but not the import would have been backed up faithfully and then
+   silently dropped by the next restore, which is the kind of data loss nobody
+   notices until they need the data. */
+const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
+  'maintenance','complaints','checkinlog','notices','fines',
+  'activitylog','inspections','billsplits','transfers','archive'];
 let _schemaMigrated = false;
 
 // ── Online services (Phase 1) ─────────────────────────────────────────────────
@@ -61,7 +75,7 @@ function _dbInsert(table, id, record) {
 }
 
 function initDatabase() {
-  const dbPath = path.join(app.getPath('userData'), 'hostix.db');
+  dbPath = path.join(app.getPath('userData'), 'hostix.db');
   const dbExisted = fs.existsSync(dbPath);
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -1412,6 +1426,127 @@ function _assertWritable(table) {
   }
 }
 
+/* BACKUP VALIDATION, ON THE SIDE OF THE BOUNDARY THAT COUNTS.
+ *
+ * validateBackup() in the renderer already refuses every shape this refuses,
+ * and tests/backup-hostile-input.spec.js proves it. But that check runs on the
+ * untrusted side: it is what restoreBackup() chooses to call before it asks for
+ * the import, not something the import requires. A caller reaching db:importFull
+ * directly — a bug in another module, a future screen, anything with the bridge
+ * — got no check at all, and this handler DELETEs fifteen tables.
+ *
+ * So this is deliberately a duplicate rather than a refactor. The renderer's
+ * copy explains itself to the user in the restore dialog; this one is the one
+ * that cannot be skipped. Keep them agreeing on what is valid, and let them
+ * differ on what they do about it.
+ *
+ * Structural only, on purpose. It rejects documents that cannot be written —
+ * wrong root type, a table that is not an array, a record with no usable id,
+ * settings that are not an object — and says nothing about whether the contents
+ * make business sense. A restore of a real hostel's data must not fail because
+ * this function had an opinion about their rent.
+ */
+function _validateBackupPayload(data) {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return { ok: false, reason: 'Not a backup document — expected a JSON object.' };
+  }
+
+  // A backup carrying none of our tables is somebody else's file. Without this
+  // an unrelated JSON document would validate and empty every table.
+  const present = BACKUP_TABLES.filter(t => Object.prototype.hasOwnProperty.call(data, t));
+  if (!present.length) {
+    return { ok: false, reason: 'This file contains no Hostyllo data.' };
+  }
+
+  for (const t of present) {
+    const rows = data[t];
+    if (!Array.isArray(rows)) {
+      return { ok: false, reason: `"${t}" must be a list of records.` };
+    }
+    for (const r of rows) {
+      if (r === null || typeof r !== 'object' || Array.isArray(r)) {
+        return { ok: false, reason: `"${t}" contains an entry that is not a record.` };
+      }
+      // db:importFull binds r.id straight into an INSERT. undefined, null and
+      // '' all bind as NULL and collide on the primary key, so the row that
+      // looks saved is the only one of them that survives.
+      if (r.id === undefined || r.id === null || String(r.id).trim() === '') {
+        return { ok: false, reason: `"${t}" contains a record with no id.` };
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'settings')) {
+    const s = data.settings;
+    if (s === null || typeof s !== 'object' || Array.isArray(s)) {
+      return { ok: false, reason: 'Settings must be an object.' };
+    }
+  }
+
+  return { ok: true };
+}
+
+/* THE SNAPSHOT TAKEN BEFORE A RESTORE OVERWRITES ANYTHING.
+ *
+ * The transaction around db:importFull protects against a crash. It does not
+ * protect against the restore SUCCEEDING with the wrong file, which commits
+ * cleanly over a live hostel's records and has no undo. Spec §16 asks for this
+ * snapshot for exactly that case.
+ *
+ * VACUUM INTO is the same idiom the pre-migration backup uses, and it is the
+ * right one: a consistent copy of the whole database taken through SQLite
+ * rather than a file copy racing the WAL.
+ *
+ * TIMESTAMPED, AND THREE ARE KEPT, because a single fixed filename is a trap.
+ * Restore a bad file, notice, restore again — and the second snapshot captures
+ * the bad state on top of the good one, leaving nothing to go back to. That is
+ * precisely the "never overwrite the only known-good copy" rule, and a fixed
+ * name breaks it on the second attempt rather than the first.
+ *
+ * A snapshot failure does NOT block the restore. Refusing to restore because a
+ * safety copy could not be written would strand a customer whose disk is full
+ * on the broken database they are trying to escape. The reason is returned so
+ * the caller can say so.
+ */
+const PRE_RESTORE_KEEP = 3;
+
+function _preRestoreSnapshot() {
+  if (!dbPath) return { ok: false, reason: 'no database path' };
+  try {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    // Milliseconds are in the name because seconds are not enough. VACUUM INTO
+    // refuses to write a file that already exists, so two restores inside the
+    // same second lost the second snapshot — and lost it quietly, reporting a
+    // failure reason nobody was going to read. Fixed width keeps the plain
+    // lexicographic sort below chronological.
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+                  `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}` +
+                  `-${String(d.getMilliseconds()).padStart(3, '0')}`;
+    const target = `${dbPath}.pre-restore-${stamp}.bak`;
+
+    db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+
+    // Prune oldest first, and only ever our own snapshots.
+    try {
+      const dir  = path.dirname(dbPath);
+      const base = path.basename(dbPath) + '.pre-restore-';
+      const mine = fs.readdirSync(dir)
+        .filter(f => f.startsWith(base) && f.endsWith('.bak'))
+        .sort();
+      for (const f of mine.slice(0, Math.max(0, mine.length - PRE_RESTORE_KEEP))) {
+        try { fs.unlinkSync(path.join(dir, f)); } catch (_) { /* a stale copy is not worth failing over */ }
+      }
+    } catch (_) { /* pruning is housekeeping, never a reason to stop */ }
+
+    console.log('[HOSTYLLO] Pre-restore backup written:', target);
+    return { ok: true, path: target };
+  } catch (e) {
+    console.error('[HOSTYLLO] Pre-restore backup FAILED:', e.message);
+    return { ok: false, reason: e.message };
+  }
+}
+
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
     _assertRendererTable(table);
@@ -1460,9 +1595,7 @@ ipcMain.handle('db:setSetting', (_e, key, value) => {
 
 ipcMain.handle('db:exportFull', () => {
   try {
-    const tables = ['rooms','students','payments','expenses','cancellations',
-      'maintenance','complaints','checkinlog','notices','fines',
-      'activitylog','inspections','billsplits','transfers','archive'];
+    const tables = BACKUP_TABLES;
     const result = {};
     for (const t of tables) {
       result[t] = db.prepare(`SELECT data FROM ${t}`).all().map(r => JSON.parse(r.data));
@@ -1478,11 +1611,18 @@ ipcMain.handle('db:exportFull', () => {
 ipcMain.handle('db:importFull', (_e, data) => {
   try { _assertWritable('import'); }
   catch (e) { return { ok: false, error: e.message, code: e.code || null }; }
+
+  // Refuse before anything is deleted. The renderer checks this too; that check
+  // is the one the user sees, this is the one that cannot be bypassed.
+  const valid = _validateBackupPayload(data);
+  if (!valid.ok) return { ok: false, error: valid.reason, code: 'INVALID_BACKUP' };
+
+  // Snapshot the live database while it is still the good one.
+  const snap = _preRestoreSnapshot();
+
   try {
     const transaction = db.transaction(() => {
-      const tables = ['rooms','students','payments','expenses','cancellations',
-        'maintenance','complaints','checkinlog','notices','fines',
-        'activitylog','inspections','billsplits','transfers','archive'];
+      const tables = BACKUP_TABLES;
       for (const t of tables) {
         db.prepare(`DELETE FROM ${t}`).run();
         if (Array.isArray(data[t])) {
@@ -1499,7 +1639,11 @@ ipcMain.handle('db:importFull', (_e, data) => {
       }
     });
     transaction();
-    return { ok: true };
+    // The snapshot's fate is reported, never guessed at. A restore that
+    // succeeded without a safety copy is a different thing to one that had one,
+    // and the caller is entitled to know which it just did.
+    return { ok: true, preRestoreBackup: snap.ok ? snap.path : null,
+             preRestoreBackupError: snap.ok ? null : snap.reason };
   } catch (e) { return { ok: false, error: e.message }; }
 });
 

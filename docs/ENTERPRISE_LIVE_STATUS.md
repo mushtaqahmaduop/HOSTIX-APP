@@ -18,6 +18,11 @@
 
 ## Current Phase
 
+**Phase B — Remaining Data Safety — IN PROGRESS.** Two of its four items are
+closed: **D-2** (validation moved to the main process) and the **pre-restore
+backup**. Remaining: the §17 recovery workflow (corruption detection, disk-full
+on the DB write path) and §27's "unknown schema → safe recovery".
+
 **Phase A — Live-State Reconciliation — COMPLETE.** Spec §28 was correct that
 implementation is well advanced; it was *not* correct that Phase A had begun —
 this file did not exist before today.
@@ -93,7 +98,7 @@ uncommitted files, so it carries no status forward.
 | 21 / 29 | **Signed production installer** | Not signed. `package.json` `build.win` sets `verifyUpdateCodeSignature: false` **and** `signAndEditExecutable: false`, and there is no certificate configuration. Every shipped installer and every update artifact is unsigned, so §27's "unsigned artifact → release blocked" and "signature mismatch → update rejected" rows cannot hold. |
 | 21 | **Pre-update DB backup** | A pre-*migration* backup exists (`main.js:115`); no pre-*update* backup was found. §21 and the §29 Updates gate both require one before installation. |
 | 31 | Live status document | Was missing. This file closes it. |
-| 16 | **Pre-restore backup** | Not implemented. §16 requires `… → verify financial invariants → pre-restore backup → restore safely → validate → commit`. `db:importFull` runs `DELETE FROM <table>` for all 15 tables and re-inserts, with no snapshot taken first. The transaction protects against a *crash*; it does not protect against a **successfully restored wrong file**, which is the case §16's pre-restore backup exists for. |
+| 16 | ~~**Pre-restore backup**~~ | **CLOSED, Phase B.** `_preRestoreSnapshot()` now runs before the transaction, using the same `VACUUM INTO` idiom as the pre-migration backup. Snapshots are **timestamped and the newest three kept**, not written to one fixed name — a fixed name means the second restore captures the first restore's bad state on top of the good one, which breaks §16's "never overwrite the only known-good copy" exactly when it matters. A snapshot failure does not block the restore (that would strand a customer with a full disk on the database they are escaping); the reason is returned instead. Proved by `tests/backup-main-guard.spec.js`. |
 | 16 | Scheduled local backup | §16 requires four backup types (scheduled local, manual export, pre-migration, pre-restore). Only two exist: manual export (`db:exportFull`) and pre-migration (`main.js:115`). No scheduler was found. |
 | 17 | DB corruption detection and recovery | Absent. `integrity_check` appears nowhere in the codebase. There is no corruption detector, no recovery screen, no restore-to-temporary-DB, and no atomic switch. §17's entire chain is unimplemented, and §27's "DB corruption → recovery workflow" row cannot hold. |
 | 14 | Financial test matrix | §14 names 15 required cases (exact, partial, overpayment, multiple months, concessions, extras, cancellation, checkout, reversal, refund, zero, invalid/negative, large amounts, rounding boundaries). Reversal and refund have no implementation to test; rounding boundaries and large amounts have no policy to test against. |
@@ -176,7 +181,26 @@ Fix direction: one `outstandingOf(payment)` helper beside `resolveCharges()`,
 with the fallback decided once and deliberately, and both call sites routed
 through it. Small, contained, and it is the natural first step of Phase C.
 
-### D-2 — Backup validation is renderer-side only
+### D-2 — Backup validation is renderer-side only — **FIXED, Phase B**
+
+Closed in `main.js`. `_validateBackupPayload()` now runs inside `db:importFull`
+before a single `DELETE` executes, refusing with `code: 'INVALID_BACKUP'`. It is
+deliberately a *duplicate* of the renderer's `validateBackup()` rather than a
+refactor: the renderer's copy explains itself to the user in the restore dialog,
+this one is the copy that cannot be skipped.
+
+It also catches a case the old handler could not: a valid JSON document naming
+none of our tables ("this file contains no Hostyllo data") previously passed
+`Array.isArray` on every key and emptied all fifteen tables.
+
+The 15-table list is now the single `BACKUP_TABLES` constant, consumed by both
+`db:exportFull` and `db:importFull`, so the two can no longer drift.
+
+**Proved by `tests/backup-main-guard.spec.js` — 4/4 passing.** It calls
+`electronAPI.dbImportFull()` directly, bypassing the renderer check entirely,
+which is the thing the pre-existing `backup-hostile-input.spec.js` could not do.
+
+### Original finding
 
 Every guarantee `tests/backup-hostile-input.spec.js` proves is enforced in
 `restoreBackup()` (`modals.js:305`), not in the handler. `db:importFull`
@@ -260,8 +284,23 @@ Executed 2026-09-05 on `feature/dashboard-1c` @ `c63ff5f`.
 | `npm run test:activation` | **6 passed, 0 failed** | executed |
 | `npm run typecheck` | **0 errors** | executed |
 | **Total** | **203 passed, 0 failed** | |
-| `npx playwright test` | **NOT RUN** | ~11 min, needs a licensed `HOSTIX_TEST_PROFILE`. Required before Phase B is signed off. |
+| `npx playwright test` | **88 passed, 2 skipped, 0 failed** | All 40 spec files, run in batches — see the note below. Baseline was 84+2; the four new `backup-main-guard` tests account for the difference, so **no regression** from the Phase B change to `main.js`. |
 | `node server/test/run.js`, `server/test/http.js` | **NOT RUN** | control-plane suites; last known 29 + 21 on 2026-09-04. |
+
+> **Running Playwright on this machine.** Two things are not obvious and cost
+> time to rediscover.
+>
+> 1. **It needs a licensed profile.** `HOSTIX_TEST_PROFILE` must point at a
+>    directory containing a valid `license.enc`, or `_profile.js:27` throws.
+>    Without it every spec dies 30s later on `#login-input` looking like a boot
+>    regression. A working profile is at
+>    `%LOCALAPPDATA%\Temp\hostix-test-profile` (licence copied from `.devdata`).
+> 2. **The whole suite in one command exhausts memory on this machine.** It got
+>    to 19 passed and then the worker died with `code=3221225794`
+>    (`STATUS_DLL_INIT_FAILED`), which Playwright reports as **32 failed** —
+>    every one of them a cascade, not an assertion. Run it in batches of 6-8
+>    spec files. A red that names almost every spec at once is this, not a real
+>    break.
 
 ---
 
@@ -296,9 +335,10 @@ Uncommitted in-flight design work, left exactly as found:
   Payments and Reports screens report different amounts owed for the same
   records. A warden chasing arrears from one screen collects a different set
   than a warden chasing them from the other.
-- **Medium — no pre-restore backup (§16).** Restoring the wrong file is
-  transactional and therefore *irreversible on success*: it commits cleanly over
-  live data with no snapshot to return to.
+- ~~**Medium — no pre-restore backup (§16).**~~ **Closed in Phase B.** Restoring
+  the wrong file was irreversible precisely *because* it succeeded — the
+  transaction commits cleanly over live data. There are now three rolling
+  snapshots to return to.
 - **Medium — no support bundle (§22).** When a customer's install misbehaves
   there is currently no way to get its state off their machine. That is a
   support-cost risk rather than a data risk, but §5 sells a support identifier
@@ -316,7 +356,7 @@ Uncommitted in-flight design work, left exactly as found:
 4. `license.hostyllo.com` does not resolve — no shippable control-plane address (§7).
 5. No §26 commercial E2E has ever been run.
 6. **D-1** — Payments and Reports disagree on outstanding amounts (§14, §29 "reports reconcile").
-7. **No pre-restore backup**, and no DB-corruption recovery workflow at all (§16, §17, §29 "restore safe").
+7. ~~No pre-restore backup~~ **closed**; no DB-corruption recovery workflow at all (§17, §29 "restore safe").
 8. **D-3** — read-only does not block configuration mutation (§18, §29 "suspension tested").
 
 ---
