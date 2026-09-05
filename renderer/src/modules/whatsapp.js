@@ -19,8 +19,8 @@ function showRentReminderModal() {
   var list = studentIds.map(function(sid){
     var s = DB.students.find(function(x){return x.id===sid;});
     var dues = pending.filter(function(p){return p.studentId===sid;});
-    var totalDue = dues.reduce(function(sum,p){return sum+Number(p.unpaid!=null?p.unpaid:(p.amount||0));},0);
-    var activeDues = dues.filter(function(p){return Number(p.unpaid!=null?p.unpaid:(p.amount||0))>0;});
+    var totalDue = dues.reduce(function(sum,p){return sum+outstandingOf(p);},0);
+    var activeDues = dues.filter(function(p){return outstandingOf(p)>0;});
     return {student:s, dues:activeDues, totalDue:totalDue};
   }).filter(function(x){return x.student && x.totalDue>0;});
 

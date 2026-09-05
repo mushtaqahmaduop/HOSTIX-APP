@@ -77,7 +77,7 @@ function _arcCollected(list) {
 // …and what is still owed on them.
 function _arcOwed(list) {
   return (list || []).filter(p => p.status === 'Pending')
-    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount || 0)), 0);
+    .reduce((s, p) => s + outstandingOf(p), 0);
 }
 
 // The date a cancellation belongs to: when it was raised, falling back to the
@@ -566,7 +566,7 @@ function _arcPaymentsPanel(T, label, mode) {
           <td>${pmBadge(p.method)}</td>
           <td>${statusBadge(p.status)}</td>
           <td class="num" style="color:${Number(p.amount)>0?'var(--green)':'var(--text3)'}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td>
-          <td class="num" style="color:var(--red)">${p.status==='Pending'?fmtPKR(p.unpaid!=null?p.unpaid:p.amount):'—'}</td>
+          <td class="num" style="color:var(--red)">${p.status==='Pending'?fmtPKR(outstandingOf(p)):'—'}</td>
         </tr>`).join('')}
         <tr class="arc-sub">
           <td colspan="6">${mode === 'pending' ? 'Total outstanding' : 'Total collected'}</td>
@@ -729,7 +729,7 @@ function _arcPayRows(pays) {
         <td>${pmBadge(p.method)}</td>
         <td>${statusBadge(p.status)}</td>
         <td class="num" style="color:${Number(p.amount)>0?'var(--green)':'var(--text3)'}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td>
-        <td class="num" style="color:var(--red)">${p.status==='Pending'?fmtPKR(p.unpaid!=null?p.unpaid:p.amount):'—'}</td>
+        <td class="num" style="color:var(--red)">${p.status==='Pending'?fmtPKR(outstandingOf(p)):'—'}</td>
       </tr>`).join('')}
       <tr class="arc-sub"><td colspan="4">Total</td>
         <td class="num" style="color:var(--green)">${fmtPKR(paid)}</td>
@@ -767,11 +767,11 @@ function printArchive() {
      <td>#${escHtml(String(p.roomNumber||'—'))}</td><td>${escHtml(p.month||'—')}</td>
      <td>${escHtml(p.method||'—')}</td><td>${escHtml(p.status||'—')}</td>
      <td style="text-align:right" class="gr">${Number(p.amount)>0?money(p.amount):'—'}</td>
-     <td style="text-align:right" class="re">${p.status==='Pending'?money(p.unpaid!=null?p.unpaid:p.amount):'—'}</td></tr>`).join('');
+     <td style="text-align:right" class="re">${p.status==='Pending'?money(outstandingOf(p)):'—'}</td></tr>`).join('');
 
   const pendRows = T.pays.filter(p=>p.status==='Pending').map(p =>
     `<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(String(p.roomNumber||'—'))}</td>
-     <td>${escHtml(p.month||'—')}</td><td style="text-align:right" class="re">${money(p.unpaid!=null?p.unpaid:p.amount)}</td></tr>`).join('');
+     <td>${escHtml(p.month||'—')}</td><td style="text-align:right" class="re">${money(outstandingOf(p))}</td></tr>`).join('');
 
   const canRows = T.cancels.map(c =>
     `<tr><td>${c.seq?'CAN-'+String(c.seq).padStart(4,'0'):'—'}</td>
@@ -875,7 +875,7 @@ function printArchiveStudent(studentId) {
       <td>${escHtml(fmtDate(p.date)||'—')}</td><td>${escHtml(p.month||'—')}</td>
       <td>${escHtml(p.method||'—')}</td><td>${escHtml(p.status||'—')}</td>
       <td style="text-align:right" class="gr">${Number(p.amount)>0?money(p.amount):'—'}</td>
-      <td style="text-align:right" class="re">${p.status==='Pending'?money(p.unpaid!=null?p.unpaid:p.amount):'—'}</td>
+      <td style="text-align:right" class="re">${p.status==='Pending'?money(outstandingOf(p)):'—'}</td>
     </tr>`).join('')}
     <tr style="background:#f1f5f9;font-weight:800"><td colspan="4" style="text-align:right">Total</td>
       <td style="text-align:right" class="gr">${money(f.paid)}</td>
@@ -920,7 +920,7 @@ function downloadArchiveCSV() {
   push(['Date','Student','Room','Month','Method','Status','Paid','Outstanding']);
   T.pays.forEach(p => push([p.date||'—', p.studentName||'—', '#'+(p.roomNumber||'—'), p.month||'—',
     p.method||'—', p.status||'—', Number(p.amount||0),
-    p.status==='Pending' ? (p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)) : 0]));
+    outstandingOf(p)]));
   blank();
 
   push(['Expenses by Category']);

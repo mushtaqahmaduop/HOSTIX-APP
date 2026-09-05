@@ -742,7 +742,7 @@ function downloadCancellationReport() {
           <td>${p.month||'—'}</td>
           <td>${fmtPKR(p.monthlyRent||0)}</td>
           <td>${fmtPKR(p.amount||0)}</td>
-          <td style="color:${(p.unpaid||0)>0?'#dc2626':'#16a34a'};font-weight:700">${fmtPKR(p.unpaid||0)}</td>
+          <td style="color:${outstandingOf(p)>0?'#dc2626':'#16a34a'};font-weight:700">${fmtPKR(outstandingOf(p))}</td>
           <td>${escHtml(p.method||'—')}</td>
           <td>${fmtDate(p.date)||'—'}</td>
           <td><span class="badge ${statusCls}">${p.status}</span></td>

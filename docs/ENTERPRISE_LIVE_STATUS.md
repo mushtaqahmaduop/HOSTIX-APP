@@ -1,7 +1,7 @@
 # Enterprise Live Status
 
 **Spec:** `HOSTYLLO_OFFLINE_ENTERPRISE_PRODUCTION_MASTER_SPEC_v2.md` (v2.0)
-**Reconciled:** 2026-09-05
+**Reconciled:** 2026-09-05 · **Phase C opened:** 2026-09-05
 **Branch:** `feature/dashboard-1c` — 38 commits ahead of `master`, 0 behind (it is the tip)
 **App version:** 5.0.0 · Electron 43.4.0
 
@@ -9,10 +9,11 @@
 > real tree; Phase B then closed the data-safety gaps it found. Anything not
 > stated here is not implied to pass.
 >
-> Three defects were found. **D-2 is fixed** (Phase B). **D-1** (Phase C) and
-> **D-3** (Phase D) are recorded and deliberately not fixed — §32.2 says inspect
-> before changing, and both need specs run against them that belong to their own
-> phase.
+> Four defects are now recorded. **D-2 is fixed** (Phase B) and **D-1 is fixed**
+> (Phase C). **D-3** (Phase D) is recorded and deliberately not fixed — §32.2
+> says inspect before changing, and it needs specs run against it that belong to
+> its own phase. **D-4** was surfaced by the D-1 fix and is its mirror image on
+> the collected side; it is named below and not yet fixed.
 
 ---
 
@@ -23,7 +24,15 @@ items are closed: **D-2** (validation moved to the main process), the
 **pre-restore backup**, and the whole **§17 recovery chain**. Remaining: §27's
 "unknown schema → safe recovery", and an end-to-end disk-full test.
 
-**Next is Phase C (Remaining Financial Gaps)**, which opens on **D-1**.
+**Phase C — Remaining Financial Gaps — OPENED, and D-1 is closed.**
+`outstandingOf()` now sits beside `resolveCharges()` in `renderer/src/utils.js`
+and is the single answer to "what is still owed on this record", consumed at 52
+sites across eight modules. Proved by `tests/outstanding.test.js` — 18/18.
+
+Phase C is **not** complete: §14's `applyPayment()` / `reversePayment()` /
+`calculateRefund()` still do not exist, money is still IEEE-754 `Number` with no
+rounding policy, and the §14 financial test matrix is still 15 named cases with
+no home. **D-4** (below) is the immediate next item.
 
 **Phase A — Live-State Reconciliation — COMPLETE.** Spec §28 was correct that
 implementation is well advanced; it was *not* correct that Phase A had begun —
@@ -51,6 +60,7 @@ what those suites actually assert is promoted here.
 | 16 | Archive/retention pruning preserves records | `npm run test:retention` — **13/13**, including "an existing archive is appended to, not replaced". |
 | 11 | Connectivity/device/entitlement probe behaviour | `npm run test:services` — **115/115**, including "a probe falls back to a second mechanism before giving up" and "a first-ever boot with a failing probe is reported, not hidden". |
 
+| 14 | One answer to "what is still owed", derived from the charge authority | `npm run test:outstanding` — **18/18**, including "a recorded balance survives a Paid status", "a legacy Pending record is priced from resolveCharges, not from amount" and "a bundled hostel still bills mess when the record says otherwise". This closes **D-1**. |
 | 16 | Restore refuses a bad document at the privileged handler, and snapshots before it commits | `tests/backup-main-guard.spec.js` — **4/4**, calling `dbImportFull()` directly rather than through the renderer. |
 | 17 | The whole corruption-recovery chain | `tests/db-recovery.spec.js` — **6/6**: detection, writes refused, verified restore, atomic switch, the damaged file kept, the app healthy afterwards, and a damaged backup refused without touching the live database. |
 
@@ -80,7 +90,7 @@ Everything else in this document remains unverified.
 |---|---|---|
 | 23 | "Strict CSP" | A CSP **is** enforced (`main.js:1533`, plus per-page meta in `renderer/license.html` and `renderer/license-settings.html`), but it carries `script-src 'unsafe-inline'`. This is a *documented, deliberate* decision (comment at `main.js:1525-1532`): the UI is built from inline `onclick`/`oninput` handlers across every module, and the escaping sweep is the compensating control. It is defensible — but it is not "strict CSP" as §23 words it, and the spec should be reconciled to the decision rather than the code to the spec. |
 | 13 | Typed IPC operations | **8 of 24** `ipcMain.handle` registrations are the generic primitives §13 names as migration targets: `db:all` (1377), `db:upsert` (1415), `db:delete` (1424), `db:bulkReplace` (1433), `db:getSetting` (1446), `db:setSetting` (1453), `db:exportFull` (1461), `db:importFull` (1478). None of the typed operations (`students.create`, `payments.create`, …) exist yet. §13 itself says *do not* big-bang this — so it is a sequenced backlog item, not a defect. |
-| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). But **`reports.js` calls it zero times** and recomputes every figure inline (~10 independent `reduce` expressions). §14's "reports must reconcile against the same financial authority" therefore fails, and it fails concretely — see **D-1** below. §14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form: reversal exists only as a *cancellation status* (`cancellations.js:129,145`), refund not at all. |
+| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). ~~But **`reports.js` calls it zero times**~~ — **closed in Phase C.** `reports.js` now reaches the charge authority through `outstandingOf()` at 11 sites, and every other module that reported an outstanding figure does the same. §14's "reports must reconcile against the same financial authority" holds for *what is owed*; it does not yet hold for *what was collected* — see **D-4**. §14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form: reversal exists only as a *cancellation status* (`cancellations.js:129,145`), refund not at all. |
 | 14 | Money representation | Money is JS `Number` — IEEE-754 binary floating point — which §14 explicitly rules out. In practice PKR is billed in whole rupees so the exposure is small, but no canonical representation, precision or rounding policy is defined anywhere. The only `Math.round` on a money path is a half-payment split (`payments.js:2244`); the rest round percentages. Rounding boundaries are untested. |
 | 16 | Restore is safe against a bad file | The protections exist and are genuinely tested — `tests/backup-hostile-input.spec.js` asserts every malformed or hostile shape is **refused with a reason** (:98-100), that a refused import leaves the live data **byte-identical** (:145), that `Object.prototype` is not polluted (:149), and that a genuine backup is still accepted (:103). `db:importFull` is wrapped in `db.transaction()`, so an interrupted restore rolls back and §27's "interrupted restore → live DB remains safe" holds. **But every one of those checks lives in the renderer** (`restoreBackup()`, `modals.js:305`). The privileged handler itself validates nothing beyond `Array.isArray` — see **D-2**. |
 | 17 | Disk full → no false success | Handled, with genuinely actionable messages for `ENOSPC` / `EACCES` / `EPERM` / `ENOENT` — but **only on the PDF path** (`main.js:1119-1125`). The database write path has no equivalent, which is where §17 actually points. |
@@ -206,7 +216,75 @@ mapping is proven by inspection only, so those §27 rows stay PARTIAL.
 These are concrete, reproducible, and were not previously recorded. They belong
 to Phases B/C but were surfaced by Phase A, so they are logged here.
 
-### D-1 — Payments and Reports disagree on what is outstanding
+### D-1 — Payments and Reports disagree on what is outstanding — **FIXED, Phase C**
+
+Closed by `outstandingOf()` in `renderer/src/utils.js`, beside `resolveCharges()`.
+
+**Phase A understated this by an order of magnitude.** It is not three call
+sites in two files. Sweeping every fallback found **55 sites across 8 files**:
+29 fell back to `p.amount` (a legacy record owes its full amount) and 26 fell
+back to `0` (it owes nothing). `reports.js`, `students.js` and `receipt.js` each
+contained **both**, so `reports.js` disagreed with itself — its Pending card
+(`:94`) summed the full amount while its own transaction table (`:1083`)
+rendered `p.unpaid||0` for the same records, one screen, two answers.
+
+**Neither fallback was arithmetically right.** `payStatusOf()`
+(`payments.js:26`) establishes that `amount` is money *collected* and `unpaid`
+is money still *owed*. "Owes exactly what they already paid" is therefore a
+coincidence that holds only when nothing was collected. The correct derivation
+already existed in the tree at `payments.js:2640`, where the Edit Payment form
+computed it from `resolveCharges()` — it was simply never shared, so every
+other screen guessed.
+
+**The ruling (owner, 2026-09-05):** derive from the charge authority, and route
+all 55 sites.
+
+Two things the fix had to get right that a straight substitution would not:
+
+1. **`payments.js:311` never filtered to Pending** — it sums the whole filtered
+   list. Adopting the Reports rule naively would have made every *Paid* legacy
+   record contribute its full charge to Outstanding. The helper short-circuits
+   `Paid` to 0, but only on the derived path.
+2. **A recorded `unpaid` outranks the status.** Every automatic settlement
+   writes `unpaid = 0` alongside `status = 'Paid'`, but the Edit Payment form
+   takes status from a free dropdown while the balance beside it is readonly
+   (`payments.js:2759`), so a warden can save a Paid record carrying a real
+   balance. Zeroing it because the status says so loses money that is owed.
+   The explicit value is answered first and always.
+
+A third correction came out of writing the tests: the derivation must obey
+resolveCharges' own rule that **the hostel's answer overrides the record's**. A
+hostel that switched from mess-optional to bundled carries records stamped
+`messIncluded:false`; honouring those would quietly drop the mess charge off its
+arrears for every one of them. Only an *optional* hostel lets the record decide,
+because only there is that flag a billing fact rather than a stale preference.
+`payments.js:2640` had this wrong too, and inherited the fix.
+
+**The sharpest consequence, which was not previously recorded:** `payIsArrear()`
+(`payments.js:235`) gated on `Number(p.unpaid || 0) <= 0`, so a legacy debtor
+could **never register as an arrear at all** — they were absent from the arrears
+list, the arrears banner and its total, not merely counted wrongly there.
+
+**52 sites** now route through the helper — payments 21, reports 11, archive 7,
+dashboard 7, whatsapp 2, receipt 2, cancellations 1, nav 1 — which is **58
+calls**, because a few table cells ask twice, once for the figure and once for
+the colour it is drawn in.
+
+That is more than the 55 the two-pattern grep found, minus `students.js`'s 13,
+because the sweep also caught fallback shapes those two patterns missed: the
+`Number(p.unpaid) > 0` filters at `payments.js:1037` and `:1078`, and four form
+prefills (`:1699`, `:1767`, `:2459`, `:2640`) that derived a balance from
+`monthlyRent` alone — no mess, no fees, no concession, and never floored at 0.
+
+Predicate guards that ask "*was* a balance ever recorded" are deliberately left
+alone — a different question, and the ruling scoped them out. See **D-4**.
+
+**`renderer/src/modules/students.js` is excluded and still holds 13 sites.** It
+is one of the four §2-protected in-flight files and was not touched. Those 13
+must be routed when that design work lands; until then the Students screen keeps
+the old split.
+
+### The original finding
 
 Two screens answer the same question with different arithmetic, on a record
 whose `unpaid` field is absent:
@@ -277,6 +355,34 @@ change hostel settings. One line to fix; recorded rather than fixed because
 
 ---
 
+### D-4 — the same disagreement, on the collected side
+
+Surfaced by the D-1 sweep and deliberately not fixed: the ruling scoped the
+predicate guards out, and this is one of them.
+
+`_arcCollected()` (`archive.js:68-75`) counts a Pending record's `amount` as
+collected **only if `p.unpaid != null`**:
+
+```js
+if (p.status === 'Pending' && Number(p.amount || 0) > 0 && p.unpaid != null)
+  return s + Number(p.amount || 0);
+```
+
+A legacy record that took PKR 4,000 therefore contributes **0** to the archive's
+collected total. The same guard renders the "Partial Paid" / "Collected" column
+as `—` at `reports.js:120`, `:1144` and `:1271`.
+
+This is D-1's mirror: the guard exists because `amount` was once read as the
+*owed* figure, which is the confusion D-1 was about. It is **not made worse** by
+the D-1 fix — before, both halves were wrong (owed = the full amount, collected
+= 0); now the owed half is right and only the collected half is not. But the two
+halves no longer reconcile against the charge: for a legacy record billed
+14,500 with 4,000 taken, owed now reads 10,500 and collected still reads 0.
+
+**Financial correctness risk: medium.** No data is written wrongly and no debt
+is lost — the money is under-reported as *income*, not dropped from *arrears*.
+Contained to one function and three display columns.
+
 ## Blocked
 
 | § | Item | Why |
@@ -321,10 +427,11 @@ Recorded per the owner's instruction to flag stale premises rather than obey the
 
 ## Tests Executed
 
-Executed 2026-09-05 on `feature/dashboard-1c` @ `c63ff5f`.
+Executed 2026-09-05 on `feature/dashboard-1c`, re-run in full after the Phase C change.
 
 | Test | Result | Evidence |
 |---|---|---|
+| `npm run test:outstanding` | **18 passed, 0 failed** | executed — new in Phase C |
 | `npm run test:services` | **115 passed, 0 failed** | executed |
 | `npm run test:license` | **39 passed, 0 failed** | executed |
 | `npm run test:servicemodel` | **16 passed, 0 failed** | executed |
@@ -333,8 +440,8 @@ Executed 2026-09-05 on `feature/dashboard-1c` @ `c63ff5f`.
 | `npm run test:migrate` | **6 passed, 0 failed** | executed |
 | `npm run test:activation` | **6 passed, 0 failed** | executed |
 | `npm run typecheck` | **0 errors** | executed |
-| **Total** | **203 passed, 0 failed** | |
-| `npx playwright test` | **94 passed, 2 skipped, 0 failed** | All 41 spec files, run in batches — see the note below. Baseline was 84+2; the four new `backup-main-guard` tests and six new `db-recovery` tests account for the difference exactly, so **no regression** from any Phase B change. |
+| **Total** | **221 passed, 0 failed** | |
+| `npx playwright test` | **94 passed, 2 skipped, 0 failed** | All 41 spec files, run in six batches — see the note below. **Identical to the pre-Phase-C baseline of 94+2**, so the 53-site financial sweep caused no regression. The money-critical batch (`partial-and-arrears`, `admit-to-payment`, `payment-redesign`, `payment-method-chip`, `month-scope`, `dashboard-recent-payments`) was run first and passed 14/14. |
 | `node server/test/run.js`, `server/test/http.js` | **NOT RUN** | control-plane suites; last known 29 + 21 on 2026-09-04. |
 
 > **Running Playwright on this machine.** Two things are not obvious and cost
@@ -381,10 +488,18 @@ Uncommitted in-flight design work, left exactly as found:
 - **Medium — the 42-room seed.** It writes invented records into a real customer
   database on first boot. Not destructive, but it is customer data the customer
   did not enter, and it must be gone before a paid install.
-- **Financial correctness — high (D-1).** No data is written wrongly, but the
-  Payments and Reports screens report different amounts owed for the same
-  records. A warden chasing arrears from one screen collects a different set
-  than a warden chasing them from the other.
+- ~~**Financial correctness — high (D-1).**~~ **Closed in Phase C.** Every
+  outstanding figure outside the protected `students.js` now derives from the
+  charge authority. The worst of it was not the disagreement between two
+  screens but `payIsArrear()`: a legacy debtor could not appear in the arrears
+  list at all, so nobody was ever prompted to chase them.
+- **Financial correctness — medium (D-4).** Collected totals still under-report
+  a legacy part-payment. Income is understated; no debt is lost.
+- **Financial correctness — medium: `students.js` is 13 sites behind.** It is
+  §2-protected in-flight work and was left untouched, so the Students screen
+  still answers this question the old way while every other screen answers it
+  the new one. This is a *known, recorded* inconsistency with an owner, not a
+  silent one.
 - ~~**Medium — no pre-restore backup (§16).**~~ **Closed in Phase B.** Restoring
   the wrong file was irreversible precisely *because* it succeeded — the
   transaction commits cleanly over live data. There are now three rolling
@@ -408,7 +523,7 @@ Uncommitted in-flight design work, left exactly as found:
 3. No pre-update database backup (§21, §29).
 4. `license.hostyllo.com` does not resolve — no shippable control-plane address (§7).
 5. No §26 commercial E2E has ever been run.
-6. **D-1** — Payments and Reports disagree on outstanding amounts (§14, §29 "reports reconcile").
+6. ~~**D-1** — Payments and Reports disagree on outstanding amounts~~ — **CLOSED, Phase C.**
 7. ~~No pre-restore backup, and no DB-corruption recovery workflow~~ — **both closed in Phase B**.
 8. **D-3** — read-only does not block configuration mutation (§18, §29 "suspension tested").
 
@@ -423,10 +538,16 @@ Uncommitted in-flight design work, left exactly as found:
    §10 room-setup step instead.
 3. **Decide the code-signing path** (certificate + signing step), since blockers
    1 and 3 cannot close without it.
-4. **Fix D-3** (one line: guard `db:setSetting` with `_assertWritable`) and
-   **D-1** (one `outstandingOf()` helper, two call sites). Both are contained,
-   both are release blockers, and D-1 is the natural opening move of Phase C.
-5. **Close the last of Phase B** — §27's unknown-schema row, and a real
+4. **Fix D-3** (one line: guard `db:setSetting` with `_assertWritable`).
+   ~~and **D-1**~~ — D-1 is **done**; note that its "two call sites" estimate
+   was wrong by an order of magnitude, which is worth remembering the next time
+   this document sizes a fix from a grep.
+5. **Route the 13 `students.js` sites** through `outstandingOf()` once the
+   §2-protected design work in that file lands. Until then the Students screen
+   is the one place still answering "what is owed" the old way.
+6. **Fix D-4** — `_arcCollected()` and the three collected-column predicates,
+   so collected and owed reconcile against the charge.
+7. **Close the last of Phase B** — §27's unknown-schema row, and a real
    disk-full test rather than a classifier proven by reading it.
-6. **Build the §22 diagnostic bundle** — still entirely absent, and §5 sells a
+8. **Build the §22 diagnostic bundle** — still entirely absent, and §5 sells a
    support identifier as part of the product.

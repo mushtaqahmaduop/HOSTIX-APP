@@ -91,7 +91,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     // card whose own figure counted July only — the table and the stat above it
     // described two different windows.
     const pendingPays = pays.filter(p=>p.status==='Pending').sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const totalPend = pendingPays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+    const totalPend = pendingPays.reduce((s,p)=>s+outstandingOf(p),0);
     const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
@@ -118,7 +118,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="text-gold fw-700">#${escHtml(p.roomNumber||'—')}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
         <td class="${Number(p.amount)>0&&p.unpaid!=null?'text-green fw-700':'text-muted'}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td>
-        <td class="text-red fw-700">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td>
+        <td class="text-red fw-700">${fmtPKR(outstandingOf(p))}</td>
         <td>${pmBadge(p.method)}</td>
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
         <td><button class="btn btn-success btn-sm" style="font-size:11px" onclick="markPaymentPaid('${p.id}');reportDetail='pending';renderPage('reports')">✓ Collect</button></td>
@@ -485,7 +485,7 @@ function _rptTotals(keys) {
   const rev  = keys.reduce((s, k) => s + calcRevenue(k), 0);
   const pending = DB.payments
     .filter(p => p.status === 'Pending' && keys.some(k => _payMatchesMonth(p, k)))
-    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount)), 0);
+    .reduce((s, p) => s + outstandingOf(p), 0);
   // A funds transfer IS an expense — calcExpenses() carries both, so totalExp is
   // the whole outgoing and net is simply revenue minus it. totalTransfers stays
   // on the return for the screens that itemise the two halves.
@@ -1079,15 +1079,15 @@ function downloadDetailPDF(type) {
   const css = printDocStyles();
   let body = `<div class="hdr"><div><div class="ht">${escHtml(DB.settings.hostelName)}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
+    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+outstandingOf(p),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
+    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${outstandingOf(p)>0?'re':''}">PKR ${outstandingOf(p).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
   } else if(type==='pending'){
     // Period-scoped like the table it is printed from. It read the whole
     // payment table, so a monthly PDF carried every unpaid rent ever recorded.
     const pend = pays.filter(p=>p.status==='Pending');
-    const totalUnpaid = pend.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+    const totalUnpaid = pend.reduce((s,p)=>s+outstandingOf(p),0);
     body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pend.length}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${totalUnpaid.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pend.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${(p.unpaid!=null?p.unpaid:p.amount).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
+    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${outstandingOf(p).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
   } else if(type==='netprofit'){
     body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
     // Category summary, then the full register underneath it so the reader can
@@ -1135,13 +1135,13 @@ function downloadReportDetailPDF(detailId) {
   let tableHTML = '';
   if(detailId==='financial'||detailId==='payments') {
     const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
-    tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${(p.unpaid||0)>0?'red':''}">${fmtPKR(p.unpaid||0)}</td><td>${escHtml(p.method||'—')}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='expenses') {
     tableHTML = `<h3>Expenses by Category</h3>` + _rptCatTablesHTML(exps);
   } else if(detailId==='pending') {
     // Period-scoped like the on-screen table this PDF is printed from.
     const pendPays = pays.filter(p=>p.status==='Pending');
-    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='students') {
     const _idx=_buildRoomStudentIndex();
     // Same period scope as the on-screen table this PDF is printed from.
@@ -1233,7 +1233,7 @@ function printReport() {
          directly above it -- the owner was reading a payments report with no
          payable in it. */}
     <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Collected</th><th>Still Owed</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${Number(p.unpaid||0)>0?'red':''}">${Number(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
+    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${outstandingOf(p)>0?fmtPKR(outstandingOf(p)):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
     </tbody></table>
   </div>
   <div class="section">
@@ -1268,7 +1268,7 @@ function downloadDetailCSV(type) {
     rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
     _inPeriodPays.filter(p=>p.status==='Pending').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        p.unpaid!=null?p.amount:0, p.unpaid!=null?p.unpaid:p.amount,
+        p.unpaid!=null?p.amount:0, outstandingOf(p),
         p.method||'—', p.date||'—']);
     });
   } else if (type === 'expenses') {

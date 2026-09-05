@@ -249,7 +249,7 @@ function _dashSeries() {
     out.rev.push(calcRevenue(k));
     out.exp.push(calcExpenses(k));    // transfers included — they ARE expenses
     out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
-      .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
+      .reduce((s,p)=>s+outstandingOf(p),0));
   }
   return out;
 }
@@ -352,7 +352,7 @@ function renderDashboard() {
   // differing is normal rather than a fault.
   const cashIn = cashBreakdown(mo);
   // Pending — only for the selected month
-  const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+outstandingOf(p),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
   const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
@@ -768,7 +768,7 @@ function renderDashboard() {
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
         '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--green)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg></div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
-          const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
+          const unpaidShow = outstandingOf(p);
           const due = _dashDueState(p);
           const nm  = String(p.studentName||'?');
           const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
@@ -1098,7 +1098,7 @@ function _dashRecentPayments(list, mo, collected) {
     // `p.monthlyRent` alone, so a student on 8,000 rent + 6,500 mess showed
     // "PKR 8,000" beside a PKR 14,500 payment and the mess was nowhere.
     const ch     = paymentCharges(p, st);
-    const unpaid = Number(p.unpaid != null ? p.unpaid : 0);
+    const unpaid = outstandingOf(p);
     const name   = String(p.studentName || '?');
     const menu =
       '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showViewStudentModal\',\'' + p.studentId + '\')">' + _rpIco('eye') + 'View student</button>'
@@ -2110,7 +2110,7 @@ function exportMonthCSV(monthKey, monthLabel) {
   const rev = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
+  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+outstandingOf(p),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   // Ordered by room like every other roster, export and PDF in the app — the
   // warden reads this sheet against the building, not against insertion order.
@@ -2140,7 +2140,7 @@ function printMonthReport(monthKey, monthLabel) {
   const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
-  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+outstandingOf(p),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
   ${printDocStyles()}
@@ -2270,7 +2270,7 @@ function drawTrendChart() {
     var isPast = k <= curKey;
     var rev = isPast ? calcRevenue(k) : 0;
     var exp = isPast ? calcExpenses(k)  : 0;   // transfers included
-    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
+    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+outstandingOf(p),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
     // null means "this month has not happened", NOT "this month was zero".
     // These used to collapse both cases to null and then map null→0, so every

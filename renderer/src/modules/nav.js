@@ -376,7 +376,7 @@ function chromeAlerts() {
   const pendCancel= (DB.cancellations || []).filter(c => c.status === 'Pending').length;
 
   if (pending.length) {
-    const amt = pending.reduce((s,p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount||0)), 0);
+    const amt = pending.reduce((s,p) => s + outstandingOf(p), 0);
     out.push({ hue:'dh-amber', go:"navigate('payments')",
       msg: pending.length + ' pending payment' + (pending.length>1?'s':'') + ' — ' + fmtPKR(amt) + ' uncollected',
       icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>' });

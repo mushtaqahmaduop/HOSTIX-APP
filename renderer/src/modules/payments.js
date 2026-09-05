@@ -232,7 +232,7 @@ function payMonthOptions() {
 // These are the balances a warden would otherwise have to go back a month to
 // find, which is why they are shown alongside the current month by default.
 function payIsArrear(p, mo) {
-  if (Number(p.unpaid || 0) <= 0) return false;
+  if (outstandingOf(p) <= 0) return false;
   if (payStatusOf(p) === 'Paid') return false;
   const k = _payMonthKey(p);
   return !!k && k < mo;
@@ -252,7 +252,7 @@ function payFiltered() {
 
     if (payFilter.room !== 'All' && String(p.roomNumber || '') !== payFilter.room) return false;
     if (payFilter.method !== 'All' && p.method !== payFilter.method) return false;
-    if (payFilter.unpaidOnly && !(Number(p.unpaid || 0) > 0)) return false;
+    if (payFilter.unpaidOnly && !(outstandingOf(p) > 0)) return false;
 
     if (payFilter.status !== 'All') {
       // 'Overdue' is no longer offered, but a session that had it selected — or
@@ -276,7 +276,7 @@ function payFiltered() {
     month:   p => new Date((p.month || '') + ' 1').getTime() || 0,
     rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
     paid:    p => Number(p.amount || 0),
-    unpaid:  p => Number(p.unpaid || 0),
+    unpaid:  p => outstandingOf(p),
     method:  p => p.method,
     status:  p => payStatusOf(p)
   });
@@ -298,7 +298,7 @@ function renderPayments() {
   const _arrearScope = payFilter.month === 'All' && !payFilter.showAll && payFilter.arrears;
   const isArrear = p => _arrearScope && payIsArrear(p, mo);
   const nArrears = pays.filter(isArrear).length;
-  const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+Number(p.unpaid||0),0);
+  const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+outstandingOf(p),0);
 
   // ── Stat strip figures — all computed from the CURRENT filtered list, so the
   //    cards always describe exactly what the table below is showing.
@@ -308,7 +308,7 @@ function renderPayments() {
   const total=pays.filter(p=>!isArrear(p)).reduce((s,p)=>s+Number(p.amount),0);
   const nPaid    = pays.filter(p=>payStatusOf(p)==='Paid').length;
   const nPending = pays.filter(p=>payStatusOf(p)!=='Paid').length;
-  const outstanding = pays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):0),0);
+  const outstanding = pays.reduce((s,p)=>s+outstandingOf(p),0);
   const share = n => pays.length ? Math.round(n/pays.length*100) : 0;
 
   // Month-over-month change in collections. Real months only — renders nothing
@@ -513,7 +513,7 @@ function renderPayments() {
           const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0);
           const conc   = Number(p.concession||p.discount||0);
           const concD  = p.concessionDesc||p.discountDesc||'';
-          const unpaid = Number(p.unpaid||0);
+          const unpaid = outstandingOf(p);
           const sLabel = payStatusOf(p);
           const sHue   = payStatusHue(sLabel);
           const picked = paySelected.has(p.id);
@@ -689,7 +689,7 @@ function payBulkExport() {
     const _c = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
     rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
       _c.rent||0, _c.messIncluded?_c.mess:0, _c.monthly||0,
-      p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p),
+      p.amount||0, outstandingOf(p), p.method||'', payStatusOf(p),
       admFee||'', extras||'', conc||'', p.date||'']);
   });
   downloadCSV(rows, 'Payments_Selected.csv');
@@ -712,7 +712,7 @@ function exportPaymentsPDF() {
 
   const stuById   = new Map((DB.students || []).map(s => [s.id, s]));
   const collected = list.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const owing     = list.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const owing     = list.reduce((s, p) => s + outstandingOf(p), 0);
   const settled   = list.filter(p => payStatusOf(p) === 'Paid').length;
 
   const scope = payFilter.month !== 'All' ? String(payFilter.month)
@@ -744,8 +744,8 @@ function exportPaymentsPDF() {
           return `<b>${fmtPKR(p.amount)}</b>` +
             (adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : '') +
             extras.map(c => `<span class="sub">+ ${fmtPKR(c.amount)} ${escHtml(c.description || c.desc || c.label || 'extra')}</span>`).join(''); } },
-      { label: 'Unpaid',  align: 'right', get: p => Number(p.unpaid || 0) > 0
-                            ? `<span class="red">${fmtPKR(p.unpaid)}</span>` : '—' },
+      { label: 'Unpaid',  align: 'right', get: p => outstandingOf(p) > 0
+                            ? `<span class="red">${fmtPKR(outstandingOf(p))}</span>` : '—' },
       { label: 'Method',  get: p => escHtml(p.method || '—') },
       { label: 'Status',  get: p => escHtml(payStatusOf(p)) },
       { label: 'Date',    get: p => fmtDate(p.date) },
@@ -768,7 +768,7 @@ function exportPaymentsCSV() {
     const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const _pc=Number(p.concession||p.discount||0);
     const _pch = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,outstandingOf(p),p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
   });
   downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
 }
@@ -1034,9 +1034,9 @@ function selectStudentForPayment(studentId) {
   // of itself — counting it made the same balance appear twice on one screen.
   const _mNow = document.getElementById('f-pmonth')?.value || '';
   const _arr  = DB.payments
-    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && outstandingOf(p) > 0
               && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_mNow))
-    .reduce((s, p) => s + Number(p.unpaid || 0), 0);
+    .reduce((s, p) => s + outstandingOf(p), 0);
   const _j = t.joinDate ? new Date(t.joinDate) : null;
   const _since = (_j && !isNaN(_j)) ? _j.toLocaleString('default', { month: 'short', year: 'numeric' }) : '—';
   const _seat  = [rtype?.name, room?.floor ? room.floor + ' floor' : ''].filter(Boolean).join(', ');
@@ -1075,9 +1075,9 @@ function pfRenderLedger(t) {
   // months" and the same balance appeared twice on one screen.
   const _lmNow = document.getElementById('f-pmonth')?.value || '';
   const arrears = t ? DB.payments
-    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && outstandingOf(p) > 0
               && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_lmNow))
-    .reduce((s, p) => s + Number(p.unpaid || 0), 0) : 0;
+    .reduce((s, p) => s + outstandingOf(p), 0) : 0;
 
   const cell = (label, id, hue, hint) =>
     `<div class="pf-ledger__c ${hue}"><div class="pf-ledger__l"${hint?` title="${hint}"`:''}>${label}</div>
@@ -1196,7 +1196,7 @@ function pfReloadOutstandings() {
   const arrears = pfOutstandingRecords(sid, month);
   if (!arrears.length) { box.style.display = 'none'; box.innerHTML = ''; showNone(true); return; }
 
-  const total = arrears.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const total = arrears.reduce((s, p) => s + outstandingOf(p), 0);
   // One arrear is the common case and the one the owner's reference draws: the
   // row carries its own "Collect All" and the header needs no button. With
   // several months the per-row button fills that row alone, so the header gets
@@ -1282,7 +1282,7 @@ function pfLoadMonthContext() {
   _pfFilledFrom = rec.id || '';
 
   const already = Number(rec.amount || 0);
-  const owing   = Number(rec.unpaid || 0);
+  const owing   = outstandingOf(rec);
   const settled = rec.status === 'Paid' || owing <= 0;
 
   // The record's own charges go back on the form. Without this the merge on
@@ -1696,7 +1696,7 @@ function showAddPaymentForStudent(studentId) {
     if (messEl)   messEl.value   = c.mess || 0;
     if (messOnEl) messOnEl.checked = c.messOptIn;
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
-    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : Math.max(0, c.total - (existingPending.amount||0));
+    if (unpaidEl) unpaidEl.value = outstandingOf(existingPending);
     if (statEl)   statEl.value   = existingPending.status;
     if (notesEl)  notesEl.value  = existingPending.notes || '';
     psMessToggle();
@@ -1764,7 +1764,7 @@ async function submitPaymentForStudent() {
   if (alreadyPending && !window._updatePendingPS) {
     window._updatePendingPS = true;
     const existingPaidAmt = Number(alreadyPending.amount || 0);
-    const existingUnpaid  = Number(alreadyPending.unpaid != null ? alreadyPending.unpaid : (alreadyPending.monthlyRent - existingPaidAmt));
+    const existingUnpaid  = outstandingOf(alreadyPending);
     showConfirm(
       '⚠️ Pending Record Already Exists',
       `${escHtml(t.name)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth)}</strong>.<br>`
@@ -2347,7 +2347,7 @@ function pfRenderRecent(t) {
     .slice(0, 6);
   if (!rows.length) { box.innerHTML = '<div class="ap-empty">No payments recorded yet</div>'; return; }
   box.innerHTML = rows.map(p => {
-    const owed  = Number(p.unpaid || 0);
+    const owed  = outstandingOf(p);
     const clear = p.status === 'Paid' || owed <= 0;
     return `<div class="ap-led__r">
       <span class="ap-led__m">${escHtml(p.month || '—')}</span>
@@ -2456,7 +2456,7 @@ async function submitAddPayment() {
       window._updatePendingAP = true;
       // Build a friendly detail line showing what already exists
       const existingPaidAmt = Number(alreadyPending2.amount || 0);
-      const existingUnpaid  = Number(alreadyPending2.unpaid  != null ? alreadyPending2.unpaid : (alreadyPending2.monthlyRent - existingPaidAmt));
+      const existingUnpaid  = outstandingOf(alreadyPending2);
       showConfirm(
         '⚠️ Pending Record Already Exists',
         `${escHtml(tName)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth2)}</strong>.<br>`
@@ -2637,7 +2637,7 @@ function showEditPaymentModal(id) {
   const admissionFee = p.admissionFee || p.fee || 0;
   const concession   = p.concession || p.discount || 0;
   const concessionDesc = p.concessionDesc || p.discountDesc || '';
-  const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + (messIncluded?messCharge:0) + admissionFee - concession - paidAmount);
+  const unpaid = outstandingOf(p);
   showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>

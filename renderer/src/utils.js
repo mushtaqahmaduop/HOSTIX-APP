@@ -293,6 +293,74 @@ function resolveCharges(student, opts) {
   };
 }
 
+/* ── WHAT IS STILL OWED ON A PAYMENT ──────────────────────────────────────────
+   `amount` is money COLLECTED; `unpaid` is money still owed. Records written
+   before `unpaid` existed carry only the first, and every screen invented its
+   own answer for the second — 29 sites fell back to `p.amount`, 26 fell back
+   to 0, and reports.js did both, so its Pending card and its own transaction
+   table disagreed about the same record. A warden chasing arrears from the
+   Payments screen therefore collected a different set than one chasing them
+   from Reports, and neither figure was labelled as an estimate.
+
+   Neither fallback was right. "Owes exactly what they already paid" is only
+   correct when nothing was paid, and "owes nothing" quietly drops real debtors
+   off every arrears list.
+
+   The answer comes from the charge authority instead, which is what §14 means
+   by reports reconciling against the same financial layer: resolveCharges()
+   knows what this student is billed today, and what is owed is that, less what
+   came in. This is not a new rule — the Edit Payment form has computed it this
+   way all along (payments.js). It was simply never shared, so every other
+   screen guessed.
+
+   The payment's own recorded rent/mess are the fallback for a student who has
+   since been deleted: the record still has to print a number on a receipt.
+
+   ORDER MATTERS HERE. A recorded `unpaid` is answered first and always, even
+   on a record marked Paid. Those two can disagree: every automatic settlement
+   writes `unpaid = 0` with the status, but the Edit Payment form takes the
+   status from a free dropdown while the balance beside it is readonly, so a
+   warden can mark a part-paid record Paid and save a balance with it. That
+   balance is money someone is owed. Deriving over it, or zeroing it because
+   the status says so, loses it silently.
+
+   The 'Paid' short-circuit therefore guards only the DERIVATION, which is
+   where it is actually needed: several call sites sum over lists that were
+   never filtered to Pending, and without it a legacy Paid record would
+   contribute its whole charge to Outstanding.
+
+   Everything derived is floored at 0 — a record whose collections already
+   cover the charge is settled, not in credit. */
+function outstandingOf(p) {
+  if (!p) return 0;
+  if (p.unpaid != null) return Number(p.unpaid) || 0;
+  if (p.status === 'Paid') return 0;
+
+  const t = (typeof DB !== 'undefined' && DB.students || []).find(s => s.id === p.studentId);
+  const c = t ? resolveCharges(t) : null;
+  const rent = (c && c.rent) || Number(p.monthlyRent || p.totalRent || 0);
+
+  /* Mess obeys resolveCharges' own rule: THE HOSTEL'S ANSWER OVERRIDES THE
+     RECORD'S. A rent-only hostel bills no food and a bundled one bills it for
+     everyone, whatever `messIncluded` a record written under an older setting
+     happens to carry — otherwise a hostel that switched to bundled would
+     under-state its arrears on every record from before the switch. Only an
+     optional hostel lets the record decide, which is the one case where that
+     flag is a billing fact rather than a stale preference.
+
+     With no student left to price against, the record is all there is. */
+  const mess = c
+    ? (c.messOptional && p.messIncluded != null
+        ? (p.messIncluded !== false ? c.mess : 0)
+        : c.messBilled)
+    : (p.messIncluded !== false ? Number(p.messCharge || 0) : 0);
+
+  return Math.max(0, rent + mess
+                   + Number(p.admissionFee || p.fee || 0)
+                   - Number(p.concession   || p.discount || 0)
+                   - Number(p.amount       || 0));
+}
+
 /* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
    Every screen that shows a student drew its own fallback when there is no
    photo, and they had drifted: the students table used one initial, the

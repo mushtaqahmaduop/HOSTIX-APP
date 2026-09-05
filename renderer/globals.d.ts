@@ -68,6 +68,12 @@ declare function hostelServesMess(): boolean;
 declare function messIsOptional(): boolean;
 declare function serviceModelInfo(): ServiceModelDef;
 
+// -- utils.js: the financial authority ----------------------------------------
+// What is still owed on one payment record. The single answer to a question
+// eight modules used to answer three different ways — see the comment above
+// the function itself, and tests/outstanding.test.js.
+declare function outstandingOf(p: any): number;
+
 // -- rooms.js: bulk creation --------------------------------------------------
 declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };
 declare var ROOM_AMENITY_DEFAULTS: string[];

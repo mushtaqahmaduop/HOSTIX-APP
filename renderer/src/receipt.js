@@ -188,8 +188,9 @@ function buildReceiptHTML(payId) {
   }
   html += sep('dashed');
   html += dotRow('AMOUNT PAID', fmtPKR(p.amount), true);
-  if (Number(p.unpaid || 0) > 0) {
-    html += dotRow('REMAINING', fmtPKR(p.unpaid), true);
+  const rcptRemaining = outstandingOf(p);
+  if (rcptRemaining > 0) {
+    html += dotRow('REMAINING', fmtPKR(rcptRemaining), true);
     html += '<div style="font-family:monospace;font-size:9px;font-weight:900;color:#c00;'
       + 'letter-spacing:1.5px;text-align:right;margin-top:2px">** PENDING BALANCE **</div>';
   }
@@ -468,7 +469,7 @@ function sendWA(payId) {
       + 'Reminder from *' + DB.settings.hostelName + '*\n\n'
       + 'Dear Student,\nThis is a reminder that your hostel fee is still pending. '
       + 'Please make the payment as soon as possible to avoid any inconvenience.\nThank you for your prompt attention.\n\n'
-      + '💰 Pending: *' + fmtPKR(p.unpaid || p.amount) + '*\n'
+      + '💰 Pending: *' + fmtPKR(outstandingOf(p)) + '*\n'
       + 'Month: ' + p.month + '\nRoom #' + (p.roomNumber || '—');
   }
   openExternalLink('whatsapp://send?phone=' + phone + '&text=' + encodeURIComponent(msg));
