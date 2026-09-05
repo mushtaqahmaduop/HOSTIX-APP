@@ -74,7 +74,6 @@ action in Phase B.
 
 | § | Item | Why |
 |---|---|---|
-| 25 | **"Light mode only … no dark mode."** | This reverses committed, tested work and needs the owner's decision, not silent implementation. The app ships **two** themes — a dark default plus `body.light-theme` — with `tests/theme-parity.spec.js` existing specifically because a var-substitution bug once made light mode silently inherit dark values at 3.77:1 contrast. Commits `bee7c1b` (make light mode readable), `d3229fb` (one home per token) and `1cbfd18` (repoint the dark ground warm) are all on this branch. Removing dark mode discards that work and the regression net guarding it; keeping it contradicts §25. **Recorded, not acted on.** |
 | 7 | Rollout of any control-plane URL | `license.hostyllo.com` still does not resolve. Nothing can be baked into a build until it does; the per-machine `online-config.json` is a demo mechanism, not a rollout mechanism. `*.up.railway.app` must not be baked — generated subdomains are recycled, and the string would ship inside 50+ installers where it is changeable only by cutting a release. (`docs/SESSION_HANDOFF_2026-09-04.md` §5.3.) |
 
 ---
@@ -94,7 +93,18 @@ Recorded per the owner's instruction to flag stale premises rather than obey the
 1. **§24 "the currently EOL Electron runtime."** Electron is `^43.4.0`
    (`package.json`), which is not EOL. See `docs/PHASE_0.5_ELECTRON_43_REPORT.md`
    — the upgrade §24 describes has already happened. No action.
-2. **§25 "no dark mode."** Contradicts committed and tested work — see Blocked.
+2. **§25 "Light mode only … no dark mode."** **Superseded by owner ruling,
+   2026-09-05: keep both themes; the spec is amended, not the code.**
+   The app ships two themes — a dark default plus `body.light-theme` — and
+   `tests/theme-parity.spec.js` exists specifically because a var-substitution
+   bug once made light mode silently inherit dark values at 3.77:1 contrast.
+   Commits `bee7c1b` (make light mode readable), `d3229fb` (one home per token)
+   and `1cbfd18` (repoint the dark ground warm) are all on this branch. Removing
+   dark mode would discard that work *and* the regression net guarding it, for a
+   directive written without knowledge of either. §25's other requirements —
+   royal/electric blue primary, no neon, no sci-fi, high information density —
+   still stand and are already met (`--accent-600` = `#2563eb`, `renderer/tokens.css`).
+   **No further action. Do not re-raise this as a gap.**
 3. **§23 "strict CSP."** Reads as unimplemented; is actually an explicit,
    reasoned exception with a compensating control. See Partial.
 4. **§28 "Phase A."** Implies reconciliation was already underway. It had not
@@ -149,8 +159,7 @@ Uncommitted in-flight design work, left exactly as found:
 2. 42 demo rooms seeded into production onboarding (§10).
 3. No pre-update database backup (§21, §29).
 4. `license.hostyllo.com` does not resolve — no shippable control-plane address (§7).
-5. §25 light-mode-only directive unresolved against shipped dark mode.
-6. No §26 commercial E2E has ever been run.
+5. No §26 commercial E2E has ever been run.
 
 ---
 
@@ -159,12 +168,10 @@ Uncommitted in-flight design work, left exactly as found:
 1. **Re-run the full suite on this tip** (Playwright + services + license +
    retention + migrate + server + typecheck) and record the real numbers here.
    Until that happens nothing can move out of *Implemented but Unverified*.
-2. **Owner decision on §25** — keep both themes, or spend the work to remove dark
-   mode and retire `theme-parity.spec.js`. Blocking, and cheap to answer.
-3. **Gate the 42-room seed** behind dev-only, and give production onboarding the
+2. **Gate the 42-room seed** behind dev-only, and give production onboarding the
    §10 room-setup step instead.
-4. **Decide the code-signing path** (certificate + signing step), since blockers
+3. **Decide the code-signing path** (certificate + signing step), since blockers
    1 and 3 cannot close without it.
-5. **Reconcile the remaining sections** — §14 financial, §16/§17 backup and
+4. **Reconcile the remaining sections** — §14 financial, §16/§17 backup and
    recovery, §11 offline, §18–20 entitlement lifecycle, §22 support redaction —
    into this document before Phase B is declared started.
