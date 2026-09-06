@@ -2,8 +2,9 @@
 
 **Date:** 2026-09-06 · **Branch:** `feature/dashboard-1c`
 **Committed:** `213ba19` (the layer), `86d3b27` (the wiring), `575d341` (the two
-screens), `4f76bfc` (reports onto the authority)
-**Gate:** Playwright **107 passed / 2 skipped / 0 failed** (all 44 spec files, batched) ·
+screens), `4f76bfc` (reports onto the authority), `b88e862` (four dashboard
+defects the owner reported)
+**Gate:** Playwright **113 passed / 2 skipped / 0 failed** (all 45 spec files, batched) ·
 node suites **324 passed / 0 failed** · typecheck **0 errors**
 
 Continues `SESSION_HANDOFF_2026-09-05-dashboard.md` §7 item 3. The owner chose
@@ -193,7 +194,14 @@ real record, not as a rate improvised at checkout.
 7. Playwright still needs `HOSTIX_TEST_PROFILE` with a `license.enc`, and still
    must be run **6–8 spec files at a time** or the worker OOMs and reports a
    cascade as ~32 assertion failures.
-8. **The OOM does not always look like an assertion failure.** Running seven
+8. **`waitForSelector` waits for VISIBILITY.** `#canc-student` is the
+   cancellation modal's hidden input; waiting on it waits forever for something
+   that is hidden by design. Assert on a visible field of the form instead.
+9. **An auto margin eats the space after it.** `.seat-inline { margin-left:auto }`
+   pushed anything placed after it in the header onto a second line at widths
+   with 60px to spare. If something wraps and the arithmetic says it should fit,
+   look for the auto margin before shrinking anything.
+10. **The OOM does not always look like an assertion failure.** Running seven
    files including two heavy ones produced a single test that ran for 3.5
    minutes and then died with *"Target page, context or browser has been
    closed"* — which reads exactly like a crash in the code under test. It passed
@@ -225,8 +233,10 @@ reimplement it, when that file lands.
   `renderer/src/modules/dashboard.js`, `renderer/payments.css`,
   `renderer/index.html`, `renderer/globals.d.ts`, `tsconfig.json`, `package.json`
 - `renderer/src/modules/reports.js`, `renderer/reports.css`
+- `renderer/src/modules/dashboard.js`, `renderer/dashboard.css`
 - `tests/finance.test.js`, `tests/cash-events.test.js`,
-  `tests/report-totals.test.js`, `tests/finance-flows.spec.js` (all new)
+  `tests/report-totals.test.js`, `tests/finance-flows.spec.js`,
+  `tests/dashboard-cards.spec.js` (all new)
 - `docs/ENTERPRISE_LIVE_STATUS.md`
 
 > `renderer/rail-compact.css` is still the deliberate temporary file the previous
@@ -280,7 +290,87 @@ not read as a third footnote about formatting.
 
 ---
 
-## 8. Next
+## 8. Four dashboard defects — `b88e862`
+
+Reported by the owner after the §14 work; unrelated to it.
+
+### Today at a Glance showed six zeros
+
+**The arithmetic was never wrong.** Seeded with records dated today it reports
+all six figures correctly — proved before changing anything. What was wrong is
+that it was hard-scoped to the literal calendar day on a page where every other
+card is month-scoped.
+
+The owner's own dev database settles it: **141 payments, 55 students, latest
+activity 2026-09-05, nothing dated today, and the check-in log has never had a
+single row written to it in either install.** So the card printed six zeros
+until somebody recorded something, and six more the next morning. A card that is
+almost always empty teaches a warden to stop looking at it, and six zeros on a
+busy hostel is indistinguishable from a card wired to nothing.
+
+It now falls back to the most recent day that HAS activity, and the heading
+names that day ("Latest Activity · 05-Sept-2026"). **Falling back is not the
+same as widening the window** — it still reports one day, every figure still
+comes from records that exist, nothing is summed across days. Switching quietly
+to a month total would have put a figure under a heading that does not describe
+it. Capped at today, so a payment dated ahead cannot drag the panel into a day
+that has not happened.
+
+> If you would rather it simply followed the month like the KPI row, that is a
+> two-line change in `_dlGlanceDay()`. The fallback was chosen because it keeps
+> the card's meaning; say the word.
+
+### Needs Action keeps all four rows
+
+Owner's call, reversing 2026-09-05. Dropping zero rows made the panel a
+different shape every render: rows moved under the cursor as a queue cleared, so
+a warden could not learn that "pending payments" is the second line — and an
+absent row reads as missing rather than clear. Cleared rows are muted and their
+verb becomes "Clear" rather than an instruction to do nothing. The badge counts
+what still wants attention, because a badge that always reads 4 is not
+information.
+
+**This exposed a pluralisation bug that had never been visible:** `noun + 's'`
+produced "0 open maintenances" — and had been producing "2 open maintenances"
+all along. Each row now carries both forms explicitly.
+
+### Quick Actions open their forms
+
+They called `navigate()`, so "Add Payment" landed on the Payments table and the
+warden then had to find the button. A tile called *Add X* that does not add an X
+is a link wearing a verb. All four now call the same entry points as the
+header's primary button (`headerAction()` in nav.js), so the form and its
+permission check are identical wherever it is opened from. Add Payment is a full
+page in this app rather than a modal — still one click, still the form.
+
+### Expand and Print are back on Seat Availability
+
+**In the footer strip, not the header, and that is measured rather than
+preferred.** `.seat-inline` carries `margin-left:auto`, which absorbs every
+pixel of free space — so anything placed after it wraps onto a second line
+however much room the card has. Grouping the counts and the buttons fixed 1536px,
+but at 1366 the header genuinely has no room: it went 30px → 62px, and every one
+of those pixels comes out of the room grid this card was rebuilt to enlarge.
+`printSeatAvailability()` was never deleted; only its button was.
+
+### The fold is unchanged, and that was measured
+
+Two extra Needs Action rows are ~70px, and that card is the tallest in row C at
+full height. The height comes back out of **decoration** in the existing density
+blocks — the icon tile shrinks, the padding tightens — which is the rule the KPI
+tiles already follow. `tests/dashboard-cards.spec.js` measures four rows against
+two at four sizes and asserts row C ends at the same pixel; it does.
+
+> **Two sizes do not fit, and did not fit before this change either.**
+> 1280×660 and 1093×614 end at 712 and 699 against those viewports — with two
+> rows and with four, identically. The handoff of 2026-09-05 recorded 1280×660
+> as fitting at 652; that was measured on a lighter fixture. Row B, not row C,
+> is what exceeds it here (248px at 660 with 40 rooms and 30 students). Worth a
+> look, but it is not this change and the owner has not reported it.
+
+---
+
+## 9. Next
 
 1. **Route the 13 `students.js` sites** through `outstandingOf()` when that
    file's design work lands — still the one screen answering "what is owed" the
