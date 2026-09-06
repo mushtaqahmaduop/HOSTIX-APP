@@ -367,20 +367,58 @@ but at 1366 the header genuinely has no room: it went 30px → 62px, and every o
 of those pixels comes out of the room grid this card was rebuilt to enlarge.
 `printSeatAvailability()` was never deleted; only its button was.
 
-### The fold is unchanged, and that was measured
+### The fold now holds with 40 rooms, at all five sizes — `d466139`
 
-Two extra Needs Action rows are ~70px, and that card is the tallest in row C at
-full height. The height comes back out of **decoration** in the existing density
-blocks — the icon tile shrinks, the padding tightens — which is the rule the KPI
-tiles already follow. `tests/dashboard-cards.spec.js` measures four rows against
-two at four sizes and asserts row C ends at the same pixel; it does.
+The owner asked for this after the four fixes above. With 40 rooms the page
+ended 23px past the fold at 1366×768, 79px at 1280×660 and 112px at 1093×614.
+All five shipped screen/scaling combinations now reach the bottom of the screen
+— **including 1093×614**, which the 2026-09-05 handoff wrote off as impossible:
+*"the last 43 would have to come out of the chart and the card padding, past the
+point where either is worth showing."*
 
-> **Two sizes do not fit, and did not fit before these changes either.**
-> 1280×660 and 1093×614 end at 712 and 699 against those viewports — with two
-> rows and with four, identically. The handoff of 2026-09-05 recorded 1280×660
-> as fitting at 652; that was measured on a lighter fixture. Row B, not row C,
-> is what exceeds it here (248px at 660 with 40 rooms and 30 students). Worth a
-> look, but it is not this change and the owner has not reported it.
+**What made it possible was finding the constraint rather than trimming
+everything a little**, and the constraint was not where two previous passes had
+looked. Row B's three cards stretch to the tallest of them, and only ONE of them
+cannot shrink:
+
+| Card | Can it give height back? |
+|---|---|
+| Revenue Trend | Yes — `height:auto`, flexes into whatever the row gives it |
+| Seat Availability | Yes — the room grid is `overflow:auto` and scrolls |
+| **This Month at a Glance** | **No — six rows of fixed content** |
+
+Hiding the glance card dropped row B from **275px to 156px** at 1280×660, and
+every size fitted immediately. The chart and the room grid, the two things
+earlier passes had been shaving, were never the problem.
+
+**Why the glance was so tall:** it is one KPI tile wide
+(`.dash-row-b` gives it `calc((100% - 50px) / 6)`), and at that width four of
+its six labels wrapped to two lines. Measured, the rows were
+`23,23,32,59,32,31` — the money row alone 59px.
+
+The height came back from three places, in this order:
+
+1. **One-word labels** — Admissions, Payments, Complaints, Maintenance. Not the
+   truncation `dashboard.css` forbids: "Maintenance" is a whole word, not an
+   elided one, and the card's heading already supplies the period. The full
+   wording is on each row's `title`. Rows became `23,23,19,30,19,18`.
+2. **Below 700px**, the glance icon and label shrink and the month's takings
+   drop off the row — that block is already "figures only, no secondary detail"
+   for the KPI tiles, and this is the same move. The amount stays on the `title`
+   and one click away on Payments.
+3. **Below 640px**, the three row gaps give up 2px each. That is the last 6px
+   and the CSS says so.
+
+**No figure and no label was lost.**
+
+The fold is now an assertion rather than a note. The spec walks all five sizes
+with 40 rooms and 30 students, fails if row C passes the viewport, and fails if
+any glance row grows past one line — a silent re-wrap is ~65px of fold going
+quietly missing, and that is exactly how this regressed unnoticed before.
+
+> `.dash-row-b .dl-glance__label` is `nowrap` with an ellipsis **on purpose**.
+> If a label ever grows past the tile again, a visible ellipsis is a bug someone
+> fixes; a silent second line is 65px of fold nobody sees go.
 
 ---
 
