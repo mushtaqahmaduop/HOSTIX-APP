@@ -7,6 +7,10 @@
 //     printed nothing until somebody recorded something, and went back to
 //     nothing the next morning. Six zeros is indistinguishable from a card that
 //     is not wired to anything, and that is how it was read.
+//     It now follows the MONTH, which is the same window the KPI row above it
+//     uses — and `thisMonth()` reads the sidebar month picker, so the panel
+//     moves with it. Owner's direction, replacing a day-fallback that shipped
+//     first.
 //  2. Seat Availability's Expand and Print were removed on 2026-09-05. Owner
 //     reversed that; they are back, in the footer strip.
 //  3. Needs Action dropped rows with a count of 0. Owner: all four rows always
@@ -63,9 +67,9 @@ async function seed(win, fn, arg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1 — the glance reports a real day
+// 1 — the glance reports the month, and the same month as everything else
 // ─────────────────────────────────────────────────────────────────────────────
-test('with activity today, the glance says Today and counts it', async () => {
+test('the glance counts the whole month, not just today', async () => {
   const pageErrors = [];
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
@@ -77,88 +81,112 @@ test('with activity today, the glance says Today and counts it', async () => {
   const pre = await win.evaluate(() => window.electronAPI.dbAll('students'));
   expect(pre.length, 'SAFETY ABORT: expected an EMPTY isolated DB').toBe(0);
 
+  /* THE DEFECT, in one fixture. Everything here happened THIS MONTH but on an
+     earlier day — which is the normal state of a hostel on any given morning.
+     Every one of these six figures used to read 0. */
   await seed(win, async ([rent, mess]) => {
-    const td = today();
+    const mo = thisMonth();
+    const d = n => mo + '-' + String(n).padStart(2, '0');
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
-    DB.students = [{ id: 's1', name: 'Today Student', roomId: 'r1', status: 'Active',
-                     joinDate: td, messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'Today Student', month: thisMonth(),
-                     date: td, amount: rent + mess, unpaid: 0, overpaid: 0, status: 'Paid', paidDate: td,
-                     monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' }];
-    DB.complaints  = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
-    DB.maintenance = [];
-    DB.checkinlog  = [{ id: 'ci1', studentId: 's1', type: 'Check-in', date: td, time: '09:00' }];
+    DB.students = [
+      { id: 's1', name: 'Early Joiner', roomId: 'r1', status: 'Active', joinDate: d(2), messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's2', name: 'Mid Joiner',   roomId: 'r1', status: 'Active', joinDate: d(4), messOptIn: true, paymentMethod: 'Cash' },
+      // Last month — must NOT be counted.
+      { id: 's3', name: 'Old Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-07-11', messOptIn: true, paymentMethod: 'Cash' },
+    ];
+    DB.payments = [
+      { id: 'p1', studentId: 's1', studentName: 'Early Joiner', month: mo, date: d(2),
+        amount: rent + mess, unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(2),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+      { id: 'p2', studentId: 's2', studentName: 'Mid Joiner', month: mo, date: d(4),
+        amount: rent, unpaid: mess, overpaid: 0, status: 'Paid', paidDate: d(4),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
+      // A different month — out of scope.
+      { id: 'p3', studentId: 's3', studentName: 'Old Joiner', month: '2026-07', date: '2026-07-11',
+        amount: 9999, unpaid: 0, overpaid: 0, status: 'Paid', paidDate: '2026-07-11',
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+    ];
+    DB.complaints  = [{ id: 'cp1', seq: 1, subject: 'Fan', date: d(3), status: 'Open' }];
+    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: d(5), status: 'Open' }];
+    DB.checkinlog  = [{ id: 'ci1', studentId: 's1', type: 'Check-in',  date: d(2), time: '09:00' },
+                      { id: 'ci2', studentId: 's1', type: 'Check-out', date: d(6), time: '18:00' },
+                      { id: 'ci3', studentId: 's3', type: 'Check-in',  date: '2026-07-11', time: '10:00' }];
     DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
   const g = await win.evaluate(() => {
     const panel = [...document.querySelectorAll('.dl-panel')]
-      .find(p => /Glance|Latest Activity/.test(p.innerText));
+      .find(p => /at a Glance/.test(p.innerText));
     return {
       title: panel.querySelector('.dash-sec__title').innerText.trim(),
       pill: panel.querySelector('.dash-pill')?.innerText.trim() || null,
       rows: [...panel.querySelectorAll('.dl-glance__row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()),
+      computed: _dlGlance(thisMonth()),
     };
   });
 
-  expect(g.title).toBe('Today at a Glance');
-  expect(g.pill, 'no date pill is needed when the day IS today').toBeNull();
-  expect(g.rows.length).toBe(6);
-  // Every figure real, and the two that are zero today say 0 rather than vanish.
-  expect(g.rows.join(' | ')).toContain('Check-ins 1');
-  expect(g.rows.join(' | ')).toContain('New Admissions 1');
-  expect(g.rows.join(' | ')).toContain('Complaints Raised 1');
-  expect(g.rows.some(r => /Payments Received .*14,500 1/.test(r))).toBe(true);
+  // The heading names the window. It cannot still say "Today" over a month.
+  expect(g.title).toBe('This Month at a Glance');
+  expect(g.pill, 'the pill names WHICH month, since the sidebar can change it').toMatch(/2026/);
+
+  const by = k => g.computed.find(r => r.k === k).n;
+  expect(by('in')).toBe(1);        // the July check-in is out of scope
+  expect(by('out')).toBe(1);
+  expect(by('new')).toBe(2);       // two admissions this month, not the July one
+  expect(by('money')).toBe(2);     // two settled records this month
+  expect(by('issue')).toBe(1);
+  expect(by('wrench')).toBe(1);
+  // 14,500 + 8,000 — and NOT the 9,999 from July.
+  expect(g.computed.find(r => r.k === 'money').money).toBe(RENT + MESS + RENT);
 
   expect(pageErrors).toEqual([]);
   await app.close();
 });
 
-test('with nothing today, the glance falls back to the last real day and names it', async () => {
+test('the glance and Collection by Method report the same rupees', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
   await win.waitForLoadState('domcontentloaded');
   await login(win);
   await win.waitForTimeout(400);
 
-  /* THE DEFECT. Before this, all six rows read 0 on a hostel with records —
-     because nothing happened on this particular calendar day, which is the
-     normal state of affairs most mornings. */
   await seed(win, async ([rent, mess]) => {
+    const mo = thisMonth();
+    const d = n => mo + '-' + String(n).padStart(2, '0');
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
-    DB.students = [{ id: 's1', name: 'Older Student', roomId: 'r1', status: 'Active',
-                     joinDate: '2026-09-05', messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'Older Student', month: thisMonth(),
-                     date: '2026-09-05', amount: rent + mess, unpaid: 0, overpaid: 0,
-                     status: 'Paid', paidDate: '2026-09-05',
-                     monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' }];
+    DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: d(1), messOptIn: true, paymentMethod: 'Cash' }];
+    DB.payments = [
+      { id: 'p1', studentId: 's1', studentName: 'A', month: mo, date: d(2), amount: rent + mess,
+        unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(2),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+      { id: 'p2', studentId: 's1', studentName: 'A', month: mo, date: d(9), amount: 5000,
+        unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(9),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
+      // Part-paid: deliberately NOT settled, so it belongs to neither figure.
+      { id: 'p3', studentId: 's1', studentName: 'A', month: mo, date: d(12), amount: 3000,
+        unpaid: 11500, status: 'Pending',
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+    ];
     DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
-  const g = await win.evaluate(() => {
-    const panel = [...document.querySelectorAll('.dl-panel')]
-      .find(p => /Glance|Latest Activity/.test(p.innerText));
-    return {
-      title: panel.querySelector('.dash-sec__title').innerText.trim(),
-      pill: panel.querySelector('.dash-pill')?.innerText.trim() || null,
-      rows: [...panel.querySelectorAll('.dl-glance__row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()),
-      day: _dlGlanceDay(),
-    };
+  /* Both use `_payMatchesMonth()` over settled records, which is why this holds
+     — the glance row and the Collection by Method card sit two panels apart on
+     one screen, and two figures for the same money on one screen is the defect
+     this whole session has been about. */
+  const agree = await win.evaluate(() => {
+    const mo = thisMonth();
+    return { glance: _dlGlance(mo).find(r => r.k === 'money').money,
+             methods: _dlMethods(mo).total };
   });
-
-  // It reports the day it is actually describing. A heading that says "Today"
-  // over another day's numbers is worse than the empty card it replaced.
-  expect(g.day).toBe('2026-09-05');
-  expect(g.title).toBe('Latest Activity');
-  expect(g.pill, 'the fallback must name the day').toMatch(/2026/);
-  expect(g.rows.join(' | ')).toContain('New Admissions 1');
-  expect(g.rows.some(r => /Payments Received .*14,500 1/.test(r))).toBe(true);
+  expect(agree.glance).toBe(agree.methods);
+  expect(agree.glance).toBe(RENT + MESS + 5000);
   await app.close();
 });
 
-test('a payment dated in the future does not drag the glance forward', async () => {
+test('the glance follows the sidebar month picker, like the KPI row', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
   await win.waitForLoadState('domcontentloaded');
@@ -167,19 +195,26 @@ test('a payment dated in the future does not drag the glance forward', async () 
 
   await seed(win, async ([rent, mess]) => {
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
-    DB.students = [{ id: 's1', name: 'Older Student', roomId: 'r1', status: 'Active',
-                     joinDate: '2026-09-05', messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'Older Student', month: '2027-01',
-                     date: '2027-01-15', amount: rent + mess, unpaid: 0, overpaid: 0,
-                     status: 'Paid', paidDate: '2027-01-15',
-                     monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' }];
-    DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    DB.students = [
+      { id: 's1', name: 'July Joiner',  roomId: 'r1', status: 'Active', joinDate: '2026-07-04', messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's2', name: 'Aug Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-08-06', messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's3', name: 'Aug Joiner 2', roomId: 'r1', status: 'Active', joinDate: '2026-08-19', messOptIn: true, paymentMethod: 'Cash' },
+    ];
+    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
-  // A record dated ahead must not make the panel report a day that has not
-  // happened. It falls back to the admission instead.
-  expect(await win.evaluate(() => _dlGlanceDay())).toBe('2026-09-05');
+  // `thisMonth()` reads the picker, so pointing it at a month re-scopes the
+  // panel exactly as it re-scopes the KPI cards above it.
+  const admissions = await win.evaluate(() => {
+    const out = {};
+    for (const m of ['2026-07', '2026-08']) {
+      out[m] = _dlGlance(m).find(r => r.k === 'new').n;
+    }
+    return out;
+  });
+  expect(admissions['2026-07']).toBe(1);
+  expect(admissions['2026-08']).toBe(2);
   await app.close();
 });
 

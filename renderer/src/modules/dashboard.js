@@ -884,53 +884,42 @@ function renderDashboard() {
    that already exists in a table, waiting on a decision.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── WHICH DAY THE GLANCE REPORTS ────────────────────────────────────────────
-   Today, unless nothing happened today — then the most recent day that did.
+/* ── THE GLANCE FOLLOWS THE MONTH ────────────────────────────────────────────
+   Owner's call, 2026-09-06. The panel was hard-scoped to the literal calendar
+   day on a page where every other card is month-scoped, so on a hostel holding
+   141 payments and 55 students it printed six zeros until somebody recorded
+   something, and six more the next morning. The arithmetic was never wrong —
+   seeded with records dated today it reported all six correctly. What was wrong
+   is that "today" is empty most mornings, and a card that is almost always
+   empty teaches a warden to stop reading it.
 
-   THE BUG THIS FIXES. The panel was hard-scoped to the literal calendar day on
-   a page where every other card is month-scoped, so on a hostel holding 141
-   payments and 55 students it printed six zeros every day until somebody
-   recorded something, and went back to six zeros the next morning. Six zeros on
-   a busy hostel is indistinguishable from a card that is not wired to anything,
-   and that is exactly how it was read.
+   A day-fallback shipped first and was replaced by this at the owner's
+   direction. The month is the better answer for one reason worth writing down:
+   it is the SAME WINDOW as the KPI row above it. `thisMonth()` reads the
+   sidebar month picker, so the panel now moves with it exactly as the KPI
+   cards, Collection by Method and the Pending figure already do — one scope on
+   one screen, rather than five cards describing a month and a sixth describing
+   a day nobody selected.
 
-   The arithmetic was never wrong — seeded with records dated today it reports
-   all six correctly. What was wrong is that "today" is empty most of the time,
-   and a card that is almost always empty teaches a warden to stop looking at it.
+   PAYMENTS RECEIVED USES `_payMatchesMonth()`, which is not an arbitrary
+   choice: it is the identical test `_dlMethods()` uses for Collection by
+   Method, on this same card row. The two therefore report the same rupees, and
+   `tests/dashboard-cards.spec.js` asserts they cannot drift apart. The other
+   five rows key off `_toMonthKey()`, which reads both `2026-08-14` and the
+   older `August 2026` shape a record may carry.
 
-   Falling back is not the same as widening the window: it still reports ONE
-   day, every figure still comes from records that exist, and the header names
-   the day whenever it is not today. Nothing is summed across days and nothing
-   is invented — the alternative, quietly switching to a month total, would put
-   a figure under a heading that does not describe it.
+   THE COST, STATED: on the 1st of a month this reads six zeros again. That is
+   now correct rather than misleading — the KPI row above it reads zero too,
+   because nothing has happened yet in the window both are describing. */
 
-   Capped at today, because a payment may be dated ahead: a record for next
-   week must not drag the panel into the future and report a day that has not
-   happened. */
-function _dlGlanceDay() {
-  const td = today();
-  const day = d => String(d || '').slice(0, 10);
-  const seen = [];
-  const push = v => { const s = day(v); if (s && s <= td) seen.push(s); };
-
-  (DB.checkinlog  || []).forEach(c => push(c.date));
-  (DB.students    || []).forEach(s => push(s.joinDate));
-  (DB.payments    || []).forEach(p => { if (p.status === 'Paid') push(p.date); });
-  (DB.complaints  || []).forEach(c => push(c.date || c.createdAt));
-  (DB.maintenance || []).forEach(m => push(m.date || m.createdAt));
-
-  if (seen.indexOf(td) !== -1 || !seen.length) return td;
-  return seen.sort().pop();
-}
-
-/** Counts for the glance — six figures, each from its own table, one day. */
-function _dlGlance(forDay) {
-  const td = forDay || _dlGlanceDay();
-  const isToday = d => String(d || '').slice(0, 10) === td;
+/** Counts for the glance — six figures, each from its own table, one month. */
+function _dlGlance(mo) {
+  const mk = mo || thisMonth();
+  const inMonth = d => _toMonthKey(d) === mk;
   const log = DB.checkinlog || [];
-  // A payment's `date` is when it was taken. Pending rows have no date yet, so
-  // they cannot be "received today" and must not be counted here.
-  const paidToday = (DB.payments || []).filter(p => p.status === 'Paid' && isToday(p.date));
+  /* Same month test as _dlMethods(), so the count and the amount on this row
+     are the same rupees Collection by Method draws two cards away. */
+  const paid = (DB.payments || []).filter(p => p.status === 'Paid' && _payMatchesMonth(p, mk));
   /* `page: null` means THERE IS NOWHERE TO GO, and the row is rendered as plain
      text rather than a button.
 
@@ -941,12 +930,12 @@ function _dlGlance(forDay) {
      where a warden learns in one click whether the numbers are wired to
      anything. */
   return [
-    { k: 'in',    label: 'Check-ins',           n: log.filter(c => isToday(c.date) && c.type !== 'Check-out').length, page: null },
-    { k: 'out',   label: 'Check-outs',          n: log.filter(c => isToday(c.date) && c.type === 'Check-out').length, page: null },
-    { k: 'new',   label: 'New Admissions',      n: (DB.students || []).filter(s => isToday(s.joinDate)).length,       page: 'students' },
-    { k: 'money', label: 'Payments Received',   n: paidToday.length, money: paidToday.reduce((s, p) => s + Number(p.amount || 0), 0), page: 'payments' },
-    { k: 'issue', label: 'Complaints Raised',   n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
-    { k: 'wrench',label: 'Maintenance Requests',n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },
+    { k: 'in',    label: 'Check-ins',           n: log.filter(c => inMonth(c.date) && c.type !== 'Check-out').length, page: null },
+    { k: 'out',   label: 'Check-outs',          n: log.filter(c => inMonth(c.date) && c.type === 'Check-out').length, page: null },
+    { k: 'new',   label: 'New Admissions',      n: (DB.students || []).filter(s => inMonth(s.joinDate)).length,       page: 'students' },
+    { k: 'money', label: 'Payments Received',   n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
+    { k: 'issue', label: 'Complaints Raised',   n: (DB.complaints || []).filter(c => inMonth(c.date || c.createdAt)).length,  page: 'issues' },
+    { k: 'wrench',label: 'Maintenance Requests',n: (DB.maintenance || []).filter(m => inMonth(m.date || m.createdAt)).length, page: 'maintenance' },
   ];
 }
 
@@ -1001,9 +990,7 @@ function _dlIco(k) {
 }
 
 function _dashLedgerRow(mo, pending, pendingCount) {
-  const glanceDay = _dlGlanceDay();
-  const glance    = _dlGlance(glanceDay);
-  const glanceIsToday = glanceDay === today();
+  const glance    = _dlGlance(mo);
   const methods   = _dlMethods(mo);
 
   const glanceRows = glance.map(g => {
@@ -1122,17 +1109,17 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         + '</button>').join('');
 
   return {
-    /* The title states which day these six figures describe. When the panel has
-       fallen back it must NOT still say "Today" — a heading that does not
-       describe the numbers under it is worse than the empty card it replaced. */
+    /* THE HEADING HAS TO NAME THE WINDOW. It said "Today at a Glance" over six
+       figures that are now a month's — and a heading that does not describe the
+       numbers under it is worse than the empty card it replaced. The pill
+       carries the month itself rather than leaving "This Month" to be resolved
+       against whatever the sidebar picker happens to be set to, which is the
+       whole point of the panel following that picker. */
     glance:
         '<div class="dash-sec dl-panel">'
       +   '<div class="dash-sec__head">'
-      +     '<span class="dash-sec__title">'
-      +       (glanceIsToday ? 'Today at a Glance' : 'Latest Activity') + '</span>'
-      +     (glanceIsToday ? ''
-          : '<span class="dash-pill dh-slate" title="Nothing has been recorded today yet">'
-            + escHtml(fmtDate(glanceDay)) + '</span>')
+      +     '<span class="dash-sec__title">This Month at a Glance</span>'
+      +     '<span class="dash-pill dh-slate">' + escHtml(thisMonthLabel()) + '</span>'
       +   '</div>'
       +   '<div class="dl-glance">' + glanceRows + '</div>'
       + '</div>',
