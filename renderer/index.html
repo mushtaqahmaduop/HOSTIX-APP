@@ -701,6 +701,9 @@
        ═══════════════════════════════════════════════════════════════════════ -->
   <script src="src/config.js"></script>
   <script src="src/utils.js"></script>
+  <!-- Spec §14 financial integrity layer. AFTER utils.js: it calls
+       resolveCharges() and outstandingOf() rather than reimplementing them. -->
+  <script src="src/finance.js"></script>
   <script src="src/icons.js"></script>
   <script src="src/auth-nev.js"></script>
   <script src="src/storage.js"></script>

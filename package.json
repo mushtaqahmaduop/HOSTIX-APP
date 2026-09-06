@@ -26,6 +26,7 @@
     "test:bulkrooms": "node tests/bulk-rooms.test.js",
     "test:servicemodel": "node tests/service-model.test.js",
     "test:outstanding": "node tests/outstanding.test.js",
+    "test:finance": "node tests/finance.test.js",
     "test:services": "node tests/services.test.js",
     "test:update": "node tests/update-url.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
