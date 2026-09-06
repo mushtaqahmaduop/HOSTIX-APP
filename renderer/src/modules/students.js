@@ -1970,7 +1970,15 @@ function showViewStudentModal(id) {
   const totalPaid=payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount),0)
     + payHistory.filter(p=>p.status==='Pending'&&Number(p.amount)>0&&p.unpaid!=null&&Number(p.unpaid)>0).reduce((s,p)=>s+Number(p.amount),0);
   // Due = only actual unpaid remainder
-  const totalDue=payHistory.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  /* The balance is calculateOutstanding(p), never the stored field. The old
+     form asked two wrong questions: it skipped a record marked Paid that still
+     carries a balance -- outstandingOf() answers a recorded `unpaid` first and
+     always, deliberately, see the note above it in utils.js -- and where none
+     was recorded it summed p.amount, the sum COLLECTED, as the sum OWED.
+     Summing unfiltered is the sanctioned form: calculateOutstanding returns 0
+     for a settled record, which is why the Pending filter is not a safety net
+     but the thing that was losing money. */
+  const totalDue=payHistory.reduce((s,p)=>s+calculateOutstanding(p),0);
   const paidCount=payHistory.filter(p=>p.status==='Paid').length;
   // Admission fee is stored on the payment that collected it, under either key
   // depending on the app version that wrote the row.
@@ -2073,6 +2081,7 @@ function showViewStudentModal(id) {
             const admFee=Number(p.admissionFee||p.fee||0);
             const extras=p.extraCharges||[];
             const conc=Number(p.concession||p.discount||0);
+            const due=calculateOutstanding(p);
             let paidCell='<span class="svw-paid">'+fmtPKR(p.amount)+'</span>';
             if(admFee>0) paidCell+='<span class="svw-sub is-adm">+'+fmtPKR(admFee)+' admission</span>';
             extras.forEach(c=>{paidCell+='<span class="svw-sub is-extra">+'+fmtPKR(c.amount)+' '+escHtml(c.label||'')+'</span>';});
@@ -2082,7 +2091,7 @@ function showViewStudentModal(id) {
             +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+(_ch.messIncluded?'<span class="svw-sub">'+fmtPKR(_ch.rent)+' rent + '+fmtPKR(_ch.mess)+' mess</span>':_ch.hasMess?'<span class="svw-sub">rent only · mess off</span>':'')+'</td>'
             +'<td class="svw-t__conc">'+(conc>0?'−'+fmtPKR(conc):'<span class="is-empty">—</span>')+'</td>'
             +'<td>'+paidCell+'</td>'
-            +'<td class="svw-t__unpaid'+((p.unpaid||0)>0?' is-due':'')+'">'+((p.unpaid||0)>0?fmtPKR(p.unpaid||0):'<span class="is-empty">—</span>')+'</td>'
+            +'<td class="svw-t__unpaid'+(due>0?' is-due':'')+'">'+(due>0?fmtPKR(due):'<span class="is-empty">—</span>')+'</td>'
             +'<td>'+pmBadge(p.method)+'</td>'
             +'<td>'+statusBadge(p.status)+'</td>'
             +'<td class="svw-t__date">'+(fmtDate(p.date)||'—')+'</td>'
@@ -2381,8 +2390,7 @@ function printStudentCard(id) {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
   const paidRecords = payHistory.filter(p => p.status === 'Paid');
   const totalPaid = paidRecords.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalDue  = payHistory.filter(p => p.status === 'Pending')
-    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount || 0)), 0);
+  const totalDue  = payHistory.reduce((s, p) => s + calculateOutstanding(p), 0);
   const admission = payHistory.reduce((s, p) => s + Number(p.admissionFee || p.fee || 0), 0);
 
   const hostel = DB.settings.hostelName || 'Hostel';
@@ -2534,7 +2542,7 @@ function printStudentCard(id) {
       const conc = Number(p.concession != null ? p.concession : p.discount || 0);
       const adm  = Number(p.admissionFee || p.fee || 0);
       const extras = (p.extraCharges || []).filter(x => Number(x.amount) > 0);
-      const unpaid = Number(p.unpaid || 0);
+      const unpaid = calculateOutstanding(p);
       return `<tr>
         <td><b>${escHtml(p.month || '—')}</b></td>
         <td>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}${c.messIncluded
@@ -2830,7 +2838,7 @@ async function confirmDeleteStudent(id) {
      room assignment, the profile. That is what they asked to lose. */
   const _pays = DB.payments.filter(p => p.studentId === id);
   const _paid = _pays.reduce((s,p) => s + Number(p.amount  || 0), 0);
-  const _owed = _pays.reduce((s,p) => s + Number(p.unpaid  || 0), 0);
+  const _owed = _pays.reduce((s,p) => s + calculateOutstanding(p), 0);
   const _detail = _pays.length
     ? `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.75">`
       + `Their <strong>${_pays.length}</strong> payment record(s) <strong>stay in the books</strong> —`
@@ -3067,8 +3075,10 @@ function formerStudentSearch(query) {
   results.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">${former.length} result${former.length!==1?'s':''} found</div>`+former.map(s=>{
     const payHistory = DB.payments.filter(p=>p.studentId===s.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
     const totalPaid  = payHistory.filter(p=>p.status==='Paid').reduce((sum,p)=>sum+Number(p.amount||0),0);
-    const pendRecs   = payHistory.filter(p=>p.status==='Pending');
-    const totalPend  = pendRecs.reduce((sum,p)=>sum+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
+    /* Both from the same answer. Filtering on status and summing balances
+       could print "0 pending" beside a non-zero figure. */
+    const pendRecs   = payHistory.filter(p=>calculateOutstanding(p)>0);
+    const totalPend  = pendRecs.reduce((sum,p)=>sum+calculateOutstanding(p),0);
     const histBadge  = totalPend>0?`<span style="background:rgba(255,77,109,0.15);color:var(--red);border:1px solid rgba(255,77,109,0.3);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">${icon('warning','sm')} ${pendRecs.length} pending · ${fmtPKR(totalPend)}</span>`:payHistory.length?`<span style="background:rgba(46,201,138,0.1);color:var(--green);border:1px solid rgba(46,201,138,0.2);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">${icon('checkmark','xs')} All clear</span>`:`<span style="background:var(--bg4);color:var(--text3);border-radius:6px;padding:2px 8px;font-size:10px">No history</span>`;
     const recentRows = payHistory.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3)">${escHtml(p.month||fmtDate(p.date)||'—')}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${fmtPKR(p.amount)}</span><span style="color:${p.status==='Paid'?'var(--green)':'var(--red)'}">${p.status==='Paid'?icon('checkmark','xs'):'⏳'}</span></div>`).join('');
     return `<div id="fsr-${s.id}" style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:10px">
@@ -3119,9 +3129,9 @@ function openRestoreStudentForm(studentId) {
   const thisMonthKey = today.slice(0,7);
   const payHistory = DB.payments.filter(p=>p.studentId===t.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totalPaid = payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount||0),0);
-  const pendRecs  = payHistory.filter(p=>p.status==='Pending');
-  const totalPend = pendRecs.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0);
-  const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${(p.unpaid||0)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?icon('checkmark','xs'):'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
+  const pendRecs  = payHistory.filter(p=>calculateOutstanding(p)>0);
+  const totalPend = pendRecs.reduce((s,p)=>s+calculateOutstanding(p),0);
+  const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${calculateOutstanding(p)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${calculateOutstanding(p)>0?fmtPKR(calculateOutstanding(p)):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?icon('checkmark','xs'):'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
 
   showModal('modal-lg', `<span style="color:var(--green)">🔄 Restore — ${escHtml(t.name)}</span>`,
     `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;background:var(--green-dim);border:1px solid rgba(46,201,138,0.25);border-radius:8px;padding:10px 14px">All previous details are pre-filled. Update the room and payment details.</div>
@@ -3230,7 +3240,7 @@ function rsCheckMonthDuplicate(studentId, monthVal) {
     if (ps) ps.disabled = true;
   } else if (pending) {
     warn.style.display = '';
-    warn.innerHTML = '<div style="background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--accent-strong);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(pending.unpaid || pending.amount) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
+    warn.innerHTML = '<div style="background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--accent-strong);font-weight:600">' + icon('warning','sm') + ' This student has a <strong>Pending</strong> payment of <strong>' + fmtPKR(calculateOutstanding(pending)) + '</strong> for <strong>' + monthVal + '</strong>. Submitting will add a new record — consider updating the existing one instead.</div>';
     ['rs-amount','rs-pending','rs-concession','rs-pstatus'].forEach(function(id){
       const el = document.getElementById(id); if (el) el.disabled = false;
     });
@@ -3435,7 +3445,7 @@ function doGenerateStudentsPDF(monthKey) {
 
     var paidAmt    = mPays.filter(function(p){return p.status==='Paid';}).reduce(function(acc,p){return acc+Number(p.amount||0);},0)
                    + mPays.filter(function(p){return p.status==='Pending'&&Number(p.amount||0)>0&&p.unpaid!=null&&Number(p.unpaid)>0;}).reduce(function(acc,p){return acc+Number(p.amount||0);},0);
-    var pendingAmt = mPays.filter(function(p){return p.status==='Pending';}).reduce(function(acc,p){return acc+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
+    var pendingAmt = mPays.reduce(function(acc,p){return acc+calculateOutstanding(p);},0);
     var admFee     = mPays.reduce(function(acc,p){return acc+Number(p.admissionFee||p.fee||0);},0);
     var extraTotal = mPays.reduce(function(acc,p){return acc+(p.extraTotal!=null&&Number(p.extraTotal)>0?Number(p.extraTotal):(p.extraCharges||[]).reduce(function(x,c){return x+Number(c.amount||0);},0));},0);
     var concession = mPays.reduce(function(acc,p){return acc+Number(p.concession||p.discount||0);},0);
@@ -3633,7 +3643,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '</div>';
 
   // Summary tiles (Fix #12: admission fee and concession removed from grand total badges)
-  var _pdfPending=DB.payments.filter(function(p){return p.status==='Pending'&&_payMatchesMonth(p,monthKey);}).reduce(function(s,p){return s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0));},0);
+  var _pdfPending=DB.payments.filter(function(p){return _payMatchesMonth(p,monthKey);}).reduce(function(s,p){return s+calculateOutstanding(p);},0);
   var _tile = function(tone, ico, val, lbl) {
     return '<div class="sbox t-'+tone+'"><span class="ico">'+icon(ico,'sm')+'</span>'
       + '<span><span class="v">'+val+'</span><span class="l">'+lbl+'</span></span></div>';
