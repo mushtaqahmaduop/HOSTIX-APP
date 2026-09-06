@@ -53,6 +53,34 @@ function _electronPDF(html, suggestedName, opts) {
   // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child
   // window.open() window hangs the Electron renderer on Windows. User presses the button.
   injected = injected.replace('</body>', btnHtml + '</body>');
+
+  /* ── THE WINDOW IS OPENED BY THE MAIN PROCESS, NOT BY THIS ONE ────────────
+     window.open() from the renderer is the one strategy this codebase has
+     already learned hangs Electron on Windows, and it had been left here after
+     being removed everywhere else: receipt.js says so in as many words ("No
+     window.open() — that hangs the Electron renderer on Windows") and prints
+     from the main window through an injected overlay instead, and
+     doGenerateStudentsPDF() goes through electronAPI.openPdfWindow. This
+     function is what every OTHER Print in the app calls — the student card,
+     payments, expenses, reports, the archive, the visit sheet — so the hang
+     the owner reported on the panel's Print button was every one of them.
+
+     openPdfWindow writes the HTML to a temp file and loads it into a real
+     top-level BrowserWindow, so the Print / Save as PDF button inside it is a
+     window printing itself rather than a renderer printing a popup it owns.
+     The renderer never blocks, which is why the app froze with the print.
+
+     The popup stays as the browser fallback, and as the fallback for a
+     document over the bridge's 2MB guard — silently dropping a report that is
+     merely large would be worse than a slow window. */
+  var _title = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1]
+            || String(suggestedName || 'Report').replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ');
+  if (window.electronAPI && typeof window.electronAPI.openPdfWindow === 'function'
+      && injected.length <= 2 * 1024 * 1024) {
+    window.electronAPI.openPdfWindow(injected, _title);
+    return;
+  }
+
   // PERF/UX: open the popup and paint a lightweight "Generating…" placeholder
   // IMMEDIATELY, then write the (potentially large) report HTML on the next tick.
   // Parsing a big document.write blob is what made the window appear ~1s late;

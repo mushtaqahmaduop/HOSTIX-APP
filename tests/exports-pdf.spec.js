@@ -215,3 +215,61 @@ test('all categories print as a table each, with a subtotal and a grand total', 
 
   await app.close();
 });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PRINT WINDOW IS OPENED BY THE MAIN PROCESS (owner, 2026-09-06:
+   "print button hangs the print and also the app").
+
+   window.open() from the renderer is the one strategy this codebase has already
+   learned hangs Electron on Windows. It had been removed twice — receipt.js
+   says so in as many words and prints from the main window through an injected
+   overlay, and doGenerateStudentsPDF() goes through electronAPI.openPdfWindow —
+   but _electronPDF() still had it, and _electronPDF is what every OTHER Print
+   in the app calls: the student card, payments, expenses, reports, the archive,
+   the visit sheet. One popup, every Print button.
+
+   This pins the transport rather than the document: openPdfWindow is called,
+   window.open is NOT, and the HTML that goes over the bridge is the real
+   report and not the "Generating report…" placeholder the popup path painted
+   first. The fallback stays for a browser, which is why the assertion is on
+   the Electron path being PREFERRED, not on window.open being deleted.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('every Print opens its window through the main process, never window.open', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+  await win.evaluate(() => { expFilter.cat = 'All'; renderPage('expenses'); });
+  await win.waitForTimeout(600);
+
+  /* The bridge CANNOT be stubbed — contextBridge.exposeInMainWorld defines
+     electronAPI non-writable AND non-configurable, so both a property
+     assignment and a defineProperty shadow fail (the first silently, which is
+     worse: the test then reads a 0 that means "not stubbed", not "not called").
+     So this asserts the real thing instead, which is the better evidence
+     anyway: window.open is never called, and a second REAL BrowserWindow
+     appears carrying the report. Only the main process can produce that. */
+  const before = app.windows().length;
+  const out = await win.evaluate(() => {
+    const realOpen = window.open;
+    let opened = 0;
+    window.open = function () { opened++; return null; };
+    try { exportExpensesPDF(); } finally { window.open = realOpen; }
+    return { opened,
+      hasBridge: !!(window.electronAPI && typeof window.electronAPI.openPdfWindow === 'function') };
+  });
+
+  expect(out.hasBridge, 'the main-process PDF bridge is missing').toBe(true);
+  expect(out.opened, 'window.open is the call that hangs the renderer').toBe(0);
+
+  await expect.poll(() => app.windows().length, { timeout: 10000 })
+    .toBeGreaterThan(before);
+
+  const pdfWin = app.windows().find(w => w !== win);
+  await pdfWin.waitForLoadState('domcontentloaded');
+  const html = await pdfWin.content();
+  // The real document, not the "Generating report…" shell the popup path painted.
+  expect(html).toContain('Print / Save as PDF');
+  expect(html).not.toContain('Generating report');
+  expect(html).toContain('Electricity');
+
+  await app.close();
+});

@@ -99,9 +99,14 @@ test('it opens over the roster with exactly four tabs, and closes again', async 
 
   // §22: a slide-over, not a page — the table is still behind it.
   expect(await win.evaluate(() => !!document.querySelector('.stu-table'))).toBe(true);
+  /* 600, WIDENED FROM 440 BY THE OWNER on 2026-09-06 against the reference
+     `student detail.png`. The old range here was the written 400-480; this is a
+     deliberate overrule, not drift, and the width is load-bearing for the layout
+     above — under ~520 the identity and the action tiles cannot share a band and
+     the media query stacks them again. */
   const w = await win.evaluate(() => Math.round(document.querySelector('.stu-pan').getBoundingClientRect().width));
-  expect(w, 'width must stay inside the 400-480 the spec asks for').toBeGreaterThanOrEqual(400);
-  expect(w).toBeLessThanOrEqual(480);
+  expect(w, 'the panel is 600 wide, and the action band needs it').toBeGreaterThanOrEqual(560);
+  expect(w).toBeLessThanOrEqual(640);
 
   await win.evaluate(() => closeStudentPanel());
   await win.waitForTimeout(400);
@@ -287,16 +292,42 @@ test('every verb the old profile modal had is on the panel', async () => {
     .map(b => ({ label: b.innerText.trim(), call: b.getAttribute('onclick'),
                  clipped: b.scrollWidth - b.clientWidth })));
 
+  /* CANCEL SEAT IS LAST because it is the conditional one: it shows only for an
+     Active student, and a conditional cell anywhere else makes the tiles after
+     it move when a student's status changes. */
   expect(acts.map(a => a.label))
-    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Cancel Seat', 'Delete']);
+    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete', 'Cancel Seat']);
   // Each hands off to the function that already owns the workflow.
   expect(acts.find(a => a.label === 'Move Room').call).toContain('showRoomShiftModal');
   expect(acts.find(a => a.label === 'Print').call).toContain('printStudentCard');
-  expect(acts.find(a => a.label === 'Cancel Seat').call).toContain('quickCancelStudent');
+  /* Cancel Seat OPENS THE FORM. It used to call quickCancelStudent(), which
+     wrote a Pending cancellation on the press with an invented date and reason;
+     a button that puts a resident on notice without asking anything is the one
+     thing this assertion exists to stop coming back. */
+  expect(acts.find(a => a.label === 'Cancel Seat').call).toContain('showAddCancellationModal');
+  expect(acts.find(a => a.label === 'Cancel Seat').call).not.toContain('quickCancel');
   // Print renders a PDF rather than opening a modal, so it leaves the panel up.
   expect(acts.find(a => a.label === 'Print').call).not.toContain('closeStudentPanel');
-  // Six labels in a 440px panel: "Cancel Seat" is the longest and must fit.
+  /* AND NEITHER DOES DELETE, on the way to the confirm. Closing first meant a
+     warden who read the dialog and said no lost the record for saying no. */
+  expect(acts.find(a => a.label === 'Delete').call).toContain('confirmDeleteStudent');
+  expect(acts.find(a => a.label === 'Delete').call).not.toContain('closeStudentPanel');
+  // "Cancel Seat" is the longest label and must fit its cell without clipping.
   expect(acts.every(a => a.clipped <= 0), 'an action label is clipped').toBe(true);
+
+  /* AND THEY SIT BESIDE THE IDENTITY, NOT UNDER IT (owner reference,
+     `student detail.png`). Stacked, the two halves cost the sum of their
+     heights; side by side they cost the taller one, and the difference is what
+     the content gets. If this ever reads as "under", the width has been taken
+     back and the panel has silently lost ~150px of body. */
+  const band = await win.evaluate(() => {
+    const id = document.querySelector('.stu-pan__id').getBoundingClientRect();
+    const ac = document.querySelector('.stu-pan__acts').getBoundingClientRect();
+    return { idRight: Math.round(id.right), acLeft: Math.round(ac.left),
+             sameRow: Math.abs(Math.round(id.top - ac.top)) < 40 };
+  });
+  expect(band.sameRow, 'the actions dropped below the identity').toBe(true);
+  expect(band.acLeft).toBeGreaterThanOrEqual(band.idRight);
 
   /* CANCEL SEAT IS CONDITIONAL, as it was in the modal. Offering it to someone
      who has already left either duplicates a cancellation or fails with a
@@ -412,8 +443,14 @@ test('Financial carries the old profile ledger, whole', async () => {
   expect(led.acts[0]).toEqual(['Mark Paid', 'Print Receipt', 'Edit Payment', 'Delete']);
   expect(led.acts[1]).toEqual(['Print Receipt', 'Edit Payment', 'Delete']);
 
-  // Nine columns do not fit 440px, so the table scrolls rather than the panel.
-  expect(led.scrolls, 'the ledger should scroll inside its card').toBe(true);
+  /* NINE COLUMNS STILL DO NOT FIT, and no slide-over width will make them.
+     Measured, the table's natural width is ~1005px — Method alone takes 136 for
+     "Bank Transfer" and Actions 159 for four row buttons — so the 600px panel
+     gives its card 564, and the widening bought height, not this. What matters
+     is WHERE the overflow goes: inside .svw-tw, never by pushing the panel body
+     sideways. A horizontally scrolling body moves the content under the cursor
+     as you read down it, which is the fault this pair exists to catch. */
+  expect(led.scrolls, 'the ledger should scroll inside its own card').toBe(true);
   expect(await win.evaluate(() => {
     const b = document.getElementById('stu-panel-body');
     return b.scrollWidth - b.clientWidth;

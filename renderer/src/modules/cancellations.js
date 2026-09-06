@@ -454,14 +454,45 @@ async function deleteCancellationRecord(cancId) {
   }));
 }
 
-function showAddCancellationModal() {
+/* THE ONLY WAY A CANCELLATION IS STARTED (owner, 2026-09-06: "the cancellation
+   button should always open the cancellation form, not directly cancel the
+   student").
+
+   There used to be a second way in: quickCancelStudent() in students.js wrote a
+   Pending cancellation the moment the button was pressed, with a hardcoded
+   reason ("Student requested cancellation") and a vacate date of end-of-next-
+   month, no form and no confirmation. Two problems, one visible and one not:
+
+     · Putting a resident on notice is a decision with a DATE and a REASON in
+       it. Both were invented, and the warden was never shown them, so the
+       cancellations list filled up with records nobody had actually written.
+     · The record it wrote was malformed. saveCancellation() stamps a `canc_`
+       id and a `seq` (the stable CAN-#### the list is numbered by);
+       quickCancelStudent wrote a bare uid() and no seq at all.
+
+   `studentId` preselects a resident — that is what the panel and the profile
+   pass — and the form is identical either way, so there is exactly one shape of
+   cancellation record in the database. */
+function showAddCancellationModal(studentId) {
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const alreadyCancelling = (DB.cancellations||[]).filter(c=>c.status==='Pending').map(c=>c.studentId);
   const available = activeStudents.filter(s=>!alreadyCancelling.includes(s.id));
-  const studentOpts = available.map(s=>{
-    const room=DB.rooms.find(r=>r.id===s.roomId);
-    return `<option value="${s.id}">👤 ${escHtml(s.name)} — Room #${escHtml(String(room?room.number:'?'))}</option>`;
-  }).join('');
+
+  /* Say WHICH student cannot be cancelled and why. Opening an empty form for a
+     warden who pressed Cancel Seat on one particular person, or telling them
+     "no active students" when the one they picked is simply already on notice,
+     is an answer to a question they did not ask. */
+  if (studentId) {
+    const one = DB.students.find(s => s.id === studentId);
+    if (!one) { toast('Student not found', 'error'); return; }
+    if (alreadyCancelling.includes(studentId)) {
+      toast(`${one.name} is already on the cancellation list`, 'error'); return;
+    }
+    if (one.status !== 'Active') {
+      toast(`${one.name} is ${String(one.status || '').toLowerCase()} — there is no seat to cancel`, 'error');
+      return;
+    }
+  }
 
   if(available.length===0){
     toast('No active students available to cancel','error');
@@ -517,6 +548,11 @@ function showAddCancellationModal() {
   );
   // pass available list to search fn
   window._cancAvailable = available;
+
+  /* Preselected, but not pre-decided: the name, room and search box are filled
+     and the warden still has to give the date and the reason and press the
+     button. Nothing is written until saveCancellation(). */
+  if (studentId) selectCancStudent(studentId);
 }
 
 function cancStudentSearch(query) {

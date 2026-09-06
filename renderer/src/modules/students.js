@@ -2,7 +2,7 @@
    Contains: renderStudents, showAddStudentModal, submitAddStudent,
              showViewStudentModal, showEditStudentModal, submitEditStudent,
              confirmDeleteStudent, showRoomShiftModal, submitRoomShift,
-             photo upload/camera, quickCancelStudent,
+             photo upload/camera,
              printStudentCard, downloadAllStudentsPDF, formerStudents flow,
              filterRoomSearch, pickRoomSearch, extra charge helpers
    ─────────────────────────────────────────────────────────────────────────── */
@@ -792,6 +792,7 @@ function _stuPanelHtml(t) {
       </button>
     </header>
 
+    <div class="stu-pan__top">
     <div class="stu-pan__id">
       ${studentAvatar(t, 58, stuAvatarHue(String(t.name || '?')))}
       <div class="stu-pan__idtext">
@@ -817,8 +818,13 @@ function _stuPanelHtml(t) {
            it closes. closeModal() refreshes the panel on its way out, so a
            saved edit is visible immediately.
 
-           DELETE IS THE ONE THAT STILL CLOSES, because the record it is
-           showing will not exist when the confirm returns.
+           DELETE ASKS FIRST AND CLOSES SECOND. It used to close the panel on
+           the way to the confirm, so a warden who read the dialog and said no
+           got their record taken away as the reward for saying no. The confirm
+           opens OVER the panel like every other form here, and the panel is
+           closed inside the callback — once the student is actually going.
+           (refreshStudentPanel() closes it by itself if the record is gone, so
+           the close is belt and braces, not the only guard.)
 
            EVERY ACTION THE OLD PROFILE MODAL CARRIED (owner). The panel
            replaced showViewStudentModal, and replacing a screen means taking
@@ -831,10 +837,14 @@ function _stuPanelHtml(t) {
            what WRITES DB.roomShifts, so this button and the Room History tab
            are two ends of one record.
 
-           CANCEL SEAT IS CONDITIONAL, as it was in the modal: quickCancelStudent
-           starts a cancellation, and offering it for a student who has already
-           left or is already cancelling would either duplicate a record or fail
-           with a message the warden cannot act on.
+           CANCEL SEAT OPENS THE FORM (owner, 2026-09-06). It used to call
+           quickCancelStudent(), which WROTE a Pending cancellation on the press
+           — a hardcoded reason, an invented vacate date, no confirmation, and a
+           record missing the `seq` the cancellations list numbers itself by.
+           Putting a resident on notice has a date and a reason in it, so it
+           goes through showAddCancellationModal() with this student
+           preselected. It is still conditional on Active: the form itself says
+           why when it is not.
 
            PRINT LEAVES THE PANEL OPEN. It renders a PDF through _electronPDF
            rather than opening a dialog over the app, so there is nothing to get
@@ -842,18 +852,19 @@ function _stuPanelHtml(t) {
            is reading. Everything else opens a modal, so it closes first. */}
     <div class="stu-pan__acts">
       <button class="stu-pan__act" onclick="showEditStudentModal('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Edit</span></button>
       <button class="stu-pan__act" onclick="showRoomShiftModal('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>Move Room</button>
-      <button class="stu-pan__act" onclick="printStudentCard('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print</button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Move Room</span></button>
+      <button class="stu-pan__act is-green" onclick="printStudentCard('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg><span>Print</span></button>
       <button class="stu-pan__act" onclick="openAddPayment('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>Payment</button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg><span>Payment</span></button>
+      <button class="stu-pan__act is-danger" onclick="confirmDeleteStudent('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Delete</span></button>
       ${status === 'Active' ? `
-      <button class="stu-pan__act is-warn" onclick="quickCancelStudent('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>Cancel Seat</button>` : ''}
-      <button class="stu-pan__act is-danger" onclick="closeStudentPanel();confirmDeleteStudent('${escHtml(t.id)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
+      <button class="stu-pan__act is-warn" onclick="showAddCancellationModal('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><span>Cancel Seat</span></button>` : ''}
+    </div>
     </div>
 
     <nav class="stu-pan__tabs" role="tablist">
@@ -2140,7 +2151,7 @@ function showViewStudentModal(id) {
     <button class="btn btn-secondary" onclick="printStudentCard('${id}')">${icon('print','sm')} Print</button>
     <button class="btn btn-secondary" onclick="closeModal();showRoomShiftModal('${id}')">${icon('transfer','sm')} Shift Room</button>
     <button class="btn btn-secondary" onclick="closeModal();showEditStudentModal('${id}')">${icon('edit','sm')} Edit</button>
-    ${t.status==='Active'?`<button class="btn btn-danger" onclick="closeModal();quickCancelStudent('${id}')">${icon('error','sm')} Cancel Seat</button>`:''}
+    ${t.status==='Active'?`<button class="btn btn-danger" onclick="closeModal();showAddCancellationModal('${id}')">${icon('error','sm')} Cancel Seat</button>`:''}
     <button class="btn btn-primary" onclick="closeModal()">Close</button>
   `);
 }
@@ -2334,34 +2345,13 @@ function closeEditStudentCamera() {
   const box = document.getElementById('edit-student-cam-box'); if(box) box.style.display='none';
 }
 
-async function quickCancelStudent(studentId) {
-  const student = DB.students.find(s=>s.id===studentId);
-  if(!student){ toast('Student not found','error'); return; }
-  // Check if already in cancellation list
-  const existing = (DB.cancellations||[]).find(c=>c.studentId===studentId&&c.status==='Pending');
-  if(existing){ toast(`${student.name} is already in the cancellation list`,'error'); return; }
-  const room = DB.rooms.find(r=>r.id===student.roomId);
-  const type = room?getRoomType(room):null;
-  const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return ymd(d); })();
-  if(!DB.cancellations) DB.cancellations=[];
-  DB.cancellations.push({
-    id: uid(),
-    studentId: student.id,
-    studentName: student.name,
-    roomId: student.roomId||'',
-    roomNumber: room?room.number:'—',
-    roomType: type?type.name:'—',
-    requestDate: today(),
-    vacateDate: endOfMonth,
-    reason: 'Student requested cancellation',
-    status: 'Pending',
-    createdAt: today()
-  });
-  student.status = 'Cancelling';
-  await saveDB();
-  toast(`${student.name} added to cancellation list. Seat is now vacant.`, 'success');
-  if(currentPage==='dashboard') renderPage('dashboard');
-}
+/* quickCancelStudent() was here. It wrote a Pending cancellation the moment
+   the button was pressed — hardcoded reason, invented vacate date, no form and
+   no seq — and both of its callers now open showAddCancellationModal() with the
+   student preselected instead. Deleted rather than left unused: a second way to
+   write a cancellation is a second shape of cancellation record, and this one
+   was already producing rows the CAN-#### numbering could not see.
+   See the note above showAddCancellationModal() in cancellations.js.        */
 
 /* The printed resident record. Owner reference: `student profile.png` (26 Aug).
 
@@ -2852,6 +2842,9 @@ async function confirmDeleteStudent(id) {
     : 'This removes the student from the roster. They have no payment records.';
 
   showConfirm(`Remove ${escHtml(t.name)}?`, _detail, (async ()=>{
+    // The answer was yes, so the slide-over is now showing a record that is
+    // about to stop existing.
+    if (typeof closeStudentPanel === 'function') closeStudentPanel();
     logActivity('Student Deleted',
       `${t.name} — roster entry removed · ${_pays.length} payment record(s) KEPT · `
       + `${fmtPKR(_paid)} collected, ${fmtPKR(_owed)} outstanding`,

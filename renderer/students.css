@@ -1033,9 +1033,16 @@
 }
 @keyframes stuPanFade { from { opacity: 0 } to { opacity: 1 } }
 
+/* 600, NOT 440 (owner reference: `student detail.png`, 6 Sep). The width is a
+   content decision, not a chrome one: at 440 the identity block and the six
+   actions had to stack, which spent ~150px of height before the tabs even
+   started, and the Financial tab's nine-column ledger could not fit and had to
+   scroll sideways inside its own card. At 600 the actions sit BESIDE the
+   identity in one band and the ledger fits, so the change buys height twice.
+   94vw still caps it, so on the 1093px @125% floor it stays on screen. */
 .stu-pan {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 331;
-    width: 440px; max-width: 94vw;
+    width: 600px; max-width: 94vw;
     display: flex; flex-direction: column;
     background: var(--card); border-left: 1px solid var(--border);
     box-shadow: -18px 0 48px rgba(15,23,42,.16);
@@ -1070,9 +1077,19 @@
 .stu-pan__x svg { width: 15px; height: 15px; }
 .stu-pan__x:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
 
+/* ONE BAND, TWO HALVES. Who this is on the left, what can be done to them on
+   the right, divided by a hairline — the reference's arrangement, and the whole
+   point of it: stacked, the two halves cost the sum of their heights; side by
+   side they cost the taller one, and the difference goes to the content. */
+.stu-pan__top {
+    flex: 0 0 auto;
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 16px; border-bottom: 1px solid var(--border);
+}
+
 /* Identity block: the one place in the panel that repeats what the row said,
    because the panel can be opened from a menu and the row may be scrolled off. */
-.stu-pan__id { flex: 0 0 auto; display: flex; gap: 13px; padding: 16px; align-items: flex-start; }
+.stu-pan__id { flex: 1 1 auto; min-width: 0; display: flex; gap: 13px; align-items: flex-start; }
 .stu-pan__idtext { min-width: 0; }
 .stu-pan__name {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -1080,35 +1097,62 @@
 }
 .stu-pan__meta { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
 
-/* SIX VERBS, THREE ACROSS. The panel took over from showViewStudentModal and
-   inherited its whole footer — Print, Shift Room, Edit, Cancel Seat — on top of
-   Payment and Delete. A flex row shared 440px between them at ~65px each, which
-   is narrower than the words: "Cancel Seat" and "Move Room" would both have
-   wrapped or clipped.
+/* SIX VERBS, THREE ACROSS, IN FIXED CELLS. The panel took over from
+   showViewStudentModal and inherited its whole footer — Print, Shift Room, Edit,
+   Cancel Seat — on top of Payment and Delete.
 
-   A fixed three-column grid instead of `auto-fit`, so the buttons keep the same
+   A fixed three-column grid rather than `auto-fit`, so the tiles keep the same
    width whether the seat action is showing or not. With auto-fit, a student
-   going from Active to Left would silently resize every remaining button — the
-   row would look like it had changed rather than lost one item. */
+   going from Active to Left would silently resize every remaining tile — the
+   block would look like it had changed rather than lost one item. Cancel Seat
+   is the conditional one and is LAST for the same reason: dropping the final
+   cell leaves the other five exactly where they were.
+
+   The cells are a fixed 84px rather than a fraction, so the block is a known
+   width and the identity beside it gets everything else. */
 .stu-pan__acts {
     flex: 0 0 auto;
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px; padding: 0 16px 14px;
+    display: grid; grid-template-columns: repeat(3, 84px); gap: 6px;
+    padding-left: 16px; border-left: 1px solid var(--border);
 }
+
+/* The label sits UNDER the glyph, which is what lets a 84px cell carry
+   "Cancel Seat" and "Move Room" without wrapping or shrinking the type. Side by
+   side those two are ~76px of text alone. */
 .stu-pan__act {
-    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-    min-width: 0; height: 32px; padding: 0 6px; border-radius: 8px; cursor: pointer;
-    background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
-    font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap;
-    transition: background .14s ease, color .14s ease, border-color .14s ease;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    min-width: 0; height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer;
+    background: var(--accent-dim); border: 1px solid transparent; color: var(--accent);
+    font-family: inherit; font-size: 11px; font-weight: 600; white-space: nowrap;
+    transition: filter .14s ease, border-color .14s ease;
 }
-.stu-pan__act svg { width: 13px; height: 13px; flex: 0 0 auto; }
-.stu-pan__act:hover { border-color: var(--accent); color: var(--accent); }
-/* Cancel Seat starts a cancellation and Delete destroys a record: the first is
+.stu-pan__act svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.stu-pan__act:hover { border-color: currentColor; }
+
+/* FOUR TINTS, AND EACH ONE IS A CLAIM ABOUT THE VERB. Blue is the ordinary
+   working set. Print is green because it is the only one that writes nothing.
+   Cancel Seat starts a cancellation and Delete destroys a record: the first is
    a reversible workflow with a form behind it, the second is not, so they do
-   not share a colour. Amber reads as "this needs care", red as "this ends it". */
-.stu-pan__act.is-warn:hover   { border-color: var(--warning-fg);    color: var(--warning-fg); }
-.stu-pan__act.is-danger:hover { border-color: var(--ant-danger-fg); color: var(--ant-danger-fg); }
+   not share a colour — amber reads as "this needs care", red as "this ends it".
+   Both tints are the --ant-* pairs, which are defined for BOTH themes; a
+   hardcoded tint here would have been the light-mode regression theme-parity
+   keeps catching. */
+.stu-pan__act.is-green  { background: var(--ant-success-bg); color: var(--ant-success-fg); }
+.stu-pan__act.is-warn   { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
+.stu-pan__act.is-danger { background: var(--ant-danger-bg);  color: var(--ant-danger-fg); }
+
+/* A NARROW WINDOW GETS THE STACK BACK. Below ~760px of viewport the panel is
+   capped by 94vw rather than by its own width, so the two halves no longer both
+   fit: identity would be squeezed under 200px and the name would wrap onto
+   three lines. Stacking costs height, which is the trade the wide layout exists
+   to avoid — but a wrapped name costs it too, and reads as broken. */
+@media (max-width: 760px) {
+    .stu-pan__top  { flex-direction: column; gap: 12px; }
+    .stu-pan__acts {
+        width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding-left: 0; border-left: 0;
+    }
+}
 
 /* Four tabs, and exactly four (§23). They scroll horizontally on a narrow
    window rather than wrapping onto a second line — a wrapped tab strip changes
