@@ -409,18 +409,27 @@ function renderStudents() {
                entirely. A colgroup cannot be outbid by a cell, it is read in
                one place, and the total is checkable by eye. */}
         <colgroup>
+          ${''/* CNIC AND NATIONALITY WERE BOTH TOO NARROW FOR REAL VALUES, and
+                 a fixed layout does not tell you — it just paints the overflow
+                 under the next column. A CNIC is 15 characters (17101-3012345-6)
+                 in a 53px cell, and "Pakistani" is a chip with padding in a 59px
+                 one, so both appeared to be swallowed by the column to their
+                 right. Widened from the two columns that were carrying slack:
+                 the student name no longer needs 169px now that the identity
+                 gutter is tight, and an address is a wrapping cell that can take
+                 a narrower measure. Still sums to exactly 100. */}
           <col style="width:2.6%">   <!-- select      -->
           <col style="width:3.6%">   <!-- ID          -->
-          <col style="width:15.8%">  <!-- student     -->
+          <col style="width:14.8%">  <!-- student     -->
           <col style="width:9%">     <!-- room        -->
           <col style="width:10.5%">  <!-- contact     -->
-          <col style="width:5%">     <!-- CNIC        -->
-          <col style="width:8.5%">   <!-- course      -->
-          <col style="width:8.5%">   <!-- address     -->
-          <col style="width:5.5%">   <!-- nationality -->
-          <col style="width:10.5%">  <!-- charges     -->
+          <col style="width:7%">     <!-- CNIC        -->
+          <col style="width:8%">     <!-- course      -->
+          <col style="width:7.5%">   <!-- address     -->
+          <col style="width:7%">     <!-- nationality -->
+          <col style="width:10%">    <!-- charges     -->
           <col style="width:8%">     <!-- fee status  -->
-          <col style="width:7.5%">   <!-- status      -->
+          <col style="width:7%">     <!-- status      -->
           <col style="width:5%">     <!-- actions     -->
         </colgroup>
         <thead><tr>
@@ -475,7 +484,14 @@ function renderStudents() {
               <div class="stu-contact">${escHtml(t.phone||'—')}</div>
               ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i>${waIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
-            <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${''/* A CNIC BREAKS ON ITS OWN HYPHENS, over two lines (owner).
+                   It is 15 characters and the column cannot hold them on one
+                   line at any width this table can spare — so it wrapped
+                   invisibly under Course, which is what "hidden by the course
+                   column" was. `.stu-cnic` rather than `.stu-contact`: the phone
+                   beside it is a single unbreakable token and must keep its
+                   nowrap, so the two cannot share a class. */}
+            <td>${t.cnic?`<span class="stu-cnic">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
             <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}">${escHtml(t.address)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
