@@ -1796,6 +1796,199 @@ ok('a probe falls back to a second mechanism before giving up', () => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\ndevice.js — one entitlement sync per connectivity recovery');
+// ══════════════════════════════════════════════════════════════════════════
+/* THE BUG THESE HOLD CLOSED.
+
+   index.js syncs the entitlement on EVERY connectivity transition into
+   reachable, and ConnectivityService emits on a changed `reason` as well as on
+   changed reachability — so a connection settling through two or three error
+   codes asked for one full sync per emission: a device-token round trip, an
+   entitlement round trip and a cache write, each fetching the same answer.
+
+   `_syncing` did not stop it. It blocks CONCURRENT syncs, and the transitions
+   arrive one after another.
+
+   The first test below fails without the minimum gap: it counts three network
+   syncs where one recovery happened. */
+
+const { DeviceService } = require('../services/device');
+
+/** A device service whose network is a counter. */
+function fakeDevice(extra) {
+  const seen = { tokens: 0, refreshes: 0 };
+  const dev = new DeviceService({
+    userDataDir: TMP,
+    machineIdProvider: () => 'MID-TEST',
+    licenceProvider: () => ({ key: 'K', valid: true }),
+    entitlement: {
+      getStatus: () => ({ state: 'ACTIVE', features: {}, expiresAt: null, policy: null }),
+      refresh: async () => {
+        seen.refreshes++;
+        return { ok: true, status: { state: 'ACTIVE', features: {}, expiresAt: null, policy: null } };
+      }
+    },
+    cfg: Object.assign({ minSyncGapMs: 60000 }, extra || {})
+  });
+  // Stand in for register + token, which are the two round trips a sync spends
+  // before it reads anything.
+  dev._ensureToken = async () => { seen.tokens++; return 'tok'; };
+  return { dev, seen };
+}
+
+/** The exact subscriber index.js installs on the connectivity service. */
+function onRecovered(dev, status) {
+  if (status.apiReachable) return dev.sync();
+  return Promise.resolve(null);
+}
+
+await okAsync('a connection settling through several states syncs ONCE', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev, seen } = fakeDevice();
+
+  // One real recovery, reported by connectivity as three emissions — which is
+  // what it does when `reason` changes on the way up. Before the minimum gap
+  // this spent three tokens and three entitlement reads.
+  await onRecovered(dev, { apiReachable: true });
+  await onRecovered(dev, { apiReachable: true });
+  await onRecovered(dev, { apiReachable: true });
+
+  assert.strictEqual(seen.refreshes, 1,
+    'one recovery must read the entitlement once, got ' + seen.refreshes);
+  assert.strictEqual(seen.tokens, 1,
+    'one recovery must fetch one device token, got ' + seen.tokens);
+});
+
+await okAsync('the second sync is refused with a reason, not silently dropped', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev } = fakeDevice();
+
+  const first  = await dev.sync();
+  const second = await dev.sync();
+
+  assert.strictEqual(first.ok, true);
+  assert.strictEqual(second.ok, false);
+  assert.strictEqual(second.errorCode, 'E_TOO_SOON',
+    'a refused sync must say why — a support call reads this');
+});
+
+await okAsync('a FAILED sync also holds the floor, because that is the flapping case', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev, seen } = fakeDevice();
+  // The connection is bad enough that the token step fails — which is exactly
+  // the connection that flaps. Gating on the last SUCCESS would leave the
+  // hammering in place for the only case that causes it.
+  dev._ensureToken = async () => { seen.tokens++; return null; };
+
+  await dev.sync();
+  await dev.sync();
+  await dev.sync();
+
+  assert.strictEqual(seen.tokens, 1, 'a failing sync retried inside the floor');
+});
+
+await okAsync('force ignores the floor, so "Check again" is never a dead button', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev, seen } = fakeDevice();
+
+  await dev.sync();
+  const forced = await dev.sync({ force: true });
+
+  assert.strictEqual(forced.ok, true);
+  assert.strictEqual(seen.refreshes, 2, 'an explicit request must still be answered');
+});
+
+await okAsync('past the floor it syncs again — this is a gap, not a latch', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev, seen } = fakeDevice({ minSyncGapMs: 20 });
+
+  await dev.sync();
+  await new Promise(r => setTimeout(r, 40));
+  await dev.sync();
+
+  assert.strictEqual(seen.refreshes, 2, 'the service stopped syncing altogether');
+});
+
+await okAsync('the boot sync is NOT suppressed by a transition sync seconds earlier', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev, seen } = fakeDevice();
+
+  /* THE REGRESSION THIS EXISTS FOR. Both boot triggers are kept by the owner's
+     ruling: the connectivity transition (a machine that boots online) and
+     device.start()'s +5s timer (the guaranteed one per launch). On 2026-09-06
+     the gap swallowed the second — `entitlement_sync_skipped sinceMs: 4204` —
+     because the first probe had landed four seconds earlier. That is one of the
+     two syncs going missing, not a duplicate being suppressed.
+
+     start() is not called here because it would schedule a real 5s timer; the
+     assertion is on what it does — force. */
+  await onRecovered(dev, { apiReachable: true });   // transition sync at ~t+1s
+  await dev.sync({ force: true });                  // the +5s boot sync
+
+  assert.strictEqual(seen.refreshes, 2,
+    'the boot sync was suppressed by the transition sync, got ' + seen.refreshes);
+});
+
+await okAsync('lastSyncAt still means the last SUCCESSFUL read', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  const { dev } = fakeDevice();
+  // The connection panel prints this, so it must not start reporting attempts.
+  await dev.sync();
+  const after = dev.getStatus().lastSyncAt;
+  await dev.sync();                       // refused, must not move the figure
+  assert.strictEqual(dev.getStatus().lastSyncAt, after);
+  assert.ok(after, 'a successful sync recorded no time at all');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\nconnectivity.js — start() is safe while a probe is in flight');
+// ══════════════════════════════════════════════════════════════════════════
+
+await okAsync('a second start() during an in-flight probe does not add a poll chain', async () => {
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  let probes = 0;
+  api._setFetch(async () => {
+    probes++;
+    await new Promise(r => setTimeout(r, 30));   // a probe that takes a while
+    return fakeResponse(200, {});
+  });
+
+  const c = new ConnectivityService({ cfg: connCfg({ probeTimeoutMs: 500, requestTimeoutMs: 500 }) });
+  c.start();
+  // `_schedule()` nulls `_timer` before awaiting the probe, so the old guard
+  // read this service as stopped for the whole duration of one. index.js calls
+  // start() again the moment discovery adopts an address.
+  await new Promise(r => setTimeout(r, 10));
+  c.start();
+  c.start();
+  await new Promise(r => setTimeout(r, 60));
+  c.stop();
+
+  assert.strictEqual(probes, 1, 'a second poll chain started: ' + probes + ' probes');
+  api._setFetch(null);
+});
+
+await okAsync('start() after an unconfigured boot still starts, once an address exists', async () => {
+  // The adoption path: boot with no control plane, learn one, start for real.
+  config.load({ userDataDir: TMP, overrides: { apiBase: '' } });
+  let probes = 0;
+  api._setFetch(async () => { probes++; return fakeResponse(200, {}); });
+
+  const c = new ConnectivityService({ cfg: connCfg() });
+  c.start();                                   // unconfigured — must NOT latch
+  assert.strictEqual(probes, 0);
+
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid' } });
+  c.cfg = connCfg();
+  c.start();                                   // now it must genuinely start
+  await new Promise(r => setTimeout(r, 40));
+  c.stop();
+
+  assert.ok(probes >= 1, 'the machine never polled after adopting an address');
+  api._setFetch(null);
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 logger.close();
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) {}

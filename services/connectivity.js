@@ -72,6 +72,7 @@ class ConnectivityService extends EventEmitter {
     };
 
     this._timer = null;
+    this._running = false;   // see start() — `_timer` goes null during a probe
     this._inFlight = null;
     this._lastCheckNowAt = 0;
     this._currentIntervalMs = this.cfg.pollIntervalMs;
@@ -119,8 +120,17 @@ class ConnectivityService extends EventEmitter {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+  /* `_running`, not `_timer`, and the difference is a real hole rather than a
+     tidy-up. `_schedule()` sets `this._timer = null` before awaiting `_check()`,
+     so for the whole duration of a probe — seven seconds when it times out —
+     this service looks stopped. index.js calls start() a SECOND time when
+     discovery adopts a control-plane address, and if that lands inside an
+     in-flight probe the old guard missed and a second poll chain began, each
+     one polling and each one firing the status subscriber that syncs the
+     entitlement. It has not fired here: discovery has been timing out on this
+     machine, so the second start() never ran. */
   start() {
-    if (this._timer) return;
+    if (this._running) return;
     if (!config.isConfigured()) {
       // Nothing to poll. Say so once, loudly enough to find in a log, and do
       // not schedule a timer that would wake the machine to do nothing.
@@ -129,13 +139,19 @@ class ConnectivityService extends EventEmitter {
         networkAvailable: this._readNetworkHint()
       });
       log.info('not_configured', { apiBaseSource: this.cfg.apiBaseSource });
+      // Deliberately NOT marked running. This is the state a machine boots in
+      // before discovery finds it an address, and index.js calls start() again
+      // the moment one is adopted — latching the flag here would make that
+      // second call a no-op and the machine would never poll at all.
       return;
     }
+    this._running = true;
     this._schedule(0);
     log.info('started', { intervalMs: this.cfg.pollIntervalMs });
   }
 
   stop() {
+    this._running = false;
     if (this._timer) { clearTimeout(this._timer); this._timer = null; }
   }
 

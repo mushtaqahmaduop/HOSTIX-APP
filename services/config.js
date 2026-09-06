@@ -101,6 +101,23 @@ const DEFAULTS = {
   // tomorrow. The request is tiny and there are ~50 of them.
   entitlementSyncIntervalMs: 3600000,
 
+  /* The floor between two entitlement syncs, whatever asks for one.
+     index.js syncs on EVERY connectivity transition into reachable, and
+     ConnectivityService emits on a changed `reason` as well as on a changed
+     reachability — so a flapping connection asked for one full sync (device
+     token + entitlement + a disk write) per flap, unbounded. `_syncing` did not
+     help: it blocks CONCURRENT syncs, and flaps arrive sequentially.
+
+     A minute is chosen against what the sync is for. It carries a suspension,
+     a revocation or a renewal, and those are decided by a human in a portal —
+     nobody applies one and expects it to bite inside sixty seconds. The
+     interval above is the real latency budget; this only stops the same answer
+     being fetched repeatedly while a connection settles.
+
+     Explicitly asking — the connection panel's "Check again" — passes
+     `force: true` and ignores this. */
+  minSyncGapMs: 60000,
+
   // ── Telemetry (§38) ───────────────────────────────────────────────────────
   // Off by default and stays off until there is something to send it to and a
   // documented list of what it contains. §38: no invasive analytics by default.

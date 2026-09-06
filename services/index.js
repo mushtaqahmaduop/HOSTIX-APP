@@ -212,18 +212,27 @@ function registerIpc(services, electron) {
   ipcMain.handle('online:checkNow', async () => {
     // Rate-limiting lives in the service, so a renderer loop cannot turn this
     // into an outbound request amplifier.
+    /* `lastCheckedAt` before and after tells us whether the probe actually ran
+       or whether checkNow() returned early from its own rate limiter. That
+       distinction is what keeps the guarantee in the comment above true now
+       that device.sync() has a minimum gap of its own: a real press forces a
+       sync so the button is never dead, while a renderer looping on this
+       channel gets the rate limiter's early return, does not advance the clock,
+       and therefore cannot force anything. */
+    const before = services.connectivity.getStatus().lastCheckedAt;
     await services.connectivity.checkNow();
     // Read the state from getStatus() rather than from checkNow()'s return —
     // that one resolves to whatever the internal probe hands back, and this
     // handler should not be coupled to its shape.
     const status = services.connectivity.getStatus();
+    const probed = status.lastCheckedAt !== before;
     // Refresh the entitlement as well. Syncing only on a connectivity
     // TRANSITION meant a machine with a stable connection never re-synced
     // between six-hourly ticks — so a suspension applied at 10am did not reach
     // the hostel until 4pm, and pressing "check connection" did nothing about
     // it. Someone asking the app to check is asking about all of it.
-    if (status && status.apiReachable) {
-      try { await services.device.sync(); } catch (_) {}
+    if (status && status.apiReachable && probed) {
+      try { await services.device.sync({ force: true }); } catch (_) {}
     }
     return services.connectivity.getStatus();
   });

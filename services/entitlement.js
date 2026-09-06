@@ -313,12 +313,26 @@ class EntitlementService {
     this._kid = res.kid;
 
     if (res.valid) {
+      /* Captured BEFORE the assignment below, because it is the question being
+         asked: is this the same entitlement we already hold on disk?
+
+         `refresh()` passes `persist: true` on every sync, so an unchanged
+         entitlement — the overwhelmingly common case, `changed: false` in the
+         sync log — rewrote a byte-identical cache file every time. Harmless
+         once; not harmless when a flapping connection asks for a sync per flap,
+         which is the defect this sits beside.
+
+         `moved` still forces the write: a clock correction changes
+         `serverTimeSeen` in the file body even when the JWS is identical, and
+         that is the record that stops a machine with a wrong clock trusting a
+         stale entitlement. */
+      const sameAsHeld = this._jws === jws && this._storedAt;
       this._jws = jws;
       this._claims = res.claims;
       this._state = res.claims.status;
       this._reason = null;
       const moved = this._noteServerTime(res.claims.issuedAt);
-      if (persist || moved) this._write(jws);
+      if ((persist && !sameAsHeld) || moved) this._write(jws);
       log.info('entitlement_accepted', {
         status: res.claims.status, kid: res.kid,
         expiresAt: res.claims.expiresAt, notAfter: res.claims.notAfter

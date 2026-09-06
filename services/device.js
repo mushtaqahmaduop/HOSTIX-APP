@@ -66,7 +66,8 @@ class DeviceService {
     this._token = null;          // { value, expiresAt }
     this._timer = null;
     this._syncing = false;
-    this._lastSyncAt = null;
+    this._lastSyncAt = null;     // last SUCCESSFUL read — printed by getStatus()
+    this._lastAttemptAt = null;  // last attempt — what the minimum gap measures
     this._lastError = null;
   }
 
@@ -232,10 +233,45 @@ class DeviceService {
    * suspension, a revocation, a renewal or a feature-flag change from the
    * control plane to the app.
    */
-  async sync() {
+  async sync(opts) {
+    const o = opts || {};
     if (!config.isConfigured()) return { ok: false, errorCode: 'E_NOT_CONFIGURED' };
     if (this._syncing) return { ok: false, errorCode: 'E_BUSY' };
+
+    /* THE MINIMUM GAP, AND WHY `_syncing` WAS NOT ENOUGH.
+
+       `_syncing` blocks CONCURRENT syncs. The calls that actually pile up are
+       SEQUENTIAL: index.js syncs on every connectivity transition into
+       reachable, and ConnectivityService emits on a changed `reason` as well as
+       on changed reachability — so a connection settling through two or three
+       error codes asked for a full sync each time, each one a device-token
+       round trip, an entitlement round trip and a disk write. Every one of them
+       fetched the same answer.
+
+       Refused rather than queued: the point of a sync is to hold the freshest
+       entitlement, and a sync refused ten seconds ago has already delivered
+       that. Queuing it would only spend the round trip later.
+
+       `force` is for someone who has ASKED — the connection panel's "Check
+       again". A person pressing a button is entitled to an answer even if the
+       app fetched one moments ago. */
+    /* Gated on the last ATTEMPT, not the last success. `_lastSyncAt` means
+       "when this machine last actually read its entitlement" and is what the
+       connection panel prints, so it must keep success semantics. A sync that
+       fails at the token step has still spent the round trips, and a flapping
+       connection is exactly the case where it fails — gating on success would
+       leave the hammering in place for the one connection that causes it. */
+    if (!o.force && this._lastAttemptAt != null) {
+      const gap = this.cfg.minSyncGapMs != null ? this.cfg.minSyncGapMs : 60000;
+      const since = Date.now() - this._lastAttemptAt;
+      if (since < gap) {
+        log.debug('entitlement_sync_skipped', { reason: 'too_soon', sinceMs: since, gapMs: gap });
+        return { ok: false, errorCode: 'E_TOO_SOON', sinceMs: since };
+      }
+    }
+
     this._syncing = true;
+    this._lastAttemptAt = Date.now();
     try {
       const token = await this._ensureToken();
       if (!token) {
@@ -293,9 +329,22 @@ class DeviceService {
       log.info('device_service_idle', { reason: 'not_configured' });
       return;
     }
-    // A short delay so a cold boot renders the app before it reaches for the
-    // network. The licence already works offline; nothing here is urgent.
-    setTimeout(() => { this.sync().catch(() => {}); }, 5000);
+    /* A short delay so a cold boot renders the app before it reaches for the
+       network. The licence already works offline; nothing here is urgent.
+
+       FORCED, and that is the owner's ruling rather than a convenience. This is
+       the one guaranteed sync per launch: it is what gets a suspension applied
+       overnight in front of the warden the next morning, and it fires exactly
+       once, so it is never the thing that hammers. The minimum gap exists for
+       the OTHER trigger — the connectivity subscriber, which fires once per
+       flap and is unbounded.
+
+       Without the force the two collide on any machine that boots online: the
+       first probe lands within a second, its transition sync sets the floor,
+       and this one is refused four seconds later. Observed exactly that on
+       2026-09-06 — `entitlement_sync_skipped sinceMs: 4204` — which is one of
+       the two boot syncs going missing, not a duplicate being suppressed. */
+    setTimeout(() => { this.sync({ force: true }).catch(() => {}); }, 5000);
 
     const every = this.cfg.entitlementSyncIntervalMs || 6 * 3600 * 1000;
     this._timer = setInterval(() => { this.sync().catch(() => {}); }, every);
