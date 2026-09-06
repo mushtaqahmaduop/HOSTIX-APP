@@ -2,8 +2,15 @@
 
 **Spec:** `HOSTYLLO_OFFLINE_ENTERPRISE_PRODUCTION_MASTER_SPEC_v2.md` (v2.0)
 **Reconciled:** 2026-09-05 · **Phase C opened:** 2026-09-05 · **§14 layer landed:** 2026-09-06
-**Branch:** `feature/dashboard-1c` — 52 commits ahead of `master`, 0 behind (it is the tip)
-(The "38 commits ahead" this line carried was stale by 13 before today.)
+**Branch:** `feature/dashboard-1c` — measured against `origin/master`, not the
+local one. **2026-09-06 correction:** this line has been wrong twice. It read
+"38 commits ahead, 0 behind"; I updated it to "52 ahead, 0 behind (it is the
+tip)" — both counted against the LOCAL `master`, which was itself 49 commits
+behind `origin/master`. The branch was never the tip. It was 22 ahead and **11
+behind**, missing PR #22 (control-plane discovery, the update-check fix, the
+entitlement header) and PR #23. `origin/master` has since been merged into this
+branch and the full gate re-run on the result. Count against `origin/master`;
+the local ref is stale.
 **App version:** 5.0.0 · Electron 43.4.0
 
 > **How to read this.** Phase A reconciled every section of the spec against the

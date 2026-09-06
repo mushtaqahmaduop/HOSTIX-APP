@@ -30,7 +30,7 @@
     "test:cashevents": "node tests/cash-events.test.js",
     "test:reporttotals": "node tests/report-totals.test.js",
     "test:services": "node tests/services.test.js",
-    "test:update": "node tests/update-url.test.js",
+    "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "build": {

@@ -1,205 +1,433 @@
-# Handoff — v2 master spec adopted, Phase A closed, Phase B mostly built
+# Handoff — the licence chain and the update channel, checked end to end
 
-**Date:** 2026-09-05 · **Branch:** `feature/dashboard-1c`
-**Commits:** `837325c`, `68af843`, `f2feaf0`, `c63ff5f`, `53cc78f`, `5eae31b`, `0e1d450`
-**Spec:** `C:\Users\PCS\Downloads\HOSTYLLO_OFFLINE_ENTERPRISE_PRODUCTION_MASTER_SPEC_v2.md`
-**Gate:** Playwright **94 passed / 2 skipped / 0 failed** (41 spec files, batched) ·
-node suites **203 passed / 0 failed** · typecheck **0 errors**
-
----
-
-## 1. Read this first
-
-`docs/ENTERPRISE_LIVE_STATUS.md` is the authoritative state document (spec §31).
-It did not exist before today, which means §28's claim that Phase A was already
-underway was **not true** — this session started it.
-
-That file, not this one, is the thing to keep current. This handoff is the
-narrative; that one is the contract.
+**Date:** 2026-09-05 · **Branch:** `fix/control-plane-demo-ready` (off `feature/dashboard-1c`)
+**Commits:** `868b964`, `2297a9c`, `fa8c5b7`, `d6a57ce`, `f134850`
+**Purpose:** make the app ready for clients and a demo — verify the control
+plane's licensing end to end, verify the client-side update path end to end,
+and close what was left half-finished.
 
 ---
 
-## 2. What the v2 spec changed
+## 1. The headline
 
-v2 replaces the old 13-phase programme with **Phase A–I** and says plainly:
-*continuation and reconciliation, NOT a restart*. The old Phase 0→12 sequence is
-now reference architecture.
+Two chains were walked end to end against live infrastructure rather than
+reasoned about. Both hold. One real client-facing defect fell out of the second
+one, and the rollout blocker that has sat open since 2026-08-31 is now closed
+by a mechanism instead of by a domain purchase.
 
-**Three of v2's premises are stale**, and they are recorded rather than obeyed:
-
-| v2 says | Actually |
+| Chain | Result |
 |---|---|
-| §24 "the currently EOL Electron runtime" | Electron is **43.4.0**. That upgrade already happened. |
-| §23 implies strict CSP is missing | It exists, with a documented `'unsafe-inline'` exception and the escaping sweep as its compensating control. |
-| §25 "Light mode only … no dark mode" | **Overruled by the owner, 2026-09-05.** See below. |
+| Licence — machine half, live control plane | **28/28** |
+| Update channel — live GitHub release feed | **16/16** |
+| Discovery — live, over the real network | **7/7** |
+| Licence — portal half (issue/suspend/revoke) | **not run** — see §6 |
 
-v2 was written from the same brief as v1 and inherits its blind spots. **Audit
-it, do not obey it.**
+### Tests, all green
 
-### The §25 ruling
+| Suite | Result |
+|---|---|
+| `npx playwright test` | **84 passed, 2 skipped, 0 failed** (13.0 min) |
+| `npm run test:services` | **136 passed** (was 115) |
+| `npm run test:update` | 17 passed (8 existing + 9 new) |
+| `npm run test:license` | 39 passed |
+| `npm run test:retention` | 13 passed |
+| `npm run typecheck` | 0 errors |
+| `server: node test/run.js` | 29 passed |
+| `server: node test/http.js` | 21 passed |
 
-The owner's decision: **keep both themes, amend the spec, not the code.**
-
-Removing dark mode would reverse `bee7c1b`, `d3229fb` and `1cbfd18` and retire
-`tests/theme-parity.spec.js` — the test that exists because light mode once
-silently inherited dark values at 3.77:1 contrast. §25's other clauses (royal
-blue primary, no neon, dense) already hold.
-
-**Do not re-raise this as a gap.** It is settled.
+The Playwright figure is identical to the 2026-09-04 baseline, which is the
+claim that matters: none of this session's work moved the app's behaviour.
 
 ---
 
-## 3. Phase A — complete
+## 2. The licence chain, machine half — 28 checks, all live
 
-Every spec section reconciled against the real tree, including the full 21-row
-§27 failure matrix. Four release blockers found, three defects named.
+Run against `https://control-plane-production-924b.up.railway.app/v1` with a
+key minted locally from `LEGACY_KEY_SECRET`, so it exercised the path the ~50
+existing hostels are on: a key the database has never seen.
 
-### Release blockers
+The entitlement was verified with **the app's own `verifyEntitlement()`**, not
+with a re-implementation — signature against the public key in
+`services/entitlement-keys.js`, `kid ent-20260819`, bound to the machine id,
+`features: archive, backup, expenses, multiUser, printDocs, reports`,
+`policy: {graceDays:14, readOnlyOnExpiry:true}`.
 
-1. **The installer is unsigned.** `build.win` sets `verifyUpdateCodeSignature:
-   false` *and* `signAndEditExecutable: false`, with no certificate configured.
-   This single fact kills §27's unsigned-artifact and signature-mismatch rows
-   and the §33 "signed release" gate. **Everything still MISSING in the matrix
-   is downstream of this.**
-2. **42 demo rooms seed into production onboarding.** `modals.js:243` calls
-   `generateRooms()` (`dashboard.js:207-232`) whenever the room set is empty —
-   42 invented rooms across 4 floors, no dev-only guard. Direct §10 violation. A
-   new paying customer's first sight of the product is rooms they do not have.
-3. `license.hostyllo.com` still does not resolve — nothing is bakeable.
-4. No §26 commercial E2E has ever been run.
+What was proven beyond the happy path, in the order it is likely to matter:
 
-### Defects
+- An entitlement copied to another machine is **rejected** (`WRONG_MACHINE`).
+- A payload edited to say ACTIVE and expire in 2099 is **rejected**
+  (`BAD_SIGNATURE`). The trust boundary is real.
+- The v4 one-device cap holds: a second machine on the same key gets **409**
+  with a message that names the fix.
+- A reinstall on the same machine re-registers to the **same device row**,
+  rotates the secret, and **invalidates the token the old secret bought** — so
+  a leaked secret stops working the moment the customer re-registers.
+- A wrong secret, a bad checksum, a malformed key and an unfingerprintable
+  machine each get their own correct code, and the four failure modes of
+  `/devices/token` all answer with one indistinguishable 401.
 
-| | Finding | State |
+`/v1/healthz` answered in 798ms and does not touch the database, which is what
+lets every install poll it every 60 seconds.
+
+**The sleeping-database fix is live.** The first request of the session woke
+Postgres and took 6.5s to return `{"db":"ok","signing":"ok"}`. Under the code
+before `2d3e7ea` that is the request that returned 500 in 256ms. Evidence, not
+assumption — but see §5, because that commit is not on master.
+
+---
+
+## 3. The update channel — and the defect it turned up
+
+### 3.1 The channel itself is intact
+
+Walked in the exact order `electron-updater`'s `GitHubProvider` walks it:
+
+```
+GET  releases.atom                      200  → newest tag v5.0.0
+GET  v5.0.0/latest.yml                  200  → version 5.0.0
+     fallback path:                          → …-x64.exe  (correctly pinned)
+HEAD …/Hostyllo-Offline-Setup-5.0.0-x64.exe  200
+HEAD …/Hostyllo-Offline-Setup-5.0.0-ia32.exe 200
+```
+
+The 116 MB x64 installer was **downloaded and hashed**: its sha512 matches the
+feed byte for byte, and the feed's top-level `sha512` matches its own `files:`
+entry. An integrity mismatch there would fail every client update with nothing
+in the UI to explain it, so it is worth the download.
+
+### 3.2 `Help → Check for Updates` did nothing at all
+
+The defect, and it is not a corner case — it is what every machine in the field
+does today, since the app is 5.0.0 and 5.0.0 is the newest release.
+
+`checkForUpdates()` resolves with the **parsed feed whether or not there is
+anything newer in it**. `electron-updater`'s `AppUpdater.js:404` returns
+`{ isUpdateAvailable: false, updateInfo }` on the up-to-date path. So
+
+```js
+if (!result || !result.updateInfo) { …show "Up to Date"… }
+```
+
+was false in both cases and that dialog could never open, while
+`update-not-available` only wrote to the console. A warden clicked the menu
+item and nothing happened.
+
+Three branches now, each owing the user a different thing:
+
+| `result` | what it means | what is shown |
 |---|---|---|
-| **D-1** | Payments and Reports disagree on what is outstanding. `payments.js:311` treats a payment with no `unpaid` field as owing **0**; `reports.js:94` and `:488` treat the same record as owing its **full amount**. Same records, two answers, neither hedged. | **OPEN — Phase C, next up** |
-| **D-2** | Backup validation was renderer-side only. | **FIXED** (`5eae31b`) |
-| **D-3** | `_assertWritable` guards four handlers but not `db:setSetting`, so a suspended install can still mutate configuration — which §18 blocks by name. | **OPEN — Phase D, one line** |
+| `null` | the updater refused to run — **not** the same as "up to date" | Update Check Failed |
+| `isUpdateAvailable: true` | `update-available` already spoke from inside the call | nothing; saying it twice is worse |
+| otherwise | current | Up to Date, naming the version so the answer is checkable |
 
-D-1 is not hypothetical: the Phase 0 fixture `edge-money.db` already encodes
-`m_legacy_no_unpaid` because records without `unpaid` exist in the field.
+The same `!!result` bug was in the `update:check` IPC, which reported every
+up-to-date machine as having an update waiting. Nothing in the renderer calls it
+yet, so it was fixed rather than deleted — the next caller would have inherited
+it.
 
----
+Also removed: `update-downloaded`'s promise that the update "will install
+automatically when you next close the app". `autoInstallOnAppQuit` is false
+[D-2], so the build does not keep that promise. The handler is unreachable
+while `autoDownload` is false, and is kept correct so that enabling downloads
+alongside code signing does not ship a lie with them.
 
-## 4. Phase B — three of four items closed
+`tests/update-check.test.js` covers all seven paths and pins the two source
+invariants. `npm run test:update` runs it alongside `update-url`.
 
-### `5eae31b` — the backup boundary
+### 3.3 What still cannot be demonstrated
 
-`_validateBackupPayload()` now runs inside `db:importFull` before a single
-`DELETE`. It is a deliberate **duplicate** of the renderer's `validateBackup()`,
-not a refactor: the renderer's copy explains itself to the user in the restore
-dialog; this one is the copy that cannot be skipped. Keep them agreeing on what
-is valid and let them differ on what they do about it.
-
-It catches a case the old handler could not: a valid JSON document naming none
-of our tables passed `Array.isArray` on every key and emptied all fifteen.
-
-**Pre-restore snapshot** via `VACUUM INTO`. Timestamped **with milliseconds**,
-newest three kept. Two traps behind that:
-
-- A single fixed filename means the second restore captures the first restore's
-  bad state on top of the good one — so noticing a bad restore one step too late
-  leaves nothing to go back to.
-- Second-granularity was not enough. `VACUUM INTO` refuses to overwrite, so two
-  restores inside one second lost the second snapshot and returned a reason
-  nobody would read.
-
-`BACKUP_TABLES` replaces the 15-table list that was written out twice.
-
-### `0e1d450` — §17 recovery
-
-The full chain: detect → stop writing → recovery screen → verified backup →
-restore to a temporary DB → integrity checks → atomic switch → restart.
-
-**Two real bugs came out of this, and both would have reached customers:**
-
-1. A corrupt database was an **unhandled crash**. `initDatabase()` was called
-   bare inside `app.whenReady()`, so `new Database()` throwing took the whole
-   boot with it — no window, no message, and no way to tell a broken file from a
-   broken app while the data sat intact in a backup beside it.
-2. `new Database()` can **succeed** on a damaged file and fail a moment later on
-   the first pragma. Dropping the reference without `close()` leaks the handle,
-   and **on Windows an open file cannot be renamed** — so recovery failed with
-   `EBUSY` at the exact moment it was needed. Only the test caught this.
-
-Design notes that will look like preferences and are not:
-
-- `PRAGMA integrity_check` runs **before** the `CREATE TABLE` block, because that
-  block is a write and running it on a damaged file is how a recoverable problem
-  becomes an unrecoverable one.
-- `integrity_check`, not `quick_check` — the latter skips the index-vs-table
-  pass, which is exactly the damage a half-written page leaves.
-- Restore **beside** the live file, verify, then swap. Writing straight over the
-  original destroys the evidence before producing a replacement.
-- `_verifySnapshot` checks structure as well as integrity: an intact file with
-  someone else's schema passes `integrity_check` and still leaves the app broken.
-- The damaged file is renamed to `.corrupt-<stamp>.bak`, **never deleted**.
-- Stale `-wal`/`-shm` are removed first — they belong to the old database and
-  would be replayed over the new one.
-- `recovery:restore` and `recovery:restart` are **two** calls. Restarting inside
-  the restore means the only way to check the swap is to watch an app disappear.
-
-`db:setSetting` gained the **health** guard only. The licence gate on it is D-3
-and belongs to Phase D, which owns the specs that would have to prove it.
-
-### Still open in Phase B
-
-- §27's **"unknown schema → safe recovery"** row — unassessed.
-- **Disk-full is classified but never tested against a genuinely full disk.**
-  `_classifyWriteError` maps `DISK_FULL` / `PERMISSION_DENIED` / `DB_CORRUPT` /
-  `IO_ERROR` with actionable sentences, but the mapping is proven by inspection
-  only, so those §27 rows stay PARTIAL.
+**An update being received.** The app and the latest release are both 5.0.0, so
+the correct answer is "up to date" — which, as of this session, is now actually
+displayed. Showing a download needs a release above 5.0.0 to exist. Show the
+check, not the download.
 
 ---
 
-## 5. Running the tests — two traps
+## 4. The rollout blocker is closed — by a mechanism, not a domain
 
-1. **`HOSTIX_TEST_PROFILE` must point at a directory containing a valid
-   `license.enc`**, or `tests/_profile.js:27` throws. Without it every spec dies
-   30s later on `#login-input` looking like a boot regression. A working profile
-   is at `%LOCALAPPDATA%\Temp\hostix-test-profile` (licence copied from
-   `.devdata`, same machine so the binding holds).
+Since 2026-08-31 the position has been: the control plane is built, deployed and
+correct, and **no shipped build knows its address**. `DEFAULT_API_BASE` is baked
+empty, so every install resolves `apiBase` to `null`, makes no requests, and can
+never be told anything. A licence could be suspended in the portal all day with
+nobody listening.
 
-2. **The whole suite in one command exhausts memory on this machine.** It reached
-   19 passed and the worker died with `code=3221225794`
-   (`STATUS_DLL_INIT_FAILED`), which Playwright reported as **32 failed** — every
-   one a cascade, not an assertion. **Run 6–8 spec files per invocation.** A red
-   naming almost every spec at once is this, not a real break.
+`license.hostyllo.com` still does not resolve (checked again today; neither does
+`hostyllo.com`). Waiting for it has cost five weeks.
 
-Also: a spec file that launches Electron per-test goes flaky. `backup-main-guard`
-failed 2 of 4 that way while each passed alone — the `titlebar-keyboard` pattern
-from 2026-09-04. One shared instance plus
-`test.describe.configure({ mode: 'serial' })` took it from 1.3 min to 11s.
+### 4.1 `services/discovery.js`
 
-### The two skipped tests are environment-gated, not broken
+The address is **fetched** from `control-plane.json` on `master`, over
+`raw.githubusercontent.com` — the same host the update channel already depends
+on. Re-pointing 50 hostels becomes one commit.
 
-| Spec | Line | Why |
+Resolution order gains a fourth step, **below** the baked default:
+
+```
+env  >  online-config.json  >  DEFAULT_API_BASE  >  discovered  >  null
+```
+
+Below, deliberately: a build that eventually bakes `license.hostyllo.com` should
+trust its own build, and this goes dormant the moment one does.
+
+### 4.2 What the document can and cannot do
+
+It supplies an **address**. That is all it can ever supply. It cannot grant,
+extend or forge an entitlement — those are Ed25519 signatures verified against a
+public key compiled into `app.asar` and bound to a machine fingerprint, and §2
+proves both checks bite. The worst a wrong address achieves is denial of
+service, which is indistinguishable from the server being down, and the app
+already treats that as normal.
+
+The residual risk is the registration request: a licence key and a machine id
+would be **sent** to whoever answers. That is precisely why the document lives
+in the repository rather than at the control plane — re-pointing is a commit
+that takes effect in minutes. **Change `control-plane.json` before deleting or
+re-provisioning a Railway service, and give it a day.** Generated
+`*.up.railway.app` names are recycled.
+
+### 4.3 Failing safe, which is most of the code
+
+No network, a 404, malformed JSON, a wrong `v`, an `http://` base, an oversized
+body — every one of them returns without writing, leaves any existing cache
+alone, and falls through to `null`, which is offline-only operation and a
+supported state rather than an error. `refresh()` is fire-and-forget, has its
+own 8s timeout, and is never awaited on the boot path. Nothing here can make the
+app *require* the control plane; that would be a breaking change.
+
+**The kill switch:** `"apiBase": null` in the published document clears every
+install's cache and returns the estate to offline-only, for taking the control
+plane down without cutting a release. A document that merely *forgets* the key
+is malformed and changes nothing — that distinction is deliberate, so "I made a
+typo" and "switch everyone off" can never be the same document.
+
+### 4.4 Same session, not next launch
+
+A fresh install has no cache, so its first boot resolves `null` and the fetch
+lands a second or two later. `config.adoptDiscoveredBase()` mutates the resolved
+object **in place** and `index.js` re-enters the three lifecycles, so the machine
+comes online in that session — for a customer activating a licence, the
+alternative was the whole of their first session offline.
+
+In-place mutation is safe **only** because every URL-critical path re-reads
+through `isConfigured()` and `url()` at call time (`api-client.js:193,199`,
+`device.js:149,236,287`, `connectivity.js:124,171`). The captured `cfg` is used
+for numeric tunables. *Do not start caching `apiBase` in a service without
+revisiting this* — `tests/services.test.js` has one test whose only job is to
+fail if someone does.
+
+`device.start()` gained the idempotence guard the other two lifecycles already
+had; without it the second call would have left two sync intervals running
+forever.
+
+21 tests, most of them about failing safe. Discovery is skipped under
+`HOSTIX_TEST_PROFILE`: the Playwright suite launches the app ~85 times, and a
+suite that reaches GitHub on every launch goes red when the network does.
+
+### 4.5 MERGED — and it resolves
+
+Merged as **PR #22** (`324a5fc`), and the chain was then run for real rather
+than declared done.
+
+```
+GET raw.githubusercontent…/master/control-plane.json   200
+refresh()  → {ok:true, base:"…railway.app/v1", changed:true}
+config     → apiBaseSource "discovered"
+GET  that address /healthz                             200
+```
+
+And in a real Electron boot, from a cold profile with no cache:
+
+```
+online_services_starting        configured:false  apiBaseSource:"none"
+discovery_changed               null → https://…railway.app/v1     (+1.5s)
+control_plane_address_adopted   apiBaseSource:"discovered"
+device_service_started
+device_register_failed          E_RATE_LIMITED  429
+```
+
+The app configured itself, in one session, with no relaunch and nothing written
+by hand. The 429 is the budget this session spent testing (see the runbook
+warning); it is the rate limiter working, and the app logged it at WARN, kept
+running, and will retry on its next tick.
+
+The cache it wrote names its own source, so someone finding it in `%APPDATA%`
+can tell what put it there:
+
+```json
+{ "v": 1, "apiBase": "https://…/v1", "fetchedAt": …,
+  "source": "https://raw.githubusercontent.com/…/master/control-plane.json" }
+```
+
+---
+
+## 5. Two things that are true and were not written down
+
+### 5.1 The deployed server fix was not on master — it is now
+
+`2d3e7ea` — the sleeping-Postgres retry — was deployed to Railway and running in
+production, but existed only on branches. Anyone redeploying the control plane
+from master would have reintroduced the 500-on-wake bug, the one that answered
+500 to a *correct* portal password on 2026-09-03.
+
+It came across with **PR #22**, along with the other 33: the rail fix, the
+Anthropic design pass, the daily-flow sweep, and all of the licensing work.
+`origin/master` had been 34 commits and 81 files behind.
+
+**What made that merge safe to do, since master is what 50+ clients run:**
+
+- PRs #19 and #20 changed **no files** relative to the merge base — their
+  content was already in this lineage — so the merged tree is byte-identical to
+  the branch head, and every suite run against that head applies to master.
+- The suite had run against a tree that ALSO held in-flight uncommitted Phase 4
+  theme work, which is not in the merge. That gap was closed rather than
+  assumed: `theme-parity`, `rail-reach`, `students-export`,
+  `students-profile-archive`, `zz-v6-redesign` and `zz-boot-diag` were re-run in
+  a throwaway worktree at the exact merge commit — **13/13**.
+- The owner's four uncommitted files were never touched. The worktree's
+  `node_modules` junction was removed with `rmdir` **before** the worktree was,
+  and the real `node_modules` was counted afterwards to prove it survived — that
+  exact deletion cost an `npm ci` on 2026-09-03.
+
+### 5.2 A hostel still on v4.0.0 auto-installs whatever you publish next
+
+Checked against the tags rather than assumed:
+
+| Build | `autoDownload` | `autoInstallOnAppQuit` |
 |---|---|---|
-| `control-plane-sync.spec.js` | 91 | `test.skip(!CAN_RUN, …)` — needs `CONTROL_PLANE_URL`, `CP_ADMIN_EMAIL`, `CP_ADMIN_PASSWORD` |
-| `settings-is-source.spec.js` | 18 | `test.skip(!PROFILE, …)` — needs `HOSTIX_REAL_PROFILE`, **deliberately opt-in** because it reads the real install |
+| `v4.0.0` | **true** | **true** |
+| `v5.0.0` | false | false |
+
+So D-2's standing concern — "the shipped app already has both true on 50+
+machines" — is **closed for anyone on 5.0.0**, and the note saying otherwise is
+stale. It is still live for anyone on v4: that machine will silently download
+and install the next release you cut. Self-healing, because landing on 5.0.0
+stops it, but it means **publishing 5.0.1 pushes it to every v4 hostel without
+asking them.** Worth deciding deliberately rather than discovering.
 
 ---
 
-## 6. Working tree
+## 6. What is still not proven
 
-**Four files are uncommitted, in-flight design work, and are PROTECTED by spec
-§2. They were not touched at any point this session** — every commit staged by
-explicit path, never `git add -A`:
+**The portal half of the licence loop.** Issue a key → activate → suspend →
+watch the app go read-only → reactivate → revoke, with the audit trail behind
+it. The script is written and ready (`e2e-admin.js`, in the session scratchpad):
+it drives the real admin routes over HTTPS with cookies and CSRF, and runs the
+fetched entitlement through the **real** `EntitlementService` and
+`enforcement.resolve()`, so what it asserts is what a warden would see.
 
-- `renderer/chrome.css`
-- `renderer/src/modules/students.js`
-- `renderer/students.css`
-- `renderer/style.css`
+It needs portal credentials, which are in the owner's password manager. Creating
+a throwaway admin over `railway ssh` was blocked by the permission classifier.
 
-Do not stash, switch branches, or `git add -A` under the owner.
+Until it runs, the suspend→read-only path is covered by unit tests
+(`enforcement.js`, 115+ of the services suite) and by the 2026-09-04 manual walk,
+but not by an automated end-to-end run against production.
 
 ---
 
-## 7. Next
+## 7. Demo runbook
 
-1. Close the last of Phase B — the unknown-schema row, and a real disk-full test.
-2. **Phase C opens on D-1.** The fix direction: one `outstandingOf(payment)`
-   helper beside `resolveCharges()` in `utils.js`, the fallback decided once and
-   deliberately, both call sites routed through it.
-3. Then D-3 (Phase D), the §22 diagnostic bundle (still entirely absent), and
-   the code-signing decision that unblocks every remaining MISSING matrix row.
+Unchanged from 2026-09-04 except where marked.
+
+### A trap that will bite on demo day
+
+`/devices/register` is rate limited to **20 per IP per hour**, and it is shared
+across everything activating from that address. `scripts/e2e-license-chain.js`
+spends six of them per run, so about three runs an hour is the whole budget —
+and this session used it up, which is how the limit was found.
+
+**If you rehearse activation from the same connection as the demo, a real
+activation can be refused with 429.** To a client that looks exactly like a
+broken product. Do not loop the check before a demo; if you have been testing,
+either wait for the window to roll over or activate from a different network.
+The script now aborts with that explanation instead of a stack trace, and
+`SKIP_REJECTIONS=1` halves what it spends.
+
+### Before the client arrives
+
+1. **Wake the database.** Open `…/healthz` and refresh until it reads
+   `{"db":"ok","signing":"ok"}`. It took 6.5s cold today.
+2. **Sign in to the portal** at `…/admin/` — *with* the trailing slash; `/admin`
+   404s — and leave the tab open.
+3. **Point the demo machine at the control plane.** Write
+   `<userData>/online-config.json`:
+   ```json
+   { "apiBase": "https://control-plane-production-924b.up.railway.app/v1" }
+   ```
+   `userData` is `%APPDATA%\hostix-app` installed, `.devdata` for `npm start`.
+
+   **New:** once `control-plane.json` is on master this step disappears — the app
+   finds the address itself. The per-machine file still outranks discovery, so
+   it also remains the way to point one machine somewhere else.
+
+### The loop worth showing
+
+1. **Settings → Connection** — the four-state readout, genuinely online.
+2. **Issue a licence** in the portal. It mints a v4 key and shows it once.
+3. **Activate** it in the app. Activation registers with the control plane
+   immediately (`main.js` calls `device.sync()` on success), so the machine
+   appears in the portal straight away rather than at the six-hourly tick.
+4. **Suspend** that licence in the portal.
+5. **Settings → Connection → check now.** The app drops to read-only: every
+   primary and danger button greys out, a banner explains why, and `main.js`
+   blocks the write at the IPC layer even if someone reaches a control.
+   **Nothing is deleted or hidden** — every student, payment, report and export
+   still works. That is D-3, and it is the part worth saying out loud.
+6. **Reactivate** and check again.
+7. **New: Help → Check for Updates.** It now answers. Before today it was
+   silent, so this was not showable at all.
+
+### Do not demo
+
+- **An update being received.** The channel is proven healthy, but 5.0.0 is
+  current, so the honest answer is "up to date" — which is now what it says.
+
+---
+
+## 8. Working tree
+
+Committed on `fix/control-plane-demo-ready`:
+
+| Commit | What |
+|---|---|
+| `868b964` | `Check for Updates` answers when the app is current, + 9 tests |
+| `2297a9c` | `services/discovery.js`, `control-plane.json`, config chain, 20 tests |
+| `fa8c5b7` | entitlement.js header stopped claiming the opposite of the code |
+| `d6a57ce` | CLAUDE.md — `control-plane.json` as live infrastructure |
+| `f134850` | the adoption integration test, and this branch's CLAUDE.md counts |
+
+**Still uncommitted, and untouched by this session:** `renderer/chrome.css`,
+`renderer/src/modules/students.js`, `renderer/students.css`, `renderer/style.css`
+— the in-flight dashboard design work. The branch was cut from
+`feature/dashboard-1c` so those four files followed along with nothing on disk
+changing. Nothing here reads them.
+
+## 9. In order, what to do next
+
+Merged to master as PR #22, so the two blocking items on the old list are gone.
+What is left:
+
+1. **Run `scripts/e2e-admin-portal.js`** (§6) once portal credentials are to
+   hand. It is the last unproven link in the chain, and it is one command.
+   Wait out the registration window first — see the runbook warning.
+2. **Decide about 5.0.1 before publishing it** (§5.2). It reaches every
+   remaining v4 machine unattended.
+3. **Build and launch a packaged installer** with all of this in it. Nothing in
+   this session was tested from an installer, and `electron-builder`'s `files`
+   allowlist has caught a missing `services/**` before.
+4. Only then bake `DEFAULT_API_BASE`, and only once `license.hostyllo.com`
+   answers `/v1/healthz`. Discovery removes the urgency, which is the point.
+
+### A follow-up worth someone's time, found in the boot log
+
+**A machine coming online for the first time registers TWICE**, 1.4s apart —
+once from the connectivity probe's status change (`index.js` syncs on every
+transition into reachable) and once from `device.start()`'s five-second timer.
+`sync()`'s `_syncing` flag only guards *overlapping* calls, so two sequential
+ones both proceed.
+
+This predates the discovery work; adoption merely made both fire close enough
+together to see. It is self-correcting — each `/devices/register` rotates the
+secret, so the second wins — and it only happens on the first online boot,
+because afterwards `_ensureToken()` uses `/devices/token` instead. But it spends
+two of a 20-per-hour budget instead of one, and there is a short window where
+the first sync's token has been deleted by the second registration.

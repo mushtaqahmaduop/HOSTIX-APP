@@ -253,6 +253,313 @@ ok('a malformed override file does not stop the app booting', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+console.log('\ndiscovery.js — how a shipped build learns the address');
+// ══════════════════════════════════════════════════════════════════════════
+
+// Every installer in the field bakes an empty DEFAULT_API_BASE, so without
+// this module they resolve to `null` for the life of the build and no portal
+// action can reach them. It fetches the address from a JSON document in the
+// repository, which makes re-pointing the estate a commit instead of a
+// release. The tests that matter most are the ones proving it FAILS SAFE:
+// nothing it can receive is allowed to make the app require a network.
+
+const discovery = require('../services/discovery');
+
+function tmpdir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-disc-')); }
+function doc(o) { return { status: 200, text: async () => JSON.stringify(o) }; }
+function fetchOf(response) {
+  const calls = [];
+  const impl = async (url) => { calls.push(url); return response; };
+  impl.calls = calls;
+  return impl;
+}
+
+const LIVE = 'https://cp.example.com/v1';
+
+ok('the discovery URL is on the same repository as the update channel', () => {
+  // A repository rename would leave updates working — electron-builder reads
+  // package.json — while discovery quietly 404s forever. This is the only
+  // thing that would notice.
+  const pub = require('../package.json').build.publish;
+  assert.ok(discovery.DISCOVERY_URL.includes('/' + pub.owner + '/' + pub.repo + '/'),
+    'DISCOVERY_URL does not point at ' + pub.owner + '/' + pub.repo + ': ' + discovery.DISCOVERY_URL);
+  assert.ok(/^https:\/\/raw\.githubusercontent\.com\//.test(discovery.DISCOVERY_URL),
+    'DISCOVERY_URL must be https raw.githubusercontent.com: ' + discovery.DISCOVERY_URL);
+});
+
+ok('the committed control-plane.json is a document this code would accept', () => {
+  // The file is fetched, not required, so nothing else in the build would ever
+  // catch a typo in it — and a malformed document silently leaves the whole
+  // estate offline, which looks exactly like the state before this existed.
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'control-plane.json'), 'utf8'));
+  assert.strictEqual(raw.v, 1, 'control-plane.json must be v:1');
+  assert.ok('apiBase' in raw, 'control-plane.json must carry an apiBase key');
+  if (raw.apiBase !== null) {
+    const norm = config._normaliseBase(raw.apiBase);
+    assert.ok(norm, 'control-plane.json apiBase is not a valid https base: ' + raw.apiBase);
+    assert.ok(/\/v1$/.test(norm),
+      'apiBase must end in the machine-facing /v1 prefix, not /admin: ' + norm);
+  }
+});
+
+await okAsync('a fetched address is cached, and config.load() then finds it', async () => {
+  const dir = tmpdir();
+  const r = await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.base, LIVE);
+  assert.strictEqual(r.changed, true);
+
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, LIVE);
+  assert.strictEqual(c.apiBaseSource, 'discovered');
+  assert.strictEqual(config.isConfigured(), true);
+});
+
+await okAsync('a per-machine override outranks a discovered address', async () => {
+  // The staging seam has to keep working. A machine deliberately pointed
+  // somewhere must not be dragged back to production by a background fetch.
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  fs.writeFileSync(path.join(dir, 'online-config.json'),
+    JSON.stringify({ apiBase: 'https://staging.example.com/v1' }));
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, 'https://staging.example.com/v1');
+  assert.strictEqual(c.apiBaseSource, 'file');
+});
+
+await okAsync('adoption never overrides a more specific source', async () => {
+  const dir = tmpdir();
+  fs.writeFileSync(path.join(dir, 'online-config.json'),
+    JSON.stringify({ apiBase: 'https://staging.example.com/v1' }));
+  config.load({ userDataDir: dir });
+  assert.strictEqual(config.adoptDiscoveredBase(LIVE), false, 'adoption overrode the per-machine file');
+  assert.strictEqual(config.get().apiBase, 'https://staging.example.com/v1');
+});
+
+ok('adoption flips an unconfigured app online in the same session', () => {
+  // The services capture cfg by reference, so this has to mutate in place
+  // rather than replace the object. If it ever stops doing that, a fresh
+  // install stays offline until its next launch.
+  const dir = tmpdir();
+  const cfg = config.load({ userDataDir: dir });
+  assert.strictEqual(config.isConfigured(), false);
+  assert.strictEqual(config.adoptDiscoveredBase(LIVE), true);
+  assert.strictEqual(cfg.apiBase, LIVE, 'the object the services hold was not updated');
+  assert.strictEqual(cfg.apiBaseSource, 'discovered');
+  assert.strictEqual(config.isConfigured(), true);
+  assert.strictEqual(config.url('/healthz'), LIVE + '/healthz');
+});
+
+ok('adoption refuses a base it would not have accepted from the wire', () => {
+  const dir = tmpdir();
+  config.load({ userDataDir: dir });
+  assert.strictEqual(config.adoptDiscoveredBase('http://cleartext.example.com/v1'), false);
+  assert.strictEqual(config.isConfigured(), false);
+});
+
+// ── Failing safe ──────────────────────────────────────────────────────────
+// Each of these leaves the machine exactly as it was. That is the whole
+// contract: this module may hand the app an address, and may never take one
+// away by accident or stop it booting.
+
+await okAsync('no network leaves the app offline and does not throw', async () => {
+  const dir = tmpdir();
+  const boom = async () => { throw new Error('ENOTFOUND'); };
+  const r = await discovery.refresh({ userDataDir: dir, fetchImpl: boom });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.reason, 'network');
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, null);
+});
+
+await okAsync('a 404 leaves an existing address alone', async () => {
+  // The document not being on master yet is exactly this case, and it must
+  // not un-point a machine that already resolved one.
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const r = await discovery.refresh({
+    userDataDir: dir, force: true,
+    fetchImpl: fetchOf({ status: 404, text: async () => 'Not Found' })
+  });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.reason, 'http_404');
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, LIVE, 'a 404 unset the address');
+});
+
+await okAsync('malformed JSON leaves an existing address alone', async () => {
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const r = await discovery.refresh({
+    userDataDir: dir, force: true,
+    fetchImpl: fetchOf({ status: 200, text: async () => '{ this is not json' })
+  });
+  assert.strictEqual(r.reason, 'malformed');
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, LIVE);
+});
+
+await okAsync('a document with no apiBase key is malformed, not a kill switch', async () => {
+  // The distinction that protects the estate: "I forgot to write the key" and
+  // "switch everyone off" must not be the same document.
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1 })) });
+  const r = await discovery.refresh({
+    userDataDir: dir, force: true, fetchImpl: fetchOf(doc({ v: 1, note: 'oops' }))
+  });
+  assert.strictEqual(r.reason, 'malformed');
+});
+
+await okAsync('a wrong version is refused rather than guessed at', async () => {
+  const dir = tmpdir();
+  const r = await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 2, apiBase: LIVE })) });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.reason, 'malformed');
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, null);
+});
+
+await okAsync('a cleartext address is refused, not downgraded to', async () => {
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const r = await discovery.refresh({
+    userDataDir: dir, force: true,
+    fetchImpl: fetchOf(doc({ v: 1, apiBase: 'http://cp.example.com/v1' }))
+  });
+  assert.strictEqual(r.reason, 'bad_base');
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, LIVE, 'http replaced a good https address');
+});
+
+await okAsync('an oversized document is refused before it is parsed', async () => {
+  const dir = tmpdir();
+  const huge = { status: 200, text: async () => 'x'.repeat(discovery.MAX_BYTES + 1) };
+  const r = await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(huge) });
+  assert.strictEqual(r.reason, 'too_large');
+});
+
+await okAsync('apiBase: null is the kill switch and returns the machine to offline', async () => {
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, LIVE);
+
+  const r = await discovery.refresh({
+    userDataDir: dir, force: true, fetchImpl: fetchOf(doc({ v: 1, apiBase: null }))
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.reason, 'cleared');
+  assert.strictEqual(r.changed, true);
+
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, null);
+  assert.strictEqual(c.apiBaseSource, 'none');
+  assert.strictEqual(config.isConfigured(), false, 'the kill switch left the machine online');
+});
+
+// ── Frequency ─────────────────────────────────────────────────────────────
+
+await okAsync('a fresh cache is not re-fetched', async () => {
+  // ~50 installs, once a day. The address changes approximately never, and a
+  // suspension travels by entitlement sync, not by this.
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const impl = fetchOf(doc({ v: 1, apiBase: 'https://moved.example.com/v1' }));
+  const r = await discovery.refresh({ userDataDir: dir, fetchImpl: impl });
+  assert.strictEqual(impl.calls.length, 0, 'it went to the network inside the refresh window');
+  assert.strictEqual(r.reason, 'fresh');
+  assert.strictEqual(r.base, LIVE);
+});
+
+await okAsync('a stale cache is re-fetched, and a moved address is adopted', async () => {
+  const dir = tmpdir();
+  const t0 = Date.now();
+  await discovery.refresh({ userDataDir: dir, now: t0, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const later = t0 + discovery.MIN_REFRESH_MS + 1000;
+  const impl = fetchOf(doc({ v: 1, apiBase: 'https://moved.example.com/v1' }));
+  const r = await discovery.refresh({ userDataDir: dir, now: later, fetchImpl: impl });
+  assert.strictEqual(impl.calls.length, 1);
+  assert.strictEqual(r.base, 'https://moved.example.com/v1');
+  assert.strictEqual(r.changed, true);
+  assert.strictEqual(config.load({ userDataDir: dir }).apiBase, 'https://moved.example.com/v1');
+});
+
+await okAsync('the cache is written atomically, leaving no partial file behind', async () => {
+  const dir = tmpdir();
+  await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+  const left = fs.readdirSync(dir).filter(f => f.endsWith('.tmp'));
+  assert.deepStrictEqual(left, [], 'a .tmp file survived the write: ' + left.join(', '));
+});
+
+ok('a hand-edited cache holding cleartext is ignored, not obeyed', () => {
+  // %APPDATA% is the customer's own directory. What comes off disk is
+  // re-checked rather than trusted.
+  const dir = tmpdir();
+  fs.writeFileSync(path.join(dir, config.DISCOVERY_CACHE_FILE),
+    JSON.stringify({ v: 1, apiBase: 'http://evil.example.com/v1', fetchedAt: Date.now() }));
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, null);
+  assert.strictEqual(c.apiBaseSource, 'none');
+});
+
+ok('a corrupt cache reads as no cache rather than stopping the boot', () => {
+  const dir = tmpdir();
+  fs.writeFileSync(path.join(dir, config.DISCOVERY_CACHE_FILE), '{ truncated');
+  const c = config.load({ userDataDir: dir });
+  assert.strictEqual(c.apiBase, null);
+  assert.strictEqual(config.isConfigured(), false);
+});
+
+// ── index.js: the wiring that turns a discovered address into a live client ─
+// The tests above prove discovery resolves an address. This proves the thing
+// that actually matters to a customer: that the online machinery then comes
+// UP, in the same session, without a relaunch. It is the seam most likely to
+// rot — a service that started caching apiBase instead of re-reading it would
+// pass every test above and fail this one.
+
+await okAsync('a machine that learns its address comes online without a relaunch', async () => {
+  const services = require('../services/index.js');
+  const dir = tmpdir();
+  const qdb = new Database(path.join(dir, 'q.db'));
+
+  let started = null;
+  try {
+    started = services.start({
+      db: qdb,
+      userDataDir: dir,
+      isDev: false,
+      // No Electron here. index.js guards the IPC registration itself; the
+      // empty surface keeps that guard out of what is under test.
+      electron: {},
+      machineIdProvider: () => 'a'.repeat(64),
+      licenceProvider: () => null,
+      // The real fetch is index.js's own business and is covered above. A unit
+      // test must not reach the network to prove a wiring question.
+      discovery: false
+    });
+
+    assert.strictEqual(config.isConfigured(), false,
+      'a machine with no cache must start offline');
+
+    // Drive the adoption exactly as index.js does on a successful refresh.
+    await discovery.refresh({ userDataDir: dir, fetchImpl: fetchOf(doc({ v: 1, apiBase: LIVE })) });
+    assert.strictEqual(config.adoptDiscoveredBase(LIVE), true);
+    assert.strictEqual(config.isConfigured(), true);
+
+    // The services captured cfg by reference at construction. This is the
+    // assertion that in-place mutation exists for: the URL they build now
+    // points at the discovered address, with nothing reconstructed.
+    assert.strictEqual(config.url('/devices/register'), LIVE + '/devices/register');
+
+    started.queue.start();
+    started.connectivity.start();
+    started.device.start();
+    const timer = started.device._timer;
+    started.device.start();          // twice on purpose
+    assert.strictEqual(started.device._timer, timer,
+      'device.start() is not idempotent — a second call left two sync intervals running');
+  } finally {
+    if (started) started.stop();
+    try { qdb.close(); } catch (_) {}
+  }
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════
 console.log('\napi-client.js — §36 reliability');
 // ══════════════════════════════════════════════════════════════════════════
 

@@ -1037,13 +1037,38 @@ async function doCheckUpdates() {
     return;
   }
   try {
+    // `isUpdateAvailable`, NOT `updateInfo`. checkForUpdates() resolves with
+    // `{ isUpdateAvailable: false, updateInfo }` when the app is CURRENT
+    // (electron-updater AppUpdater.js — it returns the parsed feed either way),
+    // so a truthiness test on `updateInfo` is true in both cases and this
+    // dialog was unreachable. `update-not-available` only writes to the
+    // console, so the menu item did nothing visible at all — which is what a
+    // client sees today, since 5.0.0 is also the latest release.
     const result = await autoUpdater.checkForUpdates();
-    if (!result || !result.updateInfo) {
+    if (!result) {
+      // `null` means the updater declined to run at all (isUpdaterActive() is
+      // false — an unpackaged copy, or no feed configured). It is NOT the same
+      // as "no newer version exists", and answering "you have the latest" to
+      // a check that never happened is the one thing this dialog must not do.
       dialog.showMessageBox(mainWindow, {
-        type: 'info', title: 'Up to Date',
-        message: '✅ You have the latest version of Hostyllo.'
+        type: 'warning', title: 'Update Check Failed',
+        message: 'Could not check for updates.',
+        detail: 'Please check your internet connection and try again.'
       });
+      return;
     }
+    if (result.isUpdateAvailable) {
+      // The `update-available` handler has already shown its own dialog from
+      // inside this call. Saying it twice is worse than saying it once.
+      return;
+    }
+    dialog.showMessageBox(mainWindow, {
+      type: 'info', title: 'Up to Date',
+      message: 'You have the latest version of Hostyllo.',
+      detail: result.updateInfo && result.updateInfo.version
+        ? 'Version ' + result.updateInfo.version + ' is the newest release, and it is the one you are running.'
+        : undefined
+    });
   } catch (e) {
     dialog.showMessageBox(mainWindow, {
       type: 'warning', title: 'Update Check Failed',
@@ -1694,7 +1719,13 @@ function setupAutoUpdater() {
       type: 'info',
       title: 'Update Ready',
       message: `Hostyllo v${info.version} is ready to install`,
-      detail: 'Restart now to apply the update, or it will install automatically when you next close the app.',
+      // [D-2] `autoInstallOnAppQuit` is false, so the old second clause —
+      // the one promising an install on the next quit — was a
+      // promise the build does not keep. This handler is unreachable while
+      // `autoDownload` is false and nothing calls downloadUpdate(); it is kept
+      // correct so that enabling downloads alongside code signing does not
+      // ship a lie with them.
+      detail: 'Restart now to apply the update. Nothing installs by itself.',
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
       cancelId: 1
@@ -1713,8 +1744,15 @@ function setupAutoUpdater() {
 ipcMain.handle('update:check', async () => {
   if (!autoUpdater) return { available: false, reason: 'updater_not_available' };
   try {
+    // Same trap as doCheckUpdates: `!!result` is true even when the app is
+    // current, so this used to report every up-to-date machine as having an
+    // update waiting. Nothing in the renderer calls this yet; it is fixed
+    // rather than deleted because the next caller would inherit the lie.
     const result = await autoUpdater.checkForUpdates();
-    return { available: !!result, version: result?.updateInfo?.version };
+    return {
+      available: !!(result && result.isUpdateAvailable),
+      version: result?.updateInfo?.version
+    };
   } catch (e) {
     return { available: false, reason: e.message };
   }
