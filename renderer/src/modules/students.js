@@ -734,14 +734,38 @@ function _stuPanelHtml(t) {
       </div>
     </div>
 
-    ${''/* The three actions the spec's §30 matrix names, and no more. Each one
-           hands off to the workflow that already owns it rather than
-           reimplementing anything inside the panel. */}
+    ${''/* EVERY ACTION THE OLD PROFILE MODAL CARRIED (owner). The panel
+           replaced showViewStudentModal, and replacing a screen means taking
+           its verbs with it — the modal's footer held Print, Shift Room, Edit
+           and Cancel Seat, and a panel that offered three of them would have
+           made two workflows reachable only from the kebab menu on the row.
+
+           Each one hands off to the function that already owns it. Nothing here
+           reimplements a workflow; Move Room is showRoomShiftModal(), which is
+           what WRITES DB.roomShifts, so this button and the Room History tab
+           are two ends of one record.
+
+           CANCEL SEAT IS CONDITIONAL, as it was in the modal: quickCancelStudent
+           starts a cancellation, and offering it for a student who has already
+           left or is already cancelling would either duplicate a record or fail
+           with a message the warden cannot act on.
+
+           PRINT LEAVES THE PANEL OPEN. It renders a PDF through _electronPDF
+           rather than opening a dialog over the app, so there is nothing to get
+           out of its way — and closing would throw away the record the warden
+           is reading. Everything else opens a modal, so it closes first. */}
     <div class="stu-pan__acts">
       <button class="stu-pan__act" onclick="closeStudentPanel();showEditStudentModal('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button>
+      <button class="stu-pan__act" onclick="closeStudentPanel();showRoomShiftModal('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>Move Room</button>
+      <button class="stu-pan__act" onclick="printStudentCard('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print</button>
       <button class="stu-pan__act" onclick="closeStudentPanel();openAddPayment('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>Payment</button>
+      ${status === 'Active' ? `
+      <button class="stu-pan__act is-warn" onclick="closeStudentPanel();quickCancelStudent('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>Cancel Seat</button>` : ''}
       <button class="stu-pan__act is-danger" onclick="closeStudentPanel();confirmDeleteStudent('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
     </div>

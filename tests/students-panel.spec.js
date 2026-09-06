@@ -266,3 +266,83 @@ test('a Blacklisted student fits their own status cell', async () => {
 
   await app.close();
 });
+
+test('every verb the old profile modal had is on the panel', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+  await win.setViewportSize({ width: 1366, height: 768 });
+  await win.waitForTimeout(200);
+
+  /* THE PANEL REPLACED showViewStudentModal, whose footer held Print, Shift
+     Room, Edit and Cancel Seat. Dropping any of them makes that workflow
+     reachable only from the kebab on the row — which is the quiet way a feature
+     disappears in a redesign. */
+  await win.evaluate(() => { DB.students[0].status = 'Active'; });
+  await openPanel(win);
+  const acts = await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
+    .map(b => ({ label: b.innerText.trim(), call: b.getAttribute('onclick'),
+                 clipped: b.scrollWidth - b.clientWidth })));
+
+  expect(acts.map(a => a.label))
+    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Cancel Seat', 'Delete']);
+  // Each hands off to the function that already owns the workflow.
+  expect(acts.find(a => a.label === 'Move Room').call).toContain('showRoomShiftModal');
+  expect(acts.find(a => a.label === 'Print').call).toContain('printStudentCard');
+  expect(acts.find(a => a.label === 'Cancel Seat').call).toContain('quickCancelStudent');
+  // Print renders a PDF rather than opening a modal, so it leaves the panel up.
+  expect(acts.find(a => a.label === 'Print').call).not.toContain('closeStudentPanel');
+  // Six labels in a 440px panel: "Cancel Seat" is the longest and must fit.
+  expect(acts.every(a => a.clipped <= 0), 'an action label is clipped').toBe(true);
+
+  /* CANCEL SEAT IS CONDITIONAL, as it was in the modal. Offering it to someone
+     who has already left either duplicates a cancellation or fails with a
+     message the warden cannot act on. */
+  await win.evaluate(() => closeStudentPanel());
+  await win.waitForTimeout(300);
+  await win.evaluate(() => { DB.students[0].status = 'Left'; });
+  await openPanel(win);
+  expect(await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
+    .map(b => b.innerText.trim())))
+    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete']);
+
+  await app.close();
+});
+
+test('the panel clears the title bar, and no band is squashed', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+  await win.setViewportSize({ width: 1366, height: 768 });
+  await win.waitForTimeout(200);
+  await openPanel(win);
+
+  const geo = await win.evaluate(() => {
+    const box = s => { const e = document.querySelector(s); if (!e) return null;
+      const r = e.getBoundingClientRect(); return { top: Math.round(r.top), h: Math.round(r.height) }; };
+    return { bar: box('#hz-titlebar'), pan: box('.stu-pan'), scrim: box('.stu-pan__scrim'),
+             tabs: box('.stu-pan__tabs'), head: box('.stu-pan__head'),
+             tabH: Math.round(document.querySelector('.stu-pan__tab').getBoundingClientRect().height) };
+  });
+
+  /* THE BAR SITS AT z-index 100000, above modals on purpose. A panel pinned to
+     top:0 therefore put its own header — the title and the close button —
+     underneath it, and the panel looked headerless. */
+  expect(geo.pan.top).toBe(geo.bar.top + geo.bar.h);
+  expect(geo.scrim.top).toBe(geo.pan.top);
+
+  /* AND NO BAND MAY SHRINK. .stu-pan is a column flex container, so a band left
+     at the default flex-shrink:1 gives up height when the content is taller
+     than the panel. The tab strip lost 13px that way and drew its own bottom
+     border through the middle of the word "Overview". */
+  expect(geo.tabs.h).toBeGreaterThanOrEqual(geo.tabH);
+  expect(geo.head.h).toBeGreaterThanOrEqual(30);
+
+  await app.close();
+});

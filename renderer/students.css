@@ -1042,7 +1042,16 @@
     .stu-pan__scrim { animation: none; }
 }
 
+/* EVERY BAND ABOVE THE BODY IS flex:0 0 auto, AND THAT IS NOT DECORATION.
+   .stu-pan is a column flex container, so an item with the default
+   `flex-shrink:1` gives up height when the content is taller than the panel.
+   The tab strip is the shortest band and lost the most: it collapsed from 33px
+   to 20, which drew the container's own bottom border straight through the
+   middle of the word "Overview" and clipped the labels top and bottom. It looks
+   like a rendering fault rather than a layout one, which is why it is worth the
+   note. The body is the only band allowed to flex, and it scrolls. */
 .stu-pan__head {
+    flex: 0 0 auto;
     display: flex; align-items: center; gap: 10px;
     padding: 14px 16px; border-bottom: 1px solid var(--border);
 }
@@ -1057,7 +1066,7 @@
 
 /* Identity block: the one place in the panel that repeats what the row said,
    because the panel can be opened from a menu and the row may be scrolled off. */
-.stu-pan__id { display: flex; gap: 13px; padding: 16px; align-items: flex-start; }
+.stu-pan__id { flex: 0 0 auto; display: flex; gap: 13px; padding: 16px; align-items: flex-start; }
 .stu-pan__idtext { min-width: 0; }
 .stu-pan__name {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -1065,16 +1074,34 @@
 }
 .stu-pan__meta { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
 
-.stu-pan__acts { display: flex; gap: 7px; padding: 0 16px 14px; }
+/* SIX VERBS, THREE ACROSS. The panel took over from showViewStudentModal and
+   inherited its whole footer — Print, Shift Room, Edit, Cancel Seat — on top of
+   Payment and Delete. A flex row shared 440px between them at ~65px each, which
+   is narrower than the words: "Cancel Seat" and "Move Room" would both have
+   wrapped or clipped.
+
+   A fixed three-column grid instead of `auto-fit`, so the buttons keep the same
+   width whether the seat action is showing or not. With auto-fit, a student
+   going from Active to Left would silently resize every remaining button — the
+   row would look like it had changed rather than lost one item. */
+.stu-pan__acts {
+    flex: 0 0 auto;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px; padding: 0 16px 14px;
+}
 .stu-pan__act {
-    flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    height: 32px; border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    min-width: 0; height: 32px; padding: 0 6px; border-radius: 8px; cursor: pointer;
     background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
-    font-family: inherit; font-size: 11.5px; font-weight: 600;
+    font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap;
     transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
-.stu-pan__act svg { width: 13px; height: 13px; }
+.stu-pan__act svg { width: 13px; height: 13px; flex: 0 0 auto; }
 .stu-pan__act:hover { border-color: var(--accent); color: var(--accent); }
+/* Cancel Seat starts a cancellation and Delete destroys a record: the first is
+   a reversible workflow with a form behind it, the second is not, so they do
+   not share a colour. Amber reads as "this needs care", red as "this ends it". */
+.stu-pan__act.is-warn:hover   { border-color: var(--warning-fg);    color: var(--warning-fg); }
 .stu-pan__act.is-danger:hover { border-color: var(--ant-danger-fg); color: var(--ant-danger-fg); }
 
 /* Four tabs, and exactly four (§23). They scroll horizontally on a narrow
@@ -1082,6 +1109,7 @@
    the panel height as you switch tabs, which moves the content under the
    cursor. */
 .stu-pan__tabs {
+    flex: 0 0 auto;
     display: flex; gap: 2px; padding: 0 10px; overflow-x: auto;
     border-bottom: 1px solid var(--border);
 }
@@ -1093,7 +1121,7 @@
 .stu-pan__tab:hover { color: var(--text2); }
 .stu-pan__tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
 
-.stu-pan__body { flex: 1 1 auto; overflow-y: auto; padding: 4px 16px 20px; }
+.stu-pan__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 20px; }
 .stu-pan__sec { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .stu-pan__sec:last-child { border-bottom: 0; }
 .stu-pan__sec h4 {
