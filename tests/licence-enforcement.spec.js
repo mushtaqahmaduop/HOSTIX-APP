@@ -139,6 +139,16 @@ test('an EXPIRED licence goes read-only — it does NOT lock the hostel out', as
     const del = await win.evaluate(() => window.electronAPI.dbDelete('rooms', 'anything'));
     expect(del.ok).toBe(false);
 
+    // Configuration is a write too. §18 lists "configuration mutation" among
+    // the operations a read-only install must block, but db:setSetting checked
+    // database health and never the licence, so a suspended or expired hostel
+    // could still change its settings. (Recorded as D-3 in the enterprise live
+    // status — a different D-3 from the one section 1 above refers to.)
+    const cfg = await win.evaluate(() =>
+      window.electronAPI.dbSetSetting('hostelName', 'Renamed While Expired'));
+    expect(cfg.ok, 'a read-only licence still accepted a configuration change').toBe(false);
+    expect(cfg.code).toBe('LICENCE_READ_ONLY');
+
     // ── 4. The audit trail keeps recording ─────────────────────────────────
     // Freezing it would make the one period a support call cares about the one
     // period with no record.

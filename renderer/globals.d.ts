@@ -68,6 +68,36 @@ declare function hostelServesMess(): boolean;
 declare function messIsOptional(): boolean;
 declare function serviceModelInfo(): ServiceModelDef;
 
+// -- utils.js: the financial authority ----------------------------------------
+// What is still owed on one payment record. The single answer to a question
+// eight modules used to answer three different ways — see the comment above
+// the function itself, and tests/outstanding.test.js.
+declare function outstandingOf(p: any): number;
+// What this student is billed per month, from settings — the charge authority
+// outstandingOf() derives against.
+declare function resolveCharges(student: any, opts?: any): any;
+
+// -- finance.js: the §14 financial integrity layer -----------------------------
+// Money is a whole rupee held as an integer, and money() is the one boundary it
+// crosses. calculateCharges/calculateOutstanding are the §14 names for the two
+// functions above and CALL them — they are not a second opinion. See the header
+// of finance.js, tests/finance.test.js and tests/cash-events.test.js.
+// MONEY_SAFE_MAX is deliberately NOT declared here: finance.js is inside the
+// typecheck scope, so its own `const` is the declaration, and a `declare var`
+// beside it is a redeclaration error rather than a convenience.
+declare function money(v: any): number;
+declare function moneyIsSafe(v: any): boolean;
+declare function moneySum(list: any, get?: (x: any, i: number) => any): number;
+declare function moneyPct(base: any, pct: any): number;
+declare function calculateCharges(student: any, opts?: any): any;
+declare function calculateOutstanding(p: any): number;
+declare function calculateBill(rec: any): number;
+declare function applyPayment(p: any, opts?: any): any;
+declare function reversePayment(p: any, opts?: any): any;
+declare function calculateRefund(p: any): { refundable: number; recorded: number; derived: boolean; reason: string };
+declare function calculateSettlement(studentId: string, opts?: any): any;
+declare function calculateReportTotals(payments: any, opts?: any): any;
+
 // -- rooms.js: bulk creation --------------------------------------------------
 declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };
 declare var ROOM_AMENITY_DEFAULTS: string[];

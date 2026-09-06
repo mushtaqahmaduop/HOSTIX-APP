@@ -37,7 +37,17 @@ function profileDir() {
 function resetProfile() {
   const p = profileDir();
   for (const f of fs.readdirSync(p)) {
-    if (f.startsWith('hostix.db')) fs.rmSync(path.join(p, f), { force: true });
+    if (!f.startsWith('hostix.db')) continue;
+    const full = path.join(p, f);
+    /* Clear read-only BEFORE deleting. `fs.rmSync` with `force` ignores a
+       MISSING file, not an unwritable one — on Windows a read-only attribute
+       makes it throw EPERM, and because every spec shares this profile, one
+       spec that left a file read-only takes down every spec that resets after
+       it. write-failure.spec.js makes the database read-only on purpose, so
+       that is not hypothetical; this is the backstop for the case where its
+       own cleanup does not run (an interrupted run, a crashed worker). */
+    try { fs.chmodSync(full, 0o666); } catch (_) {}
+    fs.rmSync(full, { force: true });
   }
   fs.rmSync(path.join(p, 'Local Storage'), { recursive: true, force: true });
   return p;

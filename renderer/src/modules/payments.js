@@ -232,7 +232,7 @@ function payMonthOptions() {
 // These are the balances a warden would otherwise have to go back a month to
 // find, which is why they are shown alongside the current month by default.
 function payIsArrear(p, mo) {
-  if (Number(p.unpaid || 0) <= 0) return false;
+  if (outstandingOf(p) <= 0) return false;
   if (payStatusOf(p) === 'Paid') return false;
   const k = _payMonthKey(p);
   return !!k && k < mo;
@@ -252,7 +252,7 @@ function payFiltered() {
 
     if (payFilter.room !== 'All' && String(p.roomNumber || '') !== payFilter.room) return false;
     if (payFilter.method !== 'All' && p.method !== payFilter.method) return false;
-    if (payFilter.unpaidOnly && !(Number(p.unpaid || 0) > 0)) return false;
+    if (payFilter.unpaidOnly && !(outstandingOf(p) > 0)) return false;
 
     if (payFilter.status !== 'All') {
       // 'Overdue' is no longer offered, but a session that had it selected — or
@@ -276,7 +276,7 @@ function payFiltered() {
     month:   p => new Date((p.month || '') + ' 1').getTime() || 0,
     rent:    p => Number(p.monthlyRent || p.totalRent || p.amount || 0),
     paid:    p => Number(p.amount || 0),
-    unpaid:  p => Number(p.unpaid || 0),
+    unpaid:  p => outstandingOf(p),
     method:  p => p.method,
     status:  p => payStatusOf(p)
   });
@@ -298,7 +298,7 @@ function renderPayments() {
   const _arrearScope = payFilter.month === 'All' && !payFilter.showAll && payFilter.arrears;
   const isArrear = p => _arrearScope && payIsArrear(p, mo);
   const nArrears = pays.filter(isArrear).length;
-  const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+Number(p.unpaid||0),0);
+  const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+outstandingOf(p),0);
 
   // ── Stat strip figures — all computed from the CURRENT filtered list, so the
   //    cards always describe exactly what the table below is showing.
@@ -308,7 +308,7 @@ function renderPayments() {
   const total=pays.filter(p=>!isArrear(p)).reduce((s,p)=>s+Number(p.amount),0);
   const nPaid    = pays.filter(p=>payStatusOf(p)==='Paid').length;
   const nPending = pays.filter(p=>payStatusOf(p)!=='Paid').length;
-  const outstanding = pays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):0),0);
+  const outstanding = pays.reduce((s,p)=>s+outstandingOf(p),0);
   const share = n => pays.length ? Math.round(n/pays.length*100) : 0;
 
   // Month-over-month change in collections. Real months only — renders nothing
@@ -513,7 +513,7 @@ function renderPayments() {
           const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0);
           const conc   = Number(p.concession||p.discount||0);
           const concD  = p.concessionDesc||p.discountDesc||'';
-          const unpaid = Number(p.unpaid||0);
+          const unpaid = outstandingOf(p);
           const sLabel = payStatusOf(p);
           const sHue   = payStatusHue(sLabel);
           const picked = paySelected.has(p.id);
@@ -563,6 +563,11 @@ function renderPayments() {
               <div class="pay-acts">
                 <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
                 <button class="pay-act dh-green" onclick="event.stopPropagation();printReceipt('${p.id}')" title="Receipt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
+                ${''/* Reverse is offered only where there is something to
+                     reverse. On a record that collected nothing the button
+                     would be a dead control on every untouched row of a freshly
+                     generated month — which is most of the table on the 1st. */}
+                ${money(p.amount) > 0 ? `<button class="pay-act dh-amber" onclick="event.stopPropagation();showReversePaymentModal('${p.id}')" title="Reverse a collection"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>` : ''}
                 <button class="pay-act dh-red"   onclick="event.stopPropagation();deletePayment('${p.id}')" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
               </div>
             </td>
@@ -656,19 +661,20 @@ async function payBulkMarkPaid() {
   if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
   showConfirm(`Mark ${targets.length} payment${targets.length>1?'s':''} as paid?`,
     `This collects the outstanding balance on each selected row and stamps today's date.`, async () => {
+      // applyPayment() again, so a bulk settle is indistinguishable from
+      // settling each row by hand — including the D-1 fix: the balance comes
+      // from calculateOutstanding(), not from `p.unpaid || 0`, which is 0 on a
+      // legacy record and used to mark a real debtor Paid having collected
+      // nothing at all.
+      let collected = 0;
       targets.forEach(p => {
-        const prevUnpaid = Number(p.unpaid) || 0;
-        p.amount = (Number(p.amount)||0) + prevUnpaid;
-        p.unpaid = 0;
-        p.status = 'Paid';
-        p.paidDate = today();
-        if (!p.partialPayments) p.partialPayments = [];
-        if (prevUnpaid > 0) p.partialPayments.push({
-          date: today(), amount: prevUnpaid, method: p.method || 'Cash',
-          collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-          note: 'Pending cleared (bulk)'
-        });
+        const due = calculateOutstanding(p);
+        if (due <= 0) { p.status = 'Paid'; p.paidDate = p.paidDate || today(); return; }
+        collected += applyPayment(p, { amount: due, date: today(),
+                                       note: 'Pending cleared (bulk)' }).applied;
       });
+      if (collected > 0) logActivity('Payment Collected',
+        `${targets.length} record(s) settled in bulk · ${fmtPKR(collected)} collected`, 'Finance');
       await saveDB();
       paySelected.clear();
       renderPage('payments');
@@ -689,7 +695,7 @@ function payBulkExport() {
     const _c = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
     rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
       _c.rent||0, _c.messIncluded?_c.mess:0, _c.monthly||0,
-      p.amount||0, p.unpaid||0, p.method||'', payStatusOf(p),
+      p.amount||0, outstandingOf(p), p.method||'', payStatusOf(p),
       admFee||'', extras||'', conc||'', p.date||'']);
   });
   downloadCSV(rows, 'Payments_Selected.csv');
@@ -712,7 +718,7 @@ function exportPaymentsPDF() {
 
   const stuById   = new Map((DB.students || []).map(s => [s.id, s]));
   const collected = list.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const owing     = list.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const owing     = list.reduce((s, p) => s + outstandingOf(p), 0);
   const settled   = list.filter(p => payStatusOf(p) === 'Paid').length;
 
   const scope = payFilter.month !== 'All' ? String(payFilter.month)
@@ -744,8 +750,8 @@ function exportPaymentsPDF() {
           return `<b>${fmtPKR(p.amount)}</b>` +
             (adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : '') +
             extras.map(c => `<span class="sub">+ ${fmtPKR(c.amount)} ${escHtml(c.description || c.desc || c.label || 'extra')}</span>`).join(''); } },
-      { label: 'Unpaid',  align: 'right', get: p => Number(p.unpaid || 0) > 0
-                            ? `<span class="red">${fmtPKR(p.unpaid)}</span>` : '—' },
+      { label: 'Unpaid',  align: 'right', get: p => outstandingOf(p) > 0
+                            ? `<span class="red">${fmtPKR(outstandingOf(p))}</span>` : '—' },
       { label: 'Method',  get: p => escHtml(p.method || '—') },
       { label: 'Status',  get: p => escHtml(payStatusOf(p)) },
       { label: 'Date',    get: p => fmtDate(p.date) },
@@ -768,7 +774,7 @@ function exportPaymentsCSV() {
     const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
     const _pc=Number(p.concession||p.discount||0);
     const _pch = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,p.unpaid||0,p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
+    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,outstandingOf(p),p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
   });
   downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
 }
@@ -813,30 +819,32 @@ async function generateMonthlyRents() {
         : 'All students already have records for this month',
     added>0 ? 'success' : skipped>0 ? 'warning' : 'info');
 }
+/* Settle a record's whole outstanding balance in one action.
+
+   THE WRITE-SIDE TAIL OF D-1. This read the balance as `Number(p.unpaid) || 0`,
+   which is 0 on a record written before that field existed — so pressing Mark
+   Paid on a legacy debtor collected NOTHING, wrote `unpaid = 0` and stamped it
+   Paid. The debt was not settled; it was deleted, and the record then dropped
+   out of the arrears list, the banner and its total with no trace.
+
+   applyPayment() reads calculateOutstanding(), which prices a record with no
+   recorded balance from the charge authority. That is the entire point of there
+   being one answer. */
 async function markPaymentPaid(id) {
   const p = DB.payments.find(x => x.id === id); if (!p) return;
-  const prevUnpaid = Number(p.unpaid) || 0;
-  const prevPaid   = Number(p.amount) || 0;
-  p.amount   = prevPaid + prevUnpaid;
-  p.unpaid   = 0;
-  p.discount = p.discount || 0;
-  p.status   = 'Paid';
-  p.paidDate = today();
-  const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
-  if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
-  // Log installment in partialPayments history
-  if (!p.partialPayments) p.partialPayments = [];
-  if (prevUnpaid > 0) {
-    p.partialPayments.push({
-      date: today(),
-      amount: prevUnpaid,
-      method: p.method || 'Cash',
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Pending cleared'
-    });
+  const due = calculateOutstanding(p);
+  if (due <= 0) {
+    p.status = 'Paid'; p.paidDate = p.paidDate || today();
+    await saveDB(); renderPage(currentPage);
+    toast('Already settled — nothing left to collect on this record', 'info');
+    return;
   }
-  if (prevUnpaid > 0) logActivity('Payment Collected',
-    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  p.discount = p.discount || 0;
+  const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
+  p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
+  logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(r.applied)} balance cleared`, 'Finance');
   await saveDB();
   renderPage(currentPage);
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
@@ -844,28 +852,25 @@ async function markPaymentPaid(id) {
 
 // FIX Issue 3: Called from student modal — refreshes the student modal directly
 // instead of calling renderPage (which fights with the modal re-open)
+// Same collection as markPaymentPaid(), including the D-1 balance fix — it
+// differs only in refreshing the student modal instead of the page, which
+// renderPage() would fight with.
 async function markPaymentPaidFromStudentView(payId, studentId) {
   const p = DB.payments.find(x => x.id === payId); if (!p) return;
-  const prevUnpaid = Number(p.unpaid) || 0;
-  const prevPaid   = Number(p.amount) || 0;
-  p.amount   = prevPaid + prevUnpaid;
-  p.unpaid   = 0;
-  p.discount = p.discount || 0;
-  p.status   = 'Paid';
-  p.paidDate = today();
-  const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
-  if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
-  if (!p.partialPayments) p.partialPayments = [];
-  if (prevUnpaid > 0) {
-    p.partialPayments.push({
-      date: today(), amount: prevUnpaid,
-      method: p.method || 'Cash',
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Pending cleared'
-    });
+  const due = calculateOutstanding(p);
+  if (due <= 0) {
+    p.status = 'Paid'; p.paidDate = p.paidDate || today();
+    await saveDB();
+    toast('Already settled — nothing left to collect on this record', 'info');
+    showViewStudentModal(studentId);
+    return;
   }
-  if (prevUnpaid > 0) logActivity('Payment Collected',
-    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  p.discount = p.discount || 0;
+  const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
+  p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
+  logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(r.applied)} balance cleared`, 'Finance');
   await saveDB();
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
   showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
@@ -1034,9 +1039,9 @@ function selectStudentForPayment(studentId) {
   // of itself — counting it made the same balance appear twice on one screen.
   const _mNow = document.getElementById('f-pmonth')?.value || '';
   const _arr  = DB.payments
-    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && outstandingOf(p) > 0
               && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_mNow))
-    .reduce((s, p) => s + Number(p.unpaid || 0), 0);
+    .reduce((s, p) => s + outstandingOf(p), 0);
   const _j = t.joinDate ? new Date(t.joinDate) : null;
   const _since = (_j && !isNaN(_j)) ? _j.toLocaleString('default', { month: 'short', year: 'numeric' }) : '—';
   const _seat  = [rtype?.name, room?.floor ? room.floor + ' floor' : ''].filter(Boolean).join(', ');
@@ -1075,9 +1080,9 @@ function pfRenderLedger(t) {
   // months" and the same balance appeared twice on one screen.
   const _lmNow = document.getElementById('f-pmonth')?.value || '';
   const arrears = t ? DB.payments
-    .filter(p => p.studentId === t.id && p.status === 'Pending' && Number(p.unpaid) > 0
+    .filter(p => p.studentId === t.id && p.status === 'Pending' && outstandingOf(p) > 0
               && _normPayMonthLabel(p.month) !== _normPayMonthLabel(_lmNow))
-    .reduce((s, p) => s + Number(p.unpaid || 0), 0) : 0;
+    .reduce((s, p) => s + outstandingOf(p), 0) : 0;
 
   const cell = (label, id, hue, hint) =>
     `<div class="pf-ledger__c ${hue}"><div class="pf-ledger__l"${hint?` title="${hint}"`:''}>${label}</div>
@@ -1196,7 +1201,7 @@ function pfReloadOutstandings() {
   const arrears = pfOutstandingRecords(sid, month);
   if (!arrears.length) { box.style.display = 'none'; box.innerHTML = ''; showNone(true); return; }
 
-  const total = arrears.reduce((s, p) => s + Number(p.unpaid || 0), 0);
+  const total = arrears.reduce((s, p) => s + outstandingOf(p), 0);
   // One arrear is the common case and the one the owner's reference draws: the
   // row carries its own "Collect All" and the header needs no button. With
   // several months the per-row button fills that row alone, so the header gets
@@ -1212,12 +1217,17 @@ function pfReloadOutstandings() {
        ${many ? `<button type="button" class="pf-out__btn" onclick="pfFillAllOutstandings()">Collect all</button>` : ''}
      </div>
      <div class="pf-out__note">From earlier months. What you enter here is posted to that month's record — not to ${escHtml(month || 'this month')}.</div>
-     ${arrears.map(p => `
+     ${arrears.map(p => `${''/* The row must use the SAME answer as the header
+        two lines above it. Both the printed figure and the input cap read
+        `p.unpaid` directly, so on a record written before that field existed
+        the row said "owes PKR 0" and refused to accept anything, while the
+        header — which already used outstandingOf() — showed the real total.
+        The panel disagreed with itself about one student's arrears. */}
        <div class="pf-out__row">
          <div class="pf-out__m">${escHtml(p.month || '—')}</div>
-         <div class="pf-out__d">owes <b>${fmtPKR(p.unpaid)}</b></div>
-         <input class="pf-in pf-out__in" type="number" min="0" max="${Number(p.unpaid)}"
-                id="f-pout-${p.id}" data-payid="${p.id}" data-max="${Number(p.unpaid)}"
+         <div class="pf-out__d">owes <b>${fmtPKR(calculateOutstanding(p))}</b></div>
+         <input class="pf-in pf-out__in" type="number" min="0" max="${calculateOutstanding(p)}"
+                id="f-pout-${p.id}" data-payid="${p.id}" data-max="${calculateOutstanding(p)}"
                 placeholder="0" value="" oninput="pfOutstandingInput(this)">
          <button type="button" class="pf-out__btn" title="Collect the whole ${escHtml(p.month || 'month')} balance"
                  onclick="pfFillOutstandingRow('${p.id}')">${many ? 'Collect' : 'Collect All'}</button>
@@ -1282,7 +1292,7 @@ function pfLoadMonthContext() {
   _pfFilledFrom = rec.id || '';
 
   const already = Number(rec.amount || 0);
-  const owing   = Number(rec.unpaid || 0);
+  const owing   = outstandingOf(rec);
   const settled = rec.status === 'Paid' || owing <= 0;
 
   // The record's own charges go back on the form. Without this the merge on
@@ -1366,26 +1376,25 @@ function pfOutstandingAllocations() {
     const amt = parseFloat(el.value) || 0;
     if (amt <= 0) return;
     const p = DB.payments.find(x => x.id === el.dataset.payid);
-    if (p) out.push({ payment: p, amount: Math.min(amt, Number(p.unpaid) || 0) });
+    // Capped at what the month actually owes, from the one answer — `p.unpaid`
+    // alone caps a legacy arrear at 0 and silently discards the collection.
+    if (p) out.push({ payment: p, amount: Math.min(money(amt), calculateOutstanding(p)) });
   });
   return out;
 }
 
 /* Posts arrear collections back to the months they belong to. Returns a short
-   description for the activity log. */
+   description for the activity log.
+
+   Through applyPayment() (§14), so an arrear collected here is written exactly
+   the way one collected from the row action is: same balance, same trail entry,
+   same status and paidDate rules. It used to compute its own. */
 function pfApplyOutstandings(allocations, method, date) {
   const done = [];
   allocations.forEach(({ payment: p, amount }) => {
-    p.amount  = (Number(p.amount) || 0) + amount;
-    p.unpaid  = Math.max(0, (Number(p.unpaid) || 0) - amount);
-    if (!p.partialPayments) p.partialPayments = [];
-    p.partialPayments.push({
-      date, amount, method,
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Arrears collected'
-    });
-    if (p.unpaid === 0) { p.status = 'Paid'; p.paidDate = date; }
-    done.push((p.month || '—') + ' ' + fmtPKR(amount));
+    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected' });
+    if (!r.ok) return;
+    done.push((p.month || '—') + ' ' + fmtPKR(r.applied));
   });
   return done.join(', ');
 }
@@ -1478,24 +1487,44 @@ function recalcUnpaid() {
   const admFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const conc    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const total   = pfPayableTotal();
-  // Cap paid amount — prevent accidental overpayment (e.g. 1600000 instead of 16000)
+  /* THE TYPO GUARD, AND WHY IT NO LONGER TRUNCATES AT THE BILL.
+
+     This capped the amount at the total due, silently. It exists for a real
+     case — 1600000 typed for 16000 — but it also caught the ordinary counter
+     case of a student handing over a round 15,000 against a 14,500 bill: the
+     form rewrote 15,000 to 14,500 and the 500 was owed to nobody, which is the
+     behaviour §14 asks to have a policy for.
+
+     Two different amounts need two different answers, so the threshold is now
+     plausibility rather than exactness. Up to twice the bill is money someone
+     could actually be handing over, and the excess is recorded as a credit
+     (see `overpaid` on the record). Beyond that it is a keystroke, and it is
+     still capped and still says so. */
   const paidEl  = document.getElementById('f-ppaid');
-  let pa = parseFloat(paidEl?.value)||0;
-  if(pa > total && total > 0) {
-    pa = total;
-    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
-    const capWarn = document.getElementById('f-ppaid-cap-warn');
-    if(!capWarn && paidEl) {
-      const w = document.createElement('div');
+  let pa = money(parseFloat(paidEl?.value)||0);
+  const implausible = total > 0 && pa > total * 2;
+  const note = (text, tone) => {
+    let w = document.getElementById('f-ppaid-cap-warn');
+    if (!text) { if (w) w.remove(); return; }
+    if (!w && paidEl) {
+      w = document.createElement('div');
       w.id = 'f-ppaid-cap-warn';
-      w.style.cssText = 'font-size:11px;color:var(--amber);margin-top:3px;font-weight:600';
-      w.textContent = '⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.';
       paidEl.parentNode.appendChild(w);
     }
+    if (!w) return;
+    w.style.cssText = 'font-size:11px;color:var(--' + tone + ');margin-top:3px;font-weight:600';
+    w.textContent = text;
+  };
+  if (implausible) {
+    pa = total;
+    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
+    note('⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
+  } else if (pa > total && total > 0) {
+    if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
+    note(fmtPKR(pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
   } else {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
-    const capWarn = document.getElementById('f-ppaid-cap-warn');
-    if(capWarn) capWarn.remove();
+    note('');
   }
   const u = Math.max(0, total - pa);
   const el = document.getElementById('f-punpaid');
@@ -1696,7 +1725,7 @@ function showAddPaymentForStudent(studentId) {
     if (messEl)   messEl.value   = c.mess || 0;
     if (messOnEl) messOnEl.checked = c.messOptIn;
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
-    if (unpaidEl) unpaidEl.value = existingPending.unpaid != null ? existingPending.unpaid : Math.max(0, c.total - (existingPending.amount||0));
+    if (unpaidEl) unpaidEl.value = outstandingOf(existingPending);
     if (statEl)   statEl.value   = existingPending.status;
     if (notesEl)  notesEl.value  = existingPending.notes || '';
     psMessToggle();
@@ -1732,7 +1761,10 @@ function recalcUnpaidPS() {
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
-  const unpaid = Math.max(0, rent + mess + extra + admFee - conc - paid);
+  const unpaid = Math.max(0, calculateBill({
+    rent, messCharge: mess, messIncluded: true,   // psMessAmount() returns 0 when off
+    extraTotal: extra, admissionFee: admFee, concession: conc,
+  }) - money(paid));
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
@@ -1764,7 +1796,7 @@ async function submitPaymentForStudent() {
   if (alreadyPending && !window._updatePendingPS) {
     window._updatePendingPS = true;
     const existingPaidAmt = Number(alreadyPending.amount || 0);
-    const existingUnpaid  = Number(alreadyPending.unpaid != null ? alreadyPending.unpaid : (alreadyPending.monthlyRent - existingPaidAmt));
+    const existingUnpaid  = outstandingOf(alreadyPending);
     showConfirm(
       '⚠️ Pending Record Already Exists',
       `${escHtml(t.name)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth)}</strong>.<br>`
@@ -1775,20 +1807,48 @@ async function submitPaymentForStudent() {
         // ── UPDATE existing pending record in-place ──────────────────
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
         const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
-        const newUnpaid      = Math.max(0, newMonthlyRent - newPaid);
+        /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
+           charge, the extras, the admission fee and the concession outright — so
+           at a bundled hostel, merging a payment into an existing pending record
+           understated the balance by the whole mess charge, while creating a
+           fresh record from the identical form got it right. The neighbouring
+           merge path in submitAddPayment() had had exactly this bug and carries
+           a comment about the fix; this copy was missed. One expression now:
+           calculateBill() in finance.js. */
+        const newMessOn      = document.getElementById('f-ps-mess-on')?.checked !== false;
+        const newMess        = psMessAmount();
+        const newAdmFee      = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
+        const newConcession  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+        const newConcDesc    = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
+        const newExtras      = getExtraChargesData();
+        const newExtraTotal  = newExtras.reduce((s, c) => s + c.amount, 0);
+        const newTotalDue    = calculateBill({
+          rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+          extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+        });
+        const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
         const newStatus      = document.getElementById('f-ps-stat')?.value  || 'Pending';
         const newMethod      = document.getElementById('f-ps-method')?.value || alreadyPending.method || 'Cash';
         const newDate        = document.getElementById('f-ps-date')?.value   || today();
         const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
 
-        alreadyPending.monthlyRent = newMonthlyRent;
-        alreadyPending.totalRent   = newMonthlyRent;
-        alreadyPending.amount      = newPaid;
-        alreadyPending.unpaid      = newUnpaid;
-        alreadyPending.method      = newMethod;
-        alreadyPending.status      = newStatus;
-        alreadyPending.date        = newDate;
-        alreadyPending.paidDate    = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
+        alreadyPending.monthlyRent  = newMonthlyRent;
+        alreadyPending.totalRent    = newMonthlyRent;
+        alreadyPending.messCharge   = newMess;
+        alreadyPending.messIncluded = newMessOn;
+        alreadyPending.extraCharges = newExtras;
+        alreadyPending.extraTotal   = newExtraTotal;
+        alreadyPending.admissionFee = newAdmFee;
+        alreadyPending.concession   = newConcession;
+        alreadyPending.concessionDesc = newConcDesc;
+        alreadyPending.discount     = newConcession;
+        alreadyPending.amount       = money(newPaid);
+        alreadyPending.unpaid       = newUnpaid;
+        alreadyPending.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
+        alreadyPending.method       = newMethod;
+        alreadyPending.status       = newStatus;
+        alreadyPending.date         = newDate;
+        alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
         alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
         if (newNotes) alreadyPending.notes = newNotes;
 
@@ -1813,8 +1873,11 @@ async function submitPaymentForStudent() {
   const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
   const extraChargesPS = getExtraChargesData();
   const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
-  const totalDuePS  = Math.max(0, monthlyRent + messChargePS + extraTotalPS + admissionFeePS - concessionPS);
-  const unpaid      = Math.max(0, totalDuePS - paidAmount);
+  const totalDuePS  = calculateBill({
+    rent: monthlyRent, messCharge: messChargePS, messIncluded: true,
+    extraTotal: extraTotalPS, admissionFee: admissionFeePS, concession: concessionPS,
+  });
+  const unpaid      = Math.max(0, totalDuePS - money(paidAmount));
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // Collecting a payment does NOT change what the student is charged. Price is
   // set in Settings → Rent & Mess; this form only records what was taken. It
@@ -1830,6 +1893,10 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
+    // §14 overpayment: money handed over above the bill is recorded, not
+    // swallowed by the Math.max that computes `unpaid`. Written even when 0, so
+    // calculateRefund() answers from the record instead of deriving.
+    overpaid: Math.max(0, money(paidAmount) - totalDuePS),
     messCharge: messChargePS, messIncluded: messIncludedPS,
     admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
@@ -2251,8 +2318,17 @@ function pfPayQuick(which) {
    cannot drift apart. */
 function pfPayableTotal() {
   const num = id => parseFloat(document.getElementById(id)?.value) || 0;
-  return Math.max(0, pfRentAmount() + pfMessAmount() + getExtraChargesTotal()
-                   + num('f-padmfee') - num('f-pconcession'));
+  // §14: one bill expression. This was the sixth hand-written copy of
+  // rent + mess + extras + admission − concession, and the copies had already
+  // drifted apart — see calculateBill() in finance.js.
+  return calculateBill({
+    rent:         pfRentAmount(),
+    messCharge:   pfMessAmount(),
+    messIncluded: true,           // pfMessAmount() already returns 0 when off
+    extraTotal:   getExtraChargesTotal(),
+    admissionFee: num('f-padmfee'),
+    concession:   num('f-pconcession'),
+  });
 }
 
 // The segmented control on line 01 sets the checkbox the rest of the form reads.
@@ -2347,7 +2423,7 @@ function pfRenderRecent(t) {
     .slice(0, 6);
   if (!rows.length) { box.innerHTML = '<div class="ap-empty">No payments recorded yet</div>'; return; }
   box.innerHTML = rows.map(p => {
-    const owed  = Number(p.unpaid || 0);
+    const owed  = outstandingOf(p);
     const clear = p.status === 'Paid' || owed <= 0;
     return `<div class="ap-led__r">
       <span class="ap-led__m">${escHtml(p.month || '—')}</span>
@@ -2456,7 +2532,7 @@ async function submitAddPayment() {
       window._updatePendingAP = true;
       // Build a friendly detail line showing what already exists
       const existingPaidAmt = Number(alreadyPending2.amount || 0);
-      const existingUnpaid  = Number(alreadyPending2.unpaid  != null ? alreadyPending2.unpaid : (alreadyPending2.monthlyRent - existingPaidAmt));
+      const existingUnpaid  = outstandingOf(alreadyPending2);
       showConfirm(
         '⚠️ Pending Record Already Exists',
         `${escHtml(tName)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth2)}</strong>.<br>`
@@ -2477,8 +2553,11 @@ async function submitAddPayment() {
           // a fresh one from the identical form.
           const newAdmFee      = parseFloat(document.getElementById('f-padmfee')?.value)||0;
           const newConcession  = parseFloat(document.getElementById('f-pconcession')?.value)||0;
-          const newTotalDue    = Math.max(0, newMonthlyRent + newMess + newExtraTotal + newAdmFee - newConcession);
-          const newUnpaid      = Math.max(0, newTotalDue - newPaid);
+          const newTotalDue    = calculateBill({
+            rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+            extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+          });
+          const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
           const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
           const newDate        = document.getElementById('f-pdate')?.value  || today();
@@ -2491,6 +2570,7 @@ async function submitAddPayment() {
           alreadyPending2.messIncluded = newMessOn;
           alreadyPending2.amount       = newPaid;
           alreadyPending2.unpaid       = newUnpaid;
+          alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
           // Amount Paid is the running total for the month, so today's cash is
           // the difference. Recording it leaves a per-instalment trail instead
           // of one figure that quietly changes shape between visits.
@@ -2549,9 +2629,12 @@ async function submitAddPayment() {
   const admissionFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc= (document.getElementById('f-pconcession-desc')?.value||'').trim();
-  const totalDue    = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
+  const totalDue    = calculateBill({
+    rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
+    extraTotal, admissionFee, concession,
+  });
   const totalRent   = monthlyRent;                // display rent = base only
-  const unpaid      = Math.max(0, totalDue - paidAmount);
+  const unpaid      = Math.max(0, totalDue - money(paidAmount));
   const status      = document.getElementById('f-pstat')?.value || 'Pending';
   const t    = isManual ? null : DB.students.find(x=>x.id===studentIdRaw);
   const room = t ? DB.rooms.find(r=>r.id===t?.roomId) : null;
@@ -2570,6 +2653,8 @@ async function submitAddPayment() {
     roomNumber: room?.number||'',
     amount: paidAmount,
     monthlyRent, unpaid,
+    // §14 overpayment — see submitPaymentForStudent() for the reasoning.
+    overpaid: Math.max(0, money(paidAmount) - totalDue),
     messCharge, messIncluded,
     extraCharges, extraTotal,
     admissionFee, concession, concessionDesc,
@@ -2637,7 +2722,7 @@ function showEditPaymentModal(id) {
   const admissionFee = p.admissionFee || p.fee || 0;
   const concession   = p.concession || p.discount || 0;
   const concessionDesc = p.concessionDesc || p.discountDesc || '';
-  const unpaid = p.unpaid != null ? p.unpaid : Math.max(0, monthlyRent + (messIncluded?messCharge:0) + admissionFee - concession - paidAmount);
+  const unpaid = outstandingOf(p);
   showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>
@@ -2729,9 +2814,12 @@ async function submitEditPayment(id) {
   const concessionDesc = (document.getElementById('f-pconcession-desc')?.value||'').trim();
   const extraCharges = getExtraChargesData();
   const extraTotal   = extraCharges.reduce((s,c)=>s+c.amount, 0);
-  const totalDue     = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
-  const unpaid       = Math.max(0, totalDue - paidAmount);
-  const prevPaid     = Number(p.amount) || 0;
+  const totalDue     = calculateBill({
+    rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
+    extraTotal, admissionFee, concession,
+  });
+  const unpaid       = Math.max(0, totalDue - money(paidAmount));
+  const prevPaid     = money(p.amount);
   if (!p.partialPayments) p.partialPayments = [];
   if (paidAmount > prevPaid) {
     p.partialPayments.push({
@@ -2754,6 +2842,11 @@ async function submitEditPayment(id) {
   p.extraCharges   = extraCharges;
   p.extraTotal     = extraTotal;
   p.unpaid         = unpaid;
+  // §14 overpayment. Recomputed from this form's own figures rather than added
+  // to, because the Edit form restates the whole record: the bill it shows and
+  // the amount beside it are both editable, so the credit is whatever those two
+  // now say it is.
+  p.overpaid       = Math.max(0, money(paidAmount) - totalDue);
   p.method         = document.getElementById('f-pmethod')?.value || p.method;
   p.month          = document.getElementById('f-pmonth')?.value  || p.month;
   p.status         = document.getElementById('f-pstat')?.value   || p.status;
@@ -2776,6 +2869,123 @@ async function submitEditPayment(id) {
   }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REVERSING A COLLECTION (spec §14)
+
+   A warden keys 15,000 where they meant 1,500. Until now the only remedy was
+   the Edit form, which restates the whole record: the wrong figure is
+   overwritten, the instalment trail is rewritten around it, and nothing is left
+   saying a mistake was ever made. On a shared warden screen that is
+   indistinguishable from money going missing.
+
+   A reversal is a fact about money and is recorded as one. It never edits the
+   collection it undoes — the original stays in the trail, the reversal sits
+   beside it in `p.reversals` with its reason and who did it, and dashboard.js
+   dates it as cash leaving the drawer on the day it happened.
+
+   THIS IS NOT DELETE. Delete removes the record and everything it says; this
+   removes an amount and says why. They are next to each other in the row
+   actions, so the modal has to make the difference obvious.
+   ══════════════════════════════════════════════════════════════════════════ */
+function showReversePaymentModal(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  const p = DB.payments.find(x => x.id === id); if (!p) return;
+
+  const collected = money(p.amount);
+  if (collected <= 0) { toast('Nothing has been collected on this record', 'info'); return; }
+
+  const due    = calculateOutstanding(p);
+  const credit = calculateRefund(p).refundable;
+  const trail  = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+  const past   = Array.isArray(p.reversals) ? p.reversals : [];
+
+  const line = (label, value, tone) =>
+    `<div class="pay-rev__line"><span>${label}</span>` +
+    `<b class="${tone || ''}">${value}</b></div>`;
+
+  showModal('modal-sm', 'Reverse a collection',
+    `<div class="pay-rev">
+       <div class="pay-rev__who">
+         <b>${escHtml(p.studentName || '—')}</b>
+         <span>${escHtml(p.month || '—')}${p.roomNumber ? ' · Room #' + escHtml(String(p.roomNumber)) : ''}</span>
+       </div>
+       <div class="pay-rev__box">
+         ${line('Collected on this record', fmtPKR(collected))}
+         ${line('Still owed', fmtPKR(due), due > 0 ? 'is-red' : '')}
+         ${credit > 0 ? line('Credit held', fmtPKR(credit), 'is-amber') : ''}
+       </div>
+       ${past.length ? `<div class="pay-rev__past">Already reversed: ${
+          past.map(r => fmtPKR(money(r.amount)) + ' on ' + escHtml(r.date || '—')).join(' · ')}</div>` : ''}
+       <div class="field">
+         <label>Amount to reverse</label>
+         <input class="form-control" id="f-prev-amt" type="number" min="1" max="${collected}"
+                value="${collected}" oninput="pfReverseHint()">
+         <div class="pay-rev__hint" id="f-prev-hint"></div>
+       </div>
+       <div class="field">
+         <label>Reason</label>
+         <input class="form-control" id="f-prev-reason" type="text" maxlength="120"
+                placeholder="Why is this being reversed?">
+       </div>
+       <div class="field">
+         <label>Date</label>
+         <input class="form-control cdp-trigger" id="f-prev-date" type="text" readonly
+                onclick="showCustomDatePicker(this,event)" value="${today()}">
+       </div>
+       ${''/* Said plainly, because this button sits beside Delete. */}
+       <div class="pay-rev__note">The original collection stays on the record. This
+         adds a reversal beside it, and the money shows as leaving on the date above.</div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="submitReversePayment('${p.id}')">Reverse</button>`);
+
+  setTimeout(pfReverseHint, 30);
+}
+
+/* What the record will say once this is applied. Shown live, because "what does
+   1,000 off a 15,000 collection leave me owed" is the question the warden is
+   actually asking and it is not obvious on a part-paid record. */
+function pfReverseHint() {
+  const el = document.getElementById('f-prev-hint');
+  const inp = document.getElementById('f-prev-amt');
+  if (!el || !inp) return;
+  const amt = money(parseFloat(inp.value) || 0);
+  const max = money(parseFloat(inp.max) || 0);
+  if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
+  if (amt > max)  { el.textContent = 'More than was collected (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
+  el.textContent = 'Leaves ' + fmtPKR(max - amt) + ' collected on this record.';
+  el.className = 'pay-rev__hint';
+}
+
+async function submitReversePayment(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  const p = DB.payments.find(x => x.id === id); if (!p) return;
+
+  const amount = money(parseFloat(document.getElementById('f-prev-amt')?.value) || 0);
+  const reason = (document.getElementById('f-prev-reason')?.value || '').trim();
+  const date   = document.getElementById('f-prev-date')?.value || today();
+
+  const r = reversePayment(p, { amount, reason, date });
+  if (!r.ok) {
+    toast(r.reason === 'exceeds-collected'
+        ? 'That is more than was collected on this record (' + fmtPKR(r.max) + ')'
+        : 'Enter an amount to reverse', 'error');
+    return;
+  }
+
+  /* Logged like every other money action, and with the reason — a reversal with
+     no stated cause is the one entry a later reader cannot make sense of. */
+  logActivity('Payment Reversed',
+    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} reversed`
+    + (reason ? ' · ' + reason : ' · no reason given'), 'Finance');
+
+  await saveDB();
+  closeModal();
+  renderPage(currentPage === 'payments' ? 'payments' : currentPage);
+  toast(fmtPKR(r.reversed) + ' reversed — ' + fmtPKR(money(p.amount)) + ' still collected on this record',
+        'success', 'Collection reversed');
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSES

@@ -1,6 +1,6 @@
 /* ─── HOSTYLLO — NAVIGATION MODULE ───────────────────────────────────────────
    Loaded by index.html after storage.js
-   Contains: goBack, navigate, headerAction, headerAction2, renderPage,
+   Contains: goBack, navigate, headerAction, renderPage,
              updateSidebar, searchRenderPage, toggleSidebar, closeSidebar
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
@@ -147,27 +147,58 @@ function navigate(page, isBack=false) {
     try { _lit.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
     catch (_) { /* a rail that does not auto-scroll still navigates fine */ }
   }
-  const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
-  const _s=document.getElementById('hdr-sub');
-  if(_s) { _s.textContent=cfg?.sub||''; _s.style.display = cfg?.sub ? 'block' : 'none'; }
-  /* The header's two green/blue buttons are Add <something> and Add Payment,
-     and both now lead to a gate. A button that always refuses is worse than no
-     button: the warden does not learn they lack the permission, they learn the
-     app is broken. _mayAdd/_mayCollect keep the chrome honest; the gates at the
-     entry points are still the boundary, because the command palette and a
-     direct navigate() reach those functions without passing through here. */
-  const _mayAdd     = typeof canDo !== 'function' || canDo('edit');
-  const _mayCollect = typeof canDo !== 'function' || canDo('payments');
-  const actionBtn = document.getElementById('hdr-action');
-  if(actionBtn) {
-    if(cfg && cfg.action && _mayAdd) { actionBtn.style.display='flex'; document.getElementById('hdr-action-text').textContent=cfg.action; }
-    else { actionBtn.style.display='none'; }
-  }
-  // Show "Add Payment" button on Dashboard and Students pages
-  const action2Btn = document.getElementById('hdr-action2');
-  if(action2Btn) action2Btn.style.display =
-    ((page === 'students' || page === 'dashboard') && _mayCollect) ? 'flex' : 'none';
+  applyHeaderChrome(page);
   renderPage(page, true); // reset scroll on real navigation
+}
+
+/* THE HEADER'S TITLE, SUBTITLE AND PRIMARY BUTTON, IN ONE PLACE.
+ *
+ * This used to live inside navigate(), which meant it only ever ran when
+ * somebody clicked the rail. On a fresh login the app lands on the dashboard
+ * WITHOUT going through navigate(), so the header kept its markup defaults:
+ * the title read "Dashboard" because that is what index.html hard-codes, and
+ * the primary button stayed hidden with the placeholder label "Add". The one
+ * button the sketch puts in the header was missing until you navigated away
+ * and back.
+ *
+ * Pulled out so the login path can call it too. It only writes chrome — no
+ * render, no navigation — so it is safe to call at any point after DB and the
+ * permission helpers exist. */
+function applyHeaderChrome(page) {
+  const cfg = pageConfig[page] || { title: page, sub: '', action: null };
+
+  const _t = document.getElementById('hdr-title');
+  if (_t) _t.textContent = cfg.title || '';
+
+  /* The subtitle is the HOSTEL'S NAME, on every page. The sketch puts it beside
+     the page title, and it is the one piece of context that answers "whose data
+     am I looking at" — which matters because a warden can run more than one
+     hostel from the same install. A page's own subtitle still shows after it. */
+  const _s = document.getElementById('hdr-sub');
+  if (_s) {
+    const hostel = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || '';
+    const txt = [hostel, cfg.sub].filter(Boolean).join(' · ');
+    _s.textContent = txt;
+    _s.style.display = txt ? 'block' : 'none';
+  }
+
+  /* The header's one primary button is Add <something>, and it leads to a gate.
+     A button that always refuses is worse than no button: the warden does not
+     learn they lack the permission, they learn the app is broken. This keeps
+     the chrome honest; the gate at the entry point is still the boundary,
+     because the command palette and a direct navigate() reach those functions
+     without passing through here. */
+  const mayAdd = typeof canDo !== 'function' || canDo('edit');
+  const btn = document.getElementById('hdr-action');
+  if (btn) {
+    if (cfg.action && mayAdd) {
+      btn.style.display = 'flex';
+      const lbl = document.getElementById('hdr-action-text');
+      if (lbl) lbl.textContent = cfg.action;
+    } else {
+      btn.style.display = 'none';
+    }
+  }
 }
 
 function headerAction() {
@@ -179,10 +210,11 @@ function headerAction() {
   else if(currentPage==='cancellations') showAddCancellationModal();
   else if(currentPage==='issues') showAddIssueModal();
 }
-function headerAction2() {
-  // "Add Payment" button shown on Dashboard and Students page
-  if(currentPage==='students' || currentPage==='dashboard') openAddPayment();
-}
+/* headerAction2() — the header's "Add Payment" button — is gone with the button
+   (2026-09-05). The sketch gives the header one primary action, and Add Payment
+   is the first tile in the dashboard's Quick Actions. openAddPayment() is
+   untouched and still reached from there, from the Payments page and from the
+   command palette. */
 
 // debounce() — defined in src/utils.js
 
@@ -247,13 +279,15 @@ function renderPage(p, resetScroll=false) {
     document.querySelectorAll('.nav-item').forEach(el=>{ el.classList.toggle('active', el.dataset.page==='cancellations'); });
     const cfg=pageConfig['cancellations'];
     const _t=document.getElementById('hdr-title'); if(_t) _t.textContent=cfg?.title||'';
-    const _s=document.getElementById('hdr-sub'); if(_s) _s.textContent=cfg?.sub||'';
+    const _s=document.getElementById('hdr-sub');
+    if(_s) {
+      const _hostel = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || '';
+      _s.textContent = [_hostel, cfg?.sub].filter(Boolean).join(' · ');
+    }
     const actionBtn=document.getElementById('hdr-action');
     const _mayAdd2 = typeof canDo !== 'function' || canDo('edit');
     if(cfg&&cfg.action&&_mayAdd2){actionBtn.style.display='flex';document.getElementById('hdr-action-text').textContent=cfg.action;}
     else{actionBtn.style.display='none';}
-    const action2Btn=document.getElementById('hdr-action2');
-    if(action2Btn) action2Btn.style.display='none';
   }
   setTimeout(()=>{
     try {
@@ -376,7 +410,7 @@ function chromeAlerts() {
   const pendCancel= (DB.cancellations || []).filter(c => c.status === 'Pending').length;
 
   if (pending.length) {
-    const amt = pending.reduce((s,p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount||0)), 0);
+    const amt = pending.reduce((s,p) => s + outstandingOf(p), 0);
     out.push({ hue:'dh-amber', go:"navigate('payments')",
       msg: pending.length + ' pending payment' + (pending.length>1?'s':'') + ' — ' + fmtPKR(amt) + ' uncollected',
       icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>' });

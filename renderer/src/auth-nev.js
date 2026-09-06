@@ -570,6 +570,14 @@ async function checkLogin() {
         if (screen) screen.style.display = 'none';
         updateRoleBadge();
         applyPermissionsToChrome();
+        /* Set the header for the page we are landing on. Login does not go
+           through navigate(), so without this the title, the hostel name and
+           the primary button keep index.html's placeholders until the warden
+           clicks something in the rail. */
+        if (typeof applyHeaderChrome === 'function') {
+          try { applyHeaderChrome(typeof currentPage !== 'undefined' ? currentPage : 'dashboard'); }
+          catch (e) { console.error('[chrome]', e); }
+        }
         _startIdleTracking();
         _checkDefaultPasswords();
         // Anything raised while the login screen was up has been held; the app

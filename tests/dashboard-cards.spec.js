@@ -1,0 +1,440 @@
+// ════════════════════════════════════════════════════════════════════════════
+// The four dashboard defects the owner reported on 2026-09-06.
+//
+//  1. "Today at a Glance" showed six zeros. The arithmetic was right — it was
+//     hard-scoped to the literal calendar day on a page where every other card
+//     is month-scoped, so on a hostel holding 141 payments and 55 students it
+//     printed nothing until somebody recorded something, and went back to
+//     nothing the next morning. Six zeros is indistinguishable from a card that
+//     is not wired to anything, and that is how it was read.
+//     It now follows the MONTH, which is the same window the KPI row above it
+//     uses — and `thisMonth()` reads the sidebar month picker, so the panel
+//     moves with it. Owner's direction, replacing a day-fallback that shipped
+//     first.
+//  2. Seat Availability's Expand and Print were removed on 2026-09-05. Owner
+//     reversed that; they are back, in the footer strip.
+//  3. Needs Action dropped rows with a count of 0. Owner: all four rows always
+//     present, only the numbers change.
+//  4. Quick Actions navigated to a page instead of opening the form the tile is
+//     named after. A tile called "Add X" that does not add an X is a link
+//     wearing a verb.
+//
+// The fold test at the end is the constraint all four had to respect: the
+// owner's brief is that rows A-C reach the bottom of the screen without
+// scrolling, and item 3 adds two rows to a card sitting in row C.
+// ════════════════════════════════════════════════════════════════════════════
+'use strict';
+
+const { test, expect, _electron: electron } = require('@playwright/test');
+const path = require('path');
+const { resetProfile } = require('./_profile');
+
+const REPO_ROOT = path.join(__dirname, '..');
+const PROFILE = process.env.HOSTIX_TEST_PROFILE;
+const ELECTRON = require('electron');
+
+function launchOpts() {
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return { executablePath: ELECTRON,
+    args: [REPO_ROOT, '--dev', '--user-data-dir=' + PROFILE, '--no-sandbox', '--disable-gpu'], env };
+}
+
+async function login(win) {
+  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
+  await win.waitForFunction(
+    () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
+    null, { timeout: 30000 });
+  await win.fill('#login-user', 'warden1');
+  await win.fill('#login-input', 'admin123');
+  await win.click('#login-btn');
+  await win.waitForFunction(
+    () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
+    null, { timeout: 30000 });
+}
+
+test.beforeAll(() => { resetProfile(); });
+
+const RENT = 8000, MESS = 6500, FULL = RENT + MESS;
+
+/** Seed and wait until it sticks — first-boot seeding can land on top of it. */
+async function seed(win, fn, arg) {
+  await win.evaluate(fn, arg);
+  await win.waitForFunction(() => DB.students.length > 0, null, { timeout: 8000 });
+  await win.evaluate(() => navigate('dashboard'));
+  await win.waitForSelector('.dl-glance__row', { timeout: 8000 });
+  await win.waitForTimeout(400);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1 — the glance reports the month, and the same month as everything else
+// ─────────────────────────────────────────────────────────────────────────────
+test('the glance counts the whole month, not just today', async () => {
+  const pageErrors = [];
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  win.on('pageerror', e => pageErrors.push(e.message));
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  const pre = await win.evaluate(() => window.electronAPI.dbAll('students'));
+  expect(pre.length, 'SAFETY ABORT: expected an EMPTY isolated DB').toBe(0);
+
+  /* THE DEFECT, in one fixture. Everything here happened THIS MONTH but on an
+     earlier day — which is the normal state of a hostel on any given morning.
+     Every one of these six figures used to read 0. */
+  await seed(win, async ([rent, mess]) => {
+    const mo = thisMonth();
+    const d = n => mo + '-' + String(n).padStart(2, '0');
+    DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
+    DB.students = [
+      { id: 's1', name: 'Early Joiner', roomId: 'r1', status: 'Active', joinDate: d(2), messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's2', name: 'Mid Joiner',   roomId: 'r1', status: 'Active', joinDate: d(4), messOptIn: true, paymentMethod: 'Cash' },
+      // Last month — must NOT be counted.
+      { id: 's3', name: 'Old Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-07-11', messOptIn: true, paymentMethod: 'Cash' },
+    ];
+    DB.payments = [
+      { id: 'p1', studentId: 's1', studentName: 'Early Joiner', month: mo, date: d(2),
+        amount: rent + mess, unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(2),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+      { id: 'p2', studentId: 's2', studentName: 'Mid Joiner', month: mo, date: d(4),
+        amount: rent, unpaid: mess, overpaid: 0, status: 'Paid', paidDate: d(4),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
+      // A different month — out of scope.
+      { id: 'p3', studentId: 's3', studentName: 'Old Joiner', month: '2026-07', date: '2026-07-11',
+        amount: 9999, unpaid: 0, overpaid: 0, status: 'Paid', paidDate: '2026-07-11',
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+    ];
+    DB.complaints  = [{ id: 'cp1', seq: 1, subject: 'Fan', date: d(3), status: 'Open' }];
+    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: d(5), status: 'Open' }];
+    DB.checkinlog  = [{ id: 'ci1', studentId: 's1', type: 'Check-in',  date: d(2), time: '09:00' },
+                      { id: 'ci2', studentId: 's1', type: 'Check-out', date: d(6), time: '18:00' },
+                      { id: 'ci3', studentId: 's3', type: 'Check-in',  date: '2026-07-11', time: '10:00' }];
+    DB.cancellations = [];
+    await saveDB();
+  }, [RENT, MESS]);
+
+  const g = await win.evaluate(() => {
+    const panel = [...document.querySelectorAll('.dl-panel')]
+      .find(p => /at a Glance/.test(p.innerText));
+    return {
+      title: panel.querySelector('.dash-sec__title').innerText.trim(),
+      pill: panel.querySelector('.dash-pill')?.innerText.trim() || null,
+      rows: [...panel.querySelectorAll('.dl-glance__row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()),
+      computed: _dlGlance(thisMonth()),
+    };
+  });
+
+  // The heading names the window. It cannot still say "Today" over a month.
+  expect(g.title).toBe('This Month at a Glance');
+  expect(g.pill, 'the pill names WHICH month, since the sidebar can change it').toMatch(/2026/);
+
+  const by = k => g.computed.find(r => r.k === k).n;
+  expect(by('in')).toBe(1);        // the July check-in is out of scope
+  expect(by('out')).toBe(1);
+  expect(by('new')).toBe(2);       // two admissions this month, not the July one
+  expect(by('money')).toBe(2);     // two settled records this month
+  expect(by('issue')).toBe(1);
+  expect(by('wrench')).toBe(1);
+  // 14,500 + 8,000 — and NOT the 9,999 from July.
+  expect(g.computed.find(r => r.k === 'money').money).toBe(RENT + MESS + RENT);
+
+  expect(pageErrors).toEqual([]);
+  await app.close();
+});
+
+test('the glance and Collection by Method report the same rupees', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  await seed(win, async ([rent, mess]) => {
+    const mo = thisMonth();
+    const d = n => mo + '-' + String(n).padStart(2, '0');
+    DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
+    DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: d(1), messOptIn: true, paymentMethod: 'Cash' }];
+    DB.payments = [
+      { id: 'p1', studentId: 's1', studentName: 'A', month: mo, date: d(2), amount: rent + mess,
+        unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(2),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+      { id: 'p2', studentId: 's1', studentName: 'A', month: mo, date: d(9), amount: 5000,
+        unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(9),
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
+      // Part-paid: deliberately NOT settled, so it belongs to neither figure.
+      { id: 'p3', studentId: 's1', studentName: 'A', month: mo, date: d(12), amount: 3000,
+        unpaid: 11500, status: 'Pending',
+        monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'Cash' },
+    ];
+    DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    await saveDB();
+  }, [RENT, MESS]);
+
+  /* Both use `_payMatchesMonth()` over settled records, which is why this holds
+     — the glance row and the Collection by Method card sit two panels apart on
+     one screen, and two figures for the same money on one screen is the defect
+     this whole session has been about. */
+  const agree = await win.evaluate(() => {
+    const mo = thisMonth();
+    return { glance: _dlGlance(mo).find(r => r.k === 'money').money,
+             methods: _dlMethods(mo).total };
+  });
+  expect(agree.glance).toBe(agree.methods);
+  expect(agree.glance).toBe(RENT + MESS + 5000);
+  await app.close();
+});
+
+test('the glance follows the sidebar month picker, like the KPI row', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  await seed(win, async ([rent, mess]) => {
+    DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
+    DB.students = [
+      { id: 's1', name: 'July Joiner',  roomId: 'r1', status: 'Active', joinDate: '2026-07-04', messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's2', name: 'Aug Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-08-06', messOptIn: true, paymentMethod: 'Cash' },
+      { id: 's3', name: 'Aug Joiner 2', roomId: 'r1', status: 'Active', joinDate: '2026-08-19', messOptIn: true, paymentMethod: 'Cash' },
+    ];
+    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    await saveDB();
+  }, [RENT, MESS]);
+
+  // `thisMonth()` reads the picker, so pointing it at a month re-scopes the
+  // panel exactly as it re-scopes the KPI cards above it.
+  const admissions = await win.evaluate(() => {
+    const out = {};
+    for (const m of ['2026-07', '2026-08']) {
+      out[m] = _dlGlance(m).find(r => r.k === 'new').n;
+    }
+    return out;
+  });
+  expect(admissions['2026-07']).toBe(1);
+  expect(admissions['2026-08']).toBe(2);
+  await app.close();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2, 3, 4 — the controls
+// ─────────────────────────────────────────────────────────────────────────────
+test('Needs Action keeps all four rows, and only the numbers change', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  // Nothing outstanding anywhere: the panel used to disappear into one line.
+  await seed(win, async () => {
+    DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
+    DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
+    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    await saveDB();
+  });
+
+  let n = await win.evaluate(() => ({
+    rows: [...document.querySelectorAll('.dl-need')].map(r => ({
+      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+    pill: [...document.querySelectorAll('.dl-panel')]
+      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dash-pill')?.innerText.trim() || null,
+  }));
+
+  expect(n.rows.length, 'all four rows are always present').toBe(4);
+  expect(n.rows.every(r => r.clear)).toBe(true);
+  expect(n.rows.map(r => r.text)).toEqual([
+    '0 pending cancellations Clear',
+    '0 pending payments Clear',
+    '0 open complaints Clear',
+    // "0 open maintenances" — the naive + 's' pluraliser was wrong at every
+    // count, not just at zero; it was simply never visible before.
+    '0 open maintenance jobs Clear',
+  ]);
+  expect(n.pill, 'no badge when nothing wants attention').toBeNull();
+
+  // Now give two of them something. The rows must not move.
+  await win.evaluate(async () => {
+    const td = today();
+    DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'A', month: thisMonth(),
+                     date: td, amount: 0, unpaid: 14500, status: 'Pending',
+                     monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' }];
+    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
+    await saveDB();
+    navigate('dashboard');
+  });
+  await win.waitForTimeout(700);
+
+  n = await win.evaluate(() => ({
+    rows: [...document.querySelectorAll('.dl-need')].map(r => ({
+      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+    pill: [...document.querySelectorAll('.dl-panel')]
+      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dash-pill')?.innerText.trim() || null,
+  }));
+
+  expect(n.rows.length).toBe(4);
+  // Same order, same positions — the list is scannable because it does not move.
+  expect(n.rows[0].text).toBe('0 pending cancellations Clear');
+  expect(n.rows[1].text).toBe('1 pending payment Collect');
+  expect(n.rows[2].text).toBe('1 open complaint Resolve');
+  expect(n.rows[3].text).toBe('0 open maintenance jobs Clear');
+  expect(n.rows.map(r => r.clear)).toEqual([true, false, false, true]);
+  expect(n.pill, 'the badge counts what wants attention, not the rows').toBe('2');
+
+  await app.close();
+});
+
+test('every Quick Action opens its own form, and Seat Availability can expand and print', async () => {
+  const pageErrors = [];
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  win.on('pageerror', e => pageErrors.push(e.message));
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  await seed(win, async () => {
+    DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
+    DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
+    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    await saveDB();
+  });
+
+  const labels = await win.evaluate(() =>
+    [...document.querySelectorAll('.dl-act')].map(a => a.innerText.replace(/\s+/g, ' ').trim()));
+  expect(labels).toEqual(['Add Payment', 'Add Expense', 'Add Issue', 'Add Cancellation']);
+
+  // Each modal tile opens ITS form — not the page the form lives on.
+  // Each id is a VISIBLE field of the form in question — `#canc-student` is the
+  // cancellation modal's hidden input, and waiting on it waits for something
+  // that is never visible by design.
+  for (const [label, id] of [['Add Expense', 'f-ecat'],
+                             ['Add Issue', 'if-maint'],
+                             ['Add Cancellation', 'canc-search']]) {
+    await win.evaluate(l => [...document.querySelectorAll('.dl-act')]
+      .find(a => a.innerText.replace(/\s+/g, ' ').trim() === l).click(), label);
+    await win.waitForSelector('#' + id, { timeout: 6000 });
+    await win.evaluate(() => closeModal());
+    await win.waitForTimeout(250);
+  }
+
+  // Add Payment is a full page in this app rather than a modal, so the form it
+  // opens is a screen — still one click, still the form.
+  await win.evaluate(() => [...document.querySelectorAll('.dl-act')]
+    .find(a => /Add Payment/.test(a.innerText)).click());
+  await win.waitForTimeout(600);
+  expect(await win.evaluate(() => currentPage)).toBe('addpayment');
+
+  // ── Seat Availability: Expand and Print are reachable again ───────────────
+  await win.evaluate(() => navigate('dashboard'));
+  await win.waitForSelector('.seat-foot__b', { timeout: 8000 });
+  const seat = await win.evaluate(() =>
+    [...document.querySelectorAll('.seat-foot__b')].map(b => ({
+      label: b.innerText.trim(), fn: b.getAttribute('onclick') })));
+  expect(seat.map(b => b.label)).toEqual(['Expand', 'Print']);
+  expect(seat[0].fn).toContain('showSeatDetailModal');
+  // printSeatAvailability() was never deleted — only its button was.
+  expect(seat[1].fn).toContain('printSeatAvailability');
+
+  await win.evaluate(() => document.querySelectorAll('.seat-foot__b')[0].click());
+  await win.waitForTimeout(600);
+  const expanded = await win.evaluate(() =>
+    (document.querySelector('.modal-title') || {}).innerText || '');
+  expect(expanded).toMatch(/All Rooms/i);
+
+  expect(pageErrors).toEqual([]);
+  await app.close();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE FOLD, WITH 40 ROOMS
+// ─────────────────────────────────────────────────────────────────────────────
+test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  await seed(win, async () => {
+    const td = today(), mo = thisMonth();
+    DB.rooms = []; DB.students = []; DB.payments = [];
+    for (let i = 1; i <= 40; i++)
+      DB.rooms.push({ id: 'r' + i, number: String(i), floor: 'G', typeId: '2s',
+                      studentIds: [], amenities: [], notes: '' });
+    for (let i = 1; i <= 30; i++) {
+      DB.students.push({ id: 's' + i, name: 'Student ' + i, roomId: 'r' + ((i % 40) + 1),
+                         status: 'Active', joinDate: mo + '-02', messOptIn: true, paymentMethod: 'Cash' });
+      DB.payments.push({ id: 'p' + i, studentId: 's' + i, studentName: 'Student ' + i,
+                         month: mo, date: td, amount: i % 3 ? 14500 : 4000,
+                         unpaid: i % 3 ? 0 : 10500, overpaid: 0,
+                         status: i % 3 ? 'Paid' : 'Pending', paidDate: i % 3 ? td : '',
+                         monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' });
+    }
+    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
+    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    DB.cancellations = [{ id: 'c1', seq: 1, studentId: 's1', studentName: 'Student 1',
+                          roomNumber: '2', requestDate: td, vacateDate: '2026-09-30',
+                          status: 'Pending', reason: 'x', createdAt: td }];
+    await saveDB();
+  });
+
+  /* The five screen/scaling combinations the app is actually used at. All five
+     now fit — the 2026-09-05 handoff recorded four, with 1093x614 written off
+     as impossible ("the last 43 would have to come out of the chart and the
+     card padding, past the point where either is worth showing").
+
+     What made it possible was finding the real constraint rather than trimming
+     everything a little. Row B's three cards stretch to the tallest of them,
+     and only ONE of them cannot shrink: the chart flexes and the room grid
+     scrolls, so the glance sets the row. Hiding it dropped row B from 275px to
+     156px. Its labels were wrapping to two lines at one-tile width; one-word
+     labels and the short-height density rules gave back ~90px, and no figure
+     and no label was lost to get it. */
+  const SIZES = [
+    { label: '1366x768 @100%',  width: 1366, height: 768 },
+    { label: '1920x1080 @100%', width: 1920, height: 1040 },
+    { label: '1920x1080 @125%', width: 1536, height: 824 },
+    { label: '1920x1080 @150%', width: 1280, height: 660 },
+    { label: '1366x768 @125%',  width: 1093, height: 614 },
+  ];
+
+  const misses = [];
+  for (const s of SIZES) {
+    await win.setViewportSize({ width: s.width, height: s.height });
+    await win.evaluate(() => navigate('dashboard'));
+    await win.waitForSelector('.dl-need', { timeout: 8000 });
+    await win.waitForTimeout(700);
+    const m = await win.evaluate(() => ({
+      bottom: Math.round(document.querySelector('.dash-row-c').getBoundingClientRect().bottom),
+      vp: window.innerHeight,
+      // Every glance row must be ONE line. A re-wrap is ~65px of fold going
+      // quietly missing, so it is asserted rather than left to be noticed.
+      rows: [...document.querySelectorAll('.dash-row-b .dl-glance__row')]
+              .map(r => Math.round(r.getBoundingClientRect().height)),
+      overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }));
+    if (m.bottom > m.vp) misses.push(`${s.label}: row C ends at ${m.bottom}, viewport ${m.vp}`);
+    expect(m.overflowX, `${s.label} must not scroll sideways`).toBe(false);
+    // Six rows, and the tallest no more than a line and a half — the money row
+    // carries a second line at full height and drops it under 700px.
+    expect(m.rows.length).toBe(6);
+    expect(Math.max(...m.rows), `${s.label}: a glance label has wrapped again`)
+      .toBeLessThanOrEqual(50);
+  }
+  expect(misses, 'rows A-C must reach the fold at every shipped size').toEqual([]);
+
+  // And the seat header stays one line at 1366, which is why Expand and Print
+  // went to the footer rather than beside the counts.
+  await win.setViewportSize({ width: 1366, height: 768 });
+  await win.evaluate(() => navigate('dashboard'));
+  await win.waitForSelector('.seat-foot__b', { timeout: 8000 });
+  await win.waitForTimeout(400);
+  const headH = await win.evaluate(() =>
+    Math.round(document.querySelectorAll('.dash-row-b .dash-sec__head')[1].getBoundingClientRect().height));
+  expect(headH, 'the seat header must stay one line at 1366').toBeLessThan(45);
+
+  await app.close();
+});

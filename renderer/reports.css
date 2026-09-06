@@ -301,6 +301,17 @@
 }
 .mov__foot span { display:inline-flex; align-items:center; gap:6px; }
 
+/* Shown only when the §14 layer will not vouch for the figures above it (a
+   total past exact integer range, or the accrual and the layer disagreeing).
+   It takes the whole row rather than sitting third in the flex line: a caveat
+   about the numbers being wrong must not read as a third footnote about
+   formatting. */
+.mov__foot .mov__warn {
+    flex:1 0 100%; align-items:flex-start; line-height:1.55;
+    color:var(--ant-danger-fg); font-weight:600;
+}
+.mov__foot .mov__warn svg { flex-shrink:0; margin-top:2px; }
+
 @media (max-width:900px) {
     /* The strip is on auto-fit now and needs no viewport rule; the cell borders
        are the grid gap, so the nth-child fixups went with them. */

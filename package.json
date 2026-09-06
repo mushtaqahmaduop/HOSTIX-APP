@@ -25,6 +25,10 @@
     "test:retention": "node tests/retention.test.js",
     "test:bulkrooms": "node tests/bulk-rooms.test.js",
     "test:servicemodel": "node tests/service-model.test.js",
+    "test:outstanding": "node tests/outstanding.test.js",
+    "test:finance": "node tests/finance.test.js",
+    "test:cashevents": "node tests/cash-events.test.js",
+    "test:reporttotals": "node tests/report-totals.test.js",
     "test:services": "node tests/services.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Same CSP posture as license.html. Nothing here loads anything remote. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;">
+<title>Hostyllo — Recovery</title>
+<style>
+  /* Self-contained on purpose. This screen has to render when the rest of the
+     app cannot, so it depends on no token file, no stylesheet and no font the
+     machine might not have. */
+  :root {
+    --bg:#1a1c1e; --panel:#232629; --line:#33383d;
+    --ink:#e8eaed; --muted:#9aa3ab; --accent:#2563eb; --accent-ink:#fff;
+    --warn:#e5a13a; --danger:#d9534f; --ok:#3fa66a;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:28px 30px; background:var(--bg); color:var(--ink);
+    font:14px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  h1 { margin:0 0 6px; font-size:20px; font-weight:650; letter-spacing:-.01em; }
+  .sub { color:var(--muted); margin:0 0 22px; }
+  .panel {
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px; margin-bottom:16px;
+  }
+  .panel h2 { margin:0 0 10px; font-size:13px; font-weight:650; color:var(--muted);
+              text-transform:uppercase; letter-spacing:.06em; }
+  .reason { color:var(--warn); font-family:Consolas,"Courier New",monospace;
+            font-size:12.5px; word-break:break-word; }
+  ul.snaps { list-style:none; margin:0; padding:0; }
+  ul.snaps li {
+    display:flex; align-items:center; gap:14px; padding:11px 0;
+    border-bottom:1px solid var(--line);
+  }
+  ul.snaps li:last-child { border-bottom:0; }
+  .snap-main { flex:1 1 auto; min-width:0; }
+  .snap-kind { font-weight:600; }
+  .snap-meta { color:var(--muted); font-size:12.5px; margin-top:2px;
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  button {
+    font:inherit; font-weight:600; padding:8px 15px; border-radius:7px;
+    border:1px solid var(--line); background:#2b2f33; color:var(--ink);
+    cursor:pointer; white-space:nowrap;
+  }
+  button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  button:disabled { opacity:.45; cursor:default; }
+  .note { color:var(--muted); font-size:12.5px; margin-top:12px; }
+  .msg { margin-top:14px; padding:11px 13px; border-radius:8px; display:none; }
+  .msg.err { display:block; background:rgba(217,83,79,.13); border:1px solid var(--danger); color:#f3b5b3; }
+  .msg.ok  { display:block; background:rgba(63,166,106,.13); border:1px solid var(--ok);     color:#b3e6c8; }
+  .empty { color:var(--muted); }
+</style>
+</head>
+<body>
+
+<h1 id="head">Your data is safe. This file is not.</h1>
+<p class="sub" id="sub">
+  Hostyllo checked its database when it started and found damage, so it has
+  <strong>stopped writing to it</strong> rather than risk making things worse.
+  Nothing has been deleted.
+</p>
+
+<div class="panel">
+  <h2>What was found</h2>
+  <div class="reason" id="reason">Checking…</div>
+  <div class="note" id="dbpath"></div>
+</div>
+
+<div class="panel" id="restore-panel">
+  <h2>Restore from a backup</h2>
+  <ul class="snaps" id="snaps"><li class="empty">Looking for backups…</li></ul>
+  <div class="note">
+    The backup is copied and checked <em>beside</em> your data first, and only
+    swapped in if it passes. The damaged file is kept either way — it is never
+    deleted. Hostyllo will restart once this is done.
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<p class="note" id="foot">
+  If none of these work, contact support and quote the file name above. The
+  damaged file can often still be read by hand, so do not delete it.
+</p>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function kb(n) {
+    if (n == null) return 'size unknown';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function when(iso) {
+    if (!iso) return 'date unknown';
+    var d = new Date(iso);
+    if (isNaN(d)) return 'date unknown';
+    return d.toLocaleString();
+  }
+
+  function show(kind, text) {
+    var m = $('msg');
+    m.className = 'msg ' + kind;
+    m.textContent = text;
+  }
+
+  function lockAll(yes) {
+    var bs = document.querySelectorAll('#snaps button');
+    for (var i = 0; i < bs.length; i++) bs[i].disabled = yes;
+  }
+
+  /* Two states arrive here and they need opposite advice.
+
+     CORRUPT: the file is damaged, and restoring a backup over it is the fix.
+
+     UNSUPPORTED_SCHEMA: the file is perfectly intact and NEWER than this build
+     understands. Restoring an older backup over it would not recover anything
+     — it would be the data loss. So the restore list is removed entirely and
+     the only instruction is to update the app. */
+  var UNSUPPORTED = false;
+
+  window.electronAPI.dbHealth().then(function (h) {
+    UNSUPPORTED = h && h.state === 'UNSUPPORTED_SCHEMA';
+    $('reason').textContent = (h && h.reason) || 'The database file could not be read.';
+    if (h && h.dbPath) $('dbpath').textContent = h.dbPath;
+
+    if (UNSUPPORTED) {
+      $('head').textContent = 'Your data is newer than this version of Hostyllo.';
+      $('sub').innerHTML =
+        'This database was written by a <strong>newer version</strong> of Hostyllo. ' +
+        'Nothing is wrong with it, and nothing has been changed — but this build ' +
+        'does not understand its format, so it has <strong>not opened or written to ' +
+        'it</strong> rather than save records with pieces missing.';
+      var rp = $('restore-panel');
+      if (rp) rp.parentNode.removeChild(rp);
+      $('foot').textContent =
+        'Install the current version of Hostyllo and your data will open as normal. '
+        + 'Do not restore an older backup over it — that would replace good data '
+        + 'with older data. If you are not sure which version you had, contact support '
+        + 'and quote the file name above.';
+      return;
+    }
+    loadSnapshots();
+  }).catch(function () {
+    $('reason').textContent = 'The database file could not be read.';
+    loadSnapshots();
+  });
+
+  function loadSnapshots() {
+  window.electronAPI.recoveryList().then(function (r) {
+    var list = (r && r.snapshots) || [];
+    var ul = $('snaps');
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty">No backups were found next to the database.</li>';
+      return;
+    }
+    ul.innerHTML = '';
+    list.forEach(function (s, i) {
+      var li = document.createElement('li');
+      li.innerHTML =
+        '<div class="snap-main">' +
+          '<div class="snap-kind">' + esc(s.kind) + '</div>' +
+          '<div class="snap-meta">' + esc(when(s.mtime)) + ' · ' + esc(kb(s.size)) +
+            ' · ' + esc(s.file) + '</div>' +
+        '</div>';
+      if (s.restorable) {
+        var b = document.createElement('button');
+        // The newest restorable backup is the one almost everybody wants.
+        b.className = i === 0 ? 'primary' : '';
+        b.textContent = 'Restore this';
+        b.addEventListener('click', function () {
+          lockAll(true);
+          show('ok', 'Checking this backup…');
+          window.electronAPI.recoveryRestore(s.path).then(function (res) {
+            if (res && res.ok) {
+              show('ok', 'Restored. Hostyllo is restarting…');
+              window.electronAPI.recoveryRestart();
+            } else {
+              show('err', (res && res.error) || 'That backup could not be used.');
+              lockAll(false);
+            }
+          }).catch(function (e) {
+            show('err', String(e && e.message || e));
+            lockAll(false);
+          });
+        });
+        li.appendChild(b);
+      }
+      ul.appendChild(li);
+    });
+  }).catch(function (e) {
+    $('snaps').innerHTML = '<li class="empty">Backups could not be listed.</li>';
+    show('err', String(e && e.message || e));
+  });
+  }
+})();
+</script>
+</body>
+</html>

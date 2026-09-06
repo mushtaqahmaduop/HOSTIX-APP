@@ -167,6 +167,40 @@ function isResident(t) { return !!t && RESIDENT_STATUSES.indexOf(t.status) !== -
 function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
 function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
 
+/* ── BIG NUMBERS, SHORT ENOUGH TO FIT ────────────────────────────────────────
+   A KPI tile is about 190px wide with six across, which holds roughly
+   "PKR 9,999,999" and no more. A hostel billing in whole rupees reaches eight
+   and nine digits easily — a year of a 150-bed house is tens of millions — and
+   past that the tile simply clipped: "PKR 1,000,000,17" with the rest of the
+   number, and any sense of its size, cut off at the card edge. A figure you
+   cannot read the end of is worse than a rounded one.
+
+   So: exact up to 9,999,999, abbreviated above it. The threshold is where the
+   tile actually runs out, not a round-looking number — under it nothing
+   changes, which is why ordinary hostels see no difference at all.
+
+   Two decimals, because one is not enough at this scale: 1.2B and 1.24B are
+   forty million rupees apart.
+
+   THE EXACT FIGURE IS NEVER LOST. Every caller pairs this with a title
+   attribute carrying the full number (moneyValue does it automatically), so
+   the rounding is a display choice a hover undoes, not a discarded fact. */
+function fmtCompact(n) {
+  const v = Number(n || 0);
+  const abs = Math.abs(v);
+  if (abs < 1e7) return fmtNum(v);                 // exact while it still fits
+  const sign = v < 0 ? '-' : '';
+  /* Divisor and suffix as separate values rather than a [suffix, divisor]
+     tuple: a mixed array types as (string|number)[], so the division fails
+     `npm run typecheck` — utils.js is one of the four files in its scope. */
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : 1e6;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : 'M';
+  /* Trailing zeros trimmed: "5B" reads better than "5.00B", and the two mean
+     the same thing. Only the zeros go — 5.20B keeps its 2. */
+  const num = (abs / div).toFixed(2).replace(/\.?0+$/, '');
+  return sign + num + suffix;
+}
+
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
    charge is a reader, and reads it through here.
@@ -291,6 +325,89 @@ function resolveCharges(student, opts) {
     configured: rentFrom.src !== 'none',
     room, roomType: rtype
   };
+}
+
+/* ── WHAT IS STILL OWED ON A PAYMENT ──────────────────────────────────────────
+   `amount` is money COLLECTED; `unpaid` is money still owed. Records written
+   before `unpaid` existed carry only the first, and every screen invented its
+   own answer for the second — 29 sites fell back to `p.amount`, 26 fell back
+   to 0, and reports.js did both, so its Pending card and its own transaction
+   table disagreed about the same record. A warden chasing arrears from the
+   Payments screen therefore collected a different set than one chasing them
+   from Reports, and neither figure was labelled as an estimate.
+
+   Neither fallback was right. "Owes exactly what they already paid" is only
+   correct when nothing was paid, and "owes nothing" quietly drops real debtors
+   off every arrears list.
+
+   The answer comes from the charge authority instead, which is what §14 means
+   by reports reconciling against the same financial layer: resolveCharges()
+   knows what this student is billed today, and what is owed is that, less what
+   came in. This is not a new rule — the Edit Payment form has computed it this
+   way all along (payments.js). It was simply never shared, so every other
+   screen guessed.
+
+   The payment's own recorded rent/mess are the fallback for a student who has
+   since been deleted: the record still has to print a number on a receipt.
+
+   ORDER MATTERS HERE. A recorded `unpaid` is answered first and always, even
+   on a record marked Paid. Those two can disagree: every automatic settlement
+   writes `unpaid = 0` with the status, but the Edit Payment form takes the
+   status from a free dropdown while the balance beside it is readonly, so a
+   warden can mark a part-paid record Paid and save a balance with it. That
+   balance is money someone is owed. Deriving over it, or zeroing it because
+   the status says so, loses it silently.
+
+   The 'Paid' short-circuit therefore guards only the DERIVATION, which is
+   where it is actually needed: several call sites sum over lists that were
+   never filtered to Pending, and without it a legacy Paid record would
+   contribute its whole charge to Outstanding.
+
+   Everything derived is floored at 0 — a record whose collections already
+   cover the charge is settled, not in credit. */
+function outstandingOf(p) {
+  if (!p) return 0;
+  if (p.unpaid != null) return Number(p.unpaid) || 0;
+  if (p.status === 'Paid') return 0;
+
+  const t = (typeof DB !== 'undefined' && DB.students || []).find(s => s.id === p.studentId);
+  const c = t ? resolveCharges(t) : null;
+  const rent = (c && c.rent) || Number(p.monthlyRent || p.totalRent || 0);
+
+  /* Mess obeys resolveCharges' own rule: THE HOSTEL'S ANSWER OVERRIDES THE
+     RECORD'S. A rent-only hostel bills no food and a bundled one bills it for
+     everyone, whatever `messIncluded` a record written under an older setting
+     happens to carry — otherwise a hostel that switched to bundled would
+     under-state its arrears on every record from before the switch. Only an
+     optional hostel lets the record decide, which is the one case where that
+     flag is a billing fact rather than a stale preference.
+
+     With no student left to price against, the record is all there is. */
+  const mess = c
+    ? (c.messOptional && p.messIncluded != null
+        ? (p.messIncluded !== false ? c.mess : 0)
+        : c.messBilled)
+    : (p.messIncluded !== false ? Number(p.messCharge || 0) : 0);
+
+  /* Extra charges are part of the bill. Every place that WRITES a balance
+     computes it as monthlyRent + mess + extraTotal + admissionFee − concession
+     (payments.js:1816, :2552, :2732), so a derivation that drops extraTotal
+     reports less than the record owes. That omission is a real, recorded
+     defect — the Phase 0 fixture `m_legacy_no_unpaid` exists to catch it, and
+     `payments.js:2640` had it before this helper replaced that expression.
+
+     The recorded total wins; the line items are the fallback for a record that
+     carries them without it. */
+  const extras = p.extraTotal != null
+    ? Number(p.extraTotal) || 0
+    : (Array.isArray(p.extraCharges)
+        ? p.extraCharges.reduce((s, c) => s + (Number(c && c.amount) || 0), 0)
+        : 0);
+
+  return Math.max(0, rent + mess + extras
+                   + Number(p.admissionFee || p.fee || 0)
+                   - Number(p.concession   || p.discount || 0)
+                   - Number(p.amount       || 0));
 }
 
 /* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────
@@ -440,9 +557,16 @@ function moneyValue(amount, opts) {
   const currency = opts.currency || 'PKR';
   const color = opts.color ? `style="color:${opts.color}"` : '';
   const cls = opts.className ? ' ' + opts.className : '';
-  return `<span class="money-value money-value--${size}${cls}" ${color}>`
+  /* `compact` shortens the digits and keeps the exact figure in the title, so
+     a clipped card becomes a readable one without the precise number going
+     anywhere. Used by the KPI row, where the space is fixed and the values are
+     unbounded. */
+  const shown = opts.compact ? fmtCompact(amount) : fmtNum(amount);
+  const exact = opts.compact && shown !== fmtNum(amount)
+    ? ` title="${currency} ${fmtNum(amount)}"` : '';
+  return `<span class="money-value money-value--${size}${cls}" ${color}${exact}>`
        + `<span class="money-cur">${currency}</span>`
-       + `<span class="money-amt">${fmtNum(amount)}</span>`
+       + `<span class="money-amt">${shown}</span>`
        + `</span>`;
 }
 

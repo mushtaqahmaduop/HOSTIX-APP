@@ -91,7 +91,11 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     // card whose own figure counted July only — the table and the stat above it
     // described two different windows.
     const pendingPays = pays.filter(p=>p.status==='Pending').sort((a,b)=>new Date(b.date)-new Date(a.date));
-    const totalPend = pendingPays.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+    /* `pending` is already this figure — _rptTotals() computes it over exactly
+       this set through calculateReportTotals(). It was being summed a second
+       time here from the same records, which is how a card and the stat above
+       it drift apart when only one of them is later corrected. */
+    const totalPend = pending;
     const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
@@ -109,7 +113,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         </div>
         <div style="background:var(--blue-dim);border:1px solid rgba(74,156,240,0.3);border-radius:10px;padding:16px;text-align:center">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);font-weight:700">Partially Paid</div>
-          <div style="font-size:26px;font-weight:900;color:var(--blue)">${pendingPays.filter(p=>p.unpaid!=null&&Number(p.amount)>0).length}</div>
+          <div style="font-size:26px;font-weight:900;color:var(--blue)">${pendingPays.filter(p=>Number(p.amount)>0).length}</div>
         </div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th><th>Action</th></tr></thead><tbody>
@@ -117,8 +121,8 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal('${p.studentId}')">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${escHtml(p.roomNumber||'—')}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
-        <td class="${Number(p.amount)>0&&p.unpaid!=null?'text-green fw-700':'text-muted'}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td>
-        <td class="text-red fw-700">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td>
+        <td class="${Number(p.amount)>0?'text-green fw-700':'text-muted'}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td>
+        <td class="text-red fw-700">${fmtPKR(outstandingOf(p))}</td>
         <td>${pmBadge(p.method)}</td>
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
         <td><button class="btn btn-success btn-sm" style="font-size:11px" onclick="markPaymentPaid('${p.id}');reportDetail='pending';renderPage('reports')">✓ Collect</button></td>
@@ -479,19 +483,69 @@ function _rptCatTablesHTML(rows) {
 
 // Totals for an arbitrary set of period keys, so current and previous windows
 // are measured by exactly the same code.
+/* ── THE REPORT AUTHORITY (spec §14: "reports must reconcile against the same
+      financial authority") ──────────────────────────────────────────────────
+
+   Every figure this page, its detail cards, its CSVs and its PDFs print comes
+   from here. The money half now comes from `calculateReportTotals()` in
+   finance.js rather than from sums written out again in this file — the two
+   things §14 is asking for are that reports use the same authority as the rest
+   of the app, and that they use ONE of them rather than one per screen.
+
+   WHAT DID NOT CHANGE, AND WHY.
+
+   `rev` still comes from `calcRevenue()`. That is deliberate, not an oversight:
+   `calcRevenue()` is the ACCRUAL authority the dashboard, the cards, the CSVs
+   and the share sheets all read, and July's rent handed over in August is
+   July's revenue to all of them. Replacing it here with the layer's `collected`
+   would be replacing a shared answer with a second one — the exact shape of
+   D-1. The layer's `collected` is returned BESIDE it instead, and the two must
+   agree: both sum `p.amount` over the same scope, so a divergence means a
+   record carries a stored status that is neither Paid nor Pending, and the
+   report would then be quietly missing its money. `tests/report-totals.test.js`
+   asserts they reconcile and pins that failure mode.
+
+   `pending` still counts records whose STORED status is Pending, which is what
+   the dashboard's Pending card does too. It is now derived through the §14 name
+   rather than by a local reduce, but the scope is unchanged on purpose: a Paid
+   record carrying a recorded balance is reachable and `outstandingOf()` returns
+   that balance, yet no Pending card in the app counts it. That inconsistency is
+   real and pre-dates this change — see the handoff. It is not fixed here
+   because moving a headline figure on 50+ live installs is the owner's call,
+   and doing it silently inside a refactor is how a report loses trust.         */
 function _rptTotals(keys) {
   const pays = DB.payments.filter(p => keys.some(k => _payMatchesMonth(p, k)));
   const exps = _rptOutgoings(keys);
   const rev  = keys.reduce((s, k) => s + calcRevenue(k), 0);
-  const pending = DB.payments
-    .filter(p => p.status === 'Pending' && keys.some(k => _payMatchesMonth(p, k)))
-    .reduce((s, p) => s + (p.unpaid != null ? Number(p.unpaid) : Number(p.amount)), 0);
+
+  const totals  = calculateReportTotals(pays);
+  const pendingTotals = calculateReportTotals(pays, { filter: p => p.status === 'Pending' });
+  const pending = pendingTotals.outstanding;
+
   // A funds transfer IS an expense — calcExpenses() carries both, so totalExp is
   // the whole outgoing and net is simply revenue minus it. totalTransfers stays
   // on the return for the screens that itemise the two halves.
   const totalExp       = keys.reduce((s, k) => s + calcExpenses(k), 0);
   const totalTransfers = keys.reduce((s, k) => s + calcTransfers(k), 0);
-  return { pays, exps, rev, pending, totalExp, totalTransfers, net: rev - totalExp };
+
+  return {
+    pays, exps, rev, pending, totalExp, totalTransfers, net: rev - totalExp,
+    // The §14 figures, so a caller never has to sum a money column itself again.
+    totals, pendingTotals,
+    billed:        totals.billed,
+    collected:     totals.collected,
+    credit:        totals.credit,
+    concessions:   totals.concessions,
+    extras:        totals.extras,
+    admissionFees: totals.admissionFees,
+    reversed:      totals.reversed,
+    pendingCount:  pendingTotals.count,
+    /* False when a total has left the range where integer arithmetic is exact,
+       or when the accrual and the layer disagree about the same rupees. A
+       report that prints a figure the layer will not vouch for is worse than
+       one that says it cannot. */
+    safe: totals.safe && rev === totals.collected,
+  };
 }
 
 // Students whose join/leave dates fall inside the window — the only honest
@@ -802,6 +856,17 @@ function renderReports() {
     <div class="mov__foot">
       <span>${icon('info','xs')} All amounts are in PKR</span>
       <span>${icon('clock','xs')} ${withDataNote}</span>
+      ${''/* §14: the layer returns whether it will vouch for these figures —
+           either a total has left the range where integer arithmetic is exact,
+           or the accrual authority and the layer disagree about the same
+           rupees, which means a record carries a stored status neither of them
+           expects and its money is missing from one of the two. Saying so is
+           the point of the flag; printing a figure the layer has disowned is
+           worse than printing nothing. */}
+      ${cur.safe ? '' :
+        `<span class="mov__warn">${icon('warning','xs')} These totals could not be
+         reconciled against the financial layer — check the payment records
+         before relying on them.</span>`}
     </div>
   </div>
 
@@ -1075,19 +1140,21 @@ function downloadDetailPDF(type) {
   const label = _rptExportWord();
   // Transfers are folded in as ordinary expense rows under their own category,
   // so the itemised table adds up to the total printed above it.
-  const { pays, exps, rev, totalExp, totalTransfers, net } = _rptTotals(keys);
+  const { pays, exps, rev, pending, pendingTotals, totalExp, totalTransfers, net } = _rptTotals(keys);
   const css = printDocStyles();
   let body = `<div class="hdr"><div><div class="ht">${escHtml(DB.settings.hostelName)}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
   if(type==='financial'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0).toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${(p.unpaid||0)>0?'re':''}">PKR ${(p.unpaid||0).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
+    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pending.toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
+    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${outstandingOf(p)>0?'re':''}">PKR ${outstandingOf(p).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
   } else if(type==='pending'){
     // Period-scoped like the table it is printed from. It read the whole
     // payment table, so a monthly PDF carried every unpaid rent ever recorded.
     const pend = pays.filter(p=>p.status==='Pending');
-    const totalUnpaid = pend.reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
-    body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pend.length}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${totalUnpaid.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pend.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${(p.unpaid!=null?p.unpaid:p.amount).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
+    /* All three of these come from _rptTotals() — the same call renderReports()
+       makes — so the PDF cannot disagree with the screen it was printed from.
+       They used to be summed again here from the same records. */
+    body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pendingTotals.count}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${pending.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pendingTotals.collected.toLocaleString()}</div></div></div>`;
+    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${outstandingOf(p).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
   } else if(type==='netprofit'){
     body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
     // Category summary, then the full register underneath it so the reader can
@@ -1124,7 +1191,7 @@ function downloadReportDetailPDF(detailId) {
   const mo   = _rptExportLabel();
   // Transfers ride along as expense rows under their own category, so totalExp
   // is the whole outgoing and Available Fund is revenue minus it.
-  const { pays, exps, rev, totalExp, totalTransfers, net } = _rptTotals(keys);
+  const { pays, exps, rev, pending, pendingTotals, totalExp, totalTransfers, net } = _rptTotals(keys);
   // Escaped ONCE, here, because this value is interpolated into the print
   // document in four places (the <title>, the header, the footer and the
   // filename) and escaping it at each of those is how one gets missed.
@@ -1135,13 +1202,13 @@ function downloadReportDetailPDF(detailId) {
   let tableHTML = '';
   if(detailId==='financial'||detailId==='payments') {
     const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
-    tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${(p.unpaid||0)>0?'red':''}">${fmtPKR(p.unpaid||0)}</td><td>${escHtml(p.method||'—')}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='expenses') {
     tableHTML = `<h3>Expenses by Category</h3>` + _rptCatTablesHTML(exps);
   } else if(detailId==='pending') {
     // Period-scoped like the on-screen table this PDF is printed from.
     const pendPays = pays.filter(p=>p.status==='Pending');
-    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.unpaid!=null&&Number(p.amount)>0?'green':''}">${p.unpaid!=null?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(p.unpaid!=null?p.unpaid:p.amount)}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
+    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'green':''}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
   } else if(detailId==='students') {
     const _idx=_buildRoomStudentIndex();
     // Same period scope as the on-screen table this PDF is printed from.
@@ -1233,7 +1300,7 @@ function printReport() {
          directly above it -- the owner was reading a payments report with no
          payable in it. */}
     <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Collected</th><th>Still Owed</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${Number(p.unpaid||0)>0?'red':''}">${Number(p.unpaid||0)>0?fmtPKR(p.unpaid):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
+    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${outstandingOf(p)>0?fmtPKR(outstandingOf(p)):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
     </tbody></table>
   </div>
   <div class="section">
@@ -1268,7 +1335,7 @@ function downloadDetailCSV(type) {
     rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
     _inPeriodPays.filter(p=>p.status==='Pending').forEach(p=>{
       rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        p.unpaid!=null?p.amount:0, p.unpaid!=null?p.unpaid:p.amount,
+        Number(p.amount||0), outstandingOf(p),
         p.method||'—', p.date||'—']);
     });
   } else if (type === 'expenses') {

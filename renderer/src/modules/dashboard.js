@@ -15,8 +15,17 @@ function calcRevenue(datePrefix) {
   const paid    = DB.payments
     .filter(p => p.status==='Paid' && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
+  /* D-4. This used to require `p.unpaid != null`, so a part-payment written
+     before that field existed contributed NOTHING to revenue — the money was
+     collected, banked and simply absent from the books.
+
+     The guard was a relic of reading `amount` as the sum still owed. It is not:
+     _cashEvents() below says it outright — "p.amount is the total collected on
+     that record" — and carries no such condition, so calcCashReceived() has
+     been counting these records all along. The cash figure and the accrual
+     figure disagreed about the same rupees. */
   const partial = DB.payments
-    .filter(p => p.status==='Pending' && Number(p.amount||0)>0 && p.unpaid!=null
+    .filter(p => p.status==='Pending' && Number(p.amount||0)>0
       && _payMatchesMonth(p, datePrefix))
     .reduce((s,p) => s + Number(p.amount||0), 0);
   return paid + partial;
@@ -54,19 +63,42 @@ function calcRevenue(datePrefix) {
    trails cannot be trusted to date anything, so such a record falls back
    entirely to its own date rather than being scaled or partly believed. */
 function _cashEvents(p) {
-  const total = Number(p && p.amount || 0);
-  if (!p || total <= 0) return [];
+  if (!p) return [];
+  const total = Number(p.amount || 0);
   const base  = p.date || p.paidDate || p.dueDate || '';
   const trail = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+
+  /* REVERSALS ARE CASH EVENTS TOO, AND THEY ARE NEGATIVE ONES.
+
+     reversePayment() (§14) hands money back, which leaves the drawer on the day
+     it happens — so it belongs in this month's cash figure with a minus sign,
+     not netted invisibly into the original collection's month.
+
+     It is stored in its own array rather than as a negative entry in
+     partialPayments precisely because of the two lines below: this function
+     FILTERS that array to positive amounts when it dates cash but SUMS it whole
+     when it sanity-checks. A negative entry there would be counted by one and
+     dropped by the other, and the record's cash would come out over-stated by
+     the amount handed back — the one thing this function must never do. */
+  const revs = Array.isArray(p.reversals) ? p.reversals : [];
+  const revSum = revs.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+
+  // A record whose collections have been fully reversed still moved money on
+  // two days, and the reconciliation has to show both.
+  if (total <= 0 && revSum <= 0) return [];
+
   const trailSum = trail.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+  const netTrail = trailSum - revSum;
 
   // No trail, or a trail that claims more than was collected: one event.
-  if (!trail.length || trailSum > total + 0.5) return [{ date: base, amount: total }];
+  if (!trail.length || netTrail > total + 0.5) return [{ date: base, amount: total }];
 
   const events = trail
     .filter(e => e && Number(e.amount || 0) > 0)
     .map(e => ({ date: e.date || base, amount: Number(e.amount || 0) }));
-  const residual = total - trailSum;
+  revs.filter(e => e && Number(e.amount || 0) > 0)
+      .forEach(e => events.push({ date: e.date || base, amount: -Number(e.amount || 0) }));
+  const residual = total - netTrail;
   if (residual > 0.5) events.push({ date: base, amount: residual });
   return events;
 }
@@ -243,13 +275,19 @@ function _dashSeries() {
   const now = new Date();
   const yr  = now.getFullYear();
   const cur = now.getMonth(); // 0-based
-  const out = { rev:[], exp:[], pend:[] };
+  const out = { rev:[], exp:[], pend:[], cash:[] };
   for (let i = 0; i <= cur; i++) {
     const k = yr + '-' + String(i+1).padStart(2,'0');
     out.rev.push(calcRevenue(k));
     out.exp.push(calcExpenses(k));    // transfers included — they ARE expenses
     out.pend.push((DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k))
-      .reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0));
+      .reduce((s,p)=>s+outstandingOf(p),0));
+    /* Cash is the one series that is NOT derived from the month a record bills.
+       calcCashReceived() dates money by when it physically arrived, so this
+       line and out.rev deliberately disagree in any month where rent was
+       handed over late — which is the whole reason both figures are on the
+       row. */
+    out.cash.push(calcCashReceived(k));
   }
   return out;
 }
@@ -352,7 +390,7 @@ function renderDashboard() {
   // differing is normal rather than a fault.
   const cashIn = cashBreakdown(mo);
   // Pending — only for the selected month
-  const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+outstandingOf(p),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
   const paidCount = DB.payments.filter(p=>p.status==='Paid'&&_payMatchesMonth(p,mo)).length;
   const overdue = 0; // overdue feature removed
@@ -433,6 +471,13 @@ function renderDashboard() {
   const series   = _dashSeries();
   const revDelta = _dashDelta(series.rev);
 
+  /* The four ledger panels and the occupancy card are built here rather than
+     inline because the sketch spreads them across three different rows: Today
+     at a Glance rides with the trend, Needs Action and Quick Actions sit in the
+     occupancy row, and Collection by Method pairs with Pending Payments. */
+  const P = _dashLedgerRow(mo, pending, pendingCount);
+  const occCard = _dashOccupancyOverview(totalSeats, filledSeats, availSeats, seatPct);
+
   return `
   ${''/* The pending-cancellations banner that stood here is gone, and so is the
          `alertHtml` strip that was computed below it. Owner's call, 2026-08-31:
@@ -481,9 +526,9 @@ function renderDashboard() {
           <span class="dash-pill dh-slate">${paidCount} paid</span>
         </div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(collected,{size:"display"})}</div>
+      <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
       <div class="dash-track"><div class="dash-track__fill" style="width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%"></div></div>
-      <div class="dash-kpi__sub">of <span class="pkr">PKR</span>${fmtNum(totalExpected)} expected</div>
+      <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">PKR</span>${fmtCompact(totalExpected)} expected</div>
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -497,7 +542,7 @@ function renderDashboard() {
         <div class="dash-kpi__label">Expenses</div>
         <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display"})}</div>
+      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub">this month</div>
       ${_dashSpark(series.exp)}
     </div>
@@ -510,9 +555,14 @@ function renderDashboard() {
         <div class="dash-kpi__label">Available<br>Fund</div>
         <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display"})}</div>
-      <div class="dash-kpi__sub">
-        ${fmtPKR(collected)} − ${fmtPKR(moExp)}
+      <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
+      ${''/* Compact, and for a sharper reason than the others: this line is
+             TWO figures with a minus between them, so it is the first thing on
+             the row to wrap — at real hostel scale it took two lines on its own
+             and made every card in the row taller, which is what pushed Needs
+             Action and Quick Actions under the fold. */}
+      <div class="dash-kpi__sub" title="${fmtPKR(collected)} − ${fmtPKR(moExp)}">
+        PKR ${fmtCompact(collected)} − PKR ${fmtCompact(moExp)}
       </div>
       <!-- This was the only money card with no history behind it, so it sat
            visibly emptier than the four beside it. The series is the same
@@ -532,103 +582,59 @@ function renderDashboard() {
           <span class="dash-pill">${pendingCount} unpaid</span>
         </div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(pending,{size:"display"})}</div>
+      <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub">click to collect</div>
       ${_dashSpark(series.pend)}
     </div>
-  </div>
 
-  <!-- ══ STAT BADGES: Occupied | Vacant | Active ══ -->
-  <div class="dash-tile-grid">
-    <div onclick="showOccupiedRoomsModal()" class="dsh-card dsh-card--click dh-blue">
-      <div class="dash-tile__head">
-        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="m21.71 9.29-9-9a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42L3 11.41V20a2 2 0 0 0 2 2h4a1 1 0 0 0 1-1v-5h4v5a1 1 0 0 0 1 1h4a2 2 0 0 0 2-2v-8.59l.71-.7a1 1 0 0 0 0-1.42Z"/></svg></div>
-        <div style="min-width:0">
-          <div class="dash-kpi__label" style="margin-bottom:5px">Occupied Rooms</div>
-          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
-            <span class="dash-tile__num">${occ}</span>
-            <span style="font-size:11px;color:var(--text3)">of ${DB.rooms.length}</span>
-            ${seatsRemainingInOccupiedRooms>0?`<span class="dash-pill dh-green">+${seatsRemainingInOccupiedRooms} free</span>`:''}
-          </div>
+    <!-- Cash Received — the sixth tile the sketch asks for.
+         Deliberately the LAST one, and deliberately next to Revenue: this is
+         the cash-basis figure (what should physically be in the drawer this
+         month) while Revenue is accrual (what this month earned). The two
+         differ whenever rent for August is handed over in September, and that
+         is normal rather than a fault — cashBreakdown() carries the split, and
+         the sub-line names it so the number beside Revenue never reads as a
+         contradiction. -->
+    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-green">
+      <div class="dash-kpi__top">
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-8 9a3 3 0 1 1 3-3 3 3 0 0 1-3 3Z"/></svg></div>
+        <div class="dash-kpi__label">Cash<br>Received</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill dh-slate">${fmtNum(cashIn.count)} receipt${cashIn.count===1?'':'s'}</span>
         </div>
-        <span class="dash-tile__caret">›</span>
       </div>
-      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(occ/DB.rooms.length*100):0}%"></div></div>
-    </div>
-
-    <div onclick="showVacantRoomsModal()" class="dsh-card dsh-card--click dh-green">
-      <div class="dash-tile__head">
-        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82ZM9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .92-.62l.5-1.21A4 4 0 0 0 9.5 11.5Z"/></svg></div>
-        <div style="min-width:0">
-          <div class="dash-kpi__label" style="margin-bottom:5px">Vacant Rooms</div>
-          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
-            <span class="dash-tile__num">${vac}</span>
-            <span style="font-size:11px;color:var(--text3)">${availSeats} seat${availSeats===1?'':'s'} free</span>
-          </div>
-        </div>
-        <span class="dash-tile__caret">›</span>
-      </div>
-      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${DB.rooms.length?Math.round(vac/DB.rooms.length*100):0}%"></div></div>
-    </div>
-
-    ${''/* CASH RECEIVED — the drawer, not the books. The tile beside it reads
-           "Total Revenue" for the same month and will usually show a DIFFERENT
-           number; that is the point of having both, and the modal explains the
-           gap line by line. */}
-    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-amber">
-      <div class="dash-tile__head">
-        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H3a1 1 0 0 1 0-2h15a1 1 0 0 0 0-2H3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Zm-3 8a2 2 0 1 1 2-2 2 2 0 0 1-2 2Z"/></svg></div>
-        <div style="min-width:0">
-          <div class="dash-kpi__label" style="margin-bottom:5px">Cash Received</div>
-          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
-            ${''/* MONEY IN A ROW OF COUNTS.
-
-                   The three tiles beside this one are counts — rooms, rooms,
-                   students — so a bare "24,500" here read as a quantity of
-                   something rather than as an amount of money. It carries its
-                   unit now, in the same <span class="pkr"> form the rest of the
-                   app uses for a figure that needs one. fmtPKR() is NOT used
-                   with it: that would print the prefix twice (CLAUDE.md rule 4).
-
-                   The caption names the month, because "this month" on a
-                   dashboard whose month selector can be moved is ambiguous
-                   exactly when it matters. */}
-            <span class="dash-tile__num"><span class="pkr">PKR</span> ${fmtNum(cashIn.total)}</span>
-            <span style="font-size:11px;color:var(--text3)">${
-              cashIn.arrears>0
-                ? 'incl. ' + fmtPKR(cashIn.arrears) + ' arrears'
-                : (typeof _rptMonthName==='function' ? 'in ' + _rptMonthName(mo) : 'this month')
-            }</span>
-          </div>
-        </div>
-        <span class="dash-tile__caret">›</span>
-      </div>
-      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${cashIn.total>0?Math.min(100,Math.round(cashIn.current/cashIn.total*100)):0}%"></div></div>
-    </div>
-
-    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-violet">
-      <div class="dash-tile__head">
-        <div class="dash-chip dash-chip--lg"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.55 2.19a1 1 0 0 1 .9 0l9.5 4.75a1 1 0 0 1 0 1.79l-2.45 1.22V14a1 1 0 0 1-.4.8c-.13.1-3.18 2.45-7.1 2.45s-7-2.35-7.1-2.45A1 1 0 0 1 4.5 14v-4.05L3 9.2v3.55a1 1 0 0 1-2 0V7.75a1 1 0 0 1 .55-.89ZM6.5 10.18V13.5c.74.46 2.78 1.75 5.5 1.75s4.76-1.29 5.5-1.75v-3.32l-5.05 2.52a1 1 0 0 1-.9 0Z"/><path d="M12 19c-3.31 0-6-1.16-6-2.6a1 1 0 0 1 2 0c0 .14.96.6 4 .6s4-.46 4-.6a1 1 0 0 1 2 0c0 1.44-2.69 2.6-6 2.6Z"/></svg></div>
-        <div style="min-width:0">
-          <div class="dash-kpi__label" style="margin-bottom:5px">Active Students</div>
-          <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
-            <span class="dash-tile__num">${activeStudents}</span>
-            <span style="font-size:11px;color:var(--text3)">${DB.students.length} registered</span>
-          </div>
-        </div>
-        <span class="dash-tile__caret">›</span>
-      </div>
-      <div class="dash-track" style="margin-bottom:0"><div class="dash-track__fill" style="width:${totalSeats>0?Math.round(activeStudents/totalSeats*100):0}%"></div></div>
+      <div class="dash-kpi__value">${moneyValue(cashIn.total,{size:"display",compact:true})}</div>
+      <div class="dash-track"><div class="dash-track__fill" style="width:${cashIn.total>0?Math.round(cashIn.current/cashIn.total*100):0}%"></div></div>
+      <div class="dash-kpi__sub"${cashIn.arrears>0?` title="incl. ${fmtPKR(cashIn.arrears)} arrears"`:''}>${cashIn.arrears>0?`incl. <span class="pkr">PKR</span>${fmtCompact(cashIn.arrears)} arrears`:'in the drawer this month'}</div>
+      ${''/* Opens showCashReceivedModal(), NOT the payments page. Cash Received
+             used to be a tile in the stat row this KPI replaced, and that tile
+             opened a reconciliation that balances the drawer against the books.
+             Losing that on the way into the KPI row would have quietly removed
+             the only screen that explains why this figure and Total Revenue
+             differ. tests/counter-flow-decisions.spec.js asserts it. */}
+      ${_dashSpark(series.cash)}
     </div>
   </div>
-  <!-- ══ TREND + SEAT AVAILABILITY ROW ══ -->
-  <div class="dash-split">
+
+  ${''/* The Occupied / Vacant / Active tile row that sat here is GONE.
+
+     It cost a full row of height to repeat three figures the page already
+     answers better further down: Occupancy Overview gives beds occupied and
+     free against the total, Seat Availability gives it room by room, and
+     Occupancy by Room Type breaks it down by type. Three ways of saying the
+     same thing, and the first of them was the least useful.
+
+     The row also made the sketch's fold impossible. The brief is that Needs
+     Actions and Quick Actions must be on screen without scrolling, and 120-odd
+     pixels of duplicate stats is exactly what was pushing them under. Rooms
+     remain one click away on the sidebar and on the Seat Availability card. */}
+  <!-- ══ ROW B: TREND · SEAT AVAILABILITY · TODAY AT A GLANCE ══ -->
+  <div class="dash-row-b">
   <div class="dash-sec">
     <!-- Header: title + legend -->
     <div class="dash-sec__head">
       <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
-      <span class="dash-sec__title">Revenue vs Expenses</span>
-      <span class="dash-sec__sub">Jan – Dec</span>
+      <span class="dash-sec__title">Revenue Trend</span>
       <div class="dash-legend" style="margin-left:auto">
         <!-- TWO SERIES, and the legend says two (design 1c, "bars instead of
              lines"). Pending was dropped from the chart rather than redrawn as
@@ -643,17 +649,29 @@ function renderDashboard() {
              drawn; a legend that describes something else is how a reader stops
              trusting the panel. -->
         <span class="dash-legend__k dh-blue"><i></i>Revenue</span>
-        <span class="dash-legend__k dh-red"><i></i>Expenses</span>
+        <span class="dash-legend__k dh-slate"><i></i>Expenses</span>
+      </div>
+      <!-- db3's segmented control. It replaces a static "Jan – Dec" caption:
+           the reference has a control here, and the caption only restated the
+           axis directly under it. -->
+      <div class="trend-range" role="group" aria-label="Chart range">
+        ${''/* The active state is read from _dashTrendRange, not hard-coded on
+               Year. renderPage() rebuilds this markup on every navigation while
+               the range variable survives, so a hard-coded default would light
+               "Year" over a chart still drawing a quarter. */}
+        <button class="trend-range__b ${_dashTrendRange==='quarter'?'is-on':''}" data-range="quarter" onclick="setTrendRange('quarter')">Quarter</button>
+        <button class="trend-range__b ${_dashTrendRange==='6m'?'is-on':''}"      data-range="6m"      onclick="setTrendRange('6m')">6 Months</button>
+        <button class="trend-range__b ${_dashTrendRange==='year'?'is-on':''}"    data-range="year"    onclick="setTrendRange('year')">Year</button>
       </div>
     </div>
-    <!-- This-month figures -->
-    <div class="dash-mini-row">
-      <div class="dash-mini dh-green"><span class="dash-mini__k">Revenue</span><span class="dash-mini__v">${fmtPKR(collected)}</span></div>
-      <div class="dash-mini dh-red"><span class="dash-mini__k">Expenses</span><span class="dash-mini__v">${fmtPKR(moExp)}</span></div>
-      <div class="dash-mini ${netProfit>=0?'dh-green':'dh-red'}"><span class="dash-mini__k">Net</span><span class="dash-mini__v">${netProfit>=0?'+':''}${fmtPKR(netProfit)}</span></div>
-    </div>
+    ${''/* The Revenue / Expenses / Net strip that sat here is REMOVED. db3.png
+           does not have it, and all three figures are already on the KPI row
+           two inches above — Total Revenue, Expenses & Transfers, Available
+           Fund, which IS net. Printing them again directly under the chart put
+           the same three numbers on screen twice and cost the chart the height
+           it needed to stay legible when the row was compressed. */}
     <!-- Chart.js canvas -->
-    <div id="trend-chart-wrap" style="position:relative;height:178px;">
+    <div id="trend-chart-wrap" style="position:relative">
       <div id="trend-hb" style="position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;pointer-events:none;display:none;z-index:9999;min-width:210px;box-shadow:var(--shadow);"></div>
       <canvas id="trend-canvas" style="display:block"></canvas>
     </div>
@@ -664,23 +682,28 @@ function renderDashboard() {
       <div class="dash-sec__head">
         <div class="dash-chip dh-violet" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
         <span class="dash-sec__title">Seat Availability</span>
-        <div class="dash-sec__tools">
-          <button class="dash-btn" onclick="printSeatAvailability()"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5a3 3 0 0 0-3 3v5a1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3h3a1 1 0 0 0 1-1v-5a3 3 0 0 0-3-3ZM7 19v-3h10v3Zm10-14H7a1 1 0 0 0-1 1v1h12V6a1 1 0 0 0-1-1Z"/></svg>Print</button>
-          <button class="dash-btn" onclick="showSeatDetailModal('rooms')">Expand ↗</button>
+        <!-- db3 puts the three counts INLINE here, not in a block of tiles
+             below. Same three numbers, one line instead of ~70px of card, and
+             the height goes to the room grid — which is what the owner asked
+             for: more rooms visible. Each is still the click target it was. -->
+        <div class="seat-inline">
+          <button class="seat-inline__k" onclick="showSeatDetailModal('rooms')" title="All seats">
+            <b>${totalSeats}</b><span>Total</span></button>
+          <button class="seat-inline__k dh-green" onclick="showSeatDetailModal('vacant')" title="Free seats">
+            <b>${availSeats}</b><span>Free</span></button>
+          <button class="seat-inline__k" onclick="showSeatDetailModal('occupied')" title="Filled seats">
+            <b>${allActiveSeats}</b><span>Filled</span></button>
         </div>
       </div>
-      <!-- Summary row -->
-      <div class="dash-seat-sum">
-        <div class="dh-violet" onclick="showSeatDetailModal('rooms')" title="All seats">
-          <div class="n">${totalSeats}</div><div class="l">Total</div>
-        </div>
-        <div class="dh-green" onclick="showSeatDetailModal('vacant')" title="Free seats">
-          <div class="n">${availSeats}</div><div class="l">Free</div>
-        </div>
-        <div class="dh-violet" onclick="showSeatDetailModal('occupied')" title="Filled seats">
-          <div class="n">${allActiveSeats}</div><div class="l">Filled</div>
-        </div>
-      </div>
+      ${''/* The three-tile summary block that stood here is gone — the same
+             counts now sit inline in the header above, as db3 draws them. That
+             is ~70px of card returned to the room grid, and it is why the grid
+             shows roughly twice as many rooms before it scrolls.
+
+             Print and Expand went with it. Neither is in db3, both were the
+             only two buttons on any card header in row B, and both are still
+             reachable: Expand is what tapping any room or any of the three
+             counts already does, and Print lives on the Rooms page. */}
       <!-- Per-room mini tiles -->
       <div class="dash-room-wrap">
         ${DB.rooms.map(r=>{
@@ -699,12 +722,46 @@ function renderDashboard() {
         <span class="dash-key dh-violet"><i></i>Has free seats</span>
         <span class="dash-key dh-slate"><i></i>Full</span>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
+        ${''/* EXPAND AND PRINT ARE BACK (owner, 2026-09-06, reversing the
+             2026-09-05 removal). The old argument was that both were reachable
+             elsewhere — Expand is what tapping a room does, Print lives on the
+             Rooms page. Reachable is not findable: this card is where a warden
+             is looking at seats, and tapping a room gets you ONE room, not the
+             whole grid at a readable size.
+
+             In the FOOTER, not the header, and that is measured rather than
+             preferred. The header carries a chip, a title and three counts, and
+             `.seat-inline` holds `margin-left:auto` — which absorbs all the free
+             space, so anything after it wraps onto a second line. Fixing that
+             auto margin bought back 1536px, but at 1366 the header genuinely has
+             no room: the buttons wrapped it 30px -> 62px, and every one of those
+             pixels comes out of the room grid, which is the opposite of what this
+             card was rebuilt for. This strip is one line with slack at every
+             width, and it sits directly under the grid they act on.
+
+             printSeatAvailability() was never deleted — only its button was, so
+             this is a button returning to a live function. */}
+        <span class="seat-foot__acts">
+          <button class="seat-foot__b" onclick="showSeatDetailModal('rooms')"
+                  title="Expand — every room at a readable size" aria-label="Expand seat availability">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>Expand
+          </button>
+          <button class="seat-foot__b" onclick="printSeatAvailability()"
+                  title="Print the seat availability sheet" aria-label="Print seat availability">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print
+          </button>
+        </span>
       </div>
     </div>
-  </div><!-- end 2-col trend+seat grid -->
+  ${P.glance}
+  </div><!-- end row B -->
 
-  <!-- ══ ROW 3+4: BY ROOM TYPE + PENDING PAYMENTS (same row) ══ -->
-  <div class="dash-split">
+  <!-- ══ ROW C: THE FOLD LINE ══
+       Everything above this, plus this row, must fit one screen — the owner's
+       brief is that Needs Action and Quick Actions are reachable without
+       scrolling. Recent Payments is the first thing below it, deliberately:
+       it is a log, and a log is what you scroll TO. -->
+  <div class="dash-row-c">
   <div class="dash-sec">
     <div class="dash-sec__head" style="margin-bottom:4px">
       <div class="dash-chip dh-blue" style="width:34px;height:34px;border-radius:10px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:17px;height:17px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
@@ -756,7 +813,14 @@ function renderDashboard() {
       Occupancy percentage is calculated based on available seats in each room type.
     </div>
   </div>
-  <!-- PENDING PAYMENTS -->
+  ${occCard}
+  ${P.needs}
+  ${P.actions}
+  </div><!-- end row C -->
+
+  <!-- ══ ROW D: COLLECTION BY METHOD + PENDING PAYMENTS ══ -->
+  <div class="dash-split">
+  ${P.methods}
   <div class="dash-sec" style="display:flex;flex-direction:column">
       <div class="dash-sec__head">
         <div class="dash-chip dh-amber" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg></div>
@@ -768,7 +832,7 @@ function renderDashboard() {
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
         '<div style="padding:32px;text-align:center;color:var(--text3)"><div style="margin-bottom:10px;color:var(--green)"><svg class="icon icon-xl" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z"/></svg></div><div style="font-size:14px;font-weight:600">All cleared!</div></div>':
         moPending.slice(0,10).map(p=>{
-          const unpaidShow = p.unpaid!=null?p.unpaid:p.amount;
+          const unpaidShow = outstandingOf(p);
           const due = _dashDueState(p);
           const nm  = String(p.studentName||'?');
           const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
@@ -794,7 +858,6 @@ function renderDashboard() {
   </div><!-- end row3+4 grid -->
 
   <!-- ══ ROW 5: THE LEDGER ROW (design 1c) ══ -->
-  ${_dashLedgerRow(mo, pending, pendingCount)}
 
   <!-- ══ ROW 6: RECENT PAYMENTS ══ -->
   ${_dashRecentPayments(recentPay, mo, collected)}`;
@@ -813,21 +876,50 @@ function renderDashboard() {
    put the reconstruction mandate in place. Where a source does not exist the
    panel says so and shows nothing.
 
-   The one place the mockup was followed and should NOT have been: it lists an
+   The one place the mockup was followed and should NOT have been: it listed an
    upcoming "Room Inspection". `DB.inspections` rows record an inspection that
    HAS HAPPENED — they carry a condition, an inspector and findings, and have no
-   scheduled-date field at all. There is no upcoming inspection to read, so
-   reminders are built from notices and real rent arrears instead.
+   scheduled-date field at all. There was no upcoming inspection to read, which
+   is part of why that panel is now Needs Action: everything it lists is a row
+   that already exists in a table, waiting on a decision.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Counts for "Today at a Glance" — six figures, each from its own table. */
-function _dlGlance() {
-  const td = today();
-  const isToday = d => String(d || '').slice(0, 10) === td;
+/* ── THE GLANCE FOLLOWS THE MONTH ────────────────────────────────────────────
+   Owner's call, 2026-09-06. The panel was hard-scoped to the literal calendar
+   day on a page where every other card is month-scoped, so on a hostel holding
+   141 payments and 55 students it printed six zeros until somebody recorded
+   something, and six more the next morning. The arithmetic was never wrong —
+   seeded with records dated today it reported all six correctly. What was wrong
+   is that "today" is empty most mornings, and a card that is almost always
+   empty teaches a warden to stop reading it.
+
+   A day-fallback shipped first and was replaced by this at the owner's
+   direction. The month is the better answer for one reason worth writing down:
+   it is the SAME WINDOW as the KPI row above it. `thisMonth()` reads the
+   sidebar month picker, so the panel now moves with it exactly as the KPI
+   cards, Collection by Method and the Pending figure already do — one scope on
+   one screen, rather than five cards describing a month and a sixth describing
+   a day nobody selected.
+
+   PAYMENTS RECEIVED USES `_payMatchesMonth()`, which is not an arbitrary
+   choice: it is the identical test `_dlMethods()` uses for Collection by
+   Method, on this same card row. The two therefore report the same rupees, and
+   `tests/dashboard-cards.spec.js` asserts they cannot drift apart. The other
+   five rows key off `_toMonthKey()`, which reads both `2026-08-14` and the
+   older `August 2026` shape a record may carry.
+
+   THE COST, STATED: on the 1st of a month this reads six zeros again. That is
+   now correct rather than misleading — the KPI row above it reads zero too,
+   because nothing has happened yet in the window both are describing. */
+
+/** Counts for the glance — six figures, each from its own table, one month. */
+function _dlGlance(mo) {
+  const mk = mo || thisMonth();
+  const inMonth = d => _toMonthKey(d) === mk;
   const log = DB.checkinlog || [];
-  // A payment's `date` is when it was taken. Pending rows have no date yet, so
-  // they cannot be "received today" and must not be counted here.
-  const paidToday = (DB.payments || []).filter(p => p.status === 'Paid' && isToday(p.date));
+  /* Same month test as _dlMethods(), so the count and the amount on this row
+     are the same rupees Collection by Method draws two cards away. */
+  const paid = (DB.payments || []).filter(p => p.status === 'Paid' && _payMatchesMonth(p, mk));
   /* `page: null` means THERE IS NOWHERE TO GO, and the row is rendered as plain
      text rather than a button.
 
@@ -836,14 +928,28 @@ function _dlGlance() {
      lands on a screen with no title. A row that looks clickable and does
      nothing is worse than a row that never offered — especially on a dashboard,
      where a warden learns in one click whether the numbers are wired to
-     anything. Same for notices in _dlReminders(). */
+     anything. */
+  /* ONE WORD EACH, AND THAT IS A HEIGHT DECISION, NOT A STYLE ONE.
+
+     This card is one KPI tile wide (`.dash-row-b` gives it
+     `calc((100% - 50px) / 6)`), and at that width "New Admissions",
+     "Payments Received", "Complaints Raised" and "Maintenance Requests" each
+     wrapped to two lines. Measured at 1280x660 the six rows came to
+     23,23,32,59,32,31 = 200px — and this card is the ONLY content in row B that
+     cannot shrink, so it alone sets the row's height: hiding it dropped row B
+     from 275px to 156px and every screen size then reached the fold.
+
+     Shortening them is not truncating them, which is what the rule in
+     dashboard.css forbids: "Admissions" and "Maintenance" are the whole word,
+     not an elided one, and the card's heading already supplies the period.
+     `title` carries the long form for anyone who wants it. */
   return [
-    { k: 'in',    label: 'Check-ins',           n: log.filter(c => isToday(c.date) && c.type !== 'Check-out').length, page: null },
-    { k: 'out',   label: 'Check-outs',          n: log.filter(c => isToday(c.date) && c.type === 'Check-out').length, page: null },
-    { k: 'new',   label: 'New Admissions',      n: (DB.students || []).filter(s => isToday(s.joinDate)).length,       page: 'students' },
-    { k: 'money', label: 'Payments Received',   n: paidToday.length, money: paidToday.reduce((s, p) => s + Number(p.amount || 0), 0), page: 'payments' },
-    { k: 'issue', label: 'Complaints Raised',   n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
-    { k: 'wrench',label: 'Maintenance Requests',n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },
+    { k: 'in',    label: 'Check-ins',   full: 'Check-ins',            n: log.filter(c => inMonth(c.date) && c.type !== 'Check-out').length, page: null },
+    { k: 'out',   label: 'Check-outs',  full: 'Check-outs',           n: log.filter(c => inMonth(c.date) && c.type === 'Check-out').length, page: null },
+    { k: 'new',   label: 'Admissions',  full: 'New admissions',       n: (DB.students || []).filter(s => inMonth(s.joinDate)).length,       page: 'students' },
+    { k: 'money', label: 'Payments',    full: 'Payments received',    n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
+    { k: 'issue', label: 'Complaints',  full: 'Complaints raised',    n: (DB.complaints || []).filter(c => inMonth(c.date || c.createdAt)).length,  page: 'issues' },
+    { k: 'wrench',label: 'Maintenance', full: 'Maintenance requests', n: (DB.maintenance || []).filter(m => inMonth(m.date || m.createdAt)).length, page: 'maintenance' },
   ];
 }
 
@@ -864,37 +970,17 @@ function _dlMethods(mo) {
   return { rows, total };
 }
 
-/**
- * Upcoming reminders — notices dated from today onward, plus this month's real
- * arrears as a single line.
- *
- * Sorted soonest-first and capped, because this is a "what is coming" panel and
- * a list long enough to scroll stops being one.
- */
-function _dlReminders(mo, pending, pendingCount) {
-  const td = today();
-  const out = [];
-  if (pending > 0) {
-    out.push({
-      when: '', whenLabel: 'This month',
-      title: 'Rent due — ' + pendingCount + ' payment' + (pendingCount === 1 ? '' : 's'),
-      sub: fmtPKR(pending) + ' outstanding',
-      tone: 'due', page: 'payments'
-    });
-  }
-  for (const n of (DB.notices || [])) {
-    const d = String(n.date || '').slice(0, 10);
-    if (!d || d < td) continue;          // past notices are history, not reminders
-    out.push({
-      when: d,
-      whenLabel: d === td ? 'Today' : fmtDate(d),
-      title: String(n.title || 'Notice'),
-      sub: String(n.type || ''), tone: 'note', page: null   // no notices page in nav.js
-    });
-  }
-  out.sort((a, b) => String(a.when || '').localeCompare(String(b.when || '')));
-  return out.slice(0, 5);
-}
+/* UPCOMING REMINDERS IS GONE, replaced by Needs Action (2026-09-05).
+
+   _dlReminders() and its panel are deleted rather than left computing into
+   nothing — the same call this file made about `alertHtml`. The reminders
+   listed what was COMING; Needs Action lists what is already waiting on a
+   decision and names the decision, which is the more useful of the two on a
+   dashboard a warden opens to find out what to do next. Git has the old
+   function if the "what is coming" view is ever wanted back as its own card.
+
+   `.dl-rem*` stays in dashboard.css for the same reason — it is a complete,
+   working panel style with nothing to bring back but markup. */
 
 function _dlIco(k) {
   const P = {
@@ -903,6 +989,8 @@ function _dlIco(k) {
     new:   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
     money: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
     issue: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    cancel:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
+    bed:   '<path d="M2 8v12"/><path d="M2 17h20v3"/><path d="M6 8v9"/><path d="M2 11h14a4 4 0 0 1 4 4v2"/><circle cx="9" cy="11" r="0"/>',
     wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
     due:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     note:  '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
@@ -916,9 +1004,8 @@ function _dlIco(k) {
 }
 
 function _dashLedgerRow(mo, pending, pendingCount) {
-  const glance    = _dlGlance();
+  const glance    = _dlGlance(mo);
   const methods   = _dlMethods(mo);
-  const reminders = _dlReminders(mo, pending, pendingCount);
 
   const glanceRows = glance.map(g => {
     /* The payments row reports TWO facts — how many arrived and how much they
@@ -930,9 +1017,15 @@ function _dashLedgerRow(mo, pending, pendingCount) {
     const inner =
       '<span class="dl-glance__ic">' + _dlIco(g.k) + '</span>'
       + '<span class="dl-glance__body">'
-        + '<span class="dl-glance__label">' + escHtml(g.label) + '</span>'
+        + '<span class="dl-glance__label" title="' + escHtml(g.full || g.label) + '">'
+          + escHtml(g.label) + '</span>'
         + (g.money != null && g.money > 0
-            ? '<span class="dl-glance__sub dl-money">' + fmtPKR(g.money) + '</span>' : '')
+            /* Compact: this sits in a column one KPI tile wide, and a real
+               month's takings spelled out in full wrapped it onto three lines
+               and pushed the six rows out of the card. The exact figure is on
+               the Payments screen this row links to. */
+            ? '<span class="dl-glance__sub dl-money" title="' + fmtPKR(g.money) + '">PKR '
+              + fmtCompact(g.money) + '</span>' : '')
       + '</span>'
       + '<span class="dl-glance__n">' + fmtNum(g.n) + '</span>';
     return g.page
@@ -950,57 +1043,153 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         + '</div>').join('')
     : '<div class="dl-empty">No payments settled this month yet.</div>';
 
-  const reminderRows = reminders.length
-    ? reminders.map(r => {
-        const inner =
-          '<span class="dl-rem__ic dl-rem__ic--' + r.tone + '">' + _dlIco(r.tone) + '</span>'
-          + '<span class="dl-rem__body"><b>' + escHtml(r.title) + '</b>'
-          + '<span class="dl-rem__sub">' + escHtml(r.whenLabel) + (r.sub ? ' · ' + escHtml(r.sub) : '') + '</span></span>';
-        return r.page
-          ? '<button class="dl-rem__row" onclick="navigate(\'' + r.page + '\')">' + inner + '</button>'
-          : '<div class="dl-rem__row dl-rem__row--static">' + inner + '</div>';
-      }).join('')
-    /* Not a decorated empty state. Nothing is due and nothing is posted is a
-       real, good answer, and dressing it up as an error would be a lie. */
-    : '<div class="dl-empty">Nothing due, and no notices posted ahead.</div>';
+  /* QUICK ACTIONS — four, per the owner's `quick.png`.
 
+     It was six (Add Student, Add Payment, Add Expense, Complaints, Rooms,
+     Reports). Add Student already sits in the header as the page's one primary
+     button, and Rooms and Reports are permanent sidebar entries — so half the
+     panel was a third route to somewhere already on screen twice. The four
+     that remain are the ones with no other one-click home: the two things a
+     warden posts during the day, and the two things they raise. */
+  /* EACH ONE OPENS ITS FORM, not the page the form lives on (owner, 2026-09-06).
+     They used to navigate() — so "Add Payment" landed on the Payments table and
+     the warden then had to find the button, which is two clicks and a scan to
+     do the thing the tile is named after. A tile called Add X that does not add
+     an X is a link wearing a verb.
+
+     These are the same four entry points the header's primary button uses
+     (headerAction() in nav.js), so a form opened from here is the identical
+     form, with the identical permission check, opened from anywhere else.
+     openAddPayment() is a page rather than a modal — Add Payment is a full
+     screen in this app — and it is still the form, reached in one click. */
   const actions = [
-    { k: 'add',    label: 'Add Student',  fn: "navigate('students')" },
-    { k: 'card',   label: 'Add Payment',  fn: "navigate('payments')" },
-    { k: 'spend',  label: 'Add Expense',  fn: "navigate('expenses')" },
-    { k: 'issue',  label: 'Complaints',   fn: "navigate('issues')"   },
-    { k: 'room',   label: 'Rooms',        fn: "navigate('rooms')"    },
-    { k: 'report', label: 'Reports',      fn: "navigate('reports')"  },
+    { k: 'card',   label: 'Add Payment',      fn: "openAddPayment()" },
+    { k: 'spend',  label: 'Add Expense',      fn: "showAddExpenseModal()" },
+    // One form covers complaints and maintenance — it opens with the two as a
+    // toggle, which is why this is "Add Issue" rather than either noun.
+    { k: 'issue',  label: 'Add Issue',        fn: "showAddIssueModal()" },
+    { k: 'cancel', label: 'Add Cancellation', fn: "showAddCancellationModal()" },
   ].map(a =>
     '<button class="dl-act" onclick="' + a.fn + '">'
     + '<span class="dl-act__ic">' + _dlIco(a.k) + '</span>'
     + '<span class="dl-act__label">' + escHtml(a.label) + '</span></button>').join('');
 
+  /* NEEDS ACTION — the sketch replaces Upcoming Reminders with this, and it is
+     the better card. Reminders listed what was COMING; this lists what is
+     already waiting on a decision, and every row names the decision rather
+     than just the count. A warden reading "13 pending payments" still has to
+     work out what to do about it; "Collect" does not.
+
+     ALL FOUR ROWS ARE ALWAYS PRESENT — only the numbers change (owner, 2026-09-06,
+     reversing the 2026-09-05 call that dropped zero rows). Dropping them made
+     the panel a different shape every render: the rows moved under the cursor
+     as a queue cleared, and a warden could not learn where "pending payments"
+     lives because it was in a different place each morning — or absent, which
+     reads as missing rather than clear. A fixed four-row list is scannable by
+     position, and a 0 beside "pending payment" is itself the answer to the
+     question the card exists to answer.
+
+     A cleared row is muted rather than removed, so the ones that still want
+     attention are the ones that carry colour. */
+  /* Each row carries BOTH forms. `noun + 's'` produced "0 open maintenances",
+     which only became visible once zero rows stopped being dropped — but it was
+     equally wrong at 2, and had been all along. Maintenance is a mass noun; so
+     is the plural of most of what a hostel counts. Spelling both out is shorter
+     than the rule that would get them right. */
+  const needs = [
+    { k:'cancel', tone:'amber',  n:(DB.cancellations||[]).filter(c=>c.status==='Pending').length,
+      one:'pending cancellation', many:'pending cancellations', verb:'View',    page:'cancellations' },
+    { k:'card',   tone:'red',    n:pendingCount,
+      one:'pending payment',      many:'pending payments',      verb:'Collect', page:'payments' },
+    { k:'issue',  tone:'violet', n:(DB.complaints||[]).filter(c=>c.status==='Open').length,
+      one:'open complaint',       many:'open complaints',       verb:'Resolve', page:'issues' },
+    { k:'wrench', tone:'blue',   n:(DB.maintenance||[]).filter(m=>m.status==='Open').length,
+      one:'open maintenance',     many:'open maintenance jobs', verb:'Assign',  page:'issues' },
+  ];
+  // The pill counts the rows that still want something, not the rows on screen —
+  // four is now always the number of rows, and a badge that always reads 4 is
+  // not information.
+  const needsOpen = needs.filter(r => r.n > 0).length;
+
+  const needsRows = needs.map(r =>
+        '<button class="dl-need' + (r.n === 0 ? ' is-clear' : '') + '"'
+        + ' onclick="navigate(\'' + r.page + '\')">'
+        + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
+        + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
+        + '<span class="dl-need__label">' + escHtml(r.n === 1 ? r.one : r.many) + '</span>'
+        /* The verb still names the decision, because the row is still the way
+           to that screen — but on a cleared row it would be an instruction to
+           do nothing, so it gives way to a tick. */
+        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb)) + '</span>'
+        + '</button>').join('');
+
+  return {
+    /* THE HEADING HAS TO NAME THE WINDOW. It said "Today at a Glance" over six
+       figures that are now a month's — and a heading that does not describe the
+       numbers under it is worse than the empty card it replaced. The pill
+       carries the month itself rather than leaving "This Month" to be resolved
+       against whatever the sidebar picker happens to be set to, which is the
+       whole point of the panel following that picker. */
+    glance:
+        '<div class="dash-sec dl-panel">'
+      +   '<div class="dash-sec__head">'
+      +     '<span class="dash-sec__title">This Month at a Glance</span>'
+      +     '<span class="dash-pill dh-slate">' + escHtml(thisMonthLabel()) + '</span>'
+      +   '</div>'
+      +   '<div class="dl-glance">' + glanceRows + '</div>'
+      + '</div>',
+
+    methods:
+        '<div class="dash-sec dl-panel">'
+      +   '<div class="dash-sec__head"><span class="dash-sec__title">Collection by Method</span>'
+      +   (methods.total > 0 ? '<span class="dl-head__total">' + fmtPKR(methods.total) + '</span>' : '')
+      +   '</div>'
+      +   '<div class="dl-meth">' + methodRows + '</div>'
+      + '</div>',
+
+    needs:
+        '<div class="dash-sec dl-panel">'
+      +   '<div class="dash-sec__head"><span class="dash-sec__title">Needs Action</span>'
+      +   (needsOpen ? '<span class="dash-pill dh-slate">' + needsOpen + '</span>' : '')
+      +   '</div>'
+      +   '<div class="dl-needs">' + needsRows + '</div>'
+      + '</div>',
+
+    actions:
+        '<div class="dash-sec dl-panel">'
+      +   '<div class="dash-sec__head"><span class="dash-sec__title">Quick Actions</span></div>'
+      +   '<div class="dl-acts dl-acts--4">' + actions + '</div>'
+      + '</div>',
+  };
+}
+
+/* OCCUPANCY OVERVIEW — the owner's `occupency 2.png`.
+
+   One bar, three figures, no donut. Occupancy by Room Type sits immediately to
+   its left and is already a donut in the reference; a second one beside it
+   would have made the pair read as two versions of the same chart rather than
+   the whole and its parts.
+
+   `filled` deliberately excludes force-added students, matching the seat maths
+   everywhere else on this page — a bed given to someone over capacity is not a
+   bed the hostel has to sell. The headline percentage would otherwise be able
+   to exceed 100 and the bar would overflow its track. */
+function _dashOccupancyOverview(totalSeats, filled, avail, pct) {
   return ''
-  + '<div class="dl-row">'
-
-    + '<div class="dash-sec dl-panel">'
-      + '<div class="dash-sec__head"><span class="dash-sec__title">Today at a Glance</span></div>'
-      + '<div class="dl-glance">' + glanceRows + '</div>'
-    + '</div>'
-
-    + '<div class="dash-sec dl-panel">'
-      + '<div class="dash-sec__head"><span class="dash-sec__title">Collection by Method</span>'
-      + (methods.total > 0 ? '<span class="dl-head__total">' + fmtPKR(methods.total) + '</span>' : '')
+  + '<div class="dash-sec dl-panel">'
+    + '<div class="dash-sec__head"><span class="dash-sec__title">Occupancy Overview</span></div>'
+    + '<div class="dl-occ">'
+      + '<div class="dl-occ__top">'
+        + '<span class="dl-occ__pct">' + pct + '%</span>'
+        + '<span class="dl-occ__of">' + fmtNum(filled) + ' / ' + fmtNum(totalSeats) + ' beds</span>'
       + '</div>'
-      + '<div class="dl-meth">' + methodRows + '</div>'
+      + '<div class="dl-occ__bar"><i style="width:' + Math.min(100, pct) + '%"></i></div>'
+      + '<div class="dl-occ__legend">'
+        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--track"></i>Total beds<b>' + fmtNum(totalSeats) + '</b></span>'
+        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--fill"></i>Occupied<b>' + fmtNum(filled) + '</b></span>'
+        + '<span class="dl-occ__row"><i class="dl-occ__sw dl-occ__sw--free"></i>Available<b>' + fmtNum(avail) + '</b></span>'
+      + '</div>'
     + '</div>'
-
-    + '<div class="dash-sec dl-panel">'
-      + '<div class="dash-sec__head"><span class="dash-sec__title">Upcoming Reminders</span></div>'
-      + '<div class="dl-rem">' + reminderRows + '</div>'
-    + '</div>'
-
-    + '<div class="dash-sec dl-panel">'
-      + '<div class="dash-sec__head"><span class="dash-sec__title">Quick Actions</span></div>'
-      + '<div class="dl-acts">' + actions + '</div>'
-    + '</div>'
-
   + '</div>';
 }
 
@@ -1098,7 +1287,7 @@ function _dashRecentPayments(list, mo, collected) {
     // `p.monthlyRent` alone, so a student on 8,000 rent + 6,500 mess showed
     // "PKR 8,000" beside a PKR 14,500 payment and the mess was nowhere.
     const ch     = paymentCharges(p, st);
-    const unpaid = Number(p.unpaid != null ? p.unpaid : 0);
+    const unpaid = outstandingOf(p);
     const name   = String(p.studentName || '?');
     const menu =
       '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showViewStudentModal\',\'' + p.studentId + '\')">' + _rpIco('eye') + 'View student</button>'
@@ -2110,7 +2299,7 @@ function exportMonthCSV(monthKey, monthLabel) {
   const rev = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
   let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0)}\n\n`;
+  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+outstandingOf(p),0)}\n\n`;
   csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
   // Ordered by room like every other roster, export and PDF in the app — the
   // warden reads this sheet against the building, not against insertion order.
@@ -2140,7 +2329,7 @@ function printMonthReport(monthKey, monthLabel) {
   const exps = _rptOutgoings(monthKey);
   const rev = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
-  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount)),0);
+  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+outstandingOf(p),0);
   const activeStudents = DB.students.filter(s=>s.status==='Active');
   const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
   ${printDocStyles()}
@@ -2254,6 +2443,32 @@ setTimeout(function(){
   if(typeof Chart!=='undefined'&&typeof ChartDataLabels!=='undefined') Chart.register(ChartDataLabels);
 },0);
 
+/* THE TREND RANGE — db3.png's Quarter / 6 Months / Year switch.
+ *
+ * The header carried a static "Jan – Dec" label where the reference has a
+ * control. A label that states what the chart shows is fine; a control that
+ * lets you change it is better, and it is what the design asks for.
+ *
+ * Deliberately NOT a rolling window: the ranges end at the current month and
+ * count back, so "Quarter" is the last three months INCLUDING this one. Every
+ * other figure on this dashboard is scoped to a month the sidebar picks, and a
+ * chart that quietly showed a different span than the cards around it would be
+ * the same class of disagreement as D-1.
+ *
+ * Year is the default because it is the only one of the three that shows a
+ * season, which is what a hostel's takings actually have. */
+var _dashTrendRange = 'year';
+var TREND_RANGES = { quarter: 3, '6m': 6, year: 12 };
+
+function setTrendRange(r) {
+  if (!TREND_RANGES[r]) return;
+  _dashTrendRange = r;
+  document.querySelectorAll('.trend-range__b').forEach(function (b) {
+    b.classList.toggle('is-on', b.dataset.range === r);
+  });
+  drawTrendChart();
+}
+
 function drawTrendChart() {
   var canvas = document.getElementById('trend-canvas');
   if (!canvas || typeof Chart === 'undefined') return;
@@ -2270,7 +2485,7 @@ function drawTrendChart() {
     var isPast = k <= curKey;
     var rev = isPast ? calcRevenue(k) : 0;
     var exp = isPast ? calcExpenses(k)  : 0;   // transfers included
-    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+(p.unpaid!=null?Number(p.unpaid):Number(p.amount||0)),0) : 0;
+    var pend= isPast ? (DB.payments||[]).filter(p=>p.status==='Pending'&&_payMatchesMonth(p,k)).reduce((s,p)=>s+outstandingOf(p),0) : 0;
     months.push({label:MS2[i], full:MN2[i]+' '+yr, key:k});
     // null means "this month has not happened", NOT "this month was zero".
     // These used to collapse both cases to null and then map null→0, so every
@@ -2284,6 +2499,23 @@ function drawTrendChart() {
     real.push(isPast&&rev>0);
   }
 
+  /* Trim to the chosen range. The series are built for the whole year first and
+     sliced after, rather than looping only over the range: the arrays are
+     twelve numbers and the cost is nothing, while a second month-walk would be
+     a second place for the "future months are null, not zero" rule to be got
+     wrong. The window ENDS at the current month — a hostel does not want three
+     months of a year that has not happened. */
+  var _span = TREND_RANGES[_dashTrendRange] || 12;
+  if (_span < 12) {
+    var _end = now.getMonth() + 1;               // count of months so far
+    var _from = Math.max(0, _end - _span);
+    months = months.slice(_from, _end);
+    revD   = revD.slice(_from, _end);
+    expD   = expD.slice(_from, _end);
+    pendD  = pendD.slice(_from, _end);
+    real   = real.slice(_from, _end);
+  }
+
   // resolve CSS vars at draw time → adapts to dark/light theme
   var _cs = getComputedStyle(document.body);
   var cGreen  = _cs.getPropertyValue('--green').trim()  || '#45dfa4';
@@ -2295,6 +2527,17 @@ function drawTrendChart() {
   // which put two blues on one chart and left green doing double duty as both
   // "revenue" and "went up".
   var cRevenue = _cs.getPropertyValue('--blue').trim()   || '#2563eb';
+  /* EXPENSES IS A PALE TINT OF REVENUE, NOT RED — db3.png's chart is one hue in
+     two weights, and it reads better for the reason it usually does: the two
+     bars are the same KIND of thing (money moving in a month), so the eye should
+     compare their heights, not their colours. Red also said "bad" about a
+     hostel's ordinary running costs, which is a judgement the chart has no
+     business making.
+
+     Derived from the revenue colour rather than fixed, so it follows the theme
+     and any future accent change. Same +alpha idiom the faint-month bars below
+     already use, which assumes --blue resolves to hex. */
+  var cExpense = cRevenue + '4D';
   var cPending = _cs.getPropertyValue('--purple').trim() || '#8b5cf6';
   var cText2  = _cs.getPropertyValue('--text2').trim()  || '#8a9ab8';
   var cText3  = _cs.getPropertyValue('--text3').trim()  || '#4a6080';
@@ -2323,7 +2566,7 @@ function drawTrendChart() {
     var isR=real[idx];
     badge.innerHTML='<div style="font-size:12px;font-weight:700;color:'+cText2+';margin-bottom:8px">'+months[idx].full+'</div>'+(isR?[
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+';display:inline-block"></span>Revenue</span><span style="font-weight:700;color:'+cRevenue+'">'+fmtPKR(rev)+'</span></div>',
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRed+';display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cRed+'">'+fmtPKR(exp)+'</span></div>',
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+'80;display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cText2+'">'+fmtPKR(exp)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cPending+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cPending+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
       '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
@@ -2384,61 +2627,16 @@ function drawTrendChart() {
         // near 1 with a bar percentage below it puts the air INSIDE the pair,
         // which is what makes a two-series comparison readable.
         categoryPercentage:0.72, barPercentage:0.92,
-        datalabels:{
-          // Only the peak and the latest month are called out. Labelling every
-          // real month stacked eight overlapping badges across the middle of a
-          // 178px-tall panel and buried the line they were annotating; the
-          // reference calls out one or two points and lets the hover badge
-          // answer the rest.
-          display:function(c){
-            var i=c.dataIndex; if(!real[i]) return false;
-            /* THE BADGE IS DRAWN BY `display`, THE TEXT BY `formatter`, AND THEY
-               HAD DIFFERENT OPINIONS. The formatter returns '' when there is no
-               earlier month to measure against — no baseline, no percentage —
-               but display had already said yes, so the chart painted an empty
-               bordered pill hovering over the first month with data. Invisible
-               on a busy year; unmissable on a hostel's opening month, which is
-               exactly when a new customer is looking at it.
+        /* NO DATALABELS. db3.png's chart has none, and on real data the
+           rise/fall badges were actively misleading: a hostel whose first
+           month held a token amount produced "▲ +157902725.6%" floating over
+           the bars. A percentage against a near-zero baseline is a true
+           division and a meaningless statement.
 
-               So ask the same question here: is there an earlier real month? */
-            var hasBaseline=false;
-            for(var k=i-1;k>=0;k--){ if(real[k]){ hasBaseline=true; break; } }
-            if(!hasBaseline) return false;
-            var last=-1, peak=-1, peakV=-Infinity;
-            for(var j=0;j<real.length;j++){ if(!real[j]) continue;
-              last=j; if((plotRev[j]||0)>peakV){peakV=plotRev[j]||0; peak=j;} }
-            return i===last || i===peak;
-          },
-          anchor:'end',align:'top',offset:6,
-          color:function(c){return lblColors[c.dataIndex];},
-          backgroundColor:cBg2, borderColor:function(c){return lblColors[c.dataIndex];},
-          borderWidth:1, borderRadius:4, padding:{top:3,bottom:3,left:7,right:7},
-          font:{size:10,weight:'700'},
-          formatter:function(v,c){
-            var i=c.dataIndex; if(!real[i])return'';
-            var pv=null; for(var j=i-1;j>=0;j--){if(real[j]){pv=plotRev[j];break;}}
-            /* THE MOVEMENT, NOT THE MONEY.
-            
-               This printed the figure and the percentage on two stacked lines, so the
-               badge repeated an amount the Y axis and the Total Revenue card both
-               already state -- three places for one number -- while the thing a trend
-               chart exists to show, the direction and size of the move, was the
-               smaller half of it. The exact figure for any month is one hover away in
-               the badge, which is where a precise number belongs.
-            
-               No baseline means no percentage: the first month with data has nothing
-               to have moved FROM, and inventing 0% there would draw a flat trend for
-               a hostel that has simply just opened. */
-            if(pv===null)return'';
-            /* A previous month of ZERO has no percentage either: (v-0)/0 is Infinity,
-               and this rendered the literal "▲ Infinity%" on the first month a
-               hostel collected anything. Say it rose, without pretending to say by
-               how much. */
-            if(!pv) return v>0?'▲ new':'';
-            var p=(((v-pv)/pv)*100);
-            return (p>=0?'▲ ':'▼ ')+Math.abs(p).toFixed(1)+'%';
-          }
-        }
+           The movement is still readable — that is what a bar chart is for —
+           and the exact figures for any month are one hover away in the badge,
+           which is where a precise number belongs. */
+        datalabels:{ display:false }
       },
       // The legend above this chart has always advertised four series, but
       // only the revenue line was ever drawn — expD/pendD were computed
@@ -2453,7 +2651,7 @@ function drawTrendChart() {
       // No Transfers series: expD already CONTAINS the transfers, so a second
       // one drew the same money twice and a reader adding the two got a figure
       // the ledger never held.
-      secondary('Expenses',  expD,  cRed)]
+      secondary('Expenses',  expD,  cExpense)]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -2469,7 +2667,19 @@ function drawTrendChart() {
       },
       scales:{
         x:{grid:{color:cBorder},border:{display:false},ticks:{color:cText3,font:{size:11}}},
-        y:{grid:{color:cBorder},border:{display:false},ticks:{color:cText3,font:{size:11},callback:function(v){return v>=1e6?(v/1e6).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}
+        y:{grid:{color:cBorder},border:{display:false},ticks:{color:cText3,font:{size:11},maxTicksLimit:5,callback:function(v){
+          /* The ladder stopped at M, so a hostel billing in whole rupees got
+             axis labels like "1500000.0M" — arithmetically right and unreadable.
+             fmtCompact() carries B and T, and it is the same function the KPI
+             row uses, so the axis and the cards round the same way. Under 10M
+             it returns exact digits, which is too long for a tick, so the axis
+             keeps its own short form below that threshold. */
+          var a=Math.abs(v);
+          if(a>=1e7) return fmtCompact(v);
+          if(a>=1e6) return (v/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+          if(a>=1e3) return (v/1e3).toFixed(0)+'K';
+          return v;
+        }}}
       }
     }
   });

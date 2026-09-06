@@ -170,11 +170,22 @@ test("'payments' is enforced: a warden without it cannot collect or edit money",
 test('the header stops offering buttons the warden may not use', async () => {
   const { app, win } = await openApp();
 
+  /* The header's second button, "Add Payment" (#hdr-action2), was removed on
+     2026-09-05 — the sketch gives the header one primary action and Add Payment
+     is the first tile in the dashboard's Quick Actions. This test now asserts
+     the remaining button, which is the claim that still has teeth: the chrome
+     must not offer an action the warden's permissions will refuse.
+
+     The 'payments' permission is still gated, and still tested — by "'payments'
+     is enforced" above, which drives the actual entry point rather than the
+     button that used to lead to it. That is the stronger of the two checks: a
+     hidden button is a courtesy, the gate is the boundary. */
   const shown = await win.evaluate(async () => {
-    const read = () => ({
-      add: getComputedStyle(document.getElementById('hdr-action')).display,
-      pay: getComputedStyle(document.getElementById('hdr-action2')).display,
-    });
+    const read = () => {
+      const el = document.getElementById('hdr-action');
+      return { add: el ? getComputedStyle(el).display : 'missing',
+               pay2: !!document.getElementById('hdr-action2') };
+    };
     const before = { ...CUR_USER.perms };
 
     CUR_USER.perms.edit = true; CUR_USER.perms.payments = true;
@@ -192,9 +203,8 @@ test('the header stops offering buttons the warden may not use', async () => {
   });
 
   expect(shown.full.add, 'a permitted warden lost the Add button').not.toBe('none');
-  expect(shown.full.pay, 'a permitted warden lost the Add Payment button').not.toBe('none');
   expect(shown.none.add, 'the Add button was offered without permission').toBe('none');
-  expect(shown.none.pay, 'Add Payment was offered without permission').toBe('none');
+  expect(shown.full.pay2, 'the Add Payment header button is gone — see the comment above').toBe(false);
 
   await app.close();
 });
