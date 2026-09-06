@@ -656,19 +656,20 @@ async function payBulkMarkPaid() {
   if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
   showConfirm(`Mark ${targets.length} payment${targets.length>1?'s':''} as paid?`,
     `This collects the outstanding balance on each selected row and stamps today's date.`, async () => {
+      // applyPayment() again, so a bulk settle is indistinguishable from
+      // settling each row by hand — including the D-1 fix: the balance comes
+      // from calculateOutstanding(), not from `p.unpaid || 0`, which is 0 on a
+      // legacy record and used to mark a real debtor Paid having collected
+      // nothing at all.
+      let collected = 0;
       targets.forEach(p => {
-        const prevUnpaid = Number(p.unpaid) || 0;
-        p.amount = (Number(p.amount)||0) + prevUnpaid;
-        p.unpaid = 0;
-        p.status = 'Paid';
-        p.paidDate = today();
-        if (!p.partialPayments) p.partialPayments = [];
-        if (prevUnpaid > 0) p.partialPayments.push({
-          date: today(), amount: prevUnpaid, method: p.method || 'Cash',
-          collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-          note: 'Pending cleared (bulk)'
-        });
+        const due = calculateOutstanding(p);
+        if (due <= 0) { p.status = 'Paid'; p.paidDate = p.paidDate || today(); return; }
+        collected += applyPayment(p, { amount: due, date: today(),
+                                       note: 'Pending cleared (bulk)' }).applied;
       });
+      if (collected > 0) logActivity('Payment Collected',
+        `${targets.length} record(s) settled in bulk · ${fmtPKR(collected)} collected`, 'Finance');
       await saveDB();
       paySelected.clear();
       renderPage('payments');
@@ -813,30 +814,32 @@ async function generateMonthlyRents() {
         : 'All students already have records for this month',
     added>0 ? 'success' : skipped>0 ? 'warning' : 'info');
 }
+/* Settle a record's whole outstanding balance in one action.
+
+   THE WRITE-SIDE TAIL OF D-1. This read the balance as `Number(p.unpaid) || 0`,
+   which is 0 on a record written before that field existed — so pressing Mark
+   Paid on a legacy debtor collected NOTHING, wrote `unpaid = 0` and stamped it
+   Paid. The debt was not settled; it was deleted, and the record then dropped
+   out of the arrears list, the banner and its total with no trace.
+
+   applyPayment() reads calculateOutstanding(), which prices a record with no
+   recorded balance from the charge authority. That is the entire point of there
+   being one answer. */
 async function markPaymentPaid(id) {
   const p = DB.payments.find(x => x.id === id); if (!p) return;
-  const prevUnpaid = Number(p.unpaid) || 0;
-  const prevPaid   = Number(p.amount) || 0;
-  p.amount   = prevPaid + prevUnpaid;
-  p.unpaid   = 0;
-  p.discount = p.discount || 0;
-  p.status   = 'Paid';
-  p.paidDate = today();
-  const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
-  if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
-  // Log installment in partialPayments history
-  if (!p.partialPayments) p.partialPayments = [];
-  if (prevUnpaid > 0) {
-    p.partialPayments.push({
-      date: today(),
-      amount: prevUnpaid,
-      method: p.method || 'Cash',
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Pending cleared'
-    });
+  const due = calculateOutstanding(p);
+  if (due <= 0) {
+    p.status = 'Paid'; p.paidDate = p.paidDate || today();
+    await saveDB(); renderPage(currentPage);
+    toast('Already settled — nothing left to collect on this record', 'info');
+    return;
   }
-  if (prevUnpaid > 0) logActivity('Payment Collected',
-    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  p.discount = p.discount || 0;
+  const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
+  p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
+  logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(r.applied)} balance cleared`, 'Finance');
   await saveDB();
   renderPage(currentPage);
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
@@ -844,28 +847,25 @@ async function markPaymentPaid(id) {
 
 // FIX Issue 3: Called from student modal — refreshes the student modal directly
 // instead of calling renderPage (which fights with the modal re-open)
+// Same collection as markPaymentPaid(), including the D-1 balance fix — it
+// differs only in refreshing the student modal instead of the page, which
+// renderPage() would fight with.
 async function markPaymentPaidFromStudentView(payId, studentId) {
   const p = DB.payments.find(x => x.id === payId); if (!p) return;
-  const prevUnpaid = Number(p.unpaid) || 0;
-  const prevPaid   = Number(p.amount) || 0;
-  p.amount   = prevPaid + prevUnpaid;
-  p.unpaid   = 0;
-  p.discount = p.discount || 0;
-  p.status   = 'Paid';
-  p.paidDate = today();
-  const collectionNote = prevUnpaid > 0 ? `Remaining ${fmtPKR(prevUnpaid)} collected on ${today()}` : '';
-  if (collectionNote) p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
-  if (!p.partialPayments) p.partialPayments = [];
-  if (prevUnpaid > 0) {
-    p.partialPayments.push({
-      date: today(), amount: prevUnpaid,
-      method: p.method || 'Cash',
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Pending cleared'
-    });
+  const due = calculateOutstanding(p);
+  if (due <= 0) {
+    p.status = 'Paid'; p.paidDate = p.paidDate || today();
+    await saveDB();
+    toast('Already settled — nothing left to collect on this record', 'info');
+    showViewStudentModal(studentId);
+    return;
   }
-  if (prevUnpaid > 0) logActivity('Payment Collected',
-    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(prevUnpaid)} balance cleared`, 'Finance');
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  p.discount = p.discount || 0;
+  const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
+  p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
+  logActivity('Payment Collected',
+    `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(r.applied)} balance cleared`, 'Finance');
   await saveDB();
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
   showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
@@ -1212,12 +1212,17 @@ function pfReloadOutstandings() {
        ${many ? `<button type="button" class="pf-out__btn" onclick="pfFillAllOutstandings()">Collect all</button>` : ''}
      </div>
      <div class="pf-out__note">From earlier months. What you enter here is posted to that month's record — not to ${escHtml(month || 'this month')}.</div>
-     ${arrears.map(p => `
+     ${arrears.map(p => `${''/* The row must use the SAME answer as the header
+        two lines above it. Both the printed figure and the input cap read
+        `p.unpaid` directly, so on a record written before that field existed
+        the row said "owes PKR 0" and refused to accept anything, while the
+        header — which already used outstandingOf() — showed the real total.
+        The panel disagreed with itself about one student's arrears. */}
        <div class="pf-out__row">
          <div class="pf-out__m">${escHtml(p.month || '—')}</div>
-         <div class="pf-out__d">owes <b>${fmtPKR(p.unpaid)}</b></div>
-         <input class="pf-in pf-out__in" type="number" min="0" max="${Number(p.unpaid)}"
-                id="f-pout-${p.id}" data-payid="${p.id}" data-max="${Number(p.unpaid)}"
+         <div class="pf-out__d">owes <b>${fmtPKR(calculateOutstanding(p))}</b></div>
+         <input class="pf-in pf-out__in" type="number" min="0" max="${calculateOutstanding(p)}"
+                id="f-pout-${p.id}" data-payid="${p.id}" data-max="${calculateOutstanding(p)}"
                 placeholder="0" value="" oninput="pfOutstandingInput(this)">
          <button type="button" class="pf-out__btn" title="Collect the whole ${escHtml(p.month || 'month')} balance"
                  onclick="pfFillOutstandingRow('${p.id}')">${many ? 'Collect' : 'Collect All'}</button>
@@ -1366,26 +1371,25 @@ function pfOutstandingAllocations() {
     const amt = parseFloat(el.value) || 0;
     if (amt <= 0) return;
     const p = DB.payments.find(x => x.id === el.dataset.payid);
-    if (p) out.push({ payment: p, amount: Math.min(amt, Number(p.unpaid) || 0) });
+    // Capped at what the month actually owes, from the one answer — `p.unpaid`
+    // alone caps a legacy arrear at 0 and silently discards the collection.
+    if (p) out.push({ payment: p, amount: Math.min(money(amt), calculateOutstanding(p)) });
   });
   return out;
 }
 
 /* Posts arrear collections back to the months they belong to. Returns a short
-   description for the activity log. */
+   description for the activity log.
+
+   Through applyPayment() (§14), so an arrear collected here is written exactly
+   the way one collected from the row action is: same balance, same trail entry,
+   same status and paidDate rules. It used to compute its own. */
 function pfApplyOutstandings(allocations, method, date) {
   const done = [];
   allocations.forEach(({ payment: p, amount }) => {
-    p.amount  = (Number(p.amount) || 0) + amount;
-    p.unpaid  = Math.max(0, (Number(p.unpaid) || 0) - amount);
-    if (!p.partialPayments) p.partialPayments = [];
-    p.partialPayments.push({
-      date, amount, method,
-      collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-      note: 'Arrears collected'
-    });
-    if (p.unpaid === 0) { p.status = 'Paid'; p.paidDate = date; }
-    done.push((p.month || '—') + ' ' + fmtPKR(amount));
+    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected' });
+    if (!r.ok) return;
+    done.push((p.month || '—') + ' ' + fmtPKR(r.applied));
   });
   return done.join(', ');
 }
@@ -1478,24 +1482,44 @@ function recalcUnpaid() {
   const admFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const conc    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const total   = pfPayableTotal();
-  // Cap paid amount — prevent accidental overpayment (e.g. 1600000 instead of 16000)
+  /* THE TYPO GUARD, AND WHY IT NO LONGER TRUNCATES AT THE BILL.
+
+     This capped the amount at the total due, silently. It exists for a real
+     case — 1600000 typed for 16000 — but it also caught the ordinary counter
+     case of a student handing over a round 15,000 against a 14,500 bill: the
+     form rewrote 15,000 to 14,500 and the 500 was owed to nobody, which is the
+     behaviour §14 asks to have a policy for.
+
+     Two different amounts need two different answers, so the threshold is now
+     plausibility rather than exactness. Up to twice the bill is money someone
+     could actually be handing over, and the excess is recorded as a credit
+     (see `overpaid` on the record). Beyond that it is a keystroke, and it is
+     still capped and still says so. */
   const paidEl  = document.getElementById('f-ppaid');
-  let pa = parseFloat(paidEl?.value)||0;
-  if(pa > total && total > 0) {
-    pa = total;
-    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
-    const capWarn = document.getElementById('f-ppaid-cap-warn');
-    if(!capWarn && paidEl) {
-      const w = document.createElement('div');
+  let pa = money(parseFloat(paidEl?.value)||0);
+  const implausible = total > 0 && pa > total * 2;
+  const note = (text, tone) => {
+    let w = document.getElementById('f-ppaid-cap-warn');
+    if (!text) { if (w) w.remove(); return; }
+    if (!w && paidEl) {
+      w = document.createElement('div');
       w.id = 'f-ppaid-cap-warn';
-      w.style.cssText = 'font-size:11px;color:var(--amber);margin-top:3px;font-weight:600';
-      w.textContent = '⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.';
       paidEl.parentNode.appendChild(w);
     }
+    if (!w) return;
+    w.style.cssText = 'font-size:11px;color:var(--' + tone + ');margin-top:3px;font-weight:600';
+    w.textContent = text;
+  };
+  if (implausible) {
+    pa = total;
+    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
+    note('⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
+  } else if (pa > total && total > 0) {
+    if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
+    note(fmtPKR(pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
   } else {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
-    const capWarn = document.getElementById('f-ppaid-cap-warn');
-    if(capWarn) capWarn.remove();
+    note('');
   }
   const u = Math.max(0, total - pa);
   const el = document.getElementById('f-punpaid');
@@ -1732,7 +1756,10 @@ function recalcUnpaidPS() {
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
-  const unpaid = Math.max(0, rent + mess + extra + admFee - conc - paid);
+  const unpaid = Math.max(0, calculateBill({
+    rent, messCharge: mess, messIncluded: true,   // psMessAmount() returns 0 when off
+    extraTotal: extra, admissionFee: admFee, concession: conc,
+  }) - money(paid));
   const unpaidEl = document.getElementById('f-ps-unpaid');
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
@@ -1775,20 +1802,48 @@ async function submitPaymentForStudent() {
         // ── UPDATE existing pending record in-place ──────────────────
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
         const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
-        const newUnpaid      = Math.max(0, newMonthlyRent - newPaid);
+        /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
+           charge, the extras, the admission fee and the concession outright — so
+           at a bundled hostel, merging a payment into an existing pending record
+           understated the balance by the whole mess charge, while creating a
+           fresh record from the identical form got it right. The neighbouring
+           merge path in submitAddPayment() had had exactly this bug and carries
+           a comment about the fix; this copy was missed. One expression now:
+           calculateBill() in finance.js. */
+        const newMessOn      = document.getElementById('f-ps-mess-on')?.checked !== false;
+        const newMess        = psMessAmount();
+        const newAdmFee      = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
+        const newConcession  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+        const newConcDesc    = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
+        const newExtras      = getExtraChargesData();
+        const newExtraTotal  = newExtras.reduce((s, c) => s + c.amount, 0);
+        const newTotalDue    = calculateBill({
+          rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+          extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+        });
+        const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
         const newStatus      = document.getElementById('f-ps-stat')?.value  || 'Pending';
         const newMethod      = document.getElementById('f-ps-method')?.value || alreadyPending.method || 'Cash';
         const newDate        = document.getElementById('f-ps-date')?.value   || today();
         const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
 
-        alreadyPending.monthlyRent = newMonthlyRent;
-        alreadyPending.totalRent   = newMonthlyRent;
-        alreadyPending.amount      = newPaid;
-        alreadyPending.unpaid      = newUnpaid;
-        alreadyPending.method      = newMethod;
-        alreadyPending.status      = newStatus;
-        alreadyPending.date        = newDate;
-        alreadyPending.paidDate    = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
+        alreadyPending.monthlyRent  = newMonthlyRent;
+        alreadyPending.totalRent    = newMonthlyRent;
+        alreadyPending.messCharge   = newMess;
+        alreadyPending.messIncluded = newMessOn;
+        alreadyPending.extraCharges = newExtras;
+        alreadyPending.extraTotal   = newExtraTotal;
+        alreadyPending.admissionFee = newAdmFee;
+        alreadyPending.concession   = newConcession;
+        alreadyPending.concessionDesc = newConcDesc;
+        alreadyPending.discount     = newConcession;
+        alreadyPending.amount       = money(newPaid);
+        alreadyPending.unpaid       = newUnpaid;
+        alreadyPending.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
+        alreadyPending.method       = newMethod;
+        alreadyPending.status       = newStatus;
+        alreadyPending.date         = newDate;
+        alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
         alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
         if (newNotes) alreadyPending.notes = newNotes;
 
@@ -1813,8 +1868,11 @@ async function submitPaymentForStudent() {
   const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
   const extraChargesPS = getExtraChargesData();
   const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
-  const totalDuePS  = Math.max(0, monthlyRent + messChargePS + extraTotalPS + admissionFeePS - concessionPS);
-  const unpaid      = Math.max(0, totalDuePS - paidAmount);
+  const totalDuePS  = calculateBill({
+    rent: monthlyRent, messCharge: messChargePS, messIncluded: true,
+    extraTotal: extraTotalPS, admissionFee: admissionFeePS, concession: concessionPS,
+  });
+  const unpaid      = Math.max(0, totalDuePS - money(paidAmount));
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // Collecting a payment does NOT change what the student is charged. Price is
   // set in Settings → Rent & Mess; this form only records what was taken. It
@@ -1830,6 +1888,10 @@ async function submitPaymentForStudent() {
     roomNumber: room?.number || '',
     amount: paidAmount,
     monthlyRent, unpaid,
+    // §14 overpayment: money handed over above the bill is recorded, not
+    // swallowed by the Math.max that computes `unpaid`. Written even when 0, so
+    // calculateRefund() answers from the record instead of deriving.
+    overpaid: Math.max(0, money(paidAmount) - totalDuePS),
     messCharge: messChargePS, messIncluded: messIncludedPS,
     admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
@@ -2251,8 +2313,17 @@ function pfPayQuick(which) {
    cannot drift apart. */
 function pfPayableTotal() {
   const num = id => parseFloat(document.getElementById(id)?.value) || 0;
-  return Math.max(0, pfRentAmount() + pfMessAmount() + getExtraChargesTotal()
-                   + num('f-padmfee') - num('f-pconcession'));
+  // §14: one bill expression. This was the sixth hand-written copy of
+  // rent + mess + extras + admission − concession, and the copies had already
+  // drifted apart — see calculateBill() in finance.js.
+  return calculateBill({
+    rent:         pfRentAmount(),
+    messCharge:   pfMessAmount(),
+    messIncluded: true,           // pfMessAmount() already returns 0 when off
+    extraTotal:   getExtraChargesTotal(),
+    admissionFee: num('f-padmfee'),
+    concession:   num('f-pconcession'),
+  });
 }
 
 // The segmented control on line 01 sets the checkbox the rest of the form reads.
@@ -2477,8 +2548,11 @@ async function submitAddPayment() {
           // a fresh one from the identical form.
           const newAdmFee      = parseFloat(document.getElementById('f-padmfee')?.value)||0;
           const newConcession  = parseFloat(document.getElementById('f-pconcession')?.value)||0;
-          const newTotalDue    = Math.max(0, newMonthlyRent + newMess + newExtraTotal + newAdmFee - newConcession);
-          const newUnpaid      = Math.max(0, newTotalDue - newPaid);
+          const newTotalDue    = calculateBill({
+            rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+            extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+          });
+          const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
           const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
           const newDate        = document.getElementById('f-pdate')?.value  || today();
@@ -2491,6 +2565,7 @@ async function submitAddPayment() {
           alreadyPending2.messIncluded = newMessOn;
           alreadyPending2.amount       = newPaid;
           alreadyPending2.unpaid       = newUnpaid;
+          alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
           // Amount Paid is the running total for the month, so today's cash is
           // the difference. Recording it leaves a per-instalment trail instead
           // of one figure that quietly changes shape between visits.
@@ -2549,9 +2624,12 @@ async function submitAddPayment() {
   const admissionFee  = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc= (document.getElementById('f-pconcession-desc')?.value||'').trim();
-  const totalDue    = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
+  const totalDue    = calculateBill({
+    rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
+    extraTotal, admissionFee, concession,
+  });
   const totalRent   = monthlyRent;                // display rent = base only
-  const unpaid      = Math.max(0, totalDue - paidAmount);
+  const unpaid      = Math.max(0, totalDue - money(paidAmount));
   const status      = document.getElementById('f-pstat')?.value || 'Pending';
   const t    = isManual ? null : DB.students.find(x=>x.id===studentIdRaw);
   const room = t ? DB.rooms.find(r=>r.id===t?.roomId) : null;
@@ -2570,6 +2648,8 @@ async function submitAddPayment() {
     roomNumber: room?.number||'',
     amount: paidAmount,
     monthlyRent, unpaid,
+    // §14 overpayment — see submitPaymentForStudent() for the reasoning.
+    overpaid: Math.max(0, money(paidAmount) - totalDue),
     messCharge, messIncluded,
     extraCharges, extraTotal,
     admissionFee, concession, concessionDesc,
@@ -2729,9 +2809,12 @@ async function submitEditPayment(id) {
   const concessionDesc = (document.getElementById('f-pconcession-desc')?.value||'').trim();
   const extraCharges = getExtraChargesData();
   const extraTotal   = extraCharges.reduce((s,c)=>s+c.amount, 0);
-  const totalDue     = Math.max(0, monthlyRent + messCharge + extraTotal + admissionFee - concession);
-  const unpaid       = Math.max(0, totalDue - paidAmount);
-  const prevPaid     = Number(p.amount) || 0;
+  const totalDue     = calculateBill({
+    rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
+    extraTotal, admissionFee, concession,
+  });
+  const unpaid       = Math.max(0, totalDue - money(paidAmount));
+  const prevPaid     = money(p.amount);
   if (!p.partialPayments) p.partialPayments = [];
   if (paidAmount > prevPaid) {
     p.partialPayments.push({
@@ -2754,6 +2837,11 @@ async function submitEditPayment(id) {
   p.extraCharges   = extraCharges;
   p.extraTotal     = extraTotal;
   p.unpaid         = unpaid;
+  // §14 overpayment. Recomputed from this form's own figures rather than added
+  // to, because the Edit form restates the whole record: the bill it shows and
+  // the amount beside it are both editable, so the credit is whatever those two
+  // now say it is.
+  p.overpaid       = Math.max(0, money(paidAmount) - totalDue);
   p.method         = document.getElementById('f-pmethod')?.value || p.method;
   p.month          = document.getElementById('f-pmonth')?.value  || p.month;
   p.status         = document.getElementById('f-pstat')?.value   || p.status;

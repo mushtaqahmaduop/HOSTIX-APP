@@ -63,19 +63,42 @@ function calcRevenue(datePrefix) {
    trails cannot be trusted to date anything, so such a record falls back
    entirely to its own date rather than being scaled or partly believed. */
 function _cashEvents(p) {
-  const total = Number(p && p.amount || 0);
-  if (!p || total <= 0) return [];
+  if (!p) return [];
+  const total = Number(p.amount || 0);
   const base  = p.date || p.paidDate || p.dueDate || '';
   const trail = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+
+  /* REVERSALS ARE CASH EVENTS TOO, AND THEY ARE NEGATIVE ONES.
+
+     reversePayment() (§14) hands money back, which leaves the drawer on the day
+     it happens — so it belongs in this month's cash figure with a minus sign,
+     not netted invisibly into the original collection's month.
+
+     It is stored in its own array rather than as a negative entry in
+     partialPayments precisely because of the two lines below: this function
+     FILTERS that array to positive amounts when it dates cash but SUMS it whole
+     when it sanity-checks. A negative entry there would be counted by one and
+     dropped by the other, and the record's cash would come out over-stated by
+     the amount handed back — the one thing this function must never do. */
+  const revs = Array.isArray(p.reversals) ? p.reversals : [];
+  const revSum = revs.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+
+  // A record whose collections have been fully reversed still moved money on
+  // two days, and the reconciliation has to show both.
+  if (total <= 0 && revSum <= 0) return [];
+
   const trailSum = trail.reduce((s, e) => s + Number(e && e.amount || 0), 0);
+  const netTrail = trailSum - revSum;
 
   // No trail, or a trail that claims more than was collected: one event.
-  if (!trail.length || trailSum > total + 0.5) return [{ date: base, amount: total }];
+  if (!trail.length || netTrail > total + 0.5) return [{ date: base, amount: total }];
 
   const events = trail
     .filter(e => e && Number(e.amount || 0) > 0)
     .map(e => ({ date: e.date || base, amount: Number(e.amount || 0) }));
-  const residual = total - trailSum;
+  revs.filter(e => e && Number(e.amount || 0) > 0)
+      .forEach(e => events.push({ date: e.date || base, amount: -Number(e.amount || 0) }));
+  const residual = total - netTrail;
   if (residual > 0.5) events.push({ date: base, amount: residual });
   return events;
 }
