@@ -862,7 +862,7 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     p.status = 'Paid'; p.paidDate = p.paidDate || today();
     await saveDB();
     toast('Already settled — nothing left to collect on this record', 'info');
-    showViewStudentModal(studentId);
+    if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
     return;
   }
   const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
@@ -873,7 +873,9 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     `${p.studentName||'—'} — ${p.month||'—'} · ${fmtPKR(r.applied)} balance cleared`, 'Finance');
   await saveDB();
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
-  showViewStudentModal(studentId); // FIX: refresh student modal directly, no renderPage conflict
+  /* The slide-over is the student view now when it is open; the modal is
+     still the fallback for the dashboard, reports and rooms, which open it. */
+  if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
 }
 async function deletePayment(id) {
   const _dp = DB.payments.find(x => x.id === id);
@@ -896,7 +898,7 @@ async function deletePaymentFromStudentView(payId, studentId) {
     DB.payments=DB.payments.filter(x=>x.id!==payId);
     await saveDB();
     toast('Payment record deleted','info');
-    showViewStudentModal(studentId); // refresh the modal
+    if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
   });
 }
 
@@ -2863,7 +2865,7 @@ async function submitEditPayment(id) {
   toast('Payment updated','success');
   if(_returnStudentId) {
     var _sid = _returnStudentId; _returnStudentId = null;
-    showViewStudentModal(_sid);
+    if (!refreshStudentView(_sid)) showViewStudentModal(_sid);
   } else {
     closeModal(); renderPage('payments');
   }

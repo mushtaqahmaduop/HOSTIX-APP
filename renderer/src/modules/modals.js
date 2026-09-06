@@ -60,6 +60,11 @@ function closeModal() {
     if(vid?.srcObject){ vid.srcObject.getTracks().forEach(t=>t.stop()); vid.srcObject=null; }
   });
   document.getElementById('modal-container').innerHTML='';
+  /* The student slide-over sits UNDER modals and stays open while one is up,
+     so whatever the form just changed has to be re-read on the way out —
+     otherwise the panel behind shows the values from before the save. No-op
+     unless the panel is actually open. */
+  if (typeof refreshStudentPanel === 'function') refreshStudentPanel();
 }
 let _pendingConfirmCb = null;
 let _pendingConfirmCancelCb = null;

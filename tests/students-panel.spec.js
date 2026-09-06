@@ -346,3 +346,135 @@ test('the panel clears the title bar, and no band is squashed', async () => {
 
   await app.close();
 });
+
+test('Financial carries the old profile ledger, whole', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+
+  /* Three records with the shapes the ledger exists to explain: one pending, one
+     clean, one with a concession. A digest that drops the concession column
+     cannot say why the third row paid 14,000 against a 14,500 charge. */
+  await win.evaluate(async () => {
+    const base = { monthlyRent: 14500, messCharge: 0, messIncluded: false, method: 'Cash',
+                   extraCharges: [], extraTotal: 0, admissionFee: 0, concession: 0,
+                   studentId: '066', studentName: 'Mushtaq Ahmad' };
+    DB.payments = [
+      Object.assign({}, base, { id:'q1', month:'2026-09', amount:0, unpaid:14500, overpaid:0,
+        status:'Pending', date:'2026-09-02', dueDate:'2026-09-10' }),
+      Object.assign({}, base, { id:'q2', month:'2026-08', amount:14500, unpaid:0, overpaid:0,
+        status:'Paid', date:'2026-08-01', paidDate:'2026-08-01' }),
+      Object.assign({}, base, { id:'q3', month:'2026-07', amount:14000, unpaid:0, overpaid:0,
+        status:'Paid', date:'2026-07-03', paidDate:'2026-07-03', concession:500 }),
+    ];
+    await saveDB();
+  });
+  await openPanel(win);
+  await win.evaluate(() => stuPanelTab('financial'));
+  await win.waitForTimeout(300);
+
+  const led = await win.evaluate(() => ({
+    bar:  document.querySelector('.svw-card__head--bar').innerText.replace(/\s+/g, ' '),
+    head: [...document.querySelectorAll('.svw-t thead th')].map(h => h.innerText.trim()),
+    rows: [...document.querySelectorAll('.svw-t tbody tr')].map(r =>
+            [...r.children].map(c => c.innerText.replace(/\s+/g, ' ').trim())),
+    foot: document.querySelector('.svw-tfoot').innerText.trim(),
+    acts: [...document.querySelectorAll('.svw-t tbody tr')].map(r =>
+            [...r.querySelectorAll('.svw-ia')].map(b => b.title)),
+    scrolls: (() => { const w = document.querySelector('.svw-tw');
+                      return w.scrollWidth > w.clientWidth; })(),
+  }));
+
+  // ALL NINE COLUMNS, in the modal's order.
+  // Uppercased in CSS, so compare on the words rather than their casing.
+  expect(led.head.map(h => h.toLowerCase()))
+    .toEqual(['month', 'monthly rent', 'concession', 'paid (+extras)',
+              'unpaid', 'method', 'status', 'date', 'actions']);
+  expect(led.bar).toContain('Full Payment History (3 records)');
+  expect(led.bar).toContain('Total paid: PKR 28,500');
+  expect(led.bar).toContain('Due PKR 14,500');
+  expect(led.foot).toBe('Showing 3 of 3 records');
+
+  // The concession is broken out under the paid figure, which is the point.
+  expect(led.rows[2][2]).toBe('−PKR 500');
+  expect(led.rows[2][3]).toContain('PKR 14,000');
+  expect(led.rows[2][3]).toContain('concession');
+  // Unpaid comes from calculateOutstanding, not the stored field.
+  expect(led.rows[0][4]).toBe('PKR 14,500');
+  expect(led.rows[1][4]).toBe('—');
+
+  /* FOUR ROW ACTIONS, and Mark Paid only where there is something to collect.
+     These are the only place a warden can settle a pending record or reprint a
+     receipt without leaving for Payments and finding the row again. */
+  expect(led.acts[0]).toEqual(['Mark Paid', 'Print Receipt', 'Edit Payment', 'Delete']);
+  expect(led.acts[1]).toEqual(['Print Receipt', 'Edit Payment', 'Delete']);
+
+  // Nine columns do not fit 440px, so the table scrolls rather than the panel.
+  expect(led.scrolls, 'the ledger should scroll inside its card').toBe(true);
+  expect(await win.evaluate(() => {
+    const b = document.getElementById('stu-panel-body');
+    return b.scrollWidth - b.clientWidth;
+  }), 'the panel body is being pushed sideways').toBeLessThanOrEqual(1);
+
+  await app.close();
+});
+
+test('a form opens over the panel, and the panel is still there after it', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+  await openPanel(win);
+
+  /* THE BUG THIS PINS: every action used to close the panel first, because the
+     panel sat at z-index 1401 and .modal-overlay sits at 350 — a form opened
+     from here rendered underneath it. So closing the form left the warden back
+     at the table, having to find the student and click again. */
+  const opened = await win.evaluate(() => {
+    const b = [...document.querySelectorAll('.stu-pan__act')].find(x => x.innerText.trim() === 'Edit');
+    if (!b) return 'no Edit button';
+    b.click();
+    return b.getAttribute('onclick');
+  });
+  await win.waitForTimeout(700);
+  expect(opened, 'Edit did not fire').toContain('showEditStudentModal');
+
+  const layered = await win.evaluate(() => ({
+    modal: !!document.querySelector('.modal-overlay'),
+    panel: !!document.querySelector('.stu-pan'),
+    modalZ: +getComputedStyle(document.querySelector('.modal-overlay')).zIndex,
+    panelZ: +getComputedStyle(document.querySelector('.stu-pan')).zIndex,
+  }));
+  expect(layered.modal && layered.panel, 'both must be on screen at once').toBe(true);
+  expect(layered.modalZ, 'the form must render above the panel').toBeGreaterThan(layered.panelZ);
+
+  // Escape belongs to the form while one is open, not to the panel behind it.
+  await win.keyboard.press('Escape');
+  await win.waitForTimeout(300);
+  expect(await win.evaluate(() => !!document.querySelector('.stu-pan'))).toBe(true);
+
+  // And closing the form leaves the record exactly where it was.
+  await win.evaluate(() => closeModal());
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => !!document.querySelector('.stu-pan.is-open'))).toBe(true);
+  expect(await win.evaluate(() => !document.querySelector('.modal-overlay'))).toBe(true);
+
+  /* closeModal() re-reads the record on its way out, so an edit saved in the
+     form is on the panel immediately rather than a reopen later. */
+  await win.evaluate(async () => { DB.students[0].bloodGroup = 'O−'; await saveDB(); closeModal(); });
+  await win.waitForTimeout(300);
+  expect(await win.evaluate(() => document.getElementById('stu-panel-body').innerText))
+    .toContain('O−');
+
+  // Escape with no form up still closes the panel.
+  await win.keyboard.press('Escape');
+  await win.waitForTimeout(400);
+  expect(await win.evaluate(() => !document.querySelector('.stu-pan'))).toBe(true);
+
+  await app.close();
+});

@@ -661,13 +661,13 @@ function showStudentPanel(id, tab) {
     const p = document.getElementById('stu-panel');
     if (p) p.classList.add('is-open');
   });
-  document.addEventListener('keydown', _stuPanelEsc);
+  document.addEventListener('keydown', _stuPanelEsc, true);
 }
 
 function closeStudentPanel() {
   const p = document.getElementById('stu-panel');
   const host = document.getElementById('stu-panel-host');
-  document.removeEventListener('keydown', _stuPanelEsc);
+  document.removeEventListener('keydown', _stuPanelEsc, true);
   _stuPanelId = null;
   if (!p) { if (host) host.innerHTML = ''; return; }
   p.classList.remove('is-open');
@@ -675,7 +675,49 @@ function closeStudentPanel() {
   setTimeout(() => { if (host) host.innerHTML = ''; }, 200);
 }
 
-function _stuPanelEsc(e) { if (e.key === 'Escape') closeStudentPanel(); }
+/* ESCAPE CLOSES THE TOP LAYER, AND THIS LISTENS IN THE CAPTURE PHASE TO DO IT.
+   app.js:180 already binds Escape to "close any open modal" — bubble phase, at
+   load time, so it runs BEFORE anything registered later. Bubbling, this handler
+   fired second, found the container app.js had just emptied, concluded no form
+   was open and closed the panel too: ONE Escape shut both, and the warden was
+   back at the table. In capture it runs first, sees the form that is actually
+   on screen, and yields. */
+function _stuPanelEsc(e) {
+  if (e.key !== 'Escape') return;
+  const m = document.getElementById('modal-container');
+  if (m && m.firstElementChild) return;
+  closeStudentPanel();
+}
+
+/* ── REFRESHING WHAT IS ALREADY OPEN ──────────────────────────────────────────
+   Called by closeModal(), so anything saved in a form over the panel shows the
+   moment the form goes. The tab is kept: a warden who edited a fee from the
+   Financial tab should come back to the Financial tab.
+
+   The student may not survive the form — Delete is a modal too — so a missing
+   record closes the panel rather than rendering an empty one. */
+function refreshStudentPanel() {
+  if (!_stuPanelId) return false;
+  const host = document.getElementById('stu-panel-host');
+  if (!host) { _stuPanelId = null; return false; }
+  const t = DB.students.find(x => x.id === _stuPanelId);
+  if (!t) { closeStudentPanel(); return false; }
+  host.innerHTML = _stuPanelHtml(t);
+  // Already on screen, so it must not replay the entry transition.
+  const el = document.getElementById('stu-panel');
+  if (el) el.classList.add('is-open');
+  return true;
+}
+
+/* The one place that answers "refresh the student the user is looking at".
+   Returns false when the panel is not the thing on screen, so the old modal
+   stays the fallback for the dashboard, reports and rooms — all of which still
+   open showViewStudentModal. */
+function refreshStudentView(id) {
+  if (!_stuPanelId) return false;
+  if (id && _stuPanelId !== id) return false;
+  return refreshStudentPanel();
+}
 
 function stuPanelTab(tab) {
   if (!_stuPanelId) return;
@@ -688,6 +730,36 @@ function stuPanelTab(tab) {
   body.innerHTML = _stuPanelTabHtml(t, tab);
   host.querySelectorAll('.stu-pan__tab').forEach(b =>
     b.classList.toggle('is-on', b.dataset.tab === tab));
+}
+
+/* The card glyphs. Inline because they are one-offs at one size, and a sprite
+   for six 14px icons costs more than it saves. */
+const STU_PICO = {
+  person: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  phone:  '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  book:   '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  bed:    '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
+  money:  '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  heart:  '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+};
+function _pico(name) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+       + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+       + (STU_PICO[name] || '') + '</svg>';
+}
+
+/* ONE TITLED CARD, which is what the reference draws and what an uppercase
+   rule could not do. The Overview was five <section>s separated by hairlines
+   and a small-caps label; at 440px that reads as one continuous list with
+   headings in it, and the eye has to parse the labels to find where "Current
+   Room" stops. A bordered card with a tinted glyph beside its title gives each
+   group an edge, so the panel can be scanned by shape instead of by reading. */
+function _pcard(title, glyph, tone, rows) {
+  return '<section class="stu-pan__card">'
+       + '<h4 class="stu-pan__card__h"><span class="stu-pan__card__i'
+       + (tone ? ' ' + tone : '') + '">' + _pico(glyph) + '</span>'
+       + escHtml(title) + '</h4>'
+       + '<div class="stu-pan__card__b">' + rows + '</div></section>';
 }
 
 /** A field row. Missing values print an em dash — §24: only render what exists. */
@@ -734,7 +806,21 @@ function _stuPanelHtml(t) {
       </div>
     </div>
 
-    ${''/* EVERY ACTION THE OLD PROFILE MODAL CARRIED (owner). The panel
+    ${''/* THE PANEL STAYS OPEN UNDER THE FORM (owner: "the slide-over is
+           closed and you have to go back to the student and click it").
+
+           It used to close itself before opening anything, because it had to:
+           it sat at z-index 1401 and .modal-overlay sits at 350, so a form
+           opened from here rendered UNDERNEATH it and was unreachable. The
+           panel is at 331 now — above the page and the rail, below every
+           modal — so the form opens on top and the record is still there when
+           it closes. closeModal() refreshes the panel on its way out, so a
+           saved edit is visible immediately.
+
+           DELETE IS THE ONE THAT STILL CLOSES, because the record it is
+           showing will not exist when the confirm returns.
+
+           EVERY ACTION THE OLD PROFILE MODAL CARRIED (owner). The panel
            replaced showViewStudentModal, and replacing a screen means taking
            its verbs with it — the modal's footer held Print, Shift Room, Edit
            and Cancel Seat, and a panel that offered three of them would have
@@ -755,16 +841,16 @@ function _stuPanelHtml(t) {
            out of its way — and closing would throw away the record the warden
            is reading. Everything else opens a modal, so it closes first. */}
     <div class="stu-pan__acts">
-      <button class="stu-pan__act" onclick="closeStudentPanel();showEditStudentModal('${escHtml(t.id)}')">
+      <button class="stu-pan__act" onclick="showEditStudentModal('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button>
-      <button class="stu-pan__act" onclick="closeStudentPanel();showRoomShiftModal('${escHtml(t.id)}')">
+      <button class="stu-pan__act" onclick="showRoomShiftModal('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>Move Room</button>
       <button class="stu-pan__act" onclick="printStudentCard('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print</button>
-      <button class="stu-pan__act" onclick="closeStudentPanel();openAddPayment('${escHtml(t.id)}')">
+      <button class="stu-pan__act" onclick="openAddPayment('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>Payment</button>
       ${status === 'Active' ? `
-      <button class="stu-pan__act is-warn" onclick="closeStudentPanel();quickCancelStudent('${escHtml(t.id)}')">
+      <button class="stu-pan__act is-warn" onclick="quickCancelStudent('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>Cancel Seat</button>` : ''}
       <button class="stu-pan__act is-danger" onclick="closeStudentPanel();confirmDeleteStudent('${escHtml(t.id)}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
@@ -787,14 +873,30 @@ function _stuPanelTabHtml(t, tab) {
   return _stuPanelOverview(t);
 }
 
-/* ── OVERVIEW ─────────────────────────────────────────────────────────────── */
+/* ── OVERVIEW ─────────────────────────────────────────────────────────────────
+   The reference's card set, one column at 440px. Five groups, each with the
+   glyph tile that tells them apart before a word is read, and Status & Fee in
+   green because it is the only one that carries money.
+
+   THE FIELDS ARE THE RECORD'S OWN. Date of birth, gender, marital status,
+   blood group and session have been stored and exported all along with nothing
+   rendering them (owner's question); an absent one is a grey em dash, so a
+   column of them reads as "not recorded" rather than as data.
+
+   Guardian is ONE pair. §24 lists a guardian and an emergency contact, but the
+   record carries a single emergencyContact/emergencyPhone which the Add Student
+   form now labels Guardian — a second pair would be two rows no form fills. */
 function _stuPanelOverview(t) {
   const room  = DB.rooms.find(r => r.id === t.roomId);
   const rtype = room ? getRoomType(room) : null;
-  const sec = (title, rows) =>
-    '<section class="stu-pan__sec"><h4>' + escHtml(title) + '</h4>' + rows + '</section>';
+  const c = calculateCharges(t);
+  const f = calculateFeeStatus(t.id);
+  const status = t.status || 'Active';
+  const pkr = v => fmtPKR(money(v));
+  const pill = (hue, text) =>
+    '<span class="stu-pill ' + hue + '"><i></i>' + escHtml(text) + '</span>';
 
-  return sec('Personal information',
+  return _pcard('Personal Information', 'person', '',
         _pf('Full name',      t.name)
       + _pf("Father's name",  t.fatherName)
       + _pf('Student ID',     '#' + t.id, { mono: true })
@@ -806,45 +908,91 @@ function _stuPanelOverview(t) {
       + _pf('Nationality',    t.nationality)
       + _pf('Address',        t.address))
 
-  + sec('Contact & guardian',
-        _pf('Phone',             t.phone, { mono: true })
-      + _pf('Email',             t.email)
-      /* ONE PAIR, under the label the forms now use. §24 lists a guardian AND
-         an emergency contact; the record has one pair and no form fills a
-         second, so a second would be two permanently empty rows. */
-      + _pf('Guardian name',     t.emergencyContact)
-      + _pf('Guardian contact',  t.emergencyPhone, { mono: true }))
+  + _pcard('Contact & Guardian', 'phone', '',
+        _pf('Phone number',     t.phone, { mono: true })
+      + _pf('Email',            t.email)
+      + _pf('Guardian name',    t.emergencyContact)
+      + _pf('Guardian contact', t.emergencyPhone, { mono: true }))
 
-  + sec('Academic',
-        _pf('Course / class',    t.occupation || t.course)
+  + _pcard('Academic / Institutional', 'book', '',
+        _pf('Course / class',     t.occupation || t.course)
       + _pf('Session / semester', t.session)
-      + _pf('Expected stay',     t.expectedStay))
+      + _pf('Expected stay',      t.expectedStay))
 
-  + sec('Current room',
-        _pf('Room',       room ? '#' + room.number : '')
-      + _pf('Room type',  rtype ? rtype.name : '')
-      + _pf('Floor',      room ? room.floor : '')
-      + _pf('Bed',        t.bed)
-      + _pf('Joined',     t.joinDate ? fmtDate(t.joinDate) : ''))
+  /* THERE IS NO BLOCK. The reference's room card opens with one; this app's
+     rooms carry a number, a floor and a type and nothing else, so a Block row
+     would print an em dash on every record for ever. Bed is real — the student
+     record holds it — and takes its place. */
+  + _pcard('Current Room', 'bed', '',
+        _pf('Room number', room ? '#' + room.number : '')
+      + _pf('Bed number',  t.bed)
+      + _pf('Room type',   rtype ? rtype.name : '')
+      + _pf('Floor',       room && room.floor ? room.floor + ' Floor' : '')
+      + _pf('Since',       t.joinDate ? fmtDate(t.joinDate) : ''))
+
+  /* The money half, read through the §14 layer rather than recomputed. Plan
+     type is the field that says whether the mess charge above it is being
+     billed at all, which is why it is a fact and not decoration. */
+  + _pcard('Status & Fee', 'money', 'is-green',
+        _pf('Monthly rent',   pkr(c.rent), { mono: true })
+      + _pf('Mess charges',   c.messOptIn && c.mess > 0 ? pkr(c.mess) : 'Not billed', { mono: true })
+      + _pf('Monthly total',  pkr(c.total), { mono: true })
+      + _pf('Plan type',      pill('dh-blue', c.messOptIn && c.mess > 0 ? 'Rent + Mess' : 'Rent only'), { html: true })
+      + _pf('Fee status',     pill(stuFeeHue(f.status), f.status), { html: true })
+      + _pf('Student status', pill(stuStatusHue(status), status), { html: true }))
 
   + (t.allergies || t.notes
-      ? sec('Health & notes', _pf('Allergies', t.allergies) + _pf('Notes', t.notes))
+      ? _pcard('Health & Notes', 'heart', '',
+          _pf('Allergies', t.allergies) + _pf('Notes', t.notes))
       : '');
 }
 
-/* ── FINANCIAL ────────────────────────────────────────────────────────────── */
+/* ── FINANCIAL ────────────────────────────────────────────────────────────────
+   THE OLD PROFILE'S FULL PAYMENT HISTORY, NOT A SUMMARY OF IT (owner).
+   showViewStudentModal carried a nine-column ledger — month, monthly rent,
+   concession, paid with its extras broken out, unpaid, method, status, date and
+   four row actions — and the panel that replaced it shipped a four-column
+   digest. That is not a smaller version of the same thing: the columns it
+   dropped are the ones that answer "why is this figure not the rent", and the
+   actions it dropped are the only place a warden can mark a pending record paid
+   or reprint a receipt without going to Payments and finding the row again.
+
+   It is the SAME markup and the same `.svw-*` classes as the modal, deliberately
+   — one ledger, styled once, so the two can never drift into disagreeing about
+   the same student. What is added is the wrapper: the panel is 440px and this
+   table is not, so it scrolls horizontally inside its own card rather than
+   pushing the panel sideways.
+
+   Every figure above it comes from the §14 layer — calculateCharges,
+   calculateFeeStatus, calculateOutstanding. The bar's two totals are the
+   modal's own arithmetic, kept identical for the same reason.
+
+   ONE DELIBERATE CORRECTION on the way across: the Unpaid column read
+   `p.unpaid || 0`, a stored field, where the rest of the app asks
+   calculateOutstanding(p). Those disagree the moment a payment is edited or
+   reversed without the field being rewritten, and a ledger that disagrees with
+   the balance printed above it is worse than one that is merely terse.      */
 function _stuPanelFinancial(t) {
   const c = calculateCharges(t);
   const f = calculateFeeStatus(t.id);
-  const rows = (DB.payments || [])
-    .filter(p => p && p.studentId === t.id)
+  const id = t.id;
+  const payHistory = (DB.payments || [])
+    .filter(p => p && p.studentId === id)
     .slice()
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   /* `pkr`, not `money` — finance.js exports a global `money()` that normalises
      a figure to whole rupees, and shadowing it here would have made every
      amount in this tab silently bypass the money layer. */
   const pkr = v => fmtPKR(money(v));
+
+  const totalPaid = payHistory.filter(p => p.status === 'Paid')
+      .reduce((s, p) => s + Number(p.amount), 0)
+    + payHistory.filter(p => p.status === 'Pending' && Number(p.amount) > 0
+        && p.unpaid != null && Number(p.unpaid) > 0)
+      .reduce((s, p) => s + Number(p.amount), 0);
+  const totalDue = payHistory.reduce((s, p) => s + calculateOutstanding(p), 0);
+
   const head =
       '<section class="stu-pan__sec"><h4>Charges &amp; balance</h4>'
     + _pf('Monthly rent',   pkr(c.rent), { mono: true })
@@ -859,19 +1007,77 @@ function _stuPanelFinancial(t) {
         { html: true })
     + '</section>';
 
-  /* §27's mini history, from the real rows. "Do not invent history." */
-  const hist = rows.length
-    ? '<table class="stu-pan__tbl"><thead><tr><th>Month</th><th>Paid</th><th>Method</th><th>Status</th></tr></thead><tbody>'
-      + rows.map(p => `<tr onclick="closeStudentPanel();navigate('payments')" title="Open Payments">
-          <td>${escHtml(p.month || '—')}</td>
-          <td class="is-num">${pkr(p.amount)}</td>
-          <td>${escHtml(p.method || '—')}</td>
-          <td><span class="stu-pill ${calculateOutstanding(p) > 0 ? 'dh-amber' : 'dh-green'}"><i></i>${calculateOutstanding(p) > 0 ? 'Pending' : 'Paid'}</span></td>
-        </tr>`).join('')
-      + '</tbody></table>'
-    : '<div class="stu-pan__empty">No payment history</div>';
+  const rows = payHistory.map(p => {
+    /* The monthly CHARGE. Reading `monthlyRent` alone hid the mess half — see
+       paymentCharges() in utils.js. */
+    const _ch = paymentCharges(p, t);
+    const mRent = _ch.monthly;
+    const admFee = Number(p.admissionFee || p.fee || 0);
+    const extras = p.extraCharges || [];
+    const conc = Number(p.concession || p.discount || 0);
+    const due = calculateOutstanding(p);
+    let paidCell = '<span class="svw-paid">' + pkr(p.amount) + '</span>';
+    if (admFee > 0) paidCell += '<span class="svw-sub is-adm">+' + pkr(admFee) + ' admission</span>';
+    extras.forEach(x => { paidCell += '<span class="svw-sub is-extra">+' + pkr(x.amount)
+      + ' ' + escHtml(x.label || '') + '</span>'; });
+    if (conc > 0) paidCell += '<span class="svw-sub is-conc">−' + pkr(conc) + ' concession</span>';
 
-  return head + '<section class="stu-pan__sec"><h4>Payment history</h4>' + hist + '</section>';
+    return '<tr>'
+      + '<td class="svw-t__month">' + escHtml(p.month || '—') + '</td>'
+      + '<td class="svw-t__num">' + (mRent > 0 ? pkr(mRent) : '<span class="is-empty">—</span>')
+        + (_ch.messIncluded
+            ? '<span class="svw-sub">' + pkr(_ch.rent) + ' rent + ' + pkr(_ch.mess) + ' mess</span>'
+            : _ch.hasMess ? '<span class="svw-sub">rent only · mess off</span>' : '')
+        + '</td>'
+      + '<td class="svw-t__conc">' + (conc > 0 ? '−' + pkr(conc) : '<span class="is-empty">—</span>') + '</td>'
+      + '<td>' + paidCell + '</td>'
+      + '<td class="svw-t__unpaid' + (due > 0 ? ' is-due' : '') + '">'
+        + (due > 0 ? pkr(due) : '<span class="is-empty">—</span>') + '</td>'
+      + '<td>' + pmBadge(p.method) + '</td>'
+      + '<td>' + statusBadge(p.status) + '</td>'
+      + '<td class="svw-t__date">' + (fmtDate(p.date) || '—') + '</td>'
+      + '<td><div class="svw-t__acts">'
+      + (p.status !== 'Paid'
+          ? '<button class="svw-ia is-ok" onclick="markPaymentPaidFromStudentView(\'' + escHtml(p.id)
+            + '\',\'' + escHtml(id) + '\')" title="Mark Paid">' + icon('checkmark', 'xs') + '</button>'
+          : '')
+      + '<button class="svw-ia" onclick="printReceiptFromStudentView(\'' + escHtml(p.id)
+        + '\',\'' + escHtml(id) + '\')" title="Print Receipt">' + icon('receipt', 'xs') + '</button>'
+      + '<button class="svw-ia" onclick="editPaymentFromStudentView(\'' + escHtml(p.id)
+        + '\',\'' + escHtml(id) + '\')" title="Edit Payment">' + icon('edit', 'xs') + '</button>'
+      + '<button class="svw-ia is-danger" onclick="deletePaymentFromStudentView(\'' + escHtml(p.id)
+        + '\',\'' + escHtml(id) + '\')" title="Delete">' + icon('trash', 'xs') + '</button>'
+      + '</div></td></tr>';
+  }).join('');
+
+  const n = payHistory.length;
+  const ledger =
+      '<div class="svw-card svw-card--flush stu-pan__ledger">'
+    + '<div class="svw-card__head dh-blue svw-card__head--bar">'
+    + '<span class="svw-card__ico">' + icon('card', 'sm') + '</span>'
+    + '<span>Full Payment History (' + n + ' record' + (n === 1 ? '' : 's') + ')</span>'
+    + '<span class="svw-card__meta">Total paid: <b>' + pkr(totalPaid) + '</b>'
+    + (totalDue > 0 ? ' · <b class="is-due">Due ' + pkr(totalDue) + '</b>' : '') + '</span>'
+    + '</div>'
+    + (n
+        ? '<div class="svw-tw"><table class="svw-t"><thead><tr>'
+          + '<th>Month</th><th>Monthly Rent</th><th>Concession</th><th>Paid (+Extras)</th>'
+          + '<th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th>'
+          + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+          + '<div class="svw-tfoot">Showing ' + n + ' of ' + n + ' record' + (n === 1 ? '' : 's') + '</div>'
+        : '<div class="svw-none">No payment records yet</div>')
+    + '</div>';
+
+  /* The verb that belongs to this tab. Every other action on this record is in
+     the header; collecting money from the ledger you are reading should not
+     mean scrolling back up to find it. */
+  const add = '<button class="stu-pan__wide" onclick="openAddPayment(\'' + escHtml(id) + '\')">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'
+    + 'Record a payment</button>';
+
+  return head + '<section class="stu-pan__sec stu-pan__sec--flush">'
+       + ledger + '<div class="stu-pan__secpad">' + add + '</div></section>';
 }
 
 /* ── DOCUMENTS ────────────────────────────────────────────────────────────── */

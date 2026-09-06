@@ -1020,15 +1020,21 @@
 
    The scrim is deliberately light. A heavy one would say "the page behind is
    gone", and the point of a slide-over is that it is not. */
+/* 330/331, AND THE NUMBERS MATTER. .modal-overlay is z-index 350, so at the
+   1400/1401 this started at, every form opened from the panel rendered
+   underneath it — which is why each action used to close the panel first, and
+   why closing the form left the warden back at the table. Below the modal,
+   above the rail (100) and the page: the form opens over the record and the
+   record is still there afterwards. */
 .stu-pan__scrim {
-    position: fixed; inset: 0; z-index: 1400;
+    position: fixed; inset: 0; z-index: 330;
     background: rgba(15,23,42,.28);
     animation: stuPanFade .18s ease;
 }
 @keyframes stuPanFade { from { opacity: 0 } to { opacity: 1 } }
 
 .stu-pan {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 1401;
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 331;
     width: 440px; max-width: 94vw;
     display: flex; flex-direction: column;
     background: var(--card); border-left: 1px solid var(--border);
@@ -1121,13 +1127,48 @@
 .stu-pan__tab:hover { color: var(--text2); }
 .stu-pan__tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
 
-.stu-pan__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 20px; }
-.stu-pan__sec { padding: 12px 0; border-bottom: 1px solid var(--border); }
-.stu-pan__sec:last-child { border-bottom: 0; }
+/* THE BODY IS A SHADE BACK FROM ITS CONTENT, and that is what turns a list
+   into cards. The tab used to be five <section>s separated by hairlines under
+   a small-caps label; on one flat surface at 440px that reads as one
+   continuous list with headings in it, and the eye has to parse the labels to
+   find where "Current Room" ends. --bg2 under --card is one step — enough for
+   an edge, not enough to look like a different screen. */
+.stu-pan__body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    padding: 14px; background: var(--bg2);
+}
+
+/* A CARD AND A SECTION ARE THE SAME OBJECT. .stu-pan__card is the Overview's
+   titled card with a glyph; .stu-pan__sec is the plainer one the other tabs
+   use. They share their chrome here so the four tabs cannot drift apart. */
+.stu-pan__card,
+.stu-pan__sec {
+    margin: 0 0 12px; padding: 13px 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+}
+.stu-pan__card:last-child,
+.stu-pan__sec:last-child { margin-bottom: 0; }
+
 .stu-pan__sec h4 {
     margin: 0 0 8px; font-size: 10.5px; font-weight: 700;
     letter-spacing: .06em; text-transform: uppercase; color: var(--text3);
 }
+
+/* The title reads as a title, not as a label: sentence case at the body size,
+   with the tinted tile carrying the group's identity. */
+.stu-pan__card__h {
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 0 9px; font-size: 12.5px; font-weight: 700; color: var(--text);
+}
+.stu-pan__card__i {
+    width: 26px; height: 26px; border-radius: 8px; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-dim); color: var(--accent);
+}
+.stu-pan__card__i svg { width: 14px; height: 14px; }
+/* Status & Fee is the one card carrying money, so it is the one that is not
+   accent-blue. */
+.stu-pan__card__i.is-green { background: var(--ant-success-bg); color: var(--ant-success-fg); }
 
 /* Label left, value right, one line each. A two-column grid rather than a
    table so a long value wraps under itself instead of widening the label
@@ -1159,10 +1200,47 @@
     font-family: var(--ant-num-font); font-variant-numeric: tabular-nums; color: var(--text);
 }
 
+/* THE FULL PAYMENT LEDGER IS NINE COLUMNS WIDE AND THE PANEL IS 440px, so it
+   scrolls inside its own card. The alternative — dropping columns to fit — is
+   what the digest it replaced did, and the dropped ones were the concession and
+   the extras, which are the two that explain why a paid figure is not the rent.
+
+   Bled to the section's edges: the card already draws the border, so the
+   ledger's own rounded corners would be a second frame 14px inside the first. */
+/* The section is flush because the ledger's own bar IS the heading — a
+   small-caps "PAYMENT HISTORY" directly above "Full Payment History (3
+   records)" is the same words twice. */
+.stu-pan__sec--flush { padding: 0; overflow: hidden; }
+.stu-pan__secpad { padding: 0 14px 13px; }
+.stu-pan__ledger { border: 0; border-radius: 12px 12px 0 0; }
+.stu-pan__ledger .svw-card__head--bar { flex-wrap: wrap; gap: 4px 8px; font-size: 12px; }
+.stu-pan__ledger .svw-card__meta { margin-left: auto; white-space: nowrap; }
+.stu-pan__ledger .svw-t th,
+.stu-pan__ledger .svw-t td { white-space: nowrap; }
+.stu-pan__ledger .svw-t__acts { flex-wrap: nowrap; }
+
+/* The verb that belongs to this tab. Full width because it is the only action
+   in its section and a 120px button floating in a 412px card reads as an
+   afterthought. */
+.stu-pan__wide {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; height: 34px; margin-top: 12px; border-radius: 9px; cursor: pointer;
+    background: var(--accent-dim); border: 1px solid transparent; color: var(--accent);
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    transition: background .14s ease, border-color .14s ease;
+}
+.stu-pan__wide svg { width: 14px; height: 14px; }
+.stu-pan__wide:hover { border-color: var(--accent); }
+
 .stu-pan__empty {
     padding: 14px; text-align: center; font-size: 12px; color: var(--text3);
     background: var(--bg3); border-radius: 9px;
 }
+/* Documents and Room History draw their own rows inside the section card, so
+   the row that used to be the last one before a section border no longer needs
+   one of its own. */
+.stu-pan__doc:last-of-type,
+.stu-pan__hrow:last-child { border-bottom: 0; padding-bottom: 0; }
 
 /* Documents: a row per type, with the state said in words. A disabled control
    beside "Not uploaded" is the honest shape — §28 forbids pretending files
