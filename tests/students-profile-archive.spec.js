@@ -99,10 +99,20 @@ test('the students table states the whole agreement, not the rent half', async (
   await win.evaluate(() => renderPage('students'));
   await win.waitForTimeout(700);
 
+  /* THE SUB-LINE IS GONE (owner, 2026-09-06) — "+ PKR 6,500 mess" and "Mess not
+     included" no longer print under the total, because the warden reading this
+     table is the one who set those figures in Settings.
+
+     THE GUARANTEE THIS TEST EXISTS FOR IS UNCHANGED, and that is why it was
+     rewritten rather than deleted: the table must state the WHOLE agreement,
+     never the rent half. The total is still both halves and the badge still
+     names the plan — the split simply moved to the cell's title, where it is
+     available without costing a line on every row. If a future change makes
+     this column print rent alone, these assertions still fail. */
   const rows = await win.$$eval('.stu-table tbody tr', trs => trs.map(tr => ({
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
-    sub:    (tr.querySelector('.stu-charge__sub') || {}).textContent || '',
+    title:  (tr.querySelector('.stu-charge') || {}).getAttribute('title') || '',
     cover:  (tr.querySelector('.stu-cov') || {}).textContent || '',
   })));
 
@@ -110,14 +120,16 @@ test('the students table states the whole agreement, not the rent half', async (
 
   // Rent AND mess: the total is both halves, and the badge says so.
   expect(by('Both Charges').charge).toContain('14,500');       // 8,000 + 6,500
-  expect(by('Both Charges').sub).toContain('6,500 mess');
   expect(by('Both Charges').cover.trim()).toBe('Rent + Mess');
+  // The split is still reachable, on the title rather than on a second line.
+  expect(by('Both Charges').title).toContain('6,500 mess');
+  expect(by('Both Charges').title).toContain('8,000 rent');
 
   // Mess configured but switched off: the rent alone, and the badge is the
   // thing that distinguishes this from a hostel that serves no food.
   expect(by('Mess Off').charge).toContain('8,000');
-  expect(by('Mess Off').sub).toContain('Mess not included');
   expect(by('Mess Off').cover.trim()).toBe('Rent only');
+  expect(by('Mess Off').title).not.toContain('mess');
 
   // No mess in the room type at all — a different fact, and a different badge.
   expect(by('Rent Only').charge).toContain('5,000');

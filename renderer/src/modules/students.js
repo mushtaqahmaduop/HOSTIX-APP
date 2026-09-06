@@ -407,14 +407,20 @@ function renderStudents() {
           <th>Contact / Emergency</th>
           <th>CNIC</th>
           ${th('course','Course')}
+          <th>Address</th>
           <th>Nationality</th>
-          <th>Rent + Mess / mo</th>
+          ${''/* "Charges / month", not "Rent + Mess / mo". The old heading named
+                the two components; the cell under it now shows the total and a
+                badge saying which components are in it, so the heading naming
+                them again was the third time the same fact appeared in one
+                column. */}
+          <th>Charges / month</th>
           ${th('fee','Fee Status')}
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="12"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="13"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -447,11 +453,20 @@ function renderStudents() {
             </td>
             <td>${t.cnic?`<span class="stu-contact">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
+            <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}">${escHtml(t.address)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
-                <div class="stu-charge">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
-                <div class="stu-charge__sub">${c.messOptIn&&c.mess>0?'+ '+fmtPKR(c.mess)+' mess':c.mess>0?'Mess not included':'Rent only'}</div>
+                ${''/* THE SUB-LINE IS GONE (owner, 2026-09-06). It read
+                       "+ PKR 7,000 mess" or "Mess not included" under the
+                       total — and the warden setting those figures in Settings
+                       is the same person reading this table. The badge below
+                       already says WHICH plan the total covers, so the sub-line
+                       was the same fact spelled out a second time, in a column
+                       that was 116px wide in a table overflowing by 444px.
+                       Total plus badge; the split is on the student's profile
+                       and in the Rent & Mess settings that produced it. */}
+                <div class="stu-charge" title="${c.configured?escHtml(fmtPKR(c.rent)+' rent'+(c.messOptIn&&c.mess>0?' + '+fmtPKR(c.mess)+' mess':'')):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
                 <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
               </td>`;})()}
             ${(()=>{const f=_stuFee(t.id);
@@ -461,12 +476,18 @@ function renderStudents() {
                  is how a warden chases a student who is paid up. */
               return `<td><span class="stu-pill ${stuFeeHue(f.status)}" title="${escHtml(stuFeeTitle(f))}"><i></i>${f.status}</span></td>`;})()}
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
-            <td>
-              <div class="stu-acts">
-                <button class="stu-act dh-slate" onclick="event.stopPropagation();showViewStudentModal('${t.id}')" title="View profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg></button>
-                <button class="stu-act dh-blue"  onclick="event.stopPropagation();showEditStudentModal('${t.id}')" title="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
-                <button class="stu-act dh-red"   onclick="event.stopPropagation();confirmDeleteStudent('${t.id}')" title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-              </div>
+            ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
+                   Three always-visible icons were 124px — the widest ornament
+                   on the row, in a table that could not fit its columns. A menu
+                   also names its actions in words, where three glyphs relied on
+                   a tooltip nobody hovers for; and Delete stops sitting one
+                   pixel from Edit, which is the adjacency that produces the
+                   deletion nobody meant. */}
+            <td class="stu-actc">
+              <button class="stu-kebab" onclick="event.stopPropagation();stuRowMenu('${t.id}',this)"
+                      aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+              </button>
             </td>
           </tr>`;
         }).join('')}
@@ -546,6 +567,60 @@ document.addEventListener('click', function (e) {
   const p = document.getElementById('stu-pop');
   if (p && p.style.display === 'block' && e.target.closest && !e.target.closest('#stu-pop')) p.style.display = 'none';
 });
+/* ── THE ROW MENU ────────────────────────────────────────────────────────────
+   Anchored to the button with fixed positioning and flipped upward near the
+   bottom of the window, because the last rows of a full page are exactly where
+   a downward menu would open off-screen — and a menu you cannot see is a row
+   whose actions have quietly disappeared.
+
+   Rebuilt on each open rather than one node per row: a 100-row page would
+   otherwise carry 100 hidden menus, and the table is re-rendered on every save
+   anyway. */
+function stuRowMenu(id, btn) {
+  closeStuRowMenu();
+  const t = DB.students.find(x => x.id === id);
+  if (!t) return;
+
+  const el = document.createElement('div');
+  el.className = 'stu-rmenu';
+  el.id = 'stu-rmenu';
+  el.setAttribute('role', 'menu');
+  el.innerHTML =
+      `<button role="menuitem" onclick="closeStuRowMenu();showViewStudentModal('${escHtml(id)}')">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg>View profile</button>`
+    + `<button role="menuitem" onclick="closeStuRowMenu();showEditStudentModal('${escHtml(id)}')">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit student</button>`
+    + `<div class="stu-rmenu__sep"></div>`
+    + `<button role="menuitem" class="is-danger" onclick="closeStuRowMenu();confirmDeleteStudent('${escHtml(id)}')">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete student</button>`;
+  document.body.appendChild(el);
+
+  const r = btn.getBoundingClientRect();
+  const h = el.offsetHeight || 132;
+  const below = window.innerHeight - r.bottom;
+  el.style.left = Math.max(8, Math.min(r.right - el.offsetWidth, window.innerWidth - el.offsetWidth - 8)) + 'px';
+  el.style.top  = (below < h + 12 ? r.top - h - 6 : r.bottom + 6) + 'px';
+  btn.classList.add('is-on');
+}
+
+function closeStuRowMenu() {
+  const m = document.getElementById('stu-rmenu');
+  if (m) m.remove();
+  document.querySelectorAll('.stu-kebab.is-on').forEach(b => b.classList.remove('is-on'));
+}
+
+// Outside click and Escape. Delegated off `document` because renderPage()
+// replaces the table wholesale on every save.
+document.addEventListener('click', function (e) {
+  const m = document.getElementById('stu-rmenu');
+  if (!m) return;
+  if (e.target.closest && (e.target.closest('#stu-rmenu') || e.target.closest('.stu-kebab'))) return;
+  closeStuRowMenu();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeStuRowMenu();
+});
+
 function stuToggleRow(id) {
   if (stuSelected.has(id)) stuSelected.delete(id); else stuSelected.add(id);
   renderPage('students');

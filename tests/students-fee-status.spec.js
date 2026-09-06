@@ -103,10 +103,11 @@ test('the column reports all three states, and sits beside the charge without re
   // ADDITION between the charge and the student's own status — not a
   // replacement for either.
   for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY', 'CNIC',
-                     'COURSE', 'NATIONALITY', 'RENT + MESS / MO', 'FEE STATUS', 'STATUS']) {
+                     'COURSE', 'ADDRESS', 'NATIONALITY', 'CHARGES / MONTH',
+                     'FEE STATUS', 'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
-  expect(headers.indexOf('FEE STATUS')).toBeGreaterThan(headers.indexOf('RENT + MESS / MO'));
+  expect(headers.indexOf('FEE STATUS')).toBeGreaterThan(headers.indexOf('CHARGES / MONTH'));
   expect(headers.indexOf('FEE STATUS')).toBeLessThan(headers.indexOf('STATUS'));
 
   const states = await win.evaluate(() =>
