@@ -399,8 +399,32 @@ function renderStudents() {
     <!-- ══ TABLE ══ -->
     <div class="stu-table-wrap">
       <table class="stu-table">
+        ${''/* ONE COLGROUP IS THE COLUMN WIDTHS, and nothing else sets them.
+
+               They were per-cell `th:nth-child(n)` percentages, and the header
+               checkbox carried an inline `style="width:36px"` that outbid its
+               own percentage — so the specified widths no longer summed to the
+               table and the browser took the difference out of the LAST column:
+               the actions cell resolved to 10px and the kebab was clipped away
+               entirely. A colgroup cannot be outbid by a cell, it is read in
+               one place, and the total is checkable by eye. */}
+        <colgroup>
+          <col style="width:2.6%">   <!-- select      -->
+          <col style="width:3.6%">   <!-- ID          -->
+          <col style="width:15.8%">  <!-- student     -->
+          <col style="width:9%">     <!-- room        -->
+          <col style="width:10.5%">  <!-- contact     -->
+          <col style="width:5%">     <!-- CNIC        -->
+          <col style="width:8.5%">   <!-- course      -->
+          <col style="width:8.5%">   <!-- address     -->
+          <col style="width:5.5%">   <!-- nationality -->
+          <col style="width:10.5%">  <!-- charges     -->
+          <col style="width:8%">     <!-- fee status  -->
+          <col style="width:7.5%">   <!-- status      -->
+          <col style="width:5%">     <!-- actions     -->
+        </colgroup>
         <thead><tr>
-          <th style="width:36px"><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
+          <th><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
           ${th('id','ID')}
           ${th('name','Student')}
           ${th('room','Room')}
