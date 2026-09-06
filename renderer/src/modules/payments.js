@@ -563,6 +563,11 @@ function renderPayments() {
               <div class="pay-acts">
                 <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
                 <button class="pay-act dh-green" onclick="event.stopPropagation();printReceipt('${p.id}')" title="Receipt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
+                ${''/* Reverse is offered only where there is something to
+                     reverse. On a record that collected nothing the button
+                     would be a dead control on every untouched row of a freshly
+                     generated month — which is most of the table on the 1st. */}
+                ${money(p.amount) > 0 ? `<button class="pay-act dh-amber" onclick="event.stopPropagation();showReversePaymentModal('${p.id}')" title="Reverse a collection"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>` : ''}
                 <button class="pay-act dh-red"   onclick="event.stopPropagation();deletePayment('${p.id}')" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
               </div>
             </td>
@@ -2864,6 +2869,123 @@ async function submitEditPayment(id) {
   }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REVERSING A COLLECTION (spec §14)
+
+   A warden keys 15,000 where they meant 1,500. Until now the only remedy was
+   the Edit form, which restates the whole record: the wrong figure is
+   overwritten, the instalment trail is rewritten around it, and nothing is left
+   saying a mistake was ever made. On a shared warden screen that is
+   indistinguishable from money going missing.
+
+   A reversal is a fact about money and is recorded as one. It never edits the
+   collection it undoes — the original stays in the trail, the reversal sits
+   beside it in `p.reversals` with its reason and who did it, and dashboard.js
+   dates it as cash leaving the drawer on the day it happened.
+
+   THIS IS NOT DELETE. Delete removes the record and everything it says; this
+   removes an amount and says why. They are next to each other in the row
+   actions, so the modal has to make the difference obvious.
+   ══════════════════════════════════════════════════════════════════════════ */
+function showReversePaymentModal(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  const p = DB.payments.find(x => x.id === id); if (!p) return;
+
+  const collected = money(p.amount);
+  if (collected <= 0) { toast('Nothing has been collected on this record', 'info'); return; }
+
+  const due    = calculateOutstanding(p);
+  const credit = calculateRefund(p).refundable;
+  const trail  = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+  const past   = Array.isArray(p.reversals) ? p.reversals : [];
+
+  const line = (label, value, tone) =>
+    `<div class="pay-rev__line"><span>${label}</span>` +
+    `<b class="${tone || ''}">${value}</b></div>`;
+
+  showModal('modal-sm', 'Reverse a collection',
+    `<div class="pay-rev">
+       <div class="pay-rev__who">
+         <b>${escHtml(p.studentName || '—')}</b>
+         <span>${escHtml(p.month || '—')}${p.roomNumber ? ' · Room #' + escHtml(String(p.roomNumber)) : ''}</span>
+       </div>
+       <div class="pay-rev__box">
+         ${line('Collected on this record', fmtPKR(collected))}
+         ${line('Still owed', fmtPKR(due), due > 0 ? 'is-red' : '')}
+         ${credit > 0 ? line('Credit held', fmtPKR(credit), 'is-amber') : ''}
+       </div>
+       ${past.length ? `<div class="pay-rev__past">Already reversed: ${
+          past.map(r => fmtPKR(money(r.amount)) + ' on ' + escHtml(r.date || '—')).join(' · ')}</div>` : ''}
+       <div class="field">
+         <label>Amount to reverse</label>
+         <input class="form-control" id="f-prev-amt" type="number" min="1" max="${collected}"
+                value="${collected}" oninput="pfReverseHint()">
+         <div class="pay-rev__hint" id="f-prev-hint"></div>
+       </div>
+       <div class="field">
+         <label>Reason</label>
+         <input class="form-control" id="f-prev-reason" type="text" maxlength="120"
+                placeholder="Why is this being reversed?">
+       </div>
+       <div class="field">
+         <label>Date</label>
+         <input class="form-control cdp-trigger" id="f-prev-date" type="text" readonly
+                onclick="showCustomDatePicker(this,event)" value="${today()}">
+       </div>
+       ${''/* Said plainly, because this button sits beside Delete. */}
+       <div class="pay-rev__note">The original collection stays on the record. This
+         adds a reversal beside it, and the money shows as leaving on the date above.</div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="submitReversePayment('${p.id}')">Reverse</button>`);
+
+  setTimeout(pfReverseHint, 30);
+}
+
+/* What the record will say once this is applied. Shown live, because "what does
+   1,000 off a 15,000 collection leave me owed" is the question the warden is
+   actually asking and it is not obvious on a part-paid record. */
+function pfReverseHint() {
+  const el = document.getElementById('f-prev-hint');
+  const inp = document.getElementById('f-prev-amt');
+  if (!el || !inp) return;
+  const amt = money(parseFloat(inp.value) || 0);
+  const max = money(parseFloat(inp.max) || 0);
+  if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
+  if (amt > max)  { el.textContent = 'More than was collected (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
+  el.textContent = 'Leaves ' + fmtPKR(max - amt) + ' collected on this record.';
+  el.className = 'pay-rev__hint';
+}
+
+async function submitReversePayment(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  const p = DB.payments.find(x => x.id === id); if (!p) return;
+
+  const amount = money(parseFloat(document.getElementById('f-prev-amt')?.value) || 0);
+  const reason = (document.getElementById('f-prev-reason')?.value || '').trim();
+  const date   = document.getElementById('f-prev-date')?.value || today();
+
+  const r = reversePayment(p, { amount, reason, date });
+  if (!r.ok) {
+    toast(r.reason === 'exceeds-collected'
+        ? 'That is more than was collected on this record (' + fmtPKR(r.max) + ')'
+        : 'Enter an amount to reverse', 'error');
+    return;
+  }
+
+  /* Logged like every other money action, and with the reason — a reversal with
+     no stated cause is the one entry a later reader cannot make sense of. */
+  logActivity('Payment Reversed',
+    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} reversed`
+    + (reason ? ' · ' + reason : ' · no reason given'), 'Finance');
+
+  await saveDB();
+  closeModal();
+  renderPage(currentPage === 'payments' ? 'payments' : currentPage);
+  toast(fmtPKR(r.reversed) + ' reversed — ' + fmtPKR(money(p.amount)) + ' still collected on this record',
+        'success', 'Collection reversed');
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSES

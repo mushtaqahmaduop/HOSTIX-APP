@@ -943,3 +943,39 @@ input.ws__amt {
    disagree about what "paid" and "owed" look like. */
 .pay-table .pay-money--in  { color: var(--ant-success-fg); }
 .pay-table .pay-money--due { color: var(--ant-danger-fg); }
+
+/* ── Reverse a collection (§14) ───────────────────────────────────────────────
+   This modal sits one button away from Delete, so it is styled to read as a
+   correction rather than a destruction: the record's current figures are shown
+   first and largest, and the note under the form says in words that the
+   original collection stays. Amber, not red — red is Delete's. */
+.pay-rev__who      { margin-bottom:12px; line-height:1.5; }
+.pay-rev__who b    { display:block; font-size:14.5px; color:var(--text); }
+.pay-rev__who span { font-size:12px; color:var(--text3); }
+
+.pay-rev__box {
+    background:var(--bg3); border:1px solid var(--border2); border-radius:10px;
+    padding:10px 12px; margin-bottom:14px;
+}
+.pay-rev__line {
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; font-size:12.5px; padding:3px 0; color:var(--text3);
+}
+.pay-rev__line b {
+    color:var(--text); font-family:var(--ant-num-font);
+    font-variant-numeric:tabular-nums; letter-spacing:var(--ant-num-track);
+}
+.pay-rev__line b.is-red   { color:var(--ant-danger-fg); }
+.pay-rev__line b.is-amber { color:var(--ant-warning-fg); }
+
+.pay-rev__past {
+    font-size:11.5px; color:var(--ant-warning-fg); margin:-6px 0 14px;
+    line-height:1.6;
+}
+.pay-rev__hint      { font-size:11.5px; color:var(--text3); margin-top:5px; min-height:15px; }
+.pay-rev__hint.is-red { color:var(--ant-danger-fg); font-weight:600; }
+
+.pay-rev__note {
+    font-size:11.5px; color:var(--text3); line-height:1.65;
+    border-top:1px solid var(--border2); padding-top:10px; margin-top:4px;
+}

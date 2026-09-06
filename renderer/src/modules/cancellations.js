@@ -3,7 +3,8 @@
              submitEditCancellation, deleteCancellationRecord,
              showAddCancellationModal, cancStudentSearch, selectCancStudent,
              prefillCancStudentInfo, saveCancellation, confirmCancellation,
-             restoreFromCancellation, downloadCancellationReport
+             submitCancellationSettlement, restoreFromCancellation,
+             downloadCancellationReport
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -627,21 +628,154 @@ async function saveCancellation() {
   else if(currentPage==='dashboard') renderPage('dashboard');
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   CHECKOUT SETTLEMENT (spec §14 — "cancellations, checkout")
+
+   Confirming a cancellation is the moment a student stops being the hostel's
+   and their money stops being collectable. It used to be a yes/no box that set
+   a status: whatever they owed simply stayed on the books as arrears against
+   somebody who had gone, and whatever they had overpaid stayed as a credit
+   nobody would ever look at again.
+
+   The settlement is arithmetic over records that already exist —
+   calculateSettlement() in finance.js — and NOT a pro-rata calculation. There
+   is no daily rate anywhere in this product, and a departing student is exactly
+   the wrong person to hand an invented figure to. Every line here traces to a
+   record the warden can open.
+
+   Confirming and settling are two actions and stay two: a student can leave
+   owing money. The modal shows the figure, offers to settle it, and confirms
+   either way — but it records what the position WAS at departure on the
+   cancellation itself, so the answer survives later edits to the records.
+   ══════════════════════════════════════════════════════════════════════════ */
 async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
-  showConfirm('Confirm Cancellation', `Mark ${escHtml(c.studentName)}'s cancellation as confirmed? Student will be set to "Left".`, (async ()=>{
-    c.status = 'Confirmed';
-    const student = DB.students.find(s=>s.id===c.studentId);
-    if(student){
-      student.status='Left';
-      student.leftDate = c.vacateDate || today();
-      student.lastRoom = _cancRoomNumberOf(student);
-    }
-    await saveDB();
-    toast(`${c.studentName} cancellation confirmed. Student marked as Left.`, 'success');
-    renderPage('cancellations');
-  }));
+
+  const s = calculateSettlement(c.studentId);
+  const pmOpts = (DB.settings.paymentMethods||['Cash'])
+    .map(m => `<option>${escHtml(m)}</option>`).join('');
+
+  const row = l => `
+    <div class="canc-set__row">
+      <span class="canc-set__m">${escHtml(l.month || '—')}</span>
+      <span class="canc-set__b">${fmtPKR(l.billed)} billed</span>
+      <span class="canc-set__v ${l.outstanding > 0 ? 'is-red' : l.credit > 0 ? 'is-amber' : ''}">${
+        l.outstanding > 0 ? fmtPKR(l.outstanding) + ' owed'
+        : l.credit > 0    ? fmtPKR(l.credit) + ' credit'
+        : 'settled'}</span>
+    </div>`;
+
+  const verdict =
+    s.action === 'collect' ? `<div class="canc-set__net is-red">Collect ${fmtPKR(s.amount)}</div>`
+  : s.action === 'refund'  ? `<div class="canc-set__net is-amber">Refund ${fmtPKR(s.amount)}</div>`
+  :                          `<div class="canc-set__net is-green">Nothing outstanding</div>`;
+
+  showModal('modal-sm', 'Confirm cancellation',
+    `<div class="canc-set">
+       <div class="canc-set__who">
+         <b>${escHtml(c.studentName || '—')}</b>
+         <span>Leaving ${escHtml(c.vacateDate ? fmtDate(c.vacateDate) : 'on the vacate date')}${
+           c.roomNumber && c.roomNumber !== '—' ? ' · Room #' + escHtml(String(c.roomNumber)) : ''}</span>
+       </div>
+
+       ${verdict}
+
+       ${s.records
+         ? `<div class="canc-set__lines">${s.lines.map(row).join('')}</div>`
+         : `<div class="canc-set__none">No payment records for this student.</div>`}
+
+       ${s.action !== 'settled' ? `
+         <label class="canc-set__opt">
+           <input type="checkbox" id="canc-set-do" checked>
+           ${s.action === 'collect'
+             ? `Collect the ${fmtPKR(s.amount)} now and settle every month above`
+             : `Record the ${fmtPKR(s.amount)} as handed back`}
+         </label>
+         <div class="field"><label>Method</label>
+           <select class="form-control" id="canc-set-method">${pmOpts}</select></div>
+         <div class="field"><label>Date</label>
+           <input class="form-control cdp-trigger" id="canc-set-date" type="text" readonly
+                  onclick="showCustomDatePicker(this,event)" value="${c.vacateDate || today()}"></div>
+         ${''/* Said plainly: leaving is allowed to be unresolved. A warden who
+              cannot collect today should not be pushed into recording that
+              they did. */}
+         <div class="canc-set__note">Untick to confirm the cancellation and leave
+           the ${s.action === 'collect' ? 'balance outstanding' : 'credit on the record'}.</div>`
+       : ''}
+
+       <div class="canc-set__note">The student is set to <b>Left</b> and the bed is released.</div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="submitCancellationSettlement('${c.id}')">Confirm</button>`);
+}
+
+async function submitCancellationSettlement(cancId) {
+  const c = DB.cancellations.find(x => x.id === cancId);
+  if (!c) return;
+
+  const s      = calculateSettlement(c.studentId);
+  const doIt   = !!document.getElementById('canc-set-do')?.checked;
+  const method = document.getElementById('canc-set-method')?.value || 'Cash';
+  const date   = document.getElementById('canc-set-date')?.value || c.vacateDate || today();
+
+  let moved = 0;
+  if (doIt && s.action === 'collect') {
+    /* Settled month by month against the records that hold the debt, through
+       applyPayment() — a lump written anywhere else would leave every month it
+       covered still reading as unpaid. */
+    s.lines.forEach(l => {
+      if (l.outstanding <= 0) return;
+      const p = DB.payments.find(x => x.id === l.paymentId);
+      if (!p) return;
+      const r = applyPayment(p, { amount: l.outstanding, method, date, note: 'Checkout settlement' });
+      if (r.ok) moved += r.applied;
+    });
+    if (moved > 0) logActivity('Payment Collected',
+      `${c.studentName || '—'} — checkout settlement · ${fmtPKR(moved)} across ${s.lines.filter(l=>l.outstanding>0).length} month(s)`, 'Finance');
+  } else if (doIt && s.action === 'refund') {
+    /* Handing a credit back IS a reversal: it reduces what the record holds and
+       dashboard.js dates it as cash leaving the drawer today, rather than
+       silently deleting a credit and leaving the cash figure unexplained. */
+    s.lines.forEach(l => {
+      if (l.credit <= 0) return;
+      const p = DB.payments.find(x => x.id === l.paymentId);
+      if (!p) return;
+      const r = reversePayment(p, { amount: l.credit, method, date, reason: 'Refunded at checkout' });
+      if (r.ok) moved += r.reversed;
+    });
+    if (moved > 0) logActivity('Payment Reversed',
+      `${c.studentName || '—'} — refunded at checkout · ${fmtPKR(moved)}`, 'Finance');
+  }
+
+  /* The position AT DEPARTURE, kept on the cancellation. The payment records
+     stay editable forever; this is the only place that remembers what was owed
+     on the day the student walked out. */
+  c.settlement = {
+    on: date,
+    billed: s.billed, collected: s.collected,
+    outstanding: s.outstanding, credit: s.credit,
+    net: s.net, action: s.action,
+    settledNow: moved,
+  };
+  c.status = 'Confirmed';
+
+  const student = DB.students.find(x => x.id === c.studentId);
+  if (student) {
+    student.status   = 'Left';
+    student.leftDate = c.vacateDate || today();
+    student.lastRoom = _cancRoomNumberOf(student);
+  }
+
+  await saveDB();
+  closeModal();
+  renderPage('cancellations');
+  toast(moved > 0
+      ? `${c.studentName} marked as Left · ${fmtPKR(moved)} ${s.action === 'refund' ? 'refunded' : 'collected'}`
+      : s.action === 'settled'
+        ? `${c.studentName} marked as Left — nothing outstanding`
+        : `${c.studentName} marked as Left · ${fmtPKR(s.amount)} ${s.action === 'refund' ? 'credit left on record' : 'still outstanding'}`,
+    'success');
 }
 
 async function restoreFromCancellation(cancId) {
