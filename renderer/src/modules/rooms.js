@@ -928,6 +928,11 @@ async function confirmDeleteRoom(id) {
 // Students v5 adds room / course selects, a page-size picker and a row-selection
 // set, matching the payments screen.
 let studentFilter = {status:'All', room:'All', course:'All', search:'',
+                     /* Fee status is SEPARATE from the Rent + Mess cell beside it.
+                        That cell answers "what is this student charged"; this one
+                        answers "have they paid", and the spec is explicit that one
+                        must never be read as the other. */
+                     fee:'All',
                      /* Scoped to one month by default. _stuInMonth() over in
                         students.js carries living students forward into every
                         month they were here for, and leaves departed ones

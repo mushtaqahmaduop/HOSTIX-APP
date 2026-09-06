@@ -379,6 +379,76 @@ function calculateSettlement(studentId, opts) {
   };
 }
 
+/* ── WHAT A STUDENT OWES RIGHT NOW, AS ONE WORD ───────────────────────────────
+   Paid / Pending / Overdue for a whole student, for the Students directory's
+   Fee Status column and the details panel's Financial tab.
+
+   BUILT FROM THE TWO ANSWERS THAT ALREADY EXIST, not a third one.
+   `calculateOutstanding()` says what a record still owes;
+   `payIsOverdue()` (payments.js) says whether a record's own due date has
+   passed. This adds no rule of its own beyond aggregating them, which is the
+   whole point — the Students page must not invent a fee status that disagrees
+   with the Payments screen about the same student.
+
+   OVERDUE IS A ROW-LEVEL FACT, and reusing payIsOverdue() is what keeps that
+   true. The Payments screen dropped Overdue as a KPI card and a top-level
+   filter on the owner's call — "every overdue record is also pending, so the
+   two cards double-counted the same money" — but kept the per-row mark, "because
+   that IS row-level information". A student is Overdue when a row of theirs is.
+
+   A record with no due date is never Overdue. Auto-generated monthly rents ship
+   with `dueDate: ''` (payments.js), so guessing one would mark most of a hostel
+   overdue on the strength of a field nobody filled in.
+
+   `asOf` exists for tests. Everything else reads the clock.                   */
+function calculateFeeStatus(studentId, opts) {
+  const o = opts || {};
+  const list = (o.payments || (typeof DB !== 'undefined' && DB.payments) || [])
+    .filter(p => p && p.studentId === studentId);
+
+  const overdueFn = typeof payIsOverdue === 'function' ? payIsOverdue : (() => false);
+
+  let outstanding = 0, overdue = 0, overdueAmount = 0;
+  let lastPaymentDate = '', nextDueDate = '';
+
+  for (const p of list) {
+    const owed = calculateOutstanding(p);
+    outstanding += owed;
+
+    if (owed > 0) {
+      if (overdueFn(p)) { overdue++; overdueAmount += owed; }
+      // The soonest date money is expected — what a warden chases next.
+      const due = String(p.dueDate || '').slice(0, 10);
+      if (due && (!nextDueDate || due < nextDueDate)) nextDueDate = due;
+    }
+    // The last day money actually arrived on this student, from the instalment
+    // trail where there is one — a record's own `date` is when it was raised.
+    const trail = Array.isArray(p.partialPayments) ? p.partialPayments : [];
+    for (const e of trail) {
+      const d = String(e && e.date || '').slice(0, 10);
+      if (d && money(e.amount) > 0 && d > lastPaymentDate) lastPaymentDate = d;
+    }
+    if (money(p.amount) > 0) {
+      const d = String(p.paidDate || p.date || '').slice(0, 10);
+      if (d && d > lastPaymentDate) lastPaymentDate = d;
+    }
+  }
+
+  /* A student with no records at all is 'Paid' — they owe nothing, which is
+     what the word means here. It is NOT a claim that they have paid something:
+     the column sits beside a Rent + Mess cell that says what they are charged,
+     and `records: 0` is on the return for any caller that wants to say so. */
+  const status = outstanding <= 0 ? 'Paid' : (overdue > 0 ? 'Overdue' : 'Pending');
+
+  return {
+    status, outstanding, overdue, overdueAmount,
+    records: list.length,
+    lastPaymentDate: lastPaymentDate || '',
+    nextDueDate: nextDueDate || '',
+    credit: moneySum(list, p => calculateRefund(p).refundable),
+  };
+}
+
 /* ── §14 · calculateReportTotals ──────────────────────────────────────────────
    The figures every report, CSV, PDF and card is answerable to. §14: "Reports
    must reconcile against the same financial authority."

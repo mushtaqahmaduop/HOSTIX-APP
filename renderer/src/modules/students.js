@@ -15,6 +15,44 @@
 // roomId → room, built once per call instead of DB.rooms.find() per row.
 function _stuRoomMap() { return new Map(DB.rooms.map(r => [r.id, r])); }
 
+/* ── FEE STATUS, COMPUTED ONCE PER RENDER ─────────────────────────────────────
+   `calculateFeeStatus()` scans DB.payments for one student, which is fine once
+   and expensive in a comparator: applySort() calls its accessor INSIDE the sort
+   callback, so sorting the roster by fee would rescan every payment O(n log n)
+   times — on a three-year hostel that is millions of record touches for one
+   click on a column header.
+
+   So the whole map is built once and shared by the filter, the sort and the
+   cells of a single render. Spec §44: "memoize filtered/sorted local datasets".
+
+   INVALIDATED AT THE TOP OF EVERY RENDER rather than on a timer or a length
+   check. renderPage() re-runs renderStudents() after every save, so a render is
+   exactly the boundary at which the data may have changed — and a stale fee
+   badge is a warden chasing a student who has just paid. */
+let _stuFeeMemo = null;
+function _stuFeeReset() { _stuFeeMemo = null; }
+function _stuFee(id) {
+  if (!_stuFeeMemo) {
+    _stuFeeMemo = new Map();
+    // One pass over the payments, bucketed by student, instead of one scan per
+    // student. The per-student call is still the authority — this only decides
+    // which records it is handed.
+    const byStudent = new Map();
+    for (const p of (DB.payments || [])) {
+      if (!p || !p.studentId) continue;
+      let a = byStudent.get(p.studentId);
+      if (!a) { a = []; byStudent.set(p.studentId, a); }
+      a.push(p);
+    }
+    for (const t of (DB.students || [])) {
+      _stuFeeMemo.set(t.id, calculateFeeStatus(t.id, { payments: byStudent.get(t.id) || [] }));
+    }
+  }
+  return _stuFeeMemo.get(id)
+      || { status: 'Paid', outstanding: 0, overdue: 0, overdueAmount: 0,
+           records: 0, lastPaymentDate: '', nextDueDate: '', credit: 0 };
+}
+
 /* ── WHICH MONTHS A STUDENT BELONGS TO ───────────────────────────────────────
    A student is not an event, so unlike a payment or a departure they do not
    belong to one month. They belong to every month they were living here, which
@@ -83,6 +121,12 @@ function studentsFiltered() {
     const room = byId.get(t.roomId);
     if (studentFilter.room !== 'All' && String(room ? room.number : '') !== studentFilter.room) return false;
     if (studentFilter.course !== 'All' && String(t.occupation || t.course || '') !== studentFilter.course) return false;
+    // Paid / Pending / Overdue, from calculateFeeStatus() in finance.js — which
+    // aggregates calculateOutstanding() and payments.js's payIsOverdue() rather
+    // than deciding anything itself, so this filter cannot disagree with the
+    // Payments screen about the same student.
+    if (studentFilter.fee && studentFilter.fee !== 'All'
+        && _stuFee(t.id).status !== studentFilter.fee) return false;
     if (studentFilter.search) {
       const s = studentFilter.search.toLowerCase();
       const hay = [t.name, t.fatherName, t.id, t.cnic, t.phone, t.email, t.address,
@@ -99,7 +143,11 @@ function studentsFiltered() {
     // which Number() reads as NaN and a plain string compare orders 1, 10, 2.
     room:   { get: t => { const r = byId.get(t.roomId); return r ? r.number : ''; }, cmp: cmpRoomNo },
     course: t => t.occupation || t.course || '',
-    status: t => t.status
+    status: t => t.status,
+    /* Ordered by urgency, not alphabetically: Overdue, Pending, Paid. Sorting a
+       column of states by their spelling puts Overdue between Paid and Pending,
+       which is the one arrangement that tells a warden nothing. */
+    fee:    t => ({ Overdue: 0, Pending: 1, Paid: 2 })[_stuFee(t.id).status]
   });
 }
 
@@ -117,12 +165,36 @@ function stuAvatarHue(name) {
    gone needs nothing from anybody and reads as neutral history; painting them
    amber spent the one colour that means "attention" on the one state that
    needs none, and left the state that does need it grey. */
+/* Fee hues follow the spec's table: Paid green, Pending amber, Overdue red.
+   Deliberately NOT the same palette call as stuStatusHue() below — the two
+   badges sit side by side in every row and mean different things, so they are
+   allowed to look alike only by coincidence, never by sharing a function. */
+function stuFeeHue(status) {
+  return status === 'Paid' ? 'dh-green' : status === 'Overdue' ? 'dh-red' : 'dh-amber';
+}
+
+/* The hover text. A badge reading "Overdue" with no figure sends the warden to
+   another screen to find out how much; this says it in place. */
+function stuFeeTitle(f) {
+  if (f.records === 0) return 'No payment records for this student yet';
+  if (f.status === 'Paid') {
+    return f.credit > 0 ? fmtPKR(f.credit) + ' credit held' : 'Nothing outstanding';
+  }
+  const owed = fmtPKR(f.outstanding) + ' outstanding';
+  if (f.status === 'Overdue') {
+    return owed + ' · ' + f.overdue + ' month' + (f.overdue === 1 ? '' : 's')
+         + ' past the due date';
+  }
+  return f.nextDueDate ? owed + ' · due ' + fmtDate(f.nextDueDate) : owed;
+}
+
 function stuStatusHue(s) {
   return s === 'Active' ? 'dh-green' : s === 'Cancelling' ? 'dh-amber'
        : s === 'Blacklisted' ? 'dh-red' : 'dh-slate';
 }
 
 function renderStudents() {
+  _stuFeeReset();                       // this render's data, not the last one's
   const _roomById = _stuRoomMap();
 
   if (DB.students.length === 0) return `
@@ -176,7 +248,8 @@ function renderStudents() {
 
   const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))].sort(cmpRoomNo);
   const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
-  const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All'].filter(Boolean).length;
+  const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All',
+                         studentFilter.fee!=='All'].filter(Boolean).length;
 
   const th = (key,label,extra) => {
     const on = studentFilter.sortKey===key;
@@ -262,12 +335,32 @@ function renderStudents() {
         })()}
       </select>
 
+      ${''/* FEE STATUS IS IN ADVANCED FILTERS, NOT HERE, and that is the spec's
+             own instruction rather than a space-saving compromise. §17: keep
+             Advanced Filters "for secondary filters rather than making the
+             primary filter bar too crowded". Putting it inline was exactly the
+             crowding it warns about — at 1054px, the width the design is drawn
+             at, the eighth control pushed the bar onto a second row and cost
+             the table 44px. student22.png shows eight controls on one line and
+             this is not one of them. */}
       <div style="position:relative">
-        <button class="stu-btn${activeFilters?' stu-btn--hue dh-blue':''}" onclick="stuTogglePop(event)" title="More filters">
+        <button class="stu-btn${activeFilters?' stu-btn--hue dh-blue':''}" onclick="stuTogglePop(event)" title="Secondary filters">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-          Filters${activeFilters?`<span class="stu-btn__count">${activeFilters}</span>`:''}
+          Advanced Filters${activeFilters?`<span class="stu-btn__count">${activeFilters}</span>`:''}
         </button>
         <div class="stu-pop" id="stu-pop" style="display:none">
+          ${''/* It was a READOUT — four rows restating what the selects above
+                 already showed, and nothing to act on. §17 asks this to hold
+                 "secondary filters", so the one filter the primary bar has no
+                 room for now lives here as a real control, and the rest stay as
+                 the summary they were. */}
+          <div class="stu-pop__t">Fee status</div>
+          <div class="stu-pop__fee">
+            ${['All','Paid','Pending','Overdue'].map(f=>`
+              <button class="stu-pop__chip${studentFilter.fee===f?' is-on':''}"
+                      onclick="stuSetFee('${f}')">${f==='All'?'Any':f}</button>`).join('')}
+          </div>
+          <div class="stu-pop__sep"></div>
           <div class="stu-pop__t">Active filters</div>
           <div class="stu-pop__row" style="cursor:default">Room: <b style="color:var(--text)">${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
           <div class="stu-pop__row" style="cursor:default">Course: <b style="color:var(--text)">${studentFilter.course==='All'?'Any':escHtml(studentFilter.course)}</b></div>
@@ -316,11 +409,12 @@ function renderStudents() {
           ${th('course','Course')}
           <th>Nationality</th>
           <th>Rent + Mess / mo</th>
+          ${th('fee','Fee Status')}
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="12"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -329,7 +423,11 @@ function renderStudents() {
           const status= t.status||'Active';
           return `<tr class="${picked?'is-picked dh-blue':''}">
             <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')"></td>
-            <td><span class="stu-id">#${escHtml(t.id)}</span></td>
+            ${''/* Plain text, not a pill. student22.png draws "#052" as type;
+                   the pill cost 30px of a table that was overflowing its
+                   container by 444px, and a badge around a number that is
+                   already prefixed with # was decorating an identifier. */}
+            <td class="stu-idc">#${escHtml(t.id)}</td>
             <td onclick="showViewStudentModal('${t.id}')" style="cursor:pointer" title="Open full profile">
               <div class="stu-who">
                 ${studentAvatar(t, 32, stuAvatarHue(nm))}
@@ -356,6 +454,12 @@ function renderStudents() {
                 <div class="stu-charge__sub">${c.messOptIn&&c.mess>0?'+ '+fmtPKR(c.mess)+' mess':c.mess>0?'Mess not included':'Rent only'}</div>
                 <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
               </td>`;})()}
+            ${(()=>{const f=_stuFee(t.id);
+              /* SEPARATE FROM THE CELL TO ITS LEFT, and the spec says so twice.
+                 Rent + Mess answers "what is this student charged and on what
+                 plan"; this answers "have they paid". Reading one as the other
+                 is how a warden chases a student who is paid up. */
+              return `<td><span class="stu-pill ${stuFeeHue(f.status)}" title="${escHtml(stuFeeTitle(f))}"><i></i>${f.status}</span></td>`;})()}
             <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
             <td>
               <div class="stu-acts">
@@ -410,6 +514,16 @@ function stuPager(pg) {
 }
 
 /* ── Students v5 — toolbar / selection behaviour ─────────────────────────── */
+/* Chosen from Advanced Filters. The popover stays OPEN: picking a fee status
+   is usually followed by reading the count, and a popover that closes on every
+   click makes comparing Pending against Overdue a four-click job. */
+function stuSetFee(f) {
+  studentFilter.fee = f;
+  studentFilter.page = 1;
+  renderPage('students');
+  setTimeout(() => { const p = document.getElementById('stu-pop'); if (p) p.style.display = 'block'; }, 0);
+}
+
 function stuSetStatus(s) {
   studentFilter.status = (studentFilter.status === s && s !== 'All') ? 'All' : s;
   studentFilter.page = 1;
@@ -417,6 +531,7 @@ function stuSetStatus(s) {
 }
 function stuResetFilters() {
   studentFilter.month=thisMonth(); studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All';
+  studentFilter.fee='All';
   studentFilter.search=''; studentFilter.page=1;
   stuSelected.clear();
   renderPage('students');

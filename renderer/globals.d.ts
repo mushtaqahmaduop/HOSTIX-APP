@@ -97,6 +97,13 @@ declare function reversePayment(p: any, opts?: any): any;
 declare function calculateRefund(p: any): { refundable: number; recorded: number; derived: boolean; reason: string };
 declare function calculateSettlement(studentId: string, opts?: any): any;
 declare function calculateReportTotals(payments: any, opts?: any): any;
+// Paid / Pending / Overdue for a whole student, aggregated from
+// calculateOutstanding() and payments.js's payIsOverdue(). No third rule.
+declare function calculateFeeStatus(studentId: string, opts?: any): {
+  status: string; outstanding: number; overdue: number; overdueAmount: number;
+  records: number; lastPaymentDate: string; nextDueDate: string; credit: number;
+};
+declare function payIsOverdue(p: any): boolean;
 
 // -- rooms.js: bulk creation --------------------------------------------------
 declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };
