@@ -3,7 +3,7 @@
 **Date:** 2026-09-06 · **Branch:** `feature/dashboard-1c`
 **Committed:** `213ba19` (the layer), `86d3b27` (the wiring), `575d341` (the two
 screens), `4f76bfc` (reports onto the authority), `b88e862` (four dashboard
-defects the owner reported)
+defects the owner reported), `17908d4` (the glance follows the month)
 **Gate:** Playwright **113 passed / 2 skipped / 0 failed** (all 45 spec files, batched) ·
 node suites **324 passed / 0 failed** · typecheck **0 errors**
 
@@ -294,12 +294,12 @@ not read as a third footnote about formatting.
 
 Reported by the owner after the §14 work; unrelated to it.
 
-### Today at a Glance showed six zeros
+### Today at a Glance showed six zeros — it now follows the month
 
-**The arithmetic was never wrong.** Seeded with records dated today it reports
-all six figures correctly — proved before changing anything. What was wrong is
-that it was hard-scoped to the literal calendar day on a page where every other
-card is month-scoped.
+**The arithmetic was never wrong.** Seeded with records dated today it reported
+all six figures correctly — proved before changing anything, which is what
+identified the real defect. It was hard-scoped to the literal calendar day on a
+page where every other card is month-scoped.
 
 The owner's own dev database settles it: **141 payments, 55 students, latest
 activity 2026-09-05, nothing dated today, and the check-in log has never had a
@@ -308,17 +308,31 @@ until somebody recorded something, and six more the next morning. A card that is
 almost always empty teaches a warden to stop looking at it, and six zeros on a
 busy hostel is indistinguishable from a card wired to nothing.
 
-It now falls back to the most recent day that HAS activity, and the heading
-names that day ("Latest Activity · 05-Sept-2026"). **Falling back is not the
-same as widening the window** — it still reports one day, every figure still
-comes from records that exist, nothing is summed across days. Switching quietly
-to a month total would have put a figure under a heading that does not describe
-it. Capped at today, so a payment dated ahead cannot drag the panel into a day
-that has not happened.
+**Two fixes shipped, and the second replaced the first.** `b88e862` made it fall
+back to the most recent day with activity. `17908d4` made it follow the MONTH,
+at the owner's direction — and that is the better answer for a reason the
+fallback missed: the month is the **same window as the KPI row above it**.
+`thisMonth()` reads the sidebar month picker, so the panel now moves with it
+exactly as the KPI cards, Collection by Method and the Pending figure already
+do. One scope on one screen, rather than five cards describing a month and a
+sixth describing a day nobody selected.
 
-> If you would rather it simply followed the month like the KPI row, that is a
-> two-line change in `_dlGlanceDay()`. The fallback was chosen because it keeps
-> the card's meaning; say the word.
+The heading changed with it, as the owner said it had to: **"This Month at a
+Glance"**, with a pill carrying the month itself. "This Month" alone would have
+to be resolved against whatever the picker is set to — which is precisely what
+the panel now follows, so the pill is not decoration.
+
+**Payments Received uses `_payMatchesMonth()`**, which is not an arbitrary pick:
+it is the identical test `_dlMethods()` uses for Collection by Method, two
+panels away on the same card row. The two report the same rupees and the spec
+asserts they cannot drift.
+
+> **The cost, stated rather than buried:** on the 1st of a month the panel reads
+> six zeros again. That is now *correct* rather than misleading — the KPI row
+> above it reads zero too, because nothing has happened yet in the window both
+> are describing. The day-fallback would have hidden that; matching the KPI row
+> means the dashboard is wrong in one direction or right in one direction, never
+> half of each.
 
 ### Needs Action keeps all four rows
 
@@ -361,7 +375,7 @@ blocks — the icon tile shrinks, the padding tightens — which is the rule the
 tiles already follow. `tests/dashboard-cards.spec.js` measures four rows against
 two at four sizes and asserts row C ends at the same pixel; it does.
 
-> **Two sizes do not fit, and did not fit before this change either.**
+> **Two sizes do not fit, and did not fit before these changes either.**
 > 1280×660 and 1093×614 end at 712 and 699 against those viewports — with two
 > rows and with four, identically. The handoff of 2026-09-05 recorded 1280×660
 > as fitting at 652; that was measured on a lighter fixture. Row B, not row C,
