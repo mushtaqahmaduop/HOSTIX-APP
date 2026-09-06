@@ -929,13 +929,27 @@ function _dlGlance(mo) {
      nothing is worse than a row that never offered — especially on a dashboard,
      where a warden learns in one click whether the numbers are wired to
      anything. */
+  /* ONE WORD EACH, AND THAT IS A HEIGHT DECISION, NOT A STYLE ONE.
+
+     This card is one KPI tile wide (`.dash-row-b` gives it
+     `calc((100% - 50px) / 6)`), and at that width "New Admissions",
+     "Payments Received", "Complaints Raised" and "Maintenance Requests" each
+     wrapped to two lines. Measured at 1280x660 the six rows came to
+     23,23,32,59,32,31 = 200px — and this card is the ONLY content in row B that
+     cannot shrink, so it alone sets the row's height: hiding it dropped row B
+     from 275px to 156px and every screen size then reached the fold.
+
+     Shortening them is not truncating them, which is what the rule in
+     dashboard.css forbids: "Admissions" and "Maintenance" are the whole word,
+     not an elided one, and the card's heading already supplies the period.
+     `title` carries the long form for anyone who wants it. */
   return [
-    { k: 'in',    label: 'Check-ins',           n: log.filter(c => inMonth(c.date) && c.type !== 'Check-out').length, page: null },
-    { k: 'out',   label: 'Check-outs',          n: log.filter(c => inMonth(c.date) && c.type === 'Check-out').length, page: null },
-    { k: 'new',   label: 'New Admissions',      n: (DB.students || []).filter(s => inMonth(s.joinDate)).length,       page: 'students' },
-    { k: 'money', label: 'Payments Received',   n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
-    { k: 'issue', label: 'Complaints Raised',   n: (DB.complaints || []).filter(c => inMonth(c.date || c.createdAt)).length,  page: 'issues' },
-    { k: 'wrench',label: 'Maintenance Requests',n: (DB.maintenance || []).filter(m => inMonth(m.date || m.createdAt)).length, page: 'maintenance' },
+    { k: 'in',    label: 'Check-ins',   full: 'Check-ins',            n: log.filter(c => inMonth(c.date) && c.type !== 'Check-out').length, page: null },
+    { k: 'out',   label: 'Check-outs',  full: 'Check-outs',           n: log.filter(c => inMonth(c.date) && c.type === 'Check-out').length, page: null },
+    { k: 'new',   label: 'Admissions',  full: 'New admissions',       n: (DB.students || []).filter(s => inMonth(s.joinDate)).length,       page: 'students' },
+    { k: 'money', label: 'Payments',    full: 'Payments received',    n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
+    { k: 'issue', label: 'Complaints',  full: 'Complaints raised',    n: (DB.complaints || []).filter(c => inMonth(c.date || c.createdAt)).length,  page: 'issues' },
+    { k: 'wrench',label: 'Maintenance', full: 'Maintenance requests', n: (DB.maintenance || []).filter(m => inMonth(m.date || m.createdAt)).length, page: 'maintenance' },
   ];
 }
 
@@ -1003,7 +1017,8 @@ function _dashLedgerRow(mo, pending, pendingCount) {
     const inner =
       '<span class="dl-glance__ic">' + _dlIco(g.k) + '</span>'
       + '<span class="dl-glance__body">'
-        + '<span class="dl-glance__label">' + escHtml(g.label) + '</span>'
+        + '<span class="dl-glance__label" title="' + escHtml(g.full || g.label) + '">'
+          + escHtml(g.label) + '</span>'
         + (g.money != null && g.money > 0
             /* Compact: this sits in a column one KPI tile wide, and a real
                month's takings spelled out in full wrapped it onto three lines

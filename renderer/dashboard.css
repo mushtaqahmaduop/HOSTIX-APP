@@ -846,16 +846,25 @@
 /* ── GLANCE LABELS AT ONE-TILE WIDTH ─────────────────────────────────────────
    Narrowing the card to a KPI tile left "New Admissions" as "New Admissi…" and
    "Maintenance Requests" as "Maintenance …". The labels are the card — the
-   numbers beside them mean nothing without one — so they wrap to a second line
-   instead of truncating. The rows are label + count with nothing else on them,
-   so a two-line row costs height the card has and reads fine; ellipsis does
-   not. */
+   numbers beside them mean nothing without one — so they wrapped to a second
+   line instead of truncating.
+
+   THEY NO LONGER NEED TO. The labels are one word each now (dashboard.js), and
+   the reason is measured: four of the six wrapped, this card is the only
+   content in row B that cannot shrink, and it alone set the row's height —
+   hiding it dropped row B from 275px to 156px at 1280x660 and every size
+   reached the fold. One-line labels give that height back without eliding a
+   word or shrinking a figure.
+
+   `nowrap` is deliberate rather than incidental: if a label ever grows past the
+   tile again the ellipsis is a visible bug that gets fixed, where a silent
+   re-wrap is 65px of fold quietly going missing. The full wording is on the
+   row's `title`. */
 .dash-row-b .dl-glance__label {
-    white-space:normal; overflow:visible; text-overflow:clip;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:11.5px; line-height:1.25;
 }
-.dash-row-b .dl-glance__row { align-items:flex-start; gap:8px; }
-.dash-row-b .dl-glance__ic { margin-top:1px; }
+.dash-row-b .dl-glance__row { align-items:center; gap:8px; }
 
 /* ── ROW B CARDS FILL THEIR OWN HEIGHT ───────────────────────────────────────
    The three cards in row B are stretched to the tallest of them, but their
@@ -1016,7 +1025,16 @@
   .dash-kpi-grid .dash-kpi__value { margin-bottom: 0; }
 
   #trend-chart-wrap { min-height: 96px; }
-  .dash-row-b .dl-glance__row { padding: 1px 12px; }
+  .dash-row-b .dl-glance__row { padding: 0 12px; gap: 7px; }
+  .dash-row-b .dl-glance .dl-ico { width: 13px; height: 13px; }
+  .dash-row-b .dl-glance__label { font-size: 11px; }
+  /* The month's takings drop off the row, exactly as the KPI tiles above drop
+     their sparkline, track and sub-line at this height — this block is already
+     "figures only, no secondary detail" and the amount is the secondary half of
+     a row whose primary figure is the count. It stays on the row's `title` and
+     is one click away on Payments. Worth 11px of a card that alone decides
+     whether row C reaches the bottom of the screen. */
+  .dash-row-b .dl-glance__sub { display: none; }
   .dash-row-b .dash-sec__head,
   .dash-row-c .dash-sec__head { margin-bottom: 4px; }
 
@@ -1043,7 +1061,10 @@
 @media (max-height: 640px) {
   #trend-chart-wrap { min-height: 76px; }
   .dash-row-b .dash-room-wrap { min-height: 34px; }
-  .dash-row-b .dl-glance__row { padding: 0 12px; }
+  .dash-row-b .dl-glance__row { padding: 0 12px; gap: 6px; }
+  .dash-row-b .dl-glance .dl-ico { width: 12px; height: 12px; }
+  .dash-row-b .dl-glance__label { font-size: 10.5px; }
+  .dash-row-b .dl-glance__n { font-size: 12px; }
   .dash-row-c .rt-right { max-height: 82px; }
   .dash-row-c .dl-need { padding: 2px 8px; gap: 6px; }
   .dash-row-c .dl-need__ic { width: 18px; height: 18px; }
@@ -1055,5 +1076,8 @@
   .dash-row-c .dl-occ { gap: 5px; padding: 8px 12px; }
   .dash-row-c .dl-occ__pct { font-size: 19px; }
   .dash-kpi-grid > .dsh-card { padding: 8px 10px; }
-  .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 6px; }
+  /* The last 6px, and it is the last: with 40 rooms and the glance one line per
+     row this size ends 4px past the fold, so the three row gaps give up 2px
+     each. Nothing else here has 4px left that is not a figure or a label. */
+  .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 4px; }
 }

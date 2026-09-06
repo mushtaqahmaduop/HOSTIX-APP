@@ -349,9 +349,9 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The constraint all of the above had to respect
+// THE FOLD, WITH 40 ROOMS
 // ─────────────────────────────────────────────────────────────────────────────
-test('two extra Needs Action rows cost the fold nothing', async () => {
+test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
   await win.waitForLoadState('domcontentloaded');
@@ -359,16 +359,16 @@ test('two extra Needs Action rows cost the fold nothing', async () => {
   await win.waitForTimeout(400);
 
   await seed(win, async () => {
-    const td = today();
+    const td = today(), mo = thisMonth();
     DB.rooms = []; DB.students = []; DB.payments = [];
     for (let i = 1; i <= 40; i++)
       DB.rooms.push({ id: 'r' + i, number: String(i), floor: 'G', typeId: '2s',
                       studentIds: [], amenities: [], notes: '' });
     for (let i = 1; i <= 30; i++) {
       DB.students.push({ id: 's' + i, name: 'Student ' + i, roomId: 'r' + ((i % 40) + 1),
-                         status: 'Active', joinDate: '2026-01-10', messOptIn: true, paymentMethod: 'Cash' });
+                         status: 'Active', joinDate: mo + '-02', messOptIn: true, paymentMethod: 'Cash' });
       DB.payments.push({ id: 'p' + i, studentId: 's' + i, studentName: 'Student ' + i,
-                         month: thisMonth(), date: td, amount: i % 3 ? 14500 : 4000,
+                         month: mo, date: td, amount: i % 3 ? 14500 : 4000,
                          unpaid: i % 3 ? 0 : 10500, overpaid: 0,
                          status: i % 3 ? 'Paid' : 'Pending', paidDate: i % 3 ? td : '',
                          monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' });
@@ -381,41 +381,53 @@ test('two extra Needs Action rows cost the fold nothing', async () => {
     await saveDB();
   });
 
-  /* Measured against the card drawn with two rows instead of four — which is
-     what it did before — rather than against a number copied from a handoff.
-     A fixture is not the owner's data, so the absolute figures move with it;
-     what must not move is the DIFFERENCE the two extra rows make.
+  /* The five screen/scaling combinations the app is actually used at. All five
+     now fit — the 2026-09-05 handoff recorded four, with 1093x614 written off
+     as impossible ("the last 43 would have to come out of the chart and the
+     card padding, past the point where either is worth showing").
 
-     They make none at any constrained size, because the density blocks take the
-     height back out of the icon tile and the padding, and because the room-type
-     card is the tallest thing in row C anyway. */
-  const measure = async (twoRows) => {
-    await win.evaluate(two => {
-      let st = document.getElementById('fold-probe');
-      if (!st) { st = document.createElement('style'); st.id = 'fold-probe'; document.head.appendChild(st); }
-      st.textContent = two ? '.dl-need:nth-child(n+3){display:none!important}' : '';
-    }, twoRows);
-    await win.waitForTimeout(250);
-    return win.evaluate(() => {
-      const c = document.querySelector('.dash-row-c');
-      return c ? Math.round(c.getBoundingClientRect().bottom) : null;
-    });
-  };
+     What made it possible was finding the real constraint rather than trimming
+     everything a little. Row B's three cards stretch to the tallest of them,
+     and only ONE of them cannot shrink: the chart flexes and the room grid
+     scrolls, so the glance sets the row. Hiding it dropped row B from 275px to
+     156px. Its labels were wrapping to two lines at one-tile width; one-word
+     labels and the short-height density rules gave back ~90px, and no figure
+     and no label was lost to get it. */
+  const SIZES = [
+    { label: '1366x768 @100%',  width: 1366, height: 768 },
+    { label: '1920x1080 @100%', width: 1920, height: 1040 },
+    { label: '1920x1080 @125%', width: 1536, height: 824 },
+    { label: '1920x1080 @150%', width: 1280, height: 660 },
+    { label: '1366x768 @125%',  width: 1093, height: 614 },
+  ];
 
-  for (const s of [{ width: 1366, height: 768 }, { width: 1920, height: 1040 },
-                   { width: 1536, height: 824 }, { width: 1280, height: 660 }]) {
-    await win.setViewportSize(s);
+  const misses = [];
+  for (const s of SIZES) {
+    await win.setViewportSize({ width: s.width, height: s.height });
     await win.evaluate(() => navigate('dashboard'));
     await win.waitForSelector('.dl-need', { timeout: 8000 });
-    await win.waitForTimeout(500);
-    const four = await measure(false);
-    const two  = await measure(true);
-    expect(four, `${s.width}x${s.height}: four rows must not push row C below two`)
-      .toBeLessThanOrEqual(two + 20);
+    await win.waitForTimeout(700);
+    const m = await win.evaluate(() => ({
+      bottom: Math.round(document.querySelector('.dash-row-c').getBoundingClientRect().bottom),
+      vp: window.innerHeight,
+      // Every glance row must be ONE line. A re-wrap is ~65px of fold going
+      // quietly missing, so it is asserted rather than left to be noticed.
+      rows: [...document.querySelectorAll('.dash-row-b .dl-glance__row')]
+              .map(r => Math.round(r.getBoundingClientRect().height)),
+      overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }));
+    if (m.bottom > m.vp) misses.push(`${s.label}: row C ends at ${m.bottom}, viewport ${m.vp}`);
+    expect(m.overflowX, `${s.label} must not scroll sideways`).toBe(false);
+    // Six rows, and the tallest no more than a line and a half — the money row
+    // carries a second line at full height and drops it under 700px.
+    expect(m.rows.length).toBe(6);
+    expect(Math.max(...m.rows), `${s.label}: a glance label has wrapped again`)
+      .toBeLessThanOrEqual(50);
   }
+  expect(misses, 'rows A-C must reach the fold at every shipped size').toEqual([]);
 
-  // And the seat header must not have wrapped: the buttons live in the footer
-  // precisely so the room grid keeps its height.
+  // And the seat header stays one line at 1366, which is why Expand and Print
+  // went to the footer rather than beside the counts.
   await win.setViewportSize({ width: 1366, height: 768 });
   await win.evaluate(() => navigate('dashboard'));
   await win.waitForSelector('.seat-foot__b', { timeout: 8000 });
