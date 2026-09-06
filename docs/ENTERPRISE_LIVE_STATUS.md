@@ -1,8 +1,9 @@
 # Enterprise Live Status
 
 **Spec:** `HOSTYLLO_OFFLINE_ENTERPRISE_PRODUCTION_MASTER_SPEC_v2.md` (v2.0)
-**Reconciled:** 2026-09-05 · **Phase C opened:** 2026-09-05
-**Branch:** `feature/dashboard-1c` — 38 commits ahead of `master`, 0 behind (it is the tip)
+**Reconciled:** 2026-09-05 · **Phase C opened:** 2026-09-05 · **§14 layer landed:** 2026-09-06
+**Branch:** `feature/dashboard-1c` — 52 commits ahead of `master`, 0 behind (it is the tip)
+(The "38 commits ahead" this line carried was stale by 13 before today.)
 **App version:** 5.0.0 · Electron 43.4.0
 
 > **How to read this.** Phase A reconciled every section of the spec against the
@@ -27,13 +28,58 @@ items are closed: **D-2** (validation moved to the main process), the
 **Phase C — Remaining Financial Gaps — OPENED, and D-1 is closed.**
 `outstandingOf()` now sits beside `resolveCharges()` in `renderer/src/utils.js`
 and is the single answer to "what is still owed on this record", consumed at 52
-sites across eight modules. Proved by `tests/outstanding.test.js` — 18/18.
+sites across eight modules. Proved by `tests/outstanding.test.js` — 21/21.
+(That suite read 18/18 when this line was written; it has grown since.)
 
-**Phase B is now COMPLETE**, and **D-3** and **D-4** are closed. Phase C is
-**not** complete: §14's `applyPayment()` / `reversePayment()` /
-`calculateRefund()` still do not exist, money is still IEEE-754 `Number` with no
-rounding policy, and the §14 financial test matrix is still 15 named cases with
-no home. **D-4** (below) is the immediate next item.
+**Phase B is now COMPLETE**, and **D-3** and **D-4** are closed.
+
+**Phase C — Financial Integrity — the §14 layer now exists** (2026-09-06,
+`213ba19`, `86d3b27`, `575d341`). `renderer/src/finance.js` holds all six names
+§14 asks for. Two of them — `calculateCharges()` and `calculateOutstanding()` —
+*call* `resolveCharges()` and `outstandingOf()` rather than reimplementing them,
+deliberately: D-1 was 52 sites each answering "what is owed" its own way, and a
+second implementation would have been the 53rd. The other four are new.
+
+- **Money representation is decided.** Canonical unit is one whole rupee held as
+  an integer, normalised once at the boundary by `money()`, rounded half **away
+  from zero** (not `Math.round()`, whose `-0.5 → -0` asymmetry would leave a
+  rupee on the record every time a reversal negated an amount). §14's ban on
+  binary floating point is satisfied by removing the fraction, not the double:
+  every integer sum below 2^53 is exact. Integer paisa was considered and
+  rejected — a schema migration across 50+ live installs for a currency nothing
+  in the app bills or displays below the rupee. `finance.js` names the one line
+  to change if that ever stops being true.
+- **Overpayment has a policy.** Every write path ended in `Math.max(0, …)`, so
+  money handed over above the bill was owed to nobody and appeared in no report.
+  The balance still floors at 0 — 52 call sites read it — and the excess is
+  recorded as `overpaid` and returned by `calculateRefund()`.
+- **The §14 matrix has a home.** `tests/finance.test.js`, 61 passed, with every
+  named case labelled: exact, partial, overpayment, multiple months,
+  concessions, extras, cancellation, checkout, reversal, refund, zero,
+  invalid/negative, large amounts, rounding boundaries.
+
+**Three defects were found in the wiring**, all of the same family and none in
+the defect report:
+
+1. **The three "mark paid" paths collected nothing from a legacy debtor.**
+   `markPaymentPaid()`, `markPaymentPaidFromStudentView()` and
+   `payBulkMarkPaid()` read the balance as `Number(p.unpaid) || 0`, which is 0
+   on a record written before that field existed — so the action stamped it Paid
+   having taken no money. The debt was not settled, it was deleted. **This is
+   D-1's write side**; the 52-site sweep fixed the reads only.
+2. **The arrears panel disagreed with itself.** Its header total used
+   `outstandingOf()` while each row printed `p.unpaid` and capped its input at
+   the same, so a legacy arrear showed "owes PKR 0" in a panel whose header
+   showed the real figure — and refused the collection.
+3. **`payments.js:1778`** computed the merged balance as `monthlyRent − paid`,
+   dropping mess, extras, admission fee and concession, and did not carry those
+   fields onto the record at all. The neighbouring merge path had had exactly
+   this bug and carries a comment about the fix; this copy was missed.
+
+**Phase C is not finished.** `students.js` still holds 13 unrouted sites (it is
+§2-protected and in flight), and reports have not yet been moved onto
+`calculateReportTotals()` — the figures reconcile, but through
+`calcRevenue()`/`calcCashReceived()` rather than through the §14 name.
 
 **Phase A — Live-State Reconciliation — COMPLETE.** Spec §28 was correct that
 implementation is well advanced; it was *not* correct that Phase A had begun —
@@ -41,15 +87,21 @@ this file did not exist before today.
 
 Every Phase A section is reconciled, including the full §27 failure matrix.
 
-Phases C–I have not started, and nothing in §29/§33 has been signed off.
+**Phase C is in progress** (see above); Phases D–I have not started, and nothing
+in §29/§33 has been signed off.
 
 ---
 
 ## Verified
 
-Executed on this tip, 2026-09-05: **203 passed, 0 failed** across seven node
-suites, plus a clean typecheck. Full results in *Tests Executed* below. Only
-what those suites actually assert is promoted here.
+Executed on this tip, 2026-09-06: **310 passed, 0 failed** across ten node
+suites, and **107 passed / 2 skipped / 0 failed** across all 44 Playwright spec
+files, plus a clean typecheck. Full results in *Tests Executed* below. Only what
+those suites actually assert is promoted here.
+
+> The 2026-09-05 figures this section carried (203 node, 94+2 Playwright) are
+> superseded. The three new suites are `test:finance` (61), `test:cashevents`
+> (12) and `tests/finance-flows.spec.js` (5).
 
 | § | Requirement | Executed evidence |
 |---|---|---|
@@ -61,7 +113,10 @@ what those suites actually assert is promoted here.
 | 16 | Archive/retention pruning preserves records | `npm run test:retention` — **13/13**, including "an existing archive is appended to, not replaced". |
 | 11 | Connectivity/device/entitlement probe behaviour | `npm run test:services` — **115/115**, including "a probe falls back to a second mechanism before giving up" and "a first-ever boot with a failing probe is reported, not hidden". |
 
-| 14 | One answer to "what is still owed", derived from the charge authority | `npm run test:outstanding` — **18/18**, including "a recorded balance survives a Paid status", "a legacy Pending record is priced from resolveCharges, not from amount" and "a bundled hostel still bills mess when the record says otherwise". This closes **D-1**. |
+| 14 | One answer to "what is still owed", derived from the charge authority | `npm run test:outstanding` — **21/21**, including "a recorded balance survives a Paid status", "a legacy Pending record is priced from resolveCharges, not from amount" and "a bundled hostel still bills mess when the record says otherwise". This closes **D-1**. |
+| 14 | The six named §14 operations, the money representation and the whole financial matrix | `npm run test:finance` — **61/61**. Every case §14 names is labelled `CASE …` in its title. The two that are not preferences: rounding is half **away from zero** so `money(-x) === -money(x)` and a reversal exactly undoes its collection, and `overpaid` is written even when 0 so `calculateRefund()` answers from the record rather than deriving — otherwise a bill corrected downwards later reads as a refund the hostel owes. |
+| 14 | Cash reconciliation still conserves money once reversals exist | `npm run test:cashevents` — **12/12**. `_cashEvents()` must distribute exactly `p.amount`; a reversal is a negative event dated to the day the money was handed back, and it is stored in `p.reversals` rather than as a negative `partialPayments` entry because that array is filtered to positives when cash is dated but summed whole when it is sanity-checked. |
+| 14 | The screens are wired to the layer, not just the arithmetic | `tests/finance-flows.spec.js` — **5/5**: a mis-keyed collection reversed from the row action (original collection kept, reason and date recorded, activity logged, cash still conserved), the action absent where nothing was collected, **Mark Paid on a legacy record collecting what it actually owes rather than nothing**, and checkout settlement in both directions — arrears collected month by month, and a credit handed back as a reversal. |
 | 27 / 15 | Unknown schema → safe recovery, and never an auto-downgrade | `tests/schema-guard.spec.js` — **5/5**. A database stamped newer than this build refuses to open, routes to the recovery screen, and is left byte-for-byte alone: no migration, no rename, no `.corrupt-` artefact, version still 99 afterwards. |
 | 27 / 17 | Permission denied → actionable failure, and no false success | `tests/write-failure.spec.js` — **3/3**, against a genuinely read-only file, not an injected error. Refused with `PERMISSION_DENIED`, a message naming permissions, no raw SQLite string, and the record provably absent afterwards. |
 | 18 | A read-only install cannot mutate configuration | `tests/licence-enforcement.spec.js` — `db:setSetting` is now refused with `LICENCE_READ_ONLY` under an expired licence. Closes **D-3**. |
@@ -94,8 +149,8 @@ Everything else in this document remains unverified.
 |---|---|---|
 | 23 | "Strict CSP" | A CSP **is** enforced (`main.js:1533`, plus per-page meta in `renderer/license.html` and `renderer/license-settings.html`), but it carries `script-src 'unsafe-inline'`. This is a *documented, deliberate* decision (comment at `main.js:1525-1532`): the UI is built from inline `onclick`/`oninput` handlers across every module, and the escaping sweep is the compensating control. It is defensible — but it is not "strict CSP" as §23 words it, and the spec should be reconciled to the decision rather than the code to the spec. |
 | 13 | Typed IPC operations | **8 of 24** `ipcMain.handle` registrations are the generic primitives §13 names as migration targets: `db:all` (1377), `db:upsert` (1415), `db:delete` (1424), `db:bulkReplace` (1433), `db:getSetting` (1446), `db:setSetting` (1453), `db:exportFull` (1461), `db:importFull` (1478). None of the typed operations (`students.create`, `payments.create`, …) exist yet. §13 itself says *do not* big-bang this — so it is a sequenced backlog item, not a defect. |
-| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). ~~But **`reports.js` calls it zero times**~~ — **closed in Phase C.** `reports.js` now reaches the charge authority through `outstandingOf()` at 11 sites, and every other module that reported an outstanding figure does the same. §14's "reports must reconcile against the same financial authority" holds for *what is owed*; it does not yet hold for *what was collected* — see **D-4**. §14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form: reversal exists only as a *cancellation status* (`cancellations.js:129,145`), refund not at all. |
-| 14 | Money representation | Money is JS `Number` — IEEE-754 binary floating point — which §14 explicitly rules out. In practice PKR is billed in whole rupees so the exposure is small, but no canonical representation, precision or rounding policy is defined anywhere. The only `Math.round` on a money path is a half-payment split (`payments.js:2244`); the rest round percentages. Rounding boundaries are untested. |
+| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). ~~But **`reports.js` calls it zero times**~~ — **closed in Phase C.** `reports.js` now reaches the charge authority through `outstandingOf()` at 11 sites, and every other module that reported an outstanding figure does the same. §14's "reports must reconcile against the same financial authority" holds for *what is owed*; it does not yet hold for *what was collected* — see **D-4**. ~~§14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form~~ — **CLOSED 2026-09-06.** All six §14 names live in `renderer/src/finance.js`. `calculateCharges()` and `calculateOutstanding()` call `resolveCharges()`/`outstandingOf()` rather than restating them, so the §14 name and the existing answer are the same function; `applyPayment()`, `reversePayment()`, `calculateRefund()`, `calculateSettlement()` and `calculateReportTotals()` are new. `calculateBill()` replaced six hand-written copies of the bill expression that had already drifted. Reversal is now a real operation with a screen, not a cancellation status. **Not yet complete:** reports still reconcile through `calcRevenue()`/`calcCashReceived()` rather than through `calculateReportTotals()`, and `students.js` holds 13 unrouted sites (§2-protected). |
+| 14 | ~~Money representation~~ | **CLOSED 2026-09-06.** Canonical unit is one whole rupee held as an integer, normalised once at the boundary by `money()` and rounded half **away from zero**. §14's ban on binary floating point is met by removing the fraction, not the double: every integer sum below 2^53 is exact, and `moneyPct()` is the only multiplication in the layer. Half-away-from-zero rather than `Math.round()` because `Math.round(-0.5)` is `-0`, and that asymmetry would leave a rupee on the record every time `reversePayment()` negated an amount. Integer paisa was considered and rejected: a schema migration across 50+ live installs for a sub-unit nothing in the app bills or displays — `finance.js` names the one line to change if that stops being true. Rounding boundaries are tested in both directions. |
 | 16 | Restore is safe against a bad file | The protections exist and are genuinely tested — `tests/backup-hostile-input.spec.js` asserts every malformed or hostile shape is **refused with a reason** (:98-100), that a refused import leaves the live data **byte-identical** (:145), that `Object.prototype` is not polluted (:149), and that a genuine backup is still accepted (:103). `db:importFull` is wrapped in `db.transaction()`, so an interrupted restore rolls back and §27's "interrupted restore → live DB remains safe" holds. **But every one of those checks lives in the renderer** (`restoreBackup()`, `modals.js:305`). The privileged handler itself validates nothing beyond `Array.isArray` — see **D-2**. |
 | 17 | Disk full → no false success | Handled, with genuinely actionable messages for `ENOSPC` / `EACCES` / `EPERM` / `ENOENT` — but **only on the PDF path** (`main.js:1119-1125`). The database write path has no equivalent, which is where §17 actually points. |
 | 18 | Read-only blocks writes at the IPC layer | Enforced in the **main process**, not merely by greying out buttons — which is the stronger of the two and worth recording as a pass. `_assertWritable()` (`main.js:1403`) guards `db:upsert` (:1418), `db:delete` (:1427), `db:bulkReplace` (:1436) and `db:importFull` (:1479). **One hole — see D-3.** |
@@ -114,7 +169,7 @@ Everything else in this document remains unverified.
 | 16 | ~~**Pre-restore backup**~~ | **CLOSED, Phase B.** `_preRestoreSnapshot()` now runs before the transaction, using the same `VACUUM INTO` idiom as the pre-migration backup. Snapshots are **timestamped and the newest three kept**, not written to one fixed name — a fixed name means the second restore captures the first restore's bad state on top of the good one, which breaks §16's "never overwrite the only known-good copy" exactly when it matters. A snapshot failure does not block the restore (that would strand a customer with a full disk on the database they are escaping); the reason is returned instead. Proved by `tests/backup-main-guard.spec.js`. |
 | 16 | Scheduled local backup | §16 requires four backup types (scheduled local, manual export, pre-migration, pre-restore). Only two exist: manual export (`db:exportFull`) and pre-migration (`main.js:115`). No scheduler was found. |
 | 17 | ~~DB corruption detection and recovery~~ | **CLOSED, Phase B.** The whole §17 chain now exists — see below. |
-| 14 | Financial test matrix | §14 names 15 required cases (exact, partial, overpayment, multiple months, concessions, extras, cancellation, checkout, reversal, refund, zero, invalid/negative, large amounts, rounding boundaries). Reversal and refund have no implementation to test; rounding boundaries and large amounts have no policy to test against. |
+| 14 | ~~Financial test matrix~~ | **CLOSED 2026-09-06.** `tests/finance.test.js` — **61 passed** — with every named case labelled `CASE …` in its title: exact, partial, overpayment, multiple months, concessions, extras, cancellation, checkout, reversal, refund, zero, invalid/negative, large amounts, rounding boundaries. `tests/cash-events.test.js` (12) holds the conservation invariant that reversals put at risk, and `tests/finance-flows.spec.js` (5) proves the screens are wired to the layer rather than only the arithmetic being right. |
 
 ---
 
@@ -444,21 +499,24 @@ Recorded per the owner's instruction to flag stale premises rather than obey the
 
 ## Tests Executed
 
-Executed 2026-09-05 on `feature/dashboard-1c`, re-run in full after the Phase C change.
+Executed 2026-09-06 on `feature/dashboard-1c`, re-run in full after the §14 layer landed.
 
 | Test | Result | Evidence |
 |---|---|---|
-| `npm run test:outstanding` | **18 passed, 0 failed** | executed — new in Phase C |
+| `npm run test:finance` | **61 passed, 0 failed** | executed — new, the §14 matrix |
+| `npm run test:cashevents` | **12 passed, 0 failed** | executed — new, the conservation invariant |
+| `npm run test:outstanding` | **21 passed, 0 failed** | executed |
 | `npm run test:services` | **115 passed, 0 failed** | executed |
 | `npm run test:license` | **39 passed, 0 failed** | executed |
 | `npm run test:servicemodel` | **16 passed, 0 failed** | executed |
 | `npm run test:retention` | **13 passed, 0 failed** | executed |
+| `npm run test:bulkrooms` | **13 passed, 0 failed** | executed |
 | `npm run test:update` | **8 passed, 0 failed** | executed |
 | `npm run test:migrate` | **6 passed, 0 failed** | executed |
 | `npm run test:activation` | **6 passed, 0 failed** | executed |
-| `npm run typecheck` | **0 errors** | executed |
-| **Total** | **221 passed, 0 failed** | |
-| `npx playwright test` | **94 passed, 2 skipped, 0 failed** | All 41 spec files, run in six batches — see the note below. **Identical to the pre-Phase-C baseline of 94+2**, so the 53-site financial sweep caused no regression. The money-critical batch (`partial-and-arrears`, `admit-to-payment`, `payment-redesign`, `payment-method-chip`, `month-scope`, `dashboard-recent-payments`) was run first and passed 14/14. |
+| `npm run typecheck` | **0 errors** | executed — `finance.js` is now inside the scope |
+| **Total** | **310 passed, 0 failed** | |
+| `npx playwright test` | **107 passed, 2 skipped, 0 failed** | All 44 spec files, run in six batches plus the new one — see the note below. The pre-§14 baseline was **102 + 2**; the five added are `finance-flows.spec.js`, so nothing regressed. The money-critical batch (`partial-and-arrears`, `admit-to-payment`, `payment-redesign`, `payment-method-chip`, `month-scope`, `dashboard-recent-payments`) was run first and passed 14/14. |
 | `node server/test/run.js`, `server/test/http.js` | **NOT RUN** | control-plane suites; last known 29 + 21 on 2026-09-04. |
 
 > **Running Playwright on this machine.** Two things are not obvious and cost
