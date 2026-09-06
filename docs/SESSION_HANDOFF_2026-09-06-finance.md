@@ -1,9 +1,10 @@
 # Handoff — §14 has a financial layer, and money stopped disappearing
 
 **Date:** 2026-09-06 · **Branch:** `feature/dashboard-1c`
-**Committed:** `213ba19` (the layer), `86d3b27` (the wiring), `575d341` (the two screens)
+**Committed:** `213ba19` (the layer), `86d3b27` (the wiring), `575d341` (the two
+screens), `4f76bfc` (reports onto the authority)
 **Gate:** Playwright **107 passed / 2 skipped / 0 failed** (all 44 spec files, batched) ·
-node suites **310 passed / 0 failed** · typecheck **0 errors**
+node suites **324 passed / 0 failed** · typecheck **0 errors**
 
 Continues `SESSION_HANDOFF_2026-09-05-dashboard.md` §7 item 3. The owner chose
 the full scope: the layer, a reversal UI, and checkout settlement.
@@ -13,7 +14,9 @@ the full scope: the layer, a reversal UI, and checkout settlement.
 ## 1. Read this first
 
 `docs/ENTERPRISE_LIVE_STATUS.md` is still the authoritative state document
-(spec §31) and is current through `575d341`. Its three §14 rows are now closed.
+(spec §31) and is current through `4f76bfc`. Its three §14 rows are now closed,
+and it has a new **Open Questions** section — read that before touching any
+arrears total.
 
 **One contradiction in that file is older than this session and was left alone:**
 its "How to read this" block still says D-4 is "not yet fixed" while the Current
@@ -190,6 +193,12 @@ real record, not as a rate improvised at checkout.
 7. Playwright still needs `HOSTIX_TEST_PROFILE` with a `license.enc`, and still
    must be run **6–8 spec files at a time** or the worker OOMs and reports a
    cascade as ~32 assertion failures.
+8. **The OOM does not always look like an assertion failure.** Running seven
+   files including two heavy ones produced a single test that ran for 3.5
+   minutes and then died with *"Target page, context or browser has been
+   closed"* — which reads exactly like a crash in the code under test. It passed
+   alone in 19 seconds and passed again in a batch of four. Re-run alone before
+   believing it.
 
 ---
 
@@ -215,8 +224,9 @@ reimplement it, when that file lands.
 - `renderer/src/modules/payments.js`, `renderer/src/modules/cancellations.js`,
   `renderer/src/modules/dashboard.js`, `renderer/payments.css`,
   `renderer/index.html`, `renderer/globals.d.ts`, `tsconfig.json`, `package.json`
+- `renderer/src/modules/reports.js`, `renderer/reports.css`
 - `tests/finance.test.js`, `tests/cash-events.test.js`,
-  `tests/finance-flows.spec.js` (all new)
+  `tests/report-totals.test.js`, `tests/finance-flows.spec.js` (all new)
 - `docs/ENTERPRISE_LIVE_STATUS.md`
 
 > `renderer/rail-compact.css` is still the deliberate temporary file the previous
@@ -224,16 +234,61 @@ reimplement it, when that file lands.
 
 ---
 
-## 7. Next
+## 7. Reports moved onto the authority — `4f76bfc`
+
+§14's last open half. `_rptTotals()` in `reports.js` is the single place the
+Reports page, its detail cards, its CSVs and its PDFs take their figures from,
+and its money half now comes from `calculateReportTotals()`.
+
+**Three duplicate sums went**, each recomputing a figure `_rptTotals()` had
+already produced from the very same records: the Pending detail card summed
+`outstandingOf()` over rows whose total was *already an argument to the function
+drawing them*; the financial PDF re-filtered and re-summed the same thing
+inline; the pending PDF summed both the outstanding and the partial-paid totals
+again. **None of them was wrong today** — they were three places for the page
+and the PDF printed from it to drift apart the moment one was corrected.
+
+### Two things deliberately left alone
+
+**`rev` still comes from `calcRevenue()`.** That is the ACCRUAL authority the
+dashboard, the cards and the share sheets read — July's rent handed over in
+August is July's revenue to all of them. Replacing it here with the layer's
+`collected` would be swapping a shared answer for a second one, which is the
+exact shape of D-1. The layer's figure sits *beside* it as a cross-check
+instead, and they must agree: both sum `p.amount` over the same scope.
+
+**`pending` still counts records whose STORED status is Pending.** This is the
+one worth your attention, and it is written up in
+`ENTERPRISE_LIVE_STATUS.md` → *Open Questions*: `outstandingOf()` deliberately
+returns a recorded balance even on a record marked Paid, calling it "money
+someone is owed" — but every card that totals arrears filters to Pending first,
+so that balance reaches no total anywhere except the Payments screen's
+Outstanding card, which sums an unfiltered list. **The app holds two answers.**
+Either one moves a headline figure on 50+ live installs, so nothing was changed;
+`tests/report-totals.test.js` pins today's behaviour so the fix, when it comes,
+is deliberate and visible.
+
+### `safe` is now printed
+
+`_rptTotals().safe` is false when a total has left exact integer range **or**
+when the accrual and the layer disagree — which means a record carries a stored
+status that is neither `Paid` nor `Pending` (`Partial` is derived for display
+and never written), contributing to the layer's collected total and to no
+revenue figure anywhere. The report would be quietly missing that money. It now
+prints a caveat under the figures instead, styled as a full-width row so it does
+not read as a third footnote about formatting.
+
+---
+
+## 8. Next
 
 1. **Route the 13 `students.js` sites** through `outstandingOf()` when that
-   file's design work lands — unchanged from the last handoff, and still the one
-   screen answering "what is owed" the old way. Note the write-side lesson from
-   §3: check what that file *writes*, not only what it reads.
-2. **Move reports onto `calculateReportTotals()`.** The figures reconcile today,
-   but through `calcRevenue()` / `calcCashReceived()` rather than through the
-   §14 name. This is the last open half of §14's "reports must reconcile against
-   the same financial authority".
+   file's design work lands — still the one screen answering "what is owed" the
+   old way. Note the write-side lesson from §3: check what that file *writes*,
+   not only what it reads.
+2. **Answer the Paid-with-a-balance question** (Open Questions in
+   `ENTERPRISE_LIVE_STATUS.md`). It is a one-line change either way; it is the
+   owner's call which line.
 3. **Fold `rail-compact.css` into `chrome.css`** — unchanged from the last handoff.
 4. **A real disk-full test** — the last §27 PARTIAL that is not downstream of
    code signing. Needs an elevated VHD.

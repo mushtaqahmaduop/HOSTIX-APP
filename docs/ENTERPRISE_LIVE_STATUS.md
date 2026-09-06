@@ -76,10 +76,33 @@ the defect report:
    fields onto the record at all. The neighbouring merge path had had exactly
    this bug and carries a comment about the fix; this copy was missed.
 
+**Reports now reconcile against the layer** (2026-09-06, `4f76bfc`).
+`_rptTotals()` in `reports.js` is the single place the Reports page, its detail
+cards, its CSVs and its PDFs take their figures from, and its money half comes
+from `calculateReportTotals()`. Three duplicate sums were removed — the Pending
+detail card, and two in the PDF paths — each recomputing a figure `_rptTotals()`
+had already produced from the same records. None was wrong today; all three were
+a place for the page and the PDF printed from it to drift apart.
+
+Two things deliberately did **not** change, and both are pinned by tests so that
+changing them later is a decision rather than a side effect:
+
+- **`rev` still comes from `calcRevenue()`.** That is the ACCRUAL authority the
+  dashboard, the cards and the share sheets read; replacing it here with the
+  layer's `collected` would swap a shared answer for a second one, which is the
+  shape of D-1. They are returned side by side and must agree.
+- **`pending` still counts records whose STORED status is Pending**, matching the
+  dashboard. A Paid record carrying a recorded balance is reachable and
+  `outstandingOf()` returns that balance, yet **no Pending card in the app counts
+  it** — see Open Questions.
+
+`_rptTotals().safe` is new and printed under the figures: false when a total has
+left exact integer range, or when the accrual and the layer disagree, which means
+a record carries a stored status that is neither Paid nor Pending and its money
+is missing from one of the two.
+
 **Phase C is not finished.** `students.js` still holds 13 unrouted sites (it is
-§2-protected and in flight), and reports have not yet been moved onto
-`calculateReportTotals()` — the figures reconcile, but through
-`calcRevenue()`/`calcCashReceived()` rather than through the §14 name.
+§2-protected and in flight).
 
 **Phase A — Live-State Reconciliation — COMPLETE.** Spec §28 was correct that
 implementation is well advanced; it was *not* correct that Phase A had begun —
@@ -94,14 +117,14 @@ in §29/§33 has been signed off.
 
 ## Verified
 
-Executed on this tip, 2026-09-06: **310 passed, 0 failed** across ten node
+Executed on this tip, 2026-09-06: **324 passed, 0 failed** across eleven node
 suites, and **107 passed / 2 skipped / 0 failed** across all 44 Playwright spec
 files, plus a clean typecheck. Full results in *Tests Executed* below. Only what
 those suites actually assert is promoted here.
 
 > The 2026-09-05 figures this section carried (203 node, 94+2 Playwright) are
-> superseded. The three new suites are `test:finance` (61), `test:cashevents`
-> (12) and `tests/finance-flows.spec.js` (5).
+> superseded. The four new suites are `test:finance` (61), `test:cashevents`
+> (12), `test:reporttotals` (14) and `tests/finance-flows.spec.js` (5).
 
 | § | Requirement | Executed evidence |
 |---|---|---|
@@ -149,7 +172,7 @@ Everything else in this document remains unverified.
 |---|---|---|
 | 23 | "Strict CSP" | A CSP **is** enforced (`main.js:1533`, plus per-page meta in `renderer/license.html` and `renderer/license-settings.html`), but it carries `script-src 'unsafe-inline'`. This is a *documented, deliberate* decision (comment at `main.js:1525-1532`): the UI is built from inline `onclick`/`oninput` handlers across every module, and the escaping sweep is the compensating control. It is defensible — but it is not "strict CSP" as §23 words it, and the spec should be reconciled to the decision rather than the code to the spec. |
 | 13 | Typed IPC operations | **8 of 24** `ipcMain.handle` registrations are the generic primitives §13 names as migration targets: `db:all` (1377), `db:upsert` (1415), `db:delete` (1424), `db:bulkReplace` (1433), `db:getSetting` (1446), `db:setSetting` (1453), `db:exportFull` (1461), `db:importFull` (1478). None of the typed operations (`students.create`, `payments.create`, …) exist yet. §13 itself says *do not* big-bang this — so it is a sequenced backlog item, not a defect. |
-| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). ~~But **`reports.js` calls it zero times**~~ — **closed in Phase C.** `reports.js` now reaches the charge authority through `outstandingOf()` at 11 sites, and every other module that reported an outstanding figure does the same. §14's "reports must reconcile against the same financial authority" holds for *what is owed*; it does not yet hold for *what was collected* — see **D-4**. ~~§14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form~~ — **CLOSED 2026-09-06.** All six §14 names live in `renderer/src/finance.js`. `calculateCharges()` and `calculateOutstanding()` call `resolveCharges()`/`outstandingOf()` rather than restating them, so the §14 name and the existing answer are the same function; `applyPayment()`, `reversePayment()`, `calculateRefund()`, `calculateSettlement()` and `calculateReportTotals()` are new. `calculateBill()` replaced six hand-written copies of the bill expression that had already drifted. Reversal is now a real operation with a screen, not a cancellation status. **Not yet complete:** reports still reconcile through `calcRevenue()`/`calcCashReceived()` rather than through `calculateReportTotals()`, and `students.js` holds 13 unrouted sites (§2-protected). |
+| 14 | One authoritative financial layer | **Half true.** `resolveCharges()` (`renderer/src/utils.js:235`) *is* a real single authority for charge derivation — rent/mess resolution, override precedence, the service-model rule — with 36 call sites across `archive.js` (5), `payments.js` (11), `students.js` (15), `config.js` (1), `utils.js` (4). ~~But **`reports.js` calls it zero times**~~ — **closed in Phase C.** `reports.js` now reaches the charge authority through `outstandingOf()` at 11 sites, and every other module that reported an outstanding figure does the same. §14's "reports must reconcile against the same financial authority" holds for *what is owed*; it does not yet hold for *what was collected* — see **D-4**. ~~§14's named operations `applyPayment()`, `reversePayment()` and `calculateRefund()` do not exist in any form~~ — **CLOSED 2026-09-06.** All six §14 names live in `renderer/src/finance.js`. `calculateCharges()` and `calculateOutstanding()` call `resolveCharges()`/`outstandingOf()` rather than restating them, so the §14 name and the existing answer are the same function; `applyPayment()`, `reversePayment()`, `calculateRefund()`, `calculateSettlement()` and `calculateReportTotals()` are new. `calculateBill()` replaced six hand-written copies of the bill expression that had already drifted. Reversal is now a real operation with a screen, not a cancellation status. **Not yet complete:** reports still reconcile through `calcRevenue()`/`calcCashReceived()` rather than through ~~reports still reconcile through `calcRevenue()`/`calcCashReceived()` rather than through `calculateReportTotals()`~~ — **CLOSED 2026-09-06** (`4f76bfc`): `_rptTotals()` is the report authority and takes its money half from the layer, with three duplicate sums removed from the detail card and the two PDF paths. `rev` still comes from `calcRevenue()` on purpose — that is the accrual authority the dashboard shares, and the layer's `collected` sits beside it as a cross-check rather than replacing it. **Still open:** `students.js` holds 13 unrouted sites (§2-protected). |
 | 14 | ~~Money representation~~ | **CLOSED 2026-09-06.** Canonical unit is one whole rupee held as an integer, normalised once at the boundary by `money()` and rounded half **away from zero**. §14's ban on binary floating point is met by removing the fraction, not the double: every integer sum below 2^53 is exact, and `moneyPct()` is the only multiplication in the layer. Half-away-from-zero rather than `Math.round()` because `Math.round(-0.5)` is `-0`, and that asymmetry would leave a rupee on the record every time `reversePayment()` negated an amount. Integer paisa was considered and rejected: a schema migration across 50+ live installs for a sub-unit nothing in the app bills or displays — `finance.js` names the one line to change if that stops being true. Rounding boundaries are tested in both directions. |
 | 16 | Restore is safe against a bad file | The protections exist and are genuinely tested — `tests/backup-hostile-input.spec.js` asserts every malformed or hostile shape is **refused with a reason** (:98-100), that a refused import leaves the live data **byte-identical** (:145), that `Object.prototype` is not polluted (:149), and that a genuine backup is still accepted (:103). `db:importFull` is wrapped in `db.transaction()`, so an interrupted restore rolls back and §27's "interrupted restore → live DB remains safe" holds. **But every one of those checks lives in the renderer** (`restoreBackup()`, `modals.js:305`). The privileged handler itself validates nothing beyond `Array.isArray` — see **D-2**. |
 | 17 | Disk full → no false success | Handled, with genuinely actionable messages for `ENOSPC` / `EACCES` / `EPERM` / `ENOENT` — but **only on the PDF path** (`main.js:1119-1125`). The database write path has no equivalent, which is where §17 actually points. |
@@ -455,6 +478,42 @@ such condition, so `calcCashReceived()` had been counting these records all
 along. **The cash-basis figure and the accrual figure disagreed about the same
 rupees** — revenue silently omitted money the cash reconciliation counted.
 
+## Open Questions — for the owner, not for a refactor
+
+### A Paid record carrying a balance is owed by nobody's arithmetic
+
+`outstandingOf()` answers a recorded `unpaid` **first, even on a record marked
+Paid**, and it does so deliberately: that combination is reachable — the Edit
+Payment form takes the status from a free dropdown while the balance beside it
+is readonly — and the comment above the function calls it "money someone is
+owed".
+
+But **every card that totals arrears filters to `status === 'Pending'` first**,
+so that balance reaches no total anywhere: not the Reports Pending card, not the
+dashboard's, not the arrears banner. The one exception is the Payments screen's
+Outstanding card, which sums an unfiltered list — which is precisely why
+`outstandingOf()` carries its `Paid → 0` short-circuit on the derived path.
+
+So the app currently holds two answers to "does a Paid record with a balance owe
+money": the Payments screen says yes, every other screen says no.
+
+**Not changed, on purpose.** Either answer moves a headline figure on 50+ live
+installs, and doing that inside a refactor is how a report loses trust. The
+behaviour is pinned by `tests/report-totals.test.js` ("the pending scope is
+unchanged by this refactor, deliberately") so the fix, when it comes, is visible.
+The owner's call is which of the two is right.
+
+### "Collection by Method" excludes part-payments
+
+The Reports donut sums `status === 'Paid'` records only, and carries a comment
+saying the percentages are of its own total rather than of `rev` "because `rev`
+also carries partial payments this donut deliberately excludes". That is
+documented and internally consistent, but it means a chart headed *Collection by
+Method* does not show all the collection — a month whose cash came mostly from
+part-payments is drawn far smaller than the drawer. Same family as **D-4**.
+
+---
+
 ## Blocked
 
 | § | Item | Why |
@@ -499,12 +558,14 @@ Recorded per the owner's instruction to flag stale premises rather than obey the
 
 ## Tests Executed
 
-Executed 2026-09-06 on `feature/dashboard-1c`, re-run in full after the §14 layer landed.
+Executed 2026-09-06 on `feature/dashboard-1c`, re-run in full after the §14 layer
+landed and again after reports were moved onto it.
 
 | Test | Result | Evidence |
 |---|---|---|
 | `npm run test:finance` | **61 passed, 0 failed** | executed — new, the §14 matrix |
 | `npm run test:cashevents` | **12 passed, 0 failed** | executed — new, the conservation invariant |
+| `npm run test:reporttotals` | **14 passed, 0 failed** | executed — new, reports reconcile against the layer |
 | `npm run test:outstanding` | **21 passed, 0 failed** | executed |
 | `npm run test:services` | **115 passed, 0 failed** | executed |
 | `npm run test:license` | **39 passed, 0 failed** | executed |
@@ -515,7 +576,7 @@ Executed 2026-09-06 on `feature/dashboard-1c`, re-run in full after the §14 lay
 | `npm run test:migrate` | **6 passed, 0 failed** | executed |
 | `npm run test:activation` | **6 passed, 0 failed** | executed |
 | `npm run typecheck` | **0 errors** | executed — `finance.js` is now inside the scope |
-| **Total** | **310 passed, 0 failed** | |
+| **Total** | **324 passed, 0 failed** | |
 | `npx playwright test` | **107 passed, 2 skipped, 0 failed** | All 44 spec files, run in six batches plus the new one — see the note below. The pre-§14 baseline was **102 + 2**; the five added are `finance-flows.spec.js`, so nothing regressed. The money-critical batch (`partial-and-arrears`, `admit-to-payment`, `payment-redesign`, `payment-method-chip`, `month-scope`, `dashboard-recent-payments`) was run first and passed 14/14. |
 | `node server/test/run.js`, `server/test/http.js` | **NOT RUN** | control-plane suites; last known 29 + 21 on 2026-09-04. |
 
