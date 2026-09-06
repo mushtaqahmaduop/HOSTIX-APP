@@ -420,7 +420,7 @@ function renderStudents() {
                  a narrower measure. Still sums to exactly 100. */}
           <col style="width:2.6%">   <!-- select      -->
           <col style="width:3.6%">   <!-- ID          -->
-          <col style="width:14.8%">  <!-- student     -->
+          <col style="width:13.8%">  <!-- student     -->
           <col style="width:9%">     <!-- room        -->
           <col style="width:10.5%">  <!-- contact     -->
           <col style="width:7%">     <!-- CNIC        -->
@@ -429,7 +429,7 @@ function renderStudents() {
           <col style="width:7%">     <!-- nationality -->
           <col style="width:10%">    <!-- charges     -->
           <col style="width:8%">     <!-- fee status  -->
-          <col style="width:7%">     <!-- status      -->
+          <col style="width:8%">     <!-- status      -->
           <col style="width:5%">     <!-- actions     -->
         </colgroup>
         <thead><tr>
@@ -467,7 +467,7 @@ function renderStudents() {
                    container by 444px, and a badge around a number that is
                    already prefixed with # was decorating an identifier. */}
             <td class="stu-idc">#${escHtml(t.id)}</td>
-            <td onclick="showViewStudentModal('${t.id}')" style="cursor:pointer" title="Open full profile">
+            <td onclick="showStudentPanel('${t.id}')" style="cursor:pointer" title="Open student details">
               <div class="stu-who">
                 ${studentAvatar(t, 32, stuAvatarHue(nm))}
                 <div style="min-width:0">
@@ -515,7 +515,7 @@ function renderStudents() {
                  plan"; this answers "have they paid". Reading one as the other
                  is how a warden chases a student who is paid up. */
               return `<td><span class="stu-pill ${stuFeeHue(f.status)}" title="${escHtml(stuFeeTitle(f))}"><i></i>${f.status}</span></td>`;})()}
-            <td><span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span></td>
+            <td><span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(status)}"><i></i>${escHtml(status)}</span></td>
             ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
                    Three always-visible icons were 124px — the widest ornament
                    on the row, in a table that could not fit its columns. A menu
@@ -607,6 +607,324 @@ document.addEventListener('click', function (e) {
   const p = document.getElementById('stu-pop');
   if (p && p.style.display === 'block' && e.target.closest && !e.target.closest('#stu-pop')) p.style.display = 'none';
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STUDENT DETAILS — THE SLIDE-OVER  (Students spec §22-§30)
+   ═══════════════════════════════════════════════════════════════════════════
+   A right-side panel, not a page and not a full-screen modal. §22 puts it at
+   400-480px and says so twice; the point is that the roster stays visible
+   behind it, so a warden comparing two students does not lose their place in a
+   table they have just filtered and sorted.
+
+   EXACTLY FOUR TABS (§23), and the two that could not be honest about their
+   data say so rather than inventing it:
+
+     Overview      every field is on the record already
+     Financial     calculateFeeStatus() + the student's real payment rows
+     Documents     `docs` holds ONE key, `photo`. There is no CNIC scan and no
+                   admission form in this data model, so the tab lists them as
+                   not uploaded with the controls disabled. §28: "Do not pretend
+                   files exist."
+     Room History  DB.roomShifts is real — every shift records from/to rooms, a
+                   date and a reason — so this reads records rather than
+                   guessing. A student who has never moved gets a plain line
+                   saying so, not a fabricated first row.
+
+   ONE GUARDIAN PAIR (owner, 2026-09-06). §24 lists Guardian Name, Guardian
+   Contact AND Emergency Contact, but the record carries a single pair —
+   `emergencyContact` / `emergencyPhone` — which the in-flight Add Student work
+   relabels as Guardian. It is shown once, under that label. Inventing a second
+   pair to satisfy the list would put two fields on screen that no form fills.
+
+   Rendered into one container that is replaced wholesale, and re-rendered in
+   place when a tab is clicked so the panel never rebuilds its own header.   */
+
+let _stuPanelId  = null;
+let _stuPanelTab = 'overview';
+
+function showStudentPanel(id, tab) {
+  const t = DB.students.find(x => x.id === id);
+  if (!t) { toast('Student not found', 'error'); return; }
+  _stuPanelId  = id;
+  _stuPanelTab = tab || 'overview';
+
+  let host = document.getElementById('stu-panel-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'stu-panel-host';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = _stuPanelHtml(t);
+  // The class lands on the next frame so the transform actually animates —
+  // set in the same tick as the markup it would simply appear.
+  requestAnimationFrame(() => {
+    const p = document.getElementById('stu-panel');
+    if (p) p.classList.add('is-open');
+  });
+  document.addEventListener('keydown', _stuPanelEsc);
+}
+
+function closeStudentPanel() {
+  const p = document.getElementById('stu-panel');
+  const host = document.getElementById('stu-panel-host');
+  document.removeEventListener('keydown', _stuPanelEsc);
+  _stuPanelId = null;
+  if (!p) { if (host) host.innerHTML = ''; return; }
+  p.classList.remove('is-open');
+  // Wait for the slide out rather than yanking it — 200ms matches the CSS.
+  setTimeout(() => { if (host) host.innerHTML = ''; }, 200);
+}
+
+function _stuPanelEsc(e) { if (e.key === 'Escape') closeStudentPanel(); }
+
+function stuPanelTab(tab) {
+  if (!_stuPanelId) return;
+  const t = DB.students.find(x => x.id === _stuPanelId);
+  if (!t) return;
+  _stuPanelTab = tab;
+  const body = document.getElementById('stu-panel-body');
+  const host = document.getElementById('stu-panel');
+  if (!body || !host) return;
+  body.innerHTML = _stuPanelTabHtml(t, tab);
+  host.querySelectorAll('.stu-pan__tab').forEach(b =>
+    b.classList.toggle('is-on', b.dataset.tab === tab));
+}
+
+/** A field row. Missing values print an em dash — §24: only render what exists. */
+function _pf(label, value, opts) {
+  const o = opts || {};
+  const has = value !== null && value !== undefined && String(value).trim() !== '';
+  const shown = has ? String(value) : '—';
+  return '<div class="stu-pan__f">'
+       + '<span class="stu-pan__k">' + escHtml(label) + '</span>'
+       + '<span class="stu-pan__v' + (has ? '' : ' is-empty') + (o.mono ? ' is-mono' : '') + '">'
+       + (o.html ? shown : escHtml(shown)) + '</span></div>';
+}
+
+function _stuPanelHtml(t) {
+  const room  = DB.rooms.find(r => r.id === t.roomId);
+  const rtype = room ? getRoomType(room) : null;
+  const status = t.status || 'Active';
+  const tabs = [['overview','Overview'],['financial','Financial'],
+                ['documents','Documents'],['history','Room History']];
+
+  return `
+  <div class="stu-pan__scrim" onclick="closeStudentPanel()"></div>
+  <aside class="stu-pan" id="stu-panel" role="dialog" aria-modal="true"
+         aria-label="Student details for ${escHtml(t.name || '')}">
+
+    <header class="stu-pan__head">
+      <span class="stu-pan__title">Student Details</span>
+      <button class="stu-pan__x" onclick="closeStudentPanel()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="stu-pan__id">
+      ${studentAvatar(t, 58, stuAvatarHue(String(t.name || '?')))}
+      <div class="stu-pan__idtext">
+        <div class="stu-pan__name">${escHtml(t.name || '—')}
+          <span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span>
+        </div>
+        <div class="stu-pan__meta">#${escHtml(t.id)}</div>
+        <div class="stu-pan__meta">${room ? 'Room #' + escHtml(String(room.number))
+            + (rtype ? ' · ' + escHtml(rtype.name) : '')
+            + (t.bed ? ' · Bed ' + escHtml(String(t.bed)) : '') : 'No room assigned'}</div>
+        ${t.joinDate ? `<div class="stu-pan__meta">Joined ${escHtml(fmtDate(t.joinDate))}</div>` : ''}
+      </div>
+    </div>
+
+    ${''/* The three actions the spec's §30 matrix names, and no more. Each one
+           hands off to the workflow that already owns it rather than
+           reimplementing anything inside the panel. */}
+    <div class="stu-pan__acts">
+      <button class="stu-pan__act" onclick="closeStudentPanel();showEditStudentModal('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button>
+      <button class="stu-pan__act" onclick="closeStudentPanel();openAddPayment('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>Payment</button>
+      <button class="stu-pan__act is-danger" onclick="closeStudentPanel();confirmDeleteStudent('${escHtml(t.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
+    </div>
+
+    <nav class="stu-pan__tabs" role="tablist">
+      ${tabs.map(([k, label]) => `
+        <button class="stu-pan__tab${_stuPanelTab === k ? ' is-on' : ''}" data-tab="${k}"
+                role="tab" onclick="stuPanelTab('${k}')">${label}</button>`).join('')}
+    </nav>
+
+    <div class="stu-pan__body" id="stu-panel-body">${_stuPanelTabHtml(t, _stuPanelTab)}</div>
+  </aside>`;
+}
+
+function _stuPanelTabHtml(t, tab) {
+  if (tab === 'financial') return _stuPanelFinancial(t);
+  if (tab === 'documents') return _stuPanelDocuments(t);
+  if (tab === 'history')   return _stuPanelHistory(t);
+  return _stuPanelOverview(t);
+}
+
+/* ── OVERVIEW ─────────────────────────────────────────────────────────────── */
+function _stuPanelOverview(t) {
+  const room  = DB.rooms.find(r => r.id === t.roomId);
+  const rtype = room ? getRoomType(room) : null;
+  const sec = (title, rows) =>
+    '<section class="stu-pan__sec"><h4>' + escHtml(title) + '</h4>' + rows + '</section>';
+
+  return sec('Personal information',
+        _pf('Full name',      t.name)
+      + _pf("Father's name",  t.fatherName)
+      + _pf('Student ID',     '#' + t.id, { mono: true })
+      + _pf('CNIC / ID',      t.cnic, { mono: true })
+      + _pf('Date of birth',  t.dob ? fmtDate(t.dob) : '')
+      + _pf('Gender',         t.gender)
+      + _pf('Marital status', t.maritalStatus)
+      + _pf('Blood group',    t.bloodGroup)
+      + _pf('Nationality',    t.nationality)
+      + _pf('Address',        t.address))
+
+  + sec('Contact & guardian',
+        _pf('Phone',             t.phone, { mono: true })
+      + _pf('Email',             t.email)
+      /* ONE PAIR, under the label the forms now use. §24 lists a guardian AND
+         an emergency contact; the record has one pair and no form fills a
+         second, so a second would be two permanently empty rows. */
+      + _pf('Guardian name',     t.emergencyContact)
+      + _pf('Guardian contact',  t.emergencyPhone, { mono: true }))
+
+  + sec('Academic',
+        _pf('Course / class',    t.occupation || t.course)
+      + _pf('Session / semester', t.session)
+      + _pf('Expected stay',     t.expectedStay))
+
+  + sec('Current room',
+        _pf('Room',       room ? '#' + room.number : '')
+      + _pf('Room type',  rtype ? rtype.name : '')
+      + _pf('Floor',      room ? room.floor : '')
+      + _pf('Bed',        t.bed)
+      + _pf('Joined',     t.joinDate ? fmtDate(t.joinDate) : ''))
+
+  + (t.allergies || t.notes
+      ? sec('Health & notes', _pf('Allergies', t.allergies) + _pf('Notes', t.notes))
+      : '');
+}
+
+/* ── FINANCIAL ────────────────────────────────────────────────────────────── */
+function _stuPanelFinancial(t) {
+  const c = calculateCharges(t);
+  const f = calculateFeeStatus(t.id);
+  const rows = (DB.payments || [])
+    .filter(p => p && p.studentId === t.id)
+    .slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  /* `pkr`, not `money` — finance.js exports a global `money()` that normalises
+     a figure to whole rupees, and shadowing it here would have made every
+     amount in this tab silently bypass the money layer. */
+  const pkr = v => fmtPKR(money(v));
+  const head =
+      '<section class="stu-pan__sec"><h4>Charges &amp; balance</h4>'
+    + _pf('Monthly rent',   pkr(c.rent), { mono: true })
+    + _pf('Mess charge',    c.messOptIn && c.mess > 0 ? pkr(c.mess) : 'Not billed', { mono: true })
+    + _pf('Plan',           c.messOptIn && c.mess > 0 ? 'Rent + Mess' : 'Rent only')
+    + _pf('Monthly total',  pkr(c.total), { mono: true })
+    + _pf('Outstanding',    pkr(f.outstanding), { mono: true })
+    + (f.credit > 0 ? _pf('Credit held', pkr(f.credit), { mono: true }) : '')
+    + _pf('Last payment',   f.lastPaymentDate ? fmtDate(f.lastPaymentDate) : '')
+    + _pf('Fee status',
+        '<span class="stu-pill ' + stuFeeHue(f.status) + '"><i></i>' + f.status + '</span>',
+        { html: true })
+    + '</section>';
+
+  /* §27's mini history, from the real rows. "Do not invent history." */
+  const hist = rows.length
+    ? '<table class="stu-pan__tbl"><thead><tr><th>Month</th><th>Paid</th><th>Method</th><th>Status</th></tr></thead><tbody>'
+      + rows.map(p => `<tr onclick="closeStudentPanel();navigate('payments')" title="Open Payments">
+          <td>${escHtml(p.month || '—')}</td>
+          <td class="is-num">${pkr(p.amount)}</td>
+          <td>${escHtml(p.method || '—')}</td>
+          <td><span class="stu-pill ${calculateOutstanding(p) > 0 ? 'dh-amber' : 'dh-green'}"><i></i>${calculateOutstanding(p) > 0 ? 'Pending' : 'Paid'}</span></td>
+        </tr>`).join('')
+      + '</tbody></table>'
+    : '<div class="stu-pan__empty">No payment history</div>';
+
+  return head + '<section class="stu-pan__sec"><h4>Payment history</h4>' + hist + '</section>';
+}
+
+/* ── DOCUMENTS ────────────────────────────────────────────────────────────── */
+function _stuPanelDocuments(t) {
+  const hasPhoto = !!(t.docs && t.docs.photo);
+  const row = (label, uploaded, actions) => `
+    <div class="stu-pan__doc">
+      <div class="stu-pan__doc__i">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      </div>
+      <div class="stu-pan__doc__t">
+        <div class="stu-pan__doc__n">${escHtml(label)}</div>
+        <div class="stu-pan__doc__s${uploaded ? ' is-on' : ''}">${uploaded ? 'Uploaded' : 'Not uploaded'}</div>
+      </div>
+      <div class="stu-pan__doc__a">${actions}</div>
+    </div>`;
+
+  return '<section class="stu-pan__sec"><h4>Documents</h4>'
+    + row('Student photo', hasPhoto, hasPhoto
+        ? `<button class="stu-pan__mini" onclick="stuViewDoc('${escHtml(t.id)}')">View</button>`
+        : '<button class="stu-pan__mini" disabled>View</button>')
+    /* NOT UPLOADED, AND NOT UPLOADABLE — yet. `docs` holds exactly one key,
+       `photo`. There is no CNIC scan and no admission form anywhere in this
+       data model, so these two rows are honest placeholders with their
+       controls disabled. §28: show the tab as planned rather than pretend
+       files exist. Wire them the day document storage lands. */
+    + row('CNIC / ID document', false, '<button class="stu-pan__mini" disabled>View</button>')
+    + row('Admission form',     false, '<button class="stu-pan__mini" disabled>View</button>')
+    + '<p class="stu-pan__note">Document storage is not enabled yet. The student '
+    + 'photo is the only file this record can hold today; CNIC and admission-form '
+    + 'uploads arrive with document storage.</p>'
+    + '</section>';
+}
+
+function stuViewDoc(id) {
+  const t = DB.students.find(x => x.id === id);
+  if (!t || !t.docs || !t.docs.photo) { toast('No document to open', 'info'); return; }
+  showModal('modal-md', 'Student photo — ' + escHtml(t.name || ''),
+    `<div style="text-align:center"><img src="${escHtml(t.docs.photo)}" alt="" style="max-width:100%;border-radius:12px"></div>`);
+}
+
+/* ── ROOM HISTORY ─────────────────────────────────────────────────────────── */
+function _stuPanelHistory(t) {
+  /* REAL RECORDS. DB.roomShifts is written by the room-shift workflow and
+     carries from/to rooms, a date and a reason, so this tab reads history
+     rather than reconstructing it. §29: "Do not fabricate previous rooms." */
+  const shifts = (DB.roomShifts || [])
+    .filter(x => x && x.studentId === t.id)
+    .slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  const room = DB.rooms.find(r => r.id === t.roomId);
+  const rtype = room ? getRoomType(room) : null;
+  const current = room
+    ? `<div class="stu-pan__hrow is-now">
+         <div><b>Room #${escHtml(String(room.number))}</b>
+           <span>${escHtml(rtype ? rtype.name : '')}${room.floor ? ' · ' + escHtml(room.floor) + ' Floor' : ''}</span></div>
+         <div class="stu-pan__hwhen">${t.joinDate && !shifts.length ? escHtml(fmtDate(t.joinDate)) + ' → present' : 'Present'}</div>
+       </div>`
+    : '';
+
+  if (!shifts.length) {
+    return '<section class="stu-pan__sec"><h4>Room history</h4>' + current
+      + '<div class="stu-pan__empty">No room changes recorded for this student.</div>'
+      + '</section>';
+  }
+
+  const rows = shifts.map(sh => `
+    <div class="stu-pan__hrow">
+      <div><b>Room #${escHtml(String(sh.fromRoomNumber || '?'))} → #${escHtml(String(sh.toRoomNumber || '?'))}</b>
+        ${sh.reason ? `<span>${escHtml(sh.reason)}</span>` : ''}</div>
+      <div class="stu-pan__hwhen">${escHtml(sh.date ? fmtDate(sh.date) : '—')}</div>
+    </div>`).join('');
+
+  return '<section class="stu-pan__sec"><h4>Room history</h4>' + current + rows + '</section>';
+}
+
 /* ── THE ROW MENU ────────────────────────────────────────────────────────────
    Anchored to the button with fixed positioning and flipped upward near the
    bottom of the window, because the last rows of a full page are exactly where
@@ -626,7 +944,7 @@ function stuRowMenu(id, btn) {
   el.id = 'stu-rmenu';
   el.setAttribute('role', 'menu');
   el.innerHTML =
-      `<button role="menuitem" onclick="closeStuRowMenu();showViewStudentModal('${escHtml(id)}')">`
+      `<button role="menuitem" onclick="closeStuRowMenu();showStudentPanel('${escHtml(id)}')">`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg>View profile</button>`
     + `<button role="menuitem" onclick="closeStuRowMenu();showEditStudentModal('${escHtml(id)}')">`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit student</button>`

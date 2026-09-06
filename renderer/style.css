@@ -290,11 +290,25 @@ body.light-theme textarea {
     border-color: var(--border);
     color: var(--text);
 }
+/* THE FOCUS RING FOLLOWS THE ACCENT.
+
+   This carried a hardcoded rgba(56,189,248,.12) — sky blue, left over from an
+   accent this app has not used since the ladder went royal — while the
+   border-color beside it already read var(--accent). So in LIGHT MODE every
+   input in the app focused with a blue ring that did not match the blue border
+   drawn around it, and .sf-in:focus in students.css could never fix it: this
+   selector is (0,2,2) and that one is (0,2,0), so the legacy value won
+   everywhere it applied.
+
+   Now var(--accent-dim), which is what the dark path was already using. A raw
+   hex in a renderer component is a bug (CLAUDE.md) — and this is the shape it
+   takes when nobody notices: not a wrong colour on one screen, but the right
+   colour on one theme and a fossil on the other. */
 body.light-theme input:focus,
 body.light-theme select:focus,
 body.light-theme textarea:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    box-shadow: 0 0 0 3px var(--accent-dim);
 }
 body.light-theme .modal-box,
 body.light-theme .modal {
@@ -359,7 +373,7 @@ body.light-theme .form-control {
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    box-shadow: 0 0 0 3px var(--accent-dim);
 }
 body.light-theme .settings-tab.active {
     background: rgba(0, 0, 0, 0.06);

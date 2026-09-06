@@ -152,9 +152,17 @@
 
 .stu-contact      { font-size:12px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-contact__em  { display:flex; align-items:center; gap:5px; margin-top:3px; font-size:11px; color:var(--text3); white-space:nowrap; }
-.stu-contact__em i{ width:14px; height:14px; border-radius:4px; background:#25d366; flex-shrink:0;
+.stu-contact__em i{ width:14px; height:14px; border-radius:4px; background:var(--bg3); flex-shrink:0;
                     display:inline-flex; align-items:center; justify-content:center; }
-.stu-contact__em i svg { width:9px; height:9px; color:#fff; }
+.stu-contact__em i svg { width:9px; height:9px; color:var(--text3); }
+
+/* THE EMERGENCY GLYPH STOPS SHOUTING (owner, 2026-09-06). It was a filled
+   #25d366 WhatsApp green on a white chip — the most saturated thing on the
+   page, repeated on every row, attached to the LEAST urgent line in the cell.
+   Colour on a table earns its place by marking an exception; a mark that
+   appears on all forty rows marks nothing and simply costs the fee badges the
+   attention they need. Same glyph, same meaning, now drawn in the muted tone
+   the line beside it already uses. */
 
 .stu-money  { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-money small { display:block; font-size:10px; font-weight:600; color:var(--text3); }
@@ -700,6 +708,7 @@
     .asf-body  { grid-template-columns:1fr; }
     .asf-meter { margin-left:0; }
 }
+}
 
 /* Read-only cells — floor and the monthly charge are set BY the room, so they
    state a fact rather than sit there as an empty field waiting to be filled.
@@ -709,3 +718,466 @@
     background:var(--dash-sunk); color:var(--text2); cursor:default;
 }
 .sf-in--ro::placeholder { color:var(--text3); }
+
+
+/* ── Advanced Filters: the fee-status chips ──────────────────────────────────
+   A row of chips rather than a fifth <select>, because this popover is where
+   the control went to stop the primary bar wrapping — and a select in a
+   popover needs two clicks to show its options where four chips need one. */
+.stu-pop__fee { display:flex; flex-wrap:wrap; gap:5px; padding:2px 4px 8px; }
+.stu-pop__chip {
+    flex:1 1 auto; min-width:58px; padding:5px 9px; border-radius:7px; cursor:pointer;
+    font-family:inherit; font-size:11.5px; font-weight:600; line-height:1.2;
+    background:var(--bg3); border:1px solid var(--border2); color:var(--text2);
+    transition:background .14s ease, border-color .14s ease, color .14s ease;
+}
+.stu-pop__chip:hover { border-color:var(--accent); color:var(--accent); }
+.stu-pop__chip.is-on {
+    background:var(--accent); border-color:var(--accent); color:#fff;
+}
+.stu-pop__chip:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE DENSITY — FITTING TWELVE COLUMNS AT 1366 AND BELOW
+   ═══════════════════════════════════════════════════════════════════════════
+   MEASURED, not estimated. At the 1054px viewport student22.png is drawn at,
+   the table wanted 1200px inside a 756px wrapper — overflowing by 444px, with
+   Nationality, Rent + Mess, Fee Status and Status simply off-screen behind a
+   horizontal scrollbar nobody uses. The reference fits the same twelve columns
+   in ~836px, so the gap is density, not column count.
+
+   WHERE THE 444px COMES FROM, and the rule is the same one the dashboard
+   follows: take it from padding and from decoration, never from a figure or a
+   label. Nothing below removes a column, truncates a name, or shrinks a number
+   past legibility — the cell padding tightens, the secondary lines lose their
+   generous leading, and the two cells that were carrying ornament (the ID pill,
+   the oversized action buttons) give it up.
+
+   `table-layout: fixed` with explicit widths, because `auto` was distributing
+   the overflow by content: one long course name ("BS Health Sciences") widened
+   its column and pushed four others off the end. Fixed widths mean a long value
+   wraps inside its own cell instead of stealing from its neighbours.        */
+.stu-table { table-layout: fixed; width: 100%; }
+
+.stu-table thead th,
+.stu-table tbody td { padding: 8px 7px; }
+.stu-table tbody td { font-size: 12px; }
+
+/* The columns, in the order they are declared. Percentages rather than pixels
+   so the table still uses a wider window when it has one. */
+/* The column widths live in a <colgroup> in students.js — see the note there
+   for why they are not per-cell rules any more. Only padding is set here. */
+
+/* The select and the ID sit together as one identity block, so the gap between
+   them is a hair rather than a column gutter (owner, 2026-09-06). */
+.stu-table th:nth-child(1), .stu-table td:nth-child(1) { padding-left: 8px; padding-right: 0; }
+.stu-table th:nth-child(2), .stu-table td:nth-child(2) { padding-left: 0; padding-right: 4px; }
+.stu-table th:nth-child(3), .stu-table td:nth-child(3) { padding-left: 2px; }
+
+/* The ID is type now, not a badge. Tabular figures so a column of them lines
+   up on the # rather than drifting with the digit widths. */
+.stu-idc {
+    font-size: 12px; font-weight: 600; color: var(--text2);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Secondary lines: the father's name, the room type, the emergency number.
+   They were set at the same leading as the primary line, which is what made a
+   two-line cell 81px tall. */
+.stu-who__sub,
+.stu-room__t,
+.stu-contact__em,
+.stu-charge__sub { line-height: 1.3; }
+.stu-who__name   { line-height: 1.3; }
+
+/* CLIPPING IS THE POINT OF `table-layout: fixed`, and it only works if the cell
+   is told to clip. Without `overflow:hidden` a `white-space:nowrap` line simply
+   paints outside its own cell — which is how "Kauser Rehman" ended up printed
+   through the Room column as "Kauser Reh#2an". The fixed width stops a cell
+   STEALING space; overflow:hidden stops it BORROWING pixels it was not given. */
+.stu-table td, .stu-table th { overflow: hidden; }
+
+/* Break at spaces, never inside a word. `overflow-wrap: anywhere` turned
+   "MDCAT Preparation" into "MDCAT Preparati / on", which is a worse failure
+   than the overflow it was fixing — a reader can skip a wrapped line but not
+   unsee a broken word. */
+.stu-table td { overflow-wrap: normal; word-break: normal; }
+
+/* One-line values ellipsis rather than overflow. Each of these is a value whose
+   full text is on the row's title or one click away on the profile. */
+.stu-who__name, .stu-who__sub,
+.stu-room__n, .stu-room__t,
+.stu-contact, .stu-contact__em,
+.stu-nat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-who__body, .stu-who > div { min-width: 0; }
+
+/* Actions: three 26px buttons in a 70px cell. They were 124px of table for
+   three icons, which is the widest ornament on the row. */
+.stu-acts { gap: 3px; }
+.stu-act  { width: 24px; height: 24px; border-radius: 6px; }
+.stu-act svg { width: 13px; height: 13px; }
+
+/* The coverage badge under the charge — RENT + MESS / RENT ONLY. It sets the
+   width of its column, so it is the one that has to be told to wrap. */
+.stu-cov { font-size: 9px; letter-spacing: .2px; padding: 2px 5px; white-space: nowrap; }
+
+/* ── ONE TOOLBAR ROW ─────────────────────────────────────────────────────────
+   The reference draws eight controls on a single line. Ours wrapped onto two,
+   which costs the table 44px of height for no information — the selects were
+   sized to their widest option ("September 2026") rather than to the space. */
+.stu-select { min-width: 0; }
+@media (max-width: 1400px) {
+    .stu-bar .stu-select { font-size: 12px; padding-right: 22px; }
+    .stu-btn { font-size: 12px; padding: 0 10px; }
+}
+
+/* The header row was the last 77px. `white-space:nowrap` on every `th` gave the
+   table a min-content width wider than the fixed column widths below it, so the
+   browser honoured the header rather than the layout — "CONTACT / EMERGENCY"
+   and "RENT + MESS / MO" alone held ~90px open. They wrap now, at 9.5px, which
+   is where the reference sets them; two short lines in a header is not a
+   truncation and costs no row height because the header is already two lines
+   tall on the tallest cell. */
+.stu-table thead th {
+    white-space: normal; line-height: 1.25; font-size: 9.5px; letter-spacing: .03em;
+    vertical-align: bottom;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY — spec §41, measured off student22.png
+   ═══════════════════════════════════════════════════════════════════════════
+   | element         | size   | weight |
+   | page title      | 26px   | 700    |
+   | KPI value       | 28px   | 700    |
+   | KPI label       | 10px   | 700    |
+   | table text      | 12px   | 500    |
+   | secondary text  | 10.5px | 500    |
+   | badge           | 10px   | 600    |
+
+   The primary line of a cell carries the weight; the secondary line carries the
+   colour difference and NOT a second weight — a father's name at 600 competes
+   with the student's name for the same glance. */
+.stu-table tbody td      { font-weight: 500; }
+.stu-who__name           { font-size: 12.5px; font-weight: 700; }
+.stu-who__sub            { font-size: 10.5px; font-weight: 500; }
+.stu-room__n             { font-size: 12px;   font-weight: 700; }
+.stu-room__t             { font-size: 10px;   font-weight: 500; }
+.stu-contact             { font-size: 11.5px; font-weight: 500; }
+.stu-contact__em         { font-size: 10.5px; font-weight: 500; }
+.stu-charge              { font-size: 12.5px; font-weight: 700; }
+.stu-pill                { font-size: 10px;   font-weight: 600; }
+.stu-cov                 { font-size: 9px;    font-weight: 700; }
+.stu-stat__val           { font-size: 28px; }
+.stu-stat__label         { font-size: 10px;   font-weight: 700; }
+.stu-stat__sub           { font-size: 10.5px; font-weight: 500; }
+
+/* Address: the one free-text column, so it is the one that must be stopped from
+   setting its own width. Two lines then an ellipsis; the full value is on the
+   cell's title and on the profile. */
+.stu-addr {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; font-size: 10.5px; line-height: 1.3; color: var(--text2);
+}
+
+/* ── ROW ACTIONS: ONE KEBAB ──────────────────────────────────────────────── */
+.stu-actc  { text-align: center; }
+.stu-kebab {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+    background: none; border: 1px solid transparent; color: var(--text3);
+    transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.stu-kebab:hover,
+.stu-kebab.is-on { background: var(--bg3); color: var(--accent); border-color: var(--border2); }
+.stu-kebab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* `position: fixed` because the menu is appended to <body> and anchored from
+   the button's viewport rect — inside the table it would be clipped by
+   .stu-table-wrap's `overflow-x: auto`, which is the whole reason it is not a
+   child of the row. */
+.stu-rmenu {
+    position: fixed; z-index: 1200; min-width: 176px; padding: 5px;
+    background: var(--card); border: 1px solid var(--border2); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(15,23,42,.14);
+    display: flex; flex-direction: column; gap: 1px;
+}
+.stu-rmenu button {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 10px; border: 0; border-radius: 7px; cursor: pointer;
+    background: none; color: var(--text2); text-align: left;
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+}
+.stu-rmenu button svg { width: 14px; height: 14px; flex-shrink: 0; }
+.stu-rmenu button:hover { background: var(--bg3); color: var(--text); }
+/* Delete is separated and coloured. It used to sit one pixel from Edit, which
+   is the adjacency that produces the deletion nobody meant. */
+.stu-rmenu__sep { height: 1px; background: var(--border2); margin: 4px 2px; }
+.stu-rmenu .is-danger { color: var(--ant-danger-fg); }
+.stu-rmenu .is-danger:hover { background: var(--ant-danger-bg); color: var(--ant-danger-fg); }
+
+/* ── ONE TOOLBAR ROW ─────────────────────────────────────────────────────────
+   Eight controls on one line, as the reference draws them. The search box and
+   the course select were the two that would not yield: search was `flex 1 1
+   220px` with a 190px floor, and the selects sized themselves to their widest
+   option rather than to the room available. */
+.stu-search { flex: 1 1 150px; min-width: 132px; }
+.stu-search input { font-size: 11.5px; }
+.stu-select { max-width: 118px; text-overflow: ellipsis; }
+
+/* THE SEARCH FIELD ANSWERS WHEN IT HAS FOCUS (owner, 2026-09-06). It was the
+   only control on the bar that looked identical whether or not it was taking
+   keystrokes — which matters most on the one control that silently filters the
+   table under the reader. */
+.stu-search:focus-within {
+    border-color: var(--accent);
+    background: var(--card);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.stu-search:focus-within svg { color: var(--accent); }
+
+
+/* ── BELOW THE SPEC'S TARGET, SCROLL RATHER THAN ELLIPSISE ───────────────────
+   The spec's primary viewport is 1366x738 (§43) and all thirteen columns fit
+   there with nothing clipped. Narrower than that — a 1054px window, say — the
+   fixed layout has to take the difference out of the cells, and the result is a
+   table where every value ends in an ellipsis: "Azat ...", "0333-3693...",
+   "3-Seater · ...". A row of truncations is not a denser table, it is an
+   unreadable one.
+
+   So under 1200px the table keeps a usable minimum and the wrapper scrolls,
+   which it is already set up to do (`overflow-x: auto`). One horizontal scroll
+   to reach the last two columns beats thirteen truncated values on every row.
+   The columns a warden reads first — who, where, what they owe — are the ones
+   that stay on screen without scrolling. */
+@media (max-width: 1200px) {
+    .stu-table { min-width: 980px; }
+}
+
+/* The kebab is 26px in a 46px cell; the shared 7px side padding left it a 24px
+   content box, so the button overflowed its own cell by two pixels on every
+   row — invisible, and exactly the kind of thing a fixed layout turns into a
+   clipped column at the next width down. */
+.stu-table td.stu-actc, .stu-table th:nth-child(13) { padding-left: 4px; padding-right: 4px; }
+
+
+/* ── CNIC: TWO LINES, BROKEN ON ITS OWN HYPHENS ──────────────────────────────
+   17101-3012345-6 is fifteen characters and no column this table can spare
+   holds it on one line. `nowrap` made it overflow silently under Course —
+   which is exactly how it read on screen, as a CNIC "hidden by the course
+   column".
+
+   `break-word`, not `anywhere`: the hyphens are already legitimate break
+   opportunities, so the number splits where a person reading it out would
+   pause — after a group — rather than mid-group. Tabular figures keep the two
+   lines aligned under each other. */
+.stu-cnic {
+    display: block; white-space: normal; overflow-wrap: break-word;
+    font-size: 11px; line-height: 1.35; color: var(--text);
+    font-family: var(--ant-num-font); font-variant-numeric: tabular-nums;
+    letter-spacing: var(--ant-num-track);
+}
+
+/* Nationality is a chip, so its padding counts against the column too. It
+   shrinks with the cell instead of pushing into Charges. */
+.stu-nat { display: inline-block; max-width: 100%; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+
+
+/* NATIONALITY IS TEXT, NOT A BADGE. It was a padded chip, and the padding was
+   the reason "Pakistani" ellipsised to "Pakis…" in a 75px column while the
+   word itself is 48px. A badge is for a state — something that changes and that
+   you scan a column for. A nationality is neither; student22.png draws it as
+   plain type, and as type it fits. */
+.stu-nat {
+    display: inline; background: none; border: 0; padding: 0; border-radius: 0;
+    font-size: 10.5px; font-weight: 500; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+
+/* ── A STATUS PILL NEVER PAINTS PAST ITS OWN CELL ────────────────────────────
+   "Blacklisted" is the longest word this column ever holds — nearly twice
+   "Left" — and at 75px the pill ran under the actions column, which is what
+   "the blacklisted tag is hidden by the action buttons column" was. The column
+   is a point wider now, but the durable fix is the pill: it shrinks and
+   ellipsises inside the cell instead of overflowing it, so the next status
+   somebody adds cannot reintroduce this. `title` carries the full word. */
+.stu-pill {
+    display: inline-flex; align-items: center; max-width: 100%;
+    overflow: hidden; white-space: nowrap;
+}
+.stu-pill > i { flex: 0 0 auto; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STUDENT DETAILS SLIDE-OVER  (Students spec §22)
+   ═══════════════════════════════════════════════════════════════════════════
+   440px, inside the 400-480 §22 asks for. It slides rather than appears
+   because the roster stays behind it: the panel is a look at one row of a
+   table the warden has just filtered and sorted, and a full-screen modal
+   throws that context away.
+
+   The scrim is deliberately light. A heavy one would say "the page behind is
+   gone", and the point of a slide-over is that it is not. */
+.stu-pan__scrim {
+    position: fixed; inset: 0; z-index: 1400;
+    background: rgba(15,23,42,.28);
+    animation: stuPanFade .18s ease;
+}
+@keyframes stuPanFade { from { opacity: 0 } to { opacity: 1 } }
+
+.stu-pan {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 1401;
+    width: 440px; max-width: 94vw;
+    display: flex; flex-direction: column;
+    background: var(--card); border-left: 1px solid var(--border);
+    box-shadow: -18px 0 48px rgba(15,23,42,.16);
+    transform: translateX(100%);
+    transition: transform .2s cubic-bezier(.32,.72,0,1);
+}
+.stu-pan.is-open { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) {
+    .stu-pan { transition: none; }
+    .stu-pan__scrim { animation: none; }
+}
+
+.stu-pan__head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.stu-pan__title { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.stu-pan__x {
+    margin-left: auto; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid transparent; color: var(--text3);
+}
+.stu-pan__x svg { width: 15px; height: 15px; }
+.stu-pan__x:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+
+/* Identity block: the one place in the panel that repeats what the row said,
+   because the panel can be opened from a menu and the row may be scrolled off. */
+.stu-pan__id { display: flex; gap: 13px; padding: 16px; align-items: flex-start; }
+.stu-pan__idtext { min-width: 0; }
+.stu-pan__name {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 15.5px; font-weight: 700; color: var(--text); line-height: 1.25;
+}
+.stu-pan__meta { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
+
+.stu-pan__acts { display: flex; gap: 7px; padding: 0 16px 14px; }
+.stu-pan__act {
+    flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 32px; border-radius: 8px; cursor: pointer;
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
+    font-family: inherit; font-size: 11.5px; font-weight: 600;
+    transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.stu-pan__act svg { width: 13px; height: 13px; }
+.stu-pan__act:hover { border-color: var(--accent); color: var(--accent); }
+.stu-pan__act.is-danger:hover { border-color: var(--ant-danger-fg); color: var(--ant-danger-fg); }
+
+/* Four tabs, and exactly four (§23). They scroll horizontally on a narrow
+   window rather than wrapping onto a second line — a wrapped tab strip changes
+   the panel height as you switch tabs, which moves the content under the
+   cursor. */
+.stu-pan__tabs {
+    display: flex; gap: 2px; padding: 0 10px; overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+}
+.stu-pan__tab {
+    flex: 0 0 auto; padding: 9px 11px; border: 0; background: none; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text3);
+    border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.stu-pan__tab:hover { color: var(--text2); }
+.stu-pan__tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
+
+.stu-pan__body { flex: 1 1 auto; overflow-y: auto; padding: 4px 16px 20px; }
+.stu-pan__sec { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.stu-pan__sec:last-child { border-bottom: 0; }
+.stu-pan__sec h4 {
+    margin: 0 0 8px; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--text3);
+}
+
+/* Label left, value right, one line each. A two-column grid rather than a
+   table so a long value wraps under itself instead of widening the label
+   column and shunting every other row across. */
+.stu-pan__f {
+    display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 10px;
+    padding: 4px 0; align-items: baseline;
+}
+.stu-pan__k { font-size: 11.5px; color: var(--text3); }
+.stu-pan__v { font-size: 12.5px; color: var(--text); overflow-wrap: break-word; }
+/* An absent value is grey, so a column of dashes reads as "not recorded"
+   rather than as data. */
+.stu-pan__v.is-empty { color: var(--text3); }
+.stu-pan__v.is-mono {
+    font-family: var(--ant-num-font); font-variant-numeric: tabular-nums;
+    letter-spacing: var(--ant-num-track);
+}
+
+.stu-pan__tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.stu-pan__tbl th {
+    text-align: left; font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--text3); padding: 6px 6px;
+    border-bottom: 1px solid var(--border);
+}
+.stu-pan__tbl td { padding: 7px 6px; border-bottom: 1px solid var(--border); color: var(--text2); }
+.stu-pan__tbl tbody tr { cursor: pointer; }
+.stu-pan__tbl tbody tr:hover { background: var(--bg3); }
+.stu-pan__tbl .is-num {
+    font-family: var(--ant-num-font); font-variant-numeric: tabular-nums; color: var(--text);
+}
+
+.stu-pan__empty {
+    padding: 14px; text-align: center; font-size: 12px; color: var(--text3);
+    background: var(--bg3); border-radius: 9px;
+}
+
+/* Documents: a row per type, with the state said in words. A disabled control
+   beside "Not uploaded" is the honest shape — §28 forbids pretending files
+   exist, and an absent button would leave the reader wondering where it went. */
+.stu-pan__doc {
+    display: flex; align-items: center; gap: 11px; padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+}
+.stu-pan__doc:last-of-type { border-bottom: 0; }
+.stu-pan__doc__i {
+    width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg3); color: var(--text3);
+}
+.stu-pan__doc__i svg { width: 15px; height: 15px; }
+.stu-pan__doc__t { min-width: 0; flex: 1 1 auto; }
+.stu-pan__doc__n { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.stu-pan__doc__s { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.stu-pan__doc__s.is-on { color: var(--ant-success-fg); font-weight: 600; }
+.stu-pan__mini {
+    height: 26px; padding: 0 10px; border-radius: 7px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text2);
+    font-family: inherit; font-size: 11px; font-weight: 600;
+}
+.stu-pan__mini:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.stu-pan__mini:disabled { opacity: .45; cursor: not-allowed; }
+.stu-pan__note { font-size: 11px; color: var(--text3); line-height: 1.6; margin: 10px 0 0; }
+
+/* Room history rows. The current room is marked rather than styled like the
+   past ones, so "where are they now" is answerable without reading dates. */
+.stu-pan__hrow {
+    display: flex; align-items: flex-start; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.stu-pan__hrow:last-child { border-bottom: 0; }
+.stu-pan__hrow b { color: var(--text); font-weight: 600; }
+.stu-pan__hrow span { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+.stu-pan__hwhen {
+    margin-left: auto; flex-shrink: 0; font-size: 11px; color: var(--text3);
+    font-variant-numeric: tabular-nums;
+}
+.stu-pan__hrow.is-now b::after {
+    content: 'Current'; margin-left: 7px; padding: 1px 6px; border-radius: 999px;
+    font-size: 9px; font-weight: 700; letter-spacing: .04em;
+    background: var(--ant-success-bg); color: var(--ant-success-fg);
+}
