@@ -722,6 +722,35 @@ function renderDashboard() {
         <span class="dash-key dh-violet"><i></i>Has free seats</span>
         <span class="dash-key dh-slate"><i></i>Full</span>
         <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
+        ${''/* EXPAND AND PRINT ARE BACK (owner, 2026-09-06, reversing the
+             2026-09-05 removal). The old argument was that both were reachable
+             elsewhere — Expand is what tapping a room does, Print lives on the
+             Rooms page. Reachable is not findable: this card is where a warden
+             is looking at seats, and tapping a room gets you ONE room, not the
+             whole grid at a readable size.
+
+             In the FOOTER, not the header, and that is measured rather than
+             preferred. The header carries a chip, a title and three counts, and
+             `.seat-inline` holds `margin-left:auto` — which absorbs all the free
+             space, so anything after it wraps onto a second line. Fixing that
+             auto margin bought back 1536px, but at 1366 the header genuinely has
+             no room: the buttons wrapped it 30px -> 62px, and every one of those
+             pixels comes out of the room grid, which is the opposite of what this
+             card was rebuilt for. This strip is one line with slack at every
+             width, and it sits directly under the grid they act on.
+
+             printSeatAvailability() was never deleted — only its button was, so
+             this is a button returning to a live function. */}
+        <span class="seat-foot__acts">
+          <button class="seat-foot__b" onclick="showSeatDetailModal('rooms')"
+                  title="Expand — every room at a readable size" aria-label="Expand seat availability">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>Expand
+          </button>
+          <button class="seat-foot__b" onclick="printSeatAvailability()"
+                  title="Print the seat availability sheet" aria-label="Print seat availability">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print
+          </button>
+        </span>
       </div>
     </div>
   ${P.glance}
@@ -855,9 +884,48 @@ function renderDashboard() {
    that already exists in a table, waiting on a decision.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Counts for "Today at a Glance" — six figures, each from its own table. */
-function _dlGlance() {
+/* ── WHICH DAY THE GLANCE REPORTS ────────────────────────────────────────────
+   Today, unless nothing happened today — then the most recent day that did.
+
+   THE BUG THIS FIXES. The panel was hard-scoped to the literal calendar day on
+   a page where every other card is month-scoped, so on a hostel holding 141
+   payments and 55 students it printed six zeros every day until somebody
+   recorded something, and went back to six zeros the next morning. Six zeros on
+   a busy hostel is indistinguishable from a card that is not wired to anything,
+   and that is exactly how it was read.
+
+   The arithmetic was never wrong — seeded with records dated today it reports
+   all six correctly. What was wrong is that "today" is empty most of the time,
+   and a card that is almost always empty teaches a warden to stop looking at it.
+
+   Falling back is not the same as widening the window: it still reports ONE
+   day, every figure still comes from records that exist, and the header names
+   the day whenever it is not today. Nothing is summed across days and nothing
+   is invented — the alternative, quietly switching to a month total, would put
+   a figure under a heading that does not describe it.
+
+   Capped at today, because a payment may be dated ahead: a record for next
+   week must not drag the panel into the future and report a day that has not
+   happened. */
+function _dlGlanceDay() {
   const td = today();
+  const day = d => String(d || '').slice(0, 10);
+  const seen = [];
+  const push = v => { const s = day(v); if (s && s <= td) seen.push(s); };
+
+  (DB.checkinlog  || []).forEach(c => push(c.date));
+  (DB.students    || []).forEach(s => push(s.joinDate));
+  (DB.payments    || []).forEach(p => { if (p.status === 'Paid') push(p.date); });
+  (DB.complaints  || []).forEach(c => push(c.date || c.createdAt));
+  (DB.maintenance || []).forEach(m => push(m.date || m.createdAt));
+
+  if (seen.indexOf(td) !== -1 || !seen.length) return td;
+  return seen.sort().pop();
+}
+
+/** Counts for the glance — six figures, each from its own table, one day. */
+function _dlGlance(forDay) {
+  const td = forDay || _dlGlanceDay();
   const isToday = d => String(d || '').slice(0, 10) === td;
   const log = DB.checkinlog || [];
   // A payment's `date` is when it was taken. Pending rows have no date yet, so
@@ -933,7 +1001,9 @@ function _dlIco(k) {
 }
 
 function _dashLedgerRow(mo, pending, pendingCount) {
-  const glance    = _dlGlance();
+  const glanceDay = _dlGlanceDay();
+  const glance    = _dlGlance(glanceDay);
+  const glanceIsToday = glanceDay === today();
   const methods   = _dlMethods(mo);
 
   const glanceRows = glance.map(g => {
@@ -979,11 +1049,24 @@ function _dashLedgerRow(mo, pending, pendingCount) {
      panel was a third route to somewhere already on screen twice. The four
      that remain are the ones with no other one-click home: the two things a
      warden posts during the day, and the two things they raise. */
+  /* EACH ONE OPENS ITS FORM, not the page the form lives on (owner, 2026-09-06).
+     They used to navigate() — so "Add Payment" landed on the Payments table and
+     the warden then had to find the button, which is two clicks and a scan to
+     do the thing the tile is named after. A tile called Add X that does not add
+     an X is a link wearing a verb.
+
+     These are the same four entry points the header's primary button uses
+     (headerAction() in nav.js), so a form opened from here is the identical
+     form, with the identical permission check, opened from anywhere else.
+     openAddPayment() is a page rather than a modal — Add Payment is a full
+     screen in this app — and it is still the form, reached in one click. */
   const actions = [
-    { k: 'card',   label: 'Add Payment',  fn: "navigate('payments')" },
-    { k: 'spend',  label: 'Add Expense',  fn: "navigate('expenses')" },
-    { k: 'issue',  label: 'Complaints',   fn: "navigate('issues')"   },
-    { k: 'cancel', label: 'Cancellation', fn: "navigate('cancellations')" },
+    { k: 'card',   label: 'Add Payment',      fn: "openAddPayment()" },
+    { k: 'spend',  label: 'Add Expense',      fn: "showAddExpenseModal()" },
+    // One form covers complaints and maintenance — it opens with the two as a
+    // toggle, which is why this is "Add Issue" rather than either noun.
+    { k: 'issue',  label: 'Add Issue',        fn: "showAddIssueModal()" },
+    { k: 'cancel', label: 'Add Cancellation', fn: "showAddCancellationModal()" },
   ].map(a =>
     '<button class="dl-act" onclick="' + a.fn + '">'
     + '<span class="dl-act__ic">' + _dlIco(a.k) + '</span>'
@@ -995,34 +1078,62 @@ function _dashLedgerRow(mo, pending, pendingCount) {
      than just the count. A warden reading "13 pending payments" still has to
      work out what to do about it; "Collect" does not.
 
-     Rows with a count of zero are dropped rather than shown as 0. A clean
-     queue should disappear, not sit there claiming attention it does not
-     need — and when all four are clear the panel says so in one line. */
+     ALL FOUR ROWS ARE ALWAYS PRESENT — only the numbers change (owner, 2026-09-06,
+     reversing the 2026-09-05 call that dropped zero rows). Dropping them made
+     the panel a different shape every render: the rows moved under the cursor
+     as a queue cleared, and a warden could not learn where "pending payments"
+     lives because it was in a different place each morning — or absent, which
+     reads as missing rather than clear. A fixed four-row list is scannable by
+     position, and a 0 beside "pending payment" is itself the answer to the
+     question the card exists to answer.
+
+     A cleared row is muted rather than removed, so the ones that still want
+     attention are the ones that carry colour. */
+  /* Each row carries BOTH forms. `noun + 's'` produced "0 open maintenances",
+     which only became visible once zero rows stopped being dropped — but it was
+     equally wrong at 2, and had been all along. Maintenance is a mass noun; so
+     is the plural of most of what a hostel counts. Spelling both out is shorter
+     than the rule that would get them right. */
   const needs = [
     { k:'cancel', tone:'amber',  n:(DB.cancellations||[]).filter(c=>c.status==='Pending').length,
-      noun:'pending cancellation', verb:'View',    page:'cancellations' },
+      one:'pending cancellation', many:'pending cancellations', verb:'View',    page:'cancellations' },
     { k:'card',   tone:'red',    n:pendingCount,
-      noun:'pending payment',      verb:'Collect', page:'payments' },
+      one:'pending payment',      many:'pending payments',      verb:'Collect', page:'payments' },
     { k:'issue',  tone:'violet', n:(DB.complaints||[]).filter(c=>c.status==='Open').length,
-      noun:'open complaint',       verb:'Resolve', page:'issues' },
+      one:'open complaint',       many:'open complaints',       verb:'Resolve', page:'issues' },
     { k:'wrench', tone:'blue',   n:(DB.maintenance||[]).filter(m=>m.status==='Open').length,
-      noun:'open maintenance',     verb:'Assign',  page:'issues' },
-  ].filter(r => r.n > 0);
+      one:'open maintenance',     many:'open maintenance jobs', verb:'Assign',  page:'issues' },
+  ];
+  // The pill counts the rows that still want something, not the rows on screen —
+  // four is now always the number of rows, and a badge that always reads 4 is
+  // not information.
+  const needsOpen = needs.filter(r => r.n > 0).length;
 
-  const needsRows = needs.length
-    ? needs.map(r =>
-        '<button class="dl-need" onclick="navigate(\'' + r.page + '\')">'
+  const needsRows = needs.map(r =>
+        '<button class="dl-need' + (r.n === 0 ? ' is-clear' : '') + '"'
+        + ' onclick="navigate(\'' + r.page + '\')">'
         + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
         + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
-        + '<span class="dl-need__label">' + escHtml(r.noun) + (r.n === 1 ? '' : 's') + '</span>'
-        + '<span class="dl-need__verb">' + escHtml(r.verb) + '</span>'
-        + '</button>').join('')
-    : '<div class="dl-empty">Nothing is waiting on you right now.</div>';
+        + '<span class="dl-need__label">' + escHtml(r.n === 1 ? r.one : r.many) + '</span>'
+        /* The verb still names the decision, because the row is still the way
+           to that screen — but on a cleared row it would be an instruction to
+           do nothing, so it gives way to a tick. */
+        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb)) + '</span>'
+        + '</button>').join('');
 
   return {
+    /* The title states which day these six figures describe. When the panel has
+       fallen back it must NOT still say "Today" — a heading that does not
+       describe the numbers under it is worse than the empty card it replaced. */
     glance:
         '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head"><span class="dash-sec__title">Today at a Glance</span></div>'
+      +   '<div class="dash-sec__head">'
+      +     '<span class="dash-sec__title">'
+      +       (glanceIsToday ? 'Today at a Glance' : 'Latest Activity') + '</span>'
+      +     (glanceIsToday ? ''
+          : '<span class="dash-pill dh-slate" title="Nothing has been recorded today yet">'
+            + escHtml(fmtDate(glanceDay)) + '</span>')
+      +   '</div>'
       +   '<div class="dl-glance">' + glanceRows + '</div>'
       + '</div>',
 
@@ -1037,7 +1148,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
     needs:
         '<div class="dash-sec dl-panel">'
       +   '<div class="dash-sec__head"><span class="dash-sec__title">Needs Action</span>'
-      +   (needs.length ? '<span class="dash-pill dh-slate">' + needs.length + '</span>' : '')
+      +   (needsOpen ? '<span class="dash-pill dh-slate">' + needsOpen + '</span>' : '')
       +   '</div>'
       +   '<div class="dl-needs">' + needsRows + '</div>'
       + '</div>',
