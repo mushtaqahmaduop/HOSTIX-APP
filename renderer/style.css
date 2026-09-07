@@ -387,6 +387,7 @@ body.light-theme .arch-hb {
 body.light-theme .toast {
     background: var(--card);
     border-color: var(--border);
+    border-left-color: var(--toast-tone);   /* the tone bar survives the theme */
 }
 body.light-theme .stat-card::after {
     background: rgba(59,130,246, 0.03);
@@ -1951,34 +1952,58 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 /* ══════════════════════════════════════════════════════════════════════════
    TOASTS — Premium slide + blur
    ══════════════════════════════════════════════════════════════════════════ */
+/* TOP-CENTRE, NOT TOP-RIGHT (owner, 2026-09-06). At top-right the stack sat
+   over the first two KPI cards on the dashboard and over the student drawer's
+   action band - it covered the controls the warden was reaching for, which is
+   how a toast reporting on a click ends up hiding the button that made it.
+   Centred, it crosses the search field only, and that is not a target during
+   the second a toast is on screen.
+
+   left:50% centres on the VIEWPORT rather than on the content column: the rail
+   collapses to 72px and hides entirely below 768, so anything measured from it
+   moves when the toast should not. */
 #toast-container {
     position: fixed;
-    top: 20px; right: 20px;
+    top: 20px; left: 50%;
+    transform: translateX(-50%);
     z-index: 9999;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-}
-
-.toast {
-    background: var(--card);
-    border: 1px solid var(--border2);
-    border-radius: 12px;
-    padding: 12px 18px;
-    display: flex;
     align-items: center;
     gap: 10px;
-    box-shadow: var(--shadow);
-    font-size: 13.5px;
-    animation: slideLeft 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    min-width: 260px;
-    max-width: 380px;
-    backdrop-filter: blur(12px);
+    pointer-events: none;   /* the page keeps working behind the stack ... */
+    width: max-content;
+    max-width: min(560px, calc(100vw - 32px));
+}
+#toast-container > * { pointer-events: auto; }  /* ... the toast itself does not */
+
+.toast {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--toast-tone);
+    border-radius: 14px;
+    padding: 12px 12px 13px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .16);
+    animation: toastIn .26s cubic-bezier(.32, .72, 0, 1);
+}
+.toast.is-going { animation: toastOut .2s ease forwards; }
+@media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; }
+    .toast.is-going { animation: none; opacity: 0; }
 }
 
-.toast.success { border-left: 3px solid var(--green); }
-.toast.error   { border-left: 3px solid var(--red);   }
-.toast.info    { border-left: 3px solid var(--accent);  }
+/* ONE TONE VARIABLE PER TYPE, and every coloured part reads it - the bar, the
+   well, the disc and the timer. A fifth tone is one block, not five. */
+.toast.success { --toast-tone: var(--success-fg); }
+.toast.error   { --toast-tone: var(--danger-fg);  }
+.toast.warning { --toast-tone: var(--warning-fg); }
+.toast.info    { --toast-tone: var(--accent);     }
 
 /* ══════════════════════════════════════════════════════════════════════════
    UTILITY / MISC
@@ -3232,42 +3257,68 @@ body.light-theme .login-hint-box {
     animation: confettiFall var(--dur, 1.2s) ease-out forwards;
 }
 
-/* Toast — premium redesign */
-.toast {
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-}
-
+/* -- TOAST INTERIOR ---------------------------------------------------------
+   A disc inside a well: the well is the tone at 12%, the disc is the tone
+   solid, and the glyph is reversed out of it. Two circles rather than one
+   because a single flat chip disappears against a white card at a glance,
+   which is the one thing this element cannot afford to do. */
 .toast-icon {
-    width: 28px; height: 28px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--toast-tone) 12%, transparent);
 }
+.toast-icon__disc {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--toast-tone);
+    color: #fff;
+}
+.toast-icon__disc svg { width: 15px; height: 15px; }
+/* THE GLYPH IS REVERSED OUT, AND WHAT IT REVERSES OUT OF FLIPS WITH THE THEME.
+   Light theme deepens the status colours for the 4.5:1 floor (--success-fg is
+   #1D8054 there), so white reads. The dark theme LIGHTENS them (#3FBF83) to
+   carry on a dark ground, and white on that is about 2:1 - the check goes
+   mushy. On dark, reverse out to the page ground instead. */
+body:not(.light-theme) .toast-icon__disc { color: var(--bg); }
 
-.toast.success .toast-icon { background: rgba(52,211,153,0.15); color: var(--green); }
-.toast.error   .toast-icon { background: rgba(248,113,113,0.15); color: var(--red);   }
-.toast.info    .toast-icon { background: rgba(0,0,0,0.1);  color: var(--accent-strong);}
+/* The hairline the reference draws between the mark and the message. */
+.toast-rule { flex: 0 0 auto; width: 1px; align-self: stretch; margin: 3px 0; background: var(--border); }
 
-.toast-body { flex: 1; min-width: 0; }
-.toast-title { font-size: 13px; font-weight: 700; color: var(--text); }
-.toast-msg   { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.toast-body  { flex: 1 1 auto; min-width: 0; }
+.toast-title { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.toast-msg   { font-size: 13px; color: var(--text2); margin-top: 2px; line-height: 1.35; }
 
-/* Toast progress bar */
+/* THE CLOSE BUTTON (owner's ask). 32px of hit area, under the 40px §21 touch
+   floor and deliberately so - this is a mouse-only desktop app, and a 40px
+   square here crowds a two-line message. It is never the only way out: the
+   timer still runs, and hovering pauses it. */
+.toast-x {
+    flex: 0 0 auto;
+    width: 32px; height: 32px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg2); border: 1px solid transparent;
+    color: var(--text3); cursor: pointer; padding: 0;
+    transition: background .12s ease, color .12s ease;
+}
+.toast-x svg { width: 15px; height: 15px; }
+.toast-x:hover { background: var(--bg3); color: var(--text); }
+.toast-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* THE TIMER along the bottom edge - the dwell made visible, so a toast about
+   to go does not read as one that was ignored. It holds with the timer while
+   the pointer is on the toast. */
 .toast-progress {
     position: absolute;
     bottom: 0; left: 0;
-    height: 2px;
-    border-radius: 0 0 12px 12px;
-    animation: toastProgress var(--duration, 3.5s) linear forwards;
+    height: 3px;
+    background: var(--toast-tone);
+    animation: toastProgress var(--duration, 1.5s) linear forwards;
 }
-
-.toast.success .toast-progress { background: var(--green); }
-.toast.error   .toast-progress { background: var(--red);   }
-.toast.info    .toast-progress { background: var(--accent); }
+.toast.is-held .toast-progress { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+    .toast-progress { animation: none; width: 100%; opacity: .45; }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    GLASSMORPHISM CARDS — Premium stat cards
@@ -3909,6 +3960,17 @@ body.light-theme .modal {
     to   { width: 0%;   }
 }
 
+/* Down from the title bar and back up into it - the stack is top-anchored now,
+   so the old slide-in from the right read as arriving from nowhere. */
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(-12px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes toastOut {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 0; transform: translateY(-8px) scale(.98); }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    SCROLLBAR PREMIUM
    ══════════════════════════════════════════════════════════════════════════ */
@@ -4519,19 +4581,14 @@ body.light-theme .room-card { background: var(--card); border: 1px solid #d7c3b5
 body.light-theme .room-card:hover { background: #f8f7f6; }
 
 /* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
-.toast {
-    background: var(--bg4);
-    border: var(--hairline);
-    border-radius: var(--r-lg);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    box-shadow: var(--s-elev-3), 0 0 20px rgba(0,0,0,0.3);
-}
-
-body.light-theme .toast {
-    background: var(--card);
-    border-color: #d7c3b5;
-}
+/* THE TOAST IS DEFINED ONCE, and it is not here - see the TOASTS block above,
+   around the #toast-container rule. Three separate .toast blocks used to live
+   in this file; the two later ones won on the cascade without saying so, and
+   the symptom was invisible in the CSS - the canonical block asked for a 6px
+   tone bar and the element rendered a 1px grey one, because the
+   `border: var(--hairline)` that stood here reset all four sides. If a toast
+   ever looks unstyled again, grep this file for `.toast` before editing
+   anything: a fourth block is the likeliest cause. */
 
 /* ── SETTINGS TABS (horizontal nav bar) ────────────────────────────────── */
 .settings-tab.active {
@@ -5002,9 +5059,11 @@ body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
 /* A warning toast. The type has been passed by callers for a long time with no
    rule to match, so it rendered as a plain bordered box — the one toast state
    that most needs to look different was the one that looked like nothing. */
-.toast.warning { border-left: 3px solid var(--amber); }
-.toast.warning .toast-icon { background: rgba(251,191,36,0.15); color: var(--amber); }
-.toast.warning .toast-progress { background: var(--amber); }
+/* The warning tone is set with the other three, in the single
+   `.toast.warning { --toast-tone: ... }` line beside them. This block answered
+   the same question a second time and in --amber, a fourth status colour that
+   theme-parity does not check; --warning-fg, which the tone variable uses, it
+   does check. */
 
 /* ── Licence banner ──────────────────────────────────────────────────────────
    Sits at the top of #main and pushes the page down rather than covering it.

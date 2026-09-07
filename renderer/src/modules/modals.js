@@ -68,11 +68,22 @@ function closeModal() {
 }
 let _pendingConfirmCb = null;
 let _pendingConfirmCancelCb = null;
+/* A <div>, NOT A <p>. Callers pass HTML — confirmDeleteStudent() passes a whole
+   <div> explaining what happens to the payment records — and a <div> inside a
+   <p> implicitly CLOSES the paragraph. The dialog still looked right, because
+   the content simply landed after the empty <p> as a sibling, but
+   `.confirm-text` was left empty and zero-height: its font size, colour and
+   line height applied to nothing, and any test reading `.confirm-text` saw an
+   empty string and read as a product bug rather than a markup one.
+
+   Plain-text confirms are unaffected — they were already inside the element
+   that carries the class. The ones that change are exactly the HTML-bearing
+   dialogs, which had been falling back to browser defaults all along. */
 function showConfirm(title, text, onConfirm, onCancel) {
   _pendingConfirmCb = onConfirm;
   _pendingConfirmCancelCb = onCancel || null;
   showModal('modal-sm', title,
-    `<p class="confirm-text">${text}</p>`,
+    `<div class="confirm-text">${text}</div>`,
     `<button class="btn btn-secondary" onclick="closeModal();if(_pendingConfirmCancelCb){_pendingConfirmCancelCb();_pendingConfirmCancelCb=null;}">Cancel</button><button class="btn btn-danger" onclick="closeModal();if(_pendingConfirmCb){_pendingConfirmCb();_pendingConfirmCb=null;}">Confirm</button>`
   );
 }
@@ -708,29 +719,47 @@ function flushToastQueue() {
   pending.forEach((args, i) => setTimeout(() => toast.apply(null, args), i * 700));
 }
 
+/* ── THE TOAST (owner references: `success sign.png`, `error sign1.png`,
+      `backup due sign.png`, 2026-09-06) ──────────────────────────────────────
+
+   One anatomy, four tones. Left to right:
+
+     a 6px tone bar   the colour, readable before any text is
+     an icon well     tinted disc, solid disc inside it, white glyph
+     a hairline       separates identity from message
+     title + message  what happened, then what it means
+     a close button   THE OWNER'S ASK — a toast you have read should go now
+     a timer bar      along the bottom, draining, so the dwell is visible
+
+   The reference draws a WHITE card with a coloured bar, not the tinted card
+   the written spec's §20 table describes. The images are the more specific
+   instruction and the later one, so they win; the §20 tints survive as the
+   icon well and the timer.                                                  */
 function toast(msg, type='info', title='') {
-  // Premium toast with icon, title, body, and progress bar
+  /* Solid glyphs, because they sit reversed out of a filled disc. */
   const svgIcons = {
-    success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>',
-    error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></svg>',
-    info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></svg>',
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    error:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+    info:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v-5"/><path d="M12 7.5h.01"/></svg>',
     // 'warning' has been passed by callers for a long time without existing
     // here, so those toasts came out with no icon and the title "Info".
-    warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v6"/><path d="M12 17h.01"/></svg>',
   };
   const defaultTitles = { success: 'Success', error: 'Error', info: 'Info', warning: 'Heads up' };
+  const tone = svgIcons[type] ? type : 'info';
 
-  /* DWELL TIME — the owner reported these hanging around far too long.
+  /* DWELL TIME — the owner reported these hanging around far too long, and
+     asked again on 6 Sep for "about 1.5 seconds or an appropriate time".
 
      A success toast is a GLANCE: the warden already knows what they did, the
-     toast only confirms it landed, and 3s of it sitting over the top-right KPI
-     card is a nuisance rather than information. 1.5s is enough to register.
+     toast only confirms it landed. 1.5s is enough to register.
 
-     An error or a warning is READ, so it keeps a longer dwell — but 4.5s was
-     tuned for nothing in particular and is cut too. Anything that genuinely
-     needs more time than this should not be a toast at all; it should be a
-     modal the warden dismisses. */
-  const delay = (type === 'error' || type === 'warning') ? 2600 : 1500;
+     An error or a warning is READ, so it keeps a longer dwell. Neither number
+     is a deadline any more — the timer PAUSES while the pointer is on the
+     toast, and the close button ends it early — so they are the time it takes
+     to notice, not the time it takes to read. Anything that genuinely needs
+     more than that should not be a toast at all; it should be a modal. */
+  const delay = (tone === 'error' || tone === 'warning') ? 2600 : 1500;
 
   /* NOT OVER THE LOGIN SCREEN.
 
@@ -744,26 +773,57 @@ function toast(msg, type='info', title='') {
     _toastQueue.push([msg, type, title]);
     return;
   }
+
   const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.style.cssText = 'position:relative;overflow:hidden;';
+  t.className = `toast ${tone}`;
+  /* role=alert only for the tones that report a failure; a success confirmation
+     read out over whatever the warden is doing is noise (§21). */
+  t.setAttribute('role', (tone === 'error' || tone === 'warning') ? 'alert' : 'status');
   t.innerHTML = `
-    <div class="toast-icon">${svgIcons[type] || svgIcons.info}</div>
+    <div class="toast-icon"><span class="toast-icon__disc">${svgIcons[tone]}</span></div>
+    <div class="toast-rule"></div>
     <div class="toast-body">
-      <div class="toast-title">${escHtml(title || defaultTitles[type] || 'Info')}</div>
+      <div class="toast-title">${escHtml(title || defaultTitles[tone])}</div>
       <div class="toast-msg">${escHtml(msg)}</div>
     </div>
+    <button class="toast-x" type="button" aria-label="Dismiss notification">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
     <div class="toast-progress" style="--duration:${delay}ms"></div>
   `;
+
   const container = document.getElementById('toast-container');
-  if (container) container.appendChild(t);
-  setTimeout(() => {
-    t.style.transition = 'opacity 0.3s, transform 0.3s';
-    t.style.opacity = '0';
-    t.style.transform = 'translateX(20px)';
-    setTimeout(() => t.remove(), 300);
-  }, delay);
+  if (!container) return;
+  container.appendChild(t);
+
+  /* ── DISMISSAL ────────────────────────────────────────────────────────────
+     Three ways out and one path through them, so a toast cannot be removed
+     twice (the close button during the fade used to leave a dangling timer
+     that called .remove() on a node already gone). */
+  let timer = null, startedAt = 0, left = delay, done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    t.classList.add('is-going');
+    setTimeout(() => t.remove(), 220);
+  };
+  const run = () => { startedAt = Date.now(); timer = setTimeout(finish, left); };
+
+  /* PAUSE WHILE READ. A warning that vanishes mid-sentence because the warden
+     moved the mouse onto it to press Close is the exact frustration the close
+     button is meant to fix, so hovering holds both the timer and the bar. */
+  t.addEventListener('mouseenter', () => {
+    if (done) return;
+    clearTimeout(timer);
+    left = Math.max(300, left - (Date.now() - startedAt));
+    t.classList.add('is-held');
+  });
+  t.addEventListener('mouseleave', () => { if (!done) { t.classList.remove('is-held'); run(); } });
+  t.querySelector('.toast-x').addEventListener('click', finish);
+  run();
 }
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // INIT
@@ -958,6 +1018,15 @@ async function saveUser(id) {
       CUR_USER = t;
       if (typeof updateRoleBadge === 'function') updateRoleBadge();
       if (typeof applyPermissionsToChrome === 'function') applyPermissionsToChrome();
+      /* THE NAME IS ON SCREEN IN TWO MORE PLACES than this used to refresh, and
+         both kept the old one until the app was restarted (owner, 7 Sep): the
+         sidebar account card, which `refreshChromeUser()` writes, and the
+         dashboard greeting, which carries the name in its text. Renaming
+         yourself and watching the old name sit there reads as a save that did
+         not take. */
+      if (typeof refreshChromeUser === 'function') refreshChromeUser();
+      const _g = document.getElementById('hdr-greet');
+      if (_g && typeof _dashGreeting === 'function') _g.innerHTML = _dashGreeting();
     }
   }
 
