@@ -117,7 +117,13 @@ function calcCashReceived(key) {
    earlier months + anything paid ahead. `advance` is money for a future month,
    so it is in the drawer now and in none of this month's revenue. */
 function cashBreakdown(key) {
-  const out = { total: 0, current: 0, arrears: 0, advance: 0, count: 0 };
+  /* nAdvance / nArrears / nCurrent were added for the Advance / Arrears KPI,
+     which names a count beside each figure. They count CASH EVENTS, not
+     records: one record collected in two instalments across two months is two
+     events, and the card's "8 payments" has to mean the same thing as the
+     rupees beside it or the two disagree. */
+  const out = { total: 0, current: 0, arrears: 0, advance: 0, count: 0,
+                nCurrent: 0, nArrears: 0, nAdvance: 0 };
   (DB.payments || []).forEach(p => {
     const events = _cashEvents(p);
     if (!events.length) return;
@@ -133,9 +139,9 @@ function cashBreakdown(key) {
     events.forEach(e => {
       if (String(e.date || '').indexOf(k) !== 0) return;
       out.total += e.amount; out.count++;
-      if (!mine || mine === k)  out.current += e.amount;
-      else if (mine < k)        out.arrears += e.amount;
-      else                      out.advance += e.amount;
+      if (!mine || mine === k)  { out.current += e.amount; out.nCurrent++; }
+      else if (mine < k)        { out.arrears += e.amount; out.nArrears++; }
+      else                      { out.advance += e.amount; out.nAdvance++; }
     });
   });
   return out;
@@ -320,6 +326,37 @@ function _chartFontFix(chart) {
 // Inline SVG sparkline. Stroke colour comes from the parent's --dh via CSS
 // (an SVG *attribute* cannot resolve a CSS variable — only the stylesheet can),
 // so .dash-spark polyline{stroke:var(--dh)} in dashboard.css does the colouring.
+/* ── THE KPI PROGRESS BAR (final-layout spec §1) ────────────────────────────
+   Replaces the sparkline. A sparkline showed a SHAPE — twelve months of
+   movement with no axis and no scale — which on a KPI card answers a question
+   nobody asked of it: the card states one figure for one month, and the reader
+   wants to know how that figure stands against what it could be.
+
+   So: a 0-100% bar with its ends labelled, and a percentage that is computed
+   from the two numbers the card already shows. Every one of them is a real
+   ratio, not a decoration:
+
+     Revenue      collected / expected this month
+     Expenses     spent / collected      (what the month's takings went on)
+     Fund         kept / collected       (what survived the spending)
+     Pending      outstanding / expected
+     Advance      out-of-month cash / all cash taken
+
+   `pct` is clamped to 0-100 for the BAR only. The label prints the true
+   figure, because a month that spent more than it took is a thing a warden
+   needs to see said out loud rather than flattened to "100%". */
+function _dashBar(part, whole, tone) {
+  const w = Number(whole || 0);
+  const raw = w > 0 ? (Number(part || 0) / w * 100) : 0;
+  const shown = Math.round(raw);
+  const fill = Math.max(0, Math.min(100, raw));
+  return '<div class="kbar' + (tone ? ' ' + tone : '') + '">'
+       +   '<div class="kbar__pct">' + shown + '%</div>'
+       +   '<div class="kbar__track"><i style="width:' + fill.toFixed(1) + '%"></i></div>'
+       +   '<div class="kbar__ends"><span>0%</span><span>100%</span></div>'
+       + '</div>';
+}
+
 function _dashSpark(series) {
   const pts = (series||[]).filter(v=>typeof v==='number' && isFinite(v));
   if (pts.length < 2) return '<div class="dash-spark-empty">not enough history yet</div>';
@@ -372,6 +409,266 @@ function _dashDueState(p) {
   return { label:'Pending', hue:'dh-slate' };
 }
 
+/* -- THE GREETING (reference: `dashboard globel.png`) ------------------------
+   IT SITS ON THE HEADER ROW, NOT ABOVE THE KPI CARDS, and that is the whole
+   design decision here.
+
+   Built first as its own band it looked exactly like the reference and cost
+   ~72px of page height, which pushed rows A-C past the fold at all three
+   shipped sizes (1366x768 by 43px, 1920x1080 @150% by 61, 1366x768 @125% by
+   72) and failed `dashboard-cards.spec.js`. That is not a new fault: the alert
+   banners that used to stand in that exact place were deleted for it, and the
+   note left where they stood says why - "a duplicate that costs the primary
+   content its position is not a second chance to be seen; it is a tax on the
+   screen that matters". A greeting is chrome, and chrome does not get to push
+   figures off the screen.
+
+   The reference agrees, as it happens: it draws the greeting on the TITLE row
+   beside "Dashboard", not on a row of its own. So this goes there - into the
+   spare width of #header, next to the page title, where it costs zero height.
+   It ellipsises before it crowds the search field and hides under 1180px.
+
+   THE TAGLINE IS `DB.settings.tagline`, a field the owner sets in Settings. The
+   reference prints "Better Living. Brighter Futures."; printing that string
+   would put a sentence on the dashboard that this hostel never wrote. There is
+   no room for it on the header row, so it rides in the footer instead - and if
+   the setting is empty nothing is drawn, rather than a motto of my invention
+   (per the reconstruction mandate). */
+function _dashGreeting() {
+  const h = new Date().getHours();
+  /* FIVE WINDOWS. Three was wrong in the way that matters: everything after
+     17:00 read "Good evening" and everything before noon read "Good morning",
+     so opening the app at 1am was greeted with the morning. A hostel office is
+     staffed around the clock and the small hours are a real shift here.
+
+       01-04  Late night     the shift nobody plans for
+       05-11  Good morning
+       12-16  Good afternoon
+       17-20  Good evening
+       21-00  Good night
+
+     The phrase is recomputed on a timer (see _chromeClockTick in nav.js), so
+     an app left open across a boundary does not keep yesterday's greeting. */
+  const part = h < 1  ? 'night'
+             : h < 5  ? 'late night'
+             : h < 12 ? 'morning'
+             : h < 17 ? 'afternoon'
+             : h < 21 ? 'evening'
+             : 'night';
+  const sun  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>';
+  const who  = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : '';
+
+  /* "Late night" is not something you wish someone, so it does not take the
+     "Good" - it states the hour instead, which is the honest version of a
+     greeting at 3am. Every other phase reads as the greeting it is. */
+  const dark  = (part === 'night' || part === 'late night' || part === 'evening');
+  const hello = part === 'late night'
+    ? 'Late night' + (who ? ', ' + escHtml(who) : '')
+    : 'Good ' + part + (who ? ', ' + escHtml(who) : '') + '!';
+
+  return `<div class="hdr-greet" title="Here&rsquo;s what&rsquo;s happening at your hostel today.">
+    <span class="hdr-greet__ico">${dark ? moon : sun}</span>
+    <span class="hdr-greet__hi">${hello}</span>
+  </div>`;
+}
+
+/** The greeting's current text, without touching the DOM - the clock tick
+    compares against this to decide whether anything needs repainting. */
+function _dashGreetingText() {
+  const box = document.createElement('div');
+  box.innerHTML = _dashGreeting();
+  const el = box.querySelector('.hdr-greet__hi');
+  return el ? el.textContent : '';
+}
+
+
+/* ── A DONUT, DRAWN AS ONE SVG ──────────────────────────────────────────────
+   No chart library: this is four numbers and a circle, and Chart.js is already
+   carrying the trend chart's weight. A stroke-dasharray ring is exact, scales
+   without raster blur, takes the theme through currentColor, and cannot animate
+   itself on every re-render (lower spec §42).
+
+   `segs` is [{ value, color, label }]. Segments are laid end to end from 12
+   o'clock clockwise. A zero total draws the track alone — never a full ring in
+   one colour, which is what "do not show a misleading 100% chart" (§36) means:
+   an empty month must not look like a month where one method took everything.
+
+   R and C are locked together: C = 2*pi*R. If R changes, C must. */
+function _dashDonut(segs, centreTop, centreSub, opts) {
+  const o = opts || {};
+  const R = 54, C = 2 * Math.PI * R, W = o.width || 22;
+  const total = segs.reduce((s, x) => s + Math.max(0, Number(x.value) || 0), 0);
+
+  let at = 0;
+  const arcs = total > 0 ? segs.map(s => {
+    const v = Math.max(0, Number(s.value) || 0);
+    if (v <= 0) return '';
+    const len = (v / total) * C;
+    /* -at as the offset walks the ring clockwise; the -90deg rotation on the
+       group starts it at twelve o'clock instead of three. */
+    /* A SLICE IS A CONTROL (owner, 7 Sep). It thickens under the pointer and
+       opens the page behind it when clicked. Thickening rather than sliding the
+       wedge outward: an exploded slice needs the arc's bisector and a transform
+       per segment, and it moves the ring's silhouette on every hover, which on
+       a four-slice donut reads as the chart twitching. Growing the stroke keeps
+       the ring still and still says "this one". */
+    const act = s.onclick ? ' onclick="' + s.onclick + '"' : '';
+    /* The popup reads these off the element rather than closing over the data:
+       the ring is a string of HTML by the time it reaches the DOM, so there is
+       no live object left to consult. */
+    const dat = ' data-name="' + escHtml(s.name || '') + '"'
+              + ' data-amt="'  + escHtml(s.amount || '') + '"'
+              + ' data-pct="'  + (total > 0 ? (v / total * 100).toFixed(1) : '0') + '"'
+              + ' data-hue="'  + escHtml(s.color) + '"'
+              + ' data-money="' + (o.money === false ? '0' : '1') + '"';
+    const seg = '<circle class="dnut__seg' + (s.onclick ? ' is-clickable' : '') + '"'
+      + ' cx="70" cy="70" r="' + R + '" fill="none"'
+      + ' stroke="' + escHtml(s.color) + '" stroke-width="' + W + '"'
+      + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"'
+      + ' stroke-dashoffset="' + (-at).toFixed(2) + '"' + act + dat + '>'
+      + (s.label ? '<title>' + escHtml(s.label) + '</title>' : '')
+      + '</circle>';
+    at += len;
+    return seg;
+  }).join('') : '';
+
+  setTimeout(_dnutWireTip, 0);
+  return '<div class="dnut">'
+    + '<svg viewBox="0 0 140 140" class="dnut__svg" role="img"'
+    + ' aria-label="' + escHtml(o.aria || 'Breakdown chart') + '">'
+    +   '<g transform="rotate(-90 70 70)">'
+    +     '<circle cx="70" cy="70" r="' + R + '" fill="none" stroke="var(--dash-track)" stroke-width="' + W + '"></circle>'
+    +     arcs
+    +   '</g>'
+    + '</svg>'
+    + '<div class="dnut__mid">'
+    +   '<div class="dnut__top">' + centreTop + '</div>'
+    +   '<div class="dnut__sub">' + escHtml(centreSub || '') + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+/* ── THE SLICE POPUP ────────────────────────────────────────────────────────
+   Owner, 7 Sep: "build a pop hover when cursor holds on the pie chart slices".
+
+   ONE listener on the document, not one per slice: the ring is re-rendered on
+   every dashboard paint, and per-element handlers would accumulate a set per
+   paint with nothing to remove them. Delegation survives re-renders because it
+   never references the elements.
+
+   It follows the pointer rather than anchoring to the slice's centroid. A
+   centroid anchor is prettier and wrong here — on a ring where one slice is
+   80%, its centroid can sit under the centre label, and the popup would cover
+   the total it is explaining. */
+let _dnutTipEl = null, _dnutTipWired = false;
+
+function _dnutWireTip() {
+  if (_dnutTipWired) return;
+  _dnutTipWired = true;
+
+  const tip = document.createElement('div');
+  tip.className = 'dnut-tip';
+  tip.setAttribute('aria-hidden', 'true');   // the SVG <title> serves readers
+  document.body.appendChild(tip);
+  _dnutTipEl = tip;
+
+  const hide = () => tip.classList.remove('is-on');
+
+  document.addEventListener('mouseover', (e) => {
+    const seg = e.target && e.target.closest && e.target.closest('.dnut__seg');
+    if (!seg) return;
+    const name = seg.getAttribute('data-name') || '';
+    const amt  = Number(seg.getAttribute('data-amt') || 0);
+    const pct  = seg.getAttribute('data-pct') || '0';
+    const hue  = seg.getAttribute('data-hue') || 'currentColor';
+    tip.innerHTML =
+        '<i class="dnut-tip__dot" style="background:' + escHtml(hue) + '"></i>'
+      + '<span class="dnut-tip__name">' + escHtml(name) + '</span>'
+      + '<span class="dnut-tip__amt">' + escHtml(
+            seg.getAttribute('data-money') === '0' ? fmtNum(amt) + ' seats' : fmtPKR(amt)) + '</span>'
+      + '<span class="dnut-tip__pct">' + escHtml(pct) + '%</span>';
+    tip.classList.add('is-on');
+  }, true);
+
+  document.addEventListener('mousemove', (e) => {
+    if (!tip.classList.contains('is-on')) return;
+    /* Flip before the edge rather than after it: measuring the box and
+       comparing against the viewport keeps the popup whole on the right-hand
+       ring, which is where the Collection card sits on a 1366 screen. */
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 14, y = e.clientY - h - 10;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - 14;
+    if (y < 8) y = e.clientY + 16;
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+  }, true);
+
+  document.addEventListener('mouseout', (e) => {
+    const seg = e.target && e.target.closest && e.target.closest('.dnut__seg');
+    if (seg) hide();
+  }, true);
+
+  /* Same reasoning as the trend badge: a wheel scroll moves the ring out from
+     under a stationary pointer without firing mouseout. */
+  document.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+}
+
+/* ── THE STATUS FOOTER ──────────────────────────────────────────────────────
+   "All systems operational" is a claim, and a pill that is green whatever the
+   state of the app is a decoration pretending to be a reading. It is wired to
+   `chromeAlerts()` — the same feed behind the header bell — so it goes amber
+   and counts when there is something outstanding, and reads operational only
+   when that feed is genuinely empty.
+
+   The version comes from the main process (`window.appInfo.version()`), which
+   is the number in package.json. `DB.settings.version` is a stored data field
+   that has read 'v3.0' since long before this build, so it is not used here;
+   the element paints a dash and is corrected a beat later, exactly as the
+   login footer does it. */
+function _dashFooter() {
+  const hostel = (DB.settings && DB.settings.hostelName) || '';
+  const tag    = (DB.settings && DB.settings.tagline) ? String(DB.settings.tagline).trim() : '';
+  const alerts = (typeof chromeAlerts === 'function') ? chromeAlerts() : [];
+  const ok     = alerts.length === 0;
+  const stamp  = new Date().toLocaleString('en-IN',
+    { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  return `
+  <footer class="dash-foot">
+    <div class="dash-foot__l">
+      <span class="dash-foot__brand">Hostyllo <span id="dash-foot-ver">&mdash;</span></span>
+      ${hostel ? `<span class="dash-foot__sep">|</span><span>${escHtml(hostel)}</span>` : ''}
+      ${tag ? `<span class="dash-foot__sep">|</span><span class="dash-foot__tag">&ldquo;${escHtml(tag)}&rdquo;</span>` : ''}
+    </div>
+    <div class="dash-foot__r">
+      <span class="dash-foot__state ${ok ? 'is-ok' : 'is-warn'}">
+        <i class="dash-foot__dot"></i>${ok ? 'All systems operational'
+          : alerts.length === 1 ? '1 item needs attention'
+          : alerts.length + ' items need attention'}
+      </span>
+      <span class="dash-foot__sep">|</span>
+      <span class="dash-foot__stamp">Last updated: ${escHtml(stamp)}</span>
+      <button class="dash-foot__refresh" onclick="renderPage('dashboard')" title="Refresh the dashboard" aria-label="Refresh the dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      </button>
+    </div>
+  </footer>`;
+}
+
+/** Fill in the build number the footer left as a dash. Async, and the element
+    may already be gone if the warden navigated on — hence the null guard. */
+function _dashFillVersion() {
+  try {
+    if (!window.appInfo || !window.appInfo.version) return;
+    window.appInfo.version().then(v => {
+      const el = document.getElementById('dash-foot-ver');
+      if (el && v) el.textContent = 'v' + v;
+    }).catch(() => {});
+  } catch (e) { /* browser, no bridge - the dash stands */ }
+}
+
 function renderDashboard() {
   /* The alert computation that opened this function is gone with the banners
      it fed. Every one of its findings — pending payments, open maintenance,
@@ -389,6 +686,10 @@ function renderDashboard() {
   // calcCashReceived(): this is deliberately NOT `collected`, and the two
   // differing is normal rather than a fault.
   const cashIn = cashBreakdown(mo);
+  /* The Advance / Arrears tile reports only the two buckets that are NOT this
+     month's own rent — see the card for why. */
+  const _advArr = { total: cashIn.advance + cashIn.arrears,
+                    n: cashIn.nAdvance + cashIn.nArrears };
   // Pending — only for the selected month
   const pending = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).reduce((s,p)=>s+outstandingOf(p),0);
   const pendingCount = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo)).length;
@@ -475,8 +776,16 @@ function renderDashboard() {
      inline because the sketch spreads them across three different rows: Today
      at a Glance rides with the trend, Needs Action and Quick Actions sit in the
      occupancy row, and Collection by Method pairs with Pending Payments. */
+  /* The footer paints a dash for the build number and this corrects it a beat
+     later, once nav.js has written the string below into #page. */
+  setTimeout(_dashFillVersion, 0);
+
   const P = _dashLedgerRow(mo, pending, pendingCount);
-  const occCard = _dashOccupancyOverview(totalSeats, filledSeats, availSeats, seatPct);
+  /* _dashOccupancyOverview() is retired, not deleted — the Occupancy Overview
+     card was removed on 7 Sep and its percentage bar moved into Seat
+     Availability, where the seats it describes already are. The function stays
+     below for one release in case the owner wants the card back; nothing calls
+     it, and the linter will say so. */
 
   return `
   ${''/* The pending-cancellations banner that stood here is gone, and so is the
@@ -498,23 +807,13 @@ function renderDashboard() {
   <!-- ══ ROW 1: KPI FINANCIAL CARDS ══ -->
   <div class="dash-kpi-grid">
 
-    <!-- Total Residents — blue. Design guide §8 opens the KPI row with the
-         people, not the money: a hostel is beds before it is rupees, and every
-         figure to its right is a consequence of this one. -->
-    <div onclick="navigate('students')" class="dsh-card dsh-card--click dh-blue">
-      <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2c0-3-4-5-8-5Z"/></svg></div>
-        <div class="dash-kpi__label">Total<br>Residents</div>
-        <div class="dash-pill-stack">
-          <span class="dash-pill ${seatPct>=90?'dh-red':seatPct>=70?'dh-green':'dh-amber'}">${seatPct}% full</span>
-        </div>
-      </div>
-      <!-- A headcount, so no currency prefix — the money-value classes are
-           reused for the typography only. -->
-      <div class="dash-kpi__value"><span class="money-value money-value--display"><span class="money-amt">${fmtNum(allActiveSeats)}</span></span><span style="font-size:13px;font-weight:500;color:var(--text3);margin-left:6px">of ${fmtNum(totalSeats)} beds</span></div>
-      <div class="dash-track"><div class="dash-track__fill" style="width:${seatPct}%"></div></div>
-      <div class="dash-kpi__sub">${newThisMonth>0?`▲ ${newThisMonth} new this month`:'No new admissions this month'}</div>
-    </div>
+    ${''/* TOTAL RESIDENTS IS GONE (owner, 7 Sep) and the five that remain share
+           its width. It was the one KPI answered better twice below it: Seat
+           Availability now carries the occupancy percentage AND the bed counts
+           in its own header, and Occupancy by Room Type breaks the same
+           headcount down by type. What is left is money, which is also what
+           makes the five read as one set rather than four plus an odd one.
+           The students page is still one click away on the rail. */}
 
     <!-- Total Revenue — blue -->
     <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-blue">
@@ -527,24 +826,29 @@ function renderDashboard() {
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
-      <div class="dash-track"><div class="dash-track__fill" style="width:${totalExpected>0?Math.round(collected/totalExpected*100):0}%"></div></div>
       <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">PKR</span>${fmtCompact(totalExpected)} expected</div>
+      ${_dashBar(collected, totalExpected, 'kbar--blue')}
     </div>
 
-    <!-- Expenses — red. Money OUT sits immediately after money IN and before
-         what is left of it: the Available Fund card next door states its own
-         figure as "collected − expenses", and it used to sit to the LEFT of the
-         expenses it subtracts, so the row asked the reader to hold a number
-         that had not been shown yet. -->
-    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
+    ${''/* PENDING AND EXPENSES SWAPPED (owner, 7 Sep). Worth recording what
+           the old order was FOR, because the swap breaks it: Expenses used to
+           sit immediately before Available Fund, whose figure is stated as
+           "collected - expenses" - so the subtrahend was on screen just before
+           the result that uses it. Expenses now sits AFTER Fund. The owner's
+           call, and the arithmetic is identical either way. */}
+    <!-- Pending — amber -->
+    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-amber">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
-        <div class="dash-kpi__label">Expenses</div>
-        <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
+        <div class="dash-kpi__label">Pending</div>
+        <div class="dash-pill-stack">
+          <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
+          <span class="dash-pill">${pendingCount} unpaid</span>
+        </div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub">this month</div>
-      ${_dashSpark(series.exp)}
+      <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
+      <div class="dash-kpi__sub">click to collect</div>
+      ${_dashBar(pending, totalExpected, 'kbar--amber')}
     </div>
 
     <!-- Available Fund — green when in profit, red when the fund is negative
@@ -569,50 +873,74 @@ function renderDashboard() {
            subtraction the headline states, month by month — nothing new is
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
-      ${_dashSpark(series.rev.map((v,i)=>v-(series.exp[i]||0)))}
+      ${_dashBar(netProfit, collected, 'kbar--green')}
     </div>
 
-    <!-- Pending — amber -->
-    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-amber">
+    <!-- Expenses — red. Money OUT sits immediately after money IN and before
+         what is left of it: the Available Fund card next door states its own
+         figure as "collected − expenses", and it used to sit to the LEFT of the
+         expenses it subtracts, so the row asked the reader to hold a number
+         that had not been shown yet. -->
+    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
-        <div class="dash-kpi__label">Pending</div>
-        <div class="dash-pill-stack">
-          <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
-          <span class="dash-pill">${pendingCount} unpaid</span>
-        </div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
+        <div class="dash-kpi__label">Expenses</div>
+        <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub">click to collect</div>
-      ${_dashSpark(series.pend)}
+      <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
+      <div class="dash-kpi__sub">this month</div>
+      ${_dashBar(moExp, collected, 'kbar--orange')}
     </div>
 
-    <!-- Cash Received — the sixth tile the sketch asks for.
-         Deliberately the LAST one, and deliberately next to Revenue: this is
-         the cash-basis figure (what should physically be in the drawer this
-         month) while Revenue is accrual (what this month earned). The two
-         differ whenever rent for August is handed over in September, and that
-         is normal rather than a fault — cashBreakdown() carries the split, and
-         the sub-line names it so the number beside Revenue never reads as a
-         contradiction. -->
-    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-green">
+    <!-- ADVANCE / ARREARS RECEIVED — the sixth tile (owner ref: nev.png,
+         7 Sep). NOTE: no backticks in this comment - it lives inside a JS
+         template literal, where one would end the string.
+
+         It replaces Cash Received, which reported the whole drawer and
+         so mostly repeated Total Revenue beside it; the interesting money is
+         the part that did NOT belong to this month.
+
+         TWO BUCKETS, AND THE MONTH ITSELF IS IN NEITHER:
+           · Advance (Upcoming) — cash taken this month against a LATER month.
+             It is already in the drawer and not yet earned.
+           · Previous Months — cash taken this month against an EARLIER one.
+             Arrears, finally collected.
+         current (this month's own rent, paid this month) is deliberately
+         excluded: that is what Total Revenue two cards left already says, and
+         a KPI that restates its neighbour is a wasted tile.
+
+         Both figures come from cashBreakdown(), which is the same function the
+         reconciliation modal uses — one answer to "what moved", not two. */ -->
+    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-violet dash-kpi--split">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-8 9a3 3 0 1 1 3-3 3 3 0 0 1-3 3Z"/></svg></div>
-        <div class="dash-kpi__label">Cash<br>Received</div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v3l2 1"/></svg></div>
+        <div class="dash-kpi__label">Advance /<br>Arrears</div>
         <div class="dash-pill-stack">
-          <span class="dash-pill dh-slate">${fmtNum(cashIn.count)} receipt${cashIn.count===1?'':'s'}</span>
+          <span class="dash-pill dh-slate">${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
         </div>
       </div>
-      <div class="dash-kpi__value">${moneyValue(cashIn.total,{size:"display",compact:true})}</div>
-      <div class="dash-track"><div class="dash-track__fill" style="width:${cashIn.total>0?Math.round(cashIn.current/cashIn.total*100):0}%"></div></div>
-      <div class="dash-kpi__sub"${cashIn.arrears>0?` title="incl. ${fmtPKR(cashIn.arrears)} arrears"`:''}>${cashIn.arrears>0?`incl. <span class="pkr">PKR</span>${fmtCompact(cashIn.arrears)} arrears`:'in the drawer this month'}</div>
-      ${''/* Opens showCashReceivedModal(), NOT the payments page. Cash Received
-             used to be a tile in the stat row this KPI replaced, and that tile
-             opened a reconciliation that balances the drawer against the books.
-             Losing that on the way into the KPI row would have quietly removed
-             the only screen that explains why this figure and Total Revenue
-             differ. tests/counter-flow-decisions.spec.js asserts it. */}
-      ${_dashSpark(series.cash)}
+      <div class="dash-kpi__value">${moneyValue(_advArr.total,{size:"display",compact:true})}</div>
+      ${_dashBar(_advArr.total, cashIn.total, 'kbar--violet')}
+      <div class="dash-kpi__split">
+        <span class="dash-kpi__srow">
+          <i class="dash-kpi__sdot dh-green"></i>
+          <span class="dash-kpi__slabel">Advance (Upcoming)</span>
+          <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.advance))}</b>
+          <em>${fmtNum(cashIn.nAdvance)}</em>
+        </span>
+        <span class="dash-kpi__srow">
+          <i class="dash-kpi__sdot dh-violet"></i>
+          <span class="dash-kpi__slabel">Previous Months</span>
+          <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.arrears))}</b>
+          <em>${fmtNum(cashIn.nArrears)}</em>
+        </span>
+      </div>
+      ${''/* Still opens showCashReceivedModal(), NOT the payments page — that
+             reconciliation is the screen that explains why this figure and
+             Total Revenue differ, and counter-flow-decisions.spec.js asserts
+             the tile keeps it. The sparkline is dropped: this card carries two
+             rows of real figures now, and §9 of the design system says not to
+             add a trend graphic where the metric does not need one. */}
     </div>
   </div>
 
@@ -680,20 +1008,36 @@ function renderDashboard() {
   <!-- Seat availability — interactive room grid -->
     <div class="dash-sec">
       <div class="dash-sec__head">
-        <div class="dash-chip dh-violet" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
-        <span class="dash-sec__title">Seat Availability</span>
-        <!-- db3 puts the three counts INLINE here, not in a block of tiles
-             below. Same three numbers, one line instead of ~70px of card, and
-             the height goes to the room grid — which is what the owner asked
-             for: more rooms visible. Each is still the click target it was. -->
-        <div class="seat-inline">
-          <button class="seat-inline__k" onclick="showSeatDetailModal('rooms')" title="All seats">
-            <b>${totalSeats}</b><span>Total</span></button>
-          <button class="seat-inline__k dh-green" onclick="showSeatDetailModal('vacant')" title="Free seats">
-            <b>${availSeats}</b><span>Free</span></button>
-          <button class="seat-inline__k" onclick="showSeatDetailModal('occupied')" title="Filled seats">
-            <b>${allActiveSeats}</b><span>Filled</span></button>
+        <div class="seat-hd">
+          <div class="seat-hd__t">Seat Availability</div>
+          <div class="seat-hd__s">Live room occupancy status</div>
         </div>
+        <!-- THE THREE COUNTS SIT IN THE TOP CORNER (owner ref: the seat-header
+             reference of 7 Sep). Label above figure, right-aligned,
+             out of the way of the room grid — which is the point: every pixel
+             this header does not take is another row of rooms on screen. Each
+             is still the click target it was. -->
+        <div class="seat-inline">
+          <button class="seat-inline__k" onclick="showSeatDetailModal('rooms')" title="Every seat in the hostel">
+            <span>Total Beds</span><b>${totalSeats}</b></button>
+          <button class="seat-inline__k is-free" onclick="showSeatDetailModal('vacant')" title="Seats nobody is in">
+            <span>Free Beds</span><b>${availSeats}</b></button>
+          <button class="seat-inline__k" onclick="showSeatDetailModal('occupied')" title="Seats with a resident">
+            <span>Filled Beds</span><b>${allActiveSeats}</b></button>
+        </div>
+      </div>
+      <!-- THE OCCUPANCY BAR, moved here from the Occupancy Overview card
+           (owner, 7 Sep). That card carried one figure and one bar and sat
+           beside two other cards describing the same seats; the bar is the part
+           worth keeping, and this is where the seats are. It reads ABOVE the
+           counts because it is the summary of them. -->
+      <div class="seat-occbar">
+        <div class="seat-occbar__top">
+          <span class="seat-occbar__pct">${seatPct}%</span>
+          <span class="seat-occbar__of">${fmtNum(filledSeats)} of ${fmtNum(totalSeats)} beds occupied</span>
+        </div>
+        <div class="seat-occbar__bar"><i style="width:${Math.min(100, seatPct)}%"></i></div>
+        <div class="seat-occbar__ends"><span>0%</span><span>100%</span></div>
       </div>
       ${''/* The three-tile summary block that stood here is gone — the same
              counts now sit inline in the header above, as db3 draws them. That
@@ -706,7 +1050,13 @@ function renderDashboard() {
              counts already does, and Print lives on the Rooms page. */}
       <!-- Per-room mini tiles -->
       <div class="dash-room-wrap">
-        ${DB.rooms.map(r=>{
+        ${''/* NUMERIC ORDER, 1 UPWARD (owner, 7 Sep: "numbering from 1 to
+               continue"). DB.rooms is in insertion order, so a room added later
+               sat wherever it was created and the grid read 1, 2, 5, 3, 4.
+               localeCompare with numeric:true sorts '10' after '9' rather than
+               after '1', which a plain string sort does not — and room numbers
+               are strings here because some hostels use '2A'. */}
+        ${DB.rooms.slice().sort((a,b)=>String(a.number||'').localeCompare(String(b.number||''),undefined,{numeric:true,sensitivity:'base'})).map(r=>{
           const rtype2=getRoomType(r);
           const cap=rtype2?.capacity||1;
           const occ2=getRoomOccupancy(r);
@@ -718,39 +1068,27 @@ function renderDashboard() {
           </div>`;
         }).join('')}
       </div>
-      <div style="display:flex;gap:12px;margin-top:9px;flex-wrap:wrap;align-items:center">
-        <span class="dash-key dh-violet"><i></i>Has free seats</span>
-        <span class="dash-key dh-slate"><i></i>Full</span>
-        <span style="font-size:10px;color:var(--text3);margin-left:auto;display:inline-flex;align-items:center;gap:3px"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a3 3 0 0 0-3 3v6.17l-.88-.88a2.5 2.5 0 0 0-3.54 3.54l5.5 5.5A5 5 0 0 0 11.54 21H15a5 5 0 0 0 5-5v-5a3 3 0 0 0-5-2.24V8a3 3 0 0 0-3-3 2.94 2.94 0 0 0-1 .18V5a3 3 0 0 0-1-3Z"/></svg> tap any room</span>
-        ${''/* EXPAND AND PRINT ARE BACK (owner, 2026-09-06, reversing the
-             2026-09-05 removal). The old argument was that both were reachable
-             elsewhere — Expand is what tapping a room does, Print lives on the
-             Rooms page. Reachable is not findable: this card is where a warden
-             is looking at seats, and tapping a room gets you ONE room, not the
-             whole grid at a readable size.
-
-             In the FOOTER, not the header, and that is measured rather than
-             preferred. The header carries a chip, a title and three counts, and
-             `.seat-inline` holds `margin-left:auto` — which absorbs all the free
-             space, so anything after it wraps onto a second line. Fixing that
-             auto margin bought back 1536px, but at 1366 the header genuinely has
-             no room: the buttons wrapped it 30px -> 62px, and every one of those
-             pixels comes out of the room grid, which is the opposite of what this
-             card was rebuilt for. This strip is one line with slack at every
-             width, and it sits directly under the grid they act on.
-
-             printSeatAvailability() was never deleted — only its button was, so
-             this is a button returning to a live function. */}
-        <span class="seat-foot__acts">
-          <button class="seat-foot__b" onclick="showSeatDetailModal('rooms')"
-                  title="Expand — every room at a readable size" aria-label="Expand seat availability">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>Expand
-          </button>
-          <button class="seat-foot__b" onclick="printSeatAvailability()"
-                  title="Print the seat availability sheet" aria-label="Print seat availability">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print
-          </button>
-        </span>
+      ${''/* ONE LINK, NOT A LEGEND AND TWO BUTTONS (owner, 7 Sep, asked
+             directly). The Has free / Full key and the Expand and Print
+             buttons came to 44px - which is exactly the second row of six
+             rooms, and the owner chose the rooms. Both dropped things survive:
+             the key is answered by the tiles themselves (blue has a bed going,
+             grey does not, and each tile prints its own fraction), and Expand
+             and Print are on the Rooms page this link opens. */}
+      <div class="seat-foot">
+        ${''/* EXPAND AND PRINT, NOT A LINK (owner, 7 Sep - reversing their own
+               answer of an hour earlier). They sit on the SAME single line the
+               link occupied, right-aligned, rather than on a row of their own:
+               that is the difference between costing 4px and costing 28, and
+               28 is the second row of six rooms. */}
+        <button class="seat-foot__b" onclick="showSeatDetailModal('rooms')"
+                title="Expand - every room at a readable size" aria-label="Expand seat availability">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>Expand
+        </button>
+        <button class="seat-foot__b" onclick="printSeatAvailability()"
+                title="Print the seat availability sheet" aria-label="Print seat availability">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print
+        </button>
       </div>
     </div>
   ${P.glance}
@@ -777,18 +1115,32 @@ function renderDashboard() {
 
     <div class="rt-body">
       <div class="rt-left">
-        <div class="rt-donut">
-          <!-- No width/height attributes: the chart is responsive:true, so
-               Chart.js sizes the backing store to this box and to the device
-               pixel ratio itself. Hard-coding them made it lay out against the
-               attribute size and draw the ring smaller than, and off-centre in,
-               its container. -->
-          <canvas id="dash-roomtype-donut"></canvas>
-          <div class="rt-donut__c">
-            <div class="rt-donut__n">${filledSeats}<span>/${totalSeats}</span></div>
-            <div class="rt-donut__l">Seats Occupied</div>
-          </div>
-        </div>
+        ${''/* ONE RING COMPONENT FOR THE WHOLE DASHBOARD (owner, 7 Sep: this
+               chart "should behave like collection by payment method in both
+               dark and light mode"). This was a Chart.js canvas and the
+               Collection card is an SVG _dashDonut(): two rings, two hover
+               behaviours, two ways of picking a colour, and only one of them
+               followed the theme - a canvas bakes its stroke colours at draw
+               time, so a theme switch left the old palette until the next
+               render. Same function now, so the slice pop, the pointer popup,
+               the click-through and the theme all come for free and cannot
+               drift apart again.
+
+               The slice is a room TYPE, so it opens Rooms rather than
+               Payments. */}
+        ${_dashDonut(
+            (DB.settings.roomTypes||[]).map(t => {
+              const tR = DB.rooms.filter(r => r.typeId === t.id);
+              const filled = DB.students.filter(s => s.status==='Active' && !s.isForced
+                                && tR.some(r => r.id === s.roomId)).length;
+              return { value: filled, color: t.color || 'var(--accent)', name: t.name,
+                       amount: filled,
+                       label: t.name + ' — ' + filled + ' of ' + (tR.length * t.capacity) + ' seats filled',
+                       onclick: "navigate('rooms')" };
+            }).filter(x => x.value > 0),
+            '<span class="dnut__fig">' + fmtNum(filledSeats) + '<span class="rt-of">/' + fmtNum(totalSeats) + '</span></span>',
+            'Seats Occupied',
+            { aria: 'Occupied seats by room type', money: false })}
         <div class="rt-stat">
           <span class="rt-stat__ic dh-blue"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3-4-5-8-5Z"/></svg></span>
           <div class="rt-stat__c"><b>${filledSeats}</b><span>Occupied</span></div>
@@ -813,7 +1165,6 @@ function renderDashboard() {
       Occupancy percentage is calculated based on available seats in each room type.
     </div>
   </div>
-  ${occCard}
   ${P.needs}
   ${P.actions}
   </div><!-- end row C -->
@@ -821,12 +1172,16 @@ function renderDashboard() {
   <!-- ══ ROW D: COLLECTION BY METHOD + PENDING PAYMENTS ══ -->
   <div class="dash-split">
   ${P.methods}
-  <div class="dash-sec" style="display:flex;flex-direction:column">
+  <div class="dash-sec dl-pending" style="display:flex;flex-direction:column">
       <div class="dash-sec__head">
-        <div class="dash-chip dh-amber" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10.59 3.7 3.71a1 1 0 0 1-1.4 1.42L11 13.41V6a1 1 0 0 1 2 0Z"/></svg></div>
+        <!-- The hourglass the reference draws, on the amber tile it draws it on:
+             pending is a WAITING state, not a clock running out. -->
+        <div class="dash-chip dash-chip--sm dl-pend__ico"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M6 2h12v2c0 2.5-1.6 4.7-4 5.6v.8c2.4.9 4 3.1 4 5.6v2H6v-2c0-2.5 1.6-4.7 4-5.6v-.8C7.6 8.7 6 6.5 6 4V2Zm2 2c0 1.9 1.3 3.6 3.2 4.1l.8.2.8-.2C14.7 7.6 16 5.9 16 4H8Z"/></svg></div>
         <span class="dash-sec__title">Pending Payments</span>
-        <span class="dash-pill dh-slate">${pendingCount}</span>
-        ${pendingCount>0?`<button class="dash-link" style="margin-left:auto" onclick="navigate('payments')">View All</button>`:''}
+        <!-- Red, not slate. A count of unpaid records is a debt, and the
+             reference colours it as one (design system §2.1 error tint). -->
+        <span class="dl-pend__count">${pendingCount}</span>
+        ${pendingCount>0?`<button class="dash-link dl-pend__all" onclick="openPaymentsPending()">View All <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>`:''}
       </div>
       <div style="flex:1;overflow-y:auto;max-height:288px">
       ${(()=>{const moPending=DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,mo));return moPending.length===0?
@@ -838,29 +1193,40 @@ function renderDashboard() {
           const ini = nm.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
           return '<div class="dash-pay">'
           +'<div class="dash-av '+_dashAvatarHue(nm)+'">'+escHtml(ini)+'</div>'
-          +'<div class="dash-pay__id" onclick="showViewStudentModal(\''+p.studentId+'\')">'
+          +'<div class="dash-pay__id" onclick="showStudentPanel(\''+p.studentId+'\')">'
           +'<div class="dash-pay__name">'+escHtml(p.studentName||'')+'</div>'
-          +'<div class="dash-pay__room">Room '+escHtml(p.roomNumber||'?')+' · '+escHtml(p.month||'—')+'</div>'
+          +'<div class="dash-pay__room">Room '+escHtml(p.roomNumber||'?')+' · '+escHtml(monthLabel(p.month)||'—')+'</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">'
           +'<div>'
-          +'<div class="dash-pay__amt">'+fmtPKR(unpaidShow)+'</div>'
+          /* FULL, UNTIL IT IS ABSURD. `exact .png` prints "PKR 10,000" and the
+             written spec asks for "PKR 10K"; the owner settled it on 7 Sep -
+             the real figure, because a warden reconciles it, switching to
+             compact only past a crore where the digits stop being readable.
+             fmtCompact() is exactly that rule and already existed. */
+          +'<div class="dash-pay__amt" title="'+escHtml(fmtPKR(unpaidShow))+'">PKR '+escHtml(fmtCompact(unpaidShow))+'</div>'
           +'<div class="dash-pay__due">'+(p.dueDate?'Due: '+fmtDate(p.dueDate):'unpaid')+'</div>'
           +'</div>'
           +'<span class="dash-status '+due.hue+'">'+due.label+'</span>'
-          +'<button class="dash-icon-btn dh-green" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\');renderPage(\'dashboard\')" title="Mark paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
-          +'<button class="dash-icon-btn dh-slate" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" title="Edit"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
+          +'<button class="dash-icon-btn dh-green" onclick="event.stopPropagation();markPaymentPaid(\''+p.id+'\')" title="Mark paid" aria-label="Mark this payment paid"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm5.71 8.71-6 6a1 1 0 0 1-1.42 0l-3-3a1 1 0 1 1 1.42-1.42L11 14.59l5.29-5.3a1 1 0 0 1 1.42 1.42Z\"/></svg></button>'
+          +'<button class="dash-icon-btn dh-green dash-icon-btn--wa" onclick="event.stopPropagation();waRemindStudent(\''+p.studentId+'\')" title="Send a WhatsApp reminder" aria-label="Send a WhatsApp reminder"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.26-.46-2.39-1.48-.88-.79-1.48-1.76-1.65-2.06-.18-.3-.02-.46.13-.6.13-.14.3-.35.44-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.49.7.3 1.26.49 1.69.62.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.42-.08-.12-.28-.2-.57-.34M12.05 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.89 9.89-9.89 2.64 0 5.12 1.03 6.99 2.9a9.83 9.83 0 0 1 2.89 6.99c0 5.45-4.43 9.89-9.88 9.89\"/></svg></button>'
+          +'<button class="dash-icon-btn dh-slate" onclick="event.stopPropagation();showEditPaymentModal(\''+p.id+'\')" title="Edit" aria-label="Edit this payment"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z\"/></svg></button>'
           +'</div></div>';
         }).join('')})()}
       </div>
-      ${pendingCount>0?`<div style="padding-top:11px;border-top:1px solid var(--border);margin-top:auto"><button class="btn btn-sm" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:#fff;border:none;border-radius:10px;font-weight:700;letter-spacing:.2px" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder</button></div>`:''}
+      ${pendingCount>0?`<div class="dl-pend__foot"><button class="dl-remind" onclick="showRentReminderModal()"><svg class=\"icon icon-xs\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z\"/></svg> Send Rent Reminder (${pendingCount} pending)</button></div>`:''}
+      ${''/* The bar is HIDDEN at zero, not disabled — lower spec §36: "do not
+             show the reminder button if there are zero eligible recipients". */}
     </div>
   </div><!-- end row3+4 grid -->
 
   <!-- ══ ROW 5: THE LEDGER ROW (design 1c) ══ -->
 
   <!-- ══ ROW 6: RECENT PAYMENTS ══ -->
-  ${_dashRecentPayments(recentPay, mo, collected)}`;
+  ${_dashRecentPayments(recentPay, mo, collected)}
+
+  <!-- ══ ROW 7: STATUS FOOTER ══ -->
+  ${_dashFooter()}`;
 }
 
 /* ══ THE LEDGER ROW — design 1c ══════════════════════════════════════════════
@@ -954,19 +1320,63 @@ function _dlGlance(mo) {
 }
 
 /** Payments settled this month, grouped by method. Shares `calcRevenue`'s month test. */
+/* THE METHOD LIST IS `DB.settings.paymentMethods`, NOT whatever strings turn up
+   in the data (owner, 7 Sep: "collection by method are parsing all payment
+   methods"). Grouping on the raw field meant every spelling of a method became
+   its own slice — 'Cash', 'cash' and 'Cash ' are three rows and three colours
+   for one wallet, and a legacy value from an older build added a fourth. The
+   lower-section spec §9 says it outright: use the configured list, and do not
+   invent methods.
+
+   So: normalise each payment against the configured names (trimmed,
+   case-insensitive), and fold anything that matches nothing into a single
+   'Other'.
+
+   EVERY CONFIGURED METHOD IS LISTED, WITH OR WITHOUT MONEY (owner, 7 Sep: "fix
+   wire the payment types whether it has balance or not"). A method at zero is
+   a reading: it says nobody paid that way this month, which is the answer to a
+   question a warden actually asks about a wallet they have just enabled. The
+   earlier build dropped them, so a newly configured method simply never
+   appeared and looked unwired. Zero rows draw muted and contribute no arc —
+   they cannot, having no value — so the ring is unchanged by them.
+
+   ORDER IS BY SIZE, DESCENDING, which is what both reference renders show and
+   what the ring beside it reads as: the biggest slice starts at twelve o'clock
+   and the list under the eye runs the same way. 'Other' sits last whatever its
+   size — it is a residue, not a wallet.
+
+   'Other' is never invented: it appears only when real money arrived under a
+   name Settings does not know, and hiding that would lose rupees from a total
+   that still has to add up. */
 function _dlMethods(mo) {
   const paid = (DB.payments || []).filter(p => p.status === 'Paid' && _payMatchesMonth(p, mo));
   const total = paid.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const byName = new Map();
+
+  const configured = (DB.settings && Array.isArray(DB.settings.paymentMethods) && DB.settings.paymentMethods.length)
+    ? DB.settings.paymentMethods.slice()
+    : ['Cash', 'JazzCash', 'EasyPaisa', 'Bank Transfer'];
+  const canon = new Map();                       // lower-cased -> configured spelling
+  configured.forEach(m => canon.set(String(m).trim().toLowerCase(), String(m).trim()));
+
+  const sums = new Map();
+  configured.forEach(m => sums.set(String(m).trim(), 0));
+  let other = 0;
   for (const p of paid) {
-    // An empty method is "Other" rather than a blank row: the figure is real
-    // money and must still be shown, just not under an invented name.
-    const name = String(p.method || '').trim() || 'Other';
-    byName.set(name, (byName.get(name) || 0) + Number(p.amount || 0));
+    const key = String(p.method || '').trim().toLowerCase();
+    const name = canon.get(key);
+    if (name) sums.set(name, (sums.get(name) || 0) + Number(p.amount || 0));
+    else other += Number(p.amount || 0);
   }
-  const rows = [...byName.entries()]
-    .map(([name, amount]) => ({ name, amount, pct: total > 0 ? (amount / total * 100) : 0 }))
+
+  const rows = configured
+    .map(m => String(m).trim())
+    .map(name => ({ name, amount: sums.get(name) || 0,
+                    pct: total > 0 ? ((sums.get(name) || 0) / total * 100) : 0 }))
+    /* Size order, descending, as both reference renders show — and the zeros
+       fall to the bottom of their own accord rather than needing a rule. */
     .sort((a, b) => b.amount - a.amount);
+  if (other > 0) rows.push({ name: 'Other', amount: other,
+                             pct: total > 0 ? (other / total * 100) : 0 });
   return { rows, total };
 }
 
@@ -1033,15 +1443,90 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       : '<div class="dl-glance__row dl-glance__row--static">' + inner + '</div>';
   }).join('');
 
+  /* A STABLE COLOUR PER METHOD. The donut and the row dot have to agree, and
+     the same method must keep its colour from one month to the next — a wallet
+     that is blue in September and green in October makes the two months look
+     like different reports. Keyed by name, with a deterministic fallback so a
+     method configured later still gets a fixed colour rather than a random one.
+
+     These are the design system's chart tokens (§17.2) plus two neighbours;
+     they are NOT the status colours, because a payment method is not a state
+     and green here would read as "good". */
+  /* CASH TAKES THE STRONG BLUE (owner, 7 Sep). The reference mock has EasyPaisa
+     dominant and blue, but that is the mock's data — in this hostel cash is the
+     method most of the money actually arrives by, and the heaviest slice should
+     carry the heaviest colour or the ring reads upside down. The two swap
+     rather than both going blue: two slices in one hue is not a chart. */
+  const METHOD_HUES = {
+    'cash':          '#2563EB',
+    'easypaisa':     '#93C5FD',
+    'jazzcash':      '#16A34A',
+    'bank transfer': '#D97706',
+    'bank':          '#D97706',
+    'cheque':        '#7C3AED',
+    'other':         '#94A3B8',
+  };
+  /* SPARE HUES FOR METHODS THE OWNER ADDS IN SETTINGS. Every one of these is
+     far from all six named hues above — no second blue, and NO SECOND GREEN,
+     which is the bug being fixed: 'Crypto' is owner-added, fell to a hashed
+     pick, and drew #65A30D, a lime a few degrees off JazzCash's #16A34A. Two
+     wallets in the same green is not a chart (owner, 7 Sep). */
+  const METHOD_SPARE = ['#DB2777', '#0891B2', '#EA580C', '#4F46E5', '#0F766E',
+                        '#A21CAF', '#B45309', '#334155'];
+
+  /* Allocated BY POSITION among the unnamed methods rather than by hashing the
+     name. A hash can collide however long the spare list is, and the failure
+     is invisible until two particular wallets happen to be configured
+     together; walking the list cannot collide at all. Order comes from
+     Settings, so a method keeps its colour from month to month — only adding
+     or removing one above it in the list can move it. */
+  const _spareFor = new Map();
+  ((DB.settings && DB.settings.paymentMethods) || []).forEach(m => {
+    const k = String(m || '').trim().toLowerCase();
+    if (!k || METHOD_HUES[k] || _spareFor.has(k)) return;
+    _spareFor.set(k, METHOD_SPARE[_spareFor.size % METHOD_SPARE.length]);
+  });
+  const _methodHue = (name) => {
+    const k = String(name || '').trim().toLowerCase();
+    return METHOD_HUES[k] || _spareFor.get(k) || '#94A3B8';
+  };
+
   const methodRows = methods.rows.length
-    ? methods.rows.map(m =>
-        '<div class="dl-meth__row">'
+    ? methods.rows.map(m => {
+        const hue = _methodHue(m.name);
+        /* CLICKING A ROW GOES TO PAYMENTS (lower spec §10). The method filter
+           is not a thing the Payments screen takes as an argument, so this
+           navigates rather than pretending to pre-filter — §10's own fallback:
+           "keep the row informational rather than inventing a new workflow". */
+        return '<button class="dl-meth__row' + (m.amount > 0 ? '' : ' is-zero')
+        + '" onclick="openPaymentsByMethod(&quot;' + escHtml(m.name) + '&quot;)"'
+        + ' title="' + escHtml(m.name) + ' — ' + escHtml(fmtPKR(m.amount)) + ' this month. Open Payments.">'
+        + '<span class="dl-meth__dot" style="background:' + escHtml(hue) + '"></span>'
         + '<span class="dl-meth__name">' + escHtml(m.name) + '</span>'
-        + '<span class="dl-meth__bar"><i style="width:' + m.pct.toFixed(1) + '%"></i></span>'
+        + '<span class="dl-meth__bar"><i style="width:' + m.pct.toFixed(1) + '%;background:'
+          + escHtml(hue) + '"></i></span>'
         + '<span class="dl-meth__pct">' + m.pct.toFixed(1) + '%</span>'
-        + '<span class="dl-meth__amt">' + fmtPKR(m.amount) + '</span>'
-        + '</div>').join('')
-    : '<div class="dl-empty">No payments settled this month yet.</div>';
+        + '<span class="dl-meth__amt">' + escHtml(fmtPKRk(m.amount)) + '</span>'
+        + '</button>';
+      }).join('')
+    : '';
+
+  /* THE DONUT, or nothing. §36: an empty month must not draw a full ring —
+     that reads as "one method took everything" rather than "nothing came in". */
+  const methodDonut = methods.total > 0
+    ? _dashDonut(
+        methods.rows.map(m => ({ value: m.amount, color: _methodHue(m.name),
+                                 name: m.name, amount: m.amount,
+                                 label: m.name + ' — ' + fmtPKR(m.amount) + '. Open Payments.',
+                                 onclick: 'openPaymentsByMethod(&quot;' + escHtml(m.name) + '&quot;)' })),
+        /* PKR ON ITS OWN LINE, above the figure - `exact .png`. Inline it
+           competes with the number for the widest line in a 76px hole, and the
+           number is the thing being read. */
+        '<span class="dnut__cur">PKR</span><span class="dnut__fig">'
+          + escHtml(fmtCompactK(methods.total)) + '</span>',
+        'Total Collected',
+        { aria: 'Collection by payment method for ' + thisMonthLabel() })
+    : '';
 
   /* QUICK ACTIONS — four, per the owner's `quick.png`.
 
@@ -1139,12 +1624,42 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +   '<div class="dl-glance">' + glanceRows + '</div>'
       + '</div>',
 
+    /* COLLECTION BY METHOD (lower-section spec §5-§10).
+
+       THE MONTH CHIP IS NOT A SECOND MONTH PICKER. §3 says do not modify the
+       existing date/month selector, and there already is one — in the sidebar,
+       where every figure on this screen is scoped from. So the chip REPORTS
+       the selected month and opens that picker; it does not keep a scope of
+       its own. Two controls that both set the month is how a screen ends up
+       showing September in one card and August in the next. */
     methods:
-        '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head"><span class="dash-sec__title">Collection by Method</span>'
-      +   (methods.total > 0 ? '<span class="dl-head__total">' + fmtPKR(methods.total) + '</span>' : '')
+        '<div class="dash-sec dl-panel dl-coll">'
+      +   '<div class="dash-sec__head">'
+      +     '<div class="dash-chip dh-blue dash-chip--sm">'
+      +       '<svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px">'
+      +       '<path d="M4 20h3v-8H4Zm6.5 0h3V4h-3Zm6.5 0h3v-12h-3Z"/></svg></div>'
+      +     '<span class="dash-sec__title">Collection by Method</span>'
+      +     '<button class="dl-monthchip" onclick="toggleSbCal()"'
+      +       ' title="Every figure here follows the sidebar month. Open the picker.">'
+      +       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"'
+      +       ' stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/>'
+      +       '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>'
+      +       '<span>' + escHtml(thisMonthLabel()) + '</span>'
+      +       '<svg class="dl-monthchip__cv" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+      +       ' stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+      +       '<path d="m6 9 6 6 6-6"/></svg>'
+      +     '</button>'
       +   '</div>'
-      +   '<div class="dl-meth">' + methodRows + '</div>'
+      +   (methods.total > 0
+            ? '<div class="dl-coll__body">'
+              + methodDonut
+              + '<div class="dl-meth">' + methodRows + '</div>'
+              + '</div>'
+            /* §36's exact words, and no chart at all. */
+            : '<div class="dl-empty dl-empty--tall">'
+              + '<div class="dl-empty__t">No collections yet</div>'
+              + '<div class="dl-empty__s">No payments recorded for '
+              + escHtml(thisMonthLabel()) + '.</div></div>')
       + '</div>',
 
     needs:
@@ -1290,7 +1805,7 @@ function _dashRecentPayments(list, mo, collected) {
     const unpaid = outstandingOf(p);
     const name   = String(p.studentName || '?');
     const menu =
-      '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showViewStudentModal\',\'' + p.studentId + '\')">' + _rpIco('eye') + 'View student</button>'
+      '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showStudentPanel\',\'' + p.studentId + '\')">' + _rpIco('eye') + 'View student</button>'
       + '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'printReceipt\',\'' + p.id + '\')">' + _rpIco('receipt') + 'Print receipt</button>'
       + (mayEdit
           ? '<button class="dash-rp-menu__item" onclick="_dashRowAct(event,\'showEditPaymentModal\',\'' + p.id + '\')">' + _rpIco('pencil') + 'Edit payment</button>'
@@ -1299,7 +1814,7 @@ function _dashRecentPayments(list, mo, collected) {
                 : '')
           : '');
 
-    return '<tr class="dash-rp-row" onclick="showViewStudentModal(\'' + p.studentId + '\')">'
+    return '<tr class="dash-rp-row" onclick="showStudentPanel(\'' + p.studentId + '\')">'
       + '<td><div class="dash-rp-who"><div class="dash-rp-av">' + escHtml((name.trim()[0] || '?').toUpperCase()) + '</div>'
         + '<span class="dash-rp-name">' + escHtml(name) + '</span></div></td>'
       + '<td><span class="dash-rp-room">#' + escHtml(String(p.roomNumber || '')) + '</span></td>'
@@ -1437,7 +1952,7 @@ function showRoomSeatDetailModal(roomId) {
           </div>
         </div>
         <div style="display:flex;gap:5px">
-          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showViewStudentModal('${s.id}')"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7Zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5Z"/><circle cx="12" cy="12" r="2.2"/></svg> View</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showStudentPanel('${s.id}')"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7Zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5Z"/><circle cx="12" cy="12" r="2.2"/></svg> View</button>
           <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="closeModal();showEditStudentModal('${s.id}')"><svg class="icon icon-xs" viewBox="0 0 24 24" fill="currentColor"><path d="m20.71 7.04-2.75-2.75a1 1 0 0 0-1.41 0L4.29 16.55a1 1 0 0 0-.29.71V20a1 1 0 0 0 1 1h2.74a1 1 0 0 0 .71-.29L20.71 8.46a1 1 0 0 0 0-1.42Z"/></svg> Edit</button>
         </div>
       </div>`;
@@ -1815,7 +2330,7 @@ function showSeatDetailModal(type) {
     else activeStudents.forEach(s=>{
       const room=DB.rooms.find(r=>r.id===s.roomId);
       const rtype=room?getRoomType(room):null;
-      rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();showViewStudentModal('${s.id}')">
+      rows+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();showStudentPanel('${s.id}')">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:32px;height:32px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${escHtml(s.name[0])}</div>
           <div>
@@ -2577,6 +3092,30 @@ function drawTrendChart() {
     badge.style.left=left+'px'; badge.style.top=top+'px'; badge.style.display='block';
   }
 
+  /* THE BADGE MUST GO WHEN THE CHART MOVES UNDER IT (owner, 7 Sep: "revenue
+     trend pop hover kept on also when the page is drag down").
+
+     It is position:fixed and placed from the last mouse event's VIEWPORT
+     coordinates. Scrolling with the wheel moves the canvas out from under a
+     stationary pointer without firing a single mousemove, so Chart.js's
+     onHover never runs its else-branch and the badge is left floating over
+     whatever scrolled into its place — pinned to the viewport, describing a
+     month that is no longer there.
+
+     Three ways out, because scrolling is not the only way to leave a chart
+     without moving the mouse: the scroll container, the window, and the
+     canvas's own mouseleave (which Chart.js does not guarantee to translate
+     into an empty onHover). `capture:true` on the scroll listener catches the
+     inner #content scroller, whose scroll events do not bubble to window. */
+  function hideBadge() { if (badge) badge.style.display = 'none'; }
+  if (badge && !badge._wired) {
+    badge._wired = true;
+    document.addEventListener('scroll', hideBadge, true);
+    window.addEventListener('resize', hideBadge);
+    const _cv = document.getElementById('trend-canvas');
+    if (_cv) _cv.addEventListener('mouseleave', hideBadge);
+  }
+
   // Supporting series. Nulls pass through exactly as they do for revenue, so
   // all four lines stop at the current month; datalabels are off so only the
   // revenue figures are called out.
@@ -2589,6 +3128,7 @@ function drawTrendChart() {
       // rather than a comparison. Same faint treatment for months with no
       // record, so both series describe the gap the same way.
       backgroundColor: function (c) { return real[c.dataIndex] ? hex : hex + '33'; },
+      hoverBackgroundColor: function (c) { return real[c.dataIndex] ? hex : hex + '80'; },
       borderColor: 'transparent', borderWidth: 0,
       borderRadius: 3, borderSkipped: false,
       categoryPercentage: 0.72, barPercentage: 0.92,
@@ -2623,6 +3163,17 @@ function drawTrendChart() {
         },
         borderColor:'transparent', borderWidth:0,
         borderRadius:3, borderSkipped:false,
+        /* THE BAR ANSWERS THE POINTER (owner, 7 Sep: "make the revenue trend
+           bar dynamic"). It was inert - the hover badge appeared but the chart
+           itself never acknowledged which month it was describing, so on a
+           twelve-bar year you read the badge and then hunted for the column it
+           belonged to. The hovered bar goes solid and the faint months come up
+           with it; the rest are untouched, so the highlight reads as "this
+           one" rather than as the chart changing. */
+        hoverBackgroundColor:function(c){
+          return real[c.dataIndex] ? cRevenue : cRevenue+'80';
+        },
+        hoverBorderColor:cRevenue, hoverBorderWidth:2,
         // Bars carry the category width between them; a category percentage
         // near 1 with a bar percentage below it puts the air INSIDE the pair,
         // which is what makes a two-series comparison readable.
@@ -2655,8 +3206,29 @@ function drawTrendChart() {
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      animation:false,
-      layout:{padding:{top:50,right:10,left:4,bottom:0}},
+      /* THE BARS GROW IN, ONCE. `animation:false` made the chart appear
+         complete, which on a range switch was indistinguishable from nothing
+         having happened - the whole point of the Quarter / 6 Months / Year
+         control is that the chart CHANGES, and it has to be seen to.
+
+         260ms and only the height: no fade, no stagger, nothing that would
+         still be moving while the figure is read. Design system §22 allows a
+         value transition and forbids continuously animated charts; this is the
+         former. Respecting the OS setting is not optional (§22 again). */
+      animation: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? false : { duration: 260, easing: 'easeOutQuart' },
+      /* INDEX MODE: hovering a month lights BOTH its bars and the badge reports
+         both. Per-dataset hovering meant the badge said "Revenue and Expenses"
+         while only one of the two columns responded. */
+      interaction: { mode: 'index', intersect: false },
+      hover: { mode: 'index', intersect: false },
+      /* TOP PADDING 50 -> 6 (owner, 7 Sep: the plot should come up to the
+         Quarter / 6 Months / Year line). The 50 was reserved for the rise/fall
+         datalabels that floated above each bar - those were removed when they
+         started printing things like "+157902725.6%" against a near-zero
+         baseline, and the gap they needed was never given back. It was 50px of
+         nothing between the card's header and the top of the chart. */
+      layout:{padding:{top:6,right:10,left:4,bottom:0}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       onHover:function(event,els){
         if(els.length>0){
@@ -2745,7 +3317,7 @@ function dashGlobalSearch(query) {
         title: s.name || '—',
         sub: 'ID: ' + s.id + ' · Room ' + roomLabel + (s.occupation ? ' · ' + s.occupation : '') + (s.phone ? ' · ' + s.phone : ''),
         badge: statusBadge(s.status || 'Active'),
-        action: "showViewStudentModal('" + s.id + "')"
+        action: "showStudentPanel('" + s.id + "')"
       });
     }
   });

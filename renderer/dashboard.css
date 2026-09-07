@@ -19,15 +19,24 @@
     position: relative;
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px 18px;
-    box-shadow: var(--shadow);
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    /* 12, not 16 (design system §5: "Large card 12px"). Every radius on this
+       screen now comes off the same four-step ladder - 12 card, 10 small card,
+       8 control, 999 pill - so a card and the chip inside it no longer round
+       at two unrelated rates. */
+    border-radius: 12px;
+    padding: 16px;
+    /* §6 --shadow-card. The app's --shadow is heavier and was tuned for the
+       dark ground; on the light page it read as a halo. */
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+    transition: box-shadow .12s ease, border-color .12s ease;
 }
 .dsh-card--click { cursor: pointer; }
+/* §1.6 hover is a SHADOW AND A BORDER, and §22 says avoid decorative motion.
+   The -3px lift that stood here moved six KPI cards under the pointer on a
+   screen whose whole job is to be read, so it is gone; the card still answers
+   the pointer, it just does not jump to do it. */
 .dsh-card--click:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-royal, var(--shadow));
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
     border-color: var(--border2);
 }
 
@@ -72,7 +81,14 @@
 .dash-tile__caret { margin-left:auto; flex-shrink:0; font-size:20px; line-height:1; color:var(--text3); }
 
 /* ── Section cards ───────────────────────────────────────────────────────── */
-.dash-sec        { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; }
+/* --sec-pad-x IS THE CARD'S OWN HORIZONTAL PADDING, published as a variable so
+   the one thing that has to match it can read it instead of guessing: the
+   Recent Payments table is full-bleed via a negative margin, and that margin was
+   hard-coded -16 while this padding was later changed to 14 in the density
+   block below. The table ended up 1px OUTSIDE its card on both sides
+   (235/1333 in a card running 236/1332) - which is the misaligned edge the
+   owner could see and no rule in this file admitted to. */
+.dash-sec        { --sec-pad-x:16px; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px var(--sec-pad-x); }
 .dash-sec__head  { display:flex; align-items:center; gap:9px; margin-bottom:12px; flex-wrap:wrap; }
 .dash-sec__title { font-size:14px; font-weight:700; color:var(--text); }
 .dash-sec__sub   { font-size:11px; font-weight:500; color:var(--text3); }
@@ -262,7 +278,7 @@
    leaves the geometry to the guide.
    ═══════════════════════════════════════════════════════════════════════════ */
 .dsh-card              { padding:13px 15px; }
-.dash-sec               { padding:12px 14px; border-radius:16px; }
+.dash-sec               { --sec-pad-x:14px; padding:12px var(--sec-pad-x); border-radius:16px; }
 .dash-kpi-grid          { grid-template-columns:repeat(auto-fit,minmax(196px,1fr)); gap:10px; margin-bottom:10px; }
 .dash-tile-grid         { grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:10px; margin-bottom:10px; }
 
@@ -358,7 +374,7 @@
    `table` rules in style.css; everything here is the delta the reference asks
    for, scoped to `.dash-rp` so no other table moves.
    ────────────────────────────────────────────────────────────────────────── */
-.dash-rp-wrap        { margin:0 -16px; }
+.dash-rp-wrap        { margin:0 calc(-1 * var(--sec-pad-x, 16px)); }
 .dash-rp             { width:100%; }
 .dash-rp th          { background:transparent; font-size:10px; letter-spacing:.9px; padding:0 16px 9px; }
 .dash-rp td          { padding:11px 16px; }
@@ -589,7 +605,19 @@
    row for no reason — it is a list of counts, and a list of counts does not
    get wider by being given room. */
 .dash-row-b { grid-template-columns:1.45fr 1fr calc((100% - 50px) / 6); }
-.dash-row-c { grid-template-columns:1.3fr .95fr 1.1fr .95fr; }
+/* THREE CARDS, NOT FOUR (owner, 7 Sep). Occupancy Overview is gone and its
+   width goes to Occupancy by Room Type, which is the card that actually draws
+   the seats — its donut and its per-type list were both cramped at 1.3fr and
+   the list's Occupancy column was wrapping. 2.1fr is the old 1.3 plus the .95
+   the removed card held, less a little to Needs Action, which gained a verb
+   column on the same day. */
+/* QUICK ACTIONS IS THE NARROW ONE, AND NEEDS ACTION TAKES WHAT IT DROPS
+   (owner, 7 Sep). Same heights — they are grid siblings and the row stretches —
+   but four one-word verbs never needed a quarter of the row, while Needs Action
+   holds a count, a sentence and a verb per line and was the card whose rows
+   were truncating. .95 -> .68 out of Quick Actions, straight into Needs
+   Action's 1.15 -> 1.42. The room-type card is untouched. */
+.dash-row-c { grid-template-columns:2.1fr 1.42fr .68fr; }
 
 /* Below ~1400 the four-across row cannot hold its content without the method
    and need rows truncating, so it folds to 2×2 rather than shrinking. The fold
@@ -688,7 +716,13 @@
    So the count is stated rather than inferred. Six across down to 1500, then
    3×2, then 2×3: the tiles stay equal and the row never leaves one card
    stranded on a line by itself. */
-.dash-kpi-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+/* FIVE, NOT SIX (owner, 7 Sep). Total Residents was removed and this still
+   declared six tracks, so the five cards sat in the first five and left a
+   whole card's width of blank at the right - the KPI row ended ~190px short of
+   every row below it. Explicit 1fr tracks rather than auto-fit: with a fixed
+   count they are exactly equal and they fill the row, which is what "widen
+   them equally" asks for. */
+.dash-kpi-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
 @media (max-width:1200px) { .dash-kpi-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:900px)  { .dash-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
@@ -713,8 +747,7 @@
    Overview does NOT duplicate — the split BETWEEN types — and the sketch draws
    it. The list scrolls past four types instead of growing the card, which is
    what holds the fold on a hostel with many room types. */
-.dash-row-c .rt-body { grid-template-columns:100px 1fr; gap:12px; padding:4px 0 2px; }
-.dash-row-c .rt-donut { width:100px; height:100px; }
+/* Superseded by the wide-card rules further down this file (7 Sep). */
 .dash-row-c .rt-donut__n { font-size:15px; }
 .dash-row-c .rt-donut__n span { font-size:11px; }
 .dash-row-c .rt-donut__l { font-size:8px; margin-top:2px; }
@@ -821,8 +854,15 @@
    and drops the card's height at the same time, which is the other thing row C
    needed. The overall occupancy figure it carried in the middle is the
    headline of the card immediately to its right. */
-.dash-row-c .rt-body { grid-template-columns:1fr; gap:0; }
-.dash-row-c .rt-left { display:none; }
+/* THE RING IS BACK (owner, 7 Sep: "that width should be used by occupancy by
+   room type and its pie chart"). Both reasons it was hidden have gone: the
+   card held 322px and now holds ~540 of the width Occupancy Overview used
+   to take, and the neighbour that carried the headline percentage was
+   removed the same day - so the ring is no longer the decorative half of a
+   duplicate, it is the only place the split is drawn. */
+.dash-row-c .rt-body { grid-template-columns:150px minmax(0,1fr); gap:16px; padding:4px 0 2px; }
+.dash-row-c .rt-left { display:block; }
+.dash-row-c .rt-donut { width:150px; height:150px; max-width:150px; margin:0 auto; }
 
 /* The row is a flex line of fixed parts — a 32px icon, a 70px room count, an
    86px bar and a 44px percentage, plus 11px gaps and 13px padding. That is
@@ -1081,3 +1121,1077 @@
      each. Nothing else here has 4px left that is not a figure or a label. */
   .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 4px; }
 }
+
+
+/* == THE GREETING, ON THE HEADER ROW =======================================
+   Injected into #header .hdr-left by applyHeaderChrome(), dashboard only. It
+   is deliberately CHEAP - one line, no card, no border of its own beyond the
+   divider - so it reads as part of the header rather than as a second title
+   competing with the real one.
+
+   Every property here is defensive about width. The header at 1366 has roughly
+   140px of slack between the page title and the search field; this takes what
+   is going and gives it back first (min-width:0 and an ellipsis before it
+   pushes anything), and disappears entirely under 1180 where the slack runs
+   out. It must never be the reason the search field moves. */
+#hdr-greet { min-width: 0; display: flex; }
+.hdr-greet {
+    display: inline-flex; align-items: center; gap: 7px;
+    min-width: 0; padding-left: 12px;
+    border-left: 1px solid var(--border);
+}
+.hdr-greet__ico {
+    flex: 0 0 auto;
+    width: 26px; height: 26px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-dim, var(--bg2)); color: var(--accent);
+}
+.hdr-greet__ico svg { width: 15px; height: 15px; }
+.hdr-greet__hi {
+    font-size: 12.5px; font-weight: 600; color: var(--text2);
+    line-height: 1.2; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Under here the header's slack belongs to the search field, which is a
+   control; the greeting is not. */
+@media (max-width: 1180px) { #hdr-greet { display: none; } }
+
+/* ══ THE STATUS FOOTER (row 7) ══════════════════════════════════════════════
+   A rule, two lines of provenance, and one live reading. It sits after the
+   last card rather than fixed to the window: a fixed bar would cover the
+   bottom row of every page for the whole session, which is the licence-badge
+   bug this codebase has already paid for once. */
+.dash-foot {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 14px 0 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text3);
+}
+.dash-foot__l, .dash-foot__r { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dash-foot__r { margin-left: auto; }
+.dash-foot__brand { font-weight: 650; color: var(--text2); }
+.dash-foot__sep { color: var(--border2); }
+.dash-foot__stamp { white-space: nowrap; }
+
+/* THE STATE PILL IS A READING, not a decoration - it is green only when
+   chromeAlerts() is genuinely empty, and counts when it is not. §14 badge
+   geometry, §2.1 status colours. */
+.dash-foot__state {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 22px; padding: 0 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.dash-foot__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.dash-foot__state.is-ok   { color: var(--success-fg); background: var(--success-bg); }
+.dash-foot__state.is-warn { color: var(--warning-fg); background: var(--warning-bg); }
+
+.dash-foot__refresh {
+    width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text3); cursor: pointer; padding: 0;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.dash-foot__refresh svg { width: 14px; height: 14px; }
+.dash-foot__refresh:hover { background: var(--bg2); color: var(--accent); border-color: var(--border2); }
+.dash-foot__refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The motto is the first thing to go when the footer runs out of room - it
+   is a motto, not a reading. */
+.dash-foot__tag { font-style: italic; min-width: 0; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
+/* Below the tablet break the two halves stack rather than the stamp wrapping
+   mid-sentence, and the tagline goes - §7 says 1024 is the supported floor,
+   but the rail collapses before that and the row has to survive it. */
+@media (max-width: 900px) {
+    .dash-foot__tag { display: none; }
+    .dash-foot__r { margin-left: 0; }
+}
+
+
+/* ══ COLLECTION BY METHOD (lower-section spec §5-§10) ══════════════════════ */
+.dl-coll__body {
+    display: grid;
+    /* The donut is a fixed object and the list is what stretches - a fraction
+       for both makes the ring shrink on narrow windows until the centre label
+       no longer fits inside it, which is worse than a shorter list. */
+    grid-template-columns: 150px minmax(0, 1fr);
+    align-items: center; gap: 18px;
+    padding: 4px 2px 2px;
+}
+
+/* ── THE RING ───────────────────────────────────────────────────────────────
+   The label is centred with a positioned overlay rather than an SVG <text>:
+   real text takes the page's font, wraps, ellipsises and can be selected and
+   copied, and none of that is true of text inside an SVG viewBox that scales. */
+.dnut { position: relative; width: 150px; height: 150px; flex: 0 0 auto; }
+.dnut__svg { width: 100%; height: 100%; display: block; }
+/* THE SLICE ANSWERS THE POINTER (owner, 7 Sep: "the pie chart is static ...
+   not move out when cursor is placed"). It thickens rather than sliding out
+   along its bisector: an exploded wedge moves the ring's outline on every
+   hover, and on a four-slice donut that reads as the chart twitching. Growing
+   the stroke keeps the ring still and still says "this one".
+
+   The dimming of the others is what makes it read as a selection rather than
+   as a wobble - one slice gets louder, the rest step back. */
+.dnut__seg { transition: stroke-width .14s ease, opacity .14s ease; }
+.dnut__seg.is-clickable { cursor: pointer; }
+.dnut:hover .dnut__seg { opacity: .45; }
+.dnut .dnut__seg:hover { opacity: 1; stroke-width: 30; }
+@media (prefers-reduced-motion: reduce) {
+    .dnut__seg { transition: none; }
+    .dnut .dnut__seg:hover { stroke-width: 22; }   /* the dimming still reads */
+}
+.dnut__mid {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; pointer-events: none; padding: 0 26px;
+}
+.dnut__top {
+    font-size: 19px; font-weight: 800; color: var(--text); line-height: 1.1;
+    letter-spacing: -.2px; white-space: nowrap;
+}
+.dnut__cur { font-size: 11px; font-weight: 700; color: var(--text3); margin-right: 3px; vertical-align: 2px; }
+.dnut__sub { font-size: 10.5px; color: var(--text3); margin-top: 3px; line-height: 1.2; }
+
+/* ── THE METHOD LIST ────────────────────────────────────────────────────────
+   A five-track grid so the percentages and the amounts line up down the card.
+   The bar is the only elastic track; everything else is sized to its content,
+   because a right-hand column of money that does not align is unreadable at a
+   glance and this widget is only ever read at a glance. */
+.dl-meth { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dl-meth__row {
+    display: grid;
+    grid-template-columns: 10px minmax(64px, 96px) minmax(0, 1fr) 44px auto;
+    align-items: center; gap: 9px;
+    width: 100%; padding: 6px 8px; border-radius: 8px;
+    background: none; border: none; cursor: pointer; text-align: left;
+    font-family: inherit; color: inherit;
+    transition: background .12s ease;
+}
+.dl-meth__row:hover { background: var(--bg2); }
+.dl-meth__row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dl-meth__dot  { width: 9px; height: 9px; border-radius: 50%; }
+.dl-meth__name { font-size: 12.5px; font-weight: 600; color: var(--text2);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-meth__bar  { height: 6px; border-radius: 999px; background: var(--dash-track); overflow: hidden; }
+.dl-meth__bar i { display: block; height: 100%; border-radius: 999px; }
+.dl-meth__pct  { font-size: 11.5px; color: var(--text3); text-align: right;
+                 font-variant-numeric: tabular-nums; }
+.dl-meth__amt  { font-size: 12.5px; font-weight: 700; color: var(--text);
+                 text-align: right; white-space: nowrap;
+                 font-variant-numeric: tabular-nums; }
+
+/* THE MONTH CHIP REPORTS, IT DOES NOT SET. It opens the sidebar picker, which
+   is the one month control on this screen (§3 forbids a second). */
+.dl-monthchip {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 10px; border-radius: 8px;
+    background: var(--accent-dim, var(--bg2)); border: 1px solid var(--border);
+    color: var(--accent); font-family: inherit; font-size: 11.5px; font-weight: 650;
+    white-space: nowrap; cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+}
+.dl-monthchip svg { width: 13px; height: 13px; }
+.dl-monthchip:hover { border-color: var(--accent); }
+.dl-monthchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.dash-chip--sm { width: 30px; height: 30px; border-radius: 9px; }
+
+/* §36 — the empty month says so in words instead of drawing a ring. */
+.dl-empty--tall {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; min-height: 150px; text-align: center;
+}
+.dl-empty__t { font-size: 13.5px; font-weight: 650; color: var(--text2); }
+.dl-empty__s { font-size: 12px; color: var(--text3); }
+
+/* WhatsApp keeps its own green rather than the success token: it is a brand
+   mark, and a warden looks for the colour before they read the glyph. */
+.dash-icon-btn--wa { color: #25D366; }
+
+/* ── §39 RESPONSIVE ─────────────────────────────────────────────────────────
+   Under ~1150 the two lower cards stop being 60/40 and the donut row runs out
+   of width before the list does; stack the ring above the list rather than
+   letting the method names ellipsise to two characters. */
+@media (max-width: 1150px) {
+    .dl-coll__body { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+    .dl-coll__body .dl-meth { width: 100%; }
+}
+
+
+/* ══ THE TWO LOWER CARDS, TO `exact .png` ══════════════════════════════════
+   Sampled from the owner's crop rather than guessed, and every value landed on
+   a design-system token (§1.1, §2.1) - the reference was drawn from the same
+   palette:
+
+     icon tile / reminder bar   #DBEAFE   --color-primary-subtle
+     Pending badge + its tile   #FEF3C7   warning tint
+     pending count badge        #FEE2E2   error tint
+     WhatsApp button            #DCFCE7   success tint
+     mark-paid button           #16A34A   success, solid
+     edit button                #F1F5F9   surface-muted
+
+   THESE ARE LIGHT-MODE VALUES AND THE APP SHIPS BOTH THEMES. Light matches the
+   crop; the dark block below re-tints the same hues for a dark ground so
+   theme-parity's 4.5:1 floor still holds (owner's call, 7 Sep: derive rather
+   than force one palette on both). Every pair is defined here as a variable so
+   the two themes cannot drift into disagreeing about which hue means what. */
+.dl-coll, .dl-pending {
+    --x-blue:        #2563EB;
+    --x-blue-tint:   #DBEAFE;
+    --x-amber-fg:    #B45309;
+    --x-amber-tint:  #FEF3C7;
+    --x-red-fg:      #B91C1C;
+    --x-red-tint:    #FEE2E2;
+    --x-green:       #16A34A;
+    --x-green-tint:  #DCFCE7;
+    --x-slate-tint:  #F1F5F9;
+    --x-slate-fg:    #475569;
+}
+/* The default theme here is the DARK one (light is the .light-theme opt-in),
+   so the dark values are the ones that have to be stated first. */
+body:not(.light-theme) .dl-coll,
+body:not(.light-theme) .dl-pending {
+    --x-blue:        var(--accent);
+    --x-blue-tint:   color-mix(in srgb, var(--accent) 18%, transparent);
+    --x-amber-fg:    var(--warning-fg);
+    --x-amber-tint:  color-mix(in srgb, var(--warning-fg) 18%, transparent);
+    --x-red-fg:      var(--danger-fg);
+    --x-red-tint:    color-mix(in srgb, var(--danger-fg) 18%, transparent);
+    --x-green:       var(--success-fg);
+    --x-green-tint:  color-mix(in srgb, var(--success-fg) 18%, transparent);
+    --x-slate-tint:  var(--bg3);
+    --x-slate-fg:    var(--text2);
+}
+
+/* ── Collection by Method ───────────────────────────────────────────────── */
+.dl-coll .dash-chip--sm { background: var(--x-blue-tint); color: var(--x-blue); }
+.dl-coll .dl-monthchip {
+    background: var(--x-blue-tint); border-color: transparent; color: var(--x-blue);
+    height: 28px; border-radius: 8px; gap: 7px; font-weight: 600;
+}
+.dl-coll .dl-monthchip:hover { background: color-mix(in srgb, var(--x-blue) 22%, transparent); }
+.dl-monthchip__cv { width: 12px; height: 12px; opacity: .8; }
+
+/* ── THE RING FILLS THE CARD (owner, 7 Sep: "make the pie chart ... the size of
+      pending payment so that both look equally") ─────────────────────────────
+   The two cards are grid siblings and already stretch to the same height. The
+   IMBALANCE was inside: Collection's content came to 212px in a 380px card and
+   left ~150px of dead space under the donut, so the pair read as one full card
+   beside one half-empty one.
+
+   The ring grows to take it. 240px is not arbitrary — it is the largest ring
+   that leaves the method list a bar worth drawing: every 10px on the donut is
+   10px off the bar column, and past ~250 the bars fall under 70px and stop
+   showing a proportion, which is the one thing they exist to show.
+
+   The body is centred in what is left rather than pinned to the top, so the
+   remaining ~40px splits above and below and reads as padding instead of as a
+   gap the card failed to fill. */
+.dl-coll { display: flex; flex-direction: column; }
+.dl-coll__body {
+    flex: 1;
+    grid-template-columns: clamp(180px, 40%, 225px) minmax(0, 1fr);
+    gap: 12px;
+    align-content: center;
+}
+.dl-coll .dnut { width: 100%; max-width: 240px; height: auto; aspect-ratio: 1; }
+.dl-coll .dnut__mid { padding: 0 30px; }
+.dl-coll .dnut__cur { display: block; margin: 0 0 -2px; font-size: 12px; vertical-align: baseline; }
+.dl-coll .dnut__fig { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+.dl-coll .dnut__top { font-size: inherit; }
+
+/* The bar takes the slack; the two right-hand columns are fixed so the
+   percentages and the amounts line up down the card. */
+/* EVERY FIXED COLUMN GIVES WAY TO THE BAR. The ring took 64px when it grew,
+   and taking it out of the bar was the wrong pocket: at ~65px a bar stops
+   showing a proportion, which is the only reason it is drawn. Name 92->72,
+   pct 42->34, amount 72->60, gaps 10->6, row padding 8->4, and the body gap
+   20->12. That is ~110px reclaimed, and the bar keeps its length beside a
+   225px ring. The name column is 90px because that is what "Bank Transfer"
+   measures at 12.5px/600 — it was 72 and truncated to "Bank Trans...", and a
+   method whose name is cut off is worse than a bar 16px shorter. */
+.dl-coll .dl-meth__row {
+    grid-template-columns: 10px 90px minmax(0, 1fr) 34px 60px;
+    gap: 6px; padding: 6px 4px;
+}
+.dl-coll .dl-meth__bar { height: 8px; background: var(--x-slate-tint); }
+.dl-coll .dl-meth__amt { font-size: 13px; }
+
+/* ── Pending Payments ───────────────────────────────────────────────────── */
+.dl-pending .dl-pend__ico { background: var(--x-amber-tint); color: var(--x-amber-fg); }
+.dl-pending .dl-pend__count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 26px; height: 22px; padding: 0 8px; border-radius: 999px;
+    background: var(--x-red-tint); color: var(--x-red-fg);
+    font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.dl-pending .dl-pend__all {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+    color: var(--x-blue); font-weight: 650; font-size: 12.5px;
+}
+.dl-pending .dl-pend__all svg { width: 13px; height: 13px; }
+
+/* THE AMOUNT IS THE LOUDEST THING IN THE ROW (lower spec §40: pending amounts
+   more prominent than room metadata), and red because it is owed. */
+.dl-pending .dash-pay__amt {
+    color: var(--x-red-fg); font-weight: 750; font-size: 13px;
+    text-align: right; white-space: nowrap;
+}
+.dl-pending .dash-pay__due { text-align: right; font-size: 10.5px; color: var(--text3); }
+
+/* A rounded rectangle, not a pill - the reference is explicit about it, and it
+   keeps the payment STATE visually distinct from the pill-shaped pricing-plan
+   badges used elsewhere (§15). */
+.dl-pending .dash-status {
+    background: var(--x-amber-tint); color: var(--x-amber-fg);
+    border: none; border-radius: 7px;
+    height: 26px; min-width: 62px; padding: 0 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-weight: 650;
+}
+
+/* Three buttons, three weights: the destructive-adjacent one is SOLID (you
+   should not press it by accident), WhatsApp is tinted, edit is quiet. */
+.dl-pending .dash-icon-btn {
+    width: 30px; height: 30px; border-radius: 8px; border: none;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.dl-pending .dash-icon-btn.dh-green:not(.dash-icon-btn--wa) {
+    background: var(--x-green); color: #fff;
+}
+.dl-pending .dash-icon-btn.dh-green:not(.dash-icon-btn--wa):hover {
+    filter: brightness(1.07);
+}
+.dl-pending .dash-icon-btn--wa { background: var(--x-green-tint); color: var(--x-green); }
+.dl-pending .dash-icon-btn--wa:hover { background: color-mix(in srgb, var(--x-green) 26%, transparent); }
+.dl-pending .dash-icon-btn.dh-slate { background: var(--x-slate-tint); color: var(--x-slate-fg); }
+.dl-pending .dash-icon-btn.dh-slate:hover { background: color-mix(in srgb, var(--x-slate-fg) 18%, transparent); }
+.dl-pending .dash-icon-btn:focus-visible { outline: 2px solid var(--x-blue); outline-offset: 2px; }
+
+/* ── The reminder bar ───────────────────────────────────────────────────────
+   Pale blue with blue text, per the reference - NOT the solid gradient that
+   stood here. It sends a message to every pending student, so it should read
+   as an offer rather than as the page's primary call to action; a solid blue
+   bar at the bottom of a card competes with the header's Add Student for the
+   eye, and this is not the more important of the two. */
+.dl-pending .dl-pend__foot { margin-top: auto; padding-top: 11px; }
+.dl-remind {
+    width: 100%; height: 38px; border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--x-blue-tint); border: none; color: var(--x-blue);
+    font-family: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+    transition: background .12s ease;
+}
+.dl-remind:hover { background: color-mix(in srgb, var(--x-blue) 24%, transparent); }
+.dl-remind:focus-visible { outline: 2px solid var(--x-blue); outline-offset: 2px; }
+.dl-remind .icon { width: 14px; height: 14px; }
+
+
+/* ══ SEAT AVAILABILITY: the occupancy bar, and a two-line footer ═══════════
+   The bar came from the Occupancy Overview card, which is gone (owner, 7 Sep).
+   It sits above the Total/Free/Filled counts because it is their summary, and
+   it is deliberately SHORT — this card's job is the room grid, and every pixel
+   the chrome takes here is a row of rooms the warden has to scroll for. */
+.seat-occbar { margin: 2px 0 8px; }
+.seat-occbar__top {
+    display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px;
+}
+.seat-occbar__pct { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -.2px; }
+.seat-occbar__of  { font-size: 11px; color: var(--text3); }
+.seat-occbar__bar {
+    height: 6px; border-radius: 999px; background: var(--dash-track); overflow: hidden;
+}
+.seat-occbar__bar i {
+    display: block; height: 100%; border-radius: 999px;
+    background: var(--accent);
+    transition: width .25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .seat-occbar__bar i { transition: none; } }
+
+/* THE FOOTER IS TWO LINES. Legend and the "tap any room" hint on the first,
+   Expand and Print right-aligned on the second — the hint carries
+   `margin-left:auto` and absorbed all the slack, so on one line the buttons
+   were pinned against the card edge with the hint jammed into them. */
+.seat-foot {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 12px; margin-top: 9px;
+}
+.seat-foot__acts {
+    flex: 1 0 100%;             /* its own line, whatever is left on the first */
+    display: flex; justify-content: flex-end; gap: 6px;
+    margin-top: 2px;
+}
+
+/* ══ OCCUPANCY BY ROOM TYPE gets the width the removed card held ═══════════
+   The donut can grow with it; the per-type list was the part that suffered,
+   its Occupancy column wrapping under the room count. */
+.dash-row-c .rt-donut { max-width: 168px; }
+
+
+/* ══ THE ADVANCE / ARREARS KPI (owner ref: nev.png) ════════════════════════
+   The only KPI tile with rows under its figure. It is taller than the other
+   five by design — the split is the point of the card — and the KPI grid rows
+   stretch, so the other five grow with it rather than the row going ragged. */
+.dash-kpi--split .dash-kpi__value { margin-bottom: 7px; }
+.dash-kpi__split {
+    display: flex; flex-direction: column; gap: 3px;
+    padding-top: 7px; border-top: 1px solid var(--border);
+}
+.dash-kpi__srow {
+    display: grid;
+    /* dot | label (elastic) | amount | count */
+    grid-template-columns: 8px minmax(0, 1fr) auto 20px;
+    align-items: center; gap: 6px;
+    font-size: 11px; line-height: 1.5;
+}
+.dash-kpi__sdot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.dash-kpi__slabel {
+    color: var(--text3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-kpi__srow b { font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dash-kpi__srow b .pkr { font-size: 8.5px; font-weight: 700; color: var(--text3); margin-right: 2px; }
+/* The count sits in its own well, as the reference draws it — it is a tally,
+   not money, and without the well it reads as part of the figure beside it. */
+.dash-kpi__srow em {
+    font-style: normal; font-weight: 700; font-size: 10.5px;
+    color: var(--text2); text-align: center;
+    background: var(--card); border-radius: 5px; padding: 1px 0;
+    font-variant-numeric: tabular-nums;
+}
+
+
+/* A configured method nobody used this month. It is listed because its absence
+   is a reading, and muted because it is not a figure to compare against the
+   others - see _dlMethods() for why it is drawn at all. */
+.dl-meth__row.is-zero { opacity: .55; }
+.dl-meth__row.is-zero .dl-meth__amt { font-weight: 600; color: var(--text3); }
+
+/* ══ THE SLICE TOOLTIP ═════════════════════════════════════════════════════
+   The SVG <title> the ring already carried is the browser's own tooltip: it
+   waits about a second, draws in the OS style, and cannot show a colour swatch
+   or a percentage in the app's type. This is the popup the owner asked for -
+   it follows the pointer, appears at once, and is aria-hidden because the
+   <title> is still there for anything reading the chart aloud. */
+.dnut-tip {
+    position: fixed; z-index: 9998; pointer-events: none;
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 11px; border-radius: 9px;
+    background: var(--card); border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
+    font-size: 12px; color: var(--text); white-space: nowrap;
+    opacity: 0; transform: translateY(3px);
+    transition: opacity .12s ease, transform .12s ease;
+}
+.dnut-tip.is-on { opacity: 1; transform: none; }
+.dnut-tip__dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.dnut-tip__name { font-weight: 650; }
+.dnut-tip__amt  { font-weight: 700; font-variant-numeric: tabular-nums; }
+.dnut-tip__pct  { color: var(--text3); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+    .dnut-tip { transition: none; }
+}
+
+
+/* ══ PAYING FOR THE 7 SEP ADDITIONS ════════════════════════════════════════
+   Four things were added to the upper half that day — the occupancy bar in
+   Seat Availability, Expand/Print on their own line, the Advance/Arrears
+   split rows, and the room-type ring coming back. Together they cost about
+   150px, and `dashboard-cards.spec.js` caught rows A-C falling past the fold
+   at the two ZOOMED sizes (1920x1080 @150% and 1366x768 @125%), where the
+   content box is 660px and 614px tall rather than 738.
+
+   Each of the four gives its height back where there is none to spare. The
+   principle is the one this file already follows: chrome yields, figures do
+   not. Nothing below removes a number — the bar's percentage survives as text
+   beside the counts it summarises, and the ring's split survives as the list
+   beside it. */
+
+/* THE RING GOES WHEN ROW C FOLDS TO TWO COLUMNS. It came back on 7 Sep because
+   the card is ~540px wide in the three-across layout; at two-across it is back
+   to the ~322px slot it was hidden from in the first place, where a ring with
+   no labels sits beside a labelled list saying the same thing. */
+@media (max-width:1200px) {
+  .dash-row-c .rt-body { grid-template-columns:minmax(0,1fr); gap:0; }
+  .dash-row-c .rt-left { display:none; }
+}
+
+@media (max-height:720px) {
+  /* The bar becomes one line: the percentage keeps its place beside the counts
+     it summarises, and the track goes. A 6px rule is the cheapest thing here
+     to lose and the least informative — the figure is the reading. */
+  .seat-occbar { margin:0 0 5px; }
+  .seat-occbar__bar { display:none; }
+  .seat-occbar__top { margin-bottom:0; }
+  .seat-occbar__pct { font-size:14px; }
+
+  /* Expand and Print rejoin the legend line. Below the hint is better and this
+     is not a screen with room for better. */
+  .seat-foot { margin-top:6px; gap:9px; }
+  .seat-foot__acts { flex:0 0 auto; margin-left:auto; margin-top:0; }
+
+  /* The split rows tighten; both figures and both counts stay. */
+  .dash-kpi__split { padding-top:5px; gap:1px; }
+  .dash-kpi__srow { font-size:10px; line-height:1.35; }
+
+  .dash-row-c .rt-donut { width:118px; height:118px; max-width:118px; }
+  .dash-row-c .rt-body { grid-template-columns:118px minmax(0,1fr); gap:12px; }
+}
+
+
+/* ══ THE LAST 60px, AT THE TWO ZOOMED SIZES ════════════════════════════════
+   Under 665px of content height the split rows fold onto ONE line and drop
+   their labels: the dot already carries which bucket is which (green up =
+   advance, violet = previous), and both figures and both counts survive. That
+   is 17px for no lost number, which is the whole rule here — a screen this
+   short loses chrome, never a reading. */
+@media (max-height:665px) {
+  .dash-kpi__split { flex-direction:row; gap:10px; align-items:center; padding-top:5px; }
+  .dash-kpi__srow  { grid-template-columns:8px auto auto; gap:4px; font-size:10px; }
+  .dash-kpi__slabel { display:none; }
+  .dash-kpi__srow em { background:none; padding:0; min-width:0; color:var(--text3); }
+
+  /* The percentage moves onto the counts line it summarises rather than
+     holding a line of its own. */
+  .seat-occbar { display:none; }
+  .seat-inline__k b { font-size:13px; }
+
+  .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom:4px; }
+  .dash-kpi-grid > .dsh-card { padding:8px 10px; }
+  .dash-row-c > .dash-sec { --sec-pad-x:12px; padding:10px var(--sec-pad-x); }
+}
+
+
+/* The last 30px, at 1366x768 @125% — the one size still over. `.rt-note` is a
+   sentence explaining how the percentage beside it is calculated: true, useful
+   once, and read never again. It is the only element left in rows A-C that is
+   neither a figure nor a control, so it is the right thing to lose before
+   anything that is. */
+@media (max-height:665px) {
+  .dash-row-c .rt-note { display:none; }
+}
+
+
+/* ══ SEAT AVAILABILITY HEADER (owner reference, 7 Sep) ═════════════════════
+   Title and a one-line subtitle on the left; the three bed counts in the top
+   RIGHT corner with the label above the figure. The chip icon is gone — the
+   corner counts are what the header is for, and the glyph was competing with
+   them for the same 30px of height that the room grid wants. */
+.seat-hd { min-width: 0; margin-right: auto; }
+.seat-hd__t { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.seat-hd__s { font-size: 11px; color: var(--text3); line-height: 1.3; margin-top: 1px; }
+
+.seat-inline { display: flex; align-items: flex-start; gap: 18px; flex: 0 0 auto; }
+/* Column, label first — the reference stacks them, and a label under a figure
+   reads as a caption on the NEXT figure when three sit in a row. */
+.seat-inline__k {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-family: inherit; text-align: right;
+}
+.seat-inline__k span { font-size: 10px; color: var(--text3); white-space: nowrap; line-height: 1.2; }
+.seat-inline__k b { font-size: 17px; font-weight: 800; color: var(--text); line-height: 1.1;
+                    font-variant-numeric: tabular-nums; }
+.seat-inline__k.is-free b { color: var(--accent); }
+.seat-inline__k:hover b { color: var(--accent); }
+.seat-inline__k:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+/* The occupancy line is ONE line: figure, sentence, then the bar taking the
+   rest of the width. Stacked it cost two rows for one reading. */
+.seat-occbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.seat-occbar__pct { font-size: 19px; font-weight: 800; color: var(--accent); line-height: 1;
+                    letter-spacing: -.3px; flex: 0 0 auto; }
+.seat-occbar__of  { font-size: 11px; color: var(--text3); white-space: nowrap; flex: 0 0 auto; }
+.seat-occbar__bar { flex: 1 1 auto; min-width: 40px; height: 7px; border-radius: 999px;
+                    background: var(--dash-track); overflow: hidden; }
+.seat-occbar__bar i { display: block; height: 100%; border-radius: 999px; background: var(--accent);
+                      transition: width .25s ease; }
+@media (prefers-reduced-motion: reduce) { .seat-occbar__bar i { transition: none; } }
+
+/* ══ THE ROOM-TYPE RING, now the shared SVG donut ══════════════════════════ */
+.rt-left .dnut { width: 100%; max-width: 150px; height: auto; aspect-ratio: 1; margin: 0 auto; }
+.rt-left .dnut__top { font-size: inherit; }
+.rt-left .dnut__fig { display: block; font-size: 21px; font-weight: 800; color: var(--text);
+                      letter-spacing: -.3px; }
+.rt-left .rt-of { font-size: 12px; font-weight: 700; color: var(--text3); }
+.rt-left .dnut__sub { font-size: 9.5px; }
+
+/* ══ QUICK ACTIONS: narrower buttons (owner, 7 Sep) ════════════════════════
+   The tiles were sized to fill the card, so four of them made four wide slabs
+   for four short verbs. Capped and centred, they read as buttons. */
+/* TWO COLUMNS STILL, in a card ~175px wide: the tiles lose their max-width and
+   their side padding instead, because a 2x2 block of verbs is what makes this
+   card readable at a glance and one column of four would make it a list
+   competing with Needs Action beside it. The labels already wrap to two lines
+   ("Add Cancellation"), which is why the tile is sized by its icon, not its
+   text. */
+.dash-row-c .dl-acts--4 { gap: 6px; }
+.dash-row-c .dl-acts--4 > * { padding-left: 4px; padding-right: 4px; font-size: 10.5px; }
+.dash-row-c .dl-acts--4 > * .dl-ico,
+.dash-row-c .dl-acts--4 > * svg { flex: 0 0 auto; }
+
+/* ══ REVENUE TREND: a taller plot (owner, 7 Sep) ═══════════════════════════
+   The chart sat in a short box with the card's own padding under it. The
+   heading is fixed, so every pixel here goes to the plot itself. */
+/* THE PLOT GROWS, THE ROW DOES NOT (owner, 7 Sep: "enlarge the revenue trend
+   lines"). 214px forced row B ~53px taller and pushed row C past the fold, so
+   the height comes from the CARD's own chrome instead: the plot fills whatever
+   the row gives it (flex:1 1 0 from the base rule) and the floor rises from
+   120 to 170, which is the most it can hold at 1366x768 without row C going
+   under. The density block's `height:198px !important` at line ~329 is what
+   the base rule's `height:auto !important` exists to beat - leave both. */
+#trend-chart-wrap { min-height: 152px; }
+
+
+/* The zoomed sizes give the plot back what they must — it still clears the
+   120px it had before 7 Sep, so it is larger everywhere, just not equally. */
+@media (max-height:720px) { #trend-chart-wrap { min-height: 136px; } }
+@media (max-height:665px) {
+  #trend-chart-wrap { min-height: 118px; }
+  .seat-hd__s { display: none; }          /* the title already says it */
+  .seat-inline { gap: 12px; }
+  .seat-inline__k b { font-size: 15px; }
+  .seat-occbar { margin: 2px 0 5px; }
+  .rt-left .dnut { max-width: 118px; }
+}
+
+
+/* 1366x768 @125% is the one size where row C folds to 2x2, so its cards stack
+   and every pixel counts twice. The quick-action tiles are the tallest thing
+   left that is chrome rather than a reading. */
+@media (max-height:665px) {
+  .dash-row-c .dl-acts--4 > * { padding-top: 4px; padding-bottom: 4px; max-width: 116px; }
+  .dash-row-c .dash-sec__head { margin-bottom: 2px; }
+  .dash-row-c .dash-sec__sub { display: none; }
+  .dash-row-c .rt-list__hd { display: none; }
+}
+
+
+/* ══ GIVING THE ROOM GRID ITS SECOND ROW BACK ══════════════════════════════
+   The new header costs ~18px the old one did not — a subtitle line, and the
+   counts stacked label-over-figure instead of inline. Row B cannot grow to
+   absorb it (row C is 4px off the fold), so the seat card pays out of its own
+   chrome. Each of these is a margin, not a reading, and together they are one
+   more row of rooms on screen — which is what moving the counts to the corner
+   was FOR. */
+.dash-row-b .seat-occbar { margin: 2px 0 5px; }
+.dash-row-b .seat-foot { margin-top: 5px; gap: 8px; }
+.dash-row-b .seat-foot__acts { margin-top: 0; }
+.dash-row-b .dash-sec__head { margin-bottom: 6px; }
+.dash-row-b .seat-hd__s { margin-top: 0; }
+
+
+/* THE TILE SHRINKS SO THE ROW LANDS WHOLE. The grid was clipping a second row
+   through the middle of its tiles, which reads as a rendering fault rather
+   than as "scroll for more". A tile is a number and a fraction; 6px of padding
+   and a 12px numeral is more than either needs, and taking 10px off the tile
+   buys the whole second row that the header rearrangement was meant to free.
+   Below ~44px of tile the fraction stops being legible - this stops at 40. */
+.dash-row-b .dash-room   { padding: 3px 7px; min-width: 40px; border-radius: 8px; }
+.dash-row-b .dash-room .n { font-size: 11.5px; }
+.dash-row-b .dash-room .c { font-size: 8.5px; margin-top: 0; }
+.dash-row-b .dash-room-wrap { gap: 4px; }
+
+
+/* A CLIPPED HALF-ROW HAD TO READ AS "SCROLL", NOT AS A BROKEN RENDER.
+
+   Forcing a two-row floor was tried and reverted: it makes the seat card the
+   tallest in row B, row B grows, and row C ends 18px past the fold at
+   1366x768 - the size the fold promise is actually about. At this height you
+   can have the enlarged trend, the new seat header and Expand/Print on their
+   own line, OR a second whole row of rooms. Not both.
+
+   So the partial row stays and is made to look deliberate: a mask fades the
+   last few pixels out, which is the standard way of saying there is more below
+   without spending the height a scrollbar or a shadow would. */
+.dash-row-b .dash-room-wrap {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+}
+/* Scrolled to the end there is nothing more to promise, but a CSS-only mask
+   cannot know that; 14px is small enough that a fully-scrolled last row is
+   still legible. */
+
+
+/* ══ THE ROOM GRID, per the owner's seat-availability reference (7 Sep) ═════
+   Six wide tiles to a row, left-aligned, the room number over its fraction.
+   The old tile was a 44px centred chip: the number and the fraction fought for
+   the same narrow column and the fraction had to drop to 9px to fit. Wider and
+   left-aligned, both read at their natural size, and a warden scanning for
+   "which room has a free bed" is scanning a column of numbers rather than a
+   wall of chips.
+
+   FEWER ROOMS PER ROW IS THE TRADE, and it is the reference's own: 6 across
+   instead of ~14. The grid still scrolls, and the fade at its foot says so. */
+.dash-row-b .dash-room-wrap {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    align-content: start;
+}
+.dash-row-b .dash-room {
+    display: flex; flex-direction: column; gap: 1px;
+    padding: 6px 9px; min-width: 0; text-align: left;
+    border-radius: 8px; border: 1px solid transparent;
+    /* Pale blue = this room has a bed going. It is the state a warden is
+       looking FOR, so it is the one that carries colour. */
+    background: var(--seat-free-bg);
+}
+.dash-row-b .dash-room .n {
+    font-size: 13px; font-weight: 700; color: var(--seat-free-fg); line-height: 1.15;
+}
+.dash-row-b .dash-room .c {
+    font-size: 10.5px; font-weight: 500; color: var(--text3); margin-top: 0; line-height: 1.15;
+}
+/* Full = nothing to offer. Grey, and the number goes quiet with it. */
+.dash-row-b .dash-room.is-full { background: var(--seat-full-bg); border-color: transparent; }
+.dash-row-b .dash-room.is-full .n { color: var(--text2); }
+.dash-row-b .dash-room:hover { transform: none; border-color: var(--accent); }
+
+/* Light values are the reference's own; dark re-tints the same two hues so the
+   pair keeps meaning the same thing in both themes. */
+.dash-row-b { --seat-free-bg: color-mix(in srgb, var(--accent) 16%, transparent);
+              --seat-free-fg: var(--accent);
+              --seat-full-bg: var(--bg3); }
+body.light-theme .dash-row-b { --seat-free-bg: #EFF6FF; --seat-free-fg: #2563EB;
+                               --seat-full-bg: #F1F5F9; }
+
+/* The three counts hug the top edge of the card, and the legend the bottom
+   left - the two ends of the card, so neither crowds the grid between them. */
+.dash-row-b .dash-sec__head { align-items: flex-start; }
+.dash-row-b .seat-inline { margin-top: -2px; }
+.dash-row-b .seat-foot { justify-content: flex-start; }
+
+
+/* SIX WIDE TILES TO A ROW COST HEIGHT — one row is 48px where the old 44px
+   chips packed ~14 across. The card holds ~81px of grid, which is one row and
+   most of a second: the fade at the foot says "scroll", but showing 6 of 24
+   rooms is not what this card is for. Every value below is a margin, and
+   together they buy the second whole row without row B growing (row C is 8px
+   off the fold, so it cannot). */
+.dash-row-b .dash-room      { padding: 4px 8px; }
+.dash-row-b .dash-room-wrap { gap: 5px; }
+.dash-row-b .seat-occbar    { margin: 1px 0 4px; }
+.dash-row-b .seat-hd__t     { font-size: 14.5px; }
+.dash-row-b .seat-foot      { margin-top: 4px; }
+
+
+/* ══ THE KPI PROGRESS BAR (final-layout spec §1) ═══════════════════════════
+   Percentage right-aligned above the track, ends labelled under it. The
+   percentage sits ABOVE rather than beside: the KPI figure is already the
+   widest thing on the card and a second number on its line competes with it. */
+.kbar { margin-top: auto; padding-top: 6px; }
+.kbar__pct {
+    text-align: right; font-size: 11px; font-weight: 700;
+    color: var(--kbar-fg); line-height: 1.1; margin-bottom: 3px;
+    font-variant-numeric: tabular-nums;
+}
+.kbar__track {
+    height: 7px; border-radius: 999px; overflow: hidden;
+    background: var(--dash-track);
+}
+.kbar__track i {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--kbar-a), var(--kbar-b));
+    transition: width .3s ease;
+}
+@media (prefers-reduced-motion: reduce) { .kbar__track i { transition: none; } }
+.kbar__ends {
+    display: flex; justify-content: space-between;
+    font-size: 9px; color: var(--text3); margin-top: 3px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+/* One hue per card, as the spec assigns them. Gradients are two steps of the
+   same hue, never two hues - §7 forbids neon, and a bar that changes colour
+   along its length implies a threshold the data does not have. */
+.kbar--blue   { --kbar-a:#2451D6; --kbar-b:#3B82F6; --kbar-fg:#2451D6; }
+.kbar--amber  { --kbar-a:#D97706; --kbar-b:#F59E0B; --kbar-fg:#B45309; }
+.kbar--green  { --kbar-a:#15803D; --kbar-b:#22C55E; --kbar-fg:#15803D; }
+.kbar--violet { --kbar-a:#6D28D9; --kbar-b:#8B5CF6; --kbar-fg:#6D28D9; }
+body:not(.light-theme) .kbar--blue   { --kbar-fg:#7EA2F5; }
+body:not(.light-theme) .kbar--amber  { --kbar-fg:var(--warning-fg); }
+body:not(.light-theme) .kbar--green  { --kbar-fg:var(--success-fg); }
+body:not(.light-theme) .kbar--violet { --kbar-fg:#A78BFA; }
+
+/* §2 — shorter cards, so row B moves up. The bar is pushed to the card floor
+   by its own margin-top:auto, so the height comes out of the gaps between the
+   figure and the helper text rather than off the type. */
+.dash-kpi-grid > .dsh-card { display: flex; flex-direction: column; min-height: 145px; }
+.dash-kpi-grid .dash-kpi__top { margin-bottom: 8px; }
+.dash-kpi-grid .dash-kpi__value { margin-bottom: 4px; }
+.dash-kpi-grid .dash-kpi__sub { line-height: 1.35; }
+
+/* ══ §4 — THE RIGHT COLUMN IS ONE COLUMN ══════════════════════════════════
+   This Month at a Glance and Quick Actions are in different rows, so nothing
+   made them agree: row B's third track was a leftover
+   `calc((100% - 50px) / 6)` from when the KPI row had six cards, and row C's
+   was .68fr. They landed at different widths with different left edges, which
+   is what breaks the eye going down the right-hand side of the page.
+
+   Both now take one KPI-card width - 5 cards, 4 gaps of 12 - so the right
+   column lines up with the card above it as well as with itself. */
+:root, .dash-row-b, .dash-row-c { --dash-right-col: calc((100% - 48px) / 5); }
+.dash-row-b { grid-template-columns: 1.45fr 1fr var(--dash-right-col); }
+.dash-row-c { grid-template-columns: 1.9fr 1.15fr var(--dash-right-col); }
+
+/* §5 — Needs Action, one line shorter per row. */
+.dash-row-c .dl-need { padding: 3px 9px; }
+
+
+/* §2 SAYS ~145px AND THE ROW CAME OUT AT 195. Every card stretches to the
+   tallest, and the tallest is Advance/Arrears — it carries a figure, a bar AND
+   two split rows where the others carry a figure, a line and a bar. The height
+   comes out of gaps, never type: the spec is explicit that typography is not
+   what pays for a shorter card. */
+.dash-kpi-grid > .dsh-card   { min-height: 0; padding: 12px 14px; }
+.dash-kpi-grid .dash-kpi__top { margin-bottom: 6px; }
+.dash-kpi-grid .dash-kpi__value { margin-bottom: 2px; }
+.dash-kpi-grid .kbar { padding-top: 5px; }
+.dash-kpi-grid .kbar__pct  { margin-bottom: 2px; }
+.dash-kpi-grid .kbar__ends { margin-top: 2px; }
+/* The split card's two rows tighten to match, both figures intact. */
+.dash-kpi--split .dash-kpi__split { padding-top: 5px; gap: 1px; }
+.dash-kpi--split .dash-kpi__srow  { line-height: 1.4; }
+/* The bar belongs to the card floor; on the split card the rows come after it,
+   so it must not claim the slack there. */
+.dash-kpi--split .kbar { margin-top: 4px; }
+
+
+/* THE ROW IS AS TALL AS ADVANCE/ARREARS, and that card carries one element
+   more than the other four - a bar AND two split rows. Its bar goes compact:
+   the percentage moves onto the track's line and the 0/100 axis labels go.
+   They are the least informative thing on the card, because the two rows under
+   it already name both figures and both counts; on the other four cards, where
+   the bar is the only ratio shown, the labels stay. That is ~20px off every
+   card in the row. */
+.dash-kpi--split .kbar { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.dash-kpi--split .kbar__pct   { margin: 0; order: 2; flex: 0 0 auto; font-size: 10.5px; }
+.dash-kpi--split .kbar__track { order: 1; flex: 1 1 auto; height: 6px; }
+.dash-kpi--split .kbar__ends  { display: none; }
+
+
+/* THE ZOOMED SIZES GET THE COMPACT BAR ON EVERY CARD, not just the split one.
+   The bar replaced a sparkline that these blocks had already been trimming,
+   so the KPI row came back ~20px taller here than before §1 landed. Same trade
+   as the split card: the percentage moves onto the track's line and the 0/100
+   axis labels go. The reading survives; only the axis does. */
+@media (max-height:720px) {
+  .dash-kpi-grid .kbar { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+  .dash-kpi-grid .kbar__pct   { margin: 0; order: 2; flex: 0 0 auto; font-size: 10.5px; }
+  .dash-kpi-grid .kbar__track { order: 1; flex: 1 1 auto; height: 6px; }
+  .dash-kpi-grid .kbar__ends  { display: none; }
+}
+
+
+/* RE-ASSERTED, AND THIS IS THE FILE'S RECURRING TRAP. The `.dash-kpi-grid >
+   .dsh-card { padding: 12px 14px }` added for §2 is unconditional and sits
+   LATER in this file than the max-height blocks that had already tightened the
+   same property, so it silently won at every zoomed size and gave back the
+   padding those blocks had taken. Same specificity, later wins - grep this file
+   for a selector before adding a rule for it. */
+@media (max-height:720px) {
+  .dash-kpi-grid > .dsh-card { padding: 10px 12px; }
+  .dash-kpi-grid .dash-kpi__top { margin-bottom: 4px; }
+}
+@media (max-height:665px) {
+  .dash-kpi-grid > .dsh-card { padding: 8px 10px; }
+  .dash-kpi-grid .dash-kpi__value { margin-bottom: 0; }
+  .dash-kpi-grid .kbar { padding-top: 3px; }
+}
+
+
+/* ══ SEAT CARD, FINAL SHAPE (owner answered directly, 7 Sep) ═══════════════
+   Bar on its own line with a 0/100 axis under it, matching the KPI bars; the
+   foot is one link. The 44px the legend and the two buttons held is the second
+   row of six rooms, less the 12 the axis costs. */
+.dash-row-b .seat-occbar { display: block; margin: 2px 0 6px; }
+.dash-row-b .seat-occbar__top {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;
+}
+.dash-row-b .seat-occbar__bar { display: block; width: 100%; }
+.seat-occbar__ends {
+    display: flex; justify-content: space-between;
+    font-size: 9px; color: var(--text3); margin-top: 3px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.dash-row-b .seat-foot { display: flex; justify-content: flex-end; margin-top: 6px; }
+.seat-foot__all {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: none; border: none; padding: 2px 0; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 650; color: var(--accent);
+}
+.seat-foot__all svg { width: 13px; height: 13px; }
+.seat-foot__all:hover { text-decoration: underline; }
+.seat-foot__all:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+/* At the short heights the axis is the first thing to go here too - the
+   percentage and the sentence beside it already carry the reading. */
+@media (max-height:665px) { .seat-occbar__ends { display: none; } }
+
+
+/* ══ TWO ROWS OF ROOMS, PAID FOR OUT OF ROW C ══════════════════════════════
+   Dropping the legend and the two buttons freed 44px inside the seat card and
+   the grid gained NOTHING - because row B's height is the tallest of its three
+   cards, so a shorter seat card just made row B shorter with it. The grid is
+   flex:1 1 0; it can only grow if the ROW does.
+
+   So the seat grid gets an explicit two-row floor (38px tile + 5px gap + 38px),
+   which makes the seat card the tallest and pulls row B up with it - and row C
+   gives back the same height so the fold still holds. Row C can afford it:
+   §5 asks for Needs Action shorter anyway, and Quick Actions is four verbs in
+   a 174px card. */
+.dash-row-b .dash-room-wrap { min-height: 81px; }
+
+.dash-row-c .dl-need    { padding: 2px 9px; }
+.dash-row-c .dl-need__ic { width: 20px; height: 20px; }
+.dash-row-c .dl-acts--4 > * { padding-top: 5px; padding-bottom: 5px; }
+.dash-row-c .dash-sec   { padding-top: 10px; padding-bottom: 10px; }
+
+
+/* The last 8px. `.rt-note` is a sentence explaining how the percentage beside
+   it is calculated - true, useful once, read never again - and the row-type
+   list rows carry 2px of padding each that no figure depends on. Between them
+   they are the eight pixels rows A-C were over at 1366x768. */
+.dash-row-c .rt-note { display: none; }
+.dash-row-c .rt-row  { padding-top: 3px; padding-bottom: 3px; }
+
+
+/* THE RING SETS ROW C'S HEIGHT, not the list beside it - which is why trimming
+   the list rows and the note bought nothing. 150 -> 130 is the eight pixels
+   rows A-C were over, and the ring is still the largest thing in the card. */
+.dash-row-c .rt-donut,
+.rt-left .dnut { width: 130px; height: 130px; max-width: 130px; }
+.dash-row-c .rt-body { grid-template-columns: 130px minmax(0,1fr); }
+
+
+/* ══ OWNER, 7 SEP (third pass on this card) ════════════════════════════════ */
+
+/* 1. THE THREE COUNTS GO SMALLER AND HARDER INTO THE CORNER. They were sized
+      like a KPI figure (17px) and they are not one - they are the card's
+      metadata, and at that weight they competed with the 20% underneath, which
+      IS the reading. 17 -> 14 on the figure, 10 -> 9 on the label, and the
+      gap between them from 18 to 14. */
+.dash-row-b .seat-inline      { gap: 14px; margin-top: -4px; }
+.dash-row-b .seat-inline__k b { font-size: 14px; }
+.dash-row-b .seat-inline__k span { font-size: 9px; letter-spacing: .2px; }
+
+/* 2. EXPAND AND PRINT SHARE THE FOOT LINE, right-aligned. */
+.dash-row-b .seat-foot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 5px; }
+.seat-foot__b {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 24px; padding: 0 9px; border-radius: 7px;
+    background: var(--bg2); border: 1px solid var(--border);
+    color: var(--text2); font-family: inherit; font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.seat-foot__b svg { width: 12px; height: 12px; }
+.seat-foot__b:hover { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
+.seat-foot__b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 3. THE KPI CARDS LOSE THE SPACE UNDER THEIR BARS, so row B sits higher and
+      reads as the page's centre of gravity. The bar is the last element in the
+      card, so this is pure bottom padding - no figure, label or bar loses
+      anything. 12px -> 8px of card floor, and the axis labels tuck up under
+      the track. */
+.dash-kpi-grid > .dsh-card { padding-bottom: 8px; }
+.dash-kpi-grid .kbar        { padding-top: 4px; }
+.dash-kpi-grid .kbar__ends  { margin-top: 2px; font-size: 8.5px; }
+
+
+/* EXPENSES AND PENDING WERE THE SAME AMBER (owner, 7 Sep). The layout spec
+   §1 assigns "amber/orange" to Expenses and "amber" to Pending, which reads as
+   one colour in practice - two adjacent bars in the same hue say the two
+   figures are the same kind of thing, and they are not: one is money spent,
+   the other money not yet collected. Expenses takes the orange end of that
+   pair, Pending keeps the gold. Both stay inside the warm family the spec
+   asks for; they are just far enough apart to tell apart. */
+.kbar--orange { --kbar-a:#C2410C; --kbar-b:#F97316; --kbar-fg:#C2410C; }
+body:not(.light-theme) .kbar--orange { --kbar-fg:#FB923C; }
+
+/* The chart's own box grew when its 50px of dead top padding went; the wrapper
+   floor rises with it so the plot actually uses the room rather than leaving a
+   gap under the header. */
+#trend-chart-wrap { min-height: 168px; }
+
+
+/* AND RE-ASSERTED, for the third time in this file and for the same reason:
+   an unconditional `#trend-chart-wrap { min-height }` added later beats the
+   max-height blocks that had already tightened it. The zoomed sizes went 50px
+   over the fold the moment 168 landed. If you raise this floor again, raise
+   these two with it. */
+@media (max-height:720px) { #trend-chart-wrap { min-height: 136px; } }
+@media (max-height:665px) { #trend-chart-wrap { min-height: 112px; } }
+
+
+/* ══ THE ICON GETS THE COLOUR, THE BAR GIVES IT UP (owner, 7 Sep) ══════════
+   These two changes are one decision. The KPI card had a pale glyph and a
+   saturated bar, so the eye landed on the bar - which is the card's least
+   important element. It is a ratio; the FIGURE is the reading and the icon is
+   what tells you which figure you are looking at.
+
+   So the weight swaps. The chip takes each card's full hue at a readable tint,
+   and the bar drops to the pale end of the same pair. Nothing changes shape or
+   position; only which of the two the eye reaches first. */
+
+/* THE ICONS. Per-card, matching the bar's hue so the card reads as one colour
+   rather than two - the chip used to inherit --dh, a generic per-card token
+   that had drifted paler than the bar it sat above. */
+.dash-kpi-grid > .dsh-card:nth-child(1) .dash-chip { background:#DBEAFE; color:#2451D6; }
+.dash-kpi-grid > .dsh-card:nth-child(2) .dash-chip { background:#FEF3C7; color:#B45309; }
+.dash-kpi-grid > .dsh-card:nth-child(3) .dash-chip { background:#DCFCE7; color:#15803D; }
+.dash-kpi-grid > .dsh-card:nth-child(4) .dash-chip { background:#FFEDD5; color:#C2410C; }
+.dash-kpi-grid > .dsh-card:nth-child(5) .dash-chip { background:#EDE9FE; color:#6D28D9; }
+/* Dark keeps the same hues, re-tinted for a dark ground so theme-parity's
+   4.5:1 floor still holds on the glyph. */
+body:not(.light-theme) .dash-kpi-grid > .dsh-card:nth-child(1) .dash-chip { background:color-mix(in srgb,#3B82F6 20%,transparent); color:#7EA2F5; }
+body:not(.light-theme) .dash-kpi-grid > .dsh-card:nth-child(2) .dash-chip { background:color-mix(in srgb,#F59E0B 20%,transparent); color:var(--warning-fg); }
+body:not(.light-theme) .dash-kpi-grid > .dsh-card:nth-child(3) .dash-chip { background:color-mix(in srgb,#22C55E 20%,transparent); color:var(--success-fg); }
+body:not(.light-theme) .dash-kpi-grid > .dsh-card:nth-child(4) .dash-chip { background:color-mix(in srgb,#F97316 20%,transparent); color:#FB923C; }
+body:not(.light-theme) .dash-kpi-grid > .dsh-card:nth-child(5) .dash-chip { background:color-mix(in srgb,#8B5CF6 20%,transparent); color:#A78BFA; }
+/* A touch larger, since it is now the card's colour anchor. */
+.dash-kpi-grid .dash-chip .icon { width:21px; height:21px; }
+
+/* THE BARS STEP BACK. Each gradient now runs between the two LIGHT ends of its
+   pair rather than dark-to-light, and the percentage label goes to the muted
+   text colour instead of the hue. The bar still reads - it is the only thing on
+   that line - it just stops being the loudest thing on the card. */
+.kbar--blue   { --kbar-a:#93B4F7; --kbar-b:#BFD3FB; }
+.kbar--amber  { --kbar-a:#F5C97A; --kbar-b:#FBE3B4; }
+.kbar--green  { --kbar-a:#86D9A4; --kbar-b:#BEEBCE; }
+.kbar--orange { --kbar-a:#F8B183; --kbar-b:#FBD3B8; }
+.kbar--violet { --kbar-a:#B9A2F3; --kbar-b:#D6CAF8; }
+.kbar__pct { color: var(--text3); font-weight: 650; }
+body:not(.light-theme) .kbar--blue   { --kbar-a:#3B6BD1; --kbar-b:#5D89E0; }
+body:not(.light-theme) .kbar--amber  { --kbar-a:#B07E28; --kbar-b:#C99A46; }
+body:not(.light-theme) .kbar--green  { --kbar-a:#2F8A5A; --kbar-b:#4BA675; }
+body:not(.light-theme) .kbar--orange { --kbar-a:#B85E2B; --kbar-b:#D07C48; }
+body:not(.light-theme) .kbar--violet { --kbar-a:#6F55C0; --kbar-b:#8B73D4; }
+
+
+/* ══ RECENT PAYMENTS: THE HEADER BAND AND THE OVERSIZED GLYPH ══════════════
+
+   1. THE GREY BAND. `.dash-rp th { background:transparent }` has been in this
+      file all along and never once applied: style.css carries
+      `body.light-theme table thead th { background: var(--bg3) }`, which is
+      (0,2,2) against this file's (0,1,1) and wins on specificity regardless of
+      order. So Recent Payments wore the app's generic table grey while every
+      other card header on the dashboard is white — the inconsistency the owner
+      could see. Matching the winning selector's weight is what fixes it; the
+      column labels keep their own colour and weight, they just lose the band.
+
+   2. THE BIG SVG. Every other card header sizes its glyph inline at 15-16px
+      inside a 30px chip. Recent Payments passes no size, so it fell to
+      `.dash-chip .icon` — 20px, two thirds of the chip, visibly heavier than
+      the four headers above it. 16px puts it in line with them. */
+body.light-theme .dash-rp thead th,
+.dash-rp thead th { background: transparent; }
+.dash-rp thead th { border-bottom: 1px solid var(--border); }
+
+.dash-sec .dash-chip .icon { width: 16px; height: 16px; }
+.dash-kpi-grid .dash-chip .icon { width: 21px; height: 21px; }

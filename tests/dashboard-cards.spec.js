@@ -327,7 +327,16 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
   await win.waitForTimeout(600);
   expect(await win.evaluate(() => currentPage)).toBe('addpayment');
 
-  // ── Seat Availability: Expand and Print are reachable again ───────────────
+  /* ── Seat Availability: Expand and Print, on ONE line ────────────────────
+     They were briefly replaced by a "View All Rooms" link on 7 Sep and brought
+     back the same day. What matters is not which of the two won but WHERE they
+     sit: on their own row they cost 28px, which is the second row of six
+     rooms; sharing the foot line with nothing else they cost 4. The legend
+     that used to share that line is gone for good — the tiles carry their own
+     key (blue has a bed going, grey does not, and each prints its fraction).
+
+     Both assertions below are the record of that: the buttons exist, AND the
+     rooms they were nearly traded for are still on screen. */
   await win.evaluate(() => navigate('dashboard'));
   await win.waitForSelector('.seat-foot__b', { timeout: 8000 });
   const seat = await win.evaluate(() =>
@@ -335,14 +344,17 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
       label: b.innerText.trim(), fn: b.getAttribute('onclick') })));
   expect(seat.map(b => b.label)).toEqual(['Expand', 'Print']);
   expect(seat[0].fn).toContain('showSeatDetailModal');
-  // printSeatAvailability() was never deleted — only its button was.
+  // printSeatAvailability() was never deleted — only its button ever was.
   expect(seat[1].fn).toContain('printSeatAvailability');
+  expect(await win.evaluate(() =>
+    document.querySelectorAll('.dash-row-b .dash-key').length)).toBe(0);
 
   await win.evaluate(() => document.querySelectorAll('.seat-foot__b')[0].click());
   await win.waitForTimeout(600);
-  const expanded = await win.evaluate(() =>
-    (document.querySelector('.modal-title') || {}).innerText || '');
-  expect(expanded).toMatch(/All Rooms/i);
+  expect(await win.evaluate(() =>
+    (document.querySelector('.modal-title') || {}).innerText || '')).toMatch(/All Rooms/i);
+  await win.evaluate(() => closeModal());
+  await win.waitForTimeout(300);
 
   expect(pageErrors).toEqual([]);
   await app.close();
@@ -426,15 +438,15 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
   }
   expect(misses, 'rows A-C must reach the fold at every shipped size').toEqual([]);
 
-  // And the seat header stays one line at 1366, which is why Expand and Print
-  // went to the footer rather than beside the counts.
+  // The seat header carries a title, a subtitle and three bed counts; it is
+  // allowed two lines for them and no more.
   await win.setViewportSize({ width: 1366, height: 768 });
   await win.evaluate(() => navigate('dashboard'));
   await win.waitForSelector('.seat-foot__b', { timeout: 8000 });
   await win.waitForTimeout(400);
   const headH = await win.evaluate(() =>
     Math.round(document.querySelectorAll('.dash-row-b .dash-sec__head')[1].getBoundingClientRect().height));
-  expect(headH, 'the seat header must stay one line at 1366').toBeLessThan(45);
+  expect(headH, 'the seat header must not run past two lines at 1366').toBeLessThan(58);
 
   await app.close();
 });

@@ -184,17 +184,30 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
     series: (typeof _dashTrendChart !== 'undefined' && _dashTrendChart)
                ? _dashTrendChart.data.datasets.map(d => d.label) : null,
     legend: [...document.querySelectorAll('.dash-legend__k')].map(e => e.textContent.trim()),
-    // KPI row order is the argument the row makes: people, money in, money out,
-    // what is left, what is owed, what actually arrived. Available Fund states
-    // itself as "collected − expenses" and must not precede the expenses it
-    // subtracts. Cash Received closes the row deliberately: it is the same
-    // money as Total Revenue counted on a different basis (when it physically
-    // arrived rather than which month it settles), so it reads as a footnote to
-    // the row rather than a competing headline at the front of it.
+    /* KPI ROW ORDER — REWRITTEN 7 Sep, and the old reasoning is worth keeping
+       because all three changes were owner overrides of it.
+
+       It used to read: people, money in, money out, what is left, what is
+       owed, what actually arrived. Three things happened to that argument:
+
+         · TOTAL RESIDENTS was removed. It was the one card answered better
+           twice below it — Seat Availability now carries the occupancy
+           percentage and the bed counts in its own header, and Occupancy by
+           Room Type breaks the same headcount down by type.
+         · CASH RECEIVED became ADVANCE / ARREARS. Cash Received reported the
+           whole drawer and so mostly restated Total Revenue; the two buckets
+           that are NOT this month's own rent are the part worth a card.
+         · PENDING AND EXPENSES SWAPPED. This is the one that costs something:
+           Available Fund states itself as "collected − expenses" and now
+           precedes the expenses it subtracts, which is exactly what the old
+           order existed to prevent. The owner's call; the arithmetic is
+           identical either way, and this comment is the record of what was
+           traded for it. */
     kpiOrder: [...document.querySelectorAll('.dash-kpi-grid .dash-kpi__label')]
       .map(l => l.textContent.replace(/\s+/g, '')),
     // Every money card carries its own 12-month history; the first (a headcount
     // with a fill bar) does not.
+    kpiBars: document.querySelectorAll('.dash-kpi-grid .kbar__track').length,
     kpiSparks: [...document.querySelectorAll('.dash-kpi-grid .dsh-card')]
       .map(c => !!c.querySelector('.dash-spark')),
     // Months that have not happened must be null (line stops), not 0 (line
@@ -359,10 +372,15 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   expect(dash.series, 'Pending is a balance, not a monthly flow — do not bar it')
     .not.toContain('Pending');
   expect(dash.legend, 'legend must match the drawn series').toEqual(dash.series);
-  expect(dash.kpiOrder, 'KPI row order: people, in, out, left, owed, arrived')
-    .toEqual(['TotalResidents', 'TotalRevenue', 'Expenses', 'AvailableFund', 'Pending', 'CashReceived']);
-  expect(dash.kpiSparks, 'Available Fund lost its history sparkline')
-    .toEqual([false, false, true, true, true, true]);
+  expect(dash.kpiOrder, 'KPI row order (owner, 7 Sep) — see the note above')
+    .toEqual(['TotalRevenue', 'Pending', 'AvailableFund', 'Expenses', 'Advance/Arrears']);
+  /* THE SPARKLINES ARE GONE, all five of them. They showed a SHAPE — twelve
+     months with no axis and no scale — where the card states one figure for
+     one month; the layout spec replaced them with data-driven 0-100% bars, and
+     each bar is a real ratio of two numbers the card already shows. */
+  expect(dash.kpiSparks, 'sparklines were replaced by 0-100% progress bars')
+    .toEqual([false, false, false, false, false]);
+  expect(dash.kpiBars, 'every KPI card carries a progress bar').toBe(5);
   expect(dash.futureNulls, 'past months must plot, future months must be null')
     .toEqual(dash.series.map(() => ({ past: true, future: true })));
   expect(backup.stats).toBe(4);
