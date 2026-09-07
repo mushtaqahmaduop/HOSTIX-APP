@@ -92,6 +92,12 @@
     '<div class="hz-tb-brand"><span class="hz-tb-logo">' + I.brand + '</span>' +
       '<span class="hz-tb-word">Hostyllo</span></div>' +
     '<div class="hz-tb-menus">' + menusHtml + '</div>' +
+    /* THE HOSTEL NAME, CENTRED (owner, 7 Sep 2026). Absolutely positioned so
+       it centres on the BAR rather than on whatever space the menus leave -
+       the File/View/Help block and the window buttons are different widths, so
+       a flex child between them sits off-centre by half their difference. It
+       is pointer-events:none so the whole strip stays a drag region. */
+    '<div class="hz-tb-title" id="hz-tb-title"></div>' +
     '<div class="hz-tb-spacer"></div>' +
     '<div class="hz-tb-win">' +
       '<button type="button" class="hz-min"   title="Minimize" aria-label="Minimize">' + I.min + '</button>' +
@@ -101,6 +107,7 @@
 
   document.body.insertAdjacentElement('afterbegin', bar);
   document.body.classList.add('has-titlebar');
+  if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
 
   // ── Menu open/close, and the keyboard access frame:false took away ───────
   // Dropping the native menu bar dropped Alt+F, the arrow keys and Escape with
@@ -248,3 +255,20 @@
   try { api.isMaximized().then(paintMaxState); } catch (_) {}
   api.onMaximizeChange(paintMaxState);
 })();
+
+
+/* ── THE CENTRED HOSTEL NAME ────────────────────────────────────────────────
+   Called on mount, and again by whatever changes the setting. It reads DB
+   rather than taking an argument so a caller cannot pass a stale value, and it
+   no-ops before DB exists (the bar mounts on the login screen, where there is
+   no hostel yet and an empty strip is the right answer). */
+window.setTitlebarHostel = function () {
+  var el = document.getElementById('hz-tb-title');
+  if (!el) return;
+  var name = '';
+  try {
+    if (typeof DB !== 'undefined' && DB && DB.settings) name = DB.settings.hostelName || '';
+  } catch (e) { /* not loaded yet */ }
+  el.textContent = name;
+  el.title = name;
+};

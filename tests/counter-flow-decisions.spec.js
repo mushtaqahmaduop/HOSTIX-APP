@@ -97,7 +97,10 @@ test('a student on notice keeps their bed, the room says when it frees, and the 
       chips: chips.map(c => ({
         text: c.innerText.replace(/\s+/g, ' ').trim(),
         vacating: c.classList.contains('is-vacating'),
-        opens: /showViewStudentModal/.test(c.getAttribute('onclick') || ''),
+        // The chip opens the slide-over now, not the old profile modal
+        // (owner, 7 Sep: "the student old profile is still rendering ...
+        // like from rooms"). Every in-app route to a student goes to the panel.
+        opens: /showStudentPanel/.test(c.getAttribute('onclick') || ''),
       })),
     };
   });

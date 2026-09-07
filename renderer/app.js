@@ -206,6 +206,19 @@ updateSidebar(); // shows zeros/defaults until boot() completes
 
 // ── KEYBOARD SHORTCUTS: Escape = close modal, Enter = save form ───────────────
 document.addEventListener('keydown', function(e) {
+  /* ALT+LEFT GOES BACK — the shortcut every browser and file manager on this
+     platform uses for it, so it needs no teaching. It defers to a modal: while
+     one is open, Back would step the page out from under it. It also stays out
+     of text fields, where Alt+Left is a word-wise cursor move. */
+  if (e.altKey && e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+    if (document.querySelector('.modal-overlay')) return;
+    const t = document.activeElement;
+    const tag = t ? (t.tagName || '').toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
+    if (typeof goBack === 'function') { e.preventDefault(); goBack(); }
+    return;
+  }
+
   // Escape: close any open modal
   if (e.key === 'Escape') {
     const modal = document.querySelector('.modal-overlay');

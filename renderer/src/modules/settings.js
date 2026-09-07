@@ -1360,9 +1360,11 @@ async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
   if(key==='hostelName') {
-    // Update sidebar name
+    // Update sidebar name (the node is hidden now - the visible copy is the
+    // centred one in the title bar, refreshed on the next line)
     const sbName = document.getElementById('sb-hostel-name');
     if(sbName) sbName.textContent = val;
+    if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
     // Update login screen hostel name
     const loginName = document.getElementById('login-hostel-name');
     if(loginName) loginName.textContent = val;

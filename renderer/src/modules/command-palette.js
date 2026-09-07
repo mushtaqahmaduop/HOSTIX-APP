@@ -48,7 +48,7 @@
         const r = (DB.rooms || []).find(function (x) { return x.id === s.roomId; });
         return {
           label: s.name || ('#' + s.id), sub: 'Student' + (r ? ' · Room #' + r.number : ''),
-          icon: '🎓', kind: 'Open', run: function () { showViewStudentModal(s.id); }
+          icon: '🎓', kind: 'Open', run: function () { showStudentPanel(s.id); }
         };
       });
     }

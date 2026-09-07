@@ -583,6 +583,7 @@ async function checkLogin() {
         // Anything raised while the login screen was up has been held; the app
         // is visible now, so it has somewhere to land.
         if (typeof flushToastQueue === 'function') flushToastQueue();
+        if (typeof startChromeClock === 'function') startChromeClock();
         if (typeof showSplashScreen === 'function') showSplashScreen();
         /* First-run setup, after activation and after login -- never mid-session
            and never over a hostel that already has data. maybeRunSetup() decides;
@@ -788,6 +789,7 @@ var CUR_USER = null;
     // The login screen is hidden immediately on this path, but the boot timers
     // can still fire before it is, so the queue has to be drained here too.
     setTimeout(() => { if (typeof flushToastQueue === 'function') flushToastQueue(); }, 600);
+    if (typeof startChromeClock === 'function') startChromeClock();
     _startIdleTracking();
 
   } else {

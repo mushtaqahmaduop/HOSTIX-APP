@@ -310,7 +310,7 @@ function printReceipt(payId) {
 
   // [FIX-R3] Pass _clearReturnStudentId to close handlers
   var backBtn = _returnStudentId
-    ? '<button class="btn btn-secondary" onclick="var s=_returnStudentId;_clearReturnStudentId();closeModal();if(!refreshStudentView(s))showViewStudentModal(s)">← Back to Student</button>'
+    ? '<button class="btn btn-secondary" onclick="var s=_returnStudentId;_clearReturnStudentId();closeModal();if(!refreshStudentView(s))showStudentPanel(s)">← Back to Student</button>'
     : '<button class="btn btn-secondary" onclick="_clearReturnStudentId();closeModal()">Close</button>';
 
   var _rcptFooter = backBtn

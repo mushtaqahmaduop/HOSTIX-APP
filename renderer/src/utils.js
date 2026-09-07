@@ -201,6 +201,37 @@ function fmtCompact(n) {
   return sign + num + suffix;
 }
 
+/* ── COMPACT MONEY, FROM THE THOUSAND UP ─────────────────────────────────────
+   fmtCompact() above stays exact below ten million on purpose: a KPI card that
+   rounds PKR 476,700 to "PKR 477K" has thrown away the figure a warden is
+   about to reconcile against a cash drawer.
+
+   The dashboard's lower widgets are the other case. The Pending list and the
+   Collection donut are SCANNED, not reconciled — the lower-section spec §14
+   asks for "PKR 10K / PKR 476.5K / PKR 1.24M" there, and the exact number is
+   one click away on Payments. So this is a second formatter rather than a
+   change to the first: same rules, different threshold, and each caller picks
+   the one that matches what its number is for.
+
+   One decimal, trimmed: "PKR 10K" not "PKR 10.0K", "PKR 476.5K" kept. Below a
+   thousand there is nothing to compact and the exact figure is shorter anyway. */
+function fmtCompactK(n) {
+  const v = Number(n || 0);
+  const abs = Math.abs(v);
+  if (abs < 1000) return fmtNum(v);
+  const sign = v < 0 ? '-' : '';
+  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : abs >= 1e6 ? 1e6 : 1e3;
+  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : abs >= 1e6 ? 'M' : 'K';
+  /* ONE DECIMAL AT THOUSANDS, TWO ABOVE. 476.5K needs one to stay useful;
+     1.24M needs two, because 1.2M and 1.29M are ninety thousand rupees apart
+     and the spec's own example (§6) is "PKR 1.24M". Trailing zeros go either
+     way: "10K", not "10.0K". */
+  const num = (abs / div).toFixed(div === 1e3 ? 1 : 2).replace(/\.?0+$/, '');
+  return sign + num + suffix;
+}
+/** The same, with the currency word — the lower widgets print it everywhere. */
+function fmtPKRk(n) { return 'PKR ' + fmtCompactK(n); }
+
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
    charge is a reader, and reads it through here.
@@ -750,6 +781,22 @@ function thisMonthLabel() {
   return new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 }
 function thisYear() { return new Date().getFullYear().toString(); }
+
+/* A stored month key rendered for a person. `p.month` is 'YYYY-MM' on newer
+   records and the older 'August 2026' shape on ones written before that, so
+   this takes either and returns the readable form - printing the raw key put
+   "Room 22 · 2026-09" on the dashboard, which is a database value on a screen.
+
+   en-IN, not en-PK: the app already uses it everywhere for dates. */
+function monthLabel(key) {
+  const s = String(key || '').trim();
+  if (!s) return '';
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  if (!m) return s;                       // already a label, or something else
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+}
 
 // ── String helpers ────────────────────────────────────────────────────────────
 function escHtml(s) {

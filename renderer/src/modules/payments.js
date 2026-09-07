@@ -238,6 +238,53 @@ function payIsArrear(p, mo) {
   return !!k && k < mo;
 }
 
+/* ── ARRIVING AT PAYMENTS WITH A QUESTION ALREADY ASKED ─────────────────────
+   The dashboard's lower widgets link here, and until now every one of them
+   landed on the unfiltered table (owner, 7 Sep: "view all pending payment only
+   directs to payment page not pending payments inside the payment page"). That
+   is a link that drops you at the front door of a building and leaves you to
+   find the room.
+
+   Both helpers RESET the filter before setting their one clause. Carrying
+   whatever the warden last left on the Payments screen would silently subtract
+   rows from an answer the dashboard just promised — arrive from "5 pending" and
+   see three, because last week's room filter was still on. */
+function _payResetFilter() {
+  payFilter.status = 'All'; payFilter.method = 'All'; payFilter.room = 'All';
+  payFilter.month = 'All'; payFilter.search = ''; payFilter.unpaidOnly = false;
+  payFilter.showAll = false; payFilter.arrears = true; payFilter.page = 1;
+  if (typeof paySelected !== 'undefined' && paySelected && paySelected.clear) paySelected.clear();
+}
+
+/* SET THE FILTER *AFTER* navigate(), NEVER BEFORE. navigate() clears
+   status/room/month/unpaidOnly on every change of page — deliberately, so a
+   filter left on last visit does not silently hide rows on this one. Setting
+   the clause first therefore had it wiped a millisecond later, and View All
+   landed on the unfiltered table exactly as before. navigate() first, then the
+   clause, then renderPage() to repaint in place (which does not touch the
+   trail, so Back still points at where we came from). */
+
+/** Payments, showing only what is still owed (lower-section spec §17). */
+function openPaymentsPending() {
+  navigate('payments');
+  _payResetFilter();
+  payFilter.status = 'Pending';
+  renderPage('payments');
+}
+
+/** Payments, showing only one wallet — where a donut slice or a method row goes.
+    An unknown name would filter the table to nothing and look broken, so
+    'Other' (and anything Settings does not know) opens the table unfiltered. */
+function openPaymentsByMethod(name) {
+  navigate('payments');
+  _payResetFilter();
+  const known = (DB.settings && Array.isArray(DB.settings.paymentMethods))
+    ? DB.settings.paymentMethods.map(m => String(m).trim()) : [];
+  const hit = known.find(m => m.toLowerCase() === String(name || '').trim().toLowerCase());
+  if (hit) payFilter.method = hit;
+  renderPage('payments');
+}
+
 function payFiltered() {
   const mo = thisMonth();
   let pays = DB.payments.filter(p => {
@@ -862,7 +909,7 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     p.status = 'Paid'; p.paidDate = p.paidDate || today();
     await saveDB();
     toast('Already settled — nothing left to collect on this record', 'info');
-    if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
+    if (!refreshStudentView(studentId)) showStudentPanel(studentId);
     return;
   }
   const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
@@ -875,7 +922,7 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
   toast('Payment marked as paid — ' + fmtPKR(p.amount) + ' total collected', 'success');
   /* The slide-over is the student view now when it is open; the modal is
      still the fallback for the dashboard, reports and rooms, which open it. */
-  if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
+  if (!refreshStudentView(studentId)) showStudentPanel(studentId);
 }
 async function deletePayment(id) {
   const _dp = DB.payments.find(x => x.id === id);
@@ -898,7 +945,7 @@ async function deletePaymentFromStudentView(payId, studentId) {
     DB.payments=DB.payments.filter(x=>x.id!==payId);
     await saveDB();
     toast('Payment record deleted','info');
-    if (!refreshStudentView(studentId)) showViewStudentModal(studentId);
+    if (!refreshStudentView(studentId)) showStudentPanel(studentId);
   });
 }
 
@@ -2865,7 +2912,7 @@ async function submitEditPayment(id) {
   toast('Payment updated','success');
   if(_returnStudentId) {
     var _sid = _returnStudentId; _returnStudentId = null;
-    if (!refreshStudentView(_sid)) showViewStudentModal(_sid);
+    if (!refreshStudentView(_sid)) showStudentPanel(_sid);
   } else {
     closeModal(); renderPage('payments');
   }

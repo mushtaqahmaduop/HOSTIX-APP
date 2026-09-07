@@ -49,8 +49,60 @@ try {
 // ─────────────────────────────────────────────────────────────────────────────
 
 let currentPage = 'dashboard';
+/* ── THE TRAIL ──────────────────────────────────────────────────────────────
+   `goBack()` and `pageHistory` have been here all along; what was missing was
+   any way for a warden to reach them. The header's Back button was removed on
+   the grounds that "sub-pages carry their own exit", which is true of the
+   add-student form and false of everything the dashboard links to: a donut
+   slice, a KPI card, a Needs Action verb and View All all jump you to another
+   page with no way back but the sidebar, which loses where you were (owner,
+   7 Sep).
+
+   TWO KINDS OF NAVIGATION, and only one of them is a step:
+
+     · A RAIL CLICK is a fresh start. `navRail()` clears the trail, because
+       offering to go "back" to a page the warden deliberately left is noise.
+     · EVERYTHING ELSE is a step deeper — a chart, a widget, a modal's button,
+       the command palette. Those push, and Back returns.
+
+   The button appears only when the trail has somewhere to return to, so it is
+   absent on a plain rail visit and present the moment a jump happens. */
 let pageHistory = ['dashboard'];
-function goBack(){if(pageHistory.length>1){pageHistory.pop();navigate(pageHistory[pageHistory.length-1],true);}}
+
+function goBack() {
+  if (pageHistory.length > 1) {
+    pageHistory.pop();
+    navigate(pageHistory[pageHistory.length - 1], true);
+  }
+}
+
+/** Where the sidebar goes. Same navigation, but it starts a new trail.
+
+    The reset happens AFTER navigate, not before: navigate only pushes when the
+    page actually changes, so clearing first and letting it push left the trail
+    EMPTY whenever the rail item for the current page was clicked — and an empty
+    trail hides the Back button on the next jump, which is the bug this was
+    written to prevent. Assigning afterwards makes the trail exactly [page]
+    whichever branch navigate took. */
+function navRail(page) {
+  navigate(page);
+  pageHistory = [page];
+  _syncBackBtn();
+}
+
+/** Show the Back control only when there is something behind us. */
+function _syncBackBtn() {
+  const b = document.getElementById('hdr-back');
+  if (!b) return;
+  const deep = pageHistory.length > 1;
+  b.style.display = deep ? 'flex' : 'none';
+  if (deep) {
+    const prev = pageHistory[pageHistory.length - 2];
+    const cfg = pageConfig[prev] || {};
+    b.title = 'Back to ' + (cfg.title || prev);
+    b.setAttribute('aria-label', b.title);
+  }
+}
 const pageConfig = {
   dashboard:     { title:'Dashboard', sub:'', action:'Add Student' },
   rooms:         { title:'Rooms', sub:'', action:'Add Room' },
@@ -109,12 +161,17 @@ function navigate(page, isBack=false) {
     studentFilter.page   = 1;
     if (typeof stuSelected !== 'undefined' && stuSelected) stuSelected.clear();
   }
-  if(!isBack) {
+  /* ONLY A CHANGE OF PAGE IS A STEP. `navigate(currentPage)` is how several
+     controls re-render in place, and each one used to push a duplicate — after
+     a few of those, Back appeared to do nothing because the top three entries
+     were the page you were already on. */
+  if (!isBack && page !== currentPage) {
     pageHistory.push(page);
     // FIX #9: Cap pageHistory to prevent unbounded memory growth across long sessions
     if (pageHistory.length > 50) pageHistory.shift();
   }
   currentPage = page;
+  _syncBackBtn();
   // BUG FIX: Reset reportDetail on every fresh navigation to reports so the
   // overview badges always show first instead of the last opened detail panel.
   if (page === 'reports') reportDetail = null;
@@ -170,16 +227,32 @@ function applyHeaderChrome(page) {
   const _t = document.getElementById('hdr-title');
   if (_t) _t.textContent = cfg.title || '';
 
-  /* The subtitle is the HOSTEL'S NAME, on every page. The sketch puts it beside
-     the page title, and it is the one piece of context that answers "whose data
-     am I looking at" — which matters because a warden can run more than one
-     hostel from the same install. A page's own subtitle still shows after it. */
+  /* THE HOSTEL NAME IS NOT HERE ANY MORE (owner, 7 Sep: "remove hostel name
+     from below dashboard at the header"). It moved to the centre of the title
+     bar on the same day, and printing it in both places said the same thing
+     twice, 40px apart, on every page.
+
+     The subtitle element stays and still shows a PAGE's own subtitle when one
+     is configured — that is a different sentence, and no page sets one today. */
   const _s = document.getElementById('hdr-sub');
   if (_s) {
-    const hostel = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || '';
-    const txt = [hostel, cfg.sub].filter(Boolean).join(' · ');
+    const txt = cfg.sub || '';
     _s.textContent = txt;
     _s.style.display = txt ? 'block' : 'none';
+  }
+
+  /* THE DASHBOARD GREETING rides in the header's spare width, and only there -
+     see `_dashGreeting()` for why it is not a band on the page. It is removed
+     on every other page rather than left behind: it greets you for arriving at
+     the dashboard, and a greeting that follows you to Payments is furniture. */
+  const _left = document.querySelector('#header .hdr-left');
+  const _oldGreet = document.getElementById('hdr-greet');
+  if (_oldGreet) _oldGreet.remove();
+  if (_left && page === 'dashboard' && typeof _dashGreeting === 'function') {
+    const _w = document.createElement('div');
+    _w.id = 'hdr-greet';
+    _w.innerHTML = _dashGreeting();
+    _left.appendChild(_w);
   }
 
   /* The header's one primary button is Add <something>, and it leads to a gate.
@@ -358,7 +431,11 @@ function renderPage(p, resetScroll=false) {
 
 function updateSidebar() {
   const setEl = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
-  setEl('sb-hostel-name', DB.settings.hostelName || 'Hostel Management');
+  /* The sidebar node is hidden now (the name lives in the title bar), but it
+     is still written so anything reading it stays correct - and the bar is
+     refreshed from the same call rather than from a second code path. */
+  setEl('sb-hostel-name', DB.settings.hostelName || '');
+  if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
   setEl('sb-version', 'v' + (DB.settings.version || '4.0'));
   // Update cancellation badge
   const cancelBadge = document.getElementById('cancel-badge');
@@ -382,6 +459,58 @@ function _chromeInitials(name) {
   const s = String(name || '').trim();
   if (!s) return '—';
   return s.split(/\s+/).slice(0,2).map(w => w[0] || '').join('').toUpperCase();
+}
+
+/* ── THE WALL CLOCK ─────────────────────────────────────────────────────────
+   NOTHING IN THIS APP RE-READ THE CLOCK once a screen was painted, and two
+   owner-reported faults were the same fault:
+
+     · the sidebar's date chip kept yesterday's date after midnight, which read
+       as "the date changes late" - it changes on the next render, and on a
+       machine left open overnight the next render is the next morning;
+     · the greeting still said "Good morning" at night.
+
+   Both are `new Date()` read once at paint time. This re-reads it every 30s
+   and repaints only what actually changed - the cost of being wrong here is a
+   warden dating a receipt to the wrong day.
+
+   30 SECONDS, not 1: the check is two string comparisons, and a minute of lag
+   on a greeting is invisible while a minute of lag on the date at 00:00:30 is
+   not worth a timer that fires twice as often all day for it. */
+let _clockDay = null, _clockGreet = null, _clockTimer = null;
+
+function _chromeClockTick() {
+  const now = new Date();
+  const day = (typeof ymd === 'function') ? ymd(now) : now.toDateString();
+
+  /* THE DAY ROLLED OVER. The date chip is re-rendered, and the dashboard with
+     it when that is the page on screen - every figure there is scoped to a
+     month that "today" can have just moved out of. */
+  if (_clockDay !== null && day !== _clockDay) {
+    if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+    if (typeof currentPage !== 'undefined' && currentPage === 'dashboard'
+        && typeof renderPage === 'function') renderPage('dashboard', false);
+  } else if (_clockDay === null && typeof renderSidebarCalendar === 'function') {
+    renderSidebarCalendar();
+  }
+  _clockDay = day;
+
+  /* THE GREETING CROSSED A PHASE. Only the text and the glyph change, so this
+     rewrites the one element rather than re-rendering the header. */
+  if (typeof _dashGreetingText === 'function') {
+    const txt = _dashGreetingText();
+    if (_clockGreet !== null && txt !== _clockGreet) {
+      const host = document.getElementById('hdr-greet');
+      if (host && typeof _dashGreeting === 'function') host.innerHTML = _dashGreeting();
+    }
+    _clockGreet = txt;
+  }
+}
+
+function startChromeClock() {
+  if (_clockTimer) return;
+  _chromeClockTick();
+  _clockTimer = setInterval(_chromeClockTick, 30000);
 }
 
 // Mirrors the logged-in warden into both the header chip and the sidebar card.

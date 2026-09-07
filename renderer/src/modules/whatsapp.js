@@ -120,7 +120,7 @@ function showRentReminderModal() {
               + '<button class="wa-pill wa-pill--web" onclick="openExternalLink(\''+waWebLink+'\')" title="Open WhatsApp Web">'
               + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>Web</button>'
             : '<span class="wa-row__nop">No number</span>')
-        + '<button class="wa-go" onclick="closeModal();showViewStudentModal(\''+student.id+'\')" title="Open student">'
+        + '<button class="wa-go" onclick="closeModal();showStudentPanel(\''+student.id+'\')" title="Open student">'
         + '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>'
         + '</div></div>';
     });
@@ -177,4 +177,51 @@ function waViewPendingStudents() {
     payFilter.page       = 1;
   }
   navigate('payments');
+}
+
+
+/* ── ONE STUDENT'S REMINDER (lower-dashboard spec §16) ───────────────────────
+   The Pending Payments card puts a WhatsApp button on each row. It sends the
+   SAME message the batch modal sends — built here once so the two cannot drift
+   into telling a student two different amounts.
+
+   WHAT THIS DOES NOT DO IS REPORT DELIVERY. The integration is a wa.me link
+   handed to the OS: WhatsApp opens with the message typed, and a human presses
+   send. Nothing comes back. The spec says "show delivery result only when
+   returned by the integration" — nothing is returned, so nothing is claimed,
+   and the toast says the draft was opened rather than that anything was sent. */
+function waReminderMessage(student, dues, totalDue) {
+  var room = DB.rooms.find(function (r) { return r.id === student.roomId; });
+  return encodeURIComponent('Assalamu Alaikum *' + student.name + '*,\n\n'
+    + 'Reminder from *' + DB.settings.hostelName + '*\n\n'
+    + 'Dear Student,\n'
+    + 'This is a reminder that your hostel fee is still pending. Please make the payment as soon as possible to avoid any inconvenience, otherwise late fee charges may apply.\n'
+    + 'Thank you for your prompt attention.\n\n'
+    + '\uD83D\uDCB0 Pending Amount: *' + fmtPKR(totalDue) + '*\n'
+    + 'Room: #' + (room ? room.number : '\u2014') + '\n'
+    + 'Month(s): ' + dues.map(function (d) { return d.month; }).join(', '));
+}
+
+function waRemindStudent(studentId) {
+  var student = DB.students.find(function (x) { return x.id === studentId; });
+  if (!student) { toast('That student record is no longer here', 'error'); return; }
+
+  /* Every pending record for this student, not just the row that was clicked -
+     a student who owes for two months should get one message about both, which
+     is what the batch modal already does. */
+  var dues = DB.payments.filter(function (p) {
+    return p.studentId === studentId && p.status === 'Pending' && outstandingOf(p) > 0;
+  });
+  var totalDue = dues.reduce(function (s, p) { return s + outstandingOf(p); }, 0);
+  if (!dues.length) { toast('Nothing outstanding for ' + student.name, 'info'); return; }
+
+  var rawPhone = (student.phone || '').replace(/[^0-9]/g, '').replace(/^0/, '92');
+  if (!rawPhone) {
+    toast('No phone number on ' + student.name + "'s record", 'warning', 'Cannot send');
+    return;
+  }
+  var links = waBuildLinks(rawPhone, waReminderMessage(student, dues, totalDue));
+  if (typeof openExternalLink === 'function') openExternalLink(links.web);
+  else window.open(links.web, '_blank');
+  toast('WhatsApp opened with the reminder for ' + student.name, 'success', 'Draft ready');
 }

@@ -198,7 +198,7 @@ function renderRooms() {
         ${people.length?`<div class="rms-occ">${people.map(p=>{
           const leaving = p.leaves !== null;
           const when = leaving ? (p.leaves ? fmtDate(p.leaves) : 'end of month') : '';
-          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showViewStudentModal('${p.id}')" title="${leaving?`Leaving ${escHtml(when)} — bed stays theirs until then`:`Open ${escHtml(p.name)}`}"><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">${escHtml(when)}</b>`:''}</span>`;
+          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showStudentPanel('${p.id}')" title="${leaving?`Leaving ${escHtml(when)} — bed stays theirs until then`:`Open ${escHtml(p.name)}`}"><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">${escHtml(when)}</b>`:''}</span>`;
         }).join('')}</div>`:''}
 
         <div class="rms-acts">

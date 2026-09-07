@@ -71,7 +71,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} collected − ${fmtPKR(totalExp)} expenses</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Date</th></tr></thead><tbody>
-      ${_pg.slice.map(p=>`<tr style="cursor:pointer" onclick="showViewStudentModal('${p.studentId}')">
+      ${_pg.slice.map(p=>`<tr style="cursor:pointer" onclick="showStudentPanel('${p.studentId}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${escHtml(p.roomNumber||'—')}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
@@ -118,7 +118,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th><th>Action</th></tr></thead><tbody>
       ${_pg.slice.map(p=>`<tr>
-        <td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showViewStudentModal('${p.studentId}')">${escHtml(p.studentName||'—')}</td>
+        <td class="fw-700" style="cursor:pointer;color:var(--blue)" onclick="showStudentPanel('${p.studentId}')">${escHtml(p.studentName||'—')}</td>
         <td class="text-gold fw-700">#${escHtml(p.roomNumber||'—')}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(p.month||'—')}</td>
         <td class="${Number(p.amount)>0?'text-green fw-700':'text-muted'}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td>
@@ -193,7 +193,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <button onclick="studentReportFilter='All';renderPage('reports')" class="btn btn-secondary btn-sm" style="font-size:11px">✕ Clear</button>
       </div>`:''}
       <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>
-      ${_pg.slice.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showViewStudentModal('${t.id}')">
+      ${_pg.slice.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showStudentPanel('${t.id}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(t.name)}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(t.fatherName||'—')}</td>
         <td class="text-gold fw-700">${r?'#'+r.number:'—'}</td>

@@ -28,7 +28,16 @@
    has to answer at the same weight. 18/16 of vertical padding was set when the
    block held only the brand; it now holds the picker too and reads as one
    unit. −18px. */
-#sidebar .sb-logo { padding: 10px 16px 6px; }
+/* LEFT PADDING IS 44, NOT 16, and it has to be set HERE. The collapse button
+   moved to the left of this row (owner, 7 Sep 2026) and the mark has to start
+   clear of it. chrome.css sets the same padding at the same weight and this
+   file loads after it, so chrome.css's value loses - editing it there indents
+   nothing and looks like the button is simply drawn on top of the logo, which
+   is exactly what happened. Change the indent in BOTH or in the winner; this
+   is the winner. */
+#sidebar .sb-logo { padding: 10px 16px 6px 44px; }
+/* Collapsed the rail is ~72px and the button is the only thing in the row. */
+body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
 
 /* Section headers. Five of them, and the spec above measures a header at 21px.
    4px off each is 20px of rail — the single largest saving available that is

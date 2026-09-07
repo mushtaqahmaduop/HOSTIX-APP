@@ -114,3 +114,28 @@ body.has-titlebar .stu-pan__scrim { top: var(--titlebar-h); }
    toast rendered UNDERNEATH the titlebar and lost its first line — the owner
    reported a camera-permission message cut in half. */
 body.has-titlebar #toast-container { top: calc(var(--titlebar-h) + 14px); }
+
+
+/* ── THE HOSTEL NAME, CENTRED ON THE BAR ────────────────────────────────────
+   left:50%/translateX(-50%) rather than a flex child: the menu block on the
+   left and the window buttons on the right are different widths, so a flex
+   child between them centres on the leftover space and lands visibly off the
+   window's middle.
+
+   It must never take the pointer - the bar is the drag region, and a strip of
+   text across the middle of it that swallowed mousedown would make the window
+   undraggable exactly where people grab it. max-width keeps a long hostel name
+   from reaching either neighbour; it ellipsises instead. */
+#hz-titlebar .hz-tb-title {
+    position: absolute;
+    left: 50%; top: 0; transform: translateX(-50%);
+    height: var(--titlebar-h);
+    display: flex; align-items: center;
+    max-width: min(46%, 420px);
+    padding: 0 12px;
+    font-size: 12px; font-weight: 650; letter-spacing: .1px;
+    color: var(--tb-fg, inherit); opacity: .92;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+    -webkit-app-region: drag;
+}

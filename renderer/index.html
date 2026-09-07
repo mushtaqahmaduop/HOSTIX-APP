@@ -395,7 +395,12 @@
       </div>
       <div class="sb-logo-text">
         <div class="name">HOSTYLLO</div>
-        <div class="sub" id="sb-hostel-name">Hostel Management</div>
+        <!-- THE HOSTEL'S NAME MOVED TO THE TITLE BAR (owner, 7 Sep 2026), where
+             it is centred and reads as the window's subject rather than as a
+             subtitle of the product mark. The node stays, hidden: nav.js and
+             settings.js both write to it by id, and deleting it would turn two
+             live updates into silent no-ops. -->
+        <div class="sub" id="sb-hostel-name" hidden></div>
       </div>
     </div>
     <!-- MONTH PICKER — in the sidebar, where the sketch puts it and where the
@@ -466,7 +471,7 @@
          and re-measure with tests/rail-reach.spec.js instead of assuming it
          still fits. -->
     <div class="sb-section">Main</div>
-    <div class="nav-item active" onclick="navigate('dashboard')" data-page="dashboard" title="Dashboard">
+    <div class="nav-item active" onclick="navRail('dashboard')" data-page="dashboard" title="Dashboard">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect width="7" height="9" x="3" y="3" rx="1" />
         <rect width="7" height="5" x="14" y="3" rx="1" />
@@ -476,7 +481,7 @@
       <span class="nav-label">Dashboard</span>
     </div>
     <div class="sb-section">People</div>
-    <div class="nav-item" onclick="navigate('students')" data-page="students" title="Students">
+    <div class="nav-item" onclick="navRail('students')" data-page="students" title="Students">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <path d="M16 3.128a4 4 0 0 1 0 7.744" />
@@ -485,7 +490,7 @@
       </svg>
       <span class="nav-label">Students</span>
     </div>
-    <div class="nav-item" onclick="navigate('cancellations')" data-page="cancellations" title="Cancellations">
+    <div class="nav-item" onclick="navRail('cancellations')" data-page="cancellations" title="Cancellations">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="m15 9-6 6" />
@@ -495,21 +500,21 @@
       <span id="cancel-badge" class="nav-badge" style="display:none;background:var(--red)">0</span>
     </div>
     <div class="sb-section">Finance</div>
-    <div class="nav-item" onclick="navigate('payments')" data-page="payments" title="Payments">
+    <div class="nav-item" onclick="navRail('payments')" data-page="payments" title="Payments">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect width="20" height="14" x="2" y="5" rx="2" />
         <line x1="2" x2="22" y1="10" y2="10" />
       </svg>
       <span class="nav-label">Payments</span>
     </div>
-    <div class="nav-item" onclick="navigate('expenses')" data-page="expenses" title="Expenses">
+    <div class="nav-item" onclick="navRail('expenses')" data-page="expenses" title="Expenses">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" x2="12" y1="2" y2="22" />
         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
       </svg>
       <span class="nav-label">Expenses</span>
     </div>
-    <div class="nav-item" onclick="navigate('reports')" data-page="reports" title="Reports">
+    <div class="nav-item" onclick="navRail('reports')" data-page="reports" title="Reports">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M11 13v4" />
         <path d="M15 5v4" />
@@ -520,14 +525,14 @@
       <span class="nav-label">Reports</span>
     </div>
     <div class="sb-section">Operations</div>
-    <div class="nav-item" onclick="navigate('rooms')" data-page="rooms" title="Rooms">
+    <div class="nav-item" onclick="navRail('rooms')" data-page="rooms" title="Rooms">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
         <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       </svg>
       <span class="nav-label">Rooms</span>
     </div>
-    <div class="nav-item" onclick="navigate('issues')" data-page="issues" title="Complaints">
+    <div class="nav-item" onclick="navRail('issues')" data-page="issues" title="Complaints">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
       </svg>
@@ -535,7 +540,7 @@
       <span id="issues-badge" class="nav-badge" style="display:none;background:var(--amber)">0</span>
     </div>
     <div class="sb-section">System</div>
-    <div class="nav-item" onclick="navigate('archive')" data-page="archive" title="Annual Archive">
+    <div class="nav-item" onclick="navRail('archive')" data-page="archive" title="Annual Archive">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="3" width="20" height="5" rx="1" />
         <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
@@ -543,14 +548,14 @@
       </svg>
       <span class="nav-label">Annual Archive</span>
     </div>
-    <div class="nav-item" onclick="navigate('settings')" data-page="settings" title="Settings">
+    <div class="nav-item" onclick="navRail('settings')" data-page="settings" title="Settings">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
         <circle cx="12" cy="12" r="3" />
       </svg>
       <span class="nav-label">Settings</span>
     </div>
-    <div class="nav-item" onclick="navigate('activitylog')" data-page="activitylog" title="Activity Log">
+    <div class="nav-item" onclick="navRail('activitylog')" data-page="activitylog" title="Activity Log">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 6v6l4 2" />
@@ -612,6 +617,16 @@
          pageHistory are kept — the command palette and in-page controls still
          call them. -->
     <div class="hdr-left" style="display:flex;align-items:center;gap:12px">
+      <!-- BACK. Hidden on a plain rail visit; appears the moment something
+           jumps you somewhere - a donut slice, a KPI card, View All, a modal's
+           button - so that jump can be undone. Alt+Left does the same. -->
+      <button class="hdr-back" id="hdr-back" style="display:none" onclick="goBack()"
+              title="Back" aria-label="Back">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
+        </svg>
+      </button>
       <div class="hdr-title-wrap">
         <div class="page-title" id="hdr-title">Dashboard</div>
         <div class="page-sub" id="hdr-sub" style="display:none"></div>
