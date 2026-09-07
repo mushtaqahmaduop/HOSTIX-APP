@@ -238,14 +238,15 @@ test('Room History reads real shifts, and says so when there are none', async ()
   await win.waitForTimeout(300);
   const none = await win.evaluate(() => ({
     text: document.getElementById('stu-panel-body').innerText.replace(/\s+/g, ' '),
-    rows: [...document.querySelectorAll('.stu-pan__hrow')].map(r => r.className),
+    nodes: [...document.querySelectorAll('.stu-pan__tl')].map(r => r.className),
+    tags:  [...document.querySelectorAll('.stu-pan__tl__tag')].map(r => r.innerText.trim()),
   }));
   expect(none.text).toMatch(/No room changes recorded/i);
-  /* EXACTLY ONE ROW, and it is the current room. The row does carry an arrow —
-     "12-Aug-2026 → present" — but that arrow spans the join date to now, which
-     is on the record. What must not appear is a SECOND row: a move this student
-     never made, or a first assignment inferred from the room they are in. */
-  expect(none.rows).toEqual(['stu-pan__hrow is-now']);
+  /* EXACTLY ONE NODE ON THE TIMELINE, and it is the current room. What must not
+     appear is a SECOND node: a move this student never made, or a first
+     assignment inferred from the room they happen to be in (§29). */
+  expect(none.nodes).toEqual(['stu-pan__tl is-now']);
+  expect(none.tags.map(x => x.toLowerCase())).toEqual(['current']);
   expect(none.text).not.toContain('#3');
 
   await app.close();
@@ -290,6 +291,7 @@ test('every verb the old profile modal had is on the panel', async () => {
   await openPanel(win);
   const acts = await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
     .map(b => ({ label: b.innerText.trim(), call: b.getAttribute('onclick'),
+                 h: Math.round(b.getBoundingClientRect().height),
                  clipped: b.scrollWidth - b.clientWidth })));
 
   /* CANCEL SEAT IS LAST because it is the conditional one: it shows only for an
@@ -305,6 +307,10 @@ test('every verb the old profile modal had is on the panel', async () => {
      a button that puts a resident on notice without asking anything is the one
      thing this assertion exists to stop coming back. */
   expect(acts.find(a => a.label === 'Cancel Seat').call).toContain('showAddCancellationModal');
+  /* AND THE TILES ARE ONE LINE TALL. Stacked glyph-over-label they were 58px
+     each, so two rows came to 122 — taller than the identity beside them, which
+     let the buttons rather than the person decide where the tabs started. */
+  expect(acts.every(a => a.h <= 40), 'the action tiles have grown tall again').toBe(true);
   expect(acts.find(a => a.label === 'Cancel Seat').call).not.toContain('quickCancel');
   // Print renders a PDF rather than opening a modal, so it leaves the panel up.
   expect(acts.find(a => a.label === 'Print').call).not.toContain('closeStudentPanel');
@@ -315,19 +321,33 @@ test('every verb the old profile modal had is on the panel', async () => {
   // "Cancel Seat" is the longest label and must fit its cell without clipping.
   expect(acts.every(a => a.clipped <= 0), 'an action label is clipped').toBe(true);
 
-  /* AND THEY SIT BESIDE THE IDENTITY, NOT UNDER IT (owner reference,
-     `student detail.png`). Stacked, the two halves cost the sum of their
-     heights; side by side they cost the taller one, and the difference is what
-     the content gets. If this ever reads as "under", the width has been taken
-     back and the panel has silently lost ~150px of body. */
-  const band = await win.evaluate(() => {
-    const id = document.querySelector('.stu-pan__id').getBoundingClientRect();
-    const ac = document.querySelector('.stu-pan__acts').getBoundingClientRect();
-    return { idRight: Math.round(id.right), acLeft: Math.round(ac.left),
-             sameRow: Math.abs(Math.round(id.top - ac.top)) < 40 };
+  /* FIVE BANDS, AND ONLY THE BODY SCROLLS (owner §24: "do not make the entire
+     drawer — including the header — scroll away"). Every band above the body is
+     flex:0 0 auto; the moment one is not, the tab strip is the shortest and
+     gives up its height first, drawing its own bottom border through the middle
+     of the word "Overview". Print Profile is the only verb in the header,
+     because it acts on the drawer's contents rather than on the student (§4). */
+  const bands = await win.evaluate(() => {
+    const h = s => { const e = document.querySelector(s);
+                     return e ? Math.round(e.getBoundingClientRect().height) : null; };
+    const b = document.getElementById('stu-panel-body');
+    return { tabs: h('.stu-pan__tabs'), foot: h('.stu-pan__foot'),
+             headVerbs: [...document.querySelectorAll('.stu-pan__head button')]
+                          .map(x => x.innerText.trim()).filter(Boolean),
+             sub: (document.querySelector('.stu-pan__sub') || {}).innerText,
+             closable: !!document.querySelector('.stu-pan__x')
+                    && document.querySelector('.stu-pan__x').getBoundingClientRect().width > 10,
+             scrolls: getComputedStyle(b).overflowY };
   });
-  expect(band.sameRow, 'the actions dropped below the identity').toBe(true);
-  expect(band.acLeft).toBeGreaterThanOrEqual(band.idRight);
+  expect(bands.sub).toBe('Complete profile and information');
+  expect(bands.headVerbs, 'the header took on a verb that belongs to the student')
+    .toEqual(['Print Profile']);
+  /* The close button lost its dimensions once when the header was recomposed
+     and collapsed to nothing, which is not a small bug in a modal surface. */
+  expect(bands.closable, 'the drawer has no visible way out').toBe(true);
+  expect(bands.tabs, 'the tab strip is being squashed again').toBeGreaterThanOrEqual(40);
+  expect(bands.foot).toBeGreaterThanOrEqual(24);
+  expect(bands.scrolls, 'the body is not the band that scrolls').toBe('auto');
 
   /* CANCEL SEAT IS CONDITIONAL, as it was in the modal. Offering it to someone
      who has already left either duplicates a cancellation or fails with a
@@ -415,8 +435,9 @@ test('Financial carries the old profile ledger, whole', async () => {
     foot: document.querySelector('.svw-tfoot').innerText.trim(),
     acts: [...document.querySelectorAll('.svw-t tbody tr')].map(r =>
             [...r.querySelectorAll('.svw-ia')].map(b => b.title)),
-    scrolls: (() => { const w = document.querySelector('.svw-tw');
-                      return w.scrollWidth > w.clientWidth; })(),
+    overflow: (() => { const w = document.querySelector('.svw-tw');
+                       return Math.max(0, w.scrollWidth - w.clientWidth); })(),
+    kebabs: document.querySelectorAll('.svw-t tbody .svw-kebab').length,
   }));
 
   // ALL NINE COLUMNS, in the modal's order.
@@ -427,7 +448,10 @@ test('Financial carries the old profile ledger, whole', async () => {
   expect(led.bar).toContain('Full Payment History (3 records)');
   expect(led.bar).toContain('Total paid: PKR 28,500');
   expect(led.bar).toContain('Due PKR 14,500');
-  expect(led.foot).toBe('Showing 3 of 3 records');
+  /* The footer states the count AND carries the way out to the full Payments
+     list, which is filtered to this student on the way — getting there used to
+     mean closing the drawer and typing the name back in. */
+  expect(led.foot.replace(/\s+/g, ' ')).toBe('Showing 3 of 3 records View all payments');
 
   // The concession is broken out under the paid figure, which is the point.
   expect(led.rows[2][2]).toBe('−PKR 500');
@@ -437,20 +461,33 @@ test('Financial carries the old profile ledger, whole', async () => {
   expect(led.rows[0][4]).toBe('PKR 14,500');
   expect(led.rows[1][4]).toBe('—');
 
-  /* FOUR ROW ACTIONS, and Mark Paid only where there is something to collect.
-     These are the only place a warden can settle a pending record or reprint a
-     receipt without leaving for Payments and finding the row again. */
-  expect(led.acts[0]).toEqual(['Mark Paid', 'Print Receipt', 'Edit Payment', 'Delete']);
-  expect(led.acts[1]).toEqual(['Print Receipt', 'Edit Payment', 'Delete']);
+  /* THE FOUR ROW ACTIONS ARE BEHIND A KEBAB in the drawer — one per row, the
+     same four verbs, and Mark Paid still only where there is something to
+     collect. The four-button cell they replaced was 159px of the table's 1005,
+     the single largest reason nine columns would not fit. What the menu holds
+     is asserted in "the ledger row menu carries the four verbs"; what matters
+     here is that every row still has one, because they are the only place a
+     warden can settle a pending record or reprint a receipt without leaving for
+     Payments and finding the row again. */
+  expect(led.kebabs).toBe(3);
+  expect(led.acts.every(a => a.length === 0),
+    'the drawer ledger went back to four buttons a row').toBe(true);
 
-  /* NINE COLUMNS STILL DO NOT FIT, and no slide-over width will make them.
-     Measured, the table's natural width is ~1005px — Method alone takes 136 for
-     "Bank Transfer" and Actions 159 for four row buttons — so the 600px panel
-     gives its card 564, and the widening bought height, not this. What matters
-     is WHERE the overflow goes: inside .svw-tw, never by pushing the panel body
-     sideways. A horizontally scrolling body moves the content under the cursor
-     as you read down it, which is the fault this pair exists to catch. */
-  expect(led.scrolls, 'the ledger should scroll inside its own card').toBe(true);
+  /* NINE COLUMNS NOW ESSENTIALLY FIT. They wanted 1005px when this table was
+     the modal's, laid out for a full-width screen; in the panel it is 575
+     against a 572 card. Three changes got it there and NONE of them dropped a
+     column — dropping columns is what the digest this replaced did, and the two
+     it dropped were concession and the extras, the pair that answer "why is
+     this figure not the rent": wrapped headers, one kebab instead of four row
+     buttons, and the rent split without its repeated unit.
+
+     The assertion is a BUDGET, not a boolean. A longer payment method or a
+     wider date will push it a few pixels over on somebody's data, and that is
+     what .svw-tw is for; what must never happen is the overflow escaping into
+     the panel body, because a horizontally scrolling body moves the content
+     under the cursor as you read down it. */
+  expect(led.overflow, 'the ledger has grown well past its card again')
+    .toBeLessThanOrEqual(40);
   expect(await win.evaluate(() => {
     const b = document.getElementById('stu-panel-body');
     return b.scrollWidth - b.clientWidth;
@@ -512,6 +549,187 @@ test('a form opens over the panel, and the panel is still there after it', async
   await win.keyboard.press('Escape');
   await win.waitForTimeout(400);
   expect(await win.evaluate(() => !document.querySelector('.stu-pan'))).toBe(true);
+
+  await app.close();
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE DENSITY PASS (owner, 2026-09-06, against `error1.png` and
+   `financial section vievport.png`): "the overview detail should be all
+   available to see at once without much dragging … reduce the size of the
+   buttons … and then look at the financial section, very much free space".
+
+   Both tabs were a column of label/value rows with an empty half beside every
+   value. The fix is the same in both — the card body pairs its fields — and
+   these assertions pin the SHAPE rather than a pixel count, because a pixel
+   count is a promise about somebody else's data.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('the tabs pair their fields instead of stacking them', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+  await win.setViewportSize({ width: 1366, height: 768 });
+  await win.waitForTimeout(200);
+  await openPanel(win);
+
+  const ov = await win.evaluate(() => {
+    const cols = [...document.querySelectorAll('.stu-pan__cols > .stu-pan__col')];
+    const body = document.getElementById('stu-panel-body');
+    const titles = c => [...c.querySelectorAll('.stu-pan__card__h')]
+                          .map(h => h.childNodes[1].textContent.trim());
+    return {
+      colCount: cols.length,
+      left:  cols[0] ? titles(cols[0]) : [],
+      right: cols[1] ? titles(cols[1]) : [],
+      skew: cols.length === 2
+        ? Math.abs(Math.round(cols[0].getBoundingClientRect().height
+                            - cols[1].getBoundingClientRect().height)) : 9999,
+      edits: document.querySelectorAll('.stu-pan__cedit').length,
+      notesWide: !!document.querySelector('.stu-pan__card.is-wide'),
+      overflow: body.scrollHeight - body.clientHeight,
+      sideways: body.scrollWidth - body.clientWidth,
+    };
+  });
+
+  /* TWO COLUMNS OF CARDS, NOT SIX FULL-WIDTH SECTIONS (§17). §10-§12 name the
+     right column for Contact, Academic and Current Room; §9 and §13 name the
+     left for Personal and Status & Fee. */
+  expect(ov.colCount).toBe(2);
+  expect(ov.left).toEqual(['Personal Information', 'Status & Fee']);
+  expect(ov.right).toEqual(['Contact & Guardian', 'Academic Information', 'Current Room']);
+  /* Balance is the point of the split. A column running far past its neighbour
+     puts the drawer back to scrolling through white space, which is the exact
+     fault §17 describes. */
+  expect(ov.skew, 'the two columns are badly out of balance').toBeLessThanOrEqual(220);
+  // Every card can correct itself without a trip back to the action grid.
+  expect(ov.edits).toBe(6);
+  expect(ov.notesWide, 'Notes should be the full-width card at the bottom').toBe(true);
+  expect(ov.sideways, 'the Overview must never scroll sideways').toBeLessThanOrEqual(1);
+  /* A budget, not a boundary. 34 facts and six headings do not fit the ~420px a
+     768-tall window leaves under the header, the profile, the actions and the
+     tabs — but the Overview was ~520px of scroll before this and is under 200
+     now. This catches a return to anything like the old shape. */
+  expect(ov.overflow, 'the Overview is back to being a long scroll')
+    .toBeLessThanOrEqual(230);
+
+  await win.evaluate(() => stuPanelTab('financial'));
+  await win.waitForTimeout(300);
+  const fin = await win.evaluate(() => {
+    const rows = [...document.querySelectorAll('.stu-pan__card__b.is-2col .stu-pan__f')]
+      .map(f => Math.round(f.getBoundingClientRect().left));
+    return { cols: new Set(rows).size,
+             labels: [...document.querySelectorAll('.stu-pan__card__b.is-2col .stu-pan__k')]
+                       .map(k => k.innerText.trim()) };
+  });
+  /* Charges & Balance is FULL WIDTH here, so unlike the Overview's half-width
+     cards it has the room to pair its fields. */
+  expect(fin.cols, 'Charges & Balance is still one column').toBe(2);
+  /* The column break is the meaning: what is billed on the left, where the
+     student stands against it on the right. */
+  expect(fin.labels.slice(0, 4))
+    .toEqual(['Monthly rent', 'Outstanding', 'Mess charge', 'Last payment']);
+
+  await app.close();
+});
+
+test('the ledger row menu carries the four verbs, and only what applies', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+
+  await win.evaluate(async () => {
+    const base = { monthlyRent: 14500, messCharge: 0, messIncluded: false, method: 'Cash',
+                   extraCharges: [], extraTotal: 0, admissionFee: 0, concession: 0,
+                   studentId: '066', studentName: 'Mushtaq Ahmad' };
+    DB.payments = [
+      Object.assign({}, base, { id: 'q1', month: '2026-09', amount: 0, unpaid: 14500,
+        status: 'Pending', date: '2026-09-02' }),
+      Object.assign({}, base, { id: 'q2', month: '2026-08', amount: 14500, unpaid: 0,
+        status: 'Paid', date: '2026-08-01', paidDate: '2026-08-01' }),
+    ];
+    await saveDB();
+  });
+  await openPanel(win);
+  await win.evaluate(() => stuPanelTab('financial'));
+  await win.waitForTimeout(300);
+
+  /* ONE KEBAB PER ROW, NOT FOUR BUTTONS. The four-button cell was 159px of the
+     table's 1005 — the single largest reason nine columns would not fit. */
+  expect(await win.evaluate(() => document.querySelectorAll('.svw-t tbody .svw-kebab').length))
+    .toBe(2);
+
+  // The pending row offers Mark paid; the settled row must not.
+  await win.evaluate(() => document.querySelectorAll('.svw-t tbody .svw-kebab')[0].click());
+  await win.waitForSelector('#stu-rmenu', { timeout: 4000 });
+  expect(await win.evaluate(
+    () => [...document.querySelectorAll('#stu-rmenu button')].map(b => b.innerText.trim())))
+    .toEqual(['Mark paid', 'Print receipt', 'Edit payment', 'Delete payment']);
+
+  await win.evaluate(() => closeStuRowMenu());
+  await win.evaluate(() => document.querySelectorAll('.svw-t tbody .svw-kebab')[1].click());
+  await win.waitForSelector('#stu-rmenu', { timeout: 4000 });
+  expect(await win.evaluate(
+    () => [...document.querySelectorAll('#stu-rmenu button')].map(b => b.innerText.trim())),
+    'a settled record was offered Mark paid')
+    .toEqual(['Print receipt', 'Edit payment', 'Delete payment']);
+
+  await win.evaluate(() => closeStuRowMenu());
+  await app.close();
+});
+
+test('Documents offers Download only where there is a file', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+  await seed(win, { withShift: false });
+
+  // No photo on the record yet: every control stays disabled (§28).
+  await openPanel(win);
+  await win.evaluate(() => stuPanelTab('documents'));
+  await win.waitForTimeout(300);
+  expect(await win.evaluate(
+    () => [...document.querySelectorAll('.stu-pan__doc__a button')]
+            .map(b => b.innerText.trim() + ':' + (b.disabled ? 'off' : 'on'))))
+    .toEqual(['View:off', 'Download:off', 'View:off', 'Download:off', 'View:off', 'Download:off']);
+
+  /* WITH a photo, the photo's two controls come alive and the other two rows do
+     not — there is still no CNIC scan and no admission form in the data model,
+     and a Download that produces no file is worse than one visibly not ready. */
+  await win.evaluate(async () => {
+    DB.students[0].docs = { photo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
+      + 'CAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
+    await saveDB();
+  });
+  await win.evaluate(() => { refreshStudentPanel(); stuPanelTab('documents'); });
+  await win.waitForTimeout(300);
+  expect(await win.evaluate(
+    () => [...document.querySelectorAll('.stu-pan__doc__a button')]
+            .map(b => b.innerText.trim() + ':' + (b.disabled ? 'off' : 'on'))))
+    .toEqual(['View:on', 'Download:on', 'View:off', 'Download:off', 'View:off', 'Download:off']);
+
+  /* The file it would save: named for the student, and carrying the extension
+     the data URI's own MIME type declares. Renaming a PNG to .jpg produces a
+     file Windows Photos refuses to open, which is why the type is read rather
+     than assumed. And it goes out as a blob: a multi-megabyte data URI on an
+     href is where a real photo silently fails to save. */
+  const saved = await win.evaluate(() => {
+    const real = HTMLAnchorElement.prototype.click;
+    let got = null;
+    HTMLAnchorElement.prototype.click = function () { got = { name: this.download, href: this.href }; };
+    try { stuDownloadDoc('066'); } finally { HTMLAnchorElement.prototype.click = real; }
+    return got;
+  });
+  expect(saved, 'Download produced no file at all').not.toBeNull();
+  expect(saved.name).toBe('Photo-Mushtaq-Ahmad-066.png');
+  expect(saved.href.startsWith('blob:')).toBe(true);
 
   await app.close();
 });

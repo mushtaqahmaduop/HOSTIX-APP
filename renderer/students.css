@@ -477,8 +477,21 @@
 .svw-sub.is-extra { color:var(--warning-fg); }
 .svw-sub.is-conc  { color:var(--danger-fg); }
 
-.svw-tfoot { padding:11px 16px; border-top:1px solid var(--border); text-align:center;
+.svw-tfoot { padding:9px 14px; border-top:1px solid var(--border); text-align:center;
              font-size:11.5px; color:var(--text3); background:var(--dash-sunk); }
+/* In the panel the footer carries the way out to the full Payments list, so it
+   is a row rather than a centred line. The modal's ledger has no such link and
+   keeps the centred text, which is why this is scoped. */
+.stu-pan__ledger .svw-tfoot {
+    display:flex; align-items:center; justify-content:space-between; gap:10px; text-align:left;
+}
+.svw-tfoot__link {
+    display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:0;
+    border-radius:7px; background:none; cursor:pointer;
+    font-family:inherit; font-size:11.5px; font-weight:700; color:var(--accent);
+}
+.svw-tfoot__link svg { width:13px; height:13px; }
+.svw-tfoot__link:hover { background:var(--accent-dim); }
 
 /* Row actions — icon buttons, sized to the table not to the page. */
 .svw-t__acts { display:flex; gap:5px; }
@@ -1028,7 +1041,11 @@
    record is still there afterwards. */
 .stu-pan__scrim {
     position: fixed; inset: 0; z-index: 330;
-    background: rgba(15,23,42,.28);
+    /* Light enough to keep the roster readable behind the drawer, blurred just
+       enough to push it back a plane (§3). Three pixels, not thirty: the point
+       is depth, not hiding the table the warden is working through. */
+    background: rgba(15,23,42,.18);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
     animation: stuPanFade .18s ease;
 }
 @keyframes stuPanFade { from { opacity: 0 } to { opacity: 1 } }
@@ -1042,12 +1059,15 @@
    94vw still caps it, so on the 1093px @125% floor it stays on screen. */
 .stu-pan {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 331;
-    width: 600px; max-width: 94vw;
+    /* min(600px, 100vw) with a 600 cap: the drawer is anchored right and never
+       wider than it needs to be (§3). Below ~640 of viewport it is the whole
+       screen, which is the small-screen behaviour §21 asks for. */
+    width: min(600px, 100vw); max-width: 600px;
     display: flex; flex-direction: column;
     background: var(--card); border-left: 1px solid var(--border);
     box-shadow: -18px 0 48px rgba(15,23,42,.16);
     transform: translateX(100%);
-    transition: transform .2s cubic-bezier(.32,.72,0,1);
+    transition: transform .24s cubic-bezier(.32,.72,0,1);
 }
 .stu-pan.is-open { transform: translateX(0); }
 @media (prefers-reduced-motion: reduce) {
@@ -1055,181 +1075,211 @@
     .stu-pan__scrim { animation: none; }
 }
 
-/* EVERY BAND ABOVE THE BODY IS flex:0 0 auto, AND THAT IS NOT DECORATION.
-   .stu-pan is a column flex container, so an item with the default
-   `flex-shrink:1` gives up height when the content is taller than the panel.
-   The tab strip is the shortest band and lost the most: it collapsed from 33px
-   to 20, which drew the container's own bottom border straight through the
-   middle of the word "Overview" and clipped the labels top and bottom. It looks
-   like a rendering fault rather than a layout one, which is why it is worth the
-   note. The body is the only band allowed to flex, and it scrolls. */
+/* ═══ THE 600px ENTERPRISE DRAWER (owner spec, 2026-09-06) ═══════════════════
+   Everything below replaces the band-and-tile layout that came before it. The
+   rule the owner set is the one worth keeping in mind while editing any of it:
+   "do not simply shrink the existing drawer" — the information architecture is
+   composed FOR ~580–600px, which is why the Overview is two columns of cards
+   rather than six full-width sections stacked.                              */
+
+/* THE HEADER IS TWO LINES AND ONE VERB. Print Profile is the only action here
+   because it acts on the drawer's own contents; every verb that acts on the
+   STUDENT is in the grid under their photo (§4). */
 .stu-pan__head {
     flex: 0 0 auto;
     display: flex; align-items: center; gap: 10px;
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    padding: 10px 14px 10px 16px; border-bottom: 1px solid var(--border);
 }
-.stu-pan__title { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.stu-pan__headtext { display: flex; flex-direction: column; gap: 1px; margin-right: auto; min-width: 0; }
+.stu-pan__title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.stu-pan__sub   { font-size: 11px; color: var(--text3); line-height: 1.2; }
+.stu-pan__print {
+    display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    min-width: 0;
+    height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer;
+    background: var(--accent); border: 1px solid var(--accent); color: #fff;
+    font-family: inherit; font-size: 11.5px; font-weight: 650; white-space: nowrap;
+}
+.stu-pan__print svg { width: 14px; height: 14px; }
+.stu-pan__print:hover { filter: brightness(1.06); }
+/* flex:0 0 auto AND an explicit size. This rule lost its dimensions when the
+   header was recomposed and the button collapsed to nothing — the drawer looked
+   like it had no way out, which is not a small bug in a modal surface. */
 .stu-pan__x {
-    margin-left: auto; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     background: none; border: 1px solid transparent; color: var(--text3);
 }
 .stu-pan__x svg { width: 15px; height: 15px; }
 .stu-pan__x:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
 
-/* ONE BAND, TWO HALVES. Who this is on the left, what can be done to them on
-   the right, divided by a hairline — the reference's arrangement, and the whole
-   point of it: stacked, the two halves cost the sum of their heights; side by
-   side they cost the taller one, and the difference goes to the content. */
-.stu-pan__top {
-    flex: 0 0 auto;
-    display: flex; align-items: flex-start; gap: 16px;
-    padding: 16px; border-bottom: 1px solid var(--border);
+/* WHO THIS IS. One compact row: photo, then name over id/room over joined. */
+.stu-pan__id {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
 }
-
-/* Identity block: the one place in the panel that repeats what the row said,
-   because the panel can be opened from a menu and the row may be scrolled off. */
-.stu-pan__id { flex: 1 1 auto; min-width: 0; display: flex; gap: 13px; align-items: flex-start; }
-.stu-pan__idtext { min-width: 0; }
+.stu-pan__idtext { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .stu-pan__name {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-size: 15.5px; font-weight: 700; color: var(--text); line-height: 1.25;
+    font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.2;
 }
-.stu-pan__meta { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
+.stu-pan__idmeta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stu-pan__idno {
+    font-size: 12px; font-weight: 600; color: var(--text3);
+    font-family: var(--ant-num-font); font-variant-numeric: tabular-nums;
+}
+/* The room a student is IN, as a badge. The Current Room card answers the
+   different question — what floor, what type, since when (§5, §12). */
+.stu-pan__roombadge {
+    display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px;
+    background: var(--accent-dim); color: var(--accent);
+    font-size: 11px; font-weight: 650; white-space: nowrap;
+}
+.stu-pan__roombadge.is-none { background: var(--bg3); color: var(--text3); font-weight: 600; }
+.stu-pan__meta { font-size: 11.5px; color: var(--text3); }
 
-/* SIX VERBS, THREE ACROSS, IN FIXED CELLS. The panel took over from
-   showViewStudentModal and inherited its whole footer — Print, Shift Room, Edit,
-   Cancel Seat — on top of Payment and Delete.
+/* SIX VERBS, THREE ACROSS, 34px. The owner's ceiling is 34–36 and the reason is
+   arithmetic: at the 58px they were, two rows plus a gap came to 122px, so the
+   buttons rather than the person decided where the tabs started.
 
-   A fixed three-column grid rather than `auto-fit`, so the tiles keep the same
-   width whether the seat action is showing or not. With auto-fit, a student
-   going from Active to Left would silently resize every remaining tile — the
-   block would look like it had changed rather than lost one item. Cancel Seat
-   is the conditional one and is LAST for the same reason: dropping the final
-   cell leaves the other five exactly where they were.
-
-   The cells are a fixed 84px rather than a fraction, so the block is a known
-   width and the identity beside it gets everything else. */
+   A fixed three-column grid rather than auto-fit, so the tiles keep their width
+   whether the seat action is showing or not — with auto-fit, a student going
+   Active → Left would silently resize every remaining tile, and the block would
+   look like it had changed rather than lost one item. */
 .stu-pan__acts {
     flex: 0 0 auto;
-    display: grid; grid-template-columns: repeat(3, 84px); gap: 6px;
-    padding-left: 16px; border-left: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+    padding: 0 16px 12px; border-bottom: 1px solid var(--border);
 }
-
-/* The label sits UNDER the glyph, which is what lets a 84px cell carry
-   "Cancel Seat" and "Move Room" without wrapping or shrinking the type. Side by
-   side those two are ~76px of text alone. */
 .stu-pan__act {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-    min-width: 0; height: 58px; padding: 0 4px; border-radius: 10px; cursor: pointer;
-    background: var(--accent-dim); border: 1px solid transparent; color: var(--accent);
-    font-family: inherit; font-size: 11px; font-weight: 600; white-space: nowrap;
-    transition: filter .14s ease, border-color .14s ease;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    min-width: 0; height: 34px; padding: 0 8px; border-radius: 8px; cursor: pointer;
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
+    font-family: inherit; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
-.stu-pan__act svg { width: 17px; height: 17px; flex: 0 0 auto; }
-.stu-pan__act:hover { border-color: currentColor; }
+.stu-pan__act svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.stu-pan__act:hover { border-color: var(--accent); color: var(--accent); }
 
-/* FOUR TINTS, AND EACH ONE IS A CLAIM ABOUT THE VERB. Blue is the ordinary
-   working set. Print is green because it is the only one that writes nothing.
-   Cancel Seat starts a cancellation and Delete destroys a record: the first is
-   a reversible workflow with a form behind it, the second is not, so they do
-   not share a colour — amber reads as "this needs care", red as "this ends it".
-   Both tints are the --ant-* pairs, which are defined for BOTH themes; a
-   hardcoded tint here would have been the light-mode regression theme-parity
-   keeps catching. */
-.stu-pan__act.is-green  { background: var(--ant-success-bg); color: var(--ant-success-fg); }
-.stu-pan__act.is-warn   { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
-.stu-pan__act.is-danger { background: var(--ant-danger-bg);  color: var(--ant-danger-fg); }
-
-/* A NARROW WINDOW GETS THE STACK BACK. Below ~760px of viewport the panel is
-   capped by 94vw rather than by its own width, so the two halves no longer both
-   fit: identity would be squeezed under 200px and the name would wrap onto
-   three lines. Stacking costs height, which is the trade the wide layout exists
-   to avoid — but a wrapped name costs it too, and reads as broken. */
-@media (max-width: 760px) {
-    .stu-pan__top  { flex-direction: column; gap: 12px; }
-    .stu-pan__acts {
-        width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr));
-        padding-left: 0; border-left: 0;
-    }
+/* THREE WEIGHTS, AND EACH ONE IS A CLAIM (§6). Edit and Payment are what a
+   warden came here to do, so they carry the accent. Move Room and Print are
+   secondary and stay neutral. Delete ends a record and Cancel Seat starts a
+   reversible workflow with a form behind it — amber reads as "this needs care",
+   red as "this ends it", which is why Cancel Seat must not compete with Delete.
+   Both are --ant-* pairs, defined for BOTH themes; a hardcoded tint here is the
+   light-mode regression theme-parity keeps catching. */
+.stu-pan__act.is-primary {
+    background: var(--accent-dim); border-color: transparent; color: var(--accent);
 }
+.stu-pan__act.is-danger {
+    background: var(--ant-danger-bg); border-color: transparent; color: var(--ant-danger-fg);
+}
+.stu-pan__act.is-warn {
+    background: var(--ant-warning-bg); border-color: transparent; color: var(--ant-warning-fg);
+}
+.stu-pan__act.is-primary:hover,
+.stu-pan__act.is-danger:hover,
+.stu-pan__act.is-warn:hover { border-color: currentColor; color: currentColor; }
 
-/* Four tabs, and exactly four (§23). They scroll horizontally on a narrow
-   window rather than wrapping onto a second line — a wrapped tab strip changes
-   the panel height as you switch tabs, which moves the content under the
-   cursor. */
+/* Four tabs, and exactly four (§23). 42px, and they scroll horizontally on a
+   narrow window rather than wrapping onto a second line — a wrapped tab strip
+   changes the drawer height as you switch tabs, which moves the content under
+   the cursor. */
 .stu-pan__tabs {
-    flex: 0 0 auto;
-    display: flex; gap: 2px; padding: 0 10px; overflow-x: auto;
+    flex: 0 0 auto; height: 42px;
+    display: flex; align-items: stretch; gap: 2px; padding: 0 12px; overflow-x: auto;
     border-bottom: 1px solid var(--border);
 }
 .stu-pan__tab {
-    flex: 0 0 auto; padding: 9px 11px; border: 0; background: none; cursor: pointer;
-    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text3);
+    flex: 0 0 auto; padding: 0 12px; border: 0; background: none; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text3);
     border-bottom: 2px solid transparent; white-space: nowrap;
 }
-.stu-pan__tab:hover { color: var(--text2); }
-.stu-pan__tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
+.stu-pan__tab:hover  { color: var(--text2); }
+.stu-pan__tab.is-on  { color: var(--accent); border-bottom-color: var(--accent); }
 
-/* THE BODY IS A SHADE BACK FROM ITS CONTENT, and that is what turns a list
-   into cards. The tab used to be five <section>s separated by hairlines under
-   a small-caps label; on one flat surface at 440px that reads as one
-   continuous list with headings in it, and the eye has to parse the labels to
-   find where "Current Room" ends. --bg2 under --card is one step — enough for
-   an edge, not enough to look like a different screen. */
+/* THE ONLY BAND THAT SCROLLS (§24). */
 .stu-pan__body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto;
-    padding: 14px; background: var(--bg2);
+    padding: 10px; background: var(--bg2);
 }
 
-/* A CARD AND A SECTION ARE THE SAME OBJECT. .stu-pan__card is the Overview's
-   titled card with a glyph; .stu-pan__sec is the plainer one the other tabs
-   use. They share their chrome here so the four tabs cannot drift apart. */
+/* TWO COLUMNS OF CARDS, EXPLICIT — NOT A GRID (§17). A grid aligns rows, and
+   Personal is eleven fields against Contact's five: in a grid that leaves a
+   150px hole under Contact and the drawer is right back to wasting the space
+   this layout exists to reclaim. Two flex columns just carry on. */
+.stu-pan__cols { display: flex; align-items: flex-start; gap: 10px; }
+.stu-pan__col  { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+
 .stu-pan__card,
 .stu-pan__sec {
-    margin: 0 0 12px; padding: 13px 14px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    margin: 0 0 8px; padding: 9px 11px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 11px;
 }
-.stu-pan__card:last-child,
-.stu-pan__sec:last-child { margin-bottom: 0; }
+.stu-pan__card.is-wide { margin-bottom: 0; }
+.stu-pan__col > .stu-pan__card:last-child { margin-bottom: 8px; }
 
-.stu-pan__sec h4 {
-    margin: 0 0 8px; font-size: 10.5px; font-weight: 700;
-    letter-spacing: .06em; text-transform: uppercase; color: var(--text3);
-}
-
-/* The title reads as a title, not as a label: sentence case at the body size,
-   with the tinted tile carrying the group's identity. */
+/* The title reads as a title, with the tinted tile carrying the group's
+   identity and Edit sitting where the eye already is. */
 .stu-pan__card__h {
-    display: flex; align-items: center; gap: 9px;
-    margin: 0 0 9px; font-size: 12.5px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 0 5px; font-size: 12.5px; font-weight: 700; color: var(--text);
 }
 .stu-pan__card__i {
-    width: 26px; height: 26px; border-radius: 8px; flex: 0 0 auto;
+    width: 24px; height: 24px; border-radius: 7px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
     background: var(--accent-dim); color: var(--accent);
 }
-.stu-pan__card__i svg { width: 14px; height: 14px; }
+.stu-pan__card__i svg { width: 13px; height: 13px; }
 /* Status & Fee is the one card carrying money, so it is the one that is not
    accent-blue. */
 .stu-pan__card__i.is-green { background: var(--ant-success-bg); color: var(--ant-success-fg); }
-
-/* Label left, value right, one line each. A two-column grid rather than a
-   table so a long value wraps under itself instead of widening the label
-   column and shunting every other row across. */
-.stu-pan__f {
-    display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 10px;
-    padding: 4px 0; align-items: baseline;
+.stu-pan__cedit {
+    margin-left: auto; padding: 2px 7px; border: 0; border-radius: 6px; cursor: pointer;
+    background: none; color: var(--accent);
+    font-family: inherit; font-size: 11px; font-weight: 650;
 }
-.stu-pan__k { font-size: 11.5px; color: var(--text3); }
-.stu-pan__v { font-size: 12.5px; color: var(--text); overflow-wrap: break-word; }
-/* An absent value is grey, so a column of dashes reads as "not recorded"
-   rather than as data. */
-.stu-pan__v.is-empty { color: var(--text3); }
+.stu-pan__cedit:hover { background: var(--accent-dim); }
+
+/* A card in a 274px column holds ONE field per row. A full-width card — Notes,
+   and the Financial tab's Charges & Balance — has room for two, and says so
+   with is-2col. */
+.stu-pan__card__b { display: block; }
+.stu-pan__card__b.is-2col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start;
+}
+.stu-pan__card__b.is-2col .stu-pan__f.is-wide { grid-column: 1 / -1; }
+
+/* §16: label 11px muted, value 12.5px, row 24–28px. Label left, value right,
+   as a grid rather than a table so a long value wraps under itself instead of
+   widening the label column and shunting every other row across. */
+.stu-pan__f {
+    display: grid; grid-template-columns: minmax(0, 92px) minmax(0, 1fr); gap: 8px;
+    padding: 2px 0; align-items: baseline; min-width: 0; line-height: 1.45;
+}
+.stu-pan__k { font-size: 11px; color: var(--text3); }
+.stu-pan__v { font-size: 12.5px; font-weight: 550; color: var(--text); overflow-wrap: break-word; }
+/* An absent value is muted, so a column of dashes reads as "not recorded"
+   rather than as data (§9). */
+.stu-pan__v.is-empty { color: var(--text-muted, var(--text3)); font-weight: 500; }
 .stu-pan__v.is-mono {
     font-family: var(--ant-num-font); font-variant-numeric: tabular-nums;
     letter-spacing: var(--ant-num-track);
 }
+/* §13: red is for money that is actually owed, never for ordinary financial
+   information. */
+.stu-pan__v .is-due   { color: var(--ant-danger-fg); }
+.stu-pan__v .is-clear { color: var(--ant-success-fg); }
+
+/* The footer states when the record was last written and whose product this
+   is, in one 32px line — branding must not consume drawer space (§26). */
+.stu-pan__foot {
+    flex: 0 0 auto; height: 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 0 16px; border-top: 1px solid var(--border);
+    font-size: 10.5px; color: var(--text3);
+}
+.stu-pan__brand { font-weight: 700; color: var(--text3); letter-spacing: .04em; }
 
 .stu-pan__tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 .stu-pan__tbl th {
@@ -1331,3 +1381,126 @@
     font-size: 9px; font-weight: 700; letter-spacing: .04em;
     background: var(--ant-success-bg); color: var(--ant-success-fg);
 }
+
+
+/* ── THE PANEL'S LEDGER IS THE SAME TABLE, TIGHTENED ─────────────────────────
+   Scoped to .stu-pan__ledger so the modal's copy is untouched: it renders
+   full-width and has the room, and the two must stay the same LEDGER even when
+   they are not the same size.
+
+   Measured at 600px, the nine columns wanted 1005 and the card had 564. Three
+   changes close it, and none of them drops a column — dropping columns is what
+   the digest this replaced did, and the ones it dropped were the concession and
+   the extras, which are the two that answer "why is this figure not the rent":
+
+     · the headers wrap instead of forcing their column to one line, which is
+       what "MONTHLY RENT" at 109px and "PAID (+EXTRAS)" at 127 were doing;
+     · the padding comes in from 14 to 8;
+     · the four row buttons become one kebab, 159px down to 40.
+
+   Cells still refuse to wrap. A wrapped FIGURE is unreadable in a money column
+   — the eye stops trusting a number that is on two lines. */
+.stu-pan__ledger .svw-t th {
+    padding:7px 4px; white-space:normal; line-height:1.2; letter-spacing:.3px;
+    font-size:9px; vertical-align:bottom;
+}
+.stu-pan__ledger .svw-t td { padding:7px 4px; font-size:11.5px; }
+.stu-pan__ledger .svw-paid { font-size:11.5px; }
+
+/* THE SUB-LINES WRAP; THE FIGURES DO NOT. "PKR 10,000 rent + PKR 7,000 mess"
+   on one unbreakable line made Monthly Rent 166px wide on its own — the widest
+   column in the table, for the smallest type in it. Wrapped it is ~90 and says
+   the same thing. The figures above them keep white-space:nowrap from .svw-t:
+   a money figure broken across two lines is a number the eye stops trusting. */
+.stu-pan__ledger .svw-sub { font-size:9.5px; white-space:normal; line-height:1.3; }
+.stu-pan__ledger .svw-t__date { font-size:9.5px; letter-spacing:-.2px; }
+
+/* The two chips carry a word each and were sized for a full-width modal. The
+   method chip WRAPS: "Bank Transfer" on one unbreakable line held that column
+   at 97px, wider than any figure in the table. A method is a label, not a
+   number — it survives being on two lines. */
+.stu-pan__ledger .pm-chip,
+.stu-pan__ledger .badge { font-size:9.5px; padding:2px 5px; gap:3px; }
+.stu-pan__ledger .pm-chip { white-space:normal; text-align:left; line-height:1.25; }
+.stu-pan__ledger .pm-chip svg,
+.stu-pan__ledger .badge svg { width:10px; height:10px; }
+
+/* The kebab column is exactly as wide as its button. */
+.stu-pan__ledger .svw-t__kebab { width:36px; padding:4px 3px; text-align:center; }
+.svw-kebab {
+    width:26px; height:26px; border-radius:7px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:none; border:1px solid transparent; color:var(--text3);
+}
+.svw-kebab svg { width:15px; height:15px; }
+.svw-kebab:hover, .svw-kebab.is-on {
+    background:var(--bg3); border-color:var(--border2); color:var(--text);
+}
+
+/* Two buttons per document row now that Download sits beside View, so the
+   actions are a group rather than a single control. */
+.stu-pan__doc__a { display:flex; gap:6px; flex-shrink:0; }
+.stu-pan__mini.is-go:hover:not(:disabled) {
+    border-color:var(--ant-success-fg); color:var(--ant-success-fg);
+}
+
+
+/* ── TABLET AND BELOW: ONE COLUMN (§21) ──────────────────────────────────────
+   Below ~880px of viewport the drawer is capped by 100vw rather than by its own
+   600, so the two card columns fall under ~270px each and every label/value row
+   starts wrapping. One column is taller but readable, which is the right trade
+   the moment the pair stops fitting. */
+@media (max-width: 880px) {
+    .stu-pan__cols { flex-direction: column; gap: 0; }
+    .stu-pan__col  { width: 100%; }
+    .stu-pan__card__b.is-2col { grid-template-columns: 1fr; }
+}
+
+/* ── DRAG THE LEDGER SIDEWAYS (owner, 2026-09-06) ────────────────────────────
+   "add a select drag left right hand so that the full payment history should
+   drag easily from left to right and right to left."
+
+   The nine columns very nearly fit 572px, but "very nearly" is somebody else's
+   data away from not fitting, and a 3px scrollbar is not a handle. Press and
+   drag anywhere on the table to pan it. The grab cursor is what advertises it;
+   without one this is a hidden feature.
+
+   is-dragging suppresses text selection FOR THE DRAG ONLY. A permanent
+   user-select:none would stop a warden copying a figure out of the ledger,
+   which is a thing they actually do. */
+.stu-pan__ledger .svw-tw { cursor: grab; scroll-behavior: auto; }
+.stu-pan__ledger .svw-tw.is-dragging { cursor: grabbing; user-select: none; }
+.stu-pan__ledger .svw-tw.is-dragging * { user-select: none; }
+
+/* ── THE ROOM HISTORY TIMELINE (§20) ─────────────────────────────────────────
+   A rail with a node per stay, newest first. Cards spent five lines of chrome
+   on two lines of fact; a timeline says the same thing in the shape the
+   information actually has — one thing after another. */
+.stu-pan__tlwrap { list-style: none; margin: 4px 0 0; padding: 0 0 0 4px; }
+.stu-pan__tl {
+    position: relative; display: flex; gap: 12px;
+    padding: 0 0 14px 18px;
+}
+/* The rail is the item's own left border, so it stops at the last node instead
+   of running past it into empty space. */
+.stu-pan__tl::before {
+    content: ''; position: absolute; left: 4px; top: 14px; bottom: 0;
+    width: 1px; background: var(--border2);
+}
+.stu-pan__tl:last-child { padding-bottom: 2px; }
+.stu-pan__tl:last-child::before { display: none; }
+.stu-pan__tl__dot {
+    position: absolute; left: 0; top: 5px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--card);
+    border: 2px solid var(--border2); box-sizing: border-box;
+}
+.stu-pan__tl.is-now .stu-pan__tl__dot { border-color: var(--accent); background: var(--accent); }
+.stu-pan__tl__b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stu-pan__tl__tag {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text3);
+}
+.stu-pan__tl.is-now .stu-pan__tl__tag { color: var(--accent); }
+.stu-pan__tl__t { font-size: 13px; font-weight: 650; color: var(--text); }
+.stu-pan__tl__s { font-size: 11.5px; color: var(--text2); }
+.stu-pan__tl__w { font-size: 11px; color: var(--text3); }
