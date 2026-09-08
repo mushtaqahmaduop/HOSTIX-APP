@@ -29,6 +29,10 @@ function checkUpdates()       { return Promise.resolve({ hasUpdate: false }); }
   try {
     status = await window.electronAPI.licenseCheck();
     window._hostyllo_license_cache = status;
+    // When the check ran. The License panel reports it as "Last verified",
+    // and the answer is "at startup" rather than a poll — nothing re-checks on
+    // a timer, so a stamp is the only honest way to say when.
+    window._hostyllo_license_checked_at = Date.now();
   } catch(e) {
     status = { valid: false, reason: 'ipc_error' };
   }

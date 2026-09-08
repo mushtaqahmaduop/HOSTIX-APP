@@ -1,0 +1,152 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   ACTIVITY LOG — the page (renderer/src/modules/activitylog.js)
+
+   Built on the vocabulary settings.css and backup.css already own: .set-card,
+   .set-head, .set-btn, .set-sel, .set-table, .bk-head, .bk-empty, .hi-ring,
+   .hi-store, .hi-facts, .hi-pre. Only what this page has and they do not is
+   defined here.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.al-head__acts { margin-left: auto; display: flex; gap: 9px; flex-wrap: wrap; }
+.set-btn--danger { color: var(--red); }
+.set-btn--danger:hover { background: var(--ant-danger-bg, var(--dh-bg)); border-color: var(--red); color: var(--red); }
+
+/* ── The four counters ───────────────────────────────────────────────────── */
+.al-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.al-kpi {
+    display: flex; align-items: flex-start; gap: 13px;
+    padding: 15px 16px; border-radius: 14px;
+    background: var(--card); border: 1px solid var(--border);
+}
+.al-kpi__i {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.al-kpi__l { font-size: 11.5px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+.al-kpi__v {
+    font-size: 24px; font-weight: 800; color: var(--text); line-height: 1.1; margin-top: 3px;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.al-kpi__s { font-size: 11px; margin-top: 4px; }
+/* A counter with no feature behind it keeps its place and says so — it must not
+   read as "zero happened today". */
+.al-kpi.is-locked .al-kpi__v { color: var(--text3); }
+.al-lock { display: inline-flex; color: var(--text3); cursor: help; }
+.al-lock svg { width: 11px; height: 11px; }
+.al-flat  { font-size: 11px; color: var(--text3); }
+.al-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; }
+.al-delta.is-up   { color: var(--ant-success-fg); }
+.al-delta.is-down { color: var(--red); }
+.al-delta svg { width: 12px; height: 12px; }
+
+/* ── The three charts ────────────────────────────────────────────────────── */
+.al-charts {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+}
+@media (max-width: 1180px) { .al-charts { grid-template-columns: 1fr; } }
+.al-sub { font-size: 11px; color: var(--text3); }
+
+.al-bars { display: flex; align-items: flex-end; gap: 5px; height: 108px; }
+.al-bar {
+    flex: 1; height: 100%; min-width: 0;
+    display: flex; align-items: flex-end;
+    background: var(--dash-track); border-radius: 5px; overflow: hidden;
+}
+.al-bar__f { width: 100%; background: var(--accent); border-radius: 5px; min-height: 2px; }
+.al-bars__ax {
+    display: flex; justify-content: space-between;
+    margin-top: 7px; font-size: 10.5px; color: var(--text3);
+}
+.al-none { font-size: 11.5px; color: var(--text3); padding: 8px 0; }
+
+.al-users { display: flex; flex-direction: column; gap: 9px; }
+.al-user { display: flex; align-items: center; gap: 9px; }
+.al-user__n { flex: 0 0 84px; font-size: 11.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-user__t { flex: 1; height: 8px; border-radius: 999px; background: var(--dash-track); overflow: hidden; }
+.al-user__f { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.al-user__v {
+    flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────── */
+.al-filters {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.al-search { position: relative; flex: 1 1 240px; min-width: 200px; display: flex; align-items: center; }
+.al-search svg { position: absolute; left: 11px; color: var(--text3); pointer-events: none; }
+.al-search .form-control { padding-left: 32px; height: 32px; }
+.al-filters .set-sel { max-width: 170px; }
+
+/* ── The register ────────────────────────────────────────────────────────── */
+.al-table tbody tr { cursor: pointer; }
+.al-table tbody tr:hover { background: var(--dash-sunk); }
+.al-table tbody tr.is-on { background: var(--accent-soft); }
+.al-when { white-space: nowrap; font-size: 12px; }
+.al-when small { display: block; color: var(--text3); font-size: 11px; margin-top: 1px; }
+.al-act { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
+.al-det { color: var(--text2); font-size: 12px; max-width: 300px; }
+/* A column the app cannot fill keeps its heading and a lock, so the reader can
+   see it was considered rather than missed. */
+.al-th-lock { color: var(--text3); }
+.al-th-lock svg { width: 11px; height: 11px; vertical-align: -1px; opacity: .7; }
+
+.al-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-top: 12px; font-size: 11.5px; color: var(--text3);
+}
+.al-pager { display: flex; align-items: center; gap: 8px; }
+.al-pager .set-btn { width: 30px; height: 30px; padding: 0; justify-content: center; }
+/* The forward button is the back glyph, turned. One icon, two directions. */
+.al-pager .set-btn:last-child svg { transform: rotate(180deg); }
+.al-pager__n {
+    font-size: 12px; font-weight: 700; color: var(--text2);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+
+/* ── One entry, in full ──────────────────────────────────────────────────── */
+/* 331 — the same layer the student slide-over uses, deliberately: under
+   .modal-overlay's 350, so a dialog opened from here is reachable. */
+.al-panel-wrap {
+    position: fixed; inset: 0; z-index: 331;
+    background: rgba(0, 0, 0, .38);
+    display: flex; justify-content: flex-end;
+}
+.al-panel {
+    width: min(430px, 100%); height: 100%;
+    background: var(--card); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+}
+.al-panel__h {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 18px; border-bottom: 1px solid var(--border);
+}
+.al-panel__i {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.al-panel__t { font-size: 15px; font-weight: 700; color: var(--text); }
+.al-panel__s { font-size: 12px; color: var(--text3); margin-top: 3px; line-height: 1.45; }
+.al-panel__b { padding: 18px; overflow-y: auto; }
+.al-raw__h {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text3); margin: 16px 0 8px;
+}
+
+@media (max-height: 760px) {
+    .al-bars { height: 84px; }
+    .al-kpi { padding: 12px 14px; }
+}

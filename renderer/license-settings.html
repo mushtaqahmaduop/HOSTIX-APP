@@ -312,7 +312,17 @@
     <div class="card__body" style="padding-top:14px">
       <div id="actions-wrap">
 
-        <div class="act warn">
+        <!-- ALL THREE OF THESE DO THE SAME THING, so all three are painted the
+             same. main.js: license:deactivateWithDialog and license:reset both
+             call deactivateLicense(), and license:prepareUninstall unlinks the
+             same two files by hand — every one of them deletes license.enc and
+             last_run.dat and sends the app back to the activation screen. They
+             used to be graded warn / danger / plain, which told a warden that
+             one of them was milder than another when none of them is; the
+             Settings → License tab, built 2026-09-08, was grading the same
+             three a different way again, so the two surfaces contradicted each
+             other on which button did the most damage. -->
+        <div class="act danger">
           <span class="act__ico" data-ico="lock" data-ico-size="sm"></span>
           <div class="act__b">
             <div class="act__t">Deactivate License</div>
@@ -334,7 +344,7 @@
           </button>
         </div>
 
-        <div class="act plain">
+        <div class="act danger">
           <span class="act__ico" data-ico="trash" data-ico-size="sm"></span>
           <div class="act__b">
             <div class="act__t">Prepare for Uninstall</div>

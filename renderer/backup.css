@@ -1,0 +1,132 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   BACKUP & RESTORE — the page (renderer/src/modules/backup-page.js)
+
+   Deliberately built on the `set-*` vocabulary settings.css already owns —
+   .set-card, .set-head, .set-btn, .set-note, .set-rows, .set-tabs, .cfg-note,
+   .hi-main / .hi-rail / .set-split — rather than a second set of cards that
+   look almost the same. Only what this page has and Settings does not is
+   defined here.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── The page header ─────────────────────────────────────────────────────── */
+.bk-head {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.bk-head__t { font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--text); line-height: 1.15; }
+.bk-head__s { font-size: 12.5px; color: var(--text3); margin-top: 3px; }
+
+/* The health line. Its colour is an assertion about the last backup, so it is
+   red when there has never been one and amber once a week has passed. */
+.bk-health {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 15px; border-radius: 12px;
+    background: var(--dh-bg); border: 1px solid var(--border);
+}
+.bk-health__i {
+    width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); color: var(--dh);
+}
+.bk-health b     { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
+.bk-health small { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.bk-body { margin-top: 14px; }
+
+/* ── The four counters ───────────────────────────────────────────────────── */
+.bk-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.bk-stat {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px; border-radius: 14px;
+    background: var(--card); border: 1px solid var(--border);
+}
+.bk-stat__i {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.bk-stat__v {
+    font-size: 19px; font-weight: 800; color: var(--text); line-height: 1.1;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.bk-stat__l { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+.bk-acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+/* The warning above a restore, and the locked-feature notice. One shape, two
+   temperatures — a caution is amber, an explanation is the accent tint. */
+.bk-warn {
+    display: flex; align-items: flex-start; gap: 9px;
+    margin-top: 12px; padding: 11px 13px; border-radius: 10px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+    font-size: 12px; line-height: 1.55; color: var(--text2);
+}
+.bk-warn svg { flex-shrink: 0; margin-top: 1px; color: var(--ant-warning-fg); }
+.bk-warn b { color: var(--text); }
+.bk-warn.is-info { background: var(--accent-soft); }
+.bk-warn.is-info svg { color: var(--accent-strong); }
+
+/* ── The drop zone ───────────────────────────────────────────────────────── */
+.bk-drop {
+    margin-top: 12px; padding: 26px 18px; border-radius: 14px;
+    background: var(--bg3); border: 1.5px dashed var(--border2);
+    text-align: center; cursor: pointer;
+    transition: var(--transition);
+}
+.bk-drop:hover, .bk-drop.is-over { border-color: var(--accent); background: var(--accent-soft); }
+.bk-drop__i {
+    width: 46px; height: 46px; border-radius: 14px; margin: 0 auto 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border); color: var(--accent-strong);
+}
+.bk-drop__t { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.bk-drop__s { font-size: 11.5px; color: var(--text3); margin-top: 3px; }
+.bk-drop__n {
+    font-size: 12px; font-weight: 700; color: var(--accent-strong); margin-top: 9px;
+    overflow-wrap: anywhere;
+}
+
+/* ── History, in the rail and in full ────────────────────────────────────── */
+.bk-mini { display: flex; flex-direction: column; }
+.bk-mini__r {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.bk-mini__r:last-child { border-bottom: none; }
+.bk-mini__d {
+    flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--text2);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+.bk-mini__d small { display: block; font-weight: 500; color: var(--text3); font-size: 10.5px; margin-top: 1px; }
+.bk-mini__b { flex: 1; min-width: 0; }
+.bk-mini__t { font-size: 12.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.bk-mini__s { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.bk-t { color: var(--text3); font-size: 11.5px; }
+
+.bk-empty { text-align: center; padding: 24px 12px; }
+.bk-empty svg { color: var(--text3); opacity: .45; }
+.bk-empty__t { font-size: 13px; font-weight: 700; color: var(--text2); margin-top: 8px; }
+.bk-empty__s { font-size: 11.5px; color: var(--text3); margin-top: 4px; line-height: 1.5; }
+
+/* ── Tips ────────────────────────────────────────────────────────────────── */
+.bk-tips { list-style: none; margin: 0; padding: 0; }
+.bk-tips li {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 12px; line-height: 1.5; color: var(--text2);
+    padding: 5px 0;
+}
+.bk-tips svg { flex-shrink: 0; margin-top: 2px; color: var(--ant-success-fg); }
+
+/* At the QA floor the header's health line drops under the title rather than
+   squeezing it, and the counters go two-up. */
+@media (max-width: 1080px) {
+    .bk-health { margin-left: 0; width: 100%; }
+}

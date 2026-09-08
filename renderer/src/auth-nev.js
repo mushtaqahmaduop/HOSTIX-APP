@@ -559,6 +559,15 @@ async function checkLogin() {
       await _migrateIfNeeded(CUR_ROLE, plain);
       CUR_USER = WARDENS[CUR_ROLE];
 
+      /* WHEN THIS ACCOUNT LAST SIGNED IN. Nothing recorded it before, so the
+         User Management page had a Last sign-in column it could only fill with
+         'never'. It is written here — after the password verified and before
+         the screen goes — so a failed attempt never stamps one. */
+      try {
+        CUR_USER.lastLogin = new Date().toISOString();
+        saveWardenConfig();
+      } catch (e) { /* a stamp is never worth failing a sign-in for */ }
+
       const rememberEl = _ui('login-remember');
       _createSession(CUR_ROLE, !!(rememberEl && rememberEl.checked));
       _setLoginState('success');

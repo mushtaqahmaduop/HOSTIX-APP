@@ -120,73 +120,11 @@ async function deleteFine(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // ACTIVITY LOG
 // ════════════════════════════════════════════════════════════════════════════
-function renderActivityLog() {
-  const list = DB.activityLog || [];
-  const catColor = {'General':'var(--blue)','Maintenance':'var(--amber)','Finance':'var(--green)','Student':'var(--purple)','Complaint':'var(--red)','Room':'var(--teal)','Students':'var(--purple)'};
-  const catIcon = {General:'edit_note',Maintenance:'build',Finance:'payments',Student:'person',Students:'person',Complaint:'report',Room:'meeting_room'};
+/* renderActivityLog() moved to src/modules/activitylog.js on 2026-09-08, when
+   the Activity Log became a page built to `audit logs.png` — filters, a daily
+   trend, a split by type, top users, pagination and a detail panel. It had no
+   business living in the Settings module, and it was 60 lines of inline style. */
 
-  // Per-warden summary for current user
-  const curName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : '';
-  const moKey = thisMonth();
-  const myPayments = DB.payments.filter(p => p.byWarden === curName);
-  const myPaymentsThisMo = myPayments.filter(p => _payMatchesMonth(p, moKey));
-  const myPayTotal = myPaymentsThisMo.reduce((s,p) => s + Number(p.amount||0), 0);
-  const myStudents = DB.students.filter(s => {
-    const logEntry = list.find(a => a.action === 'Student Added' && a.details && a.details.startsWith(s.name) && a.by === curName);
-    return logEntry;
-  });
-  const myStudentsThisMo = list.filter(a => a.action === 'Student Added' && a.by === curName && (a.date||'').startsWith(moKey));
-
-  return `
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-    <div style="background:var(--card);border:1px solid rgba(46,201,138,0.25);border-radius:var(--radius);padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="micon" style="font-size:20px;color:var(--green)">payments</span>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3)">Your Collections</div>
-      </div>
-      <div style="font-size:22px;font-weight:900;color:var(--green)">${fmtPKR(myPayTotal)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">${myPaymentsThisMo.length} payment${myPaymentsThisMo.length!==1?'s':''} this month${curName?' · '+escHtml(curName):''}</div>
-    </div>
-    <div style="background:var(--card);border:1px solid rgba(155,109,240,0.25);border-radius:var(--radius);padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="micon" style="font-size:20px;color:var(--purple)">person_add</span>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3)">Students Added</div>
-      </div>
-      <div style="font-size:22px;font-weight:900;color:var(--purple)">${myStudentsThisMo.length}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">this month${curName?' · '+escHtml(curName):''}</div>
-    </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="micon" style="font-size:20px;color:var(--text3)">history</span>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3)">Log Entries</div>
-      </div>
-      <div style="font-size:22px;font-weight:900;color:var(--text)">${list.length}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">last 200 saved</div>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <div style="font-size:13px;color:var(--text2)">${list.length} total entries</div>
-    <button class="btn btn-danger btn-sm" onclick="showConfirm('Clear Activity Log?','This will permanently delete all activity log entries.',async ()=>{DB.activityLog=[];await saveDB();renderPage('activitylog');})"><span class="micon" style="font-size:14px">delete</span> Clear Log</button>
-  </div>
-  ${list.length===0?`<div style="text-align:center;padding:80px 20px;color:var(--text3)"><span class="micon" style="font-size:56px;display:block;margin-bottom:16px;color:var(--border2)">history</span><div style="font-size:16px;font-weight:600;color:var(--text2);margin-bottom:8px">No Activity Yet</div><div>Actions in your dashboard will appear here automatically</div></div>`:''}
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-    ${list.map((a,i)=>`
-    <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;${i<list.length-1?'border-bottom:1px solid var(--border)':''}">
-      <div style="width:40px;height:40px;border-radius:10px;background:${catColor[a.category]||'var(--blue)'}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <span class="micon" style="font-size:20px;color:${catColor[a.category]||'var(--blue)'}">${catIcon[a.category]||'edit_note'}</span>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:14px;margin-bottom:2px">${escHtml(a.action)}</div>
-        ${a.details?`<div style="font-size:12px;color:var(--text3)">${escHtml(a.details)}</div>`:''}
-        ${a.by?`<div style="font-size:10px;color:var(--text3);margin-top:2px"><span class="micon" style="font-size:12px;vertical-align:middle">person</span> ${escHtml(a.by)}</div>`:''}
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:${catColor[a.category]||'var(--blue)'}22;color:${catColor[a.category]||'var(--blue)'};margin-bottom:4px;display:inline-block">${escHtml(a.category||'General')}</span>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(a.date)} · ${a.time||''}</div>
-      </div>
-    </div>`).join('')}
-  </div>`;
-}
 function calcBillSplit() {
   const total = Number(document.getElementById('bs-total')?.value||0);
   const method = document.getElementById('bs-method')?.value||'equal';
@@ -351,6 +289,7 @@ const SET_ICO = {
   drive:   '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>',
   clock:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   wifi:    '<path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M1.4 9.4a15 15 0 0 1 21.2 0"/>',
+  type:    '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   stack:   '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>'
 };
 function setIco(path, size, stroke) {
@@ -387,15 +326,41 @@ function _rtStampText() {
 }
 function _rtTouch() { DB.settings.roomTypesUpdatedAt = new Date().toISOString(); }
 
+/* ── ROOM TYPES, AS ONE CARD OF FOUR ────────────────────────────────────────
+   Rebuilt 2026-09-08 on the owner's instruction to follow
+   `hostel configuration.png` exactly: four panels, two by two, fitted to the
+   page, each scrolling inside itself when it holds more rows than fit.
+
+   The first attempt kept this panel full-width above the other three, to hold
+   on to the two columns the reference does not draw. The owner overruled it,
+   and the columns are accounted for rather than lost:
+
+   · DEFAULT MESS moved out, not away. The Rent & Mess tab is where the mess
+     charge is set — it has a "Quick Set by Room Type" block that writes the
+     same field, with the opt-in rules and the student counts beside it. Two
+     controls for one number, on two tabs, is how they drift.
+   · PICK COLOUR became the swatch itself. It was a hex label, a chevron and a
+     hidden colour input in a column of its own; the swatch in column two was
+     already showing that colour and doing nothing. Clicking it now opens the
+     picker, which is the control the reference draws.
+   · DRAG TO REORDER survives on the row. The reference has no grip, but the
+     order here is the order every room picker and report lists types in, and
+     removing the only way to change it to match a picture would be losing a
+     feature. The row number is the handle.
+   · THE STAT STRIP is gone from this page. Total rooms, total beds and average
+     rent are all on the Dashboard and the Rooms page, which is where a reader
+     asks those questions; "last updated" was the only fact unique to it, and
+     it is not worth a fifth panel on a page that has to fit.               */
 function renderRoomTypesPanel() {
   const types = (DB.settings.roomTypes) || [];
+  const cur = escHtml(DB.settings.currency || 'PKR');
 
-  const rows = types.map(t => {
+  const rows = types.map((t, i) => {
     const inUse   = (DB.rooms || []).filter(r => r.typeId === t.id).length;
     const cap     = Number(t.capacity) || 1;
     /* removeRoomType refuses both of these anyway. Showing the button as live
-       and then answering the click with a toast reads as a failure; the tooltip
-       carries the reason instead. */
+       and then answering the click with a toast reads as a failure; the
+       tooltip carries the reason instead. */
     const blocked = types.length <= 1 || inUse > 0;
     const why     = types.length <= 1 ? 'The hostel needs at least one room type'
                   : inUse             ? `In use by ${inUse} room${inUse !== 1 ? 's' : ''} — move them to another type first`
@@ -404,17 +369,19 @@ function renderRoomTypesPanel() {
       <tr id="rt-row-${t.id}"
           ondragstart="rtDragStart(event,'${t.id}')" ondragover="rtDragOver(event,'${t.id}')"
           ondragleave="rtDragLeave(event)" ondrop="rtDrop(event,'${t.id}')" ondragend="rtDragEnd(event)">
-        <td>
-          <div class="set-grip">
-            <span class="set-grip__h" onmousedown="rtGrab(this)"
-                  title="Drag to reorder — this is the order rooms and reports list types in">${setIco(SET_ICO.grip, 16, 2.4)}</span>
-            <span class="set-grip__sw" id="rt-sw-${t.id}" style="background:${escHtml(t.color)}"></span>
-          </div>
+        <td class="cfg-n">
+          <span class="set-grip__h rt-grip" onmousedown="rtGrab(this)"
+                title="Drag to reorder — this is the order rooms and reports list types in">${i + 1}</span>
         </td>
         <td>
-          <input class="set-in set-in--name" value="${escHtml(t.name)}" placeholder="Type name"
-                 onchange="updateRoomType('${t.id}','name',this.value)">
+          <label class="rt-sw" title="Pick the colour this type shows in across the app">
+            <span class="rt-sw__d" id="rt-sw-${t.id}" style="background:${escHtml(t.color)}"></span>
+            <input type="color" value="${escHtml(t.color)}"
+                   oninput="rtColorLive('${t.id}',this.value)"
+                   onchange="updateRoomType('${t.id}','color',this.value)">
+          </label>
         </td>
+        <td class="cfg-name rt-name">${escHtml(t.name)}</td>
         <td>
           <div class="set-step">
             <button id="rt-dec-${t.id}" onclick="rtStep('${t.id}',-1)" ${cap <= 1 ? 'disabled' : ''}
@@ -425,103 +392,49 @@ function renderRoomTypesPanel() {
           </div>
         </td>
         <td>
-          <div class="set-money">
-            <input class="set-in" type="number" min="0" value="${Number(t.defaultRent) || 0}"
-                   onchange="updateRoomType('${t.id}','defaultRent',this.value)" aria-label="Default rent">
-            <span class="set-money__cur">${escHtml(DB.settings.currency || 'PKR')}</span>
+          <input class="set-in rt-rent" type="number" min="0" value="${Number(t.defaultRent) || 0}"
+                 onchange="updateRoomType('${t.id}','defaultRent',this.value)" aria-label="Default rent">
+        </td>
+        <td class="cfg-acts">
+          <div class="lk-acts">
+            <button class="lk-act lk-act--icon" onclick="showRoomTypeModal('${t.id}')"
+                    title="Edit this room type — name, colour, capacity and both default charges"
+                    aria-label="Edit room type">${icon('edit', 'xs')}</button>
+            <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="removeRoomType('${t.id}')"
+                    title="${escHtml(why)}" ${blocked ? 'disabled' : ''}
+                    aria-label="Remove room type">${icon('trash', 'xs')}</button>
           </div>
-        </td>
-        <td>
-          <div class="set-money">
-            <input class="set-in" type="number" min="0" value="${Number(t.defaultMess) || 0}"
-                   onchange="updateRoomType('${t.id}','defaultMess',this.value)" aria-label="Default mess charge">
-            <span class="set-money__cur">${escHtml(DB.settings.currency || 'PKR')}</span>
-          </div>
-        </td>
-        <td>
-          <label class="set-color" title="Pick the colour this type shows in across the app">
-            <span class="set-color__sw" id="rt-csw-${t.id}" style="background:${escHtml(t.color)}"></span>
-            <span class="set-color__hex" id="rt-hex-${t.id}">${escHtml(t.color)}</span>
-            <span class="set-color__ch">${setIco(SET_ICO.chevron, 13, 2.4)}</span>
-            <input type="color" value="${escHtml(t.color)}"
-                   oninput="rtColorLive('${t.id}',this.value)"
-                   onchange="updateRoomType('${t.id}','color',this.value)">
-          </label>
-        </td>
-        <td>
-          <button class="set-rowbtn dh-red" onclick="removeRoomType('${t.id}')" title="${escHtml(why)}"
-                  ${blocked ? 'disabled' : ''} aria-label="Remove room type">${setIco(SET_ICO.trash, 15, 2)}</button>
         </td>
       </tr>`;
   }).join('');
 
-  const strip = [
-    ['stack', 'dh-violet', 'Total Room Types',  'rt-strip-types',   String(types.length)],
-    ['home',  'dh-blue',   'Total Rooms',       'rt-strip-rooms',   String((DB.rooms || []).length)],
-    ['bed',   'dh-green',  'Total Beds Capacity','rt-strip-beds',   String(_rtTotalBeds())],
-    ['coins', 'dh-amber',  'Average Rent',      'rt-strip-avg',
-      `<small>${escHtml(DB.settings.currency || 'PKR')}</small>${fmtNum(_rtAvgRent())}`],
-    ['clock', 'dh-slate',  'Last Updated',      'rt-strip-updated', escHtml(_rtStampText())]
-  ].map(([ic, hue, label, id, val]) => `
-    <div class="set-strip__c ${hue}">
-      <div class="set-strip__i">${setIco(SET_ICO[ic], 18)}</div>
-      <div style="min-width:0">
-        <div class="set-strip__l">${label}</div>
-        <div class="set-strip__v" id="${id}">${val}</div>
-      </div>
-    </div>`).join('');
-
   return `
-    <div class="set-card">
-      <div class="set-head">
-        <div class="set-head__ico dh-violet">${setIco(SET_ICO.hostel, 24)}</div>
-        <div style="min-width:0">
-          <div class="set-head__t">Room Types Configuration</div>
-          <div class="set-head__s">Manage your hostel room types, capacity and default rent settings</div>
-        </div>
-        <div class="set-head__end">
-          <button class="set-btn set-btn--go" onclick="addRoomType()">${setIco(SET_ICO.plus, 16, 2.2)}Add New Type</button>
-        </div>
+  <div class="set-card cfg-card">
+    <div class="set-head">
+      <div class="set-head__ico dh-violet">${icon('building', 'md')}</div>
+      <div style="min-width:0">
+        <div class="set-head__t">Room Types</div>
+        <div class="set-head__s">Manage room types, capacity and default rates.</div>
       </div>
-
-      ${types.length ? `
-      <div class="set-table-wrap">
-        <table class="set-table">
-          <thead><tr>
-            <th style="width:1%">Color</th><th>Type Name</th><th style="width:1%">Capacity (Beds)</th>
-            <th style="width:1%">Default Rent (${escHtml(DB.settings.currency || 'PKR')})</th>
-            <th style="width:1%">Default Mess (${escHtml(DB.settings.currency || 'PKR')})</th>
-            <th style="width:1%">Pick Color</th><th style="width:1%">Actions</th>
-          </tr></thead>
-          <tbody id="room-types-list">${rows}</tbody>
-        </table>
-      </div>` : `
-      <div class="set-empty">
-        <div class="set-empty__i">${setIco(SET_ICO.bed, 26, 1.7)}</div>
-        <div class="set-empty__t">No room types yet</div>
-        <div class="set-empty__s">Add one before creating rooms — every room takes its beds and default rent from its type.</div>
-      </div>`}
-
-      <div class="set-note dh-blue">
-        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
-        <span>Changing room types here updates default values. Existing room rents remain unchanged unless you edit them individually.</span>
-      </div>
-
-      <div class="set-actions">
-        <button class="set-btn set-btn--go" onclick="saveRoomTypes()">${setIco(SET_ICO.check, 16, 2.1)}Save Room Types</button>
+      <div class="set-head__end">
+        <button class="set-btn set-btn--go" onclick="addRoomType()">${icon('plus', 'xs')} Add room type</button>
       </div>
     </div>
 
-    <div class="set-strip">${strip}</div>`;
+    ${types.length ? `
+    <div class="set-table-wrap"><table class="set-table cfg-table">
+      <thead><tr>
+        <th class="cfg-n">#</th><th>Colour</th><th>Type name</th>
+        <th>Capacity</th><th>Rent (${cur})</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="room-types-list">${rows}</tbody>
+    </table></div>` : `
+    <div class="set-empty"><div class="set-empty__i">${icon('bed')}</div>
+      <div class="set-empty__t">No room types yet</div></div>`}
+
+    <div class="cfg-note">${icon('info', 'xs')}<span>Room types are used when assigning rooms to students. The mess charge for each is set on the Rent &amp; Mess tab.</span></div>
+  </div>`;
 }
-
-/* ── RENT & MESS ──────────────────────────────────────────────────────────────
-   A hostel's monthly charge is two charges. A 17,000 room is 10,000 for the bed
-   plus 7,000 for the food, and a student may take the bed alone. Storing them
-   separately is what makes "rent only" answerable; storing the sum was not.
-
-   Existing data has the two already added together in rent, with mess at 0, so
-   nothing moves until the owner splits a type here. */
 function _messTotal(s) {
   return Number(s && s.rent || 0) + (s && s.messOptIn !== false ? Number(s && s.mess || 0) : 0);
 }
@@ -633,7 +546,8 @@ function renderRentMessPanel() {
         </div>
       </div>
 
-      ${svcModelCard()}
+      ${svcModelCard()}
+      ${refundPolicyCard()}
 
       <div class="set-strip" style="margin:0 0 18px">
         <div class="set-strip__c dh-blue"><div class="set-strip__i">${setIco(SET_ICO.users,18)}</div>
@@ -978,8 +892,1016 @@ function renderDataManagementPanel() {
 
 // ════════════════════════════════════════════════════════════════════════════
 let settingsTab = 'hostel';
+
+/* ══ HOSTEL CONFIGURATION ═══════════════════════════════════════════════════
+   Built 2026-09-08 to the owner's `hostel configuration.png`, with their own
+   description of it: "I put all the room types, payment methods, expense
+   categories and floors addition here in a single place to access."
+
+   Those four were four separate tabs. They are one now, because they are one
+   job — the half-hour at the start of a hostel's life when somebody sets the
+   place up, plus the rare afternoon when a floor is added.
+
+   ROOM TYPES KEEPS ITS OWN PANEL, AT FULL WIDTH. The reference draws it as one
+   quarter of a 2x2 grid, in five columns. The panel this app already has runs
+   to seven — it also carries the default MESS charge, a stat strip and
+   drag-to-reorder, none of which are in the reference and all of which are
+   real. Squeezing it into half a column would mean dropping them, which is
+   losing a feature to match a picture. It sits above the other three instead.
+
+   WHAT THE REFERENCE ASKS FOR THAT THE DATA DID NOT CARRY
+   -------------------------------------------------------
+   An icon on every payment method and expense category, a live/retired state
+   on every method, and a pencil on every row. The three lists were arrays of
+   plain STRINGS, and those strings are the identity: `payment.method` holds
+   'Cash', `expense.category` holds 'Electricity', `room.floor` holds 'Ground'.
+
+   So the strings stay exactly as they are, and the new attributes go in a
+   parallel map keyed by name (`DB.settings.configMeta`). Every existing reader
+   of these three lists keeps working untouched — and there are a lot of them,
+   on Payments, Expenses, Rooms, the Add forms and both exports. Turning the
+   arrays into objects to gain an icon would have been a rewrite of all of it
+   for a glyph.
+
+   RENAMING IS THE ONE THAT IS NOT COSMETIC. The reference puts a pencil on
+   every row, and renaming a payment method is a rename of the value stored on
+   every payment ever taken by it. `_cfgRename()` migrates the records, the
+   meta and the list together, or refuses. A rename that updates the list alone
+   would orphan every record that used the old name — which is the same failure
+   `removePaymentMethod()` was hardened against in the first place.          */
+
+/** Icons a method or category may wear. Small, fixed set: a free icon field is
+ *  a field nobody fills in correctly. */
+const CFG_ICONS = ['money', 'card', 'wallet', 'phone', 'building', 'receipt',
+                   'zap', 'droplet', 'flame', 'tool', 'shield', 'wifi',
+                   'armchair', 'bath', 'utensils', 'transfer', 'tag'];
+
+/** The parallel attribute map. Created on read so no migration step is needed
+ *  and an older backup restores cleanly. */
+function _cfgMeta() {
+  if (!DB.settings.configMeta) DB.settings.configMeta = {};
+  const m = DB.settings.configMeta;
+  if (!m.method) m.method = {};
+  if (!m.category) m.category = {};
+  return m;
+}
+
+/** Sensible starting glyphs, so a fresh install is not seventeen identical
+ *  tags. Applied only where the owner has not chosen one. */
+const CFG_DEFAULT_ICON = {
+  'Cash': 'money', 'JazzCash': 'phone', 'EasyPaisa': 'phone',
+  'Bank Transfer': 'building', 'Cheque': 'receipt', 'Card': 'card',
+  'Electricity': 'zap', 'Water': 'droplet', 'Gas': 'flame',
+  'Maintenance': 'tool', 'Cleaning': 'bath', 'Security': 'shield',
+  'Internet': 'wifi', 'Furniture': 'armchair', 'Plumbing': 'droplet',
+  'Fund Transfer': 'transfer', 'Mess': 'utensils', 'Other': 'tag',
+};
+
+function cfgIconOf(kind, name) {
+  const m = _cfgMeta()[kind][name];
+  return (m && m.icon) || CFG_DEFAULT_ICON[name] || 'tag';
+}
+
+/** A payment method a warden may still choose. Retired methods stay on the
+ *  records that used them — see the note in `_cfgSetActive`. */
+function cfgMethodActive(name) {
+  const m = _cfgMeta().method[name];
+  return !m || m.active !== false;
+}
+
+async function cfgSetIcon(kind, name, ico) {
+  const meta = _cfgMeta()[kind];
+  meta[name] = Object.assign({}, meta[name], { icon: ico });
+  await saveDB();
+  renderPage('settings');
+}
+
+/** Retire or restore a payment method.
+ *
+ *  A retired method is NOT deleted and NOT removed from any record: a hostel
+ *  that stops taking cheques still has last year's cheques in its ledger, and
+ *  a register that cannot name how a payment arrived is a broken register.
+ *  It simply stops being offered on new payments. */
+async function cfgToggleMethod(name) {
+  const meta = _cfgMeta().method;
+  const now = cfgMethodActive(name);
+  if (now && (DB.settings.paymentMethods || []).filter(cfgMethodActive).length <= 1) {
+    toast('At least one payment method has to stay active', 'error');
+    return;
+  }
+  meta[name] = Object.assign({}, meta[name], { active: !now });
+  logActivity(now ? 'Payment Method Retired' : 'Payment Method Restored', name, 'Settings');
+  await saveDB();
+  renderPage('settings');
+  toast(now ? escHtml(name) + ' retired — past payments keep it' : escHtml(name) + ' is live again', 'info');
+}
+
+/**
+ * The `<option>` list for every control where a warden CHOOSES how money
+ * arrived — the Add Payment page, the Add Payment modal, Edit Payment, the
+ * student intake and edit forms, and the cancellation settlement.
+ *
+ * Two rules, and the second is the one that matters:
+ *
+ *  · only ACTIVE methods are offered, which is what retiring one means;
+ *  · the record's OWN method is always in the list, active or not, and
+ *    retired or removed. Editing a payment taken by cheque in a hostel that
+ *    has since stopped taking cheques must not silently rewrite it to Cash on
+ *    save — a select whose value is missing from its options reports the
+ *    first option instead. Edit Payment already guarded this for methods
+ *    DELETED from Settings; retiring one is the same hazard by another route,
+ *    so the guard lives here now and every form gets it.
+ *
+ * @param {string} [selected] the value the record currently holds
+ */
+function pmOptions(selected) {
+  const all = (DB.settings.paymentMethods || ['Cash']);
+  const list = all.filter(cfgMethodActive);
+  if (selected && list.indexOf(selected) === -1) list.unshift(selected);
+  return list.map(m =>
+    `<option value="${escHtml(m)}"${m === selected ? ' selected' : ''}>${escHtml(m)}</option>`
+  ).join('');
+}
+
+/* ── RENAMING ───────────────────────────────────────────────────────────────
+   `kind` is the axis; `field` is where the value lives on a record.
+
+   The records are migrated FIRST and the list last, so an interruption leaves
+   records pointing at a name that still exists rather than at one that does
+   not. */
+const CFG_KINDS = {
+  method: {
+    list: 'paymentMethods', meta: 'method', coll: 'payments', field: 'method',
+    label: 'payment method', placeholder: 'e.g. Raast, Card',
+    // The existing guards stay the authority on removal — each already refuses
+    // to strand records, and each says why in its own words.
+    remove: 'removePaymentMethod',
+  },
+  category: {
+    list: 'expenseCategories', meta: 'category', coll: 'expenses', field: 'category',
+    label: 'expense category', placeholder: 'e.g. Laundry',
+    remove: 'removeExpenseCategory',
+  },
+  floor: {
+    list: 'floors', meta: null, coll: 'rooms', field: 'floor',
+    label: 'floor', placeholder: 'e.g. 4th',
+    remove: 'removeFloor',
+  },
+};
+
+function cfgRenamePrompt(kind, oldName) {
+  const k = CFG_KINDS[kind];
+  const used = (DB[k.coll] || []).filter(r => r[k.field] === oldName).length;
+  showModal('modal-sm', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon('edit', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">Rename ${escHtml(k.label)}</span>
+        <span class="hf-mh__s">${used
+          ? used + ' existing record' + (used === 1 ? '' : 's') + ' will be updated with it'
+          : 'Nothing uses this yet'}</span>
+      </span>
+    </div>`,
+    `<div class="field">
+       <label>New name</label>
+       <div class="hf-in"><span class="hf-in__i">${icon('tag', 'xs')}</span>
+         <input id="cfg-rename" class="form-control" value="${escHtml(oldName)}"
+                onkeydown="if(event.key==='Enter')cfgRename('${escHtml(kind)}','${escHtml(oldName)}')"></div>
+     </div>`,
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       <button class="btn btn-primary" onclick="cfgRename('${escHtml(kind)}','${escHtml(oldName)}')">
+         ${icon('save', 'xs')} Rename</button>
+     </div>`);
+  setTimeout(() => { const el = document.getElementById('cfg-rename'); if (el) { el.focus(); el.select(); } }, 60);
+}
+
+async function cfgRename(kind, oldName) {
+  const k = CFG_KINDS[kind];
+  const next = String((document.getElementById('cfg-rename') || {}).value || '').trim();
+  if (!next) { toast('Enter a name', 'error'); return; }
+  if (next === oldName) { closeModal(); return; }
+  const list = DB.settings[k.list] || [];
+  if (list.includes(next)) { toast('"' + next + '" already exists', 'error'); return; }
+
+  // Records first: an interruption must leave them pointing at a name that
+  // still exists, not at one that no longer does.
+  let moved = 0;
+  for (const r of (DB[k.coll] || [])) {
+    if (r[k.field] === oldName) { r[k.field] = next; moved++; }
+  }
+  if (k.meta) {
+    const meta = _cfgMeta()[k.meta];
+    if (meta[oldName]) { meta[next] = meta[oldName]; delete meta[oldName]; }
+  }
+  DB.settings[k.list] = list.map(x => (x === oldName ? next : x));
+
+  logActivity('Renamed ' + k.label, oldName + ' → ' + next, 'Settings');
+  await saveDB();
+  closeModal();
+  renderPage('settings');
+  toast(moved ? 'Renamed — ' + moved + ' record' + (moved === 1 ? '' : 's') + ' updated' : 'Renamed', 'success');
+}
+
+/* ── The three lists, drawn as the reference draws them ─────────────────── */
+
+function _cfgIconPicker(kind, name) {
+  const cur = cfgIconOf(kind, name);
+  const id = 'cfgico-' + kind + '-' + String(name).replace(/[^A-Za-z0-9]/g, '');
+  return `<div class="tb-wrap">
+    <button class="cfg-ico" id="${id}" title="Change the icon"
+            onclick="tbToggleMenu('${id}-menu',event)">${icon(cur, 'sm')}</button>
+    <div class="tb-menu cfg-ico__menu" id="${id}-menu" role="menu">
+      ${CFG_ICONS.map(i => `<button class="cfg-ico__opt${i === cur ? ' is-on' : ''}" role="menuitem"
+        title="${i}" onclick="tbCloseMenus();cfgSetIcon('${kind}','${escHtml(name)}','${i}')">${icon(i, 'sm')}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function _cfgCard(o) {
+  return `
+  <div class="set-card cfg-card">
+    <div class="set-head">
+      <div class="set-head__ico ${o.hue}">${icon(o.ico, 'md')}</div>
+      <div style="min-width:0">
+        <div class="set-head__t">${escHtml(o.title)}</div>
+        <div class="set-head__s">${escHtml(o.sub)}</div>
+      </div>
+      <div class="set-head__end">
+        <button class="set-btn set-btn--go" onclick="cfgAddPrompt('${o.kind}')">${icon('plus', 'xs')} ${escHtml(o.addLabel)}</button>
+      </div>
+    </div>
+    ${o.rows ? `<div class="set-table-wrap"><table class="set-table cfg-table">
+        <thead><tr>${o.cols}</tr></thead><tbody>${o.rows}</tbody></table></div>`
+             : `<div class="set-empty"><div class="set-empty__i">${icon(o.ico)}</div>
+                <div class="set-empty__t">Nothing here yet</div></div>`}
+    <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(o.note)}</span></div>
+  </div>`;
+}
+
+function _cfgActs(kind, name, extra) {
+  return `<td class="cfg-acts">
+    <div class="lk-acts">
+      ${extra || ''}
+      <button class="lk-act lk-act--icon" title="Rename"
+              onclick="cfgRenamePrompt('${kind}','${escHtml(name)}')">${icon('edit', 'xs')}</button>
+      <button class="lk-act lk-act--icon lk-act--hue dh-red" title="Remove"
+              onclick="${CFG_KINDS[kind].remove}('${escHtml(name)}')">${icon('trash', 'xs')}</button>
+    </div>
+  </td>`;
+}
+
+function renderConfigurationPanel() {
+  const s = DB.settings;
+  const cur = escHtml(s.currency || 'PKR');
+
+  const methods = (s.paymentMethods || []).map((m, i) => {
+    const live = cfgMethodActive(m);
+    const used = (DB.payments || []).filter(p => p.method === m).length;
+    return `<tr>
+      <td class="cfg-n">${i + 1}</td>
+      <td>${_cfgIconPicker('method', m)}</td>
+      <td class="cfg-name">${escHtml(m)}</td>
+      <td><button class="lk-chip ${live ? 'dh-green' : 'dh-slate'} cfg-state"
+                  onclick="cfgToggleMethod('${escHtml(m)}')"
+                  title="${live ? 'Live — click to retire it' : 'Retired — click to offer it again'}">
+        ${icon(live ? 'check' : 'close', 'xs')}${live ? 'Active' : 'Retired'}</button></td>
+      ${_cfgActs('method', m)}
+    </tr>`;
+  }).join('');
+
+  const cats = (s.expenseCategories || []).map((c, i) => `<tr>
+      <td class="cfg-n">${i + 1}</td>
+      <td>${_cfgIconPicker('category', c)}</td>
+      <td class="cfg-name">${escHtml(c)}</td>
+      ${_cfgActs('category', c)}
+    </tr>`).join('');
+
+  const floors = (s.floors || []).map((f, i) => {
+    const on = (DB.rooms || []).filter(r => r.floor === f).length;
+    return `<tr>
+      <td class="cfg-n">${i + 1}</td>
+      <td class="cfg-name">${escHtml(f)}</td>
+      <td class="cfg-use">${on ? on + ' room' + (on === 1 ? '' : 's') : '<span class="lk-dash">—</span>'}</td>
+      ${_cfgActs('floor', f)}
+    </tr>`;
+  }).join('');
+
+  /* Two by two, as the reference draws it and as the owner asked for on
+     2026-09-08: "follow this design for configuration and fit to page; if a
+     panel has more data make it draggable". Room Types is the first card, not
+     a full-width panel above them — see renderRoomTypesPanel() for what moved
+     to make it fit. The grid fills the page and each card scrolls inside
+     itself, so a hostel with twenty expense categories still shows four
+     panels rather than a page four screens long. */
+  return `
+    <div class="cfg-grid">
+      ${renderRoomTypesPanel()}
+      ${_cfgCard({
+        title: 'Payment Methods', sub: 'How money arrives, and which are still offered.',
+        ico: 'card', hue: 'dh-blue', kind: 'method', addLabel: 'Add method',
+        cols: '<th class="cfg-n">#</th><th>Icon</th><th>Method name</th><th>Status</th><th>Actions</th>',
+        rows: methods,
+        note: 'Active methods are the ones offered when a payment is recorded. Retiring one keeps it on every payment already taken by it.',
+      })}
+
+      ${_cfgCard({
+        title: 'Expense Categories', sub: 'How the hostel’s spending is filed.',
+        ico: 'receipt', hue: 'dh-amber', kind: 'category', addLabel: 'Add category',
+        cols: '<th class="cfg-n">#</th><th>Icon</th><th>Category name</th><th>Actions</th>',
+        rows: cats,
+        note: 'Every expense is filed under one of these, and the register totals by them.',
+      })}
+
+      ${_cfgCard({
+        title: 'Building Floors', sub: 'The floors rooms are grouped by.',
+        ico: 'building', hue: 'dh-violet', kind: 'floor', addLabel: 'Add floor',
+        cols: '<th class="cfg-n">#</th><th>Floor name</th><th>Rooms</th><th>Actions</th>',
+        rows: floors,
+        note: 'A floor in use by a room cannot be removed — move the rooms first. Renaming one moves its rooms with it.',
+      })}
+    </div>`;
+}
+
+/** One Add dialog for all three, so the three used to differ in three ways. */
+function cfgAddPrompt(kind) {
+  const k = CFG_KINDS[kind];
+  showModal('modal-sm', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon('plus', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">Add ${escHtml(k.label)}</span>
+        <span class="hf-mh__s">It becomes available everywhere this ${escHtml(k.label)} is chosen.</span>
+      </span>
+    </div>`,
+    `<div class="field">
+       <label>Name</label>
+       <div class="hf-in"><span class="hf-in__i">${icon('tag', 'xs')}</span>
+         <input id="cfg-add" class="form-control" placeholder="${escHtml(k.placeholder)}"
+                onkeydown="if(event.key==='Enter')cfgAdd('${kind}')"></div>
+     </div>`,
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       <button class="btn btn-primary" onclick="cfgAdd('${kind}')">${icon('save', 'xs')} Add</button>
+     </div>`);
+  setTimeout(() => { const el = document.getElementById('cfg-add'); if (el) el.focus(); }, 60);
+}
+
+async function cfgAdd(kind) {
+  const k = CFG_KINDS[kind];
+  const val = String((document.getElementById('cfg-add') || {}).value || '').trim();
+  if (!val) { toast('Enter a name', 'error'); return; }
+  const list = DB.settings[k.list] || (DB.settings[k.list] = []);
+  if (list.includes(val)) { toast('"' + val + '" already exists', 'error'); return; }
+  list.push(val);
+  logActivity('Added ' + k.label, val, 'Settings');
+  await saveDB();
+  closeModal();
+  renderPage('settings');
+  toast('Added', 'success');
+}
+
+/* ── WHICH FACES THIS COMPUTER CAN ACTUALLY DRAW ─────────────────────────────
+   The picker used to offer twenty faces, thirteen of which were Google
+   families — DM Serif Display, Playfair, Cinzel, Cormorant, Baskerville, Fell
+   English, Philosopher, Yeseva One, Bebas Neue, Rajdhani, Teko, Josefin Sans
+   and Righteous. Not one of them ships with this app: `vendor/fonts.css`
+   declares Inter, Outfit, Barlow, Barlow Condensed and JetBrains Mono and
+   nothing else, and `font-src 'self' data:` in main.js's CSP means a webfont
+   can never be fetched from anywhere. So all thirteen fell back to the default
+   serif and every one of those tiles drew the SAME face under a different
+   name — including `DM Serif Display`, which was the shipped default.
+
+   The list below is the two kinds of face that do resolve: the five the
+   installer carries, and the Windows faces present on any machine this runs
+   on. The system ones are still measured before being offered, because
+   "present on any Windows" is an assumption and an N/LTSC image can prove it
+   wrong — better to show fifteen tiles that work than eighteen where three
+   lie.                                                                       */
+const HI_FONT_DEFAULT = 'Georgia';
+const HI_FONTS_BUNDLED = [
+  ['Outfit', 'Outfit'], ['Barlow', 'Barlow'], ['Barlow Condensed', 'Barlow Condensed'],
+  ['Inter', 'Inter'], ['JetBrains Mono', 'JetBrains Mono'],
+];
+const HI_FONTS_SYSTEM = [
+  ['Georgia', 'Georgia'], ['Cambria', 'Cambria'], ['Constantia', 'Constantia'],
+  ['Book Antiqua', 'Book Antiqua'], ['Palatino Linotype', 'Palatino'],
+  ['Times New Roman', 'Times New Roman'], ['Segoe UI', 'Segoe UI'],
+  ['Tahoma', 'Tahoma'], ['Verdana', 'Verdana'], ['Trebuchet MS', 'Trebuchet'],
+  ['Candara', 'Candara'], ['Corbel', 'Corbel'],
+  ['Century Gothic', 'Century Gothic'], ['Franklin Gothic Medium', 'Franklin Gothic'],
+  ['Bahnschrift', 'Bahnschrift'], ['Arial Black', 'Arial Black'],
+  ['Impact', 'Impact'], ['Gabriola', 'Gabriola'],
+];
+
+/* Canvas measurement, not `document.fonts.check()`: check() answers for faces
+   the page has REGISTERED, and no @font-face declares a Windows system font,
+   so it reports every one of them missing. Measuring one string in the
+   candidate and again in the generic it would fall back to catches the case
+   that matters — a name that resolves to nothing. Memoised: this runs once per
+   face per session, not once per render. */
+const _hiFontSeen = {};
+function hiFontAvailable(name) {
+  if (name in _hiFontSeen) return _hiFontSeen[name];
+  let ok = false;
+  try {
+    const c = document.createElement('canvas').getContext('2d');
+    const S = 'Hostel Name mmmmwwwWM';
+    for (const generic of ['serif', 'sans-serif', 'monospace']) {
+      /* 700, because that is the weight the tile draws. A family whose bundled
+         faces do not include the weight asked for measures as missing. */
+      c.font = '700 48px ' + generic;
+      const base = c.measureText(S).width;
+      c.font = '700 48px "' + name + '", ' + generic;
+      if (Math.abs(c.measureText(S).width - base) > 0.5) { ok = true; break; }
+    }
+  } catch (e) { ok = true; }   // no canvas: offer it rather than hide everything
+  _hiFontSeen[name] = ok;
+  return ok;
+}
+
+/* A family name on its way into markup. `hostelNameFont` is a stored value and
+   a restored backup is a file the customer chose, so it is not trusted input:
+   a quote in it would close the style attribute it is written into. Everything
+   but the characters a font family can legitimately contain is dropped, which
+   also means a doctored value degrades to a face that does not resolve — and
+   the panel already says so out loud. titlebar.js does the same thing its own
+   way, by assigning the DOM property rather than building markup. */
+function hiSafeFace(name) {
+  return String(name || '').replace(/[^A-Za-z0-9 ._-]/g, '').slice(0, 48);
+}
+
+/** The two groups the picker draws, system faces filtered to what resolves. */
+function hiFontChoices() {
+  return [
+    { label: 'Shipped with the app — the same on every computer', fonts: HI_FONTS_BUNDLED },
+    { label: 'Installed on this computer', fonts: HI_FONTS_SYSTEM.filter(f => hiFontAvailable(f[0])) },
+  ];
+}
+
+/* ── WHAT A CONTROL DOES WHEN THE FEATURE BEHIND IT IS NOT BUILT ─────────────
+   The owner's rule, 2026-09-08: "if there is no function present for a feature
+   then just lock it and show a warning or info." A row the reference draws is
+   drawn — with its control disabled, a lock on it, and one line saying what the
+   app does INSTEAD. Three things follow from that and all three matter:
+
+   · The control is never merely greyed. A disabled toggle with no explanation
+     is indistinguishable from a broken one, and a warden will click it twice
+     and then telephone. Every locked row carries the sentence.
+   · The sentence says what happens today, not "coming soon". "Rooms are chosen
+     by hand when a student is admitted" is usable information; "not yet
+     implemented" is not.
+   · Nothing locked is ever given a value that looks live. A locked toggle
+     shows the state of the world (auto-assignment is OFF, because there is no
+     auto-assignment), never a decorative "on".                               */
+const HI_LOCK_NOTE = 'Not in this build';
+
+/** One row of a settings list: glyph, name, what it does, and its control. */
+function _setRow(o) {
+  const locked = !!o.lock;
+  const id = 'sr-' + (o.key || Math.random().toString(36).slice(2));
+  return `
+    <div class="set-row${locked ? ' is-locked' : ''}">
+      <div class="set-row__i ${o.hue || 'dh-slate'}">${setIco(SET_ICO[o.ico] || SET_ICO.info, 17)}</div>
+      <div class="set-row__b">
+        <div class="set-row__t">${escHtml(o.title)}</div>
+        <div class="set-row__s">${escHtml(o.sub)}</div>
+      </div>
+      <div class="set-row__c">${o.control}</div>
+      ${locked ? `
+        <button class="set-row__i-btn" title="Why is this locked?" aria-expanded="false"
+                onclick="setRowWhy('${id}',this)">${icon('info', 'xs')}</button>
+        <div class="set-row__why" id="${id}" hidden>${icon('warning', 'xs')}<span>${escHtml(o.lock)}</span></div>`
+      : '<span></span>'}
+    </div>`;
+}
+
+/** The (i) on a locked row reveals the sentence under it. */
+function setRowWhy(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = !el.hidden;
+  if (btn) btn.setAttribute('aria-expanded', String(!el.hidden));
+}
+
+/** A switch. Disabled ones keep their real state, which for a feature that
+    does not exist is off. */
+function _setTog(on, opts) {
+  const o = opts || {};
+  return `<button type="button" role="switch" aria-checked="${!!on}" class="set-tog${on ? ' is-on' : ''}"
+      ${o.lock ? `disabled aria-label="${escHtml(HI_LOCK_NOTE)}"` : ''}
+      ${o.on ? `onclick="${o.on}"` : ''}><span class="set-tog__k"></span></button>
+    ${o.lock ? `<span class="set-lock">${icon('lock', 'xs')}${escHtml(HI_LOCK_NOTE)}</span>` : ''}`;
+}
+
+/** A select or a stepper that is only there to show the shape of the setting. */
+function _setDead(text) {
+  return `<span class="set-dead">${escHtml(text)}${icon('chevronDown', 'xs')}</span>
+    <span class="set-lock">${icon('lock', 'xs')}${escHtml(HI_LOCK_NOTE)}</span>`;
+}
+
+/* The database payload, split the way saveDB() writes it. Shared with the Data
+   Management panel rather than measured twice — two answers to "how big is
+   this hostel's data" is exactly the sort of pair that drifts. */
+function _setStoreParts() {
+  const total = JSON.stringify(DB).length;
+  const tbl = (key, hue, rows) => ({ key, hue, rows: (rows || []).length, n: JSON.stringify(rows || []).length });
+  const parts = [
+    tbl('Students', 'dh-violet', DB.students),
+    tbl('Payments', 'dh-blue',   DB.payments),
+    tbl('Expenses', 'dh-amber',  DB.expenses),
+    tbl('Rooms',    'dh-green',  DB.rooms)
+  ];
+  const counted = parts.reduce((s, p) => s + p.n, 0);
+  const segs = parts.filter(p => p.rows > 0)
+                    .concat([{ key: 'Other', hue: 'dh-slate', n: Math.max(0, total - counted) }])
+                    .filter(p => p.n > 0);
+  return { total, parts, segs };
+}
+
+/* ── HOSTEL INFO ─────────────────────────────────────────────────────────────
+   The identity every other surface reads — the title bar's centred name, the
+   login screen, the header of every document this app prints — and, per
+   `hostel profile.png`, the app's own preferences beside it.
+
+   Decisions worth recording.
+
+   · THERE IS NO SAVE BUTTON on the identity card. Every field there has
+     written through on each keystroke since long before this redesign
+     (`liveUpdateSetting` → `saveDB`), so the "Save Hostel Info" button that
+     used to sit under it saved nothing that was not already saved. A button
+     that looks like the thing that commits your edit, and is not, teaches a
+     warden that leaving the tab loses work.
+
+   · THE VERSION IS NOT TYPED. It used to be a text field over
+     `DB.settings.version`, so the number the sidebar showed and the number
+     support needed were whatever somebody last typed — 'v3.0' on a v5.0.0
+     build. The build decides its own version; this panel reads it from
+     `app.getVersion()` over `window.appInfo` and prints it.
+
+   · THE PROFILE CARD IS NOT DECORATION. The font picker below changes ONE
+     string in ONE place, and the old page asked you to judge twenty faces from
+     a 13px sample in a grid tile. The card draws the name at the weight the
+     title bar draws it, over the address block the login screen prints, under
+     the hostel's own logo.                                                   */
+function renderHostelInfoPanel() {
+  const s = DB.settings;
+  const font = s.hostelNameFont || HI_FONT_DEFAULT;
+  const pickerOpen = s.showFontPicker !== false;
+  const lic = window._hostyllo_license_cache || {};
+
+  /* Same field shape as the two page forms: label above, and the control in a
+     box with a tinted glyph at its left edge (forms.css §7). */
+  const F = (label, ico, input, opts) => {
+    const o = opts || {};
+    return `<div class="field${o.full ? ' col-full' : ''}">
+      <label for="${o.for}">${escHtml(label)}${o.opt ? '<span class="opt">(optional)</span>' : ''}</label>
+      <div class="hf-in"><span class="hf-in__i">${icon(ico, 'sm')}</span>${input}</div>
+      ${o.note ? `<div class="hi-note">${escHtml(o.note)}</div>` : ''}
+    </div>`;
+  };
+  const IN = (id, key, val, extra) =>
+    `<input class="form-control" id="${id}" value="${escHtml(val || '')}" `
+    + `oninput="liveUpdateSetting('${key}',this.value)" ${extra || ''}>`;
+
+  /* A row of the profile card. An empty field says so rather than leaving a
+     blank line: "no phone recorded" is information, an empty row is a bug. */
+  const R = (ico, id, val, empty) => `
+    <div class="hi-id__row">
+      <span class="hi-id__i">${icon(ico, 'xs')}</span>
+      <span class="hi-id__v${val ? '' : ' is-empty'}" id="${id}">${escHtml(val || empty)}</span>
+    </div>`;
+
+  const FONTS_GROUPS = hiFontChoices();
+  const missing = !HI_FONTS_BUNDLED.some(f => f[0] === font) && !hiFontAvailable(font);
+
+  // ── The two preference cards the reference draws ──────────────────────────
+  const general = [
+    _setRow({ key: 'lang', ico: 'drive', hue: 'dh-blue', title: 'System language',
+      sub: 'The language the application is shown in.',
+      control: _setDead('English'),
+      lock: 'This build ships in English only. Nothing in the app is translated, so a picker here would change nothing.' }),
+    _setRow({ key: 'datefmt', ico: 'clock', hue: 'dh-violet', title: 'Date format',
+      sub: 'How dates are written across the system.',
+      control: _setDead(fmtDate(today())),
+      lock: 'Every date in the app and on every export is written this way, from one formatter. Changing it in one place would leave the printed documents disagreeing with the screen.' }),
+    _setRow({ key: 'timefmt', ico: 'clock', hue: 'dh-violet', title: 'Time format',
+      sub: 'How times are written across the system.',
+      control: _setDead('12 hour (AM/PM)'),
+      lock: 'Times are printed in 12-hour form everywhere they appear — the activity log, the connection readout and the receipts.' }),
+    // The one live row on this card.
+    _setRow({ key: 'curr', ico: 'coins', hue: 'dh-green', title: 'Currency',
+      sub: 'The currency every amount is printed in.',
+      control: `<select class="set-sel" id="hi-curr" onchange="liveUpdateSetting('currency',this.value)">
+          ${['PKR', 'USD', 'EUR', 'GBP', 'AED', 'SAR'].map(c => `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>` }),
+    _setRow({ key: 'acad', ico: 'layers', hue: 'dh-amber', title: 'Academic year',
+      sub: 'The year reports and records are filed under.',
+      control: _setDead('Calendar months'),
+      lock: 'Records are filed by calendar month, and a closed year is moved to the Annual Archive by hand. The app keeps no academic-year boundary of its own.' }),
+    _setRow({ key: 'landing', ico: 'home', hue: 'dh-blue', title: 'Default page',
+      sub: 'Where the app opens after you sign in.',
+      control: _setDead('Dashboard'),
+      lock: 'The app always opens on the Dashboard. Nothing stores a landing page yet.' }),
+  ].join('');
+
+  const operational = [
+    _setRow({ key: 'autoassign', ico: 'bed', hue: 'dh-blue', title: 'Room auto assignment',
+      sub: 'Give a new student a room automatically.',
+      control: _setTog(false, { lock: true }),
+      lock: 'Rooms are chosen by hand on the admission form, which shows which rooms have space as you pick. Nothing assigns one for you.' }),
+    _setRow({ key: 'sharing', ico: 'users', hue: 'dh-violet', title: 'Allow room sharing',
+      sub: 'Allow more than one student in a room.',
+      control: _setTog(true, { lock: true }),
+      lock: 'Sharing is already how the app works: a room holds as many students as its room type has beds. There is no single-occupancy mode to switch to.' }),
+    _setRow({ key: 'autorcpt', ico: 'receipt', hue: 'dh-green', title: 'Auto generate receipts',
+      sub: 'Produce a receipt as soon as a payment is recorded.',
+      control: _setTog(false, { lock: true }),
+      lock: 'A receipt is produced when you ask for one, from the payment row. Numbers come from the same counter either way, so nothing is skipped.' }),
+    _setRow({ key: 'grace', ico: 'clock', hue: 'dh-amber', title: 'Late fee grace days',
+      sub: 'Days after the due date before a late fee applies.',
+      control: _setDead('—'),
+      lock: 'This build charges no late fee. Arrears are shown as arrears, and what to do about them is the hostel’s call.' }),
+    _setRow({ key: 'stuid', ico: 'users', hue: 'dh-violet', title: 'Student ID',
+      sub: 'Give every student a unique identifier.',
+      control: _setTog(true, { lock: true }),
+      lock: 'Every student already gets one, numbered in order as they are admitted, and it cannot be turned off — the payment and archive records key on it.' }),
+    _setRow({ key: 'imgup', ico: 'upload', hue: 'dh-blue', title: 'Image upload',
+      sub: 'Allow student photos and document scans.',
+      control: _setTog(true, { lock: true }),
+      lock: 'Photos and documents already upload from the student form, by file or from the camera. There is no switch because there is nothing that would be safe to break by turning it off.' }),
+  ].join('');
+
+  // ── The rail ──────────────────────────────────────────────────────────────
+  const store = _setStoreParts();
+  const licState = lic.valid ? 'Active' : 'Not active';
+  const reg = lic.activatedAt ? _licDate(lic.activatedAt) : null;
+  const exp = lic.expiry ? _licDate(lic.expiry) : null;
+
+  const factRow = (label, value, opts) => {
+    const o = opts || {};
+    return `<div class="hi-fact${o.lock ? ' is-locked' : ''}">
+      <span class="hi-fact__i">${icon(o.ico || 'info', 'xs')}</span>
+      <span class="hi-fact__l">${escHtml(label)}</span>
+      <span class="hi-fact__v" ${o.id ? `id="${o.id}"` : ''}>${escHtml(value)}</span>
+      ${o.lock ? `<span class="hi-fact__lock" title="${escHtml(o.lock)}">${icon('lock', 'xs')}</span>` : ''}
+    </div>`;
+  };
+
+  return `
+  <div class="set-split hi-split">
+    <div class="hi-main">
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-blue">${icon('building', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">Hostel Identity</div>
+            <div class="set-head__s">What this hostel is called and how it is reached. The title bar, the login screen and every printed header read from here.</div>
+          </div>
+          <div class="set-head__end">
+            <span class="hi-live" title="Each field is written to the database as you type it.">${icon('check', 'xs')}Saved as you type</span>
+          </div>
+        </div>
+
+        <div class="hf-g2">
+          ${F('Hostel name', 'building', IN('hi-name', 'hostelName', s.hostelName, 'maxlength="60"'), { full: true, for: 'hi-name' })}
+          ${F('Tagline', 'tag', IN('hi-tag', 'tagline', s.tagline, 'maxlength="60" placeholder="Safe &amp; comfortable living"'), { full: true, for: 'hi-tag', opt: true })}
+          ${F('Location / city', 'pin', IN('hi-loc', 'location', s.location, 'maxlength="80" placeholder="Street, city"'), { for: 'hi-loc' })}
+          ${F('Contact phone', 'phone', IN('hi-phone', 'phone', s.phone, 'maxlength="20" placeholder="03XX-XXXXXXX"'), { for: 'hi-phone' })}
+          ${F('Email address', 'mail', IN('hi-email', 'email', s.email, 'type="email" maxlength="60" placeholder="hostel@email.com"'), { full: true, for: 'hi-email', opt: true })}
+        </div>
+      </div>
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-slate">${icon('settings', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">General Settings</div>
+            <div class="set-head__s">Basic preferences and configuration for your system.</div>
+          </div>
+          <div class="set-head__end">
+            <button class="set-btn" disabled title="${escHtml(HI_LOCK_NOTE)}">${icon('refreshCw', 'xs')}Reset to default</button>
+          </div>
+        </div>
+        <div class="set-rows">${general}</div>
+      </div>
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-amber">${icon('tool', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">Operational Settings</div>
+            <div class="set-head__s">Daily operations and business rules.</div>
+          </div>
+        </div>
+        <div class="set-rows">${operational}</div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>Every switch on this card is locked because the behaviour it names is already fixed in this build. The line under each one says what the app does instead — press the ⓘ to read it.</span></div>
+      </div>
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-violet">${setIco(SET_ICO.type, 17)}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">Hostel Name Font</div>
+            <div class="set-head__s">The face the title bar sets the name in. Nothing else in the app changes.</div>
+          </div>
+          <div class="set-head__end">
+            <button class="set-btn" id="hi-font-toggle" onclick="hiTogglePicker()">
+              ${icon('eye', 'xs')}${pickerOpen ? 'Hide the faces' : 'Show the faces'}
+            </button>
+          </div>
+        </div>
+        ${missing ? `<div class="hi-warn">${icon('warning', 'xs')}<span><b>${escHtml(font)}</b> is not installed on this computer, so the title bar is drawing the interface font instead. Pick one of the faces below.</span></div>` : ''}
+        <div id="hi-font-grid" ${pickerOpen ? '' : 'hidden'}>
+          ${FONTS_GROUPS.map(g => `
+            <div class="hi-fgroup">${escHtml(g.label)}</div>
+            <div class="hi-fonts">
+              ${g.fonts.map(([ff, label]) => `
+                <button type="button" class="hi-font${font === ff ? ' is-on' : ''}" onclick="applyHostelFont('${ff}')"
+                        aria-pressed="${font === ff}" title="${escHtml(label)}">
+                  <span class="font-card-label" style="font-family:'${ff}',var(--font)">${escHtml(s.hostelName || 'Hostel Name')}</span>
+                  <span class="hi-font__n">${escHtml(label)}</span>
+                </button>`).join('')}
+            </div>`).join('')}
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="hi-rail">
+      <div class="set-card hi-id">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('building', 'sm')}Hostel Profile</div>
+          <button class="set-btn set-btn--sm" onclick="hiEditIdentity()">${icon('edit', 'xs')}Edit</button>
+        </div>
+        <div class="hi-id__top">
+          <!-- THE HOSTEL'S OWN MARK. The sidebar's logo is the PRODUCT's and was
+               deliberately fixed (index.html) — this is the other thing, the
+               hostel's, and it belongs where the hostel is named. -->
+          <button type="button" class="hi-logo${s.logo ? ' has-img' : ''}" id="hi-logo"
+                  title="${s.logo ? 'Change or remove the logo' : 'Upload a logo or photo'}"
+                  onclick="hiLogoPick()">
+            ${s.logo
+              ? `<img src="${escHtml(s.logo)}" alt="">`
+              : `${icon('building', 'md')}<span class="hi-logo__hint">${icon('upload', 'xs')}Add logo</span>`}
+          </button>
+          <input type="file" id="hi-logo-file" accept="image/png,image/jpeg,image/webp" hidden onchange="hiLogoLoad(this)">
+          <div style="min-width:0">
+            <!-- id kept: liveUpdateSetting() and applyHostelFont() both write to
+                 this node, and it is the only live sample of the chosen face. -->
+            <div class="hi-id__name" id="font-preview-name"
+                 style="font-family:'${hiSafeFace(font)}',var(--font)">${escHtml(s.hostelName || 'Hostel Name')}</div>
+            <div class="hi-id__tag${s.tagline ? '' : ' is-empty'}" id="hi-prev-tag">${escHtml(s.tagline || 'No tagline set')}</div>
+            <span class="lk-chip ${lic.valid ? 'dh-green' : 'dh-red'} hi-id__st">${icon(lic.valid ? 'check' : 'warning', 'xs')}${escHtml(licState)}</span>
+          </div>
+        </div>
+        <div class="hi-id__rows">
+          ${R('pin', 'hi-prev-loc', s.location, 'No location set')}
+          ${R('phone', 'hi-prev-phone', s.phone, 'No phone recorded')}
+          ${R('mail', 'hi-prev-email', s.email, 'No email recorded')}
+        </div>
+        <div class="hi-facts">
+          ${factRow('System version', 'Reading…', { ico: 'info', id: 'hi-appver' })}
+          ${factRow('Registration date', reg || 'Not recorded', { ico: 'calendar' })}
+          ${factRow('Current plan', 'Not recorded', { ico: 'award',
+            lock: 'This licence carries no plan tier. The app enforces no student or room caps, so there is no plan to name.' })}
+          ${factRow('Expiry date', exp || 'Not recorded', { ico: 'clock' })}
+        </div>
+      </div>
+
+      <div class="set-card">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('database', 'sm')}Storage Usage</div>
+        </div>
+        <div class="hi-store">
+          ${hiStoreRing(store)}
+          <div class="hi-store__b">
+            ${store.segs.map(p => `
+              <div class="hi-store__r">
+                <span class="hi-store__d ${p.hue}"></span>
+                <span class="hi-store__k">${escHtml(p.key)}</span>
+                <span class="hi-store__v">${_setBytes(p.n)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>The database is a file on this computer's own disk, so there is no quota and no percentage to show — the ring is what the payload is <b>made of</b>, not how full anything is.</span></div>
+        <button class="set-btn hi-wide" onclick="settingsTab='data';renderPage('settings')">${icon('database', 'xs')}Manage storage</button>
+      </div>
+
+      <div class="set-card">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('zap', 'sm')}Quick Actions</div>
+        </div>
+        <div class="hi-quick">
+          <button class="set-btn" onclick="navigate('activitylog')">${icon('list', 'xs')}System logs</button>
+          <button class="set-btn" onclick="hiDbHealth(this)">${icon('shieldCheck', 'xs')}Database health</button>
+          <button class="set-btn" disabled title="Search reads the database directly — there is no index to rebuild.">${icon('search', 'xs')}Rebuild index</button>
+          <button class="set-btn" disabled title="Nothing is cached between renders; every screen reads the database as it draws.">${icon('refreshCw', 'xs')}Clear cache</button>
+        </div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>Two of these are locked: this build keeps no search index and no render cache, so neither button would have anything to do.</span></div>
+      </div>
+
+      <div class="set-card hi-help">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('helpCircle', 'sm')}Need help?</div>
+        </div>
+        <p class="hi-help__p">Support answers on the number your provider gave you. Have the <b>License key</b> and <b>Machine ID</b> from the License tab ready — they identify this installation.</p>
+        <button class="set-btn hi-wide" onclick="settingsTab='license';renderPage('settings')">${icon('key', 'xs')}Open the License tab</button>
+      </div>
+    </aside>
+  </div>`;
+}
+
+/* The storage ring. Not a percentage of anything: there is no quota on a file
+   sitting on the customer's own disk, and the reference's "48% of 10.00 GB"
+   would be two numbers this app cannot know. The ring is the payload's
+   COMPOSITION, drawn from the same serialisation saveDB() writes, with the
+   total in the middle. */
+function hiStoreRing(store) {
+  const R = 34, C = 2 * Math.PI * R;
+  let at = 0;
+  const arcs = store.segs.map(p => {
+    const frac = store.total ? p.n / store.total : 0;
+    const seg = `<circle class="hi-ring__s ${p.hue}" cx="40" cy="40" r="${R}"
+      stroke-dasharray="${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}"
+      stroke-dashoffset="${(-at * C).toFixed(2)}"></circle>`;
+    at += frac;
+    return seg;
+  }).join('');
+  return `
+    <div class="hi-ring">
+      <svg viewBox="0 0 80 80" width="92" height="92" aria-hidden="true">
+        <circle class="hi-ring__t" cx="40" cy="40" r="${R}"></circle>
+        ${arcs}
+      </svg>
+      <div class="hi-ring__c">
+        <div class="hi-ring__v">${_setBytes(store.total)}</div>
+        <div class="hi-ring__l">on disk</div>
+      </div>
+    </div>`;
+}
+
+/** Edit — the fields are on this same page, so this puts the cursor in them. */
+function hiEditIdentity() {
+  const el = document.getElementById('hi-name');
+  if (!el) return;
+  el.focus();
+  el.select();
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+/* ── THE HOSTEL'S LOGO ───────────────────────────────────────────────────────
+   Stored in the database as a data URI, because everything else about this app
+   is: there is one file to back up and it must carry the logo with it. That is
+   also why it is DOWNSCALED first — the database is one JSON document rewritten
+   on every save, so a 4MB photograph off a phone would be re-serialised on
+   every keystroke of every form in the app. 256px is larger than any place it
+   is drawn.                                                                  */
+const HI_LOGO_MAX = 256;
+
+function hiLogoPick() {
+  /* With a logo already set there are two things you might mean, and
+     showConfirm() only offers one — so this asks with both. */
+  if (DB.settings.logo) {
+    showModal('modal-sm',
+      `<div class="hf-mh">
+         <div class="hf-mh__ico">${icon('building', 'sm')}</div>
+         <div><div class="hf-mh__t">Hostel logo</div>
+         <div class="hf-mh__s">It is drawn on this card and on the header of every document the app prints.</div></div>
+       </div>`,
+      `<div class="hi-logo-big"><img src="${escHtml(DB.settings.logo)}" alt=""></div>`,
+      `<button class="btn btn-secondary" onclick="closeModal();hiLogoClear()">Remove</button>
+       <button class="btn btn-primary" onclick="closeModal();document.getElementById('hi-logo-file').click()">Choose another</button>`);
+    return;
+  }
+  const el = document.getElementById('hi-logo-file');
+  if (el) el.click();
+}
+
+function hiLogoLoad(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { toast('That image is over 8MB — pick a smaller one', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const img = new Image();
+    img.onload = async function () {
+      try {
+        const scale = Math.min(1, HI_LOGO_MAX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        /* PNG, not JPEG: a logo is usually flat colour on transparency, and
+           JPEG would put a white box and ringing around it. */
+        DB.settings.logo = cv.toDataURL('image/png');
+        await saveDB();
+        toast('Logo updated', 'success');
+        renderPage('settings');
+      } catch (err) {
+        toast('That image could not be read', 'error');
+      }
+    };
+    img.onerror = function () { toast('That file is not an image the app can read', 'error'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function () { toast('That file could not be read', 'error'); };
+  reader.readAsDataURL(file);
+}
+
+async function hiLogoClear() {
+  delete DB.settings.logo;
+  await saveDB();
+  toast('Logo removed', 'info');
+  renderPage('settings');
+}
+
+/** Database health — the main process answers; this only reports. */
+async function hiDbHealth(btn) {
+  if (!window.electronAPI || !window.electronAPI.dbHealth) {
+    toast('Not available in this build', 'info');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const h = await window.electronAPI.dbHealth();
+    const ok = h && (h.ok === true || h.healthy === true || h.status === 'ok');
+    showModal('modal-sm',
+      `<div class="hf-mh">
+         <div class="hf-mh__ico">${icon(ok ? 'shieldCheck' : 'warning', 'sm')}</div>
+         <div><div class="hf-mh__t">Database health</div>
+         <div class="hf-mh__s">${ok ? 'The database answered and its integrity check passed.' : 'The check did not come back clean — send this to support.'}</div></div>
+       </div>`,
+      `<pre class="hi-pre">${escHtml(JSON.stringify(h, null, 2))}</pre>`,
+      `<button class="btn btn-primary" onclick="closeModal()">Close</button>`);
+  } catch (e) {
+    toast('The health check could not be run', 'error');
+  }
+  if (btn) btn.disabled = false;
+}
+
+/* The picker's open state is a stored preference, so the button writes it — but
+   it must not re-render the page to show the change: a full render from inside
+   a click handler would rebuild every tile for what is one attribute. */
+async function hiTogglePicker() {
+  const grid = document.getElementById('hi-font-grid');
+  const btn = document.getElementById('hi-font-toggle');
+  if (!grid) return;
+  const open = grid.hidden;                       // about to become visible
+  grid.hidden = !open;
+  if (btn) btn.innerHTML = icon('eye', 'xs') + (open ? 'Hide the faces' : 'Show the faces');
+  DB.settings.showFontPicker = open;
+  await saveDB();
+}
+
+/* Each field on the left has a node on the right showing what it will look
+   like, and `liveUpdateSetting` calls this on every keystroke. An empty value
+   falls back to the same "not set" wording the first render uses, so clearing a
+   field does not leave a blank row that reads as a rendering fault. */
+const HI_MIRROR = {
+  tagline:  ['hi-prev-tag',   'No tagline set'],
+  location: ['hi-prev-loc',   'No location set'],
+  phone:    ['hi-prev-phone', 'No phone recorded'],
+  email:    ['hi-prev-email', 'No email recorded'],
+};
+function hiMirror(key, val) {
+  const m = HI_MIRROR[key];
+  if (!m) return;
+  const el = document.getElementById(m[0]);
+  if (!el) return;
+  el.textContent = val || m[1];
+  el.classList.toggle('is-empty', !val);
+}
+
+/* THE BUILD'S OWN VERSION, asked for once and remembered. `DB.settings.version`
+   was a text field a warden could type into, and it read 'v3.0' on a v5.0.0
+   build — so the number in the sidebar, the number on this card and the number
+   support asked for were three different things. */
+let _hiAppVer = null;
+async function appVersionString() {
+  if (_hiAppVer) return _hiAppVer;
+  try {
+    if (window.appInfo && window.appInfo.version) _hiAppVer = 'v' + (await window.appInfo.version());
+  } catch (e) { /* falls through */ }
+  return _hiAppVer || 'v' + (DB.settings.version || '5.0');
+}
+
+/** Fills the one rail row that has to come over IPC. */
+async function hiPaintVersion() {
+  const el = document.getElementById('hi-appver');
+  if (!el) return;
+  el.textContent = await appVersionString();
+}
+
 function renderSettings() {
   const s = DB.settings;
+  /* `settingsTab` survives in memory across a re-render, and the four ids it
+     could hold before 2026-09-08 no longer name a panel. Without this, a
+     warden who was on Payment Methods when the app updated would land on a
+     Settings page with a tab strip and nothing under it. */
+  if (['rooms', 'payments', 'expenses', 'floors'].includes(settingsTab)) settingsTab = 'config';
   /* The tab strip scrolls horizontally once the labels stop fitting, and it
      always reset to the left on re-render — so selecting one of the tabs at the
      far end left it half off the edge, underlined but unreadable. renderPage()
@@ -990,15 +1912,18 @@ function renderSettings() {
       on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   }, 60);
+  /* FOUR TABS BECAME ONE on 2026-09-08. Room Types, Payment Methods, Expense
+     Categories and Floors are one job — setting the hostel up — and the owner's
+     `hostel configuration.png` puts all four on one page: "I put all the room
+     types, payment methods, expense categories and floors addition here in a
+     single place to access." Nine tabs became six, and the row stops needing
+     to scroll at the QA floor. */
   const tabs = [
     {id:'hostel',   label:'Hostel Info',        svg:SET_ICO.hostel},
-    {id:'rooms',    label:'Room Types',         svg:SET_ICO.bed},
+    {id:'config',   label:'Configuration',      svg:SET_ICO.layers},
     // This panel has existed in the markup all along but was never listed here,
     // so nothing could reach it. It is also where the rent/mess split is set.
     {id:'rentupdate', label:'Rent & Mess',      svg:SET_ICO.coins},
-    {id:'payments', label:'Payment Methods',    svg:SET_ICO.card},
-    {id:'expenses', label:'Expense Categories', svg:SET_ICO.receipt},
-    {id:'floors',   label:'Floors',             svg:SET_ICO.layers},
     {id:'data',     label:'Data Management',    svg:SET_ICO.database},
     {id:'license',  label:'License',            svg:SET_ICO.key},
     // Diagnostic, not decoration. This build makes no network calls, so a
@@ -1008,9 +1933,6 @@ function renderSettings() {
     {id:'connection', label:'Connection',       svg:SET_ICO.wifi}
   ];
 
-  const pmList = (s.paymentMethods||[]).map(m=>`<div class="tag-item" id="pm-${escHtml(m)}">${escHtml(m)}<button class="tag-remove" onclick="removePaymentMethod('${escHtml(m)}')">×</button></div>`).join('');
-  const ecList = (s.expenseCategories||[]).map(c=>`<div class="tag-item" id="ec-${escHtml(c)}">${escHtml(c)}<button class="tag-remove" onclick="removeExpenseCategory('${escHtml(c)}')">×</button></div>`).join('');
-  const floorList = (s.floors||[]).map(f=>`<div class="tag-item" id="fl-${escHtml(f)}">${escHtml(f)}<button class="tag-remove" onclick="removeFloor('${escHtml(f)}')">×</button></div>`).join('');
   return `
   <div class="set-tabs-wrap">
     <div class="set-tabs" role="tablist" aria-label="Settings sections">
@@ -1027,112 +1949,16 @@ function renderSettings() {
   <div class="settings-panels-container">
       <!-- HOSTEL INFO -->
       <div class="settings-panel ${settingsTab==='hostel'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">🏨 Hostel Information</div></div>
-          <div class="form-grid">
-            <div class="field"><label>Hostel Name</label><input class="form-control" id="cfg-name" value="${escHtml(s.hostelName)}" oninput="liveUpdateSetting('hostelName',this.value)"></div>
-            <div class="field"><label>Tagline</label><input class="form-control" id="cfg-tag" value="${escHtml(s.tagline||'')}" oninput="liveUpdateSetting('tagline',this.value)"></div>
-            <div class="field"><label>Location / City</label><input class="form-control" id="cfg-loc" value="${escHtml(s.location)}" oninput="liveUpdateSetting('location',this.value)"></div>
-            <div class="field"><label>Contact Phone</label><input class="form-control" id="cfg-phone" value="${escHtml(s.phone||'')}" oninput="liveUpdateSetting('phone',this.value)" placeholder="03XX-XXXXXXX"></div>
-            <div class="field"><label>Email Address</label><input class="form-control" id="cfg-email" type="email" value="${escHtml(s.email||'')}" oninput="liveUpdateSetting('email',this.value)" placeholder="hostel@email.com"></div>
-            <div class="field"><label>System Version</label><input class="form-control" id="cfg-ver" value="${escHtml(s.version||'v2.0')}" oninput="liveUpdateSetting('version',this.value)"></div>
-            <div class="field col-full">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
-                🔤 Hostel Name Font Style
-                <span style="flex:1"></span>
-                <span style="font-size:11px;color:var(--text3);font-weight:400;margin-right:6px">Show font picker</span>
-                <input type="checkbox" id="font-picker-toggle" ${s.showFontPicker!==false?'checked':''} onchange="(async function(){DB.settings.showFontPicker=this.checked;await saveDB();document.getElementById('font-picker-grid-wrap').style.display=this.checked?'':'none';}).call(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent-strong)">
-              </label>
-              <div id="font-picker-grid-wrap" style="display:${s.showFontPicker!==false?'block':'none'}">
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px;margin-top:8px;max-height:280px;overflow-y:auto;padding-right:2px">
-                ${[
-                  ['DM Serif Display','DM Serif'],
-                  ['Playfair Display','Playfair'],
-                  ['Cinzel','Cinzel'],
-                  ['Cormorant Garamond','Cormorant'],
-                  ['Libre Baskerville','Baskerville'],
-                  ['IM Fell English','Fell English'],
-                  ['Philosopher','Philosopher'],
-                  ['Yeseva One','Yeseva One'],
-                  ['Bebas Neue','Bebas Neue'],
-                  ['Rajdhani','Rajdhani'],
-                  ['Teko','Teko'],
-                  ['Josefin Sans','Josefin Sans'],
-                  ['Righteous','Righteous'],
-                  ['Georgia','Georgia'],
-                  ['Impact','Impact'],
-                  ['Trebuchet MS','Trebuchet'],
-                  ['Palatino Linotype','Palatino'],
-                  ['Arial Black','Arial Black'],
-                  ['Times New Roman','Times New Roman'],
-                  ['Segoe UI','Segoe UI'],
-                ].map(([ff,label])=>`<div onclick="applyHostelFont('${ff}')" style="cursor:pointer;border:2px solid ${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent)':'var(--border)'};border-radius:8px;padding:8px 6px;text-align:center;background:${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent-dim)':'var(--bg3)'};transition:all 0.15s" onmouseover="this.style.borderColor='var(--accent-strong)'" onmouseout="this.style.borderColor='${(s.hostelNameFont||'DM Serif Display')===ff?'var(--accent)':'var(--border)'}'">
-                  <div class="font-card-label" style="font-family:'${ff}',serif;font-size:13px;font-weight:700;color:var(--accent-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.hostelName||'Hostel Name')}</div>
-                  <div style="font-size:8.5px;color:var(--text3);margin-top:2px">${label}</div>
-                </div>`).join('')}
-              </div>
-              <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center">
-                <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Preview: </span>
-                <span id="font-preview-name" style="font-family:'${s.hostelNameFont||'DM Serif Display'}',serif;font-size:16px;font-weight:700;color:var(--accent-strong)">${escHtml(s.hostelName||'Hostel Name')}</span>
-              </div>
-              </div><!-- /font-picker-grid-wrap -->
-            </div>
-            <div class="field col-full">
-              <label>Currency</label>
-              <select class="form-control" id="cfg-curr" onchange="liveUpdateSetting('currency',this.value)">
-                ${['PKR','USD','EUR','GBP','AED','SAR'].map(c=>`<option ${s.currency===c?'selected':''}>${c}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-          <div style="margin-top:16px;text-align:right">
-            <button class="btn btn-primary" onclick="saveSettings()">💾 Save Hostel Info</button>
-          </div>
-        </div>
+        ${settingsTab==='hostel' ? (setTimeout(hiPaintVersion, 40), renderHostelInfoPanel()) : ''}
       </div>
 
-      <!-- ROOM TYPES -->
       <!-- Built only when it is the panel on screen. Every tab click re-enters
            renderSettings, so the visible panel is always fresh — and the Data
            Management body below serialises the whole DB to size it, which is not
            work to do while someone is editing the hostel's phone number. -->
-      <div class="settings-panel ${settingsTab==='rooms'?'active':''}">
-        ${settingsTab==='rooms' ? renderRoomTypesPanel() : ''}
-      </div>
-
-      <!-- PAYMENT METHODS -->
-      <div class="settings-panel ${settingsTab==='payments'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">💳 Payment Methods</div></div>
-          <div class="tag-list" id="pm-list">${pmList}</div>
-          <div style="display:flex;gap:10px;margin-top:14px">
-            <input class="form-control" id="new-pm" placeholder="Add new payment method…" onkeydown="if(event.key==='Enter')addPaymentMethod()">
-            <button class="btn btn-primary" onclick="addPaymentMethod()">Add</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- EXPENSE CATEGORIES -->
-      <div class="settings-panel ${settingsTab==='expenses'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">📉 Expense Categories</div></div>
-          <div class="tag-list" id="ec-list">${ecList}</div>
-          <div style="display:flex;gap:10px;margin-top:14px">
-            <input class="form-control" id="new-ec" placeholder="Add new category…" onkeydown="if(event.key==='Enter')addExpenseCategory()">
-            <button class="btn btn-primary" onclick="addExpenseCategory()">Add</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- FLOORS -->
-      <div class="settings-panel ${settingsTab==='floors'?'active':''}">
-        <div class="card">
-          <div class="card-header"><div class="card-title">🏗️ Building Floors</div></div>
-          <div class="tag-list" id="floor-list">${floorList}</div>
-          <div style="display:flex;gap:10px;margin-top:14px">
-            <input class="form-control" id="new-fl" placeholder="Add floor name (e.g. 4th)…" onkeydown="if(event.key==='Enter')addFloor()">
-            <button class="btn btn-primary" onclick="addFloor()">Add</button>
-          </div>
-        </div>
+      <!-- HOSTEL CONFIGURATION — room types, methods, categories, floors -->
+      <div class="settings-panel ${settingsTab==='config'?'active':''}">
+        ${settingsTab==='config' ? renderConfigurationPanel() : ''}
       </div>
 
       <!-- DATA MANAGEMENT -->
@@ -1147,7 +1973,7 @@ function renderSettings() {
 
       <!-- LICENSE -->
       <div class="settings-panel ${settingsTab==='license'?'active':''}">
-        ${renderLicenseSettingsPanel()}
+        ${settingsTab==='license' ? renderLicenseSettingsPanel() : ''}
       </div>
 
       <!-- CONNECTION -->
@@ -1158,7 +1984,37 @@ function renderSettings() {
   </div>`;
 }
 
-function bindSettingsEvents() {}
+function bindSettingsEvents() { cfgFitGrid(); }
+
+/* ── FIT TO PAGE, MEASURED ──────────────────────────────────────────────────
+   The owner asked for the four panels to fit the page. The height they have
+   is the window minus everything above them, and everything above them is not
+   a constant: the page header wraps to two lines below 1100 and the tab strip
+   wraps below 900, so the grid's top sits at 196px on one window and 162 on
+   another. A `calc(100dvh - 232px)` was 70px short at 1440 and 32px LONG at
+   the 1366 floor — and long is the bad direction, because `html` has
+   `overflow:hidden` (forms.css) so the overflow is clipped, not scrolled.
+
+   Measured instead. One read of the grid's own top, once per render and on
+   resize, is exact at every size and cannot drift from a chrome that changes.
+
+   The floor of 420 is the point below which two rows of cards stop being
+   readable at all; under it the page gives up on fitting and scrolls, which is
+   the honest failure. */
+function cfgFitGrid() {
+  const grid = document.querySelector('.cfg-grid');
+  if (!grid) return;
+  grid.style.height = '';                       // measure the natural top first
+  const top = grid.getBoundingClientRect().top;
+  const room = window.innerHeight - top - 16;   // 16 = the page's bottom gutter
+  grid.style.height = Math.max(420, Math.round(room)) + 'px';
+}
+
+let _cfgFitT = null;
+window.addEventListener('resize', function () {
+  clearTimeout(_cfgFitT);
+  _cfgFitT = setTimeout(cfgFitGrid, 80);
+});
 
 // ── License Settings Panel (rendered inside Settings page) ────────────────────
 /* ── CONNECTION (spec 29) ────────────────────────────────────────────────────
@@ -1179,31 +2035,42 @@ function renderConnectionPanel() {
   // The status arrives over IPC, so paint the frame now and fill it in.
   setTimeout(connRefresh, 40);
   return `
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title" style="display:flex;align-items:center;gap:8px">
-        ${setIco(SET_ICO.wifi, 16)} Connection
+  <div class="set-card">
+    <div class="set-head">
+      <div class="set-head__ico dh-blue">${setIco(SET_ICO.wifi, 22)}</div>
+      <div class="set-head__mid">
+        <div class="set-head__t">Connection</div>
+        <div class="set-head__s">Where this installation stands with Hostyllo's online services. Nothing here changes anything — it is what to read out when you call support.</div>
       </div>
+      <div class="set-head__end" id="conn-sum"></div>
     </div>
-    <div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:4px">
-      Where this installation stands with Hostyllo's online services. Nothing here
-      changes anything — it is what to read out when you call support.
-    </div>
-    <div id="conn-body" style="margin-top:10px">
-      <div style="font-size:12px;color:var(--text3);padding:14px 0">Checking…</div>
+    <div id="conn-body">
+      <div class="lic-enforce__wait">Checking…</div>
     </div>
   </div>`;
 }
 
-// One row of the §29 readout.
-function _connRow(label, value, hue, note) {
+/* One of §29's four lines, in the reference's shape: what is being reported,
+   the state as a pill, and the sentence support needs beside it.
+
+   `state` is one of the four §29 names, NOT a `dh-*` hue. tokens.css declares
+   --conn-online/degraded/offline/unconfigured for this indicator and restates
+   every one of them per theme, and until now nothing in the app read a single
+   one — the panel painted itself out of the generic hue set instead, which put
+   the "unconfigured" pill in `dh-blue`: the same blue, to the hex, as the
+   Check-again button beside it. Accent means "act". A status that means
+   "nothing is wrong and nothing is configured" must not wear it, and the token
+   set says so in as many words: unconfigured is --text-tertiary. */
+function _connRow(ico, label, sub, value, state, note) {
   return `
-    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--border)">
-      <div style="flex:0 0 150px;font-size:11.5px;font-weight:600;color:var(--text2)">${escHtml(label)}</div>
-      <div style="flex:1;min-width:0">
-        <span class="dash-pill ${hue}">${escHtml(value)}</span>
-        ${note ? `<span style="font-size:11px;color:var(--text3);margin-left:9px">${escHtml(note)}</span>` : ''}
+    <div class="conn-row is-${state}">
+      <div class="conn-row__i">${setIco(ico, 17)}</div>
+      <div class="conn-row__b">
+        <div class="conn-row__t">${escHtml(label)}</div>
+        <div class="conn-row__s">${escHtml(sub)}</div>
       </div>
+      <span class="conn-pill">${escHtml(value)}</span>
+      <div class="conn-row__n">${note ? escHtml(note) : ''}</div>
     </div>`;
 }
 
@@ -1216,11 +2083,20 @@ function _connWhen(ms) {
 
 async function connRefresh() {
   const box = document.getElementById('conn-body');
+  const sum = document.getElementById('conn-sum');
   if (!box) return;
+  const setSum = (state, title, sub) => {
+    if (!sum) return;
+    sum.innerHTML = `<div class="conn-sum is-${state}">
+      <span class="conn-sum__d"></span>
+      <span><b>${escHtml(title)}</b><small>${escHtml(sub)}</small></span>
+    </div>`;
+  };
 
   // window.online only exists in a packaged/dev Electron run with the services
   // layer present. Say which of the two is missing rather than "error".
   if (typeof window === 'undefined' || !window.online || !window.online.getStatus) {
+    setSum('unconfigured', 'Offline build', 'No online services in this build');
     box.innerHTML = `<div class="set-note">Online services are not available in this build.
       The application is running fully offline.</div>`;
     return;
@@ -1231,32 +2107,49 @@ async function connRefresh() {
     st = await window.online.getStatus();
     q  = await window.online.queueStats();
   } catch (e) {
+    setSum('degraded', 'Status unavailable', 'The service did not answer');
     box.innerHTML = `<div class="set-note">Could not read the connection status.</div>`;
     return;
   }
-  if (!st) { box.innerHTML = `<div class="set-note">No status reported.</div>`; return; }
+  if (!st) {
+    setSum('degraded', 'Status unavailable', 'Nothing was reported');
+    box.innerHTML = `<div class="set-note">No status reported.</div>`;
+    return;
+  }
 
   const unconfigured = st.configured === false || st.mode === 'unconfigured';
 
-  // §29's four lines, in its order.
+  /* THE SUMMARY IS NOT ALWAYS "ALL SYSTEMS OPERATIONAL". The reference draws
+     that phrase in green against a build that has a control plane; this one
+     has none, and four green ticks over an installation that makes no requests
+     would be a claim about a service that is not there. Each mode gets the
+     sentence that is true of it. */
+  if (unconfigured)              setSum('unconfigured', 'Running offline',        'No online services are configured');
+  else if (st.mode === 'online') setSum('online',       'All systems operational','Your installation is working correctly');
+  else if (st.mode === 'degraded') setSum('degraded',   'Working from cached data', 'The service is unreachable right now');
+  else                           setSum('offline',      'Offline',                'No connection to Hostyllo services');
+
   const rows =
-      _connRow('Internet', st.networkAvailable ? 'Connected' : 'Not detected',
-               st.networkAvailable ? 'dh-green' : 'dh-slate')
-    + _connRow('Hostyllo API',
+      _connRow(SET_ICO.wifi, 'Internet', 'Connection to the internet',
+               st.networkAvailable ? 'Connected' : 'Not detected',
+               st.networkAvailable ? 'online' : 'offline',
+               st.networkAvailable ? 'This device is online.' : 'This device has no network.')
+    + _connRow(SET_ICO.database, 'Hostyllo API', 'Connection to Hostyllo services',
                unconfigured ? 'Not configured' : (st.apiReachable ? 'Reachable' : 'Unreachable'),
-               unconfigured ? 'dh-slate' : (st.apiReachable ? 'dh-green' : 'dh-amber'),
+               unconfigured ? 'unconfigured' : (st.apiReachable ? 'online' : 'degraded'),
                unconfigured ? 'no control plane set for this build' : (st.reason || ''))
-    + _connRow('License',
+    + _connRow(SET_ICO.key, 'License', 'License validation',
                st.licenseValid ? 'Valid' : 'Checked on this device',
-               st.licenseValid ? 'dh-green' : 'dh-slate',
+               st.licenseValid ? 'online' : 'unconfigured',
                'activation is local — see the License tab')
-    + _connRow('Application',
+    + _connRow(SET_ICO.stack, 'Application', 'Hostyllo application status',
                unconfigured ? 'Offline edition' :
                  st.mode === 'online' ? 'Online' :
                  st.mode === 'degraded' ? 'Degraded — working from cached data' : 'Offline mode',
-               unconfigured ? 'dh-blue' :
-                 st.mode === 'online' ? 'dh-green' :
-                 st.mode === 'degraded' ? 'dh-amber' : 'dh-slate');
+               unconfigured ? 'unconfigured' :
+                 st.mode === 'online' ? 'online' :
+                 st.mode === 'degraded' ? 'degraded' : 'offline',
+               unconfigured ? 'everything runs on this computer' : 'application is running normally');
 
   const queued = q ? (Number(q.pending || 0) + Number(q.inflight || 0)) : 0;
   const failed = q ? Number(q.failed || 0) : 0;
@@ -1267,17 +2160,15 @@ async function connRefresh() {
              services are configured, so the app makes no internet requests at all — the rows
              below are here so support can confirm that.</div>`
         : '')
-    + `<div style="margin-top:10px">${rows}</div>`
-    + `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;
-                   padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text3)">
-         <span>Last checked: <b style="color:var(--text2)">${escHtml(_connWhen(st.lastCheckedAt))}</b></span>
-         <span>Last reached: <b style="color:var(--text2)">${escHtml(_connWhen(st.lastSuccessAt))}</b></span>
-         <span>Waiting to send: <b style="color:var(--text2)">${queued}</b></span>
-         ${failed ? `<span style="color:var(--red)">Gave up on: <b>${failed}</b></span>` : ''}
-         <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="connCheckNow(this)">Check again</button>
+    + `<div class="conn-rows">${rows}</div>`
+    + `<div class="conn-foot">
+         <span>${icon('clock', 'xs')}Last checked: <b>${escHtml(_connWhen(st.lastCheckedAt))}</b></span>
+         <span>${icon('transfer', 'xs')}Last reached: <b>${escHtml(_connWhen(st.lastSuccessAt))}</b></span>
+         <span>${icon('upload', 'xs')}Waiting to send: <b>${queued}</b></span>
+         ${failed ? `<span class="is-bad">${icon('warning', 'xs')}Gave up on: <b>${failed}</b></span>` : ''}
+         <button class="set-btn set-btn--go" onclick="connCheckNow(this)">${icon('refreshCw', 'xs')}Check again</button>
        </div>`;
 }
-
 async function connCheckNow(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
   try {
@@ -1288,63 +2179,439 @@ async function connCheckNow(btn) {
   await connRefresh();
 }
 
+/* ── LICENSE ─────────────────────────────────────────────────────────────────
+   Built to `license page2.png`, in full.
+
+   EVERY ROW THE REFERENCE DRAWS IS DRAWN. Where the licence file carries the
+   fact, the fact is printed. Where it does not — `Licensed To`, an issue date
+   distinct from the activation on this machine, a module list — the row stays,
+   says "Not recorded", and carries a lock whose tooltip says why. That is the
+   owner's rule of 2026-09-08 and it is the right one for this page in
+   particular: a warden reading this card down a telephone needs to be able to
+   say "it says Not recorded" rather than wonder which line they are missing.
+
+   WHAT IS DRAWN THAT THE REFERENCE DOES NOT HAVE. Enforcement state, and
+   whether the app is currently accepting writes. `license:enforcement` has
+   resolved ACTIVE / GRACE / EXPIRED / SUSPENDED / REVOKED since the enterprise
+   upgrade and no settings panel showed it — and on the two read-only states
+   every save in the app refuses at the main-process gate, with nothing in
+   Settings saying why.
+
+   THE THREE ACTIONS ARE ONE OPERATION. In main.js,
+   `license:deactivateWithDialog` and `license:reset` both call
+   deactivateLicense(), and `license:prepareUninstall` unlinks the same two
+   files by hand: all three delete license.enc and last_run.dat and end at the
+   activation screen. The reference grades them green / amber / red and the
+   licence window grades them warn / danger / plain; both rankings are fiction,
+   so all three are drawn the same here and the card says so. They are called
+   straight from this panel because each already confirms in the MAIN process
+   with a native dialog naming exactly what it destroys.                      */
+
+/** The key with its checksum groups starred out, by position, not by count. */
+function _licMaskKey(key) {
+  if (!key) return '—';
+  const p = String(key).split('-');
+  if (p.length < 4) return key;
+  return p.slice(0, 2).join('-') + '-' + p.slice(2, -1).map(() => '····').join('-') + '-' + p[p.length - 1];
+}
+
+function _licDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function _licWhen(ms) {
+  if (!ms) return null;
+  const d = new Date(Number(ms));
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    + ', ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+/* One row of the fact table. `copy` NAMES the value to put on the clipboard
+   rather than carrying it: the whole point of the masked key is that it is not
+   printed, and an onclick argument would put it back in the markup for anyone
+   reading over a shoulder with the inspector open. licCopy() reads it from the
+   licence cache instead. `lock` marks a row this app has no record for. */
+function _licRow(label, value, opts) {
+  const o = opts || {};
+  return `
+    <div class="lic-row${o.lock ? ' is-locked' : ''}">
+      <div class="lic-row__l">${escHtml(label)}</div>
+      <div class="lic-row__v${o.mono ? ' is-mono' : ''}${o.hue ? ' ' + o.hue : ''}">${escHtml(value)}${o.after || ''}</div>
+      ${o.copy ? `<button class="set-rowbtn lic-copy" title="Copy ${escHtml(label.toLowerCase())}"
+            onclick="licCopy(this,'${escHtml(o.copy)}')">${icon('copy', 'xs')}</button>`
+        : o.lock ? `<span class="lic-row__lock" title="${escHtml(o.lock)}">${icon('lock', 'xs')}</span>`
+        : '<span></span>'}
+    </div>`;
+}
+
+/** One of the actions: title, what it does, and a button. */
+function _licAction(o) {
+  return `
+    <div class="lic-act ${o.hue}">
+      <div class="lic-act__i">${icon(o.ico, 'sm')}</div>
+      <div class="lic-act__b">
+        <div class="lic-act__t">${escHtml(o.title)}</div>
+        <div class="lic-act__s">${escHtml(o.sub)}</div>
+      </div>
+      <button class="lic-act__go" onclick="${o.on}">${escHtml(o.btn)}</button>
+    </div>`;
+}
+
+/** A tile of the System Status strip. */
+function _licStat(ico, label, value, opts) {
+  const o = opts || {};
+  return `
+    <div class="lic-stat${o.lock ? ' is-locked' : ''}">
+      <div class="lic-stat__i ${o.hue || 'dh-slate'}">${icon(ico, 'sm')}</div>
+      <div style="min-width:0">
+        <div class="lic-stat__l">${escHtml(label)}${o.lock ? ` <span class="lic-stat__lock" title="${escHtml(o.lock)}">${icon('lock', 'xs')}</span>` : ''}</div>
+        <div class="lic-stat__v" ${o.id ? `id="${o.id}"` : ''}>${escHtml(value)}</div>
+      </div>
+    </div>`;
+}
+
 function renderLicenseSettingsPanel() {
-  const licCache = window._hostyllo_license_cache;
-  const hasLic   = licCache && licCache.valid;
-  const expStr   = hasLic && licCache.expiry
-    ? new Date(licCache.expiry).toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'})
-    : '—';
-  // Mask the checksum groups by POSITION, not by an exact segment count: keys
-  // come in three groups (legacy) or four (current), and the old `length===4`
-  // test fell through to printing a current key on screen in full.
-  const keyStr   = hasLic && licCache.key
-    ? (() => {
-        const p = licCache.key.split('-');
-        if (p.length < 4) return licCache.key;
-        return p.slice(0, 2).join('-') + '-'
-             + p.slice(2, -1).map(() => '····').join('-') + '-' + p[p.length - 1];
-      })()
-    : '—';
-  // Days left is worth showing now that keys can be cut for a week: on a
-  // one-month licence the expiry date alone reads as far away until it is not.
-  const daysLeft = hasLic && licCache.expiry
-    ? Math.ceil((new Date(licCache.expiry) - new Date()) / 86400000)
-    : null;
+  const lic = window._hostyllo_license_cache || {};
+  const has = !!lic.valid;
+  const s = DB.settings;
+
+  const exp = _licDate(lic.expiry);
+  const act = _licDate(lic.activatedAt);
+  const days = lic.expiry ? Math.ceil((new Date(lic.expiry) - new Date()) / 86400000) : null;
+  const dayHue = days === null ? '' : days <= 0 ? 'is-bad' : days <= 14 ? 'is-warn' : '';
+  const checkedAt = _licWhen(window._hostyllo_license_checked_at);
+
+  /* The three checks `checkLicenseValidity` performs, shown as the three it
+     performs. A valid licence passed all of them; an invalid one names which
+     one it failed in `reason`, so nothing here is guessed. */
+  const r = lic.reason || '';
+  const checks = [
+    ['Valid license key', has || (r !== 'tampered' && r !== 'corrupt')],
+    ['Machine authorized', has || r !== 'wrong_machine'],
+    ['Within its term', has || r !== 'expired'],
+  ];
+
+  const NO_RECORD = 'Not recorded';
+  const LOCK_CONTRACT = 'This licence file carries no such field. The app would have to invent it, and a fact about your contract is not something it may invent.';
+
+  // The panel asks the main process for the rest; see licRefresh().
+  setTimeout(licRefresh, 40);
 
   return `
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title" style="display:flex;align-items:center;gap:8px">
-        🔐 License Information
-        <span style="font-size:11px;padding:2px 10px;border-radius:20px;font-weight:700;
-          ${hasLic
-            ? 'background:var(--success-bg);border:1px solid var(--success-border);color:var(--success-fg)'
-            : 'background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-fg)'}">
-          ${hasLic ? '✅ Active' : '❌ Not Active'}
-        </span>
+  <div class="set-split">
+    <div class="hi-main">
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-blue">${icon('key', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">License Information</div>
+            <div class="set-head__s">This copy of Hostyllo is activated to this computer. The key and the Machine ID below are what support asks for.</div>
+          </div>
+          <div class="set-head__end"><span id="lic-state" class="lk-chip ${has ? 'dh-green' : 'dh-red'}">
+            ${icon(has ? 'check' : 'warning', 'xs')}${has ? 'Active' : 'Not active'}</span></div>
+        </div>
+
+        <div class="lic-split">
+          <div class="lic-grid">
+            ${_licRow('License key', _licMaskKey(lic.key), { mono: true, copy: lic.key ? 'key' : '' })}
+            ${_licRow('Hostel name', s.hostelName || 'Not named yet')}
+            ${_licRow('Licensed to', NO_RECORD, { lock: LOCK_CONTRACT })}
+            ${_licRow('Issue date', NO_RECORD, { lock: 'The file records when this computer was activated, below — not when your provider cut the key.' })}
+            ${_licRow('Activated on this computer', act || NO_RECORD)}
+            ${_licRow('Expiry date', exp || NO_RECORD, {
+              hue: dayHue,
+              after: days === null ? '' : `<span class="lic-days">${days <= 0 ? 'expired' : days + (days === 1 ? ' day left' : ' days remaining')}</span>`,
+            })}
+            ${_licRow('Edition', 'Hostyllo Offline')}
+            <div id="lic-machine">${_licRow('Machine ID', 'Reading…', { mono: true })}</div>
+          </div>
+
+          <div class="lic-state">
+            <div class="lic-state__top ${has ? 'dh-green' : 'dh-red'}">
+              <div class="lic-state__i">${icon('shieldCheck', 'md')}</div>
+              <div>
+                <div class="lic-state__t">${has ? 'Your license is active' : 'This copy is not licensed'}</div>
+                <div class="lic-state__s">${has ? 'All features are unlocked and working normally.' : 'The app will ask for a key the next time it starts.'}</div>
+              </div>
+            </div>
+            <div class="lic-checks">
+              ${checks.map(([label, ok]) => `
+                <div class="lic-check${ok ? '' : ' is-bad'}">
+                  ${icon(ok ? 'check' : 'close', 'xs')}<span>${escHtml(label)}</span>
+                </div>`).join('')}
+            </div>
+            <div id="lic-enforce" class="lic-enforce">
+              <div class="lic-enforce__wait">Reading enforcement state…</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="form-grid">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">License Key</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent-strong);letter-spacing:1px">${escHtml(keyStr)}</div>
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-amber">${icon('tool', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">License Actions</div>
+            <div class="set-head__s">All three remove the licence from this computer, and each asks you to confirm in a window of its own first.</div>
+          </div>
+        </div>
+        <div class="lic-acts">
+          ${_licAction({ hue: 'dh-red', ico: 'lock', title: 'Deactivate license',
+            sub: 'Deletes the licence file and the run watermark. You will need a key from your provider to use the app again.',
+            btn: 'Deactivate', on: 'licDo(\'deactivate\')' })}
+          ${_licAction({ hue: 'dh-red', ico: 'refreshCw', title: 'Reset license',
+            sub: 'The same removal, worded for a stuck activation: it clears the licence file and every stored timestamp, then returns to the activation screen.',
+            btn: 'Reset', on: 'licDo(\'reset\')' })}
+          ${_licAction({ hue: 'dh-red', ico: 'trash', title: 'Full reset — prepare for uninstall',
+            sub: 'Removes the same two files, then confirms it is safe to uninstall the app from Windows.',
+            btn: 'Full reset', on: 'licDo(\'uninstall\')' })}
+        </div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>These three are graded by colour in the design and they are drawn the same here on purpose: in the main process they run the <b>same removal</b>, and only their wording and what happens next differ. None of them deletes your key from your provider's records.</span></div>
       </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Valid Until</div>
-        <div style="font-size:13px;font-weight:700;color:${hasLic?'var(--green)':'var(--text3)'}">${escHtml(expStr)}</div>
-        ${daysLeft === null ? '' : `<div style="font-size:11px;margin-top:4px;color:${daysLeft <= 14 ? 'var(--danger-fg)' : 'var(--text3)'}">${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining</div>`}
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-blue">${icon('transfer', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">Reactivation &amp; Transfer</div>
+            <div class="set-head__s">Moving this installation to another computer, or putting Windows back on this one.</div>
+          </div>
+        </div>
+        <div class="lic-two">
+          <div class="lic-act dh-blue">
+            <div class="lic-act__i">${icon('download', 'sm')}</div>
+            <div class="lic-act__b">
+              <div class="lic-act__t">Prepare for reinstallation</div>
+              <div class="lic-act__s">Saves a text file with the key, the Machine ID and the expiry — everything support needs to bring this installation back.</div>
+            </div>
+            <button class="lic-act__go" onclick="licExportInfo()">Export</button>
+          </div>
+          <div class="lic-act dh-blue">
+            <div class="lic-act__i">${icon('transfer', 'sm')}</div>
+            <div class="lic-act__b">
+              <div class="lic-act__t">Transfer to a new computer</div>
+              <div class="lic-act__s">The order the steps have to happen in, and what to have ready before you start.</div>
+            </div>
+            <button class="lic-act__go" onclick="licTransferGuide()">Guide</button>
+          </div>
+        </div>
       </div>
+
+      <div class="set-card">
+        <div class="set-head">
+          <div class="set-head__ico dh-violet">${icon('chart', 'md')}</div>
+          <div class="set-head__mid">
+            <div class="set-head__t">System Status</div>
+            <div class="set-head__s">What this installation reports about itself.</div>
+          </div>
+        </div>
+        <div class="lic-stats">
+          ${_licStat('shieldCheck', 'License status', has ? 'Active' : 'Not active', { hue: has ? 'dh-green' : 'dh-red' })}
+          ${_licStat('list', 'Licensed modules', 'Not recorded', { hue: 'dh-slate',
+            lock: 'This build has no module or plan tiers — every screen ships in every copy, so there is no module list to report.' })}
+          ${_licStat('info', 'Application version', 'Reading…', { hue: 'dh-blue', id: 'lic-appver' })}
+          ${_licStat('clock', 'Last verified', checkedAt || 'At startup', { hue: 'dh-violet' })}
+        </div>
+        <div class="cfg-note">${icon('info', 'xs')}<span>The licence is checked when the app starts and again whenever the main process is asked to write — not on a timer, and never over the network.</span></div>
+      </div>
+
     </div>
-    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-secondary" onclick="openLicenseSettingsWindow()" style="display:flex;align-items:center;gap:6px">
-        ⚙️ Manage License (Deactivate / Reset)
-      </button>
-    </div>
-    <div style="margin-top:12px;background:rgba(30,64,128,0.1);border:1px solid rgba(30,64,128,0.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text3);line-height:1.6">
-      To deactivate, reset, or prepare for uninstall, click <strong style="color:var(--text2)">Manage License</strong>
-      above. You can also reach this from <strong style="color:var(--text2)">Help → License Settings</strong> in the menu bar.
-    </div>
+
+    <aside class="hi-rail">
+      <div class="set-card">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('info', 'sm')}About this license</div>
+        </div>
+        <p class="hi-help__p">This licence is tied to <b>this computer and this hostel</b>. New hardware, or Windows reinstalled, needs the same key activated again — quote the <b>Machine ID</b> when you ask.</p>
+        <p class="hi-help__p" style="margin-top:9px">Activation is local. The app makes no network request to check it, which is why it keeps working with the internet down.</p>
+      </div>
+
+      <div class="set-card">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('zap', 'sm')}Quick actions</div>
+        </div>
+        <div class="hi-quick hi-quick--1">
+          <button class="set-btn" onclick="licCopy(this,'key')">${icon('copy', 'xs')}Copy license key</button>
+          <button class="set-btn" onclick="licCopy(this,'machine')">${icon('copy', 'xs')}Copy Machine ID</button>
+          <button class="set-btn" disabled title="No licence agreement ships with this build. The terms are the ones your provider gave you.">${icon('fileText', 'xs')}View license agreement</button>
+        </div>
+      </div>
+
+      <div class="set-card hi-help">
+        <div class="hi-id__head">
+          <div class="hi-id__ttl">${icon('helpCircle', 'sm')}Need help?</div>
+        </div>
+        <p class="hi-help__p">Trouble activating, or moving to a new machine? Contact whoever supplied this copy, with the key and the Machine ID above.</p>
+      </div>
+    </aside>
   </div>`;
+}
+
+/* The facts that live in the main process. Painted after the frame so a slow
+   IPC call cannot hold up the panel — and each one replaces exactly its own
+   row, so a failure leaves the rest of the card intact. */
+async function licRefresh() {
+  const mach = document.getElementById('lic-machine');
+  if (mach && !(window.licenseAPI && window.licenseAPI.getMachineId)) {
+    // Dev or browser mode: say so, rather than leaving the row on "Reading…".
+    mach.innerHTML = _licRow('Machine ID', 'Unavailable in this build', { mono: true });
+  } else if (mach) {
+    try {
+      const id = await window.licenseAPI.getMachineId();
+      /* Truncated, as license.js has shown it since FIX-L5: the id is a 64
+         character hash and printing it in full wraps the row onto three lines
+         for a value nobody reads by eye. Copy hands over all of it. */
+      window._hostyllo_machine_id = id || '';
+      const shown = id ? (id.length > 20 ? id.slice(0, 20) + '…' : id) : 'Unavailable';
+      mach.innerHTML = _licRow('Machine ID', shown, { mono: true, copy: id ? 'machine' : '' });
+    } catch (e) {
+      mach.innerHTML = _licRow('Machine ID', 'Unavailable', { mono: true });
+    }
+  }
+
+  const ver = document.getElementById('lic-appver');
+  if (ver) ver.textContent = await appVersionString();
+
+  const box = document.getElementById('lic-enforce');
+  if (!box) return;
+  if (!window.electronAPI || !window.electronAPI.licenseEnforcement) {
+    box.innerHTML = '';
+    return;
+  }
+  let d = null;
+  try { d = await window.electronAPI.licenseEnforcement(); } catch (e) { d = null; }
+  if (!d || !d.state) { box.innerHTML = ''; return; }
+
+  const HUE = { ACTIVE: 'dh-green', GRACE: 'dh-amber', EXPIRED: 'dh-red',
+                SUSPENDED: 'dh-red', REVOKED: 'dh-red', UNLICENSED: 'dh-slate' };
+  const WORD = { ACTIVE: 'Active', GRACE: 'In its grace period', EXPIRED: 'Expired',
+                 SUSPENDED: 'Suspended', REVOKED: 'Revoked', UNLICENSED: 'Not activated' };
+
+  /* READ-ONLY IS THE ONE STATE WORTH A SENTENCE. When enforcement locks
+     writing, every save in the app refuses at the main-process gate, and until
+     now nothing in Settings said why. */
+  box.innerHTML =
+    `<div class="lic-enforce__row">
+       <span class="lic-enforce__l">Enforcement</span>
+       <span class="lk-chip ${HUE[d.state] || 'dh-slate'}">${escHtml(WORD[d.state] || d.state)}</span>
+     </div>`
+    + `<div class="lic-enforce__row">
+       <span class="lic-enforce__l">Saving</span>
+       <span class="lk-chip ${d.readOnly || d.blocked ? 'dh-red' : 'dh-green'}">
+         ${icon(d.readOnly || d.blocked ? 'lock' : 'check', 'xs')}${d.readOnly || d.blocked ? 'Read-only' : 'Enabled'}</span>
+     </div>`
+    + (d.banner && (d.readOnly || d.blocked || d.state === 'GRACE')
+        ? `<div class="lic-enforce__msg">${escHtml(typeof d.banner === 'string' ? d.banner : (d.banner.body || d.banner.title || ''))}</div>`
+        : '');
+
+  const chip = document.getElementById('lic-state');
+  if (chip && WORD[d.state]) {
+    chip.className = 'lk-chip ' + (HUE[d.state] || 'dh-slate');
+    chip.innerHTML = icon(d.state === 'ACTIVE' ? 'check' : 'warning', 'xs') + escHtml(WORD[d.state]);
+  }
+}
+
+/** Copy, with the button itself as the confirmation. `what` is the NAME of a
+    value ('key' or 'machine'), resolved here — see _licRow(). */
+async function licCopy(btn, what) {
+  const value = what === 'key'
+    ? ((window._hostyllo_license_cache || {}).key || '')
+    : what === 'machine' ? (window._hostyllo_machine_id || '')
+    : '';
+  if (!value) { toast('Nothing to copy yet', 'info'); return; }
+  try {
+    await navigator.clipboard.writeText(value);
+    toast('Copied to clipboard', 'success');
+    if (btn && btn.classList.contains('lic-copy')) {
+      const was = btn.innerHTML;
+      btn.innerHTML = icon('check', 'xs');
+      setTimeout(() => { btn.innerHTML = was; }, 1400);
+    }
+  } catch (e) {
+    toast('Could not reach the clipboard', 'error');
+  }
+}
+
+/* Everything support needs to bring this installation back, in a file the
+   customer can keep. Written from the values already on this page — it asks
+   the licence layer for nothing new, and it contains no secret the machine it
+   is saved on does not already hold. */
+function licExportInfo() {
+  const lic = window._hostyllo_license_cache || {};
+  if (!lic.key) { toast('There is no licence to export', 'info'); return; }
+  const lines = [
+    'HOSTYLLO — LICENCE DETAILS',
+    'Saved ' + new Date().toLocaleString('en-IN'),
+    '',
+    'Hostel            : ' + (DB.settings.hostelName || '—'),
+    'License key       : ' + lic.key,
+    'Machine ID        : ' + (window._hostyllo_machine_id || 'not read'),
+    'Activated on      : ' + (_licDate(lic.activatedAt) || 'not recorded'),
+    'Expiry date       : ' + (_licDate(lic.expiry) || 'not recorded'),
+    'Edition           : Hostyllo Offline',
+    '',
+    'This file is a record for your own use and for support. It does not',
+    'activate anything on its own — the key must be entered on the machine',
+    'that is being licensed.',
+  ].join('\r\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hostyllo-licence-' + (typeof today === 'function' ? today() : 'details') + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Licence details saved', 'success');
+}
+
+/** The order the steps have to happen in. No backend — this is the procedure. */
+function licTransferGuide() {
+  showModal('modal-sm',
+    `<div class="hf-mh">
+       <div class="hf-mh__ico">${icon('transfer', 'sm')}</div>
+       <div><div class="hf-mh__t">Moving to a new computer</div>
+       <div class="hf-mh__s">The order matters — step 2 cannot be undone from the new machine.</div></div>
+     </div>`,
+    `<ol class="lic-steps">
+       <li><b>Export a backup first.</b> Backup &amp; Restore → Create backup. The licence does not carry your data; without this the new machine starts empty.</li>
+       <li><b>Export the licence details</b> from this page, so you have the key and this machine's ID in writing.</li>
+       <li><b>Tell your provider</b> you are moving. They issue the key for the new machine — a key is bound to the computer it was activated on, so the old one will not activate there.</li>
+       <li><b>Deactivate this computer</b> from the card above, once you have the new key in hand.</li>
+       <li><b>Install and activate</b> on the new machine, then restore the backup from step 1.</li>
+     </ol>
+     <div class="cfg-note">${icon('warning', 'xs')}<span>Do step 4 last. Deactivating first leaves this computer at the activation screen with no way back in until the provider answers.</span></div>`,
+    `<button class="btn btn-primary" onclick="closeModal()">Close</button>`);
+}
+
+/* The destructive actions. Every one confirms in the main process — see the
+   comment at the top of this section — so this deliberately does NOT put a
+   second confirmation in front of it: two dialogs for one decision is how
+   people learn to click through both. */
+async function licDo(what) {
+  const api = window.licenseAPI;
+  if (!api) { toast('License actions are not available in this build.', 'info'); return; }
+  let res = null;
+  try {
+    if (what === 'deactivate') res = await api.deactivateLicense();
+    else if (what === 'reset') res = await api.resetLicense();
+    else if (what === 'uninstall') res = await api.prepareUninstall();
+  } catch (e) {
+    toast('That could not be completed.', 'error');
+    return;
+  }
+  if (res && res.cancelled) return;                 // the dialog was dismissed
+  if (res && res.success === false) {
+    toast(res.reason || 'That could not be completed.', 'error');
+    return;
+  }
+  /* On success the main process is already taking the window back to the
+     activation screen; nothing here needs to re-render. */
 }
 
 function openLicenseSettingsWindow() {
@@ -1359,6 +2626,9 @@ function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
+  // The profile card on the Hostel Info panel shows six of these fields as
+  // the login screen will print them; it follows the keystroke.
+  hiMirror(key, val);
   if(key==='hostelName') {
     // Update sidebar name (the node is hidden now - the visible copy is the
     // centred one in the title bar, refreshed on the next line)
@@ -1371,19 +2641,21 @@ async function liveUpdateSetting(key, val) {
     // Update font-style preview cards — text AND preserve selected font
     const prev = document.getElementById('font-preview-name');
     if(prev) {
-      prev.textContent = val || 'Hostel Name Preview';
+      prev.textContent = val || 'Hostel Name';
       // Keep the currently selected font applied to the preview
-      const ff = DB.settings.hostelNameFont || 'DM Serif Display';
+      const ff = DB.settings.hostelNameFont || HI_FONT_DEFAULT;
       prev.style.fontFamily = `'${ff}', serif`;
     }
     // Also update each individual font card label so every card shows new name
     document.querySelectorAll('.font-card-label').forEach(el => {
-      el.textContent = val || 'Hostel Name Preview';
+      el.textContent = val || 'Hostel Name';
     });
   }
   if(key==='location') {
     const loginAddr = document.getElementById('login-address');
-    if(loginAddr) loginAddr.innerHTML = val ? `&#x1F4CD; ${val}` : '';
+    // textContent, not innerHTML: this value is typed by the warden and the
+    // old line wrote it into the login screen as markup.
+    if(loginAddr) loginAddr.textContent = val ? '\u{1F4CD} ' + val : '';
   }
   if(key==='version') {
     const ver = document.getElementById('sb-version');
@@ -1398,14 +2670,15 @@ async function applyHostelFont(fontFamily) {
   const prev = document.getElementById('font-preview-name');
   if(prev) {
     prev.style.fontFamily = `'${fontFamily}', serif`;
-    prev.textContent = DB.settings.hostelName || 'Hostel Name Preview';
+    prev.textContent = DB.settings.hostelName || 'Hostel Name';
   }
   toast('Font updated — ' + fontFamily, 'success');
   renderPage('settings');
 }
-async function saveSettings() {
-  await saveDB(); toast('Settings saved successfully','success');
-}
+/* saveSettings() lived here until 2026-09-08. Its only caller was Hostel Info's
+   "Save Hostel Info" button, and that button saved nothing that was not already
+   saved — every field on that panel writes through on input. Removed with it,
+   rather than left as a function a future author could wire a button back to. */
 // ── BULK RENT + MESS UPDATE ──────────────────────────────────────────────────
 /* Writes the two charges onto the student and re-bases every payment record
    that still has money owing on it.
@@ -1770,14 +3043,126 @@ async function updateRoomType(id, field, val) {
   await saveDB();
   rtRefreshStrip();   // no-op unless the Room Types panel is the one on screen
 }
-async function addRoomType() {
-  const id='rt_'+uid();
-  // Rent starts at 0 so the warden must enter a real figure — a seeded 16,000
-  // reads as a configured price and silently becomes a bill.
-  DB.settings.roomTypes.push({id,name:'New Type',capacity:1,defaultRent:0,defaultMess:0,color:'#4a9cf0'});
-  _rtTouch();
-  await saveDB(); renderPage('settings'); toast('Room type added','success');
+/* ── ADD / EDIT A ROOM TYPE ─────────────────────────────────────────────────
+   Owner, 2026-09-08: "add room type only generates a new room type and then you
+   have again to drag and edit the room credentials, that's not professional."
+
+   They are right. `addRoomType()` used to append a row reading "New Type", one
+   bed, zero rent — a placeholder the warden then had to find in the table and
+   correct field by field. Worse, in a hostel with a dozen types the new row
+   landed at the BOTTOM of a card that shows three, so the first thing you had
+   to do was scroll to the thing you had just created.
+
+   It asks first now. The same form edits an existing type, because an add form
+   and an edit form that drift apart is how a field ends up settable in one and
+   not the other — and this one carries the two fields the compact table has no
+   room for, the colour and the default mess charge.
+
+   THE SAVE GOES THROUGH `updateRoomType()`, FIELD BY FIELD, ON AN EDIT. That
+   function owns the rules — beds are whole and positive, rent may not be zero
+   because a zero cascades onto every room of the type and its active students,
+   mess may be zero because a hostel may serve no food — and it owns the
+   cascade itself. Assigning the object wholesale here would be a second, worse
+   copy of all of it. */
+function showRoomTypeModal(id) {
+  const t = id ? (DB.settings.roomTypes || []).find(x => x.id === id) : null;
+  const cur = escHtml(DB.settings.currency || 'PKR');
+  const inUse = t ? (DB.rooms || []).filter(r => r.typeId === t.id).length : 0;
+
+  showModal('modal-form', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon(t ? 'edit' : 'plus', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">${t ? 'Edit room type — ' + escHtml(t.name) : 'Add room type'}</span>
+        <span class="hf-mh__s">${t
+          ? (inUse ? inUse + ' room' + (inUse === 1 ? '' : 's') + ' use this type — a rent change reaches them and their active students'
+                   : 'Nothing uses this type yet')
+          : 'Capacity and rent become the defaults for every room given this type.'}</span>
+      </span>
+    </div>`, `
+    <div class="hf-sec">
+      <div class="hf-sec__h"><span class="hf-num">1</span>
+        <span class="hf-sec__t">The type</span>
+        <span class="hf-sec__s">What it is called, and how many beds it has</span></div>
+      <div class="hf-g2">
+        <div class="field"><label>Type name<span class="req"> *</span></label>
+          <div class="hf-in"><span class="hf-in__i">${icon('bed', 'xs')}</span>
+            <input id="rtf-name" class="form-control" placeholder="e.g. 3-Seater"
+                   value="${t ? escHtml(t.name) : ''}"></div></div>
+        <div class="field"><label>Capacity (beds)<span class="req"> *</span></label>
+          <div class="hf-in"><span class="hf-in__i">${icon('users', 'xs')}</span>
+            <input id="rtf-cap" class="form-control" type="number" min="1" step="1"
+                   value="${t ? (Number(t.capacity) || 1) : 1}"></div></div>
+        <div class="field col-full"><label>Colour</label>
+          <div class="hf-in"><span class="hf-in__i">${icon('tag', 'xs')}</span>
+            <input id="rtf-color" class="form-control rtf-color" type="color"
+                   value="${escHtml(t ? t.color : '#4a9cf0')}"></div></div>
+      </div>
+    </div>
+
+    <div class="hf-sec">
+      <div class="hf-sec__h"><span class="hf-num">2</span>
+        <span class="hf-sec__t">Default charges</span>
+        <span class="hf-sec__s">What a room of this type bills unless a student is set otherwise</span></div>
+      <div class="hf-g2">
+        <div class="field"><label>Default rent (${cur})<span class="req"> *</span></label>
+          <div class="hf-in"><span class="hf-in__i">${icon('money', 'xs')}</span>
+            <input id="rtf-rent" class="form-control" type="number" min="0"
+                   value="${t ? (Number(t.defaultRent) || '') : ''}" placeholder="e.g. 16000"></div></div>
+        <div class="field"><label>Default mess (${cur})<span class="opt"> optional</span></label>
+          <div class="hf-in"><span class="hf-in__i">${icon('utensils', 'xs')}</span>
+            <input id="rtf-mess" class="form-control" type="number" min="0"
+                   value="${t ? (Number(t.defaultMess) || 0) : 0}"></div></div>
+      </div>
+      ${t && inUse ? `<div class="cfg-note">${icon('warning', 'xs')}<span>Changing the rent updates the ${inUse} room${inUse === 1 ? '' : 's'} of this type and their active students. The mess figure does not cascade — use Rent &amp; Mess for that.</span></div>` : ''}
+    </div>`,
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       <button class="btn btn-primary" onclick="saveRoomTypeForm(${t ? `'${escHtml(t.id)}'` : ''})">
+         ${icon('save', 'xs')} ${t ? 'Save changes' : 'Add room type'}</button>
+     </div>`);
+  setTimeout(() => { const el = document.getElementById('rtf-name'); if (el) el.focus(); }, 60);
 }
+
+async function saveRoomTypeForm(id) {
+  const val = (k) => String((document.getElementById('rtf-' + k) || {}).value || '').trim();
+  const name = val('name');
+  const cap  = Math.round(parseFloat(val('cap')));
+  const rent = parseFloat(val('rent'));
+  const mess = parseFloat(val('mess')) || 0;
+
+  if (!name) { toast('Enter a type name', 'error'); return; }
+  if (!cap || cap < 1) { toast('Capacity is a whole number of beds, at least one', 'error'); return; }
+  /* Zero is refused for the same reason `updateRoomType` refuses it: a
+     defaultRent of 0 cascades onto every room of the type and its active
+     students, and a blank box is far more often a slip than a decision. */
+  if (!rent || rent < 0) { toast('Enter the default rent for this type', 'error'); return; }
+
+  const types = DB.settings.roomTypes || (DB.settings.roomTypes = []);
+  const clash = types.find(x => x.id !== id && x.name.trim().toLowerCase() === name.toLowerCase());
+  if (clash) { toast('"' + name + '" already exists', 'error'); return; }
+
+  if (id) {
+    // Field by field, so updateRoomType's validation and its rent cascade run.
+    await updateRoomType(id, 'name', name);
+    await updateRoomType(id, 'capacity', cap);
+    await updateRoomType(id, 'defaultMess', mess);
+    await updateRoomType(id, 'defaultRent', rent);   // last: it cascades
+    logActivity('Room Type Updated', name, 'Settings');
+  } else {
+    types.push({ id: 'rt_' + uid(), name, capacity: cap, defaultRent: rent,
+                 defaultMess: mess, color: val('color') || '#4a9cf0' });
+    _rtTouch();
+    logActivity('Room Type Added', name, 'Settings');
+    await saveDB();
+  }
+  closeModal();
+  renderPage('settings');
+  toast(id ? 'Room type saved' : 'Room type added', 'success');
+}
+
+/** Kept as a name — the older call sites and the empty state use it. */
+function addRoomType() { showRoomTypeModal(); }
 async function removeRoomType(id) {
   if(DB.settings.roomTypes.length<=1){toast('Must have at least one room type','error');return;}
   if(DB.rooms.some(r=>r.typeId===id)){toast('Cannot remove type: rooms are using it','error');return;}
@@ -2261,3 +3646,84 @@ function enforceDataRetention() {
 // ════════════════════════════════════════════════════════════════════════════
 // THEME / ACCENT COLOR
 // ════════════════════════════════════════════════════════════════════════════
+
+/* ── WHAT THE HOSTEL GIVES BACK ON A PART MONTH ──────────────────────────────
+   It belongs here rather than at the checkout counter, and finance.js said so
+   before this existed: a pro-rata rule "belongs in Settings first and arrives
+   [at the settlement] as a real charge on a real record, not as a rate
+   improvised at checkout". A departing student is the worst possible audience
+   for a number the hostel has not agreed to in advance.
+
+   The default is 'none', which is what every install has been doing, so
+   nobody's figures move until somebody chooses otherwise. */
+function refundPolicyCard() {
+  const p = refundPolicy();
+  const opt = (mode, title, sub) => `
+    <label class="svc-opt${p.mode === mode ? ' is-on' : ''}">
+      <input type="radio" name="refund-mode" ${p.mode === mode ? 'checked' : ''}
+             onchange="setRefundMode('${mode}')">
+      <span class="svc-opt__b">
+        <span class="svc-opt__t">${escHtml(title)}</span>
+        <span class="svc-opt__s">${escHtml(sub)}</span>
+      </span>
+    </label>`;
+
+  return `
+  <div class="set-card">
+    <div class="set-head">
+      <div class="set-head__ico dh-amber">${icon('transfer', 'md')}</div>
+      <div class="set-head__mid">
+        <div class="set-head__t">Refund on a Part Month</div>
+        <div class="set-head__s">What a student gets back when they leave partway through a month.</div>
+      </div>
+      <div class="set-head__end"><span class="lk-chip ${p.mode === 'none' ? 'dh-slate' : 'dh-amber'}">${escHtml(refundPolicyLabel(p))}</span></div>
+    </div>
+
+    <div class="svc-opts">
+      ${opt('none', 'No refund', 'The month is charged in full however early they leave.')}
+      ${opt('mess', 'Mess only', 'The food is refunded for the days not eaten. The bed is not — the room was held and could not be re-let.')}
+      ${opt('both', 'Rent and mess', 'Both are refunded for the days not used.')}
+      ${opt('full', 'The whole month', 'Everything is returned, but only when they leave on or before the cut-off day.')}
+    </div>
+
+    <div class="rf-cut">
+      <label for="rf-cutoff">Cut-off day of the month</label>
+      <div class="set-step">
+        <button type="button" onclick="setRefundCutoff(-1)" ${p.cutoff <= 0 ? 'disabled' : ''}>−</button>
+        <input id="rf-cutoff" type="number" min="0" max="28" value="${p.cutoff}"
+               onchange="setRefundCutoff(0, this.value)">
+        <button type="button" onclick="setRefundCutoff(1)" ${p.cutoff >= 28 ? 'disabled' : ''}>+</button>
+      </div>
+      <span class="rf-cut__s">${p.cutoff
+        ? 'A student who leaves after the ' + p.cutoff + ' is charged the full month.'
+        : 'No cut-off — the rule applies whenever they leave.'}</span>
+    </div>
+
+    <div class="cfg-note">${icon('info', 'xs')}<span>Pro-rata is <b>by day of the actual month</b> — 28, 30 or 31 — and the day they leave counts as a day they stayed. At checkout the amount is written onto that month's payment record as a concession, so it shows on the payment, the receipt and every export rather than living in a separate refund ledger.</span></div>
+  </div>`;
+}
+
+async function setRefundMode(mode) {
+  if (!DB.settings.refundPolicy) DB.settings.refundPolicy = {};
+  DB.settings.refundPolicy.mode = mode;
+  /* 'full' without a cut-off would return the whole month to somebody leaving
+     on the 29th, which is not a rule any hostel means. */
+  if (mode === 'full' && !(Number(DB.settings.refundPolicy.cutoffDay) > 0)) {
+    DB.settings.refundPolicy.cutoffDay = 7;
+  }
+  await saveDB();
+  logActivity('Settings Changed', 'Part-month refund: ' + refundPolicyLabel(), 'Settings');
+  await saveDB();
+  renderPage('settings');
+}
+
+async function setRefundCutoff(delta, value) {
+  if (!DB.settings.refundPolicy) DB.settings.refundPolicy = {};
+  const cur = Number(DB.settings.refundPolicy.cutoffDay || 0);
+  let next = value != null ? Number(value) : cur + delta;
+  if (!(next >= 0)) next = 0;
+  if (next > 28) next = 28;
+  DB.settings.refundPolicy.cutoffDay = next;
+  await saveDB();
+  renderPage('settings');
+}

@@ -93,7 +93,10 @@ let DB = {
                          'Fund Transfer', 'Other'],
     floors:             ['Ground', '1st', '2nd', '3rd'],
     defaultWANumber:    '',
-    hostelNameFont:     'DM Serif Display',
+    // A face that exists. The old default named a Google family this app has
+    // never carried and its CSP cannot fetch, so every fresh install drew the
+    // browser's default serif under the name of a font it did not have.
+    hostelNameFont:     'Georgia',
     lastBackupReminder: null,  // ISO string — used by backup reminder toast
     lastBackupExport:   null,  // ISO string — when a backup was last written out
     // First-run setup. `setupCompletedAt` is only ever written by the wizard

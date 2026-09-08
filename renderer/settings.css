@@ -70,6 +70,10 @@
 }
 .set-head__t  { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: var(--text); line-height: 1.2; }
 .set-head__s  { font-size: 12.5px; color: var(--text3); margin-top: 4px; }
+/* The title column takes the slack. Without a basis the head wraps the moment
+   a subtitle is longer than the card is wide: the tile lands on one line, the
+   title on the next and the end slot on a third. */
+.set-head__mid { flex: 1 1 240px; min-width: 0; }
 .set-head__end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -80,8 +84,16 @@
     font-family: var(--font); font-size: 13px; font-weight: 600; transition: var(--transition);
 }
 .set-btn:hover     { background: var(--dash-sunk); color: var(--text); }
-.set-btn--go       { background: var(--accent); border-color: var(--accent); color: #fff; }
-.set-btn--go:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+/* connCheckNow() disables this button while a probe is in flight, and without
+   this the accent fill, the hover and the pointer all stay exactly as they
+   were — a button that looks live and does nothing. Matches .set-rowbtn's
+   disabled treatment below. */
+.set-btn:disabled,
+.set-btn--go:disabled { opacity: .5; cursor: not-allowed; }
+.set-btn:disabled:hover { background: none; }
+.set-btn--go:disabled:hover { background: var(--accent); }
+.set-btn--go       { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.set-btn--go:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--text-on-accent); }
 .set-actions       { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 /* ── Note strip (the "this only changes defaults" callout) ───────────────── */
@@ -486,3 +498,817 @@
 .mess-fixed {
     margin-top:6px; font-size:11px; font-weight:600; color:var(--text3);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTEL CONFIGURATION — added 2026-09-08 to `hostel configuration.png`
+
+   Room Types, Payment Methods, Expense Categories and Floors on one page.
+   Room Types keeps the full-width panel above; these three share a grid.
+
+   EVERY COLOUR HERE IS A TOKEN, and every token used is one that tokens.css
+   declares in BOTH palettes — `npm run test:theme` fails the build otherwise.
+   No literal white on an accent fill: `--text-on-accent` is the ink for that,
+   because dark mode lifts the accent to #4E7DFF where white is 3.68:1.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── TWO BY TWO, FITTED TO THE PAGE ─────────────────────────────────────────
+   Owner, 2026-09-08: "follow this design for configuration and fit to page; if
+   a panel has more data make it draggable."
+
+   Two columns and two rows, as `hostel configuration.png` draws them. The grid
+   is given the height left on the page and its rows split it evenly, so the
+   four panels are always all four on screen — a hostel with twenty expense
+   categories scrolls INSIDE that card rather than turning this page into four
+   screens of scrolling.
+
+   THE HEIGHT IS A calc, NOT A GUESS AT vh. `#content` sits under the title bar
+   (40px), the page header and the tab strip; `--cfg-chrome` is that stack,
+   measured at each tier below rather than assumed, because the header wraps to
+   two lines under 1100 and the tab strip wraps under 900. Getting it wrong in
+   the safe direction just means the page scrolls a little, which is what it
+   did before.                                                              */
+.cfg-grid {
+    --cfg-chrome: 232px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+    /* A FALLBACK ONLY. `cfgFitGrid()` in settings.js sets the real height from
+       a measurement of where this element actually lands, because the chrome
+       above it changes height at two breakpoints. This value keeps the page
+       sane for the one frame before that runs, and if the script never does. */
+    height: calc(100dvh - var(--cfg-chrome));
+    min-height: 420px;
+}
+
+/* Each card is its own scroll region: header and note pinned, table scrolling
+   between them. `min-height:0` is what lets a grid item shrink below its
+   content — without it the row refuses and the whole grid grows instead. */
+.cfg-grid > .cfg-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.cfg-grid > .cfg-card > .set-head,
+.cfg-grid > .cfg-card > .cfg-note { flex-shrink: 0; }
+.cfg-grid > .cfg-card > .set-table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* The heading row stays put while the rows move under it — in a panel this
+   short, three rows of scroll with no heading is unreadable. */
+.cfg-grid .cfg-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg3);
+}
+
+@media (max-width: 1100px) { .cfg-grid { --cfg-chrome: 268px; } }
+@media (max-width: 900px)  {
+    .cfg-grid {
+        --cfg-chrome: 300px;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        height: auto;
+        min-height: 0;
+    }
+    .cfg-grid > .cfg-card { max-height: 60vh; }
+}
+
+/* The shared card is padded for a full-width panel. At a third of a row that
+   padding is 46px the table does not get: Payment Methods, which carries a
+   Status column the other two do not, needed 354px inside a 310px well and
+   scrolled. Everything below trims the CHROME rather than the content — the
+   status pill keeps its glyph and its word, because the dark-mode brief is
+   explicit that a badge may not be carried by colour alone. */
+.cfg-card { margin: 0; padding: 16px; }
+.cfg-card .set-head { margin-bottom: 14px; }
+.cfg-card .set-head__t { font-size: 16px; }
+.cfg-card .set-head__s { font-size: 11.5px; }
+.cfg-card .set-head__ico { width: 38px; height: 38px; }
+
+/* The shared table is sized for the full-width Room Types panel; inside a
+   third of a row it has to give that minimum back or every card scrolls. */
+.cfg-table { min-width: 0; }
+.cfg-table thead th { padding: 9px 8px; font-size: 10.5px; }
+.cfg-table tbody td { padding: 8px; }
+
+.cfg-n {
+    width: 1%;
+    color: var(--text3);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--ant-num-font);
+}
+.cfg-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.cfg-use  { font-size: 11.5px; color: var(--text3); white-space: nowrap; }
+.cfg-acts { width: 1%; }
+.cfg-acts .lk-acts { flex-wrap: nowrap; justify-content: flex-end; gap: 3px; }
+.cfg-acts .lk-act--icon { width: 26px; height: 26px; }
+
+/* The status pill is a BUTTON — one click retires a method or brings it back,
+   which is the whole interaction the reference's Status column implies. It
+   keeps the chip's shape so it still reads as state rather than as an action
+   bar, and says which it is in its tooltip. */
+.cfg-state {
+    /* The last 5px. `.lk-chip`'s 11px side padding is sized for a table cell
+       with room; here it is the difference between the card fitting and the
+       card scrolling. */
+    padding: 4px 8px;
+    gap: 4px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: var(--transition);
+}
+.cfg-state:hover { filter: brightness(1.06); }
+.cfg-state:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── The icon picker ─────────────────────────────────────────────────────── */
+.cfg-ico {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 9px;
+    cursor: pointer;
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    color: var(--accent-strong);
+    transition: var(--transition);
+}
+.cfg-ico:hover { border-color: var(--accent); }
+.cfg-ico:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Reuses the toolbar menu's shell (open/close, click-outside, Escape) and only
+   changes the shape of what is inside it — a grid of glyphs rather than a list
+   of rows. One menu implementation in the app, not two. */
+.cfg-ico__menu {
+    display: none;
+    grid-template-columns: repeat(6, 32px);
+    gap: 4px;
+    min-width: 0;
+    left: 0; right: auto;
+}
+.cfg-ico__menu.is-open { display: grid; }
+.cfg-ico__opt {
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    color: var(--text2);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.cfg-ico__opt:hover { background: var(--dash-sunk); color: var(--text); }
+.cfg-ico__opt.is-on {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-strong);
+}
+.cfg-ico__opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The line under each card that says what the list is FOR. The reference has
+   one on every card and they are the only place a warden is told that
+   retiring a method keeps it on old payments. */
+.cfg-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text2);
+}
+.cfg-note svg { flex-shrink: 0; margin-top: 1px; color: var(--accent-strong); }
+
+/* ── The room-type row, at card width ──────────────────────────────────────
+   The swatch IS the colour control now: the old panel spent a whole column on
+   a hex label, a chevron and a hidden input, next to a swatch two columns
+   away that showed the same colour and did nothing. */
+.rt-sw {
+    display: inline-flex;
+    position: relative;
+    cursor: pointer;
+}
+.rt-sw__d {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    border: 1px solid var(--border2);
+    display: block;
+    transition: var(--transition);
+}
+.rt-sw:hover .rt-sw__d { border-color: var(--accent); transform: scale(1.06); }
+.rt-sw input[type="color"] {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; border: none; padding: 0;
+}
+.rt-sw:focus-within .rt-sw__d { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The row number doubles as the drag handle. The reference draws no grip, and
+   the order here is the order every room picker lists types in — losing the
+   only way to change it would be losing a feature to match a picture. */
+.rt-grip {
+    cursor: grab;
+    display: inline-block;
+    padding: 2px 4px;
+    border-radius: 5px;
+    transition: var(--transition);
+}
+.rt-grip:hover  { background: var(--dash-sunk); color: var(--text2); }
+.rt-grip:active { cursor: grabbing; }
+
+/* Wide enough for a six-figure rent, with the number input's spinner taken
+   off — at 92px the arrows ate the last digit and "16000" read as "1600". */
+.rt-rent { max-width: 104px; -moz-appearance: textfield; }
+.rt-rent::-webkit-outer-spin-button,
+.rt-rent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cfg-grid .set-step { transform: scale(.92); transform-origin: left center; }
+.cfg-grid .set-in--name { min-width: 84px; }
+
+/* ── DENSITY INSIDE A FITTED CARD ──────────────────────────────────────────
+   Four panels sharing one page means each gets ~250px at the QA floor, and a
+   header, a note and two visible rows is not a panel — it is a teaser. Every
+   value below takes the space out of CHROME rather than out of type: the note
+   loses padding and a point of size, the head loses its bottom margin, the
+   rows lose two pixels of cell padding. Nothing here changes a font size a
+   warden reads a NUMBER at. */
+.cfg-grid .set-head { margin-bottom: 10px; }
+.cfg-grid .cfg-note {
+    margin-top: 8px;
+    padding: 7px 10px;
+    font-size: 11px;
+    line-height: 1.45;
+}
+.cfg-grid .cfg-table tbody td { padding: 6px 8px; }
+.cfg-grid .cfg-table thead th { padding: 7px 8px; }
+.cfg-grid .set-in { height: 30px; }
+.cfg-grid .set-btn { height: 32px; }
+
+/* On a SHORT window, prose yields to data. At the 1366x768 floor the content
+   box is ~690 tall, each card gets ~250, and a header plus a note plus one
+   visible row is not a panel. The note is guidance a reader needs once; the
+   rows are what they came for. It comes back the moment there is room. */
+@media (max-height: 760px) {
+    .cfg-grid .cfg-note { display: none; }
+    .cfg-grid .set-head { margin-bottom: 8px; }
+    .cfg-grid .set-head__s { display: none; }
+}
+
+/* The room type NAME is text with a pencil beside it, not an input. An input
+   per name in a card that shows three rows was half of what the owner reported
+   on 2026-09-08 — the row read as a form you had to fill in rather than a
+   record you could read. */
+.rt-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+
+/* A colour well inside the form's icon-prefixed control. A bare
+   `input[type=color]` styled as a `.form-control` is a 4px-tall sliver in
+   Chromium, because the swatch is a replaced element that ignores the
+   control's line-height. */
+.rtf-color {
+    height: 34px;
+    padding: 3px;
+    cursor: pointer;
+    background: transparent;
+}
+.rtf-color::-webkit-color-swatch-wrapper { padding: 0; }
+.rtf-color::-webkit-color-swatch { border: 1px solid var(--border2); border-radius: 6px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOSTEL INFO — the identity panel and its profile card
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.hi-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hi-rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* Sentence case, here as in the modals. `.field label` in style.css shouts
+   every label in uppercase with 0.8px of tracking; forms.css §8 already
+   overrode that for the dialogs on the argument that one form should not read
+   two ways, and a settings card is a form. */
+.set-card .field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text2);
+}
+.set-card .field label .opt { font-weight: 500; color: var(--text3); margin-left: 4px; }
+/* The note under a field needs room beneath it too: in a two-field column a
+   note that wrapped to two lines ran into the next label. */
+.hi-note { font-size: 11px; line-height: 1.45; color: var(--text3); margin: 5px 0 2px; }
+
+/* The header badge that replaced the Save button. It is a statement about what
+   the panel does, so it is not a button and cannot be pressed. */
+.hi-live {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 11px; border-radius: 999px;
+    background: var(--ant-success-bg); border: 1px solid var(--border);
+    color: var(--ant-success-fg); font-size: 11.5px; font-weight: 600;
+}
+.hi-live svg { width: 13px; height: 13px; }
+
+/* ── The twenty faces ─────────────────────────────────────────────────────
+   Auto-fill rather than a fixed four, because this grid is in the narrower
+   column of a split and had to reflow to three at the 1366 floor. Its own
+   scroll: twenty tiles is four rows, and the panel below it is the page. */
+.hi-fonts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+    gap: 8px;
+    max-height: 292px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+.hi-font {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 10px 8px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    cursor: pointer; text-align: center; min-width: 0;
+    transition: var(--transition);
+}
+.hi-font:hover { border-color: var(--accent); }
+.hi-font:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hi-font.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.font-card-label {
+    font-size: 14px; font-weight: 700; color: var(--accent-strong);
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hi-font__n { font-size: 9.5px; color: var(--text3); }
+
+/* ── The profile card ─────────────────────────────────────────────────────
+   The same block the login screen prints, drawn from the same six fields, with
+   the name in the face the picker is choosing. */
+.hi-id__top {
+    display: flex; align-items: center; gap: 13px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--border);
+}
+.hi-id__logo {
+    width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.hi-id__name {
+    font-size: 20px; font-weight: 700; color: var(--text);
+    line-height: 1.15; overflow-wrap: anywhere;
+}
+.hi-id__tag { font-size: 12px; color: var(--text3); margin-top: 3px; overflow-wrap: anywhere; }
+.hi-id__rows { padding: 6px 0; }
+.hi-id__row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.hi-id__i {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dash-sunk); color: var(--text3);
+}
+.hi-id__v { font-size: 12.5px; color: var(--text2); min-width: 0; overflow-wrap: anywhere; }
+/* A field nobody has filled in yet reads as absent, not as a value. */
+.hi-id .is-empty { color: var(--text3); font-style: italic; }
+
+/* At the QA floor the split stacks (set-split, 1000px) and the rail lands
+   under a page that is already two cards tall. Cap the faces harder so the
+   profile card is reachable without a long scroll. */
+@media (max-height: 760px) {
+    .hi-fonts { max-height: 214px; }
+}
+
+/* A group label inside the picker: which faces ship with the app, and which
+   are the ones this Windows happens to have. */
+.hi-fgroup {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--text3);
+    margin: 4px 0 8px;
+}
+.hi-fgroup + .hi-fonts { margin-bottom: 14px; }
+#hi-font-grid { max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.hi-fonts { max-height: none; overflow: visible; }
+
+/* The stored face is not on this machine. It is not an error — the title bar
+   keeps the interface font — but it is the one thing to say out loud. */
+.hi-warn {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-bottom: 14px; padding: 10px 12px; border-radius: 10px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+    font-size: 11.5px; line-height: 1.5; color: var(--text2);
+}
+.hi-warn svg { flex-shrink: 0; margin-top: 1px; color: var(--ant-warning-fg); }
+.hi-warn b { color: var(--text); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LICENSE — the fact table, the three actions, the enforcement readout
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* A fact table, not a form: nothing here is typed, so nothing here wears a
+   field's box. Label, value, and the copy button when there is one. */
+.lic-grid { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.lic-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 200px) 1fr 32px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.lic-row:last-child { border-bottom: none; }
+.lic-row__l { font-size: 12px; color: var(--text3); }
+.lic-row__v {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    min-width: 0; overflow-wrap: break-word;
+}
+/* Only the two machine-readable values may break mid-token; a date breaking
+   after "Not" is the same bug as a wrapped column. */
+.lic-row__v.is-mono { overflow-wrap: anywhere; }
+.lic-row__v.is-mono {
+    font-family: var(--ant-num-font);
+    letter-spacing: .06em;
+    font-size: 12.5px;
+}
+.lic-row__v.is-warn { color: var(--ant-warning-fg); }
+.lic-row__v.is-bad  { color: var(--red); }
+.lic-days { font-size: 11.5px; font-weight: 600; color: var(--text3); margin-left: 9px; }
+.lic-row__v.is-warn .lic-days,
+.lic-row__v.is-bad  .lic-days { color: inherit; }
+.lic-copy { width: 30px; height: 30px; padding: 0; justify-self: end; }
+
+/* ── The three actions ────────────────────────────────────────────────────
+   The reference paints each tile in the colour of the damage it does. The
+   TILE stays neutral here and the hue is carried by the glyph and the button
+   edge: three filled colour blocks side by side in a settings card read as
+   three warnings, and only the third one is. */
+.lic-acts { display: flex; flex-direction: column; gap: 10px; }
+.lic-act {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+}
+.lic-act__i {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.lic-act__b { flex: 1; min-width: 0; }
+.lic-act__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.lic-act__s { font-size: 11.5px; color: var(--text3); margin-top: 3px; line-height: 1.45; }
+.lic-act__go {
+    flex-shrink: 0;
+    height: 32px; padding: 0 15px; border-radius: 9px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--dh); color: var(--dh);
+    font-size: 12.5px; font-weight: 700;
+    transition: var(--transition);
+}
+.lic-act__go:hover { background: var(--dh-bg); }
+.lic-act__go:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── The three startup checks ─────────────────────────────────────────── */
+.lic-checks { display: flex; flex-direction: column; gap: 9px; }
+.lic-check {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 12.5px; color: var(--text2);
+}
+.lic-check svg { color: var(--ant-success-fg); flex-shrink: 0; }
+.lic-check.is-bad { color: var(--red); }
+.lic-check.is-bad svg { color: var(--red); }
+
+/* ── Enforcement ──────────────────────────────────────────────────────── */
+.lic-enforce { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); }
+.lic-enforce__wait { font-size: 11.5px; color: var(--text3); }
+.lic-enforce__row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 5px 0;
+}
+.lic-enforce__l { font-size: 12px; color: var(--text3); }
+.lic-enforce__msg {
+    margin-top: 9px; padding: 9px 11px; border-radius: 9px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+    font-size: 11.5px; line-height: 1.5; color: var(--text2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CONNECTION — the four-line readout (spec 29), in the reference is shape
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The state summary in the card head. A dot and two lines, coloured by mode —
+   and never green unless the mode it describes is actually online. */
+/* THE FOUR §29 STATES, on the four token pairs tokens.css declares for them
+   (--conn-online / degraded / offline / unconfigured) and restates per theme.
+   Every element of a row reads the same pair, so a state is one class on the
+   row rather than a hue repeated three times — and "unconfigured" is the
+   neutral the token set specifies, not the accent it used to borrow. */
+.conn-sum, .conn-row { --c-fg: var(--conn-unconfigured-fg); --c-bg: var(--conn-unconfigured-bg); }
+.is-online       { --c-fg: var(--conn-online-fg);       --c-bg: var(--conn-online-bg); }
+.is-degraded     { --c-fg: var(--conn-degraded-fg);     --c-bg: var(--conn-degraded-bg); }
+.is-offline      { --c-fg: var(--conn-offline-fg);      --c-bg: var(--conn-offline-bg); }
+.is-unconfigured { --c-fg: var(--conn-unconfigured-fg); --c-bg: var(--conn-unconfigured-bg); }
+
+.conn-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 11px; border-radius: 999px;
+    background: var(--c-bg); color: var(--c-fg);
+    border: 1px solid var(--border);
+    font-size: 11.5px; font-weight: 700; white-space: nowrap;
+}
+
+.conn-sum {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 12px;
+    background: var(--c-bg); border: 1px solid var(--border);
+}
+.conn-sum__d { width: 9px; height: 9px; border-radius: 50%; background: var(--c-fg); flex-shrink: 0; }
+.conn-sum b     { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); }
+.conn-sum small { display: block; font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.conn-rows { margin-top: 14px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.conn-row {
+    display: grid;
+    grid-template-columns: 38px minmax(150px, 1fr) auto minmax(0, 1.1fr);
+    align-items: center; gap: 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.conn-row:last-child { border-bottom: none; }
+.conn-row__i {
+    width: 38px; height: 38px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--c-bg); color: var(--c-fg);
+}
+.conn-row__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.conn-row__s { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+.conn-row__n { font-size: 11.5px; color: var(--text3); border-left: 1px solid var(--border); padding-left: 14px; min-height: 18px; }
+
+.conn-foot {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border);
+    font-size: 11.5px; color: var(--text3);
+}
+.conn-foot span { display: inline-flex; align-items: center; gap: 6px; }
+.conn-foot b    { color: var(--text2); font-weight: 700; }
+.conn-foot .is-bad, .conn-foot .is-bad b { color: var(--red); }
+.conn-foot .set-btn { margin-left: auto; }
+
+/* Below the split point the note column has nowhere to go, so it moves under
+   the row it belongs to rather than squeezing the state pill off the edge. */
+@media (max-width: 1080px) {
+    .conn-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
+    .conn-row__n { grid-column: 2 / -1; border-left: none; padding-left: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SETTINGS LIST ROWS — the shape `hostel profile.png` uses for a preference,
+   and the treatment a preference gets when the feature behind it is not built.
+
+   A LOCKED ROW IS NOT A GREYED ROW. Disabled-and-silent is indistinguishable
+   from broken: the control dims, but it also keeps a lock chip that names the
+   state and an ⓘ that opens one sentence saying what the app does instead. The
+   row itself stays at full contrast — it is readable information, not a
+   disabled field.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.set-rows { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.set-row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto 28px;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.set-row:last-child { border-bottom: none; }
+.set-row__i {
+    width: 38px; height: 38px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.set-row__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.set-row__s { font-size: 11.5px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
+.set-row__c { display: flex; align-items: center; gap: 9px; justify-self: end; }
+
+/* The ⓘ, and the sentence it opens. */
+.set-row__i-btn {
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid transparent; color: var(--text3);
+    transition: var(--transition);
+}
+.set-row__i-btn:hover { background: var(--dash-sunk); color: var(--accent-strong); border-color: var(--border); }
+.set-row__i-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.set-row__why {
+    grid-column: 2 / -1;
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 2px; padding: 9px 11px; border-radius: 9px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+    font-size: 11.5px; line-height: 1.5; color: var(--text2);
+}
+.set-row__why svg { flex-shrink: 0; margin-top: 1px; color: var(--ant-warning-fg); }
+/* An author `display` beats the UA rule that makes [hidden] work, so the note
+   would sit open on every locked row from the first paint. Same trap forms.css
+   documents for .hf-form. */
+.set-row__why[hidden] { display: none; }
+
+/* The chip that says a control is not wired to anything. */
+.set-lock {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    color: var(--text3); font-size: 10.5px; font-weight: 700; white-space: nowrap;
+}
+.set-lock svg { width: 11px; height: 11px; }
+
+/* A switch. The locked ones are real switches showing a real state — off for a
+   behaviour that does not exist, on for one that cannot be turned off. */
+.set-tog {
+    width: 40px; height: 23px; border-radius: 999px; flex-shrink: 0;
+    background: var(--dash-track); border: 1px solid var(--border2);
+    padding: 0; cursor: pointer; position: relative;
+    transition: var(--transition);
+}
+.set-tog__k {
+    position: absolute; top: 2px; left: 2px;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border2);
+    transition: var(--transition);
+}
+.set-tog.is-on { background: var(--accent); border-color: var(--accent); }
+.set-tog.is-on .set-tog__k { left: 20px; border-color: transparent; }
+.set-tog:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.set-tog:disabled { opacity: .45; cursor: not-allowed; }
+
+/* A control that exists only to show the shape of the setting. It reads as a
+   select and cannot be opened, which is the honest picture. */
+.set-dead {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 32px; padding: 0 10px; border-radius: 9px;
+    background: var(--bg4); border: 1px dashed var(--border2);
+    color: var(--text3); font-size: 12.5px; white-space: nowrap;
+}
+.set-dead svg { opacity: .5; }
+
+/* The one live select on the General card. */
+.set-sel {
+    height: 32px; padding: 0 10px; border-radius: 9px; cursor: pointer;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-size: 12.5px; font-weight: 600;
+}
+.set-sel:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+.set-btn--sm { height: 28px; padding: 0 10px; font-size: 11.5px; }
+.hi-wide { width: 100%; justify-content: center; margin-top: 12px; }
+
+/* ── The rail's card heads ───────────────────────────────────────────────── */
+.hi-id__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 14px;
+}
+.hi-id__ttl {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 14px; font-weight: 700; color: var(--text);
+}
+.hi-id__ttl svg { color: var(--accent-strong); }
+
+/* ── The hostel's logo ───────────────────────────────────────────────────── */
+.hi-logo {
+    width: 62px; height: 62px; border-radius: 15px; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    background: var(--accent-soft); border: 1px dashed var(--border2);
+    color: var(--accent-strong); cursor: pointer; overflow: hidden;
+    transition: var(--transition);
+}
+.hi-logo:hover { border-color: var(--accent); }
+.hi-logo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hi-logo.has-img { border-style: solid; background: var(--card); padding: 4px; }
+.hi-logo img { width: 100%; height: 100%; object-fit: contain; }
+.hi-logo__hint {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 8.5px; font-weight: 700; color: var(--text3); letter-spacing: .01em;
+}
+.hi-logo__hint svg { width: 9px; height: 9px; }
+.hi-logo-big {
+    display: flex; align-items: center; justify-content: center;
+    padding: 22px; border-radius: 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.hi-logo-big img { max-width: 220px; max-height: 160px; object-fit: contain; }
+
+.hi-id__st { margin-top: 7px; }
+
+/* ── The four licence facts under the profile ────────────────────────────── */
+.hi-facts { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border); }
+.hi-fact { display: flex; align-items: center; gap: 9px; padding: 6px 0; }
+.hi-fact__i { color: var(--text3); display: flex; flex-shrink: 0; }
+.hi-fact__l { font-size: 12px; color: var(--text3); flex: 1; min-width: 0; }
+.hi-fact__v { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.hi-fact.is-locked .hi-fact__v { font-weight: 600; color: var(--text3); font-style: italic; }
+.hi-fact__lock { color: var(--text3); display: flex; cursor: help; }
+.hi-fact__lock svg { width: 12px; height: 12px; }
+
+/* ── Storage, as a composition rather than a percentage ──────────────────── */
+.hi-store { display: flex; align-items: center; gap: 16px; }
+.hi-ring { position: relative; flex-shrink: 0; width: 92px; height: 92px; }
+.hi-ring svg { transform: rotate(-90deg); }
+.hi-ring__t { fill: none; stroke: var(--dash-track); stroke-width: 9; }
+.hi-ring__s { fill: none; stroke: var(--dh); stroke-width: 9; }
+.hi-ring__c {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.hi-ring__v {
+    font-size: 13px; font-weight: 800; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+.hi-ring__l { font-size: 9.5px; color: var(--text3); margin-top: 1px; }
+.hi-store__b { flex: 1; min-width: 0; }
+.hi-store__r { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.hi-store__d { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; background: var(--dh); }
+.hi-store__k { flex: 1; font-size: 11.5px; color: var(--text2); }
+.hi-store__v {
+    font-size: 11.5px; font-weight: 700; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+
+/* ── Quick actions and help ──────────────────────────────────────────────── */
+.hi-quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hi-quick .set-btn { justify-content: flex-start; width: 100%; }
+.hi-help__p { font-size: 12px; line-height: 1.55; color: var(--text3); }
+.hi-help__p b { color: var(--text2); }
+.hi-pre {
+    max-height: 260px; overflow: auto; padding: 12px 14px; border-radius: 10px;
+    background: var(--bg4); border: 1px solid var(--border);
+    font-family: var(--ant-num-font); font-size: 11.5px; line-height: 1.5; color: var(--text2);
+    white-space: pre-wrap; word-break: break-word;
+}
+
+/* At the QA floor the rail's four cards stack under a page that is already
+   four cards tall, so the rows tighten rather than the type shrinking. */
+@media (max-height: 760px) {
+    .set-row { padding: 9px 14px; }
+    .hi-quick { grid-template-columns: 1fr; }
+}
+@media (max-width: 1180px) {
+    .set-row { grid-template-columns: 38px minmax(0, 1fr) auto 28px; }
+    .set-row__s { display: none; }
+}
+
+/* ── LICENSE, the full page ───────────────────────────────────────────────
+   The fact table and the status block sit side by side as the reference draws
+   them, and collapse in that order at the floor. */
+.lic-split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+/* Inside the page split this column is already half a page wide, so the fact
+   table gets a tighter label column than a full-width one would take. */
+.lic-split .lic-row { grid-template-columns: minmax(0, 112px) minmax(0, 1fr) 30px; gap: 10px; padding: 10px 12px; }
+@media (max-width: 1340px) { .lic-split { grid-template-columns: 1fr; } }
+
+/* A row this app has no record for. It keeps its place — a warden reading the
+   card down a telephone must be able to say "it says Not recorded" rather
+   than wonder which line they are missing. */
+.lic-row.is-locked .lic-row__v { color: var(--text3); font-weight: 600; font-style: italic; }
+.lic-row__lock { color: var(--text3); display: flex; justify-self: end; cursor: help; }
+.lic-row__lock svg { width: 12px; height: 12px; }
+
+.lic-state { display: flex; flex-direction: column; gap: 12px; }
+.lic-state__top {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px; border-radius: 12px;
+    background: var(--dh-bg); border: 1px solid var(--border);
+}
+.lic-state__i {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); color: var(--dh);
+}
+.lic-state__t { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.lic-state__s { font-size: 11.5px; color: var(--text3); margin-top: 3px; line-height: 1.45; }
+.lic-state .lic-enforce { margin-top: 0; }
+
+.lic-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+
+/* System Status — four tiles, one of them locked. */
+.lic-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.lic-stat {
+    display: flex; align-items: center; gap: 11px;
+    padding: 12px 13px; border-radius: 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.lic-stat__i {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.lic-stat__l { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+.lic-stat__lock { display: inline-flex; color: var(--text3); cursor: help; }
+.lic-stat__lock svg { width: 11px; height: 11px; }
+.lic-stat__v { font-size: 13.5px; font-weight: 700; color: var(--text); margin-top: 2px; }
+.lic-stat.is-locked .lic-stat__v { color: var(--text3); font-weight: 600; font-style: italic; }
+
+.hi-quick--1 { grid-template-columns: 1fr; }
+
+/* The transfer guide, as an ordered procedure. */
+.lic-steps { margin: 0; padding-left: 20px; }
+.lic-steps li { font-size: 12.5px; line-height: 1.6; color: var(--text2); margin-bottom: 9px; }
+.lic-steps li:last-child { margin-bottom: 0; }
+.lic-steps b { color: var(--text); }
