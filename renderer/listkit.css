@@ -90,10 +90,10 @@
     font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
 }
 .lk-btn:hover        { background:var(--dash-sunk); color:var(--text); }
-.lk-btn--go          { background:var(--accent); border-color:var(--accent); color:#fff; }
-.lk-btn--go:hover    { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+.lk-btn--go          { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
+.lk-btn--go:hover    { background:var(--accent-strong); border-color:var(--accent-strong); color:var(--text-on-accent); }
 .lk-btn--on          { border-color:var(--accent); color:var(--accent-strong); background:var(--accent-dim); }
-.lk-btn__count       { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff;
+.lk-btn__count       { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:var(--text-on-accent);
                        font-size:10px; font-weight:800; line-height:18px; text-align:center; }
 .lk-tools__end       { margin-left:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
@@ -196,7 +196,154 @@
 }
 .lk-pager button:hover:not(:disabled):not(.is-on) { background:var(--dash-sunk); color:var(--text); }
 .lk-pager button:disabled { opacity:.4; cursor:not-allowed; }
-.lk-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:#fff; }
+.lk-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 .lk-pager__gap { color:var(--text3); padding:0 3px; }
 
 @media (max-width:900px) { .lk-foot__info { order:3; flex-basis:100%; text-align:left; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHARED TOOLBAR — added 2026-09-08 with `src/toolbar.js`
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── THE SEARCH FIELD'S SECOND FOCUS RING ────────────────────────────────────
+   Reported by the owner as "a dim line circling the inline placeholders", on
+   every list screen. Each of the five search wrappers styles itself and tells
+   its inner <input> to be invisible — `background:none; border:none` — and
+   that is (0,1,1). But `style.css:307` says
+
+       body.light-theme input:focus, select:focus, textarea:focus {
+           border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+       }
+
+   which is (0,2,2) and therefore wins. So on focus the bare input drew its OWN
+   3px ring, at the UA's 4px radius, INSIDE the wrapper's 11px one: a second
+   rounded rectangle around the placeholder. Light theme only, which is why it
+   looked like a rendering artefact rather than a rule.
+
+   The wrapper is the control here; the input is a hole in it. `.lk-sin` says
+   so, and it is stated at (0,3,1) in light so it beats that rule on
+   SPECIFICITY rather than on which stylesheet happens to load later. The
+   unscoped pair covers dark, where nothing competes.                        */
+.lk-sin,
+.lk-sin:focus,
+body.light-theme .lk-sin,
+body.light-theme .lk-sin:focus {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    outline: none;
+}
+
+/* ── THE EXPORT MENU ─────────────────────────────────────────────────────── */
+.tb-wrap { position: relative; display: inline-flex; }
+
+.tb-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 60;
+    display: none;
+    min-width: 232px;
+    padding: 5px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--border2);
+    box-shadow: var(--shadow);
+}
+.tb-menu.is-open { display: block; }
+
+.tb-menu__i {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    border: none;
+    border-radius: 9px;
+    background: none;
+    color: var(--text);
+    font-family: var(--font);
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.tb-menu__i:hover { background: var(--dash-sunk); }
+.tb-menu__i:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tb-menu__i svg { flex-shrink: 0; margin-top: 1px; color: var(--text3); }
+.tb-menu__i:hover svg { color: var(--accent-strong); }
+.tb-menu__i b { display: block; font-size: 12.5px; font-weight: 700; }
+.tb-menu__i i {
+    display: block;
+    margin-top: 1px;
+    font-style: normal;
+    font-size: 11px;
+    color: var(--text3);
+}
+
+/* Clear all. Neutral, not accent: undoing a filter is not the primary action
+   on any of these screens, and the accent is spoken for by the page header. */
+.tb-clear { white-space: nowrap; }
+
+/* ── The search box's own clear (src/toolbar.js: lkSearchX) ──────────────────
+   Hidden by CSS while the field is empty, so it never needs a script to keep
+   up with the typing. The rule only works while the × is the input's IMMEDIATE
+   next sibling — do not put anything between them. */
+.lk-sx {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; flex-shrink: 0;
+    margin-right: -2px; padding: 0;
+    border: none; border-radius: 999px; cursor: pointer;
+    background: var(--dash-track); color: var(--text3);
+    transition: var(--transition);
+}
+.lk-sx:hover { background: var(--dh-bg, var(--accent-soft)); color: var(--text); }
+.lk-sx:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lk-sx svg { width: 11px; height: 11px; }
+.lk-sin:placeholder-shown + .lk-sx { display: none; }
+
+/* ══ THE ROW ACTION MENU ═══════════════════════════════════════════════════
+   Every list row's actions live behind one labelled button (owner, 2026-09-09:
+   "action buttons should be labelled"). A strip of coloured glyphs asks the
+   reader to know what a glyph means AND puts Delete one pixel from Edit; a
+   menu names each action in words and can separate the destructive one.
+
+   `position: fixed` because the menu is appended to <body> and anchored from
+   the button's viewport rect — inside the table it would be clipped by the
+   wrapper's `overflow-x: auto`, which is the whole reason it is not a child
+   of the row. */
+.lk-rmenu {
+    position: fixed; z-index: 1200; min-width: 186px; padding: 5px;
+    background: var(--card); border: 1px solid var(--border2); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(15,23,42,.14);
+    display: flex; flex-direction: column; gap: 1px;
+}
+.lk-rmenu button {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 10px; border: 0; border-radius: 7px; cursor: pointer;
+    background: none; color: var(--text2); text-align: left;
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+}
+.lk-rmenu button svg { width: 14px; height: 14px; flex-shrink: 0; }
+.lk-rmenu button:hover { background: var(--bg3); color: var(--text); }
+.lk-rmenu button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Destructive items are separated and coloured — the adjacency to Edit is what
+   produces the deletion nobody meant. */
+.lk-rmenu__sep { height: 1px; background: var(--border2); margin: 4px 2px; }
+.lk-rmenu .is-danger { color: var(--ant-danger-fg); }
+.lk-rmenu .is-danger:hover { background: var(--ant-danger-bg); color: var(--ant-danger-fg); }
+
+/* The button that opens it. Square now that the word has gone (owner,
+   2026-09-09) — the naming lives on the menu items and on aria-label/title. */
+.lk-kebab {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    width: 28px; height: 28px; padding: 0; border-radius: 8px; cursor: pointer;
+    background: none; border: 1px solid transparent; color: var(--text3);
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    transition: var(--transition);
+}
+.lk-kebab:hover, .lk-kebab.is-on {
+    background: var(--bg3); border-color: var(--border); color: var(--text);
+}
+.lk-kebab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lk-kebab svg { flex-shrink: 0; }

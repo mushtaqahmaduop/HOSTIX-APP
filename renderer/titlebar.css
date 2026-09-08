@@ -139,3 +139,10 @@ body.has-titlebar #toast-container { top: calc(var(--titlebar-h) + 14px); }
     pointer-events: none;
     -webkit-app-region: drag;
 }
+
+
+/* Short screens — see the matching block at the end of chrome.css. 32px is the
+   Windows caption height; the drag region and both window buttons are unchanged.
+   This lives HERE rather than in chrome.css because titlebar.css loads after it
+   (index.html:40 then :42), so a `:root` override there would lose to line 10. */
+@media (max-height: 700px) { :root { --titlebar-h: 32px; } }

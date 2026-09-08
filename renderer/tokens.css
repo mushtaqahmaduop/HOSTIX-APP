@@ -197,6 +197,12 @@
      white at each call site. */
   --text-on-accent:  #181715;
 
+  /* Restated per theme, NOT left to the :root alias. `--text-link:
+     var(--accent-700)` on :root freezes whatever --accent-700 is at that
+     point, and light mode then inherits the dark blue — 2.4:1 on white. The
+     alias has to be re-declared inside each palette to resolve against it. */
+  --text-link:       var(--accent-700);
+
   /* Dark theme lifts the accent so it stays legible on near-black surfaces.
      Repointed with the ramp on 2026-09-03. #2451D6 is a deep ink blue chosen
      to sit on #F5F6F9; on a #0E1420 ground it is barely separable from the
@@ -209,6 +215,22 @@
      of a cool accent on a warm ground, and it is small: two hex steps. */
   --accent-600:      #4E7DFF;
   --accent-700:      #7BA0FF;
+
+  /* THE PALE END OF THE RAMP HAD NO DARK VALUE AT ALL.
+
+     `--accent-100: #D6E2FD` is declared once, in the light ramp at the top of
+     this file, and was never restated here — so in dark mode `--accent-soft`,
+     which derives from it, resolved to a near-white blue. Everything built on
+     it read as WHITE on a dark ground: the focus ring around every field in a
+     form, and the icon tile at the left of every `.hf-in` control. The owner
+     reported it as "the border lines are not blue" on the Add Complaint form,
+     2026-09-08, and it was never specific to that form — it was every form in
+     every dark session since this ramp was written.
+
+     Translucent rather than a flat hex, for the same reason `--accent-dim`
+     already is: these sit on three different grounds (card, bg3, bg4) and a
+     fixed tint that suits one banks against another. */
+  --accent-100:      rgba(78, 125, 255, 0.22);
 
   /* Derived from the light semantics, not carried over from the old set. Each
      hue is the mockups' own, lifted until it clears a #151C2B card, and the
@@ -249,6 +271,20 @@
    specific to that form. */
 :root { color-scheme: dark; }
 
+/* …AND THE OPTIONS THEMSELVES, because `color-scheme` stops being enough the
+   moment the page paints the control. Chromium hands the popup the author's
+   own colours when a <select> is styled — every select in this app is — and
+   what came back in dark mode was the app's LIGHT ink on the UA's LIGHT
+   popup: nine categories in near-white on white, unreadable. Reported on the
+   Add Complaint form, 2026-09-08.
+
+   Stated once, unscoped, so the popup can never take one theme's ink onto the
+   other's ground — both halves resolve from the same two tokens. */
+option {
+  background-color: var(--card);
+  color: var(--text);
+}
+
 /* Light mode overrides for new tokens */
 body.light-theme {
   color-scheme: light;
@@ -275,6 +311,8 @@ body.light-theme {
   /* White is right on the light accent (#FFFFFF on #2451D6 = 6.52:1) and wrong
      on the dark lift — see the dark block, where this is near-black. */
   --text-on-accent:  #FFFFFF;
+  /* See the dark block: this alias must be restated per theme. */
+  --text-link:       var(--accent-700);
 
   /* Their --accent and --accent-ink. Unlike the old pair these are already the
      ramp's own 600/700, so light needs no deepening — the ramp was built on
@@ -448,7 +486,9 @@ body.light-theme { --accent-dim: rgba(36, 81, 214, 0.08); }
      --font-mono stays JetBrains Mono: it is the CODE face (licence keys,
      machine ids, the key preview in chrome). Numerals and code are different
      jobs, so they are different tokens. */
-  --ant-num-font:    'Barlow', 'Inter', system-ui, sans-serif;
+  /* Inter first, as §2 asks — it carries tabular figures, which is the whole
+     reason this token exists separately from --font. Barlow stays behind it. */
+  --ant-num-font:    'Inter', 'Barlow', system-ui, sans-serif;
   --ant-num-track:   0;
   --ant-unit-track:  0.1em;
 }
@@ -589,4 +629,47 @@ body.light-theme {
   --success:             var(--green);
   --danger:              var(--red);
   --warning:             var(--amber);
+}
+
+
+/* ══ KPI CHIP HUES ═════════════════════════════════════════════════════════
+   The five money tiles on the dashboard each carry their card's hue at full
+   strength as a two-stop gradient behind a white glyph. Those ten values lived
+   as literal hex in dashboard.css, which is the bug CLAUDE.md names outright:
+   "a raw hex in a renderer component is a bug". They are tokens now, and this
+   is where a rebrand will find them.
+
+   WHY THEY ARE NOT --accent / --green / --amber / --red. Those are SEMANTIC
+   tokens: they mean "primary action", "good", "warning", "bad". Four of these
+   five are categories - which figure you are looking at - and the semantics do
+   not line up: Total Revenue is not "the primary action", and Advance/Arrears
+   is not any of the four. This is a CATEGORICAL ramp, the same kind of thing a
+   chart's series colours are, and giving it its own name is what stops someone
+   later "fixing" Revenue to --accent and quietly making the KPI row mean
+   something it does not.
+
+   WHITE ON THE A-STOP IS THE CONTRAST THAT MATTERS - the glyph sits on it, and
+   WCAG 1.4.11 asks 3:1 of a non-text graphic. Measured, light: blue 3.68,
+   amber 3.19, green 3.30, orange 3.54, violet 5.70, loss-red 3.76. Dark steps
+   each pair back so a 600 does not read as a lamp on a near-black card, and
+   measures 3.88 / 3.40 / 3.93 / 4.05 / 5.92 / 4.36. Every one clears 3:1 and
+   the b-stop only darkens from there.
+
+   AMBER IS #D97706, NOT #F59E0B, and that is the whole reason this needed
+   measuring: white on #F59E0B is 2.16:1. */
+:root {
+  --kpi-1a: #3F7FE8;  --kpi-1b: #2B55B8;   /* Total Revenue    */
+  --kpi-2a: #C07D14;  --kpi-2b: #8A540B;   /* Pending          */
+  --kpi-3a: #1E9350;  --kpi-3b: #15703A;   /* Available Fund   */
+  --kpi-4a: #D2591A;  --kpi-4b: #A63F0D;   /* Expenses         */
+  --kpi-5a: #7048D2;  --kpi-5b: #522BA0;   /* Advance/Arrears  */
+  --kpi-loss-a: #D8443C; --kpi-loss-b: #A5211E;  /* Fund, negative */
+}
+body.light-theme {
+  --kpi-1a: #3B82F6;  --kpi-1b: #1D4ED8;
+  --kpi-2a: #D97706;  --kpi-2b: #92400E;
+  --kpi-3a: #16A34A;  --kpi-3b: #15803D;
+  --kpi-4a: #EA580C;  --kpi-4b: #C2410C;
+  --kpi-5a: #7C3AED;  --kpi-5b: #5B21B6;
+  --kpi-loss-a: #EF4444; --kpi-loss-b: #B91C1C;
 }

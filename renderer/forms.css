@@ -1,0 +1,444 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — GLOBAL FORM & MODAL SYSTEM
+   Built 2026-09-07 to the owner's viewport-fit specification.
+
+   WHAT THIS FIXES
+   ---------------
+   Measured on the 1366×768 QA floor before any of it: every modal in the app
+   opened 1120px wide and 722px tall — `max-height: 94vh` of a 768px window —
+   and the OVERLAY scrolled, not the modal body. So a warden editing a payment
+   saw section 1 and half of section 2, with the header scrolling away above
+   and the Save button somewhere below the fold. The form was not too long; the
+   shell was simply given the whole window and then allowed to spill.
+
+   The specification's fix, and this file's job:
+
+     constrain the shell → scroll only the body → keep header and footer
+     visible → then remove whitespace, not type size.
+
+   WHERE IT SITS
+   -------------
+   Loaded after `style.css` so it can correct the shared modal shell without
+   editing a file three screens are entangled with, and before the per-screen
+   sheets so a screen can still refine its own form. Nothing here is scoped to
+   one screen; anything that is belongs in that screen's own sheet.
+
+   COLOURS COME FROM TOKENS. The specification quotes hex (#2451D6 royal blue,
+   #E3E8F0 hairline); those are already `--accent-600` and the surface border
+   in `tokens.css`, so this file names the token. A raw hex in a renderer
+   component is a bug — the print documents are the only exemption, and this is
+   not one.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 0. THE APPLICATION SHELL (spec §1) ─────────────────────────────────────
+   Measured at 1366×768: the document was 808px tall in a 768px window, so
+   every page in the app could be dragged 40px upward to reveal a band of
+   nothing — and the custom title bar, which is fixed, slid over the content
+   on the way. The body already owns the app's scrolling (`overflow: hidden
+   auto`); the root element does not need to scroll as well, and the
+   specification says so in as many words: `overflow: hidden` on the shell,
+   `overflow-y: auto` only on the region that actually holds content.        */
+html {
+    height: 100dvh;
+    overflow: hidden;
+}
+
+/* ── 1. THE MODAL SHELL — VIEWPORT DISCIPLINE (spec §2) ─────────────────────
+   Three rules, and they are the whole viewport fix:
+
+   · the overlay CENTRES and does not scroll — a scrolling overlay is what let
+     the header leave the screen;
+   · the modal is capped at the viewport minus a margin, in dvh so a mobile
+     browser's collapsing toolbar cannot push the footer under the chrome;
+   · the body is the only thing that scrolls, and it is `min-height:0` so it
+     can actually shrink inside the flex column. Without that line a flex item
+     refuses to go below its content height and the cap does nothing.       */
+
+.modal-overlay {
+    align-items: center;
+    padding: 24px;
+    overflow: hidden;
+}
+
+/* The cap is a PERCENTAGE of the overlay, not of the viewport. The overlay is
+   the region a modal may occupy, and below it is offset under the custom
+   title bar; `100dvh` would measure the window instead and hand back the 40px
+   the bar owns. `100%` here resolves against the overlay's content box, so the
+   24px padding above is the margin and the bar can never be underneath. */
+.modal {
+    max-height: 100%;
+    margin: 0;
+}
+
+/* THE TITLE BAR OWNS THE TOP 40px, and it sits at z-index 100000 — above
+   modals, deliberately. titlebar.css already offsets the sidebar, the login
+   screen, the student slide-over and the toast stack for exactly this reason,
+   and its comment says "a centred modal never reaches it". That was true of a
+   modal 722px tall with 20px of header padding; at the density this file sets,
+   the header's first line lands at 27px and the bar cuts the title in half.
+   The overlay joins the list. */
+body.has-titlebar .modal-overlay { top: var(--titlebar-h); }
+
+.modal-body {
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+
+/* Header and footer are already `flex-shrink: 0`; this makes them stay put
+   while the body scrolls under them, and gives the footer a surface of its own
+   so rows do not appear to slide out from behind a transparent bar. */
+.modal-header,
+.modal-footer {
+    position: relative;
+    z-index: 1;
+    background: var(--card);
+}
+
+/* A subtle scrollbar (spec §5), so a scrolling body reads as a region rather
+   than as a browser window inside a dialog. */
+.modal-body::-webkit-scrollbar { width: 10px; }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border: 3px solid var(--card);
+    border-radius: 8px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── 2. THE FORM MODAL (spec §2) ────────────────────────────────────────────
+   The width the specification names for a form. It is deliberately NOT a
+   remap of `.modal-lg`: forty-odd modals in this app use the existing ladder
+   and re-sizing all of them at once would reflow screens nobody has looked at
+   yet. A form opts in, and the ladder above keeps its heights either way.
+
+   `min(…, calc(100vw - 32px))` rather than a max-width, so the modal is one
+   value on every screen instead of a width that only narrows below a
+   breakpoint somebody has to remember to write.                            */
+.modal.modal-form {
+    width: min(920px, calc(100vw - 32px));
+    max-width: none;
+}
+.modal.modal-form--wide {
+    width: min(1040px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100dvh - 40px);
+}
+
+/* ── 3. THE COMPACT MODAL HEADER (spec: 52–58px) ────────────────────────────
+   Built inside the existing `.modal-title` element, because showModal() takes
+   the title as HTML and every other modal in the app passes a plain string.
+   An icon tile, the document's name, and one line saying what the form does —
+   which is what a warden opening a dialog for the first time needs and a bare
+   title cannot give.                                                        */
+.hf-mh {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+}
+.hf-mh__ico {
+    width: 34px; height: 34px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: var(--accent);
+    /* Same token, same reason as `.hf-num` below — a filled accent tile with a
+       raw `#fff` on it measures 3.77:1 once dark mode lifts the accent. This
+       one was written the same day and missed on the same pass. */
+    color: var(--text-on-accent);
+    display: flex; align-items: center; justify-content: center;
+}
+.hf-mh__ico svg { width: 17px; height: 17px; }
+.hf-mh__t {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    color: var(--text);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hf-mh__s {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text3);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The header's own padding comes down to the specification's band. */
+.modal-form .modal-header,
+.modal-form--wide .modal-header { padding: 11px 16px; }
+.modal-form .modal-body,
+.modal-form--wide .modal-body   { padding: 14px 16px; }
+.modal-form .modal-footer,
+.modal-form--wide .modal-footer { padding: 11px 16px; }
+
+/* ── 4. FORM DENSITY INSIDE A MODAL (spec §3) ───────────────────────────────
+   Scoped to `.modal` on purpose. The two page forms — Student intake and Add
+   payment — already carry their own density in `students.css` / `payments.css`
+   and are within the specification's band; the shared `.field` / `.form-*`
+   set is what the MODALS use, and it was built for a roomier window.
+
+   Label case is the one change that is not about size. Every reference the
+   owner has drawn, and both page forms as they stand, write a field label in
+   sentence case; only the shared `.field label` still shouts it in uppercase
+   with 0.8px of tracking, so the same field read one way on the Student
+   intake page and another in the Edit Student dialog. §8 asks for one
+   typographic scale across every form, and this is it.                     */
+.modal .field { gap: 5px; }
+
+.modal .field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text2);
+}
+
+.modal .field label .req,
+.modal .field label .opt {
+    font-weight: 700;
+    margin-left: 3px;
+}
+.modal .field label .req { color: var(--red); }
+.modal .field label .opt { color: var(--text3); font-weight: 500; }
+
+.modal .form-control {
+    padding: 8px 11px;
+    font-size: 13px;
+    min-height: 36px;
+    border-radius: 9px;
+}
+.modal select.form-control { padding-right: 30px; }
+.modal textarea.form-control { min-height: 64px; padding-top: 8px; }
+
+/* A focus ring in Hostyllo blue (spec §9). The shared rule uses a black
+   shadow, which is invisible on a dark surface and muddy on a light one. */
+.modal .form-control:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.modal .form-grid { gap: 10px 12px; }
+
+/* ── 5. GRIDS (spec §4) ─────────────────────────────────────────────────────
+   Named by what they hold rather than by column count where it matters. A
+   field grid that is told `minmax(0, 1fr)` cannot be pushed wider by one long
+   value inside it — `1fr` alone can, and that is what makes a three-column row
+   quietly overflow its section on a 1366 window.                           */
+.hf-g2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.hf-g3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+.hf-g2 > .col-full, .hf-g3 > .col-full { grid-column: 1 / -1; }
+
+/* Main + summary, the shape the Edit Payment reference uses for its top row
+   and the Student intake page uses for its whole body. */
+.hf-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 12px; align-items: start; }
+
+@media (max-width: 900px) {
+    .hf-g3    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hf-split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+    .hf-g2, .hf-g3 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── 6. THE NUMBERED SECTION BADGE ──────────────────────────────────────────
+   The reference numbers every section of both forms with a filled blue disc.
+   It is not decoration: these forms are read in order — set the bill, adjust
+   it, record the settlement — and the numbers are how a warden being talked
+   through one on the phone finds the right block.                          */
+.hf-num {
+    width: 22px; height: 22px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    /* NOT `#fff`. Dark mode lifts `--accent` to a light blue and white on it
+       measures 3.77:1, under AA — which is the whole reason `--text-on-accent`
+       exists. This is a filled ACCENT disc, the exact case that token is for;
+       the dashboard's KPI chips are the other case, where the fill steps DOWN
+       in dark and white is what keeps working. They are not the same rule. */
+    color: var(--text-on-accent);
+    font-size: 11px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* ── 7. THE ICON-PREFIXED INPUT ─────────────────────────────────────────────
+   Every field in the reference carries a small glyph in a tinted box at the
+   left edge of its control. The icon sits in its own box rather than floating
+   inside the input, so a long value can never run underneath it and the
+   control keeps one predictable text inset.                                */
+.hf-in {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bg3);
+    overflow: hidden;
+    transition: var(--transition);
+}
+.hf-in:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.hf-in__i {
+    width: 36px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    border-right: 1px solid var(--border);
+}
+.hf-in__i svg { width: 15px; height: 15px; }
+/* A textarea's chip belongs at the top of the box, not floating in the middle
+   of a four-line note. */
+.hf-in--top .hf-in__i { align-items: flex-start; padding-top: 10px; }
+.hf-in > .form-control {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    flex: 1;
+    min-width: 0;
+}
+.hf-in > .form-control:focus { box-shadow: none; background: transparent; }
+
+/* A readonly figure the form computed rather than a value being typed. It
+   must not look like an empty field somebody forgot to fill in. */
+.hf-in.is-readonly { background: var(--bg4); }
+.hf-in.is-good .hf-in__i { background: var(--ant-success-bg); color: var(--ant-success-fg); }
+.hf-in.is-warn .hf-in__i { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
+
+/* ── 8. ACTION BAR (spec §9) ────────────────────────────────────────────────
+   Buttons share one height across every form, and a destructive action is
+   muted rather than a block of bright red — it sits one pixel from Save. */
+.modal-footer .btn,
+.hf-actions .btn { min-height: 38px; }
+
+.hf-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    justify-content: flex-end;
+}
+.hf-actions__spacer { margin-right: auto; }
+
+/* ── 8b. THE NUMBERED SECTION ───────────────────────────────────────────────
+   The badge above needs something to sit in. Payments grew `.pef-sec` for its
+   own Edit form on 7 Sep and Complaints needed the identical block on 8 Sep,
+   so this is where that block lives from now on: new forms use `.hf-sec`.
+
+   BE ACCURATE ABOUT WHAT THAT IS AND IS NOT. This is not yet a promotion —
+   `payments.js` still emits `.pef-sec` and `payments.css` still styles it, so
+   the app currently has TWO section wrappers, and they have already drifted:
+   radius 12px here against 10px there, padding `12px 13px 13px` against
+   `12px 14px`. Only `.hf-num`, the badge inside, is genuinely shared. The
+   first draft of this comment claimed the promotion was done, which is worse
+   than not doing it, because the next reader believes it.
+
+   Finishing it means moving `payments.js`'s five `.pef-sec` sites onto these
+   classes and deleting `.pef-sec*` from `payments.css`. Deliberately NOT done
+   on 2026-09-08: the owner has uncommitted work in `payments.js`, and this is
+   not a change to make underneath it. It is a follow-up, recorded in
+   `docs/design/REDESIGN_PROGRAMME_2026-09-07.md`.
+
+   `.hf-form` deliberately declares NO `display`. The two forms in one modal
+   are swapped with the `hidden` attribute, and any author `display` here would
+   beat the UA rule that makes `hidden` work.                                */
+.hf-sec {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 13px 13px;
+    background: var(--card);
+}
+.hf-sec + .hf-sec { margin-top: 10px; }
+
+.hf-sec__h { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; flex-wrap: wrap; }
+.hf-sec__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.hf-sec__s { font-size: 11.5px; color: var(--text3); }
+
+/* ── 8c. THE KIND SWITCH ────────────────────────────────────────────────────
+   Two segments choosing which form is on screen. NEUTRAL when selected, not
+   accent-filled: the modal has exactly one primary action and it is Save. The
+   selection is carried by weight, ground and a top edge — the same treatment
+   the dashboard's range control settled on for the same reason.            */
+.hf-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    overflow: hidden;
+    background: var(--bg3);
+}
+.hf-switch__b {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 10px 12px;
+    border: none;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    color: var(--text3);
+    font-family: var(--font); font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.hf-switch__b:last-child { border-right: none; }
+.hf-switch__b:hover  { color: var(--text2); }
+.hf-switch__b.is-on  {
+    background: var(--card);
+    color: var(--text);
+    font-weight: 700;
+    box-shadow: inset 0 2px 0 var(--accent);
+}
+.hf-switch__b:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ── 9. AT THE QA FLOOR ─────────────────────────────────────────────────────
+   1366×768 is the floor this whole file exists for. Below the 1080 point the
+   Edit Payment top row is already told to stack by `payments.css`; here the
+   shell simply gives back its outer margin so a narrow window spends its
+   pixels on the form.                                                      */
+@media (max-height: 800px) {
+    .modal-overlay { padding: 14px; }
+}
+
+/* ══ HOW A FORM ARRIVES ════════════════════════════════════════════════════
+   Owner, 2026-09-09: "opening of forms and modals should be a premium and
+   enterprise smooth opening."
+
+   Two motions, not one. The ground fades — a scrim that appeared instantly
+   read as a flash — and the panel rises a few pixels while it scales up from
+   just under full size. It is deliberately small: 8px and 1.5%. A dialog that
+   flies in from the edge or bounces is a consumer animation, and this is a
+   register a warden opens forty times a day.
+
+   Durations are short enough to feel immediate (160ms for the scrim, 220ms for
+   the panel) and the panel's curve decelerates hard, so it settles rather than
+   stops. The global prefers-reduced-motion rule in style.css already collapses
+   both to nothing.                                                            */
+@keyframes hz-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hz-panel-in {
+    from { opacity: 0; transform: translateY(8px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes hz-slide-in {
+    from { opacity: 0; transform: translateX(18px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.modal-overlay { animation: hz-scrim-in .16s ease-out both; }
+.modal         { animation: hz-panel-in .22s cubic-bezier(.2, .7, .3, 1) both; }
+
+/* Slide-overs come from the edge they are docked to, which is the only place a
+   horizontal motion is honest. */
+.al-panel-wrap { animation: hz-scrim-in .16s ease-out both; }
+.al-panel      { animation: hz-slide-in .24s cubic-bezier(.2, .7, .3, 1) both; }

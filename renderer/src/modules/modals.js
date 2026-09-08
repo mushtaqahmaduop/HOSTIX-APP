@@ -90,8 +90,12 @@ function showConfirm(title, text, onConfirm, onCancel) {
 // ════════════════════════════════════════════════════════════════════════════
 // BACKUP & RESTORE
 // ════════════════════════════════════════════════════════════════════════════
+/* THE MODAL IS A PAGE NOW (backup-page.js). This name is kept because the
+   command palette, the File menu and the backup-due toast all call it, and a
+   renamed entry point would have broken three call sites to save one line. */
 async function showBackupRestoreModal() {
   if (typeof requirePerm === 'function' && !requirePerm('backup')) return;
+  if (typeof renderBackupPage === 'function') { backupTab = 'main'; navigate('backup'); return; }
   const dataSize = (JSON.stringify(DB).length / 1024).toFixed(1);
   const studentCount = DB.students.length;
   const paymentCount = DB.payments.length;
@@ -266,7 +270,7 @@ function _initDBFields(d) {
   if (!d.settings.email) d.settings.email = '';
   if (!d.settings.version) d.settings.version = 'v1.0';
   // Appearance
-  if (!d.settings.hostelNameFont) d.settings.hostelNameFont = 'DM Serif Display';
+  if (!d.settings.hostelNameFont) d.settings.hostelNameFont = 'Georgia';
   if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
   if (!d.settings.currency) d.settings.currency = 'PKR';
@@ -339,7 +343,18 @@ async function restoreBackup() {
           if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
           try {
             DB = _initDBFields(parsed);
-            await saveDB();
+            /* THE RESTORE IS RECORDED IN THE DATA IT RESTORED. A restore
+               replaces everything, so the row belongs to the database that is
+               here afterwards — restoring an older backup brings that backup's
+               history with it, which is the truthful account. */
+            if (typeof bkRecord === 'function') {
+              await bkRecord('restoreHistory', {
+                at: new Date().toISOString(), file: file.name,
+                students: count, ok: true,
+              });
+            } else {
+              await saveDB();
+            }
             updateSidebar();
             navigate('dashboard');
             toast('Data restored successfully from backup!', 'success');
@@ -371,7 +386,14 @@ async function restoreFromPaste() {
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
       async ()=>{
         DB = _initDBFields(parsed);
-        await saveDB();
+        if (typeof bkRecord === 'function') {
+          await bkRecord('restoreHistory', {
+            at: new Date().toISOString(), file: 'Pasted text',
+            students: count, ok: true,
+          });
+        } else {
+          await saveDB();
+        }
         updateSidebar();
         navigate('dashboard');
         toast('Data restored from pasted backup!', 'success');
@@ -841,6 +863,100 @@ function toast(msg, type='info', title='') {
 // Guarded by the 'users' permission — see requirePerm() in auth-nev.js.
 // ════════════════════════════════════════════════════════════════════════════
 
+/* ══ THE USERS / STAFF EXPORT ══════════════════════════════════════════════
+   §41, and §49 harder than anywhere else in this app: a user record is the one
+   place an export can leak something that must never leave the machine.
+
+   WHAT IS DELIBERATELY NOT IN THIS FILE, and must never be added:
+     · `pw` — the PBKDF2 hash and its salt. §16 of the non-negotiable rules.
+     · `photo` — a base64 portrait, which is not export data and would multiply
+       the file size by a hundred for nothing.
+   The definition below names every field it writes, one at a time, precisely
+   so that a new field added to a user account cannot arrive in an export by
+   simply existing.
+
+   The export is behind the same `users` permission as the screen it is taken
+   from (§49: a user must never export data they are not authorised to view).
+
+   §41 also lists a department, a joined date, a last-login and a role. This
+   app records none of them: an account is a name, a username, a phone, a set
+   of permissions and a flag. Access level below is DERIVED from the
+   permissions, and is honest about being a summary of them rather than a field
+   somebody typed.                                                           */
+function _usersExportDef() {
+  const list = Object.keys(WARDENS).map(function (id) {
+    const u = WARDENS[id] || {};
+    const perms = u.perms || {};
+    const granted = PERM_KEYS.filter(function (k) { return perms[k] === true; });
+    return {
+      id: id,
+      name: u.name || '',
+      username: u.username || id,
+      phone: u.phone || '',
+      active: u.active !== false,
+      builtin: !!u.builtin,
+      granted: granted,
+      level: granted.length === PERM_KEYS.length ? 'Full access'
+           : perms.users === true ? 'Administrator'
+           : granted.length === 0 ? 'No access' : 'Limited',
+      isMe: id === CUR_ROLE,
+    };
+  }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+  const active = list.filter(u => u.active).length;
+  const admins = list.filter(u => u.granted.indexOf('users') !== -1 && u.active).length;
+
+  return {
+    module: 'Users',
+    title:  'User Accounts',
+    scope:  '',
+    sheet:  'Users',
+
+    filters: [['Scope', 'All accounts on this machine']],
+
+    summary: [
+      { label: 'Accounts',       value: String(list.length) },
+      { label: 'Active',         value: String(active), tone: 'pos' },
+      { label: 'Deactivated',    value: String(list.length - active) },
+      { label: 'Can manage users', value: String(admins), tone: admins > 1 ? '' : 'warn' },
+    ],
+
+    columns: [
+      { label: 'Name', type: 'text', width: 22,
+        value: u => u.name || '(no name)',
+        get:   u => '<b>' + escHtml(u.name || '(no name)') + '</b>' +
+                    (u.isMe ? '<span class="sub">signed in now</span>' : '') },
+      { label: 'Username', type: 'text', width: 18, value: u => u.username },
+      { label: 'Phone',    type: 'text', width: 16, value: u => String(u.phone || '') },
+      { label: 'Account',  type: 'text', width: 12,
+        value: u => u.builtin ? 'Built-in' : 'Added' },
+      { label: 'Access level', type: 'text', width: 16, value: u => u.level },
+      { label: 'Permissions',  type: 'number', width: 13,
+        value: u => u.granted.length,
+        get:   u => u.granted.length + ' of ' + PERM_KEYS.length },
+      { label: 'Granted', type: 'wrap', width: 40, pdf: false,
+        value: u => u.granted.join(', ') },
+      { label: 'Status', type: 'status', width: 12,
+        value: u => u.active ? 'Active' : 'Inactive' },
+    ],
+
+    rows: list,
+    note: 'Passwords and authentication data are never exported. ' +
+          'Permissions are enforced on this machine only.',
+    empty: 'No user accounts are configured.',
+  };
+}
+
+function exportUsersPDF() {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  EXPORT.pdf(_usersExportDef());
+}
+
+function exportUsersExcel() {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  EXPORT.excel(_usersExportDef());
+}
+
 /** Count users who can still manage users and are not deactivated. */
 function _adminCount() {
   return Object.values(WARDENS).filter(function (u) {
@@ -848,108 +964,13 @@ function _adminCount() {
   }).length;
 }
 
+/* THE MODAL BECAME A PAGE on 2026-09-09 (renderer/src/modules/users.js).
+   showUserMgmt() and showUserEditor() moved there; this name is kept because
+   the account menu calls it. */
 function showUserMgmt() {
   if (typeof requirePerm === 'function' && !requirePerm('users')) return;
-
-  var rows = Object.keys(WARDENS).map(function (id) {
-    var u = WARDENS[id] || {};
-    var isMe = id === CUR_ROLE;
-    var perms = u.perms || {};
-    var granted = PERM_KEYS.filter(function (k) { return perms[k] === true; }).length;
-    var initials = (u.name || u.username || '?').trim().charAt(0).toUpperCase();
-
-    var av = u.photo
-      ? '<img src="' + u.photo + '" style="width:40px;height:40px;border-radius:11px;object-fit:cover;flex-shrink:0">'
-      : '<div style="width:40px;height:40px;border-radius:11px;background:var(--bg4);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">' + escHtml(initials) + '</div>';
-
-    return '<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">'
-      + av
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-weight:700;font-size:14px;color:var(--text)">' + escHtml(u.name || '(no name)')
-      + (isMe ? ' <span style="font-size:10px;font-weight:700;color:var(--text3)">&middot; you</span>' : '')
-      + (u.active === false ? ' <span class="badge badge-gray" style="font-size:10px">Inactive</span>' : '')
-      + '</div>'
-      + '<div style="font-size:12px;color:var(--text3);margin-top:2px">'
-      + escHtml(u.username || id) + ' &middot; ' + granted + ' of ' + PERM_KEYS.length + ' permissions'
-      + '</div>'
-      + '</div>'
-      + '<button class="btn btn-secondary btn-sm" onclick="showUserEditor(\'' + id + '\')">Edit</button>'
-      + '</div>';
-  }).join('');
-
-  showModal('modal-md', 'User Management',
-    rows
-    + '<button class="btn btn-primary btn-sm" style="width:100%;margin-top:6px" onclick="showUserEditor(null)">+ Add User</button>'
-    + '<div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">'
-    + 'Permissions control what each person can reach in this app. They are enforced '
-    + 'on this machine &mdash; anyone with the Windows account and the database file '
-    + 'can still read the data directly.'
-    + '</div>',
-    '<button class="btn btn-secondary" onclick="closeModal()">Close</button>'
-    + '<button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>'
-  );
-}
-
-/** Add (id === null) or edit one user. */
-function showUserEditor(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
-
-  var isNew = !id;
-  var u = isNew ? { username: '', name: '', phone: '', perms: {}, active: true } : (WARDENS[id] || {});
-  var perms = u.perms || {};
-  // A new account starts with the everyday permissions ticked and the dangerous
-  // ones clear, so a mis-click cannot hand out clear-all by default.
-  var defaultOn = { edit: true, payments: true, reports: true };
-
-  var permRows = PERMS.map(function (p) {
-    var on = isNew ? (defaultOn[p.key] === true) : (perms[p.key] === true);
-    return '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);margin-bottom:6px;cursor:pointer">'
-      + '<input type="checkbox" id="up-' + p.key + '"' + (on ? ' checked' : '') + ' style="margin-top:2px;flex-shrink:0">'
-      + '<span style="flex:1"><span style="display:block;font-size:13px;font-weight:600;color:var(--text)">' + escHtml(p.label) + '</span>'
-      + '<span style="display:block;font-size:11.5px;color:var(--text3);margin-top:1px">' + escHtml(p.hint) + '</span></span>'
-      + '</label>';
-  }).join('');
-
-  // Photo is offered only when editing: a new user has no storage key yet to
-  // attach the image to. It saves immediately, unlike the fields below it.
-  var avatarHtml = isNew ? '' :
-      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">'
-    + _userAvatarNode(id, u.photo || '')
-    + '<input type="file" id="u-photo-input" accept="image/*" style="display:none" onchange="handleWardenPhoto(event,\'' + id + '\')">'
-    + '<div style="flex:1">'
-    +   '<div style="font-size:12.5px;font-weight:600;color:var(--text)">Profile photo</div>'
-    +   '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">Saved as soon as you choose it</div>'
-    + '</div>'
-    + (u.photo ? '<button class="btn btn-secondary btn-sm" onclick="removeWardenPhoto(\'' + id + '\')">Remove</button>' : '')
-    + '</div>';
-
-  var body =
-    avatarHtml
-    + '<div class="form-grid" style="gap:10px">'
-    + '<div class="field"><label style="font-size:11px">Full Name</label>'
-    + '<input id="u-name" class="form-control" value="' + escHtml(u.name || '') + '" placeholder="Full name"></div>'
-    + '<div class="field"><label style="font-size:11px">Username</label>'
-    + '<input id="u-username" class="form-control" autocapitalize="none" spellcheck="false" value="' + escHtml(u.username || '') + '" placeholder="Lowercase, no spaces"></div>'
-    + '<div class="field"><label style="font-size:11px">' + (isNew ? 'Password' : 'New Password') + '</label>'
-    + '<input id="u-pw" class="form-control" type="password" placeholder="' + (isNew ? 'At least ' + AUTH_CFG.minPwLen + ' characters' : 'Leave blank to keep current') + '"></div>'
-    + '<div class="field"><label style="font-size:11px">WhatsApp Number</label>'
-    + '<input id="u-phone" class="form-control" value="' + escHtml(u.phone || '') + '" placeholder="03XX-XXXXXXX"></div>'
-    + '</div>'
-    + '<label style="display:flex;gap:9px;align-items:center;margin:12px 0 4px;cursor:pointer">'
-    + '<input type="checkbox" id="u-active"' + (u.active !== false ? ' checked' : '') + '>'
-    + '<span style="font-size:13px;font-weight:600;color:var(--text)">Account is active</span>'
-    + '<span style="font-size:11.5px;color:var(--text3)">&mdash; inactive accounts cannot sign in</span>'
-    + '</label>'
-    + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin:16px 0 8px">Permissions</div>'
-    + permRows;
-
-  var canDelete = !isNew && !(WARDENS[id] && WARDENS[id].builtin) && id !== CUR_ROLE;
-  var footer =
-    '<button class="btn btn-secondary" onclick="showUserMgmt()">Back</button>'
-    + (canDelete ? '<button class="btn btn-danger btn-sm" onclick="deleteUser(\'' + id + '\')">Delete</button>' : '')
-    + '<button class="btn btn-primary" onclick="saveUser(' + (isNew ? 'null' : '\'' + id + '\'') + ')">Save</button>';
-
-  showModal('modal-md', isNew ? 'Add User' : 'Edit User', body, footer);
+  usersFilter.sel = null;
+  navigate('users');
 }
 
 async function saveUser(id) {
@@ -961,6 +982,12 @@ async function saveUser(id) {
   var pw = (document.getElementById('u-pw') || {}).value || '';
   var phone = (document.getElementById('u-phone') || {}).value || '';
   var active = !!(document.getElementById('u-active') || {}).checked;
+  /* Three fields the 2026-09-09 form added. None of them is enforced by
+     anything — they are the account's own record, which is why the reference
+     asks for them and why they cost one line each. */
+  var email = (document.getElementById('u-email') || {}).value || '';
+  var department = (document.getElementById('u-department') || {}).value || '';
+  var roleLabel = (document.getElementById('u-role') || {}).value || '';
 
   name = name.trim();
   username = username.trim().toLowerCase();
@@ -1007,11 +1034,17 @@ async function saveUser(id) {
     var newId = 'u' + Date.now().toString(36);
     WARDENS[newId] = {
       username: username, name: name, phone: phone,
-      perms: perms, active: active, pw: newHash, photo: ''
+      email: email.trim(), department: department, role: roleLabel,
+      perms: perms, active: active, pw: newHash, photo: '',
+      /* Stamped so "Recently joined" and the account's own Joined row have
+         something to read. Accounts made before today have no stamp and the
+         page says so rather than guessing one. */
+      createdAt: new Date().toISOString()
     };
   } else {
     var t = WARDENS[id];
     t.name = name; t.username = username; t.phone = phone;
+    t.email = email.trim(); t.department = department; t.role = roleLabel;
     t.perms = perms; t.active = active;
     if (newHash) t.pw = newHash;
     if (id === CUR_ROLE) {
@@ -1032,8 +1065,13 @@ async function saveUser(id) {
 
   saveWardenConfig();
   if (typeof USERS !== 'undefined') USERS = WARDENS;
+  if (typeof logActivity === 'function') {
+    logActivity(isNew ? 'User Added' : 'User Updated', name, 'Settings');
+    if (typeof saveDB === 'function') await saveDB();
+  }
   toast(name + (isNew ? ' added' : ' updated'), 'success');
-  showUserMgmt();
+  closeModal();
+  renderPage('users');
 }
 
 function deleteUser(id) {

@@ -147,4 +147,35 @@ interface ElectronAPI {
 interface Window {
   electronAPI: ElectronAPI;
   _hostyllo_license_cache?: any;
+  _hostyllo_license_checked_at?: number;
+  _hostyllo_machine_id?: string;
 }
+
+// ── src/export/ — the global export engine ───────────────────────────────────
+// xlsx-writer.js ends with a CommonJS export (it is loaded directly by the
+// node-side writer test), which makes TypeScript read the file as a module and
+// its top-level `const HXW` as file-local. In the browser it is a classic
+// script sharing one global lexical scope with engine.js, so this restates the
+// binding the way the runtime actually sees it.
+declare const HXW: any;
+declare function _electronPDF(html: string, suggestedName?: string, opts?: any): void;
+
+// ── Shared list toolbar (src/toolbar.js, added 2026-09-08) ───────────────────
+// The globals it reaches for live outside the checked set: `icon` in
+// src/icons.js, the filter registry in src/modules/nav.js. `thisMonth` and
+// `monthLabel` ARE in utils.js, but utils.js declares them below the point
+// tsc treats as the file's global scope for these two, so they are stated
+// here alongside the rest rather than left as the only unchecked names.
+declare function icon(name: string, size?: string): string;
+declare function thisMonth(): string;
+declare function monthLabel(key: string): string;
+declare function registerFilter(key: string, obj: any, defaults: () => any, also?: () => void): void;
+declare function resetFilters(key?: string): void;
+declare function filtersAreSet(key: string): boolean;
+declare function tbExport(o: any): string;
+declare function tbMonth(keys: any[], o?: any): string;
+declare function tbMonthLabel(key: string): string;
+declare function tbClear(page: string, o?: any): string;
+declare function tbClearAll(page: string): void;
+declare function tbToggleMenu(id: string, ev?: any): void;
+declare function tbCloseMenus(): void;

@@ -113,6 +113,11 @@ const pageConfig = {
   reports:       { title:'Reports', sub:'', action:null },
   issues:        { title:'Complaints', sub:'', action:'Add Issue' },
   activitylog:   { title:'Activity Log', sub:'', action:null },
+  // Backup & Restore was the one item in the rail's SYSTEM group that opened a
+  // dialog instead of a screen. It is a page now — see backup-page.js.
+  backup:        { title:'Backup & Restore', sub:'', action:null },
+  // User Management was a modal off the account menu until 2026-09-09.
+  users:         { title:'User Management', sub:'', action:null },
   settings:      { title:'Settings', sub:'', action:null },
   archive:       { title:'Annual Archive', sub:'', action:null },
   maintenance:   { title:'Complaints', sub:'', action:'Add Issue' },
@@ -134,33 +139,67 @@ const pageConfig = {
                    chrome:'task' }
 };
 
+/* ══ FILTER LIFECYCLE ══════════════════════════════════════════════════════
+   A list screen's filters belong to a VISIT, not to the session. Leave
+   Students and come back and it should look the way it looks the first time —
+   the owner reported the opposite on 2026-09-08: "when the page is closed and
+   reopened the search bar is still with the data you entered".
+
+   It used to be a hand-written list of assignments inside navigate(), and the
+   trouble with a hand-written list is that it drifts from the objects it
+   resets. By 8 Sep it had missed `cancelFilter` and `issueFilter` entirely,
+   plus `roomFilter.type`/`.floor`/`.status`, `studentFilter.fee`/`.month` and
+   `expFilter.cat`/`.month` — every filter added after the list was written.
+
+   Each screen now REGISTERS its filter object and the values a fresh visit
+   should start from, so adding a filter cannot be forgotten: put it in the
+   defaults and both the reset and the toolbar's Clear button pick it up.
+
+   A DEFAULT IS NOT ALWAYS EMPTY. `month` defaults to the current month on the
+   screens that scope by month, because that is the answer a warden opening
+   Payments in September wants — "the default dropdowns for current should be
+   kept as is" (owner, same message). `_filterDefaults` is therefore evaluated
+   fresh on every reset, never captured once at load: a session left open past
+   midnight on the 30th must not keep resetting to last month. */
+const FILTER_REGISTRY = [];
+
+/**
+ * Register a screen's filter object.
+ * @param {string} key     the page name, for `resetFilters(key)`
+ * @param {object} obj     the live filter object the screen reads
+ * @param {function(): object} defaults returns a fresh set of starting values
+ * @param {function()} [also] anything else a fresh visit clears (a selection)
+ */
+function registerFilter(key, obj, defaults, also) {
+  FILTER_REGISTRY.push({ key, obj, defaults, also });
+}
+
+/** Put one screen's filters — or every screen's — back to a fresh visit. */
+function resetFilters(key) {
+  for (const f of FILTER_REGISTRY) {
+    if (key && f.key !== key) continue;
+    if (!f.obj) continue;
+    Object.assign(f.obj, f.defaults());
+    if (typeof f.also === 'function') f.also();
+  }
+}
+
+/** True when anything on this screen is filtered away from its defaults. */
+function filtersAreSet(key) {
+  const f = FILTER_REGISTRY.find(x => x.key === key);
+  if (!f || !f.obj) return false;
+  const d = f.defaults();
+  // `page` and `pageSize` are position, not a filter — paging to 2 is not a
+  // filter the Clear button should offer to undo.
+  return Object.keys(d).some(k =>
+    k !== 'page' && k !== 'pageSize' && String(f.obj[k]) !== String(d[k]));
+}
+
 function navigate(page, isBack=false) {
   // Auto-close sidebar on navigation (mobile)
   closeSidebar();
-  // Auto-clear all search bars when navigating away from a section
-  if (page !== currentPage) {
-    studentFilter.search = '';
-    payFilter.search     = '';
-    payFilter.showAll    = false;
-    roomFilter.search    = '';
-    expFilter.search     = '';
-    expFilter.showAll    = false;
-    // Payments v5 filters + row selection. Clearing the selection matters:
-    // a selection left over from a previous visit would sit invisibly behind
-    // the bulk "Mark N paid" action on the next one.
-    payFilter.room       = 'All';
-    payFilter.month      = 'All';
-    payFilter.status     = 'All';
-    payFilter.unpaidOnly = false;
-    payFilter.page       = 1;
-    if (typeof paySelected !== 'undefined' && paySelected) paySelected.clear();
-    // Students v5 — same reasoning as paySelected above.
-    studentFilter.room   = 'All';
-    studentFilter.course = 'All';
-    studentFilter.status = 'All';
-    studentFilter.page   = 1;
-    if (typeof stuSelected !== 'undefined' && stuSelected) stuSelected.clear();
-  }
+  // A visit starts clean — see FILTER_REGISTRY above.
+  if (page !== currentPage) resetFilters();
   /* ONLY A CHANGE OF PAGE IS A STEP. `navigate(currentPage)` is how several
      controls re-render in place, and each one used to push a duplicate — after
      a few of those, Back appeared to do nothing because the top three entries
@@ -292,6 +331,43 @@ function headerAction() {
 // debounce() — defined in src/utils.js
 
 // Smart re-render for search bars - preserves cursor focus
+/* ══ TYPING SURVIVES A RE-RENDER ═══════════════════════════════════════════
+   Every list screen filters by re-rendering the whole page into
+   `#content.innerHTML`, which destroys the control the warden is typing into.
+   Four screens had a private workaround (`searchRenderPage`, below) and two —
+   Cancellations and Complaints — did not, so on those the search box lost
+   focus on the first keystroke and had to be clicked again for every letter.
+   The owner reported it on 2026-09-08 as "the search bar closes when you type
+   the first letter".
+
+   Fixing it per screen is how there came to be two behaviours in the first
+   place. It belongs in the one function every re-render goes through, so a
+   screen added tomorrow cannot get it wrong: remember what had focus and
+   where the caret was, and put both back once the new markup is in.
+
+   Keyed by id, because the element itself is gone — a re-render builds new
+   nodes. Anything without an id is not restorable and is skipped rather than
+   guessed at. */
+function _captureFocus() {
+  const a = document.activeElement;
+  if (!a || !a.id || !document.getElementById('content').contains(a)) return null;
+  const st = { id: a.id, start: null, end: null };
+  /* selectionStart throws on inputs that have no text selection to report —
+     checkbox, radio, a <select>. Those still restore focus; only the caret is
+     unavailable, which is what the try/catch says. */
+  try { st.start = a.selectionStart; st.end = a.selectionEnd; } catch (e) {}
+  return st;
+}
+
+function _restoreFocus(st) {
+  if (!st) return;
+  const el = document.getElementById(st.id);
+  if (!el) return;
+  el.focus();
+  if (st.start === null) return;
+  try { el.setSelectionRange(st.start, st.end); } catch (e) {}
+}
+
 function searchRenderPage(page, inputId, caretPos) {
   const el = document.getElementById('content');
   const focusId = inputId;
@@ -319,6 +395,8 @@ function renderPage(p, resetScroll=false) {
   const el = document.getElementById('content');
   // Save scroll position before re-render so it can be restored
   const savedScroll = el.scrollTop || document.getElementById('main')?.scrollTop || 0;
+  // …and whatever the warden was typing into. See _captureFocus() above.
+  const savedFocus = _captureFocus();
   el.style.transition='opacity 0.2s ease';
   el.style.opacity='0';
   // Handle cancellations sub-filter pages
@@ -404,6 +482,8 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='addstudent') el.innerHTML = renderAddStudent();
       else if(basePage==='addpayment') el.innerHTML = renderAddPayment();
       else if(basePage==='activitylog') el.innerHTML = renderActivityLog();
+      else if(basePage==='backup') el.innerHTML = renderBackupPage();
+      else if(basePage==='users') el.innerHTML = renderUsers();
       else if(basePage==='settings') el.innerHTML = renderSettings();
       else if(basePage==='archive') el.innerHTML = renderArchive();
     } catch(e) {
@@ -420,6 +500,11 @@ function renderPage(p, resetScroll=false) {
       el.scrollTop = savedScroll;
       const main = document.getElementById('main'); if(main) main.scrollTop = savedScroll;
     }
+    /* Focus goes back after the scroll, because `el.focus()` scrolls the
+       element into view and would otherwise fight the line above it. A page
+       navigation (`resetScroll`) deliberately does NOT restore: the control
+       that had focus belonged to the page being left. */
+    if (!resetScroll) _restoreFocus(savedFocus);
     // Same deferred pattern as the dashboard: the canvases must exist and be
     // laid out before Chart.js measures them.
     if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
@@ -436,7 +521,15 @@ function updateSidebar() {
      refreshed from the same call rather than from a second code path. */
   setEl('sb-hostel-name', DB.settings.hostelName || '');
   if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
-  setEl('sb-version', 'v' + (DB.settings.version || '4.0'));
+  /* THE BUILD'S VERSION, NOT A TYPED ONE. This read DB.settings.version — a
+     text field a warden could edit from Settings, which said 'v3.0' on a
+     v5.0.0 build. The login screen already corrects itself from app.getVersion()
+     (index.html); the sidebar now does the same, with the stored value as the
+     fallback that paints first. The Settings field it came from is gone. */
+  setEl('sb-version', 'v' + (DB.settings.version || '5.0'));
+  if (window.appInfo && window.appInfo.version) {
+    window.appInfo.version().then(function (v) { setEl('sb-version', 'v' + v); }).catch(function () {});
+  }
   // Update cancellation badge
   const cancelBadge = document.getElementById('cancel-badge');
   const pendingCancels = (DB.cancellations||[]).filter(c=>c.status==='Pending').length;

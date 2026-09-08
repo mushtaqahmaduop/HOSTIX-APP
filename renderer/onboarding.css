@@ -45,7 +45,7 @@ body.onb-open { overflow:hidden; }
     font-variant-numeric:tabular-nums;
 }
 .onb-step.is-on   { background:var(--card); color:var(--text); }
-.onb-step.is-on   .onb-step__n { background:var(--accent); border-color:var(--accent); color:#fff; }
+.onb-step.is-on   .onb-step__n { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 .onb-step.is-done { color:var(--text2); }
 .onb-step.is-done .onb-step__n { background:none; border-color:var(--accent); color:var(--accent); }
 

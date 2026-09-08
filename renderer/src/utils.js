@@ -232,6 +232,64 @@ function fmtCompactK(n) {
 /** The same, with the currency word — the lower widgets print it everywhere. */
 function fmtPKRk(n) { return 'PKR ' + fmtCompactK(n); }
 
+/* ── PAYMENT-METHOD COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS CASH" ─
+   Lifted out of renderDashboard(), where it lived as a local, because Reports
+   drew the same six wallets from a DIFFERENT ramp and picked BY INDEX rather
+   than by name (`_RPT_METHOD_HUES[i % len]`). So Cash was #2563EB on the
+   dashboard donut and whatever happened to sit at index 0 on the Reports one,
+   and the two screens described the same month in two colour schemes. Worse,
+   the Reports allocation moved every time a method was added or reordered in
+   Settings, so a wallet could change colour between two visits to the same
+   report.
+
+   Same shape of rule as finance.js: one authority, every screen a reader.
+
+   THE HUES. These are the design system's chart tokens (§17.2) plus two
+   neighbours, and deliberately NOT the status colours — a payment method is a
+   category, not a state, and green here would read as "good". Cash takes the
+   strong blue (owner, 7 Sep): it is the method most of the money arrives by in
+   this hostel, and the heaviest slice has to carry the heaviest colour or the
+   ring reads upside down. */
+const METHOD_HUES = {
+  'cash':          '#2563EB',
+  'easypaisa':     '#93C5FD',
+  'jazzcash':      '#16A34A',
+  'bank transfer': '#D97706',
+  'bank':          '#D97706',
+  'cheque':        '#7C3AED',
+  'other':         '#94A3B8',
+};
+
+/* SPARE HUES FOR METHODS THE OWNER ADDS IN SETTINGS. Every one is far from all
+   six named hues above — no second blue, and NO SECOND GREEN, which was the
+   bug: 'Crypto' is owner-added, fell to a hashed pick, and drew #65A30D, a lime
+   a few degrees off JazzCash's #16A34A. Two wallets in one green is not a
+   chart (owner, 7 Sep). */
+const METHOD_SPARE = ['#DB2777', '#0891B2', '#EA580C', '#4F46E5', '#0F766E',
+                      '#A21CAF', '#B45309', '#334155'];
+
+/* Allocated BY POSITION among the unnamed methods, not by hashing the name. A
+   hash can collide however long the spare list is, and the failure is invisible
+   until two particular wallets happen to be configured together; walking the
+   list cannot collide at all. Order comes from Settings, so a method keeps its
+   colour from month to month — only adding or removing one ABOVE it can move
+   it, which is the same guarantee the dashboard always gave.
+
+   Recomputed per call rather than cached: Settings can add a method at any
+   time, and this runs a handful of times per paint. */
+function methodHue(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (METHOD_HUES[k]) return METHOD_HUES[k];
+  const spare = new Map();
+  ((typeof DB !== 'undefined' && DB.settings && DB.settings.paymentMethods) || [])
+    .forEach(m => {
+      const j = String(m || '').trim().toLowerCase();
+      if (!j || METHOD_HUES[j] || spare.has(j)) return;
+      spare.set(j, METHOD_SPARE[spare.size % METHOD_SPARE.length]);
+    });
+  return spare.get(k) || '#94A3B8';
+}
+
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
    charge is a reader, and reads it through here.
@@ -563,13 +621,23 @@ function chargeCoverage(c) {
   return { key: 'none', label: 'Not set', hue: 'dh-slate' };
 }
 
-/* One-line summary for the info strips: "PKR 16,000 rent + PKR 2,000 mess".
-   Kept next to the resolver so the phrasing cannot drift between screens. */
+/* One-line summary for the info strips.
+
+   IT USED TO SPELL OUT THE ARITHMETIC — "PKR 16,000 rent + PKR 2,000 mess" —
+   next to the total those two numbers add up to (owner, 2026-09-09: "remove
+   the +10000 rent +7000 mess included from everywhere and just label there
+   Rent+mess or Rent or Mess"). The reader of this line is the same person who
+   set both figures in Settings; what they cannot see from the total alone is
+   WHICH plan it covers, and that is the one thing this now says. The split
+   itself is still on the student's own profile and in Rent & Mess.
+
+   chargeCoverage() already names the four cases, so the phrasing comes from
+   there rather than being written a second time here. */
 function chargesBreakdown(c) {
   if (!c.configured) return 'No rent configured — set it in Settings → Rent &amp; Mess';
-  let out = fmtPKR(c.rent) + ' rent';
-  if (c.messOptIn && c.mess > 0)  out += ' + ' + fmtPKR(c.mess) + ' mess';
-  else if (c.mess > 0)            out += ' · mess off';
+  let out = chargeCoverage({ rent: c.rent, mess: c.mess,
+                             messIncluded: c.messOptIn && c.mess > 0,
+                             hasMess: c.mess > 0 }).label;
   // Say where the price came from — the whole bug was not being able to tell.
   out += c.rentSource === 'override' ? ' · custom rate for this student'
        : c.rentSource === 'room'     ? ' · from room (type has no rent set)'
@@ -601,156 +669,18 @@ function moneyValue(amount, opts) {
        + `</span>`;
 }
 
-// ── PRINT / PDF STYLESHEET — single source of truth for ALL printed reports ──
-// Printed documents are always white/black-on-paper regardless of the app's
-// dark/light theme (correct for print), but every report generator used to
-// hand-roll its own near-duplicate <style> block with slightly different
-// brand colours, radii, and class names. This is the one place to edit the
-// brand look of every PDF (Monthly Report, Rent Summary, Transfers, etc.)
-const PRINT_BRAND = {
-  // Royal blue, matching --accent. This was still violet from before the
-  // accent ramp was repointed, so every PDF the app produced was branded a
-  // colour that appears nowhere in the app.
-  accent: '#2563eb',
-  green: '#16a34a',
-  red:   '#dc2626',
-  ink:   '#1a1a2e',
-  muted: '#64748b',
-  faint: '#94a3b8',
-};
+/* ── THE PRINTED DOCUMENTS LIVE IN src/export/ NOW ───────────────────────────
+   printDocStyles(), printHeader(), printKpiGrid() and printListDocument() were
+   this file's answer to "a header, some totals and a table", and every module
+   that grew an export grew a variant of them anyway. They are replaced by the
+   global export engine (src/export/engine.js), which renders the SAME
+   definition as a PDF and as a workbook so the two cannot drift apart — see
+   the export design specification, sections 58 to 61.
 
-function printDocStyles() {
-  const b = PRINT_BRAND;
-  return `<style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:${b.ink};background:#fff;padding:28px;font-size:12.5px}
-    .header,.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid ${b.accent};margin-bottom:20px}
-    .title,.ht{font-size:21px;font-weight:800}
-    .subtitle,.hs{font-size:11px;color:#666;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:${b.accent}22;color:#6d28d9;border:1px solid ${b.accent}55}
-    /* KPI grid — supports both .kpi-grid > .kpi and .kg > .kc legacy markup */
-    .kpi-grid,.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-    .kpi,.kc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center}
-    .kpi label,.kl{font-size:9.5px;color:${b.faint};text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
-    .kpi .val,.kv{font-size:20px;font-weight:900;color:${b.ink}}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px}
-    .section h3,h3{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${b.muted};margin:16px 0 10px}
-    .summary-box{border-radius:12px;padding:18px;margin-bottom:18px}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:${b.muted};font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
-    .green,.gr{color:${b.green};font-weight:700}
-    .red,.re{color:${b.red};font-weight:700}
-    .gold,.go{color:#5b21b6;font-weight:700}
-    /* Partial: amber, matching payStatusHue()'s dh-amber on screen. It used
-       to borrow .gold, which is the room-number colour in these documents —
-       so a part-paid row and a room number read as the same kind of thing. */
-    .part{color:#b45309;font-weight:700}
-    .footer,.ft{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:${b.faint}}
-    @media print{body{padding:16px}}
-  </style>`;
-}
-
-// Renders a row of KPI tiles for a printed report. items: [{label, value, cls}]
-// value should already be a formatted string (e.g. fmtPKR(x) or a plain count).
-function printKpiGrid(items) {
-  return `<div class="kpi-grid">${items.map(it =>
-    `<div class="kpi"><label>${it.label}</label><div class="val${it.cls ? ' ' + it.cls : ''}"${it.color ? ` style="color:${it.color}"` : ''}>${it.value}</div></div>`
-  ).join('')}</div>`;
-}
-
-function printHeader(hostelName, title, subtitle) {
-  return `<div class="header"><div><div class="title">${escHtml(hostelName)}</div>` +
-    (subtitle ? `<div class="subtitle">${title} · ${subtitle}</div>` : `<div class="subtitle">${title}</div>`) +
-    `</div></div>`;
-}
-
-/* ── ONE BUILDER FOR THE APP'S TABULAR PRINT DOCUMENTS ────────────────────────
-   Students, Payments and Expenses all needed an Export PDF, and three separate
-   implementations of "a header, some totals and a table" is how the printed
-   documents in this app drifted apart the first time. This is the shape they
-   share; each caller supplies what is actually different — its columns, its
-   rows, and what it counts.
-
-   `groups` is what earns this being one function rather than a snippet. The
-   expenses export prints one category or every category, and "every category"
-   is not one table with a category column — it is a table per category, each
-   with its own subtotal, and a grand total under them. Students and Payments
-   pass a single unlabelled group and get a plain table.
-
-   Every column takes `get(row)` returning READY-TO-RENDER HTML or text. Escaping
-   is the caller's job, because half these columns are money and badges the
-   caller has already formatted and the other half are names typed by a warden.
-
-   opts:
-     title      document title, under the hostel name
-     subtitle   the scope in words — which month, which filter, how many rows
-     kpis       [{label, value, cls}] for printKpiGrid
-     columns    [{label, get, cls, align}]
-     groups     [{label, meta, rows, total}]  — label/meta/total optional
-     note       a closing line above the footer                            */
-function printListDocument(opts) {
-  const o        = opts || {};
-  const hostel   = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) || 'Hostel';
-  const columns  = o.columns || [];
-  const groups   = o.groups  || [];
-  const rowCount = groups.reduce((n, g) => n + ((g.rows || []).length), 0);
-
-  const head = '<tr>' + columns.map(c =>
-    `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${escHtml(c.label)}</th>`).join('') + '</tr>';
-
-  const table = g => {
-    const rows = (g.rows || []).map(r => '<tr>' + columns.map(c =>
-      `<td${c.align ? ` style="text-align:${c.align}"` : ''}${c.cls ? ` class="${c.cls}"` : ''}>${c.get(r)}</td>`
-    ).join('') + '</tr>').join('');
-    // A subtotal row belongs INSIDE its table, not floating under it — on a
-    // page break the total must not end up on a different sheet from the rows
-    // it totals.
-    const foot = g.total
-      ? `<tr class="subtotal"><td colspan="${columns.length - 1}">${escHtml(g.total.label || 'Subtotal')}</td>` +
-        `<td style="text-align:right">${g.total.value}</td></tr>`
-      : '';
-    return `<table><thead>${head}</thead><tbody>${rows}${foot}</tbody></table>`;
-  };
-
-  const body = groups.map(g => {
-    if (!g.label) return table(g);
-    return `<div class="group">
-      <div class="group__head"><span class="group__t">${escHtml(g.label)}</span>` +
-      (g.meta ? `<span class="group__m">${g.meta}</span>` : '') + `</div>${table(g)}</div>`;
-  }).join('');
-
-  const empty = `<div class="empty">Nothing to print — the current filter matches no records.</div>`;
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>${escHtml(o.title || 'Report')} — ${escHtml(hostel)}</title>
-  ${printDocStyles()}
-  <style>
-    .group { margin-bottom: 18px; page-break-inside: avoid; }
-    .group__head { display:flex; align-items:baseline; justify-content:space-between;
-                   padding: 0 0 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 8px; }
-    .group__t { font-size: 13px; font-weight: 800; }
-    .group__m { font-size: 10.5px; color: #64748b; }
-    tr.subtotal td { border-top: 1px solid #cbd5e1; font-weight: 800; background: #f8fafc; }
-    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
-    .grand { display:flex; align-items:center; justify-content:space-between;
-             margin-top: 6px; padding: 12px 16px; border-radius: 12px;
-             background: #f1f5f9; border: 1px solid #e2e8f0; }
-    .grand__l { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: 700; }
-    .grand__v { font-size: 18px; font-weight: 900; }
-    .sub { display:block; font-size: 9.5px; color: #64748b; font-weight: 600; margin-top: 1px; }
-    /* Long tables repeat their header on every sheet — a warden reading page 3
-       of a roster otherwise has to flip back to find out what column four is. */
-    thead { display: table-header-group; }
-    tr { page-break-inside: avoid; }
-  </style></head><body>
-  ${printHeader(hostel, o.title || 'Report', o.subtitle || '')}
-  ${o.kpis && o.kpis.length ? printKpiGrid(o.kpis) : ''}
-  ${rowCount ? body : empty}
-  ${o.grand ? `<div class="grand"><span class="grand__l">${escHtml(o.grand.label)}</span><span class="grand__v">${o.grand.value}</span></div>` : ''}
-  <div class="footer">${escHtml(hostel)} · ${rowCount} record${rowCount === 1 ? '' : 's'} · Generated ${new Date().toLocaleString('en-PK')}${o.note ? ' · ' + escHtml(o.note) : ''}</div>
-  </body></html>`;
-}
+   Two printed artefacts deliberately do NOT go through it, and are not
+   regressions: the room visit sheet and the student card. Those are physical
+   objects with a design the owner signed off, not data exports, and each keeps
+   its own stylesheet inside the module that builds it.                      */
 
 /* The filename these documents get. One rule, so a folder of them sorts by
    hostel then by what they are then by date, instead of three conventions. */

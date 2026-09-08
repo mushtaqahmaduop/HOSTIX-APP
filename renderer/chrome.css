@@ -35,7 +35,13 @@
        reports / complaints / cancellations references show. */
     --sb-active:   var(--accent);
     --sb-active-hover:var(--accent-strong);
-    --sb-active-fg:#ffffff;
+    /* NOT a literal white. The fill under this is `--accent`, and dark mode
+       lifts that to #4E7DFF where white measures 3.55:1 — under AA. This is
+       the third call site in this app to walk into it, which is why the token
+       exists. (The neutral-pill rule further down currently wins, so nothing
+       renders this today; a dead token holding a wrong value is what the next
+       reader copies.) */
+    --sb-active-fg:var(--text-on-accent);
     --sb-divider:  rgba(255,255,255,.08);
     --sb-avatar:   var(--accent);
 
@@ -116,7 +122,7 @@ body.light-theme {
     --sb-hover:    rgba(15,23,42,.055);
     --sb-active:   var(--accent);
     --sb-active-hover:var(--accent-strong);
-    --sb-active-fg:#ffffff;
+    --sb-active-fg:var(--text-on-accent);
     --sb-divider:  rgba(15,23,42,.09);
     --sb-avatar:   var(--accent);
 }
@@ -192,7 +198,7 @@ body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
     border: 1px solid var(--sb-divider); cursor: pointer; padding: 0;
     box-shadow: none; transition: var(--transition);
 }
-#sidebar .sidebar-collapse-btn:hover { background: var(--sb-active); color: #fff; border-color: var(--sb-active); }
+#sidebar .sidebar-collapse-btn:hover { background: var(--sb-active); color: var(--text-on-accent); border-color: var(--sb-active); }
 
 /* Nav */
 #sidebar .sb-nav { padding: 14px 12px; }
@@ -286,7 +292,7 @@ body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
 }
 #sidebar .nav-badge {
     margin-left: auto; flex-shrink: 0;
-    background: var(--sb-active); color: #fff;
+    background: var(--sb-active); color: var(--text-on-accent);
     min-width: 19px; height: 19px; border-radius: 999px;
     font-size: 10px; font-weight: 800;
     display: flex; align-items: center; justify-content: center; padding: 0 5px;
@@ -317,7 +323,7 @@ body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
 .sb-user__av {
     width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    background: var(--sb-avatar); color: #fff;
+    background: var(--sb-avatar); color: var(--text-on-accent);
     font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
 }
 .sb-user__id   { flex: 1; min-width: 0; }
@@ -686,3 +692,142 @@ body:not(.light-theme) .tsk-foot { box-shadow: 0 -4px 14px rgba(0, 0, 0, .30); }
 }
 #header .hdr-back:hover { background: var(--bg2); color: var(--accent); border-color: var(--accent); }
 #header .hdr-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* ══ SHORT SCREENS: THE CHROME COMPACTS, THE PAGE ALREADY DID ══════════════
+   126px sat above the first card at EVERY viewport height — a 40px titlebar,
+   this 66px header, and 20px of #content padding. Between them, chrome.css,
+   style.css and titlebar.css did not contain one `max-height` rule, so none of
+   it ever gave anything back. On a 1366x768 laptop at 125% scaling — a
+   1093x614 viewport, the most common OEM default there is — that is 20.5% of
+   the screen spent before the page says anything.
+
+   dashboard.css has had height tiers at 720/700/665/640px for weeks: the KPI
+   tiles drop their sparkline and sub-line, the glance drops its amounts, the
+   room grid falls to one scrolling row. All of that was being asked of the
+   CONTENT while the chrome above it kept its full-size self, which is exactly
+   backwards — chrome is the first thing a short screen should lose, and the
+   figures are the last.
+
+   Nothing here is a figure, a label or a control. The header keeps its title,
+   its subtitle, its month picker and every button — they sit in 50px instead
+   of 66, and the tallest thing in it measures 40. 32px is the standard Windows
+   caption height, so the titlebar loses nothing but slack. */
+/* 720, NOT 700. dashboard.css steps at 720/665/640 and its new tier covers
+   721-800, so a 701-720px viewport fell between the two files: short enough
+   that the dashboard had already compacted, tall enough that the chrome above
+   it had not. Matching the 720 step closes it, and the ladder now reads 20px of
+   content padding above 800, 12px from 721-800, 10px at or below 720. */
+@media (max-height: 720px) {
+    :root    { --header-h: 50px; }
+    #content { padding-top: 10px; }
+}
+
+/* 1093x614 is 154px shorter than the same laptop at 100% and is the only size
+   that needs this last step. 6px still separates the header from the first card. */
+@media (max-height: 640px) { #content { padding-top: 6px; } }
+
+
+/* ══ THE RAIL GOES NEUTRAL (owner, 7 Sep: "use a premium neutral navbar on
+   sidebar to look professional") ══════════════════════════════════════════
+
+   THE ACTIVE PILL WAS DESIGNED FOR A RAIL THAT NO LONGER EXISTS. Its own note
+   above says so: "on a navy rail a solid block reads as a hole, while the
+   gradient plus the shadow lifts the pill off the surface." That was true of a
+   navy rail. The rail is ivory now, and on a light ground a saturated accent
+   gradient carrying a 20px accent glow is the single loudest object in the
+   application — louder than Add Student, which is the actual primary action,
+   and louder than any figure on the dashboard. A permanent, non-dismissable
+   "you are here" marker outranking every decision on the screen is the
+   definition of colour used for "look" rather than "act", which CLAUDE.md
+   reserves against.
+
+   Neutral does not mean unmarked. Three signals replace the one, and together
+   they are easier to find at a glance than a colour alone: a raised neutral
+   surface, a 3px accent edge at the leading side, and the icon in the accent
+   while the label goes to full-strength ink. That is the standard shape of a
+   professional admin rail, and it is what the reference draws.
+
+   The glow goes outright. The dark-mode brief section 3 asks for no glow, and
+   a 20px coloured shadow under a nav item is the clearest example of one in
+   the app. */
+#sidebar .nav-item.active {
+    background: var(--sb-active-surface);
+    color: var(--sb-fg);
+    border-color: var(--sb-active-edge);
+    box-shadow: none;
+    font-weight: 650;
+}
+/* The accent survives as an EDGE and an ICON, which is where it carries
+   meaning without competing for the eye. `::before` was switched off further up
+   for the old look; it is switched back on for this one. */
+#sidebar .nav-item.active::before {
+    display: block;
+    content: '';
+    position: absolute;
+    left: 0; top: 6px; bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
+}
+#sidebar .nav-item.active .nav-icon { color: var(--accent); opacity: 1; }
+/* The count badge went white-on-translucent to sit on the accent fill. With no
+   fill under it, it takes the accent itself. */
+/* --text-on-accent, NOT #fff. That token exists for exactly this: dark mode
+   lifts --accent to #4E7DFF so accent-coloured TEXT stays legible on
+   near-black, and white on that measures 3.77:1 — under AA. tokens.css spells
+   the trap out where it defines the token; a literal white here would have
+   walked into it at a brand new call site. */
+#sidebar .nav-item.active .nav-badge { background: var(--accent); color: var(--text-on-accent); }
+
+/* Light: a raised neutral, one clear step above the rail rather than a tint of
+   it — at 5.5% the hover and the active state were the same grey and the rail
+   could not say which row you were on. Dark: the same idea, lifted. */
+#sidebar { --sb-active-surface: rgba(255,255,255,.10); --sb-active-edge: rgba(255,255,255,.14); }
+body.light-theme #sidebar { --sb-active-surface: #FFFFFF; --sb-active-edge: var(--border); }
+/* The white pill needs its own separation on an ivory rail, and a 1px border
+   plus the app's own card shadow is how every other raised surface here does
+   it. This is the card shadow, not a glow: no hue, 2px of blur. */
+body.light-theme #sidebar .nav-item.active { box-shadow: 0 1px 3px rgba(15, 23, 42, .07); }
+
+/* THE SECTION LABELS. 1.4px of tracking at 10px on --sb-fg3 is five words of
+   near-invisible grey, and there are five of them down the rail — the same
+   "thin and washed out" the owner reports on the dashboard's small type, from
+   the same cause: a contrast floor picked for body text applied at 10px. One
+   step up in ink and weight, and a little less tracking so the words read as
+   words. No size change: the rail's height budget is unchanged. */
+#sidebar .sb-section {
+    color: var(--sb-fg2);
+    font-weight: 800;
+    letter-spacing: 1.1px;
+    opacity: .8;
+}
+
+/* THE DIVIDERS. The rail carried a full-width rule above the user card and a
+   drop shadow on its outer edge. Two lines doing one job; the shadow goes and
+   the rule stays, because the rule is the one that separates two things a
+   reader can name. */
+/* NO `box-shadow: none` HERE, AND THAT IS THE POINT. This block first carried
+   `body.light-theme .sidebar { box-shadow: none }` to cancel the drop shadow in
+   style.css:259. Both selectors match nothing: the element is
+   `<aside id="sidebar">` (index.html:379) and no `class="sidebar"` exists
+   anywhere in the app. So the shadow being "removed" never rendered, and the
+   rule removing it did nothing either — a fix for a symptom that was not there,
+   which is worse than no fix because the next reader believes it. Recorded as
+   a note; style.css:259 is dead code for a separate cleanup. */
+#sidebar .sidebar__bottom { border-top-color: var(--sb-divider); }
+
+/* ── THE RAIL AT A SHORT WINDOW ──────────────────────────────────────────────
+   Users (2026-09-09) was the thirteenth destination, and thirteen rows plus
+   five section labels plus the logo, the date stepper and the account card do
+   not fit 768px — Users and Backup & Restore fell below the fold, which on a
+   rail reads as "this app does not have that screen".
+
+   The space comes from CHROME, never from type: 8px to 7px of row padding,
+   2px to 1px of row margin, and a section label that gives back 5px. That is
+   about 74px across the rail, which is two rows. The 13.5px label is
+   untouched, and a taller window keeps the comfortable spacing. */
+@media (max-height: 820px) {
+    #sidebar .nav-item   { padding: 7px 12px; margin-bottom: 1px; }
+    #sidebar .sb-section { padding: 3px 10px 2px; margin-top: 2px; }
+}

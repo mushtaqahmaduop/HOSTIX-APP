@@ -36,23 +36,76 @@ function _electronPDF(html, suggestedName, opts) {
   // This avoids the native OS Save dialog that blocks the Electron renderer.
   opts = opts || {};
   var isLandscape = !!(opts && opts.landscape);
-  var pageCSS = isLandscape
-    ? '@page { size: A4 landscape; margin: 10mm; }'
-    : '@page { size: A4; margin: 18mm; }';
+  /* §6 — the export specification's margins: 10–12mm portrait, 8–10mm
+     landscape. The old 18mm portrait threw away a fifth of the printable
+     width, which is exactly the pressure that makes a register's columns look
+     like they need shrinking. A document built by the export engine declares
+     its own @page and its own margins, so it is left alone. */
+  var ownsPage = html.indexOf('name="hx-export"') !== -1;
+  var pageCSS = ownsPage ? ''
+    : isLandscape ? '@page { size: A4 landscape; margin: 9mm; }'
+                  : '@page { size: A4; margin: 12mm; }';
   // Inject print CSS + a visible Print/Save button into the HTML
   var injected = html.replace('</head>',
     '<style>' + pageCSS +
     '@media print { .no-print { display:none!important; } body { background:#fff!important; } }' +
-    '.pdf-print-btn { display:block; margin:16px auto; padding:10px 40px; background:#1e5fd4; color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:sans-serif; letter-spacing:0.5px; }' +
+    /* TOP RIGHT, UNDER THE WINDOW'S CLOSE BUTTON (owner, 2026-09-09). It was a
+       full-width strip across the top of the document, which pushed the report
+       down and put a band of chrome between the reader and the first heading.
+       A fixed column in the corner stays reachable on every page of a long
+       register, costs the document no vertical space, and sits where the eye
+       already goes for window controls. `position:fixed` rather than sticky
+       because the document scrolls under it. */
+    '.pdf-bar { position:fixed; top:14px; right:18px; z-index:50; display:flex;' +
+      ' flex-direction:column; align-items:stretch; gap:8px; font-family:sans-serif; }' +
+    '.pdf-bar__m { max-width:190px; text-align:right; font-size:11px; line-height:1.45;' +
+      ' color:#6B7A99; background:rgba(255,255,255,.92); border-radius:6px; padding:2px 4px; }' +
+    '.pdf-print-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 16px; background:#155EEF; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:sans-serif; letter-spacing:0.2px; box-shadow:0 4px 14px rgba(21,94,239,.28); }' +
+    '.pdf-print-btn--ghost { background:#fff; color:#123B8F; border:1px solid #D9E2F2; }' +
+    '.pdf-print-btn[disabled] { opacity:.55; cursor:default; }' +
+    /* THE GLYPHS NEED A SIZE HERE, BECAUSE NOTHING ELSE GIVES THEM ONE.
+       icon() emits <svg class="icon"> and every dimension it has comes from the
+       app's own stylesheet — which this document does not load. Unconstrained,
+       an inline SVG takes its default 300×150 and then stretches to the flex
+       line, which is why the two buttons filled a third of the window. */
+    '.pdf-print-btn svg { width:15px; height:15px; flex:0 0 15px; }' +
     '</style></head>');
-  // Insert a prominent Save PDF button before </body>
-  var btnHtml = '<div class="no-print" style="text-align:center;padding:16px 0 8px">'
-    + '<button class="pdf-print-btn" onclick="window.print()">' + icon('print','sm') + ' Print / Save as PDF</button>'
-    + '<div style="font-size:11px;color:#888;margin-top:6px;font-family:sans-serif">In the print dialog: set Destination → Save as PDF</div>'
+
+  /* The action bar. "Save as PDF" goes through the window's own bridge
+     (pdf-window-preload.js), which prints the window from the MAIN process:
+     A4, the right orientation, and a footer carrying "Page X of Y" on every
+     sheet — none of which Chromium's print dialog can be made to do, and its
+     own footer prints the temp file's file:// path across the bottom of an
+     owner's report. window.print() stays as the second button, and as the
+     only one when this document is open in a browser rather than the app. */
+  var btnHtml = '<div class="no-print pdf-bar">'
+    + '<button class="pdf-print-btn" onclick="__hxSavePdf(this)">' + icon('download','sm') + ' Download PDF</button>'
+    + '<button class="pdf-print-btn pdf-print-btn--ghost" onclick="window.print()">' + icon('print','sm') + ' Print</button>'
+    + '<div id="__hxmsg" class="pdf-bar__m">A4 · '
+    + (isLandscape ? 'landscape' : 'portrait') + ' · headings repeat on every page</div>'
+    + '<script>function __hxSavePdf(btn){'
+    + 'var m=document.getElementById("__hxmsg");'
+    + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){window.print();return;}'
+    + 'btn.disabled=true;m.textContent="Generating PDF\\u2026";'
+    + 'window.hostylloPdf.save().then(function(r){btn.disabled=false;'
+    + 'm.textContent=r&&r.success?"Saved: "+r.filePath:(r&&r.reason==="cancelled"?"A4 \\u00b7 headings repeat on every page":(r&&r.reason)||"Export could not be generated. Please try again.");'
+    + '}).catch(function(){btn.disabled=false;m.textContent="Export could not be generated. Please try again.";});}'
+    + '<\/script>'
     + '</div>';
   // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child
   // window.open() window hangs the Electron renderer on Windows. User presses the button.
-  injected = injected.replace('</body>', btnHtml + '</body>');
+  /* IN THE MARKUP EARLY, ON SCREEN TOP-RIGHT. It was appended before </body>,
+     which put the only way to save a nine-page register at the end of the ninth
+     page. It goes in right after <body> so it exists before the report, and the
+     CSS above fixes it under the window's close button; `no-print` keeps it off
+     the paper either way. */
+  var _bodyAt = injected.search(/<body[^>]*>/i);
+  if (_bodyAt !== -1) {
+    var _bodyEnd = injected.indexOf('>', _bodyAt) + 1;
+    injected = injected.slice(0, _bodyEnd) + btnHtml + injected.slice(_bodyEnd);
+  } else {
+    injected = btnHtml + injected;
+  }
 
   /* ── THE WINDOW IS OPENED BY THE MAIN PROCESS, NOT BY THIS ONE ────────────
      window.open() from the renderer is the one strategy this codebase has

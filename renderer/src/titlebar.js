@@ -271,4 +271,14 @@ window.setTitlebarHostel = function () {
   } catch (e) { /* not loaded yet */ }
   el.textContent = name;
   el.title = name;
+  /* THE FACE, WHICH NOTHING USED TO APPLY. Settings has offered a "Hostel Name
+     Font" picker since v2; it wrote `hostelNameFont` to the database, toasted
+     "Font updated", and no surface in the app ever read it back — the only
+     place the chosen face appeared was the picker's own preview tile. This is
+     the surface the setting names: the centred title. The fallback is the
+     interface font, so a face that is not installed leaves the bar exactly as
+     it was rather than dropping to a browser default serif. */
+  var face = '';
+  try { face = (DB.settings.hostelNameFont || '').trim(); } catch (e) {}
+  el.style.fontFamily = face ? '"' + face.replace(/"/g, '') + '", var(--font)' : '';
 };

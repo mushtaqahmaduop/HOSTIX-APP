@@ -73,8 +73,10 @@
        is warm: the stain works in both directions, and cool ink on a warm card
        is the same mistake mirrored. It also measures better — cool --text3
        #7F8AA3 is 4.82:1 on the warm ground, the warm #A09D96 is 6.16:1. */
-    --text:          #FAF9F5;
-    --text2:         #D8D5CD;
+    /* §18. Was #FAF9F5 / #D8D5CD — near-white, and the spec's first complaint
+       ("in dark mode, text is too white and harsh"). */
+    --text:          #E7EAF0;
+    --text2:         #A8B0BE;
     --text3:         var(--text-tertiary);   /* #7F8AA3, 4.92:1 on --card */
 
     /* Typography -- the type system from the Add Student design
@@ -89,8 +91,25 @@
        --font-mono is unchanged and stays JetBrains Mono -- it is the CODE
        face (licence keys, machine ids), which is a different job from either
        body text or numerals. */
-    --font:          'Barlow', 'Inter', 'Segoe UI', system-ui, sans-serif;
-    --font-display:  'Barlow Condensed', 'Barlow', 'Inter', system-ui, sans-serif;
+    /* §2 — ONE FAMILY. Inter leads both stacks now; Barlow and Barlow
+       Condensed stay behind it because they are bundled, so a face that fails
+       to load still lands on a real bundled font rather than on whatever the
+       OS happens to have. --font-display is no longer a DIFFERENT family, only
+       the same one used at display sizes: the spec rules out mixing two
+       unrelated sans-serifs, and a condensed face beside a normal one is
+       exactly that. */
+    --font:          'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    --font-display:  'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+
+    /* §3 — the weight set, named so screens stop reaching past it. 800 and 900
+       are deliberately absent: the spec says hierarchy comes from size, weight,
+       colour and spacing together, never from weight alone. */
+    --fw-regular:    400;
+    --fw-text:       450;
+    --fw-medium:     500;
+    --fw-semibold:   600;
+    --fw-bold:       700;
+    --fw-strong:     750;
     --font-mono:     'JetBrains Mono', 'Courier New', monospace;
 
     /* Shape */
@@ -221,8 +240,10 @@ body.light-theme {
     --purple:        #5B4BC4;
     --purple-dim:    rgba(91, 75, 196, 0.09);
 
-    --text:          #152238;   /* their --ink */
-    --text2:         #5B647A;   /* their --ink-soft */
+    /* §18. Was #152238 / #5B647A — the spec's second complaint, "in light mode
+       text becomes too black and visually heavy". */
+    --text:          #17233A;
+    --text2:         #52627A;
     /* WAS #8A93A6, the mockups' --ink-faint, at 2.86:1 on the workspace ground.
        This is the single most-read token in the app — 552 uses, under every
        timestamp, room subtitle, table subtext and helper line — and it was the
@@ -3540,7 +3561,7 @@ body.light-theme .stat-card.glass {
     justify-content: center;
     font-size: 11px;
     font-weight: 800;
-    color: #fff;
+    color: var(--text-on-accent);
     flex-shrink: 0;
 }
 
@@ -3717,7 +3738,7 @@ th.sortable.desc::after { content: ' ↓'; color: var(--accent-strong); }
     justify-content: center;
     font-size: 13px;
     font-weight: 800;
-    color: #fff;
+    color: var(--text-on-accent);
     flex-shrink: 0;
     overflow: hidden;
 }
