@@ -47,7 +47,11 @@ const sandbox = {
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
-for (const f of ['config.js', 'utils.js', 'finance.js',
+/* nav.js and toolbar.js come first because the screen modules call registerFilter() at
+   ReferenceError on payments.js before a single assertion ran, which is a
+   load time — it lives in nav.js. Without it this sandbox threw a
+   broken harness rather than a broken total. */
+for (const f of ['config.js', 'utils.js', 'finance.js', 'toolbar.js', 'modules/nav.js',
                  'modules/dashboard.js', 'modules/payments.js', 'modules/reports.js']) {
   vm.runInContext(R(f), sandbox, { filename: f });
 }

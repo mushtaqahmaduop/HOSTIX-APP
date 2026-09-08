@@ -263,8 +263,13 @@ test('a Blacklisted student fits their own status cell', async () => {
   /* "Blacklisted" is the longest word this column holds — nearly twice "Left" —
      and it ran under the actions column. The pill is capped and ellipsises
      inside its cell now, so a longer status added later cannot bring this back. */
+  /* Found by what it CONTAINS, not by its index. This read td[11] until
+     2026-09-09, when the Fee Status column was removed at the owner's request
+     and every cell after it shifted one to the left — so the test was
+     measuring the actions cell and passing for the wrong reason. */
   const cell = await win.evaluate(() => {
-    const td = document.querySelectorAll('.stu-table tbody tr:first-child td')[11];
+    const pill = document.querySelector('.stu-table tbody tr:first-child .stu-pill');
+    const td = pill && pill.closest('td');
     return { text: td.innerText.trim(), overflow: td.scrollWidth - td.clientWidth };
   });
   expect(cell.text).toBe('Blacklisted');

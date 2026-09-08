@@ -356,14 +356,20 @@ test('cash received counts the drawer, not the books, and money is conserved', a
   await win.evaluate(() => navigate('dashboard'));
   await win.waitForSelector('.dash-kpi-grid', { timeout: 8000 });
   const tile = await win.evaluate(() => {
+    /* FOUND BY ITS HANDLER, NOT ITS LABEL. This looked for /cash\s+received/ in
+       the tile's text, and had been failing since the tile was renamed to
+       "Advance / Arrears" on 2026-09-05 — a red spec that said nothing about
+       the code, because the label is the one part of this tile the test does
+       not care about. What it asserts, and what the comment above already says
+       it asserts, is that the figure is on the dashboard and that it opens the
+       reconciliation modal rather than linking to Payments. The handler is that
+       claim; the wording over it is the owner's to change. */
     const t = [...document.querySelectorAll('.dash-kpi-grid .dsh-card')]
-      // \s+, not a literal space: the KPI label is "Cash<br>Received" so that it
-      // wraps predictably in a narrow tile, which puts a newline in innerText.
-      .find(c => /cash\s+received/i.test(c.innerText));   // rendered uppercase by CSS
+      .find(c => /showCashReceivedModal/.test(c.getAttribute('onclick') || ''));
     return t ? { text: t.innerText.replace(/\s+/g, ' ').trim(),
                  opens: /showCashReceivedModal/.test(t.getAttribute('onclick') || '') } : null;
   });
-  expect(tile, 'the Cash Received tile is on the dashboard').toBeTruthy();
+  expect(tile, 'the cash-reconciliation tile is on the dashboard').toBeTruthy();
   expect(tile.opens).toBe(true);
 
   await win.evaluate(() => showCashReceivedModal());

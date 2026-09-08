@@ -320,6 +320,16 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   expect(await win.locator('.pay-table th.pay-col-x').count(),
     'secondary columns missing from the table').toBe(3);
 
+  /* A width where the table genuinely overflows. The 2026-09-07 density pass
+     brought the payments table down to ~1065px, which FITS the 1366 default —
+     an improvement, and one that left this test with nothing to pan and
+     failing on a table that pans perfectly at any narrower window. The
+     behaviour under test is the drag, not the column widths, so the window is
+     pinned here rather than the padding being put back. 1366 stays the layout
+     QA floor and is covered by responsive-floor.spec.js. */
+  await win.setViewportSize({ width: 1100, height: 760 });
+  await win.waitForTimeout(400);
+
   const wrap = win.locator('.pay-table-wrap');
   const canPan = await wrap.evaluate(el => el.scrollWidth > el.clientWidth + 1);
   expect(canPan, 'table does not overflow, so there is nothing to pan to').toBe(true);
@@ -335,41 +345,72 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   await win.mouse.up();
   await win.waitForTimeout(200);
 
-  expect(await wrap.evaluate(el => el.scrollLeft),
-    'dragging did not pan the table').toBeGreaterThan(30);
+  /* PANS TO THE END, rather than "past 30px". The literal 30 was written when
+     this table was ~225px wider than its container; the 2026-09-07 density pass
+     (compact currency, tighter cells) brought the overflow down to ~11px on
+     this one-row fixture, so the drag now reaches the right edge after 11 and
+     the old assertion failed on a table that pans perfectly.
+
+     Asserting against the container's own maximum keeps the test about the
+     behaviour — a drag moves the table as far as it can go — and stops it
+     being a hidden assertion about column widths, which is what made it fail
+     for a change that improved the thing it was guarding. */
+  const panned = await wrap.evaluate(el => ({
+    left: el.scrollLeft, max: el.scrollWidth - el.clientWidth }));
+  expect(panned.max, 'nothing to pan to').toBeGreaterThan(0);
+  expect(panned.left, 'dragging did not pan the table to its end')
+    .toBeGreaterThanOrEqual(Math.min(30, panned.max));
 
   // Dragging must not have triggered anything underneath it.
   expect(await win.evaluate(() => document.querySelectorAll('.modal-overlay').length),
     'the pan opened a modal — the trailing click was not swallowed').toBe(0);
 
-  // CSV header + row follow the table: money columns after Status, Date last.
-  const csv = await win.evaluate(() => {
+  /* The workbook follows the table. exportPaymentsCSV is the same button it
+     always was and the same name the keyboard shortcut calls, but it writes a
+     real .xlsx through the global export engine now: a CSV cannot carry the
+     hostel, the period, the filters, a number format or a print setup, which
+     is most of what the export standard is about.
+
+     HXW.save is stubbed, so what is asserted is the workbook that would have
+     been written — the part that can actually be wrong. */
+  const book = await win.evaluate(async () => {
     let captured = null;
-    const real = window.downloadCSV;
-    window.downloadCSV = rows => { captured = rows; };
-    try { exportPaymentsCSV(); } finally { window.downloadCSV = real; }
-    return captured;
+    const real = HXW.save;
+    HXW.save = async (spec, name) => { captured = { spec, name }; return name; };
+    try { await exportPaymentsCSV(); } finally { HXW.save = real; }
+    if (!captured) return null;
+    const sheet = captured.spec.sheets[0];
+    const headerRow = sheet.freeze.row;
+    const headers = sheet.rows[headerRow - 1].cells.map(c => c.v);
+    const row = sheet.rows[headerRow].cells.map(c => (c ? c.v : ''));
+    return { name: captured.name, headers, row,
+             numeric: sheet.rows[headerRow].cells.map(c => (c ? c.t : '')) };
   });
-  expect(csv, 'exportPaymentsCSV produced nothing').toBeTruthy();
-  // Mess/Mo and Charge/Mo joined on 2026-08-31: a sheet that quoted the rent
+
+  expect(book, 'the payments export produced nothing').toBeTruthy();
+  expect(book.name).toMatch(/^Hostyllo_Payments_.*\.xlsx$/);
+
+  const at = name => book.headers.indexOf(name);
+  for (const col of ['Room', 'Student', 'Month', 'Charge / mo', 'Rent / mo', 'Mess / mo',
+                     'Paid', 'Unpaid', 'Method', 'Status', 'Date',
+                     'Admission fee', 'Extra charges', 'Concession']) {
+    expect(book.headers, col + ' is missing from the workbook').toContain(col);
+  }
+
+  // Rent and mess joined the export on 2026-08-31: a sheet that quoted the rent
   // half alone could not be reconciled against what the student actually paid,
   // because the mess is a separate field on the record.
-  expect(csv[0]).toEqual(['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo',
-                          'Amount Paid','Unpaid','Method','Status','Adm.Fee',
-                          'Extra Charges','Concession','Date']);
-  // Values must have moved with their headers, not just the labels. Indexes are
-  // read off the header row rather than hardcoded, so the next column added
-  // fails on what it actually breaks instead of on arithmetic.
-  const at = name => csv[0].indexOf(name);
-  const row = csv[1];
-  expect(row[at('Rent/Mo')] + row[at('Mess/Mo')], 'the two halves must make the charge')
-    .toBe(row[at('Charge/Mo')]);
-  expect(row[at('Amount Paid')], 'Amount Paid column').toBe(12000);
-  expect(row[at('Unpaid')], 'Unpaid column').toBe(4000);
-  expect(row[at('Method')], 'Method column').toBe('Cash');
-  expect(row[at('Adm.Fee')], 'Adm.Fee column').toBe(5000);
-  expect(String(row[at('Extra Charges')]), 'Extra Charges column').toContain('Laundry');
-  expect(row[at('Concession')], 'Concession column').toBe(1000);
+  expect(book.row[at('Rent / mo')] + book.row[at('Mess / mo')],
+    'the two halves must make the charge').toBe(book.row[at('Charge / mo')]);
+
+  // §62 — amounts are NUMBERS, not "PKR 12,000" strings nobody can sum.
+  expect(book.row[at('Paid')], 'Paid column').toBe(12000);
+  expect(book.numeric[at('Paid')], 'Paid must be a number cell').toBe('money');
+  expect(book.row[at('Unpaid')], 'Unpaid column').toBe(4000);
+  expect(book.row[at('Method')], 'Method column').toBe('Cash');
+  expect(book.row[at('Admission fee')], 'Admission fee column').toBe(5000);
+  expect(String(book.row[at('Extra charges')]), 'Extra charges column').toContain('Laundry');
+  expect(book.row[at('Concession')], 'Concession column').toBe(1000);
 
   await app.close();
 });

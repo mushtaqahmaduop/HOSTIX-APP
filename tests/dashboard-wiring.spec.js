@@ -129,15 +129,38 @@ test('the slice is a control: it answers the pointer and opens the page', async 
     return { clickable: seg.classList.contains('is-clickable'),
              cursor: cs.cursor, onclick: seg.getAttribute('onclick'),
              tip: (seg.querySelector('title') || {}).textContent,
-             transitions: cs.transitionProperty };
+             transitions: cs.transitionProperty,
+             /* The outward vector for this slice, computed from its arc's
+                bisector in _dashDonut and read by the :hover rule. */
+             tx: seg.style.getPropertyValue('--dnut-tx'),
+             ty: seg.style.getPropertyValue('--dnut-ty'),
+             /* The sweep's target. The segment is drawn at zero length and
+                given this on the second frame, so a settled ring proves the
+                animation both ran and landed on the real geometry. */
+             target: seg.getAttribute('data-dash'),
+             live: (seg.style.strokeDasharray || '').trim() };
   });
   expect(d.clickable).toBe(true);
   expect(d.cursor).toBe('pointer');
   expect(d.onclick).toContain('openPaymentsByMethod');
   expect(d.tip).toContain('Open Payments');
-  /* It was `static` — no transition at all, so hovering did nothing (owner:
-     "the pie chart is static ... not move out when cursor is placed"). */
-  expect(d.transitions).toContain('stroke-width');
+
+  /* IT MOVES OUT NOW, WHICH IS WHAT THIS TEST WAS ALWAYS ABOUT. The owner's
+     original report was "the pie chart is static ... not move out when cursor
+     is placed"; the first fix grew the stroke instead, because an exploded
+     slice needs the arc's bisector and that was judged not worth it. The owner
+     asked for the offset again on 7 Sep — Reports has drawn its own donut with
+     Chart.js `hoverOffset` all along — so the bisector is computed now and the
+     slice really does move. Asserting the vector rather than the stroke: that
+     is the behaviour the sentence above describes. */
+  expect(d.transitions).toContain('transform');
+  expect(parseFloat(d.tx) || parseFloat(d.ty)).not.toBe(0);
+
+  /* And the ring fills on arrival rather than appearing. Both numbers are
+     compared as numbers because the browser normalises the attribute's
+     "30.84 308.45" to a comma-joined "30.84, 308.45" once it is set in style. */
+  const nums = t => String(t).split(/[\s,]+/).filter(Boolean).map(Number);
+  expect(nums(d.live)).toEqual(nums(d.target));
 
   await app.close();
 });

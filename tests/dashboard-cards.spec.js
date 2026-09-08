@@ -405,8 +405,22 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
      156px. Its labels were wrapping to two lines at one-tile width; one-word
      labels and the short-height density rules gave back ~90px, and no figure
      and no label was lost to get it. */
+  /* THESE ARE CONTENT-BOX HEIGHTS, NOT SCREEN HEIGHTS, and the first one was
+     not. `1366x768 @100%` was tested at a 768px viewport — which is the whole
+     SCREEN. Take the taskbar off and the web contents are ~730-740, so the one
+     size the owner names as the floor ("if it fails at 1366x768 it does not
+     ship") was being measured 30px more generously than it ever gets in use.
+
+     It mattered: there was no height tier anywhere between 720px and unlimited,
+     so every viewport in that band drew the full-height layout, and on a hostel
+     with five room types row C ended 21px below the bottom of the screen. The
+     spec passed the whole time, because at 768 the same layout clears by 9.
+
+     Every other row here was already a content box (the note above explains the
+     660 and 614), which is why they were the only sizes the tiers ever covered.
+     1040 for 1920x1080 follows the same reasoning and stays. */
   const SIZES = [
-    { label: '1366x768 @100%',  width: 1366, height: 768 },
+    { label: '1366x768 @100%',  width: 1366, height: 738 },
     { label: '1920x1080 @100%', width: 1920, height: 1040 },
     { label: '1920x1080 @125%', width: 1536, height: 824 },
     { label: '1920x1080 @150%', width: 1280, height: 660 },

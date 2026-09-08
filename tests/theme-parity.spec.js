@@ -108,6 +108,33 @@ function launchOpts() {
     args: [REPO_ROOT, '--dev', '--user-data-dir=' + PROFILE, '--no-sandbox', '--disable-gpu'], env };
 }
 
+/** Log in. Extracted 2026-09-08 when a second test needed it. */
+async function login(win) {
+  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
+  await win.waitForFunction(
+    () => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
+    null, { timeout: 30000 });
+  await win.fill('#login-user', 'warden1');
+  await win.fill('#login-input', 'admin123');
+  await win.click('#login-btn');
+  await win.waitForFunction(
+    () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
+    null, { timeout: 30000 });
+}
+
+/** Put the app in a named theme. The app restores a saved theme on boot, so
+ *  neither state may be assumed — this asserts rather than toggles blindly. */
+async function setTheme(win, want) {
+  await win.evaluate((w) => {
+    const isLight = document.body.classList.contains('light-theme');
+    if ((w === 'light') !== isLight && typeof toggleTheme === 'function') toggleTheme();
+  }, want);
+  await win.waitForTimeout(320);
+  const got = await win.evaluate(() =>
+    document.body.classList.contains('light-theme') ? 'light' : 'dark');
+  if (got !== want) throw new Error('could not switch to ' + want + ' theme');
+}
+
 // ── Colour maths, run in Node so a broken page cannot fake a pass ───────────
 function parse(c, over) {
   c = String(c || '').trim();
@@ -274,4 +301,107 @@ test('both themes resolve independently, and both are readable', async () => {
     'green, and the real button stayed white-on-#4B7BFF at 3.77:1, because THREE\n' +
     'rules defined .btn-primary and the winner (chrome.css, loaded last) hardcoded\n' +
     'color:#fff. A token nothing reads is decoration.').toEqual([]);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE LIST ABOVE IS HAND-MAINTAINED, AND THAT IS HOW `--accent-100` GOT OUT.
+//
+// MUST_DIFFER names ~35 tokens. The app declares 264. On 2026-09-08 the owner
+// reported that every focus ring and every icon tile in every form was WHITE in
+// dark mode; the cause was `--accent-100`, declared once in the light ramp and
+// never restated for dark, so `--accent-soft` resolved to a near-white blue.
+// It had been that way since the ramp was written, through every green run of
+// the spec above — because nobody had added it to the list.
+//
+// A guard you have to remember to update is a guard that documents the bugs you
+// already found. This one enumerates the tokens from the CSS ON DISK, so a
+// token added tomorrow is covered without being mentioned anywhere.
+//
+// The list is therefore INVERTED: instead of naming what must differ, name the
+// few colours that are deliberately theme-independent, each with its reason.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Colour-valued tokens that are the SAME in both themes on purpose. */
+const SHARED_ON_PURPOSE = {
+  // A raw neutral scale, not a semantic token. Both themes pick steps FROM it;
+  // it is the palette, not a decision.
+  '--gray-50': 'raw scale', '--gray-100': 'raw scale', '--gray-200': 'raw scale',
+  '--gray-300': 'raw scale', '--gray-400': 'raw scale', '--gray-500': 'raw scale',
+  '--gray-600': 'raw scale', '--gray-700': 'raw scale', '--gray-800': 'raw scale',
+  '--gray-900': 'raw scale', '--gray-950': 'raw scale',
+  // Same, for the accent. Only 600 and 700 are lifted for dark — the rest are
+  // the ramp those two are chosen from.
+  '--accent-50': 'raw ramp', '--accent-200': 'raw ramp', '--accent-300': 'raw ramp',
+  '--accent-400': 'raw ramp', '--accent-500': 'raw ramp',
+  '--accent-800': 'raw ramp', '--accent-900': 'raw ramp',
+  '--brand-primary-dark': 'alias of --accent-800',
+  // TRANSLUCENT ON PURPOSE, which is what lets one value serve both grounds:
+  // rgba(78,125,255,.22) resolves to ~#D8E2FF on a white card and to a dark
+  // blue wash on a near-black one. This is the fix for the bug in the header
+  // above — a flat hex here is what broke it.
+  '--accent-100': 'translucent — composites correctly on either ground',
+  '--accent-soft': 'alias of --accent-100',
+  '--brand-primary-soft': 'alias of --accent-100',
+  // Someone else's brand. WhatsApp green is WhatsApp green in both themes.
+  '--wa-green': 'third-party brand', '--wa-green-2': 'third-party brand',
+  // Disabled text is exempt from AA by the standard, and reads as "off" on
+  // either ground.
+  '--text-disabled': 'disabled state, AA-exempt',
+  // Not text. A hairline, chosen to sit between the two grounds.
+  '--border-strong': 'border, not ink',
+  // The print documents' palette. They render on white paper in a window with
+  // no stylesheet and must NOT follow the app's theme — CLAUDE.md's one
+  // documented exception to the raw-hex rule.
+  '--ant-amber': 'print document palette', '--ant-teal': 'print document palette',
+};
+
+test('every colour token differs between themes, or is listed as deliberately shared', async () => {
+  test.setTimeout(240000);
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+
+  // Names come from the CSS on disk. Reading `cssRules` off a file:// <link>
+  // is blocked and yields an empty list without throwing — which would make
+  // this spec pass by measuring nothing.
+  const cssDir = path.join(REPO_ROOT, 'renderer');
+  const names = [...new Set(
+    fs.readdirSync(cssDir).filter(f => f.endsWith('.css'))
+      .flatMap(f => (fs.readFileSync(path.join(cssDir, f), 'utf8')
+        .match(/--[A-Za-z0-9_-]+\s*:/g) || []).map(s => s.replace(/\s*:$/, ''))))].sort();
+  expect(names.length, 'no tokens found — the scan is measuring nothing').toBeGreaterThan(150);
+
+  const read = () => win.evaluate((ns) => {
+    const out = {};
+    const cs = getComputedStyle(document.body);
+    for (const n of ns) out[n] = cs.getPropertyValue(n).trim();
+    return out;
+  }, names);
+
+  await setTheme(win, 'light');
+  const light = await read();
+  await setTheme(win, 'dark');
+  const dark = await read();
+
+  const COLOUR = /^(#|rgb|hsl|color-mix)/i;
+  const shared = [];
+  for (const n of names) {
+    const l = light[n];
+    if (!l || !COLOUR.test(l)) continue;         // not a colour token
+    if (l !== dark[n]) continue;                 // properly themed
+    if (SHARED_ON_PURPOSE[n]) continue;          // listed, with a reason
+    shared.push(`${n} = ${l}`);
+  }
+
+  expect(shared,
+    'These colour tokens resolve to ONE value in both themes and are not on the\n' +
+    'deliberately-shared list. Either give the token a value per theme, or add it\n' +
+    'to SHARED_ON_PURPOSE with the reason it does not need one.\n\n' +
+    'Watch for the aliasing trap while you are here: a token declared on :root as\n' +
+    '`var(--other)` is substituted WHERE IT IS DECLARED, so it freezes the DARK\n' +
+    'value and light mode inherits it. That is what this check catches most.')
+    .toEqual([]);
+
+  await app.close();
 });

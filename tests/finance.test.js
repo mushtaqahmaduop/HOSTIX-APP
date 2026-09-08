@@ -44,7 +44,8 @@ const F = vm.runInContext(`({
   DB, money, moneyIsSafe, moneySum, moneyPct, MONEY_SAFE_MAX,
   calculateCharges, calculateOutstanding, calculateBill,
   applyPayment, reversePayment, calculateRefund,
-  calculateSettlement, calculateReportTotals
+  calculateSettlement, calculateReportTotals,
+  refundPolicy, calculateMidMonthRefund, refundPolicyLabel
 })`, sandbox);
 const { DB } = F;
 
@@ -656,6 +657,90 @@ ok('the hostel service model still overrides the record, through the layer', () 
   assert.strictEqual(F.calculateCharges(DB.students[0]).total, 8000);
   const p = { id: 'p1', studentId: 's1', month: '2026-08', amount: 0, status: 'Pending', messIncluded: true };
   assert.strictEqual(F.calculateOutstanding(p), 8000);
+});
+
+
+/* ── THE MID-MONTH REFUND RULE ──────────────────────────────────────────────
+   The arithmetic a departing student argues with, so it is the arithmetic
+   worth pinning: the divisor is the real length of the month, the day they
+   leave counts as a day they stayed, and nothing ever comes back that was not
+   charged in the first place. */
+const REC = () => ({ id: 'p1', studentId: 's1', month: '2026-09',
+  monthlyRent: 15000, messCharge: 6000, messIncluded: true, amount: 21000, status: 'Paid' });
+
+ok('no policy set means nothing is refunded', () => {
+  setup();
+  const r = F.calculateMidMonthRefund(REC(), '2026-09-10');
+  assert.strictEqual(r.amount, 0);
+  assert.strictEqual(r.mode, 'none');
+});
+
+ok('mess-only pro-rates the food and leaves the bed alone', () => {
+  setup();
+  // September has 30 days; leaving on the 10th uses 10 and leaves 20 unused.
+  const r = F.calculateMidMonthRefund(REC(), '2026-09-10', { policy: { mode: 'mess', cutoff: 0 } });
+  assert.strictEqual(r.days, 20);
+  assert.strictEqual(r.of, 30);
+  assert.strictEqual(r.amount, 4000);          // 6000 × 20/30, rent untouched
+});
+
+ok('rent and mess together pro-rate both', () => {
+  setup();
+  const r = F.calculateMidMonthRefund(REC(), '2026-09-10', { policy: { mode: 'both', cutoff: 0 } });
+  assert.strictEqual(r.amount, 14000);         // 21000 × 20/30
+});
+
+ok('the divisor is the real month, not a flat 30', () => {
+  setup();
+  // February 2026 has 28 days: leaving on the 14th leaves 14 unused, which is
+  // exactly half — a flat 30 would have said 16/30 and overpaid.
+  const feb = Object.assign(REC(), { month: '2026-02' });
+  const r = F.calculateMidMonthRefund(feb, '2026-02-14', { policy: { mode: 'mess', cutoff: 0 } });
+  assert.strictEqual(r.of, 28);
+  assert.strictEqual(r.days, 14);
+  assert.strictEqual(r.amount, 3000);          // 6000 × 14/28
+});
+
+ok('the day they leave is a day they stayed', () => {
+  setup();
+  // The last day of the month: nothing unused, nothing back.
+  const r = F.calculateMidMonthRefund(REC(), '2026-09-30', { policy: { mode: 'both', cutoff: 0 } });
+  assert.strictEqual(r.days, 0);
+  assert.strictEqual(r.amount, 0);
+});
+
+ok('a cut-off refuses the refund after its day', () => {
+  setup();
+  const inTime = F.calculateMidMonthRefund(REC(), '2026-09-05', { policy: { mode: 'full', cutoff: 7 } });
+  assert.strictEqual(inTime.amount, 21000);    // the whole month back
+  const late = F.calculateMidMonthRefund(REC(), '2026-09-08', { policy: { mode: 'full', cutoff: 7 } });
+  assert.strictEqual(late.amount, 0);
+  assert.ok(/cut-off/.test(late.reason));
+});
+
+ok('a student not on the mess gets no mess refund', () => {
+  setup();
+  const off = Object.assign(REC(), { messIncluded: false });
+  const r = F.calculateMidMonthRefund(off, '2026-09-10', { policy: { mode: 'mess', cutoff: 0 } });
+  assert.strictEqual(r.amount, 0);
+  assert.ok(/not on the mess/.test(r.reason));
+});
+
+ok('nothing comes back that was never charged', () => {
+  setup();
+  // A month already fully written off: the concession has consumed the charge,
+  // so the rule has nothing left to give.
+  const done = Object.assign(REC(), { concession: 21000 });
+  const r = F.calculateMidMonthRefund(done, '2026-09-10', { policy: { mode: 'both', cutoff: 0 } });
+  assert.strictEqual(r.amount, 0);
+});
+
+ok('an unpaid month reduces the bill but returns no cash', () => {
+  setup();
+  const unpaid = Object.assign(REC(), { amount: 0, status: 'Pending' });
+  const r = F.calculateMidMonthRefund(unpaid, '2026-09-10', { policy: { mode: 'both', cutoff: 0 } });
+  assert.strictEqual(r.amount, 14000);   // the charge drops by this much…
+  assert.strictEqual(r.cash, 0);         // …but there is no money to hand back
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

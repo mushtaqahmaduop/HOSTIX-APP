@@ -77,6 +77,31 @@ Three things follow from that, and each is a way to break 50 hostels quietly:
 - All DB writes go through async `saveDB()`. Never call it without await.
 - CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. **Royal blue** (`--accent-600` = `#2563eb`), set in `renderer/tokens.css`. It was violet once; both this line and that file's own header still said so long after it changed.
 
+## Exports — one engine, nine modules
+
+**Every PDF and Excel export goes through `renderer/src/export/`.** A module
+supplies a *definition* — its rows, columns, filters, summary and totals — and
+`EXPORT.pdf(def)` / `EXPORT.excel(def)` render it. The engine owns branding,
+page size, orientation, headers, footers, repeated headings, page breaks,
+number and date formatting, file naming, empty states and print configuration.
+The contract is documented at the top of `export/engine.js`; built 2026-09-07
+to the owner's export specification, and `docs/SESSION_HANDOFF_2026-09-07-exports.md`
+records what each module carries.
+
+- **PDF and Excel are rendered from ONE definition.** They may differ in
+  presentation and in which columns they carry — a workbook can hold a CNIC
+  column that would not fit a printed page — but never in their dataset.
+- **`export/xlsx-writer.js` writes the .xlsx, not SheetJS.** The vendored
+  SheetJS is the community build: it cannot write cell styles, frozen panes or
+  page setup, which is four of the specification's non-negotiables. SheetJS is
+  still loaded and still used — Settings READS uploaded workbooks with it.
+- **Do not invent a column for a field this app does not record.** An expense
+  is `{date, category, description, amount}`; there is no vendor and no payment
+  method. A page of em dashes is worse than an honest set of fields.
+- The **room visit sheet** and the **student card** deliberately stay outside
+  the engine. They are physical objects with a signed-off design, not exports.
+- `npm run test:export` holds the engine to the specification without Electron.
+
 ## HARD RULES — read before touching code
 ## RULE 0 — BRANCH CHECK BEFORE ANY EDIT
 
@@ -180,7 +205,8 @@ long after it stopped being true, which is how a regression reaches a client.
 ```powershell
 $env:HOSTIX_TEST_PROFILE = "<scratch>\hostix-profile"
 Copy-Item C:\HOSTIX-APP\.devdata\license.enc $env:HOSTIX_TEST_PROFILE\
-npx playwright test          # 39 spec files, 84 pass + 2 skip
+npx playwright test          # 50 spec files — run 5-7 at a time or the worker OOMs
+npm run test:export          # the export engine, against the export spec (no Electron)
 npm run test:services        # 136
 npm run test:retention       # 13
 npm run test:license         # licence system

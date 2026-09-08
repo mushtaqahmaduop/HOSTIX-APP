@@ -2,8 +2,13 @@
 // HOSTYLLO — the three PDF exports, and the order everything comes out in
 //
 // Students, Payments and Expenses each grew an Export PDF on 2026-08-31. They
-// share one builder (printListDocument in utils.js) precisely so they cannot
+// share one export engine (src/export/engine.js) precisely so they cannot
 // drift into three documents that look like they came from three products.
+//
+// The header band is the engine's now: HOSTYLLO and "Hostel Management System"
+// on the left, the DOCUMENT's name and the hostel on the right. So .title
+// holds the report and .subtitle holds the hostel and the period - the
+// opposite of the pre-engine layout, and the reason these assertions moved.
 //
 // What these tests actually guard:
 //
@@ -148,10 +153,15 @@ test('the student roster prints in room order, lettered rooms included', async (
     studentsFiltered().map(t => { const r = DB.rooms.find(x => x.id === t.roomId); return r ? r.number : ''; }));
   expect(rooms, 'the roster is not in ascending room order').toEqual(['1', '2', '10', 'A 01']);
 
-  expect(doc.name).toMatch(/^Test-Hostel_Student-Roster_\d{4}-\d{2}-\d{2}\.pdf$/);
+  // Section 32: Hostyllo_<Module>_<Scope>_<Date>
+  expect(doc.name).toMatch(/^Hostyllo_Students_.*\d{4}-\d{2}-\d{2}\.pdf$/);
   expect(doc.landscape, 'eighteen columns need the long edge').toBe(true);
-  expect(doc.title).toContain('Test Hostel');
+  expect(doc.title).toBe('Student Roster');
+  expect(doc.subtitle).toContain('Test Hostel');
   expect(doc.headers).toContain('Charge / mo');
+  // Section 16: an export must state the scope it was taken under.
+  expect(doc.text).toContain('Scope');
+  expect(doc.text).toContain('Generated');
 
   await app.close();
 });
@@ -184,9 +194,10 @@ test('expenses print one category when one is chosen', async () => {
   const doc = await capture(win, 'exportExpensesPDF');
   expect(doc).not.toBeNull();
 
-  // printHeader puts the HOSTEL in .title and the document's own name in
-  // .subtitle — so this is where "Expenses — Electricity" lands.
-  expect(doc.subtitle).toContain('Electricity');
+  // The document's own name is .title now, and the category rides in the
+  // filename as part of the scope - a file holding only the electricity rows,
+  // named for the month alone, gets forwarded as if it were the whole spend.
+  expect(doc.title).toContain('Electricity');
   expect(doc.name).toContain('Electricity');
   // Only that category's two records, and only its total.
   expect(doc.firstCells.length).toBe(3);          // 2 records + the subtotal row
@@ -271,5 +282,44 @@ test('every Print opens its window through the main process, never window.open',
   expect(html).not.toContain('Generating report');
   expect(html).toContain('Electricity');
 
+  await app.close();
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE REPORT WINDOW CAN SAVE A REAL PDF
+
+   The window opened by `open-pdf-window` is a plain BrowserWindow loading a
+   temp file, and its only exit used to be `window.print()` — Chromium's print
+   dialog, whose page numbering is a checkbox the user has to find and whose
+   footer prints the temp file's file:// path across the bottom of an owner's
+   report. It has a preload now (pdf-window-preload.js) so it can ask the MAIN
+   process to print ITSELF: A4, the right orientation, and the export
+   specification's footer (hostel, and "Page X of Y" on every sheet).
+
+   If the preload is ever dropped from the BrowserWindow options this does not
+   throw — the button silently falls back to window.print() and the footer
+   quietly reverts. Hence a test that looks for the bridge itself.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('the report window gets its save bridge', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+  await win.evaluate(() => renderPage('students'));
+  await win.waitForTimeout(500);
+
+  const pdfWinPromise = app.waitForEvent('window');
+  await win.evaluate(() => exportStudentsPDF());
+  const pdfWin = await pdfWinPromise;
+  await pdfWin.waitForLoadState('domcontentloaded');
+  await pdfWin.waitForTimeout(500);
+
+  const bridge = await pdfWin.evaluate(() => ({
+    hasBridge: typeof window.hostylloPdf === 'object' && typeof window.hostylloPdf.save === 'function',
+    meta: (document.querySelector('meta[name="hx-export"]') || {}).content || null,
+    buttons: [...document.querySelectorAll('.pdf-print-btn')].map(b => b.textContent.trim()),
+  }));
+  expect(bridge.hasBridge, 'the report window has no save bridge').toBe(true);
+  expect(JSON.parse(bridge.meta).landscape).toBe(true);
+  expect(JSON.parse(bridge.meta).file).toMatch(/^Hostyllo_Students_.*\.pdf$/);
+  await pdfWin.close();
   await app.close();
 });

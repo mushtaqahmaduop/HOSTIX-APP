@@ -249,11 +249,18 @@ test('annual archive: live + archived data, period scoping, sections, drill-down
   const doc = await pdfWin.evaluate(() => document.documentElement.outerHTML);
   await pdfWin.close();
   console.log('PRINT len=' + doc.length);
-  ['Students', 'Payments', 'Outstanding', 'Expenses by Category', 'Cancellations']
+  // The section headings the global export engine gives an archive (§39). The
+  // expenses section was "Expenses by Category" and the closing figure was a
+  // row reading "GRAND TOTAL"; the engine names the section for its dataset
+  // and states the total in words, so both moved with the redesign.
+  ['Students', 'Payments', 'Outstanding', 'Expenses', 'Cancellations']
     .forEach(section => expect(doc, `print is missing ${section}`).toContain(section));
   expect(doc).toContain('Bilal Ahmad');
   expect(doc).toContain('Handed to owner');   // the transfer, under its category
-  expect(doc).toContain('GRAND TOTAL');
+  expect(doc, 'the period total is missing').toContain('Total spent in this period');
+  // §39 — one document, and it identifies itself.
+  expect(doc).toContain('HOSTYLLO');
+  expect(doc).toContain('Annual Archive');
   expect(doc).not.toContain('Cylinder');      // July's expense, not August's
 
   await app.close();

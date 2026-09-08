@@ -146,12 +146,21 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   await win.waitForTimeout(900);
   const expPage = await win.evaluate(() => {
     const rows = Array.from(document.querySelectorAll('.exp-table tbody tr'));
-    const total = document.querySelector('.exp-stat__v')?.textContent.trim();
+    /* The headline figure is COMPACT on screen now ("PKR 16.7K", expenses spec
+       §8), so its text is no longer the exact number this assertion is about.
+       The exact value is carried in data-exact for precisely this — the check
+       here is arithmetic (headline == sum of rows, transfer counted once), not
+       formatting, and it should not break every time the display format is
+       tuned. The compact text is asserted separately below. */
+    const totalEl = document.querySelector('.exp-stat__v > [data-exact]');
+    const total = totalEl?.getAttribute('data-exact');
+    const totalShown = document.querySelector('.exp-stat__v')?.textContent.trim();
     return {
       renderError: document.body.innerText.includes('Render Error'),
       rowCount: rows.length,
       cats: rows.map(r => r.querySelector('.exp-cat')?.textContent.trim()),
       total,
+      totalShown,
       // Last month's record must not be on this month's page.
       hasLastMonth: document.body.innerText.includes('LAST MONTH ONLY'),
     };
@@ -162,7 +171,9 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.rowCount).toBe(4);                       // 3 expenses + 1 transfer
   expect(expPage.cats.join('|')).toMatch(/Fund Transfer/);
   // Headline total must equal the rows, transfer included, and not double it.
-  expect(expPage.total.replace(/[^0-9]/g, '')).toBe('16700');
+  expect(expPage.total).toBe('16700');
+  // ...and the compact rendering of that same figure is what the warden sees.
+  expect(expPage.totalShown).toBe('PKR 16.7K');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
   await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });
