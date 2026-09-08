@@ -1479,9 +1479,13 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
 
   const landscape = !!(opts && opts.landscape);
   const pageSize  = (opts && opts.pageSize) || 'A4';
+  /* INCHES, not millimetres. printToPDF has taken inches since Electron 21,
+     so the previous `{top:18,…}` asked for an eighteen-inch margin on a sheet
+     eleven inches tall — the values here are the export specification's
+     margins (§6) converted once, at the only place that needs them. */
   const marginsMM = landscape
-    ? { top: 10, bottom: 10, left: 12, right: 12 }
-    : { top: 18, bottom: 18, left: 18, right: 18 };
+    ? { top: 9 / 25.4, bottom: 9 / 25.4, left: 9 / 25.4, right: 9 / 25.4 }
+    : { top: 12 / 25.4, bottom: 12 / 25.4, left: 12 / 25.4, right: 12 / 25.4 };
 
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
     title: 'Save PDF',
@@ -1535,7 +1539,13 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
     width: 1050, height: 750, minWidth: 600, minHeight: 400,
     title: safeTitle,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    webPreferences: {
+      nodeIntegration: false, contextIsolation: true,
+      // The window's own Save-as-PDF bridge. Without it the only exit is
+      // Chromium's print dialog, which cannot produce the specification's
+      // per-page footer and prints the temp file's path across the bottom.
+      preload: path.join(__dirname, 'pdf-window-preload.js'),
+    },
     backgroundColor: '#ffffff',
     autoHideMenuBar: true
   });
@@ -1551,6 +1561,70 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
     console.error('[HOSTYLLO] open-pdf-window failed:', e.message);
     pdfWin.destroy();
     try { fs.unlinkSync(tmpFile); } catch (_) {}
+  }
+});
+
+/* ── SAVE THE REPORT WINDOW AS A REAL PDF ────────────────────────────────────
+   The window asks the main process to print ITSELF. That is the difference
+   between this and `window.print()`: no renderer blocks, the page size is A4
+   because we say so rather than because the print dialog remembered it, and
+   the footer is ours — hostel, generated stamp and "Page X of Y" on every
+   sheet, which the export specification (§8) requires and Chromium's own
+   dialog footer (which prints the temp file's file:// path) cannot give.
+
+   Margins are INCHES here. Electron's printToPDF has taken inches since v21;
+   passing millimetre numbers asks for an eighteen-INCH margin on an A4 page,
+   which is the whole sheet.                                                 */
+const MM = 25.4;
+ipcMain.handle('pdf-window:save', async (event, opts) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return { success: false, reason: 'No window' };
+
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const landscape = o.landscape === true;
+  const title = (typeof o.title === 'string' ? o.title : 'Report').slice(0, 160);
+  const footer = (typeof o.footer === 'string' ? o.footer : '').slice(0, 200);
+  const suggested = (typeof o.file === 'string' && o.file.trim())
+    ? o.file.replace(/[^a-zA-Z0-9._\- ]/g, '').slice(0, 160)
+    : `Hostyllo_Report_${_ymdLocal()}.pdf`;
+
+  const { filePath, canceled } = await dialog.showSaveDialog(win, {
+    title: 'Save PDF',
+    defaultPath: suggested,
+    filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+  });
+  if (canceled || !filePath) return { success: false, reason: 'cancelled' };
+
+  // Chromium renders header/footer templates at font-size 0 unless told
+  // otherwise, and only understands its own .pageNumber / .totalPages spans.
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const footTpl =
+    '<div style="width:100%;font-size:7px;color:#64748B;font-family:Segoe UI,Arial,sans-serif;' +
+    'padding:0 ' + (landscape ? '9mm' : '12mm') + ';display:flex;justify-content:space-between">' +
+    '<span>' + esc(footer) + '</span>' +
+    '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>';
+
+  try {
+    const pdf = await event.sender.printToPDF({
+      pageSize: 'A4',
+      landscape,
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: footTpl,
+      margins: landscape
+        ? { top: 9 / MM, bottom: 14 / MM, left: 9 / MM, right: 9 / MM }
+        : { top: 12 / MM, bottom: 16 / MM, left: 12 / MM, right: 12 / MM },
+    });
+    fs.writeFileSync(filePath, pdf);
+    shell.showItemInFolder(filePath);
+    return { success: true, filePath, title };
+  } catch (e) {
+    console.error('[HOSTYLLO] pdf-window:save failed:', e.message, e.code);
+    let reason = 'PDF could not be generated. Please try again.';
+    if (e.code === 'ENOSPC') reason = 'PDF failed: your disk is full.';
+    else if (e.code === 'EACCES' || e.code === 'EPERM') reason = 'PDF failed: that folder is not writable.';
+    return { success: false, reason };
   }
 });
 

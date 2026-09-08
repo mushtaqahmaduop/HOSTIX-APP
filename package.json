@@ -31,6 +31,8 @@
     "test:reporttotals": "node tests/report-totals.test.js",
     "test:feestatus": "node tests/fee-status.test.js",
     "test:services": "node tests/services.test.js",
+    "test:export": "node tests/export-engine.test.js",
+    "test:theme": "node tests/css-theme-hygiene.test.js",
     "test:update": "node tests/update-url.test.js && node tests/update-check.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
