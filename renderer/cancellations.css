@@ -63,3 +63,68 @@
     border-top:1px solid var(--border2); padding-top:10px; margin-top:10px;
 }
 .canc-set__note b { color:var(--text); }
+
+/* ══ EDIT A CANCELLATION — the form (add and edit cancellation.png) ═══════ */
+.cef-who {
+    display: flex; align-items: center; gap: 13px;
+    padding: 13px 15px; border-radius: 12px; margin-bottom: 14px;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.cef-who__av {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg, var(--accent-soft)); color: var(--accent-strong);
+    font-weight: 800; font-size: 15px;
+}
+.cef-who__n { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14.5px; font-weight: 700; color: var(--text); }
+.cef-who__s { font-size: 11.5px; color: var(--text3); margin-top: 3px; overflow-wrap: anywhere; }
+.cef-who__room { margin-left: auto; text-align: right; flex-shrink: 0; }
+.cef-who__rn { font-size: 14px; font-weight: 800; color: var(--text); }
+.cef-who__rt { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* The dues position. Amber, not red: an unpaid month does not stop a
+   cancellation being recorded — it is settled when the record is confirmed. */
+.cef-due {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 12px 14px; border-radius: 11px; margin-bottom: 14px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+}
+.cef-due svg { flex-shrink: 0; margin-top: 1px; color: var(--ant-warning-fg); }
+.cef-due__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.cef-due__s { font-size: 11.5px; line-height: 1.5; color: var(--text3); margin-top: 3px; }
+.cef-due .set-btn { flex-shrink: 0; align-self: center; }
+
+/* What the checkout did with the money, read back from the record. */
+.cef-settle {
+    margin-top: 12px; padding: 12px 14px; border-radius: 11px;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.cef-settle__h { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text2); margin-bottom: 8px; }
+.cef-settle__h b { color: var(--text); }
+.cef-settle__h svg { color: var(--accent-strong); }
+.cef-settle.is-pending {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 11.5px; line-height: 1.55; color: var(--text3);
+    background: var(--accent-soft);
+}
+.cef-settle.is-pending svg { flex-shrink: 0; margin-top: 1px; color: var(--accent-strong); }
+.cef-settle.is-pending b { color: var(--text2); }
+
+/* The part-month refund, offered at checkout (finance.js: the rule; Settings →
+   Rent & Mess: where it is chosen). A tick rather than an automatic deduction —
+   the warden confirming a departure is the person who knows whether the rule
+   should apply to this particular leaver. */
+.canc-rf {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    margin-top: 12px; padding: 12px 14px; border-radius: 11px;
+    background: var(--ant-warning-bg); border: 1px solid var(--border);
+}
+.canc-rf input { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+.canc-rf__b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.canc-rf__t { font-size: 13px; font-weight: 700; color: var(--text); }
+.canc-rf__s { font-size: 11.5px; line-height: 1.5; color: var(--text3); }
+
+/* The cut-off stepper on the Settings card. */
+.rf-cut { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.rf-cut > label { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.rf-cut__s { font-size: 11.5px; color: var(--text3); flex: 1; min-width: 180px; }

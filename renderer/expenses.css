@@ -168,5 +168,34 @@
 }
 .exp-pager button:hover:not(:disabled) { color:var(--text); border-color:var(--dh, var(--accent)); }
 .exp-pager button:disabled  { opacity:.4; cursor:default; }
-.exp-pager button.is-on     { background:var(--accent); border-color:var(--accent); color:#fff; }
+.exp-pager button.is-on     { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 .exp-pager__gap { color:var(--text3); padding:0 2px; }
+
+
+/* ══ PERIOD MOVEMENT ON THE HEADLINE CARD ══════════════════════════════════
+   Expenses spec §6.1 asks for the change against the previous comparable
+   period, §7 for "a simple indicator" rather than a second graphic — the card
+   already carries a sparkline of the same series, and two trend visuals on one
+   card is exactly the decoration §7 warns reduces readability.
+
+   "No comparison" is a first-class state, not an empty one. §7 forbids
+   fabricating a percentage when there is no previous period, and a near-zero
+   base is the same hazard that once printed "+157902725.6%" on the dashboard.
+
+   Up is NOT good here. On a spending register a rise is the thing worth
+   noticing, so the arrow takes the warning hue rather than the success one —
+   the opposite of the same indicator on Payments, where collection rising is
+   the good outcome. */
+.exp-stat__trend {
+    display:inline-block; margin-left:7px; vertical-align:middle;
+    font-size:11px; font-weight:800; letter-spacing:.2px;
+    padding:1px 6px; border-radius:20px; white-space:nowrap;
+}
+.exp-stat__trend.is-up   { background:var(--ant-warning-bg); color:var(--ant-warning-fg); }
+.exp-stat__trend.is-down { background:var(--ant-success-bg); color:var(--ant-success-fg); }
+.exp-stat__trend.is-none { background:var(--ant-neutral-bg); color:var(--ant-neutral-fg); font-weight:600; }
+
+
+/* The figure and its movement sit on one baseline, but in two elements — see
+   the comment on stat() in expenses.js for why they must not be nested. */
+.exp-stat__vrow { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; }

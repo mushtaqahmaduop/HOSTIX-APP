@@ -495,6 +495,102 @@ function _dashGreetingText() {
    an empty month must not look like a month where one method took everything.
 
    R and C are locked together: C = 2*pi*R. If R changes, C must. */
+
+/* ── EMOJI-STYLE SECTION ICONS (owner, 7 Sep: "use svgs of emojis") ──────────
+   The six cards below row A wore the same flat one-colour glyph the rest of the
+   app uses, in a pale square. Three of them - This Month at a Glance, Needs
+   Action and Quick Actions - wore nothing at all, so row C opened with a bare
+   word where row B opened with a marked card.
+
+   These are drawn like emoji: a few flat shapes, more than one colour, readable
+   at 17px. That is the whole difference from an icon-font glyph, and it is what
+   makes a header findable by shape rather than by reading it.
+
+   EVERY COLOUR IS A TOKEN. An emoji is normally a fixed-palette picture, which
+   is exactly what CLAUDE.md forbids in a renderer component - a raw hex here
+   would be a picture that ignores the theme and goes on being sunny yellow on a
+   near-black card. Building them out of --accent / --green / --amber / --red
+   and the surface tokens keeps them recognisable AND lets both themes repaint
+   them. White details are drawn as --card, not #fff, for the same reason: on a
+   dark card the "paper" of a calendar should be the card's own surface.
+
+   No `currentColor` anywhere, so the chip behind them can be any tint without
+   bleeding into the drawing. */
+const DASH_EMOJI = {
+  /* Rising bars with a green arrow over them - the chart, and which way it is
+     going, which is the one thing the card's title does not say. */
+  trend:
+      '<rect x="3" y="13" width="4" height="8" rx="1.3" fill="var(--accent)" opacity=".45"/>'
+    + '<rect x="10" y="9" width="4" height="12" rx="1.3" fill="var(--accent)" opacity=".7"/>'
+    + '<rect x="17" y="5" width="4" height="16" rx="1.3" fill="var(--accent)"/>'
+    + '<path d="M3.5 9.5 9 5l3.5 3L19 2" fill="none" stroke="var(--green)" stroke-width="2"'
+    + ' stroke-linecap="round" stroke-linejoin="round"/>'
+    + '<path d="M15.5 2H19v3.5" fill="none" stroke="var(--green)" stroke-width="2"'
+    + ' stroke-linecap="round" stroke-linejoin="round"/>',
+  /* A bed. Headboard in the accent, mattress pale, pillow picked out. */
+  bed:
+      '<rect x="2" y="6" width="2.6" height="14" rx="1.3" fill="var(--accent)"/>'
+    + '<rect x="4" y="12" width="18" height="5.5" rx="2" fill="var(--accent)" opacity=".55"/>'
+    + '<rect x="6" y="8.5" width="6" height="4" rx="1.6" fill="var(--card)"'
+    + ' stroke="var(--accent)" stroke-width="1.5"/>'
+    + '<rect x="4.6" y="17.5" width="2.2" height="3" rx="1.1" fill="var(--accent)"/>'
+    + '<rect x="19.2" y="17.5" width="2.2" height="3" rx="1.1" fill="var(--accent)"/>',
+  /* A calendar with today marked. The red dot is the only red on row C, which
+     is what makes the card findable in the corner of the eye. */
+  calendar:
+      '<rect x="2.5" y="4.5" width="19" height="17" rx="3" fill="var(--card)"'
+    + ' stroke="var(--accent)" stroke-width="1.6"/>'
+    + '<path d="M2.5 9.5h19" stroke="var(--accent)" stroke-width="1.6"/>'
+    + '<rect x="2.5" y="4.5" width="19" height="5" rx="3" fill="var(--accent)" opacity=".9"/>'
+    + '<rect x="6.6" y="2.5" width="2.2" height="4" rx="1.1" fill="var(--accent)"/>'
+    + '<rect x="15.2" y="2.5" width="2.2" height="4" rx="1.1" fill="var(--accent)"/>'
+    + '<circle cx="8.5" cy="14" r="1.6" fill="var(--red)"/>'
+    + '<circle cx="14" cy="14" r="1.4" fill="var(--accent)" opacity=".35"/>'
+    + '<circle cx="8.5" cy="18.2" r="1.4" fill="var(--accent)" opacity=".35"/>'
+    + '<circle cx="14" cy="18.2" r="1.4" fill="var(--accent)" opacity=".35"/>',
+  /* A block of rooms - the card is about how full the building is, not about a
+     bed, which is what the seat card next to it is about. */
+  building:
+      '<path d="M4 21V6.2a1.6 1.6 0 0 1 1-1.5l6-2.4a1.6 1.6 0 0 1 2.2 1.5V21Z"'
+    + ' fill="var(--accent)" opacity=".55"/>'
+    + '<path d="M13.2 21V9.5h5.3a1.5 1.5 0 0 1 1.5 1.5V21Z" fill="var(--accent)"/>'
+    /* WINDOWS IN THE CARD COLOUR, NOT AMBER. Lit windows want to be warm and
+       amber is the obvious pick — and it is wrong here, because amber means
+       Pending on this very screen, three cards away. A hue that carries a
+       specific meaning elsewhere on the same page cannot also be decoration. */
+    + '<rect x="6.4" y="7" width="2.4" height="2.4" rx=".7" fill="var(--card)" opacity=".92"/>'
+    + '<rect x="6.4" y="11.6" width="2.4" height="2.4" rx=".7" fill="var(--card)" opacity=".92"/>'
+    + '<rect x="15.5" y="12.6" width="2.2" height="2.2" rx=".7" fill="var(--card)" opacity=".85"/>'
+    + '<rect x="9.6" y="16.4" width="2.6" height="4.6" rx=".8" fill="var(--card)" opacity=".9"/>',
+  /* A warning triangle. The one card on the page that reports a backlog, so it
+     is the one that gets a warning hue rather than the accent. */
+  alert:
+      '<path d="M12.9 3.6a1.7 1.7 0 0 0-2.9 0L2.3 17.4A1.7 1.7 0 0 0 3.8 20h16.4a1.7 1.7 0'
+    + ' 0 0 1.5-2.6Z" fill="var(--amber)"/>'
+    + '<rect x="10.7" y="8.4" width="2.6" height="5.6" rx="1.3" fill="var(--card)"/>'
+    + '<circle cx="12" cy="16.6" r="1.4" fill="var(--card)"/>',
+  /* A lightning bolt - four verbs that happen at once. */
+  bolt:
+      '<path d="M13.6 2.3 5.2 12.4a1 1 0 0 0 .77 1.64h4.2l-1.5 7.1a.75.75 0 0 0 1.32.62l8.6'
+    /* ACCENT, NOT AMBER AND RED. A yellow bolt with a red shadow is what the
+       emoji looks like, and both hues are spoken for on this screen: amber is
+       Pending and red is Expenses, one row up. Quick Actions is a neutral card
+       and must not look like it is reporting a warning. Two strengths of one
+       hue instead, which keeps the shape reading as a bolt. */
+    + '-10.2a1 1 0 0 0-.77-1.64h-4.3l1.42-6.9a.75.75 0 0 0-1.33-.62Z" fill="var(--accent)"/>'
+    + '<path d="M10.17 14.04h4.2l-4.9 5.9Z" fill="var(--card)" opacity=".45"/>',
+};
+
+/* The chip. 34px on row C to match the Occupancy card that already had one,
+   30px inside row B's tighter headers. */
+function dashEmojiChip(name, px) {
+  const n = px || 30;
+  return '<div class="dash-chip dash-chip--emoji" style="width:' + n + 'px;height:' + n
+       + 'px;border-radius:' + Math.round(n / 3.2) + 'px">'
+       + '<svg class="icon" viewBox="0 0 24 24" style="width:' + Math.round(n * 0.56)
+       + 'px;height:' + Math.round(n * 0.56) + 'px">' + (DASH_EMOJI[name] || '') + '</svg></div>';
+}
+
 function _dashDonut(segs, centreTop, centreSub, opts) {
   const o = opts || {};
   const R = 54, C = 2 * Math.PI * R, W = o.width || 22;
@@ -507,12 +603,24 @@ function _dashDonut(segs, centreTop, centreSub, opts) {
     const len = (v / total) * C;
     /* -at as the offset walks the ring clockwise; the -90deg rotation on the
        group starts it at twelve o'clock instead of three. */
-    /* A SLICE IS A CONTROL (owner, 7 Sep). It thickens under the pointer and
-       opens the page behind it when clicked. Thickening rather than sliding the
-       wedge outward: an exploded slice needs the arc's bisector and a transform
-       per segment, and it moves the ring's silhouette on every hover, which on
-       a four-slice donut reads as the chart twitching. Growing the stroke keeps
-       the ring still and still says "this one". */
+    /* A SLICE IS A CONTROL. It slides outward under the pointer and opens the
+       page behind it when clicked.
+
+       IT USED TO THICKEN INSTEAD, and the note here argued for that: an
+       exploded slice "needs the arc's bisector and a transform per segment, and
+       it moves the ring's silhouette on every hover". Both halves are true and
+       the owner has asked for the offset anyway (7 Sep) — Reports has drawn its
+       methods donut with Chart.js `hoverOffset: 6` all along, so the two rings
+       in this app answered the pointer in two different ways, and the offset is
+       the one they already knew. Matching them is worth the bisector.
+
+       So the bisector is computed here, once, at build time, and handed to CSS
+       as a vector. The transform lands in the rotated group's own coordinate
+       space, which is why the -90 degree rotation needs no correction: the
+       angle below is the segment's own, in the same frame it is drawn in. */
+    const midRad = ((at + len / 2) / C) * 2 * Math.PI;
+    const off = ' style="--dnut-tx:' + (Math.cos(midRad) * 5).toFixed(2) + 'px;'
+              + '--dnut-ty:' + (Math.sin(midRad) * 5).toFixed(2) + 'px"';
     const act = s.onclick ? ' onclick="' + s.onclick + '"' : '';
     /* The popup reads these off the element rather than closing over the data:
        the ring is a string of HTML by the time it reaches the DOM, so there is
@@ -522,11 +630,21 @@ function _dashDonut(segs, centreTop, centreSub, opts) {
               + ' data-pct="'  + (total > 0 ? (v / total * 100).toFixed(1) : '0') + '"'
               + ' data-hue="'  + escHtml(s.color) + '"'
               + ' data-money="' + (o.money === false ? '0' : '1') + '"';
+    /* THE RING FILLS ON ARRIVAL. It is drawn at zero length and handed its real
+       dasharray on the next frame by _dnutPlay(), so the CSS transition on
+       stroke-dasharray runs it round the circle. Reports' donut has always done
+       this — it is Chart.js's default load animation — and the dashboard's ring
+       simply appeared. Same chart, same two screens, two behaviours.
+
+       The TARGET is in a data attribute rather than in the style, so a paint
+       that happens with animation suppressed (reduced motion, or a print) still
+       has the real geometry in the attribute and shows a correct ring. */
     const seg = '<circle class="dnut__seg' + (s.onclick ? ' is-clickable' : '') + '"'
       + ' cx="70" cy="70" r="' + R + '" fill="none"'
       + ' stroke="' + escHtml(s.color) + '" stroke-width="' + W + '"'
-      + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"'
-      + ' stroke-dashoffset="' + (-at).toFixed(2) + '"' + act + dat + '>'
+      + ' stroke-dasharray="0 ' + C.toFixed(2) + '"'
+      + ' data-dash="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"'
+      + ' stroke-dashoffset="' + (-at).toFixed(2) + '"' + off + act + dat + '>'
       + (s.label ? '<title>' + escHtml(s.label) + '</title>' : '')
       + '</circle>';
     at += len;
@@ -534,6 +652,7 @@ function _dashDonut(segs, centreTop, centreSub, opts) {
   }).join('') : '';
 
   setTimeout(_dnutWireTip, 0);
+  setTimeout(_dnutPlay, 0);
   return '<div class="dnut">'
     + '<svg viewBox="0 0 140 140" class="dnut__svg" role="img"'
     + ' aria-label="' + escHtml(o.aria || 'Breakdown chart') + '">'
@@ -547,6 +666,26 @@ function _dashDonut(segs, centreTop, centreSub, opts) {
     +   '<div class="dnut__sub">' + escHtml(centreSub || '') + '</div>'
     + '</div>'
     + '</div>';
+}
+
+/* Hand every freshly-drawn segment its real length on the next frame, so the
+   transition has two states to run between. Two frames, not one: setting the
+   attribute in the same frame the element was inserted in gives the style
+   engine no "before" to interpolate from, and the ring snaps.
+
+   Reduced motion is honoured by CSS (the transition is switched off there), and
+   this still runs — the segment gets its geometry either way, it just arrives
+   instantly. Nothing here decides whether to animate; it only supplies the
+   target. */
+function _dnutPlay() {
+  const segs = document.querySelectorAll('.dnut__seg[data-dash]');
+  if (!segs.length) return;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    segs.forEach(el => {
+      const d = el.getAttribute('data-dash');
+      if (d) el.style.strokeDasharray = d;
+    });
+  }));
 }
 
 /* ── THE SLICE POPUP ────────────────────────────────────────────────────────
@@ -816,9 +955,22 @@ function renderDashboard() {
            The students page is still one click away on the rail. */}
 
     <!-- Total Revenue — blue -->
-    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-blue">
+    ${''/* LOCKED (owner, 7 Sep). All five of these were `dsh-card--click`
+           navigating to a page. The owner's reason for taking it away is the
+           right one: every figure here is already broken down in Reports, on a
+           screen built to be filtered, exported and printed — so the card was a
+           slow link to a worse version of what Reports gives you, and it made
+           five large tiles twitch under the pointer on a screen whose job is to
+           be read.
+
+           ADVANCE / ARREARS IS THE EXCEPTION, and stays clickable, because its
+           detail is NOT in Reports: showCashReceivedModal() is the
+           reconciliation that explains why cash-in-the-drawer and revenue
+           differ, and there is nowhere else in the app that answers it.
+           counter-flow-decisions.spec.js asserts the tile keeps it. */}
+    <div class="dsh-card dh-blue">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H6a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-3 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM6 5h13a1 1 0 0 0 0-2H6a6 6 0 0 0-6 6v6a6 6 0 0 0 6 6h14a2 2 0 0 0 2-2v-1a1 1 0 0 0-2 0v1H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z"/></svg></div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3.2" fill="currentColor" opacity=".38"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/><circle cx="5.6" cy="12" r="1.35" fill="currentColor"/><circle cx="18.4" cy="12" r="1.35" fill="currentColor"/></svg></div>
         <div class="dash-kpi__label">Total<br>Revenue</div>
         <div class="dash-pill-stack">
           ${revDelta!==null?`<span class="dash-pill ${revDelta>=0?'dh-green':'dh-red'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
@@ -837,9 +989,9 @@ function renderDashboard() {
            the result that uses it. Expenses now sits AFTER Fund. The owner's
            call, and the arithmetic is identical either way. */}
     <!-- Pending — amber -->
-    <div onclick="navigate('payments')" class="dsh-card dsh-card--click dh-amber">
+    <div class="dsh-card dh-amber">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 22H6a1 1 0 0 1-1-1v-2a5 5 0 0 1 2.69-4.43L9.3 14l-1.6-.57A5 5 0 0 1 5 9V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2a5 5 0 0 1-2.7 4.43L14.7 14l1.6.57A5 5 0 0 1 19 19v2a1 1 0 0 1-1 1ZM7 20h10v-1a3 3 0 0 0-1.62-2.66l-3-1.07a1 1 0 0 1 0-1.88l3-1.07A3 3 0 0 0 17 9V8H7v1a3 3 0 0 0 1.62 2.66l3 1.07a1 1 0 0 1 0 1.88l-3 1.07A3 3 0 0 0 7 19Z"/></svg></div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M12 7.4v4.9l3.2 1.9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Pending</div>
         <div class="dash-pill-stack">
           <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
@@ -847,27 +999,25 @@ function renderDashboard() {
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub">click to collect</div>
       ${_dashBar(pending, totalExpected, 'kbar--amber')}
     </div>
 
     <!-- Available Fund — green when in profit, red when the fund is negative
          (a negative fund is genuine danger, not decoration) -->
-    <div onclick="navigate('reports')" class="dsh-card dsh-card--click ${netProfit>=0?'dh-green':'dh-red'}">
+    <div class="dsh-card ${netProfit>=0?'dh-green':'dh-red'}">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg></div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><rect x="6.3" y="12.6" width="2.7" height="5.1" rx="1.35" fill="currentColor"/><rect x="10.65" y="9.2" width="2.7" height="8.5" rx="1.35" fill="currentColor"/><rect x="15" y="6.3" width="2.7" height="11.4" rx="1.35" fill="currentColor"/></svg></div>
         <div class="dash-kpi__label">Available<br>Fund</div>
         <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
-      ${''/* Compact, and for a sharper reason than the others: this line is
-             TWO figures with a minus between them, so it is the first thing on
-             the row to wrap — at real hostel scale it took two lines on its own
-             and made every card in the row taller, which is what pushed Needs
-             Action and Quick Actions under the fold. */}
-      <div class="dash-kpi__sub" title="${fmtPKR(collected)} − ${fmtPKR(moExp)}">
-        PKR ${fmtCompact(collected)} − PKR ${fmtCompact(moExp)}
-      </div>
+      ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
+             restated the subtraction using the two cards either side of it —
+             Total Revenue two tiles left, Expenses one tile right — so at a
+             glance the row printed the same two figures three times. It was
+             also the first line in the row to wrap, being two unbounded numbers
+             and an operator. The card keeps its Profit/Loss pill, which is the
+             part of the sentence the other two cards do NOT already say. */}
       <!-- This was the only money card with no history behind it, so it sat
            visibly emptier than the four beside it. The series is the same
            subtraction the headline states, month by month — nothing new is
@@ -881,9 +1031,9 @@ function renderDashboard() {
          figure as "collected − expenses", and it used to sit to the LEFT of the
          expenses it subtracts, so the row asked the reader to hold a number
          that had not been shown yet. -->
-    <div onclick="navigate('expenses')" class="dsh-card dsh-card--click dh-red">
+    <div class="dsh-card dh-red">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M22.92 15.62a1 1 0 0 1-.55.55 1 1 0 0 1-.37.08h-5a1 1 0 0 1 0-2h2.59L14 8.41l-3.29 3.3a1 1 0 0 1-1.42 0l-6-6a1 1 0 1 1 1.42-1.42L10 9.59l3.29-3.3a1 1 0 0 1 1.42 0L20 11.59V9a1 1 0 0 1 2 0v6a1 1 0 0 1-.08.62Z"/></svg></div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M12 7.2v9.1m0 0 3.6-3.6M12 16.3l-3.6-3.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Expenses</div>
         <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
       </div>
@@ -913,8 +1063,8 @@ function renderDashboard() {
          reconciliation modal uses — one answer to "what moved", not two. */ -->
     <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-violet dash-kpi--split">
       <div class="dash-kpi__top">
-        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v3l2 1"/></svg></div>
-        <div class="dash-kpi__label">Advance /<br>Arrears</div>
+        <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M8.7 17V7.6m0 0L6.2 10.1M8.7 7.6l2.5 2.5M15.3 7v9.4m0 0 2.5-2.5M15.3 16.4l-2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="dash-kpi__label">Advance&nbsp;/<br>Arrears</div>
         <div class="dash-pill-stack">
           <span class="dash-pill dh-slate">${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
         </div>
@@ -961,7 +1111,7 @@ function renderDashboard() {
   <div class="dash-sec">
     <!-- Header: title + legend -->
     <div class="dash-sec__head">
-      <div class="dash-chip dh-blue" style="width:30px;height:30px;border-radius:9px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M22 7v6a1 1 0 0 1-2 0v-3.59l-6.29 6.3a1 1 0 0 1-1.42 0L9 12.41l-5.29 5.3a1 1 0 1 1-1.42-1.42l6-6a1 1 0 0 1 1.42 0L13 13.59l5.59-5.59H15a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Z"/></svg></div>
+      ${dashEmojiChip('trend', 26)}
       <span class="dash-sec__title">Revenue Trend</span>
       <div class="dash-legend" style="margin-left:auto">
         <!-- TWO SERIES, and the legend says two (design 1c, "bars instead of
@@ -1008,37 +1158,43 @@ function renderDashboard() {
   <!-- Seat availability — interactive room grid -->
     <div class="dash-sec">
       <div class="dash-sec__head">
+        ${dashEmojiChip('bed', 26)}
         <div class="seat-hd">
           <div class="seat-hd__t">Seat Availability</div>
-          <div class="seat-hd__s">Live room occupancy status</div>
+          <div class="seat-hd__s">Live room occupancy</div>
         </div>
         <!-- THE THREE COUNTS SIT IN THE TOP CORNER (owner ref: the seat-header
              reference of 7 Sep). Label above figure, right-aligned,
              out of the way of the room grid — which is the point: every pixel
              this header does not take is another row of rooms on screen. Each
              is still the click target it was. -->
+        ${/* FIGURES, NOT A NAVBAR (owner, 7 Sep). These were three buttons
+             opening three filtered lists. Nothing else in a card header on this
+             page is a control, so the row read as navigation the card does not
+             have, and it competed with Expand and Print at the foot — which go
+             to the same place. They are now what they look like: three
+             readings. Expand at the foot still opens the full list, and the
+             room tiles below are still individually clickable. */''}
         <div class="seat-inline">
-          <button class="seat-inline__k" onclick="showSeatDetailModal('rooms')" title="Every seat in the hostel">
-            <span>Total Beds</span><b>${totalSeats}</b></button>
-          <button class="seat-inline__k is-free" onclick="showSeatDetailModal('vacant')" title="Seats nobody is in">
-            <span>Free Beds</span><b>${availSeats}</b></button>
-          <button class="seat-inline__k" onclick="showSeatDetailModal('occupied')" title="Seats with a resident">
-            <span>Filled Beds</span><b>${allActiveSeats}</b></button>
+          <span class="seat-inline__k" title="Every seat in the hostel">
+            <span>Total Beds</span><b>${totalSeats}</b></span>
+          <span class="seat-inline__k is-free" title="Seats nobody is in">
+            <span>Free Beds</span><b>${availSeats}</b></span>
+          <span class="seat-inline__k" title="Seats with a resident">
+            <span>Filled Beds</span><b>${allActiveSeats}</b></span>
         </div>
       </div>
-      <!-- THE OCCUPANCY BAR, moved here from the Occupancy Overview card
-           (owner, 7 Sep). That card carried one figure and one bar and sat
-           beside two other cards describing the same seats; the bar is the part
-           worth keeping, and this is where the seats are. It reads ABOVE the
-           counts because it is the summary of them. -->
-      <div class="seat-occbar">
-        <div class="seat-occbar__top">
-          <span class="seat-occbar__pct">${seatPct}%</span>
-          <span class="seat-occbar__of">${fmtNum(filledSeats)} of ${fmtNum(totalSeats)} beds occupied</span>
-        </div>
-        <div class="seat-occbar__bar"><i style="width:${Math.min(100, seatPct)}%"></i></div>
-        <div class="seat-occbar__ends"><span>0%</span><span>100%</span></div>
-      </div>
+      ${/* THE OCCUPANCY BAR IS GONE, AND ITS HEIGHT BOUGHT A ROW OF ROOMS
+           (owner, 7 Sep). It arrived here the same day from the Occupancy
+           Overview card, and it was ~44px spent on one ratio.
+
+           Nothing is lost, which is why it was the right 44px to spend. The
+           bar's own numerator and denominator are the two counts still in the
+           header directly above it — Filled Beds and Total Beds — and the
+           percentage it drew is on the Occupancy by Room Type card in row C,
+           in the "61% Full" chip and again in the ring's centre. What the room
+           grid shows instead cannot be read anywhere else on this screen: WHICH
+           rooms have a bed going. */''}
       ${''/* The three-tile summary block that stood here is gone — the same
              counts now sit inline in the header above, as db3 draws them. That
              is ~70px of card returned to the room grid, and it is why the grid
@@ -1075,7 +1231,19 @@ function renderDashboard() {
              the key is answered by the tiles themselves (blue has a bed going,
              grey does not, and each tile prints its own fraction), and Expand
              and Print are on the Rooms page this link opens. */}
+      ${/* THE KEY IS BACK, BOTTOM LEFT (owner, 7 Sep, reversing the same
+           day's removal). It was dropped as "answered by the tiles
+           themselves", which is true only once you already know the code —
+           a pale blue tile and a grey tile are not self-describing on first
+           sight, and this card is the one a warden opens to find a bed.
+
+           It costs nothing: seat-foot was already a flex row with Expand and
+           Print pushed to the right, so the key fills space that was empty. */''}
       <div class="seat-foot">
+        <span class="seat-key">
+          <span class="seat-key__k"><i class="seat-key__sw"></i>Has free beds</span>
+          <span class="seat-key__k"><i class="seat-key__sw is-full"></i>Full</span>
+        </span>
         ${''/* EXPAND AND PRINT, NOT A LINK (owner, 7 Sep - reversing their own
                answer of an hour earlier). They sit on the SAME single line the
                link occupied, right-aligned, rather than on a row of their own:
@@ -1102,7 +1270,7 @@ function renderDashboard() {
   <div class="dash-row-c">
   <div class="dash-sec">
     <div class="dash-sec__head" style="margin-bottom:4px">
-      <div class="dash-chip dh-blue" style="width:34px;height:34px;border-radius:10px"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" style="width:17px;height:17px"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg></div>
+      ${dashEmojiChip('building', 30)}
       <div style="min-width:0">
         <div class="dash-sec__title">Occupancy by Room Type</div>
         <div class="dash-sec__sub">Overview of seat occupancy by room type</div>
@@ -1279,13 +1447,26 @@ function renderDashboard() {
    because nothing has happened yet in the window both are describing. */
 
 /** Counts for the glance — six figures, each from its own table, one month. */
+/* WHAT HAPPENED TODAY — not this month (owner, 2026-09-09).
+
+   The card was scoped to the sidebar's month like everything else on the page,
+   and the owner's question for it is a different one: what did the person on
+   the counter DO today. So this is the one panel on the dashboard that ignores
+   the month picker, and the pill beside its heading carries the date so nobody
+   has to infer the window.
+
+   THE PAYMENTS ROW CHANGES MEANING WITH IT, and the change is the right one:
+   it counts payments COLLECTED today — `p.date`, the day the money was taken —
+   rather than payments belonging to the selected month. A warden who collects
+   August arrears on the 9th of September did that work today, and the card
+   that reports their day has to say so. Collection by Method two cards away
+   still answers the month's question; the two are no longer the same rupees
+   and no longer claim to be. */
 function _dlGlance(mo) {
-  const mk = mo || thisMonth();
-  const inMonth = d => _toMonthKey(d) === mk;
+  const td = (typeof today === 'function') ? today() : ymd(new Date());
+  const isToday = d => !!d && String(d).slice(0, 10) === td;
   const log = DB.checkinlog || [];
-  /* Same month test as _dlMethods(), so the count and the amount on this row
-     are the same rupees Collection by Method draws two cards away. */
-  const paid = (DB.payments || []).filter(p => p.status === 'Paid' && _payMatchesMonth(p, mk));
+  const paid = (DB.payments || []).filter(p => p.status === 'Paid' && isToday(p.date));
   /* `page: null` means THERE IS NOWHERE TO GO, and the row is rendered as plain
      text rather than a button.
 
@@ -1310,12 +1491,12 @@ function _dlGlance(mo) {
      not an elided one, and the card's heading already supplies the period.
      `title` carries the long form for anyone who wants it. */
   return [
-    { k: 'in',    label: 'Check-ins',   full: 'Check-ins',            n: log.filter(c => inMonth(c.date) && c.type !== 'Check-out').length, page: null },
-    { k: 'out',   label: 'Check-outs',  full: 'Check-outs',           n: log.filter(c => inMonth(c.date) && c.type === 'Check-out').length, page: null },
-    { k: 'new',   label: 'Admissions',  full: 'New admissions',       n: (DB.students || []).filter(s => inMonth(s.joinDate)).length,       page: 'students' },
-    { k: 'money', label: 'Payments',    full: 'Payments received',    n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
-    { k: 'issue', label: 'Complaints',  full: 'Complaints raised',    n: (DB.complaints || []).filter(c => inMonth(c.date || c.createdAt)).length,  page: 'issues' },
-    { k: 'wrench',label: 'Maintenance', full: 'Maintenance requests', n: (DB.maintenance || []).filter(m => inMonth(m.date || m.createdAt)).length, page: 'maintenance' },
+    { k: 'in',    label: 'Check-ins',   full: 'Check-ins today',            n: log.filter(c => isToday(c.date) && c.type !== 'Check-out').length, page: null },
+    { k: 'out',   label: 'Check-outs',  full: 'Check-outs today',           n: log.filter(c => isToday(c.date) && c.type === 'Check-out').length, page: null },
+    { k: 'new',   label: 'Admissions',  full: 'Students admitted today',    n: (DB.students || []).filter(s => isToday(s.joinDate)).length,       page: 'students' },
+    { k: 'money', label: 'Payments',    full: 'Payments collected today',   n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
+    { k: 'issue', label: 'Complaints',  full: 'Complaints raised today',    n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
+    { k: 'wrench',label: 'Maintenance', full: 'Maintenance raised today',   n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },
   ];
 }
 
@@ -1409,6 +1590,7 @@ function _dlIco(k) {
     spend: '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     room:  '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     report:'<path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="13" width="9" height="4" rx="1"/><rect x="7" y="5" width="12" height="4" rx="1"/>',
+    chev:  '<path d="m9 18 6-6-6-6"/>',
   };
   return '<svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (P[k] || '') + '</svg>';
 }
@@ -1443,53 +1625,11 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       : '<div class="dl-glance__row dl-glance__row--static">' + inner + '</div>';
   }).join('');
 
-  /* A STABLE COLOUR PER METHOD. The donut and the row dot have to agree, and
-     the same method must keep its colour from one month to the next — a wallet
-     that is blue in September and green in October makes the two months look
-     like different reports. Keyed by name, with a deterministic fallback so a
-     method configured later still gets a fixed colour rather than a random one.
-
-     These are the design system's chart tokens (§17.2) plus two neighbours;
-     they are NOT the status colours, because a payment method is not a state
-     and green here would read as "good". */
-  /* CASH TAKES THE STRONG BLUE (owner, 7 Sep). The reference mock has EasyPaisa
-     dominant and blue, but that is the mock's data — in this hostel cash is the
-     method most of the money actually arrives by, and the heaviest slice should
-     carry the heaviest colour or the ring reads upside down. The two swap
-     rather than both going blue: two slices in one hue is not a chart. */
-  const METHOD_HUES = {
-    'cash':          '#2563EB',
-    'easypaisa':     '#93C5FD',
-    'jazzcash':      '#16A34A',
-    'bank transfer': '#D97706',
-    'bank':          '#D97706',
-    'cheque':        '#7C3AED',
-    'other':         '#94A3B8',
-  };
-  /* SPARE HUES FOR METHODS THE OWNER ADDS IN SETTINGS. Every one of these is
-     far from all six named hues above — no second blue, and NO SECOND GREEN,
-     which is the bug being fixed: 'Crypto' is owner-added, fell to a hashed
-     pick, and drew #65A30D, a lime a few degrees off JazzCash's #16A34A. Two
-     wallets in the same green is not a chart (owner, 7 Sep). */
-  const METHOD_SPARE = ['#DB2777', '#0891B2', '#EA580C', '#4F46E5', '#0F766E',
-                        '#A21CAF', '#B45309', '#334155'];
-
-  /* Allocated BY POSITION among the unnamed methods rather than by hashing the
-     name. A hash can collide however long the spare list is, and the failure
-     is invisible until two particular wallets happen to be configured
-     together; walking the list cannot collide at all. Order comes from
-     Settings, so a method keeps its colour from month to month — only adding
-     or removing one above it in the list can move it. */
-  const _spareFor = new Map();
-  ((DB.settings && DB.settings.paymentMethods) || []).forEach(m => {
-    const k = String(m || '').trim().toLowerCase();
-    if (!k || METHOD_HUES[k] || _spareFor.has(k)) return;
-    _spareFor.set(k, METHOD_SPARE[_spareFor.size % METHOD_SPARE.length]);
-  });
-  const _methodHue = (name) => {
-    const k = String(name || '').trim().toLowerCase();
-    return METHOD_HUES[k] || _spareFor.get(k) || '#94A3B8';
-  };
+  /* THE METHOD COLOURS MOVED TO utils.js. They were a local here and Reports
+     had a second, different ramp keyed by index — same wallets, two colour
+     schemes, and the Reports one shifted whenever Settings was reordered. One
+     authority now; the comment explaining the choice of hues went with it. */
+  const _methodHue = (name) => methodHue(name);
 
   const methodRows = methods.rows.length
     ? methods.rows.map(m => {
@@ -1547,17 +1687,22 @@ function _dashLedgerRow(mo, pending, pendingCount) {
      form, with the identical permission check, opened from anywhere else.
      openAddPayment() is a page rather than a modal — Add Payment is a full
      screen in this app — and it is still the form, reached in one click. */
+  /* Each card says what the form behind it DOES, as the reference draws it.
+     "Add Payment" names the button; "Record a student payment" names the job,
+     which is what somebody scanning four tiles is actually matching against. */
   const actions = [
-    { k: 'card',   label: 'Add Payment',      fn: "openAddPayment()" },
-    { k: 'spend',  label: 'Add Expense',      fn: "showAddExpenseModal()" },
+    { k: 'card',   tone: 'blue',   label: 'Add Payment',      sub: 'Record a student payment', fn: "openAddPayment()" },
+    { k: 'spend',  tone: 'green',  label: 'Add Expense',      sub: 'Record a hostel expense',  fn: "showAddExpenseModal()" },
     // One form covers complaints and maintenance — it opens with the two as a
     // toggle, which is why this is "Add Issue" rather than either noun.
-    { k: 'issue',  label: 'Add Issue',        fn: "showAddIssueModal()" },
-    { k: 'cancel', label: 'Add Cancellation', fn: "showAddCancellationModal()" },
+    { k: 'issue',  tone: 'amber',  label: 'Add Issue',        sub: 'Log a complaint or issue', fn: "showAddIssueModal()" },
+    { k: 'cancel', tone: 'violet', label: 'Add Cancellation', sub: 'Process a cancellation',   fn: "showAddCancellationModal()" },
   ].map(a =>
-    '<button class="dl-act" onclick="' + a.fn + '">'
+    '<button class="dl-act dh-' + a.tone + '" onclick="' + a.fn + '">'
     + '<span class="dl-act__ic">' + _dlIco(a.k) + '</span>'
-    + '<span class="dl-act__label">' + escHtml(a.label) + '</span></button>').join('');
+    + '<span class="dl-act__go">' + _dlIco('chev') + '</span>'
+    + '<span class="dl-act__label">' + escHtml(a.label) + '</span>'
+    + '<span class="dl-act__sub">' + escHtml(a.sub) + '</span></button>').join('');
 
   /* NEEDS ACTION — the sketch replaces Upcoming Reminders with this, and it is
      the better card. Reminders listed what was COMING; this lists what is
@@ -1596,30 +1741,37 @@ function _dashLedgerRow(mo, pending, pendingCount) {
   // not information.
   const needsOpen = needs.filter(r => r.n > 0).length;
 
+  /* A DIV, NOT A BUTTON, with a button inside it. The reference puts a real
+     control at the end of each row, and a button inside a button is invalid
+     markup that browsers un-nest wherever they like. The row still opens its
+     screen; the control is the same action named. */
   const needsRows = needs.map(r =>
-        '<button class="dl-need' + (r.n === 0 ? ' is-clear' : '') + '"'
-        + ' onclick="navigate(\'' + r.page + '\')">'
-        + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
+        '<div class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-clear' : '') + '"'
+        + ' onclick="navigate(\'' + r.page + '\')" role="button" tabindex="0"'
+        + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();navigate(\'' + r.page + '\');}">'
+        + '<span class="dl-need__ic">' + _dlIco(r.k) + '</span>'
         + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
         + '<span class="dl-need__label">' + escHtml(r.n === 1 ? r.one : r.many) + '</span>'
         /* The verb still names the decision, because the row is still the way
            to that screen — but on a cleared row it would be an instruction to
-           do nothing, so it gives way to a tick. */
-        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb)) + '</span>'
-        + '</button>').join('');
+           do nothing, so it reads Clear and loses its accent. */
+        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb))
+        + (r.n === 0 ? '' : _dlIco('chev')) + '</span>'
+        + '</div>').join('');
 
   return {
-    /* THE HEADING HAS TO NAME THE WINDOW. It said "Today at a Glance" over six
-       figures that are now a month's — and a heading that does not describe the
-       numbers under it is worse than the empty card it replaced. The pill
-       carries the month itself rather than leaving "This Month" to be resolved
-       against whatever the sidebar picker happens to be set to, which is the
-       whole point of the panel following that picker. */
+    /* THE HEADING HAS TO NAME THE WINDOW — which is why the pill carries the
+       date rather than the month. The card was scoped to a month and headed
+       "This Month at a Glance"; on 2026-09-09 the owner asked for the day
+       instead, and _dlGlance() moved with the name. A heading that does not
+       describe the numbers under it is worse than the empty card it replaced,
+       and this card has now been on the wrong side of that twice. */
     glance:
         '<div class="dash-sec dl-panel">'
       +   '<div class="dash-sec__head">'
-      +     '<span class="dash-sec__title">This Month at a Glance</span>'
-      +     '<span class="dash-pill dh-slate">' + escHtml(thisMonthLabel()) + '</span>'
+      +     dashEmojiChip('calendar', 24)
+      +     '<span class="dash-sec__title">Today at a Glance</span>'
+      +     '<span class="dash-pill dh-slate">' + escHtml(fmtDate(today())) + '</span>'
       +   '</div>'
       +   '<div class="dl-glance">' + glanceRows + '</div>'
       + '</div>',
@@ -1664,15 +1816,25 @@ function _dashLedgerRow(mo, pending, pendingCount) {
 
     needs:
         '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head"><span class="dash-sec__title">Needs Action</span>'
-      +   (needsOpen ? '<span class="dash-pill dh-slate">' + needsOpen + '</span>' : '')
+      +   '<div class="dash-sec__head dl-head2">' + dashEmojiChip('alert', 24)
+      +     '<span class="dl-head2__b"><span class="dash-sec__title">Needs Action</span>'
+      +       (needsOpen ? '<span class="dl-head2__pill">' + needsOpen + '</span>' : '')
+      +       '<span class="dl-head2__sub">Items that require your attention</span></span>'
+      /* Locked, and the tooltip says why: the four rows go to three different
+         screens and there is no combined outstanding list to open. */
+      +     '<button class="dl-viewall" disabled'
+      +       ' title="Each row opens its own screen — there is no single list of everything outstanding, so these four rows are the whole of it.">'
+      +       'View all' + _dlIco('chev') + '</button>'
       +   '</div>'
       +   '<div class="dl-needs">' + needsRows + '</div>'
       + '</div>',
 
     actions:
         '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head"><span class="dash-sec__title">Quick Actions</span></div>'
+      +   '<div class="dash-sec__head dl-head2">' + dashEmojiChip('bolt', 24)
+      +     '<span class="dl-head2__b"><span class="dash-sec__title">Quick Actions</span>'
+      +       '<span class="dl-head2__sub">Common tasks, one click away</span></span>'
+      +   '</div>'
       +   '<div class="dl-acts dl-acts--4">' + actions + '</div>'
       + '</div>',
   };
@@ -2692,8 +2854,8 @@ function renderMonthModal(monthKey, monthLabel) {
       </table>
     </div>
   </div>`,
-  `<button class="btn btn-secondary" onclick="exportMonthCSV('${monthKey}','${escHtml(monthLabel)}')">${ICONS.download} Export CSV</button>
-   <button class="btn btn-secondary" onclick="printMonthReport('${monthKey}','${escHtml(monthLabel)}')">${ICONS.print} Print Report</button>
+  `<button class="btn btn-secondary" onclick="exportMonthExcel('${monthKey}','${escHtml(monthLabel)}')">${ICONS.download} Export Excel</button>
+   <button class="btn btn-secondary" onclick="printMonthReport('${monthKey}','${escHtml(monthLabel)}')">${ICONS.print} Export PDF</button>
    <button class="btn btn-primary" onclick="closeModal()">${ICONS.check} Done</button>`
   );
 }
@@ -2806,76 +2968,120 @@ function addMonthExpenseFromModal(monthKey, monthLabel) {
   showAddExpenseModal();
 }
 
-function exportMonthCSV(monthKey, monthLabel) {
-  const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
+/* ══ THE MONTH REPORT ══════════════════════════════════════════════════════
+   The dashboard's month card exports the same period the card describes. It is
+   a §40 report rather than a list: summary first, then the sections behind the
+   summary — who was here, what was collected, where it went.
+
+   It used to be two implementations, and they disagreed. The CSV carried a
+   Summary block, room-ordered fee records and a grouped expense register; the
+   PDF carried an unordered fee table and quoted `s.rent`, the rent half of the
+   monthly charge, next to payments that included the mess. Both now render
+   from this one definition, and the charge comes from resolveCharges().     */
+function _dashMonthExportDef(monthKey, label) {
+  const pays = DB.payments.filter(p => _payMatchesMonth(p, monthKey));
   // The Expenses section lists transfers too, under their own category, so the
   // rows add up to the Expenses figure in the summary block above them.
   const exps = _rptOutgoings(monthKey);
-  const rev = calcRevenue(monthKey);
+  const rev  = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
-  let csv = `${DB.settings.hostelName} | ${monthLabel} Report\n\n`;
-  csv += `Summary\nTotal Revenue,${rev}\nExpenses,${expTotal}\nAvailable Fund,${rev-expTotal}\nPending,${pays.filter(p=>p.status==='Pending').reduce((s,p)=>s+outstandingOf(p),0)}\n\n`;
-  csv += `Fee Records\nStudent,Room,Month,Amount,Method,Status,Date\n`;
-  // Ordered by room like every other roster, export and PDF in the app — the
-  // warden reads this sheet against the building, not against insertion order.
-  pays.slice().sort((a,b)=>cmpRoomNo(a.roomNumber,b.roomNumber)).forEach(p=>{ csv += [csvEsc(p.studentName),csvEsc(p.roomNumber),csvEsc(p.month),Number(p.amount),csvEsc(p.method),csvEsc(p.status),csvEsc(p.date||p.dueDate||'')].join(',')+"\n"; });
-  // Grouped with a subtotal per category and a grand total, matching the
-  // register the Reports screen and the PDFs now print.
-  csv += `\nExpenses by Category\nCategory,Date,Description,Amount\n`;
-  const _mGroups = _rptByCategory(exps);
-  _mGroups.forEach(g=>{
-    g.items.forEach(e=>{ csv += [csvEsc(g.cat),csvEsc(e.date),csvEsc(e.description),Number(e.amount)].join(',')+"\n"; });
-    csv += ['','','Total — '+csvEsc(g.cat),g.total].join(',')+"\n\n";
-  });
-  csv += ['','','GRAND TOTAL',_rptGroupsTotal(_mGroups)].join(',')+"\n";
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `Hostel_Report_${monthKey}.csv`;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 16: revoke blob URL to free memory
-  toast('CSV exported successfully','success');
+  const pend = pays.filter(p => p.status === 'Pending').reduce((s, p) => s + outstandingOf(p), 0);
+  const residents = DB.students.filter(isResident);
+  const groups = _rptByCategory(exps);
+  const roomOf = s => { const r = DB.rooms.find(x => x.id === s.roomId); return r ? String(r.number) : ''; };
+
+  return {
+    module: 'Month-Report',
+    title:  'Month Report',
+    scope:  label || monthLabel(monthKey),
+    orientation: 'landscape',
+    sheetPerSection: true,
+    filters: [['Month', label || monthLabel(monthKey)]],
+
+    summary: [
+      { label: 'Revenue',        value: EXPORT.fmt.money(rev), tone: 'pos' },
+      { label: 'Expenses',       value: EXPORT.fmt.money(expTotal), tone: 'neg' },
+      { label: 'Available fund', value: EXPORT.fmt.money(rev - expTotal),
+        tone: rev - expTotal >= 0 ? 'pos' : 'neg' },
+      { label: 'Outstanding',    value: EXPORT.fmt.money(pend), tone: pend > 0 ? 'neg' : '' },
+      { label: 'Residents',      value: String(residents.length) },
+      { label: 'Payments',       value: String(pays.length) },
+    ],
+
+    sections: [
+      {
+        title: 'Fee records',
+        meta: pays.length + ' record' + (pays.length === 1 ? '' : 's'),
+        empty: 'No payment records in this month.',
+        columns: [
+          { label: 'Room', type: 'id', width: 9, value: p => String(p.roomNumber || ''),
+            get: p => '<b>#' + escHtml(String(p.roomNumber || '—')) + '</b>' },
+          { label: 'Student', type: 'text', width: 24, value: p => p.studentName || '' },
+          { label: 'Month',   type: 'text', width: 16, value: p => monthLabel(p.month) },
+          { label: 'Collected', type: 'money', width: 14, total: 'sum',
+            value: p => Number(p.amount || 0) || null },
+          { label: 'Still owed', type: 'money', width: 14, total: 'sum',
+            value: p => outstandingOf(p) || null,
+            get:   p => outstandingOf(p) > 0
+                     ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' : '—' },
+          { label: 'Method', type: 'text',   width: 13, value: p => p.method || '' },
+          { label: 'Status', type: 'status', width: 11, value: p => payStatusOf(p) },
+          { label: 'Date',   type: 'date',   width: 13,
+            value: p => p.date || p.dueDate || '' },
+        ],
+        // Room order, like every other roster, export and PDF in this app — the
+        // warden reads this sheet against the building, not insertion order.
+        rows: pays.slice().sort((a, b) => cmpRoomNo(a.roomNumber, b.roomNumber)),
+        grand: { label: 'Collected this month', value: fmtPKR(rev) },
+      },
+      {
+        title: 'Expenses by category',
+        meta: groups.length + ' categor' + (groups.length === 1 ? 'y' : 'ies'),
+        empty: 'Nothing was spent in this month.',
+        groupLabel: 'Category',
+        columns: [
+          { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
+          { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
+          { label: 'Amount', type: 'money', width: 15, total: 'sum',
+            value: e => Number(e.amount || 0),
+            get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+        ],
+        groups: groups.map(g => ({
+          label: g.cat,
+          meta: g.items.length + ' record' + (g.items.length === 1 ? '' : 's'),
+          rows: g.items,
+          total: { label: 'Total — ' + g.cat, value: fmtPKR(g.total) },
+        })),
+        grand: { label: 'Total outgoing', value: fmtPKR(expTotal) },
+      },
+      {
+        title: 'Residents',
+        meta: residents.length + ' living here',
+        empty: 'Nobody was on the roster in this month.',
+        columns: [
+          { label: 'Room', type: 'id', width: 9, value: roomOf,
+            get: s => { const r = roomOf(s); return r ? '<b>#' + escHtml(r) + '</b>' : '—'; } },
+          { label: 'Student', type: 'text', width: 24, value: s => s.name || '' },
+          { label: 'Phone',   type: 'text', width: 16, value: s => String(s.phone || '') },
+          /* The WHOLE monthly charge. This table quoted `s.rent` — the rent
+             half — beside payments that included the mess, so the two columns
+             could not be reconciled by the person holding the page. */
+          { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+            value: s => { const c = resolveCharges(s); return c.configured ? c.total : null; } },
+          { label: 'Status', type: 'status', width: 12, value: s => s.status || 'Active' },
+        ],
+        rows: studentsByRoom(residents),
+      },
+    ],
+
+    empty: 'Nothing was recorded in this month.',
+  };
 }
 
-function printMonthReport(monthKey, monthLabel) {
-  const pays = DB.payments.filter(p=>_payMatchesMonth(p,monthKey));
-  // Transfers print as expense rows under their own category, so the Expenses
-  // table adds up to the Expenses KPI above it.
-  const exps = _rptOutgoings(monthKey);
-  const rev = calcRevenue(monthKey);
-  const expTotal = calcExpenses(monthKey);
-  const pend = DB.payments.filter(p=>p.status==='Pending'&&_payMatchesMonth(p,monthKey)).reduce((s,p)=>s+outstandingOf(p),0);
-  const activeStudents = DB.students.filter(s=>s.status==='Active');
-  const _mRptHtml = `<!DOCTYPE html><html><head><title>${monthLabel} Report</title>
-  ${printDocStyles()}
-  </head><body>
-  <div class="header">
-    <div><div class="title">${escHtml(DB.settings.hostelName)}</div><div class="subtitle">${monthLabel} Report · Generated ${new Date().toLocaleDateString()}</div></div>
-    <div class="badge">Monthly Report</div>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi"><label>Total Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
-    <div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(expTotal)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
-    <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pend)}</div></div>
-  </div>
-  <div class="section"><h3>${ICONS.student} Active Students (${activeStudents.length})</h3>
-    <table><thead><tr><th>Name</th><th>Room</th><th>Rent</th><th>Phone</th><th>Status</th></tr></thead><tbody>
-    ${activeStudents.map(s=>{const rm=DB.rooms.find(r=>r.id===s.roomId);return `<tr><td>${escHtml(s.name)}</td><td class="gold">#${escHtml(String(rm?rm.number:'—'))}</td><td>${fmtPKR(s.rent)}</td><td>${escHtml(s.phone||'')}</td><td>${s.status}</td></tr>`;}).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No students</td></tr>'}
-    </tbody></table>
-  </div>
-  <div class="section"><h3>${ICONS.card} Fee Records</h3>
-    <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${pays.map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${p.roomNumber||'—'}</td><td>${escHtml(p.month||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td class="${p.status==='Paid'?'green':'red'}">${p.status}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:12px">No records</td></tr>'}
-    </tbody></table>
-  </div>
-  <div class="section"><h3>${ICONS.trendDown} Expenses by Category</h3>
-    ${_rptCatTablesHTML(exps)}
-  </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} · Confidential</div>
-  </body></html>`;
-  _electronPDF(_mRptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+monthLabel.replace(/\s+/g,'-')+'.pdf', {pageSize:'A4'});
-}
+function exportMonthExcel(monthKey, label) { EXPORT.excel(_dashMonthExportDef(monthKey, label)); }
+function exportMonthCSV(monthKey, label)   { exportMonthExcel(monthKey, label); }
+function printMonthReport(monthKey, label) { EXPORT.pdf(_dashMonthExportDef(monthKey, label)); }
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // CANCELLATIONS

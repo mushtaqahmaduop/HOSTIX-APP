@@ -20,6 +20,10 @@
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="components.css">
   <link rel="stylesheet" href="style.css">
+  <!-- Global form + modal layout system (viewport-fit spec). After style.css
+       so it can correct the shared modal shell; before the screen sheets so a
+       screen can still refine its own form. -->
+  <link rel="stylesheet" href="forms.css">
   <!-- v5 screens — ui-kit supplies the dh-* hue palette both sheets consume,
        listkit the shared stat-strip / toolbar / table / pager chrome -->
   <link rel="stylesheet" href="ui-kit.css">
@@ -35,6 +39,9 @@
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="whatsapp.css">
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="backup.css">
+  <link rel="stylesheet" href="activitylog.css">
+  <link rel="stylesheet" href="users.css">
   <link rel="stylesheet" href="onboarding.css">
   <!-- App chrome v5 (sidebar + header) — loads last so it wins on ties -->
   <link rel="stylesheet" href="chrome.css">
@@ -562,7 +569,11 @@
       </svg>
       <span class="nav-label">Activity Log</span>
     </div>
-    <div class="nav-item" onclick="showBackupRestoreModal()" data-page="backup" title="Backup &amp; Restore">
+    <div class="nav-item" onclick="navRail('users')" data-page="users" title="User Management">
+      <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nav-label">Users</span>
+    </div>
+    <div class="nav-item" onclick="navRail('backup')" data-page="backup" title="Backup &amp; Restore">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 13v8l-4-4" />
         <path d="m12 21 4-4" />
@@ -726,6 +737,13 @@
   <script src="src/license.js"></script>
   <script src="src/enforcement-ui.js"></script>
   <script src="src/receipt.js"></script>
+  <!-- Global export engine: one PDF/Excel design system for every module -->
+  <script src="src/export/xlsx-writer.js"></script>
+  <script src="src/export/engine.js"></script>
+  <!-- One toolbar for the six list screens: the Export control, the month
+       picker and Clear all. AFTER icons.js (it draws glyphs) and BEFORE the
+       modules (they call it while rendering). -->
+  <script src="src/toolbar.js"></script>
   <!-- Feature modules -->
   <script src="src/modules/theme.js"></script>
   <script src="src/modules/nav.js"></script>
@@ -744,6 +762,9 @@
   <script src="src/modules/issues.js"></script>
   <script src="src/modules/command-palette.js"></script>
   <!-- First-run setup. After rooms.js (bulkRoomPlan) and settings.js. -->
+  <script src="src/modules/activitylog.js"></script>
+  <script src="src/modules/users.js"></script>
+  <script src="src/modules/backup-page.js"></script>
   <script src="src/modules/onboarding.js"></script>
   <!-- Custom title bar (self-contained; mounts the frameless window chrome) -->
   <script src="src/titlebar.js"></script>

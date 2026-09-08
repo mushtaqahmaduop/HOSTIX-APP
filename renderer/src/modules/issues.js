@@ -1,17 +1,86 @@
 /* ─── HOSTYLLO — ISSUES (Maintenance & Complaints) MODULE ────────────────────
-   Contains: renderIssues, showAddIssueModal, saveIssue (wrapper),
+   Contains: renderIssues, showIssueModal, saveIssue,
              resolveMaintenance, progressMaintenance, deleteMaintenance,
              resolveComplaint, deleteComplaint,
              showAddMaintenanceModal, showAddComplaintModal
+
+   REDESIGNED 2026-09-08 to the owner's references `complaints2.png` (the
+   register) and `add complaaint and maintinanace.png` (both forms).
+
+   The screen was a feed of cards; the reference is a REGISTER — one row per
+   issue, one column per fact, sortable and scannable. That is the right shape:
+   a warden's question here is "what is still open, and who has it", which a
+   table answers by column and a card feed answers only by reading every card.
+
+   FOUR FIELDS THE REFERENCE ASKS FOR THAT THIS APP DID NOT RECORD
+   ---------------------------------------------------------------
+   Category, priority-on-a-complaint, assigned staff, and the expected
+   completion date. They are not invented into the table — they are now
+   CAPTURED BY THE FORM, which is where the owner's own form reference puts
+   them. A record written before today has them empty and the cell prints a
+   dash, which is honest: nobody ever typed one. That is the distinction
+   CLAUDE.md draws — do not invent a COLUMN for a field the app does not
+   record; recording it first is the fix, not the violation.
+
+   CATEGORIES ARE NEUTRAL, AND THE REFERENCE COLOURS THEM
+   ------------------------------------------------------
+   `complaints2.png` paints Plumbing blue, Electrical amber, Furniture violet
+   and Network blue. CLAUDE.md's design rule says the opposite in as many
+   words — hue is reserved for STATE, categories are neutral — and this screen
+   is the strongest case for it: a red "Open" pill is the only thing on the row
+   that means act now, and it stops meaning that when four other chips beside
+   it are equally loud. So the category chip is neutral and carries a GLYPH
+   instead; the icon is what separates Plumbing from Network at a glance.
+   Priority keeps its hue, because priority is state.
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
-/* ── Issues v5 — toolbar state ───────────────────────────────────────────────
+/* ── Issues v6 — toolbar state ───────────────────────────────────────────────
    `issuesTab` (app.js) still decides which kind is shown, because nav.js sets
-   it from the /maintenance and /complaints routes. It now also accepts 'all',
-   which is the unified feed the reference design shows. */
-let issueFilter = { search:'', status:'All', priority:'All', room:'All',
-                    sort:'newest', page:1, pageSize:30 };
+   it from the /maintenance and /complaints routes. It also accepts 'all',
+   which is the unified register the reference design shows. */
+let issueFilter = { search:'', status:'All', priority:'All', category:'All',
+                    month:thisMonth(), sort:'newest', page:1, pageSize:30 };
+
+/* A fresh visit starts here — see FILTER_REGISTRY in nav.js.
+
+   THE MONTH DEFAULTS TO THIS MONTH, as the owner asked for every month picker
+   on 2026-09-08. Evaluated on each reset rather than captured at load, so a
+   session left open past the turn of a month still opens on the month it now
+   is.
+
+   The cost is worth stating where the next reader will find it: an August
+   complaint nobody answered is still open in September, and this default puts
+   it one control away instead of on screen. The stat strip above the table is
+   the mitigation — Open, In Progress and Resolved count the WHOLE register,
+   not the month, so a warden looking at September still sees that three
+   things are open and can widen to All months to find them. Raised with the
+   owner; reversing it is `month:''` in both places here. */
+registerFilter('issues', issueFilter, () => ({
+  search:'', status:'All', priority:'All', category:'All',
+  month:thisMonth(), sort:'newest', page:1,
+}));
+
+/* ── The category axis ───────────────────────────────────────────────────────
+   Nine values, fixed rather than free text so the filter and the register can
+   group by them. The first four are the reference's own; the rest are what a
+   hostel actually logs. Each carries a glyph because the chip is neutral (see
+   the header) and the glyph is doing the work colour does in the reference. */
+const ISS_CATS = [
+  { key:'Plumbing',    ico:'droplet'  },
+  { key:'Electrical',  ico:'zap'      },
+  { key:'Furniture',   ico:'armchair' },
+  { key:'Network',     ico:'wifi'     },
+  { key:'Appliance',   ico:'fan'      },
+  { key:'Cleanliness', ico:'bath'     },
+  { key:'Mess / Food', ico:'utensils' },
+  { key:'Security',    ico:'shield'   },
+  { key:'Other',       ico:'tag'      },
+];
+function _issCatIcon(k) {
+  const c = ISS_CATS.find(x => x.key === k);
+  return c ? icon(c.ico, 'xs') : icon('tag', 'xs');
+}
 
 /* Display reference. Maintenance is MA-####, complaints CO-####, matching the
    reference. New records carry a persistent `seq`; anything created before
@@ -26,24 +95,35 @@ function _issNextSeq(coll) {
   return (coll || []).reduce((m, x) => Math.max(m, Number(x.seq) || 0), 0) + 1;
 }
 
-/* Both collections normalised onto one shape so the feed, the filters and the
-   counters all read from a single list instead of two parallel branches. */
+/* Both collections normalised onto one shape so the register, the filters and
+   the counters all read from a single list instead of two parallel branches. */
 function _issAll() {
-  const rooms = DB.rooms || [];
-  const m = (DB.maintenance||[]).map(x => {
-    const room = rooms.find(r => r.id === x.roomId);
-    return { kind:'maintenance', raw:x, id:x.id, title:x.title||'',
-             desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
-             status:x.status||'Open', priority:x.priority||'Medium',
-             roomNo: room ? String(room.number) : '', by:'', response:'' };
-  });
+  const rooms  = DB.rooms || [];
+  const roomNo = id => { const r = rooms.find(x => x.id === id); return r ? String(r.number) : ''; };
+
+  const m = (DB.maintenance||[]).map(x => ({
+    kind:'maintenance', raw:x, id:x.id, title:x.title||'',
+    desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
+    status:x.status||'Open', priority:x.priority||'Medium',
+    category:x.category||'', assigned:x.assignedTo||'',
+    expected:x.expectedDate||'', location:x.location||'', cost:Number(x.cost)||0,
+    roomNo: roomNo(x.roomId), by:'', student:null, response:'',
+  }));
+
   const c = (DB.complaints||[]).map(x => {
-    const s = (DB.students||[]).find(t => t.id === x.studentId);
+    const s = (DB.students||[]).find(t => t.id === x.studentId) || null;
     return { kind:'complaint', raw:x, id:x.id, title:x.subject||'',
-             desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
-             status:x.status||'Open', priority:'',
-             roomNo:'', by: s ? s.name : '', response:x.response||'' };
+      desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
+      status:x.status||'Open', priority:x.priority||'',
+      category:x.category||'', assigned:x.assignedTo||'',
+      expected:x.expectedDate||'', location:'', cost:0,
+      /* A complaint is filed BY a student, and its room is the room that
+         student lives in — derived on read, never a second stored copy that
+         drifts the first time somebody is moved. */
+      roomNo: s ? roomNo(s.roomId) : '',
+      by: s ? s.name : '', student: s, response:x.response||'' };
   });
+
   return m.concat(c);
 }
 
@@ -59,6 +139,159 @@ function _issStatusLabel(st) {
   return st === 'InProgress' ? 'In Progress' : st === 'UnderReview' ? 'Under Review' : st;
 }
 
+/* Whole days between two ISO dates, or null if either is missing or unparseable. */
+function _issDays(from, to) {
+  if (!from || !to) return null;
+  const a = new Date(from + 'T00:00:00'), b = new Date(to + 'T00:00:00');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+/* ── THE ISSUE FEED EVERY READER SEES ────────────────────────────────────────
+   Shared by the screen and by both exports. Maintenance and complaints are two
+   collections normalised onto one shape by _issAll(); the tab, the toolbar
+   filters and the sort all apply here so an exported register is the feed that
+   was on screen (§44). */
+function issuesFiltered() {
+  const all = _issAll();
+  const tab = (issuesTab === 'maintenance' || issuesTab === 'complaints') ? issuesTab : 'all';
+  const wantKind = tab === 'complaints' ? 'complaint' : tab === 'maintenance' ? 'maintenance' : null;
+  const q = (issueFilter.search || '').trim().toLowerCase();
+
+  const feed = all.filter(i => {
+    if (wantKind && i.kind !== wantKind) return false;
+    if (issueFilter.status   !== 'All' && _issBucket(i.status) !== issueFilter.status) return false;
+    if (issueFilter.priority !== 'All' && i.priority !== issueFilter.priority) return false;
+    if (issueFilter.category !== 'All' && i.category !== issueFilter.category) return false;
+    /* One month, or a whole year. Both are a string prefix of the ISO date, so
+       '2026-09' and '2026' need no separate branch — the same trick the
+       Cancellations month filter uses. This replaced a From/To range and a
+       room dropdown on 2026-09-08 at the owner's request. */
+    if (issueFilter.month && !String(i.date).startsWith(issueFilter.month)) return false;
+    if (!q) return true;
+    return [i.title, i.desc, i.roomNo, i.by, i.category, i.assigned,
+            _issStatusLabel(i.status), _issSeq(i)]
+      .some(v => String(v || '').toLowerCase().includes(q));
+  });
+
+  const prank = { High: 0, Medium: 1, Low: 2, '': 3 };
+  return feed.sort((a, b) =>
+    issueFilter.sort === 'oldest'   ? String(a.date).localeCompare(String(b.date))
+  : issueFilter.sort === 'priority' ? ((prank[a.priority] ?? 3) - (prank[b.priority] ?? 3))
+  : String(b.date).localeCompare(String(a.date)));
+}
+
+/* ══ THE COMPLAINTS / MAINTENANCE EXPORT ═══════════════════════════════════
+   §38. This screen had no export at all: a warden with a month of complaints
+   to answer for could show an owner the screen or nothing.
+
+   The two kinds are one register with a Kind column rather than two documents,
+   because that is how the feed reads on screen and how the question is asked
+   ("what is still open?"), and because a complaint and a broken geyser sit in
+   the same weekly review.
+
+   §38's category and assigned-staff columns ARE carried now. They were left
+   out when this export was written because the app recorded neither; the form
+   captures both since 2026-09-08, so the columns describe a field a warden
+   actually filled in rather than a page of em dashes. Records written before
+   that date export empty in those two columns, which is the truth about them.
+   §41 still applies to everything else — a complaint carries only what the
+   warden typed into it, and no internal field is exposed.                  */
+function _issExportDef(list) {
+  const open  = list.filter(i => _issBucket(i.status) === 'open').length;
+  const prog  = list.filter(i => _issBucket(i.status) === 'progress').length;
+  const done  = list.filter(i => _issBucket(i.status) === 'resolved').length;
+  const high  = list.filter(i => i.priority === 'High').length;
+
+  /* How long the resolved ones took, in days. A register of complaints with no
+     sense of turnaround answers "what happened" but not "how are we doing". */
+  const spans = list.map(i => _issDays(i.date, i.resolved)).filter(n => n !== null);
+  const avg = spans.length ? Math.round(spans.reduce((s, n) => s + n, 0) / spans.length) : null;
+
+  const tab = (issuesTab === 'maintenance' || issuesTab === 'complaints') ? issuesTab : 'all';
+
+  return {
+    module: tab === 'complaints' ? 'Complaints' : tab === 'maintenance' ? 'Maintenance' : 'Issues',
+    title:  tab === 'complaints' ? 'Complaints Register'
+          : tab === 'maintenance' ? 'Maintenance Register'
+          : 'Complaints & Maintenance Register',
+    scope: '',
+    sheet: 'Issues',
+
+    filters: [
+      ['Kind',     tab === 'all' ? 'Complaints and maintenance' : _issExportKindLabel(tab)],
+      ['Status',   issueFilter.status   !== 'All' ? _issExportBucketLabel(issueFilter.status) : null],
+      ['Priority', issueFilter.priority !== 'All' ? issueFilter.priority : null],
+      ['Category', issueFilter.category !== 'All' ? issueFilter.category : null],
+      ['Month',    issueFilter.month ? tbMonthLabel(issueFilter.month) : null],
+      ['Search',   issueFilter.search || null],
+      ['Sorted',   issueFilter.sort === 'oldest' ? 'Oldest first'
+                 : issueFilter.sort === 'priority' ? 'Priority' : 'Newest first'],
+    ],
+
+    summary: [
+      { label: 'Records',      value: String(list.length) },
+      { label: 'Open',         value: String(open), tone: open ? 'neg' : '' },
+      { label: 'In progress',  value: String(prog), tone: prog ? 'warn' : '' },
+      { label: 'Resolved',     value: String(done), tone: 'pos' },
+      { label: 'High priority', value: String(high), tone: high ? 'neg' : '' },
+      { label: 'Avg. to resolve', value: avg === null ? '—' : avg + ' day' + (avg === 1 ? '' : 's') },
+    ],
+
+    columns: [
+      { label: 'Ref',  type: 'id',   width: 11, value: i => _issSeq(i) },
+      { label: 'Kind', type: 'text', width: 14,
+        value: i => i.kind === 'maintenance' ? 'Maintenance' : 'Complaint' },
+      { label: 'Room', type: 'id', width: 9,
+        value: i => i.roomNo || '',
+        get:   i => i.roomNo ? '<b>#' + escHtml(i.roomNo) + '</b>' : '—' },
+      { label: 'Raised by', type: 'text', width: 20, value: i => i.by || '' },
+      { label: 'Subject', type: 'text', width: 26,
+        value: i => i.title || '',
+        get:   i => '<b>' + escHtml(i.title || '—') + '</b>' },
+      { label: 'Category', type: 'text', width: 14, value: i => i.category || '' },
+      { label: 'Description', type: 'wrap', width: 40, value: i => i.desc || '' },
+      { label: 'Priority', type: 'status', width: 11, value: i => i.priority || '' },
+      { label: 'Assigned to', type: 'text', width: 18, value: i => i.assigned || '' },
+      { label: 'Raised',   type: 'date', width: 13, value: i => i.date || '' },
+      { label: 'Status',   type: 'status', width: 13, value: i => _issStatusLabel(i.status) },
+      { label: 'Resolved', type: 'date', width: 13, value: i => i.resolved || '' },
+      { label: 'Days open', type: 'number', width: 11, pdf: false,
+        value: i => _issDays(i.date, i.resolved) },
+      { label: 'Resolution', type: 'wrap', width: 34, pdf: false, value: i => i.response || '' },
+    ],
+
+    rows: list,
+    empty: 'No complaints or maintenance records match the selected filters.',
+  };
+}
+
+function _issExportKindLabel(tab) {
+  return tab === 'complaints' ? 'Complaints only' : 'Maintenance only';
+}
+function _issExportBucketLabel(b) {
+  return b === 'open' ? 'Open' : b === 'progress' ? 'In progress' : 'Resolved';
+}
+
+function exportIssuesPDF() {
+  const list = issuesFiltered();
+  if (!list.length) { toast('Nothing to export', 'error'); return; }
+  EXPORT.pdf(_issExportDef(list));
+}
+
+function exportIssuesExcel() {
+  const list = issuesFiltered();
+  if (!list.length) { toast('Nothing to export', 'error'); return; }
+  EXPORT.excel(_issExportDef(list));
+}
+
+/* ══ THE REGISTER ══════════════════════════════════════════════════════════
+   Ten columns. At the 1366 QA floor the content box is ~1060px and the table
+   measures ~1190, so it scrolls horizontally inside `.lk-table-wrap` — the
+   same resolution Payments took for the same reason, and the one §41 of the
+   export spec allows below 1280. Nothing is hidden; the alternative was to
+   drop a column, and every one of the ten answers a question a warden asks.
+   It fits whole at 1440 and with the rail collapsed.                       */
 function renderIssues() {
   const all = _issAll();
   const nOpen = all.filter(i=>_issBucket(i.status)==='open').length;
@@ -69,98 +302,120 @@ function renderIssues() {
   const cOpen   = (DB.complaints||[]).filter(x=>x.status!=='Resolved').length;
 
   const tab = (issuesTab==='maintenance'||issuesTab==='complaints') ? issuesTab : 'all';
-  // The tab is named for the collection ('complaints'); a row's kind is named
-  // for the record ('complaint'). Comparing the two directly matched nothing
-  // and emptied the complaints tab.
-  const wantKind = tab==='complaints' ? 'complaint' : tab==='maintenance' ? 'maintenance' : null;
-  const q   = issueFilter.search.trim().toLowerCase();
+  const q   = (issueFilter.search||'').trim().toLowerCase();
 
-  let feed = all.filter(i => {
-    if (wantKind && i.kind !== wantKind) return false;
-    if (issueFilter.status   !== 'All' && _issBucket(i.status) !== issueFilter.status) return false;
-    if (issueFilter.priority !== 'All' && i.priority !== issueFilter.priority) return false;
-    if (issueFilter.room     !== 'All' && i.roomNo !== issueFilter.room) return false;
-    if (!q) return true;
-    return [i.title, i.desc, i.roomNo, i.by, _issStatusLabel(i.status), _issSeq(i)]
-      .some(v => String(v||'').toLowerCase().includes(q));
-  });
-
-  const prank = { High:0, Medium:1, Low:2, '':3 };
-  feed.sort((a,b) => issueFilter.sort==='oldest' ? String(a.date).localeCompare(String(b.date))
-                   : issueFilter.sort==='priority' ? (prank[a.priority]??3)-(prank[b.priority]??3)
-                   : String(b.date).localeCompare(String(a.date)));
+  // Shared with the exports, so the register and the document cannot disagree.
+  const feed = issuesFiltered();
 
   const _pg = paginate(feed, issueFilter);
-  const roomNums = [...new Set(all.map(i=>i.roomNo).filter(Boolean))].sort(cmpRoomNo);
+  const rooms    = DB.rooms || [];
   const nActive  = [issueFilter.status!=='All', issueFilter.priority!=='All',
-                    issueFilter.room!=='All', !!q].filter(Boolean).length;
+                    issueFilter.category!=='All', !!issueFilter.month, !!q]
+                   .filter(Boolean).length;
 
   const SH = { open:'dh-red', progress:'dh-amber', resolved:'dh-green' };
   const PH = { High:'dh-red', Medium:'dh-amber', Low:'dh-blue' };
+  /* No hue here. Which register a row belongs to is a CATEGORY — the same
+     kind of fact as its category chip, and the header above argues at length
+     that categories are neutral. The first pass gave Maintenance violet and
+     Complaint blue anyway, which is the rule broken in the one file that
+     states it. The glyph and the MA-/CO- prefix carry the distinction. */
   const KIND = {
-    maintenance: { hue:'dh-violet', label:'Maintenance',
-      svg:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
-    complaint:   { hue:'dh-blue', label:'Complaint',
-      svg:'<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>' }
+    maintenance: { label:'Maintenance', ico:'tool' },
+    complaint:   { label:'Complaint',   ico:'helpCircle' },
   };
 
-  const card = (key, hue, label, sub, value, svg) => `
+  const card = (key, hue, label, sub, value, ico) => `
     <div class="lk-stat lk-stat--click ${hue}${issueFilter.status===key?' is-on':''}" onclick="issSet('status','${issueFilter.status===key?'All':key}')" title="Show ${label.toLowerCase()} issues">
       <div class="lk-stat__top">
-        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
+        <div class="lk-stat__chip">${icon(ico,'sm')}</div>
         <div class="lk-stat__label">${label}</div>
       </div>
       <div class="lk-stat__val">${value}</div>
       <div class="lk-stat__sub">${issueFilter.status===key?'Showing these':sub}</div>
     </div>`;
 
+  /* One row of the register. Every cell is either a field the record holds or
+     a dash — nothing here is computed to fill a column. */
   const mkRow = (i) => {
     const k  = KIND[i.kind];
     const bk = _issBucket(i.status);
-    return `<div class="iss-row">
-      <div class="iss-row__i ${SH[bk]}">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${k.svg}</svg>
-      </div>
-      <div class="iss-row__m">
-        <div class="iss-row__top">
-          <span class="iss-row__t">${escHtml(i.title||'Untitled')}</span>
-          <span class="iss-pill ${SH[bk]}">${escHtml(_issStatusLabel(i.status))}</span>
-          ${i.priority?`<span class="iss-pill ${PH[i.priority]||'dh-amber'}">${escHtml(i.priority)} Priority</span>`:''}
+    const rm = i.roomNo ? rooms.find(r => String(r.number) === i.roomNo) : null;
+    const held = _issDays(i.date, today());
+    const took = _issDays(i.date, i.resolved);
+
+    /* Reported-on sub-line. Resolved records say how long they took; open ones
+       say how long they have been waiting, which is the number that matters —
+       and if a target date was set and has passed, that is what it says
+       instead, in red, because an overdue ticket is the one thing on this
+       screen a warden is answerable for. */
+    const overdue = !i.resolved && i.expected && i.expected < today();
+    const age = i.resolved
+      ? (took === null ? '' : 'Closed in ' + took + 'd')
+      : overdue ? 'Overdue ' + _issDays(i.expected, today()) + 'd'
+      : i.expected ? 'Due ' + fmtDate(i.expected)
+      : (held === null ? '' : held === 0 ? 'Today' : 'Open ' + held + 'd');
+
+    return `<tr>
+      <td class="iss-c-ref">
+        <div class="iss-ref">${_issSeq(i)}</div>
+        <div class="iss-kind" title="${escHtml(k.label)}">${icon(k.ico,'xs')}</div>
+      </td>
+      <td class="iss-c-title">
+        <div class="iss-t">${escHtml(i.title||'Untitled')}</div>
+        ${i.desc?`<div class="iss-d" title="${escHtml(i.desc)}">${escHtml(i.desc)}</div>`:''}
+        ${i.location?`<div class="iss-d">${icon('pin','xs')} ${escHtml(i.location)}</div>`:''}
+      </td>
+      <td>
+        ${i.student ? `<div class="lk-who">
+            <div class="lk-who__av dh-violet">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</div>
+            <div style="min-width:0">
+              <div class="lk-who__n">${escHtml(i.by)}</div>
+              <div class="lk-who__s">${escHtml(i.student.cnic || i.student.phone || '')}</div>
+            </div>
+          </div>`
+        : `<span class="lk-dash" title="Maintenance is logged against a room, not a student">—</span>`}
+      </td>
+      <td>
+        ${i.roomNo ? `<div class="lk-room__n">#${escHtml(i.roomNo)}</div>
+                      ${rm&&rm.floor?`<div class="lk-room__t">${escHtml(String(rm.floor))}</div>`:''}`
+                   : '<span class="lk-dash">—</span>'}
+      </td>
+      <td>${i.category
+            ? `<span class="lk-chip lk-chip--flat">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
+            : '<span class="lk-dash">—</span>'}</td>
+      <td>${i.priority
+            ? `<span class="lk-chip ${PH[i.priority]||'dh-amber'}">${escHtml(i.priority)}</span>`
+            : '<span class="lk-dash">—</span>'}</td>
+      <td><span class="lk-chip ${SH[bk]}">${icon(bk==='resolved'?'check':bk==='progress'?'clock':'warning','xs')}${escHtml(_issStatusLabel(i.status))}</span></td>
+      <td>
+        <div class="lk-when">${icon('calendar','xs')}${fmtDate(i.date)}</div>
+        ${age?`<div class="lk-sub${overdue?' iss-late':''}">${escHtml(age)}</div>`:''}
+      </td>
+      <td>${i.assigned
+            ? `<div class="iss-asg">${icon('person','xs')}${escHtml(i.assigned)}</div>`
+            : '<span class="lk-dash" title="Nobody has been assigned to this yet">—</span>'}</td>
+      <td>
+        <div class="lk-acts">
+          ${i.status!=='Resolved'?`<button class="lk-act lk-act--icon lk-act--hue dh-green" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved">${icon('check','xs')}</button>`:''}
+          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="lk-act lk-act--icon lk-act--hue dh-amber" onclick="progressMaint('${i.id}')" title="Mark in progress">${icon('clock','xs')}</button>`:''}
+          <button class="lk-act lk-act--icon" onclick="showIssueModal('${i.id}')" title="Edit this issue">${icon('edit','xs')}</button>
+          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete">${icon('trash','xs')}</button>
         </div>
-        <div class="iss-row__meta">
-          ${i.roomNo?`<b>Room ${escHtml(i.roomNo)}</b><i>•</i>`:''}
-          <span>${fmtDate(i.date)}</span>
-          ${i.resolved?`<i>•</i><span>Resolved on ${fmtDate(i.resolved)}</span>`:''}
-          ${i.by?`<i>•</i><span>By <b>${escHtml(i.by)}</b></span>`:''}
-        </div>
-        ${i.desc?`<div class="iss-row__d">${escHtml(i.desc)}</div>`:''}
-        ${i.response?`<div class="iss-row__r dh-green"><b>Response:</b> ${escHtml(i.response)}</div>`:''}
-      </div>
-      <div class="iss-row__e">
-        <div class="iss-row__acts">
-          <span class="lk-chip ${k.hue}">${escHtml(k.label)}</span>
-          ${i.status!=='Resolved'?`<button class="lk-act lk-act--icon lk-act--hue dh-green" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></button>`:''}
-          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="lk-act lk-act--icon lk-act--hue dh-amber" onclick="progressMaint('${i.id}')" title="Mark in progress">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></button>`:''}
-          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
-        </div>
-        <div class="iss-row__id">Issue ID: <b>${_issSeq(i)}</b></div>
-      </div>
-    </div>`;
+      </td>
+    </tr>`;
   };
 
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="lk-stats">
-    ${card('open','dh-red','Open','Needs attention',nOpen,'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>')}
-    ${card('progress','dh-amber','In Progress','Being worked on',nProg,'<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>')}
-    ${card('resolved','dh-green','Resolved','Completed',nDone,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
+    ${card('open','dh-red','Open','Needs attention',nOpen,'warning')}
+    ${card('progress','dh-amber','In Progress','Being worked on',nProg,'clock')}
+    ${card('resolved','dh-green','Resolved','Completed',nDone,'check')}
     <div class="lk-stat dh-violet" title="Every complaint and maintenance request on record">
       <div class="lk-stat__top">
-        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
-        <div class="lk-stat__label">Total</div>
+        <div class="lk-stat__chip">${icon('list','sm')}</div>
+        <div class="lk-stat__label">Total Issues</div>
       </div>
       <div class="lk-stat__val">${all.length}</div>
       <div class="lk-stat__sub">All issues on record</div>
@@ -170,26 +425,24 @@ function renderIssues() {
   <!-- ══ TABS ══ -->
   <div class="iss-tabs">
     <button class="iss-tab${tab==='all'?' is-on':''}" onclick="issSetTab('all')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-      All Issues (${all.length})
+      ${icon('list','sm')} All Issues (${all.length})
     </button>
     <button class="iss-tab${tab==='maintenance'?' is-on':''}" onclick="issSetTab('maintenance')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${KIND.maintenance.svg}</svg>
-      Maintenance (${mActive} active)
+      ${icon('tool','sm')} Maintenance (${mActive} active)
     </button>
     <button class="iss-tab${tab==='complaints'?' is-on':''}" onclick="issSetTab('complaints')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${KIND.complaint.svg}</svg>
-      Complaints (${cOpen} open)
+      ${icon('helpCircle','sm')} Complaints (${cOpen} open)
     </button>
   </div>
 
-  <!-- ══ TOOLBAR + FEED ══ -->
+  <!-- ══ TOOLBAR + REGISTER ══ -->
   <div class="lk-panel">
     <div class="lk-tools">
       <div class="lk-search">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="iss-search" placeholder="Search issues, rooms, reporters, issue ID…"
+        ${icon('search','xs')}
+        <input id="iss-search" class="lk-sin" placeholder="Search issues, rooms, students, staff, issue ID…"
                value="${escHtml(issueFilter.search)}" oninput="issSearch(this.value)">
+        ${lkSearchX('iss-search','issueFilter','issues')}
       </div>
 
       <select class="lk-select${issueFilter.status!=='All'?' is-set':''}" onchange="issSet('status',this.value)" title="Filter by status">
@@ -199,63 +452,79 @@ function renderIssues() {
         <option value="resolved" ${issueFilter.status==='resolved'?'selected':''}>Resolved</option>
       </select>
 
-      ${tab!=='complaints'?`
-      <select class="lk-select${issueFilter.priority!=='All'?' is-set':''}" onchange="issSet('priority',this.value)" title="Filter by priority — maintenance only">
+      <select class="lk-select${issueFilter.priority!=='All'?' is-set':''}" onchange="issSet('priority',this.value)" title="Filter by priority">
         <option value="All">All Priority</option>
         ${['High','Medium','Low'].map(p=>`<option value="${p}" ${issueFilter.priority===p?'selected':''}>${p}</option>`).join('')}
-      </select>`:''}
+      </select>
 
-      ${roomNums.length?`
-      <select class="lk-select${issueFilter.room!=='All'?' is-set':''}" onchange="issSet('room',this.value)" title="Filter by room">
-        <option value="All">All Rooms</option>
-        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${issueFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
-      </select>`:''}
+      <select class="lk-select${issueFilter.category!=='All'?' is-set':''}" onchange="issSet('category',this.value)" title="Filter by category">
+        <option value="All">All Categories</option>
+        ${ISS_CATS.map(c=>`<option value="${escHtml(c.key)}" ${issueFilter.category===c.key?'selected':''}>${escHtml(c.key)}</option>`).join('')}
+      </select>
 
+      ${/* One month picker where a room dropdown and a From/To range used to
+            be (owner, 2026-09-08). Month and year are one control: the list
+            carries every month the register touches plus a whole-year entry
+            per year, and both match as a string prefix. */''}
+      ${tbMonth(all.map(i=>i.date), {
+        value: issueFilter.month, all: true,
+        onchange: "issSet('month',this.value)" })}
+
+      <!-- No Add button here on purpose: the page header already carries one
+           (nav.js, issues.action), and two accent-filled buttons doing the
+           identical thing on one screen is the "one primary action" rule
+           broken twice over. The empty state keeps its own, because there is
+           no table under it to act on. -->
       <div class="lk-tools__end">
-        ${nActive?`<button class="lk-btn lk-btn--on" onclick="issClearFilters()" title="Clear the toolbar filters">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-          Clear<span class="lk-btn__count">${nActive}</span></button>`:''}
-        <select class="lk-select" onchange="issSet('sort',this.value)" title="Sort the feed">
+        <select class="lk-select" onchange="issSet('sort',this.value)" title="Sort the register">
           <option value="newest"   ${issueFilter.sort==='newest'?'selected':''}>Newest First</option>
           <option value="oldest"   ${issueFilter.sort==='oldest'?'selected':''}>Oldest First</option>
           <option value="priority" ${issueFilter.sort==='priority'?'selected':''}>Priority</option>
         </select>
-        <button class="lk-btn lk-btn--go" onclick="showAddIssueModal()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          Add Issue</button>
+        ${tbExport({ id:'iss-export', excel:'exportIssuesExcel()', pdf:'exportIssuesPDF()' })}
       </div>
     </div>
 
     ${_pg.total===0?`
       <div class="lk-empty">
-        <div class="lk-empty__i"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KIND.maintenance.svg}</svg></div>
+        <div class="lk-empty__i">${icon('tool')}</div>
         <div class="lk-empty__t">${all.length===0?'No issues logged yet':nActive?'Nothing matches those filters':'Nothing here'}</div>
         <div class="lk-empty__s">${all.length===0?'Complaints and maintenance requests will appear here.':nActive?'Try clearing a filter or widening the search.':'This tab has no records.'}</div>
         ${all.length===0
-          ? `<button class="lk-btn lk-btn--go" onclick="showAddIssueModal()">+ Add Issue</button>`
-          : nActive?`<button class="lk-btn" onclick="issClearFilters()">Clear filters</button>`:''}
+          /* NOT lk-btn--go. The page header's own Add Issue button is shown on
+             permission, not on whether the register has rows, so on an empty
+             database both are on screen at once — and an accent fill here makes
+             that two primary actions, the rule this file already removed the
+             toolbar's button for. The header keeps the accent; this one is the
+             same action, stated again where the reader is looking. */
+          ? `<button class="lk-btn" onclick="showIssueModal()">${icon('plus','xs')} Add Issue</button>`
+          : nActive?`<button class="lk-btn" onclick="tbClearAll('issues')">Clear all filters</button>`:''}
       </div>`
-    : `<div class="iss-list">${_pg.slice.map(mkRow).join('')}</div>
-       ${issPager(_pg)}`}
+    : `<div class="lk-table-wrap iss-wrap">
+        <table class="lk-table iss-table">
+          <thead><tr>
+            <th>#</th><th>Issue</th><th>Student</th><th>Room</th><th>Category</th>
+            <th>Priority</th><th>Status</th><th>Reported On</th><th>Assigned To</th><th>Actions</th>
+          </tr></thead>
+          <tbody>${_pg.slice.map(mkRow).join('')}</tbody>
+        </table>
+      </div>
+      ${issPager(_pg)}`}
   </div>`;
 }
 
-/* ── Issues v5 — toolbar behaviour ───────────────────────────────────────── */
+/* ── Issues v6 — toolbar behaviour ───────────────────────────────────────── */
 function issSet(key, val) { issueFilter[key] = val; issueFilter.page = 1; renderPage('issues'); }
 const issSearch = debounce(function (v) { issSet('search', v); }, 220);
 function issSetTab(t) {
   issuesTab = t;
-  // Priority only exists on maintenance — leaving a stale one set would silently
-  // empty the complaints tab with no visible control to undo it.
-  if (t === 'complaints') issueFilter.priority = 'All';
   issueFilter.page = 1;
   renderPage('issues');
 }
-function issClearFilters() {
-  issueFilter.search = ''; issueFilter.status = 'All';
-  issueFilter.priority = 'All'; issueFilter.room = 'All';
-  issSet('page', 1);
-}
+/* Kept as a name because older call sites use it; the registry is the one
+   definition of what "cleared" means, so this cannot drift from the Clear
+   button beside it. */
+function issClearFilters() { tbClearAll('issues'); }
 function issPager(pg) {
   const btn = (label, target, o) => {
     o = o || {};
@@ -290,54 +559,349 @@ function issPager(pg) {
   </div>`;
 }
 
-function showAddIssueModal() {
-  var rooms = roomsByNumber(DB.rooms).map(function(r){return '<option value="'+r.id+'">Room '+r.number+'</option>';}).join('');
-  var students = studentsByRoom(DB.students.filter(function(s){return s.status==='Active';})).map(function(s){return '<option value="'+s.id+'">'+escHtml(s.name)+'</option>';}).join('');
-  showModal('modal-md','Add Complaint / Maintenance',
-    '<div style="display:flex;gap:8px;margin-bottom:18px">'+
-    '<button type="button" id="ib-maint" onclick="document.getElementById(\'if-maint\').style.display=\'block\';document.getElementById(\'if-comp\').style.display=\'none\';this.style.background=\'var(--accent-dim)\';this.style.color=\'var(--accent-strong)\';document.getElementById(\'ib-comp\').style.background=\'var(--bg3)\';document.getElementById(\'ib-comp\').style.color=\'var(--text2)\'" class="btn" style="flex:1;background:var(--accent-dim);color:var(--accent-strong);">&#x1F527; Maintenance</button>'+
-    '<button type="button" id="ib-comp" onclick="document.getElementById(\'if-comp\').style.display=\'block\';document.getElementById(\'if-maint\').style.display=\'none\';this.style.background=\'var(--accent-dim)\';this.style.color=\'var(--accent-strong)\';document.getElementById(\'ib-maint\').style.background=\'var(--bg3)\';document.getElementById(\'ib-maint\').style.color=\'var(--text2)\'" class="btn btn-secondary" style="flex:1">&#x1F4AC; Complaint</button>'+
-    '</div>'+
-    '<div id="if-maint"><div class="form-grid">'+
-    '<div class="field col-full"><label>Issue Title *</label><input id="mt-title" class="form-control" placeholder="e.g. Broken fan, Leaking pipe"></div>'+
-    '<div class="field"><label>Room</label><select id="mt-room" class="form-control"><option value="">Select Room</option>'+rooms+'</select></div>'+
-    '<div class="field"><label>Priority</label><select id="mt-priority" class="form-control"><option>High</option><option selected>Medium</option><option>Low</option></select></div>'+
-    '<div class="field"><label>Date</label><input id="mt-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="'+today()+'"></div>'+
-    '<div class="field col-full"><label>Description</label><textarea id="mt-desc" class="form-control" placeholder="Describe the issue..."></textarea></div>'+
-    '</div></div>'+
-    '<div id="if-comp" style="display:none"><div class="form-grid">'+
-    '<div class="field col-full"><label>Student</label><select id="cp-student" class="form-control"><option value="">Select Student</option>'+students+'</select></div>'+
-    '<div class="field col-full"><label>Subject *</label><input id="cp-subject" class="form-control" placeholder="Brief subject"></div>'+
-    '<div class="field"><label>Date</label><input id="cp-date" class="form-control cdp-trigger" type="text" readonly onclick="showCustomDatePicker(this,event)" value="'+today()+'"></div>'+
-    '<div class="field col-full"><label>Description</label><textarea id="cp-desc" class="form-control" placeholder="Describe the complaint..."></textarea></div>'+
-    '</div></div>',
-    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveIssue()">Submit</button>'
-  );
+/* ══ THE ADD / EDIT FORM ═══════════════════════════════════════════════════
+   Built 2026-09-08 to `add complaaint and maintinanace.png`, on the global
+   form system in `forms.css` — numbered sections, icon-prefixed controls, a
+   compact header, and a body that scrolls while the header and the action bar
+   stay put. It replaces a modal of inline `style="…"` attributes and two
+   emoji-labelled toggle buttons that wrote their own colours.
+
+   IT ALSO EDITS. There was no way to change an issue at all: a warden who
+   mistyped a room had to delete the record and lose its reference number. The
+   same form serves both, because an add form and an edit form that drift apart
+   is how a field ends up writable in one and not the other.
+
+   TWO THINGS THE REFERENCE ASKS FOR THAT ARE DELIBERATELY NOT HERE
+   -----------------------------------------------------------------
+   • **Attachments** ("drag & drop images, PDF, max 5MB"). Storing files needs a
+     place to put them, a size budget inside the backup, and a main-process
+     handler — a feature, not a form field. Owner's call.
+   • **Estimated Cost (PKR)** on maintenance. Money in this app has exactly one
+     home, and it is Expenses. An estimate parked on a ticket becomes a second,
+     unreconciled answer to "what did maintenance cost this month", which is
+     the failure CLAUDE.md's finance rule exists to prevent. The right shape is
+     a resolved ticket that WRITES an expense; that is a piece of work, not a
+     text box. Owner's call.                                                */
+
+/** Staff names offered for "Assigned To" — the app's own user accounts. The
+ *  control is a free-text input backed by a datalist, not a select, because
+ *  half of what a hostel assigns goes to an outside plumber who will never
+ *  have a login. */
+function _issStaffList() {
+  return Object.values(typeof WARDENS === 'object' && WARDENS ? WARDENS : {})
+    .filter(u => u && u.active !== false)
+    .map(u => String(u.name || u.username || '').trim())
+    .filter(Boolean);
 }
 
-async function saveIssue() {
-  var isComp = document.getElementById('if-comp') && document.getElementById('if-comp').style.display!=='none';
-  if(!isComp) {
-    var title = (document.getElementById('mt-title')||{}).value||''; title=title.trim();
-    if(!title){toast('Enter a title','error');return;}
-    if(!DB.maintenance) DB.maintenance=[];
-    logActivity('Maintenance Added',title,'Maintenance');
-    DB.maintenance.push({id:'mt_'+uid(),seq:_issNextSeq(DB.maintenance),title:title,roomId:(document.getElementById('mt-room')||{}).value||'',
-      priority:(document.getElementById('mt-priority')||{}).value||'Medium',
-      description:((document.getElementById('mt-desc')||{}).value||'').trim(),
-      date:(document.getElementById('mt-date')||{}).value||today(),status:'Open',resolvedDate:''});
-    issuesTab='maintenance';
+function _issSecHead(n, title, hint) {
+  return `<div class="hf-sec__h">
+    <span class="hf-num">${n}</span>
+    <span class="hf-sec__t">${escHtml(title)}</span>
+    ${hint ? `<span class="hf-sec__s">${escHtml(hint)}</span>` : ''}
+  </div>`;
+}
+
+/** One icon-prefixed control. `ctrl` is the raw <input>/<select>/<textarea>. */
+function _issField(label, ico, ctrl, o) {
+  o = o || {};
+  return `<div class="field${o.full ? ' col-full' : ''}">
+    <label>${escHtml(label)}${o.req ? '<span class="req"> *</span>' : ''}</label>
+    <div class="hf-in${o.top ? ' hf-in--top' : ''}${o.readonly ? ' is-readonly' : ''}">
+      <span class="hf-in__i">${icon(ico, 'xs')}</span>${ctrl}
+    </div>
+  </div>`;
+}
+
+/**
+ * Add or edit a complaint / maintenance record.
+ * @param {string} [id] existing record id; omit to add a new one.
+ */
+function showIssueModal(id) {
+  const rec  = id ? _issAll().find(x => x.id === id) : null;
+  const kind = rec ? rec.kind
+             : (issuesTab === 'complaints' ? 'complaint' : 'maintenance');
+
+  const roomOpts = roomsByNumber(DB.rooms || []).map(r =>
+    `<option value="${escHtml(r.id)}" ${rec && rec.raw.roomId === r.id ? 'selected' : ''}>Room ${escHtml(String(r.number))}</option>`).join('');
+
+  /* Complaints are raised by residents. On an EDIT the recorded student is
+     offered even if they have since left, so re-saving an old complaint cannot
+     silently blank the person it was about. */
+  const stuPool = (DB.students || []).filter(s =>
+    s.status === 'Active' || (rec && rec.raw.studentId === s.id));
+  const stuOpts = studentsByRoom(stuPool).map(s => {
+    const r = (DB.rooms || []).find(x => x.id === s.roomId);
+    return `<option value="${escHtml(s.id)}" ${rec && rec.raw.studentId === s.id ? 'selected' : ''}>`
+         + `${escHtml(s.name)}${r ? ' — Room ' + escHtml(String(r.number)) : ''}</option>`;
+  }).join('');
+
+  const catOpts = ISS_CATS.map(c =>
+    `<option value="${escHtml(c.key)}" ${rec && rec.category === c.key ? 'selected' : ''}>${escHtml(c.key)}</option>`).join('');
+
+  const prioOpts = (sel) => ['High','Medium','Low'].map(p =>
+    `<option value="${p}" ${p === sel ? 'selected' : ''}>${p}</option>`).join('');
+
+  const staff = _issStaffList();
+  const dlist = `<datalist id="iss-staff">${staff.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>`;
+
+  const dateCtrl = (fid, val, ph) =>
+    `<input id="${fid}" class="form-control cdp-trigger" type="text" readonly placeholder="${ph}"`
+    + ` onclick="showCustomDatePicker(this,event)" value="${escHtml(val || '')}">`;
+
+  /* ── Maintenance ───────────────────────────────────────────────────────── */
+  const maint = `
+    <div id="if-maint" class="hf-form"${kind === 'complaint' ? ' hidden' : ''}>
+      <div class="hf-sec">
+        ${_issSecHead(1, 'The issue', 'What is broken, and where')}
+        <div class="hf-g2">
+          ${_issField('Issue title', 'tool',
+            `<input id="mt-title" class="form-control" placeholder="e.g. Broken fan, Leaking pipe" value="${rec ? escHtml(rec.title) : ''}">`,
+            { req: true, full: true })}
+          ${_issField('Category', 'tag',
+            `<select id="mt-category" class="form-control"><option value="">Select category</option>${catOpts}</select>`)}
+          ${_issField('Room', 'bed',
+            `<select id="mt-room" class="form-control"><option value="">Select room</option>${roomOpts}</select>`)}
+          ${_issField('Priority', 'warning',
+            `<select id="mt-priority" class="form-control">${prioOpts(rec ? rec.priority : 'Medium')}</select>`)}
+          ${_issField('Location / area', 'pin',
+            `<input id="mt-location" class="form-control" placeholder="e.g. Bathroom, Kitchen, Common area" value="${rec ? escHtml(rec.location) : ''}">`)}
+        </div>
+      </div>
+
+      <div class="hf-sec">
+        ${_issSecHead(2, 'Timing & status', 'When it was reported, when it is due, where it stands')}
+        <div class="hf-g3">
+          ${_issField('Reported date', 'calendar', dateCtrl('mt-date', rec ? rec.date : today(), 'Select date'), { req: true })}
+          ${_issField('Expected completion', 'clock', dateCtrl('mt-expected', rec ? rec.expected : '', 'Optional'))}
+          ${/* A status a warden can only move FORWARD is a status they cannot
+                correct. The row's buttons resolve and progress a ticket; this
+                is the only way back from a Resolved marked by mistake, and it
+                is why the complaint form has carried one from the start. */''}
+          ${_issField('Status', 'check',
+            `<select id="mt-status" class="form-control">
+               <option value="Open"       ${!rec || rec.status === 'Open' ? 'selected' : ''}>Open</option>
+               <option value="InProgress" ${rec && rec.status === 'InProgress' ? 'selected' : ''}>In Progress</option>
+               <option value="Resolved"   ${rec && rec.status === 'Resolved' ? 'selected' : ''}>Resolved</option>
+             </select>`)}
+        </div>
+      </div>
+
+      <div class="hf-sec">
+        ${_issSecHead(3, 'Details & assignment', 'Describe the work and who is doing it')}
+        <div class="hf-g2">
+          ${_issField('Description', 'fileText',
+            `<textarea id="mt-desc" class="form-control" placeholder="Describe the issue and the work required…">${rec ? escHtml(rec.desc) : ''}</textarea>`,
+            { full: true, top: true })}
+          ${/* The reference marks this required. It is not, here: a ticket is
+                logged the moment a warden hears about it, and who will do the
+                work is often the next day's question. A required field that
+                stands between a hostel and recording a burst pipe is a field
+                that gets filled with a full stop. */''}
+          ${_issField('Assigned to', 'person',
+            `<input id="mt-assigned" class="form-control" list="iss-staff" placeholder="Staff member or contractor" value="${rec ? escHtml(rec.assigned) : ''}">`,
+            { full: true })}
+        </div>
+      </div>
+    </div>`;
+
+  /* ── Complaint ─────────────────────────────────────────────────────────── */
+  const comp = `
+    <div id="if-comp" class="hf-form"${kind === 'complaint' ? '' : ' hidden'}>
+      <div class="hf-sec">
+        ${_issSecHead(1, 'Student & room', 'Who raised it — the room follows the student')}
+        <div class="hf-g2">
+          ${_issField('Student', 'student',
+            `<select id="cp-student" class="form-control" onchange="_issSyncCompRoom()"><option value="">Select student</option>${stuOpts}</select>`,
+            { req: true })}
+          ${_issField('Room', 'bed',
+            `<input id="cp-room" class="form-control" readonly value="${rec && rec.roomNo ? '#' + escHtml(rec.roomNo) : ''}" placeholder="From the student's record">`,
+            { readonly: true })}
+        </div>
+      </div>
+
+      <div class="hf-sec">
+        ${_issSecHead(2, 'Complaint details', 'What the complaint is about')}
+        <div class="hf-g3">
+          ${_issField('Category', 'tag',
+            `<select id="cp-category" class="form-control"><option value="">Select category</option>${catOpts}</select>`)}
+          ${_issField('Priority', 'warning',
+            `<select id="cp-priority" class="form-control">${prioOpts(rec && rec.priority ? rec.priority : 'Medium')}</select>`)}
+          ${_issField('Status', 'check',
+            `<select id="cp-status" class="form-control">
+               <option value="Open"        ${rec && rec.status === 'Open' ? 'selected' : ''}>Open</option>
+               <option value="UnderReview" ${rec && rec.status === 'UnderReview' ? 'selected' : ''}>Under Review</option>
+               <option value="Resolved"    ${rec && rec.status === 'Resolved' ? 'selected' : ''}>Resolved</option>
+             </select>`)}
+          ${_issField('Complaint date', 'calendar', dateCtrl('cp-date', rec ? rec.date : today(), 'Select date'), { req: true })}
+          ${_issField('Expected resolution', 'clock', dateCtrl('cp-expected', rec ? rec.expected : '', 'Optional'))}
+          ${_issField('Assigned to', 'person',
+            `<input id="cp-assigned" class="form-control" list="iss-staff" placeholder="Staff member" value="${rec ? escHtml(rec.assigned) : ''}">`)}
+          ${_issField('Subject', 'fileText',
+            `<input id="cp-subject" class="form-control" placeholder="e.g. No water in bathroom" value="${rec ? escHtml(rec.title) : ''}">`,
+            { req: true, full: true })}
+          ${_issField('Description', 'fileText',
+            `<textarea id="cp-desc" class="form-control" placeholder="Describe the complaint in detail…">${rec ? escHtml(rec.desc) : ''}</textarea>`,
+            { full: true, top: true })}
+        </div>
+      </div>
+    </div>`;
+
+  /* The kind switch. Neutral, not accent-filled: it selects which form is on
+     screen, and the one saturated action on this modal is Save. Hidden on an
+     edit — a complaint cannot become a maintenance ticket. */
+  const switcher = rec ? '' : `
+    <div class="hf-switch" role="tablist">
+      <button type="button" id="ib-maint" role="tab" class="hf-switch__b${kind === 'maintenance' ? ' is-on' : ''}"
+              onclick="_issPickKind('maintenance')">${icon('tool','xs')} Maintenance</button>
+      <button type="button" id="ib-comp" role="tab" class="hf-switch__b${kind === 'complaint' ? ' is-on' : ''}"
+              onclick="_issPickKind('complaint')">${icon('helpCircle','xs')} Complaint</button>
+    </div>`;
+
+  const heading = rec
+    ? (kind === 'maintenance' ? 'Edit Maintenance — ' + _issSeq(rec) : 'Edit Complaint — ' + _issSeq(rec))
+    : 'Add Complaint / Maintenance';
+  const sub = rec
+    ? 'Update this record. Its reference number does not change.'
+    : 'Record a maintenance task or register a complaint from a student.';
+
+  showModal('modal-form', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon(kind === 'maintenance' ? 'tool' : 'helpCircle', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">${escHtml(heading)}</span>
+        <span class="hf-mh__s">${escHtml(sub)}</span>
+      </span>
+    </div>`,
+    dlist + switcher + maint + comp,
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       <button class="btn btn-primary" onclick="saveIssue(${id ? `'${escHtml(id)}'` : ''})">
+         ${icon('save','xs')} ${rec ? 'Save changes' : 'Save issue'}</button>
+     </div>`);
+
+  if (kind === 'complaint' && !rec) _issSyncCompRoom();
+}
+
+/** Swap which of the two forms is on screen. */
+function _issPickKind(kind) {
+  const m = document.getElementById('if-maint');
+  const c = document.getElementById('if-comp');
+  const bm = document.getElementById('ib-maint');
+  const bc = document.getElementById('ib-comp');
+  if (!m || !c) return;
+  const wantComp = kind === 'complaint';
+  m.hidden = wantComp;
+  c.hidden = !wantComp;
+  if (bm) bm.classList.toggle('is-on', !wantComp);
+  if (bc) bc.classList.toggle('is-on', wantComp);
+  /* The modal header carries the kind's glyph. Rendered once at open time, it
+     went on showing a wrench over a complaint form. */
+  const mh = document.querySelector('.hf-mh__ico');
+  if (mh) mh.innerHTML = icon(wantComp ? 'helpCircle' : 'tool', 'sm');
+  if (wantComp) _issSyncCompRoom();
+}
+
+/** The complaint's room is the room its student lives in — shown, never typed. */
+function _issSyncCompRoom() {
+  const sel = document.getElementById('cp-student');
+  const out = document.getElementById('cp-room');
+  if (!sel || !out) return;
+  const s = (DB.students || []).find(t => t.id === sel.value);
+  const r = s ? (DB.rooms || []).find(x => x.id === s.roomId) : null;
+  out.value = r ? '#' + String(r.number) : '';
+}
+
+/** Which form is showing. `hidden` rather than an inline display style, so the
+ *  answer does not depend on how the element was last written to. */
+function _issFormIsComplaint() {
+  const c = document.getElementById('if-comp');
+  return !!(c && !c.hidden);
+}
+
+const _issVal = (id) => String((document.getElementById(id) || {}).value || '').trim();
+
+async function saveIssue(id) {
+  const isComp = _issFormIsComplaint();
+
+  if (!isComp) {
+    const title = _issVal('mt-title');
+    if (!title) { toast('Enter an issue title', 'error'); return; }
+    if (!DB.maintenance) DB.maintenance = [];
+
+    const status = _issVal('mt-status') || 'Open';
+    const fields = {
+      title,
+      roomId:       _issVal('mt-room'),
+      category:     _issVal('mt-category'),
+      priority:     _issVal('mt-priority') || 'Medium',
+      location:     _issVal('mt-location'),
+      description:  _issVal('mt-desc'),
+      date:         _issVal('mt-date') || today(),
+      expectedDate: _issVal('mt-expected'),
+      assignedTo:   _issVal('mt-assigned'),
+      status,
+    };
+
+    const existing = id ? DB.maintenance.find(x => x.id === id) : null;
+    if (existing) {
+      Object.assign(existing, fields);
+      /* Moving a ticket OFF Resolved has to take the closing date with it, or
+         the register shows an open ticket that also states the day it closed.
+         Moving it ON keeps a date already stamped by the row's button. */
+      if (status === 'Resolved') { if (!existing.resolvedDate) existing.resolvedDate = today(); }
+      else existing.resolvedDate = '';
+      logActivity('Maintenance Updated', title, 'Maintenance');
+    } else {
+      DB.maintenance.push(Object.assign({
+        id: 'mt_' + uid(), seq: _issNextSeq(DB.maintenance),
+        resolvedDate: status === 'Resolved' ? today() : '',
+      }, fields));
+      logActivity('Maintenance Added', title, 'Maintenance');
+    }
+    issuesTab = 'maintenance';
+
   } else {
-    var subj = (document.getElementById('cp-subject')||{}).value||''; subj=subj.trim();
-    if(!subj){toast('Enter a subject','error');return;}
-    if(!DB.complaints) DB.complaints=[];
-    DB.complaints.push({id:'cp_'+uid(),seq:_issNextSeq(DB.complaints),subject:subj,resolvedDate:'',
-      studentId:(document.getElementById('cp-student')||{}).value||'',
-      description:((document.getElementById('cp-desc')||{}).value||'').trim(),
-      date:(document.getElementById('cp-date')||{}).value||today(),status:'Open',response:''});
-    issuesTab='complaints';
+    const subject = _issVal('cp-subject');
+    if (!subject) { toast('Enter a subject', 'error'); return; }
+    if (!DB.complaints) DB.complaints = [];
+
+    const status = _issVal('cp-status') || 'Open';
+    const fields = {
+      subject,
+      studentId:    _issVal('cp-student'),
+      category:     _issVal('cp-category'),
+      priority:     _issVal('cp-priority') || 'Medium',
+      description:  _issVal('cp-desc'),
+      date:         _issVal('cp-date') || today(),
+      expectedDate: _issVal('cp-expected'),
+      assignedTo:   _issVal('cp-assigned'),
+      status,
+    };
+
+    const existing = id ? DB.complaints.find(x => x.id === id) : null;
+    if (existing) {
+      Object.assign(existing, fields);
+      /* Resolving from the form must stamp the date the resolve BUTTON stamps,
+         and clearing the status must take it back off — otherwise a record can
+         read Open while still carrying the day it was closed. */
+      if (status === 'Resolved') { if (!existing.resolvedDate) existing.resolvedDate = today(); }
+      else existing.resolvedDate = '';
+      logActivity('Complaint Updated', subject, 'Complaint');
+    } else {
+      DB.complaints.push(Object.assign({
+        id: 'cp_' + uid(), seq: _issNextSeq(DB.complaints),
+        resolvedDate: status === 'Resolved' ? today() : '', response: '',
+      }, fields));
+      logActivity('Complaint Added', subject, 'Complaint');
+    }
+    issuesTab = 'complaints';
   }
-  await saveDB(); closeModal(); renderPage('issues'); toast('Saved','success');
+
+  await saveDB();
+  closeModal();
+  renderPage('issues');
+  toast(id ? 'Changes saved' : 'Saved', 'success');
 }
 
 async function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();await saveDB();renderPage('issues');toast('Resolved','success');}}
@@ -346,12 +910,12 @@ async function delMaint(id){showConfirm('Delete?','',async function(){DB.mainten
 async function resolveComp(id) {
   // FIX #7: Replace blocking native prompt() with an in-app modal dialog
   var cc = DB.complaints.find(function(x){return x.id===id;}); if(!cc) return;
-  showModal('modal-sm', '✅ Resolve Complaint',
+  showModal('modal-sm', 'Resolve Complaint',
     '<div class="field"><label>Optional Response</label>' +
     '<textarea id="comp-resolve-text" class="form-control" rows="3" placeholder="Enter a response or leave blank…"></textarea></div>',
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
     '<button class="btn btn-success" onclick="(async function(){' +
-      'var cc=DB.complaints.find(function(x){return x.id===\''+id+'\';});' +
+      'var cc=DB.complaints.find(function(x){return x.id===\'' + id + '\';});' +
       'if(cc){cc.status=\'Resolved\';cc.resolvedDate=today();cc.response=(document.getElementById(\'comp-resolve-text\')||{}).value||\'\';}' +
       'await saveDB();closeModal();renderPage(\'issues\');toast(\'Complaint resolved\',\'success\');' +
     '})()">Mark Resolved</button>'
@@ -359,14 +923,21 @@ async function resolveComp(id) {
 }
 async function delComp(id){showConfirm('Delete?','',async function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 
-// Keep original function names as aliases so dashboard alerts still work
+/* The pre-v5 names. Nothing in the app calls them today — verified 2026-09-08
+   across the whole renderer — but they are the names every older call site and
+   any hand-written onclick used, and they cost four lines. Do not add a comment
+   claiming a caller without checking: the previous one said "so dashboard
+   alerts still work", and the dashboard navigates to this page instead. */
 function resolveMaintenance(id){resolveMaint(id);}
 function progressMaintenance(id){progressMaint(id);}
 function deleteMaintenance(id){delMaint(id);}
 function resolveComplaint(id){resolveComp(id);}
 function deleteComplaint(id){delComp(id);}
-function showAddMaintenanceModal(){issuesTab='maintenance';showAddIssueModal();}
-function showAddComplaintModal(){issuesTab='complaints';showAddIssueModal();}
+// `showAddIssueModal` is what the older call sites and the keyboard shortcut
+// use; it is the add form, which is showIssueModal with no record.
+function showAddIssueModal(){showIssueModal();}
+function showAddMaintenanceModal(){issuesTab='maintenance';showIssueModal();}
+function showAddComplaintModal(){issuesTab='complaints';showIssueModal();}
 
 
 // ══════════════════════════════════════════════════════════════════

@@ -211,8 +211,8 @@ function renderArchive() {
     <span class="arc-bar__lbl">Month</span>
     <select class="arc-select" onchange="arcSetMonth(this.value)" title="Narrow to one month">${monthOpts}</select>
     <div class="arc-bar__end">
-      <button class="arc-btn" onclick="downloadArchiveCSV()">${icon('download','xs')} CSV</button>
-      <button class="arc-btn arc-btn--primary" onclick="printArchive()">${icon('print','xs')} Print / PDF</button>
+      <button class="arc-btn" onclick="exportArchiveExcel()" title="Export the whole period to Excel — one sheet per section">${icon('download','xs')} Export Excel</button>
+      <button class="arc-btn arc-btn--primary" onclick="exportArchivePDF()" title="Export the whole period as a PDF document">${icon('print','xs')} Export PDF</button>
     </div>
   </div>`;
 
@@ -220,12 +220,19 @@ function renderArchive() {
     <div class="arc-kpi ${hue}"><div class="arc-kpi__l">${l}</div>
     <div class="arc-kpi__v">${v}</div><div class="arc-kpi__s">${s}</div></div>`;
 
+  /* COMPACT ON THE CARDS, EXACT IN THE TABLES BELOW — the same split utils.js
+     documents for fmtCompact() vs fmtPKRk(), and the same helper the dashboard
+     and Reports KPI rows now use. A whole archived YEAR is the largest figure
+     this app ever prints, so this is the screen where a full fmtPKR() ran out
+     of card first. The exact rupees stay in the title attribute, and the
+     month-by-month table further down is untouched: that one is reconciled
+     against records, not scanned. */
   const kpis = `
   <div class="arc-kpis">
-    ${kpi('dh-green','Revenue',   fmtPKR(T.rev),     `${T.pays.filter(p=>p.status==='Paid').length} paid records`)}
-    ${kpi('dh-red',  'Expenses',  fmtPKR(T.exp),     `${T.exps.length} record${T.exps.length===1?'':'s'}`)}
-    ${kpi(T.net>=0?'dh-green':'dh-red','Available Fund', fmtPKR(T.net), 'Revenue − Expenses')}
-    ${kpi('dh-amber','Pending',   fmtPKR(T.pending), `${T.pays.filter(p=>p.status==='Pending').length} unpaid`)}
+    ${kpi('dh-green','Revenue',   moneyValue(T.rev,{compact:true}),     `${T.pays.filter(p=>p.status==='Paid').length} paid records`)}
+    ${kpi('dh-red',  'Expenses',  moneyValue(T.exp,{compact:true}),     `${T.exps.length} record${T.exps.length===1?'':'s'}`)}
+    ${kpi(T.net>=0?'dh-green':'dh-red','Available Fund', moneyValue(T.net,{compact:true}), 'Revenue − Expenses')}
+    ${kpi('dh-amber','Pending',   moneyValue(T.pending,{compact:true}), `${T.pays.filter(p=>p.status==='Pending').length} unpaid`)}
     ${kpi('dh-blue', 'Students',  String(T.students.length), 'on the roster in this period')}
     ${kpi('dh-blue', 'Cancellations', String(T.cancels.length), 'requests raised')}
   </div>`;
@@ -457,7 +464,8 @@ function _arcOverviewPanel(T, label) {
           </tr>
         </tbody>
       </table></div>
-    </div>`;
+    </div>
+    ${arcCharts(y, rows)}`;
   }
 
   // One month: the same six figures, plus the category split, without leaving
@@ -740,215 +748,306 @@ function _arcPayRows(pays) {
     </tbody></table></div>`;
 }
 
-// ── PRINT ────────────────────────────────────────────────────────────────────
-// The whole period as one document: summary, roster, payments, outstanding,
-// the category register and the cancellations. This is the sheet an owner files
-// or hands to an accountant, so it carries every section rather than whichever
-// tab happened to be open.
-function printArchive() {
-  const T = _arcTotals(), label = _arcLabel(), key = _arcKey();
-  const hostel = DB.settings.hostelName || 'Hostel';
+/* ══ THE ANNUAL ARCHIVE EXPORT ═════════════════════════════════════════════
+   §39 asks for the strongest structure in the specification, and for a good
+   reason: this is the document an owner files at the end of a period and the
+   one an accountant is handed. "Do not create one enormous unstructured
+   table" — so the period comes out as SECTIONS, each with its own heading,
+   columns and totals, and the workbook puts each section on its own SHEET
+   (Summary, Students, Payments, Outstanding, Expenses, Cancellations) because
+   they are materially different datasets that nobody wants interleaved.
+
+   The engine renders both from this one definition, which is what stopped the
+   PDF and the CSV drifting: they were separate code with separate column
+   lists, and the CSV quietly carried a "Paid" figure the PDF did not.
+
+   Every figure is _arcTotals() / _arcStudentFigures(), the archive screen's
+   own arithmetic — the export computes nothing of its own, so a printed
+   archive and the screen behind it cannot disagree.                         */
+function _arcExportDef() {
+  const T      = _arcTotals();
+  const key    = _arcKey();
+  const label  = _arcLabel();
   const groups = _rptByCategory(T.exps);
+  const roomOf = s => { const r = (DB.rooms || []).find(x => x.id === s.roomId); return r ? String(r.number) : ''; };
+  const figOf  = s => _arcStudentFigures(s.id, key);
 
-  const money = n => 'PKR ' + Number(n || 0).toLocaleString('en-PK');
-  const sec = (title, inner) => `<h3>${title}</h3>${inner}`;
-  const none = m => `<table><tbody><tr><td style="text-align:center;color:#aaa;padding:10px">${escHtml(m)}</td></tr></tbody></table>`;
+  const pend = T.pays.filter(p => p.status === 'Pending');
 
-  const students = T.students.map(s => {
-    const f = _arcStudentFigures(s.id, key);
-    const room = (DB.rooms || []).find(r => r.id === s.roomId);
-    const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
-    return `<tr><td>${escHtml(s.name||'—')}</td><td>${escHtml(s.fatherName||'—')}</td>
-      <td>${room?'#'+escHtml(String(room.number)):'—'}</td><td>${escHtml(fmtDate(s.joinDate)||'—')}</td>
-      <td>${escHtml(s.status||'—')}</td><td style="text-align:right">${money(ch.total)}</td>
-      <td style="text-align:right" class="gr">${f.paid?money(f.paid):'—'}</td>
-      <td style="text-align:right" class="re">${f.pending?money(f.pending):'—'}</td></tr>`;
+  return {
+    module: 'Annual-Archive',
+    title:  'Annual Archive',
+    scope:  label,
+    orientation: 'landscape',
+    sheetPerSection: true,
+
+    filters: [['Period', label]],
+
+    /* §39's cover summary. These are the period's headline figures and they
+       lead both files, because they are what the document is opened for. */
+    summary: [
+      { label: 'Students',      value: String(T.students.length) },
+      { label: 'Revenue',       value: EXPORT.fmt.money(T.rev), tone: 'pos' },
+      { label: 'Expenses',      value: EXPORT.fmt.money(T.exp), tone: 'neg' },
+      { label: 'Available fund', value: EXPORT.fmt.money(T.net), tone: T.net >= 0 ? 'pos' : 'neg' },
+      { label: 'Outstanding',   value: EXPORT.fmt.money(T.pending), tone: T.pending > 0 ? 'neg' : '' },
+      { label: 'Payments',      value: String(T.pays.length) },
+      { label: 'Cancellations', value: String(T.cancels.length) },
+    ],
+
+    sections: [
+      {
+        title: 'Students',
+        meta: T.students.length + ' on the roster in this period',
+        empty: 'Nobody was on the roster in this period.',
+        columns: [
+          { label: 'Room', type: 'id', width: 9,
+            value: roomOf,
+            get:   s => { const r = roomOf(s); return r ? '<b>#' + escHtml(r) + '</b>' : '—'; } },
+          { label: 'Student', type: 'text', width: 22, value: s => s.name || '',
+            get: s => '<b>' + escHtml(s.name || '—') + '</b>' },
+          { label: 'Father / Guardian', type: 'text', width: 22, value: s => s.fatherName || '' },
+          { label: 'Joined', type: 'date', width: 13, value: s => s.joinDate || '' },
+          { label: 'Status', type: 'status', width: 12, value: s => s.status || '' },
+          { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+            value: s => { const c = (typeof resolveCharges === 'function')
+              ? resolveCharges(s) : { total: Number(s.rent || 0) }; return c.total || null; } },
+          { label: 'Paid', type: 'money', width: 14, total: 'sum',
+            value: s => figOf(s).paid || null },
+          { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
+            value: s => figOf(s).pending || null,
+            get:   s => { const f = figOf(s);
+              return f.pending ? '<span class="neg">' + fmtPKR(f.pending) + '</span>' : '—'; } },
+        ],
+        rows: T.students,
+      },
+
+      {
+        title: 'Payments',
+        meta: T.pays.length + ' record' + (T.pays.length === 1 ? '' : 's'),
+        empty: 'No payments in this period.',
+        columns: [
+          { label: 'Date',    type: 'date', width: 13, value: p => p.date || '' },
+          { label: 'Room',    type: 'id',   width: 9,  value: p => String(p.roomNumber || ''),
+            get: p => '<b>#' + escHtml(String(p.roomNumber || '—')) + '</b>' },
+          { label: 'Student', type: 'text', width: 22, value: p => p.studentName || '' },
+          { label: 'Month',   type: 'text', width: 16, value: p => monthLabel(p.month) },
+          { label: 'Method',  type: 'text', width: 13, value: p => p.method || '' },
+          { label: 'Status',  type: 'status', width: 11, value: p => p.status || '' },
+          { label: 'Paid',    type: 'money', width: 14, total: 'sum',
+            value: p => Number(p.amount || 0) || null },
+          { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
+            value: p => p.status === 'Pending' ? outstandingOf(p) : null,
+            get:   p => p.status === 'Pending' && outstandingOf(p) > 0
+                     ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' : '—' },
+        ],
+        rows: T.pays.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+        grand: { label: 'Collected in this period', value: fmtPKR(T.rev) },
+      },
+
+      {
+        title: 'Outstanding',
+        meta: pend.length + ' unpaid record' + (pend.length === 1 ? '' : 's'),
+        empty: 'Nothing was left unpaid in this period.',
+        columns: [
+          { label: 'Room', type: 'id', width: 9, value: p => String(p.roomNumber || ''),
+            get: p => '<b>#' + escHtml(String(p.roomNumber || '—')) + '</b>' },
+          { label: 'Student', type: 'text', width: 24, value: p => p.studentName || '' },
+          { label: 'Month',   type: 'text', width: 18, value: p => monthLabel(p.month) },
+          { label: 'Owed',    type: 'money', width: 15, total: 'sum',
+            value: p => outstandingOf(p),
+            get:   p => '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' },
+        ],
+        rows: pend,
+        grand: { label: 'Total outstanding', value: fmtPKR(T.pending) },
+      },
+
+      {
+        title: 'Expenses',
+        meta: groups.length + ' categor' + (groups.length === 1 ? 'y' : 'ies'),
+        empty: 'Nothing was spent in this period.',
+        groupLabel: 'Category',
+        columns: [
+          { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
+          { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
+          { label: 'Amount', type: 'money', width: 15, total: 'sum',
+            value: e => Number(e.amount || 0),
+            get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+        ],
+        groups: groups.map(g => ({
+          label: g.cat,
+          meta: g.items.length + ' record' + (g.items.length === 1 ? '' : 's'),
+          rows: g.items,
+          total: { label: 'Total — ' + g.cat, value: fmtPKR(g.total) },
+        })),
+        grand: { label: 'Total spent in this period', value: fmtPKR(_rptGroupsTotal(groups)) },
+      },
+
+      {
+        title: 'Cancellations',
+        meta: T.cancels.length + ' departure' + (T.cancels.length === 1 ? '' : 's'),
+        empty: 'No cancellations were raised in this period.',
+        columns: [
+          { label: 'Ref', type: 'id', width: 12,
+            value: c => c.seq ? 'CAN-' + String(c.seq).padStart(4, '0') : '' },
+          { label: 'Requested', type: 'date', width: 14, value: c => _arcCancDate(c) || '' },
+          { label: 'Room', type: 'id', width: 9, value: c => String(c.roomNumber || ''),
+            get: c => '<b>#' + escHtml(String(c.roomNumber || '—')) + '</b>' },
+          { label: 'Student', type: 'text', width: 22, value: c => c.studentName || '' },
+          { label: 'Vacates', type: 'date', width: 14, value: c => c.vacateDate || '' },
+          { label: 'Reason',  type: 'wrap', width: 30, value: c => c.reason || '' },
+          { label: 'Status',  type: 'status', width: 12, value: c => c.status || '' },
+        ],
+        rows: T.cancels,
+      },
+    ],
+
+    /* §57 — an annual archive is a certified record of a closed period. */
+    signatures: ['Prepared by', 'Owner / Manager'],
+    empty: 'No records were held in this period.',
+  };
+}
+
+function printArchive()        { EXPORT.pdf(_arcExportDef()); }
+function exportArchivePDF()    { EXPORT.pdf(_arcExportDef()); }
+function exportArchiveExcel()  { EXPORT.excel(_arcExportDef()); }
+function downloadArchiveCSV()  { exportArchiveExcel(); }
+
+/* ── ONE STUDENT'S PERIOD RECORD ─────────────────────────────────────────────
+   A record document rather than a register: the identity block is `facts`, and
+   the single table is that student's payments. §5 puts a document of this
+   shape in portrait, which is the one place in the archive that is not
+   landscape.                                                                */
+function printArchiveStudent(studentId) {
+  const s     = (DB.students || []).find(x => x.id === studentId);
+  const key   = _arcKey(), label = _arcLabel();
+  const f     = _arcStudentFigures(studentId, key);
+  const room  = s ? (DB.rooms || []).find(r => r.id === s.roomId) : null;
+  const ch    = (s && typeof resolveCharges === 'function') ? resolveCharges(s) : { total: 0 };
+
+  EXPORT.pdf({
+    module: 'Student-Record',
+    title:  'Student Record',
+    scope:  label,
+    orientation: 'portrait',
+
+    facts: [
+      ['Student', s ? s.name : ''],
+      ['Father / Guardian', s ? s.fatherName : ''],
+      ['Room', room ? '#' + room.number : ''],
+      ['Phone', s ? s.phone : ''],
+      ['CNIC', s ? s.cnic : ''],
+      ['Joined', s && s.joinDate ? EXPORT.fmt.date(s.joinDate) : ''],
+      ['Status', s ? s.status : ''],
+      ['Course', s ? (s.occupation || s.course) : ''],
+      ['Period', label],
+    ],
+
+    summary: [
+      { label: 'Charge / month', value: EXPORT.fmt.money(ch.total) },
+      { label: 'Paid',           value: EXPORT.fmt.money(f.paid), tone: 'pos' },
+      { label: 'Outstanding',    value: EXPORT.fmt.money(f.pending),
+        tone: f.pending > 0 ? 'neg' : '' },
+    ],
+
+    sections: [{
+      title: 'Payments — ' + label,
+      empty: 'No payment records for this period.',
+      columns: [
+        { label: 'Date',   type: 'date', width: 13, value: p => p.date || '' },
+        { label: 'Month',  type: 'text', width: 16, value: p => monthLabel(p.month) },
+        { label: 'Method', type: 'text', width: 13, value: p => p.method || '' },
+        { label: 'Status', type: 'status', width: 11, value: p => p.status || '' },
+        { label: 'Paid',   type: 'money', width: 14, total: 'sum',
+          value: p => Number(p.amount || 0) || null },
+        { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
+          value: p => p.status === 'Pending' ? outstandingOf(p) : null },
+      ],
+      rows: f.pays.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+      grand: { label: 'Outstanding at end of period', value: fmtPKR(f.pending) },
+    }],
+
+    signatures: ['Student', 'Warden'],
+  });
+}
+
+/* ── THE YEAR, DRAWN ─────────────────────────────────────────────────────────
+   Two panels from `annual archive.png`: money in against money out, and who
+   arrived, left and stayed. Both read the SAME twelve rows the table above
+   them is built from, so the picture and the figures cannot drift apart.
+
+   Bars rather than a chart library: this app ships none, the dashboard draws
+   its donut by hand for the same reason, and twelve bars do not justify a
+   dependency in an offline installer. An empty year draws nothing at all —
+   twelve zero-height bars under a legend is a chart that says a hostel had a
+   year of nothing, when the truth is that nothing was recorded. */
+function arcCharts(y, rows) {
+  const anyMoney = rows.some(r => r.rev > 0 || r.ex > 0);
+
+  /* Student movement is not on the month rows, so it is counted here from the
+     roster: joined in this month, left in this month, and how many were on the
+     books by the end of it. `leftDate` is written by the cancellation flow. */
+  const move = rows.map(r => {
+    const mk = r.mk;
+    const joined = (DB.students || []).filter(st => String(st.joinDate || "").startsWith(mk)).length;
+    const left   = (DB.students || []).filter(st => String(st.leftDate  || "").startsWith(mk)).length;
+    const resident = (DB.students || []).filter(st => {
+      const j = String(st.joinDate || "");
+      const l = String(st.leftDate || "");
+      if (!j || j.slice(0, 7) > mk) return false;
+      return !l || l.slice(0, 7) >= mk;
+    }).length;
+    return { mn: r.mn, joined, left, resident };
+  });
+  const anyMove = move.some(m => m.joined || m.left || m.resident);
+
+  const bars = (series, data, max) => data.map(function (d) {
+    return '<div class="arc-cbar" title="' + escHtml(d.label) + '">'
+      + series.map(function (sr) {
+          const v = Number(d[sr.k] || 0);
+          const h = max > 0 ? Math.round(v / max * 100) : 0;
+          return '<span class="arc-cbar__b ' + sr.hue + '" style="height:' + h + '%"'
+               + ' title="' + escHtml(sr.label + ": " + (sr.money ? fmtPKR(v) : String(v))) + '"></span>';
+        }).join('')
+      + '</div>';
   }).join('');
 
-  const payRows = T.pays.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(p =>
-    `<tr><td>${escHtml(fmtDate(p.date)||'—')}</td><td>${escHtml(p.studentName||'—')}</td>
-     <td>#${escHtml(String(p.roomNumber||'—'))}</td><td>${escHtml(p.month||'—')}</td>
-     <td>${escHtml(p.method||'—')}</td><td>${escHtml(p.status||'—')}</td>
-     <td style="text-align:right" class="gr">${Number(p.amount)>0?money(p.amount):'—'}</td>
-     <td style="text-align:right" class="re">${p.status==='Pending'?money(outstandingOf(p)):'—'}</td></tr>`).join('');
+  const axis = data => '<div class="arc-axis">'
+    + data.map(d => '<span>' + escHtml(d.mn) + '</span>').join('') + '</div>';
 
-  const pendRows = T.pays.filter(p=>p.status==='Pending').map(p =>
-    `<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(String(p.roomNumber||'—'))}</td>
-     <td>${escHtml(p.month||'—')}</td><td style="text-align:right" class="re">${money(outstandingOf(p))}</td></tr>`).join('');
+  const legend = series => '<div class="arc-legend">'
+    + series.map(sr => '<span class="arc-legend__i"><i class="' + sr.hue + '"></i>'
+        + escHtml(sr.label) + '</span>').join('') + '</div>';
 
-  const canRows = T.cancels.map(c =>
-    `<tr><td>${c.seq?'CAN-'+String(c.seq).padStart(4,'0'):'—'}</td>
-     <td>${escHtml(fmtDate(_arcCancDate(c))||'—')}</td><td>${escHtml(c.studentName||'—')}</td>
-     <td>#${escHtml(String(c.roomNumber||'—'))}</td><td>${escHtml(fmtDate(c.vacateDate)||'—')}</td>
-     <td>${escHtml(c.reason||'—')}</td><td>${escHtml(c.status||'—')}</td></tr>`).join('');
+  const moneySeries = [
+    { k: 'rev', hue: 'dh-green', label: 'Revenue', money: true },
+    { k: 'ex',  hue: 'dh-red',   label: 'Expenses', money: true },
+  ];
+  const moveSeries = [
+    { k: 'joined',   hue: 'dh-blue',   label: 'Admitted' },
+    { k: 'left',     hue: 'dh-amber',  label: 'Left' },
+    { k: 'resident', hue: 'dh-violet', label: 'On the roster' },
+  ];
 
-  const expSections = groups.map(g => `
-    <h4 style="margin:12px 0 4px;font-size:12px">${escHtml(g.cat)} — ${g.items.length} record${g.items.length===1?'':'s'}</h4>
-    <table><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>
-      ${g.items.map(e => `<tr><td>${escHtml(fmtDate(e.date)||'—')}</td><td>${escHtml(e.description||'—')}</td>
-        <td style="text-align:right" class="re">${money(e.amount)}</td></tr>`).join('')}
-      <tr style="background:#f1f5f9;font-weight:800"><td colspan="2" style="text-align:right">Total — ${escHtml(g.cat)}</td>
-        <td style="text-align:right" class="re">${money(g.total)}</td></tr>
-    </tbody></table>`).join('');
+  const moneyMax = Math.max.apply(null, rows.map(r => Math.max(r.rev, r.ex)).concat([0]));
+  const moveMax  = Math.max.apply(null, move.map(m => Math.max(m.joined, m.left, m.resident)).concat([0]));
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>${escHtml(hostel)} — Archive ${escHtml(label)}</title>${printDocStyles()}</head><body>
-  <div class="header"><div>
-    <div class="title">${escHtml(hostel)} — Annual Archive</div>
-    <div style="font-size:12px;color:#666;margin-top:3px">${escHtml(label)} · Generated ${new Date().toLocaleDateString()}</div>
-  </div><div style="font-size:11px;color:#94a3b8">Archive Report</div></div>
+  const moneyData = rows.map(r => ({ mn: r.mn, rev: r.rev, ex: r.ex, label: r.mn + " — " + fmtPKR(r.rev) + " in, " + fmtPKR(r.ex) + " out" }));
+  const moveData  = move.map(m => ({ mn: m.mn, joined: m.joined, left: m.left, resident: m.resident,
+    label: m.mn + " — " + m.joined + " admitted, " + m.left + " left, " + m.resident + " on the roster" }));
 
-  <div class="kpi-grid">
-    <div class="kpi"><label>Revenue</label><div class="val green">${money(T.rev)}</div></div>
-    <div class="kpi"><label>Expenses</label><div class="val red">${money(T.exp)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val ${T.net>=0?'green':'red'}">${money(T.net)}</div></div>
-    <div class="kpi"><label>Pending</label><div class="val red">${money(T.pending)}</div></div>
-    <div class="kpi"><label>Students</label><div class="val">${T.students.length}</div></div>
-    <div class="kpi"><label>Cancellations</label><div class="val">${T.cancels.length}</div></div>
-  </div>
+  const panel = (title, on, series, data, max, empty) => '<div class="arc-panel arc-chart">'
+    + '<div class="arc-panel__head"><span class="arc-panel__t">' + escHtml(title) + '</span>'
+    + (on ? legend(series) : '') + '</div>'
+    + (on
+        ? '<div class="arc-chart__b"><div class="arc-bars">' + bars(series, data, max) + '</div>' + axis(data) + '</div>'
+        : '<div class="arc-chart__empty">' + escHtml(empty) + '</div>')
+    + '</div>';
 
-  ${sec('Students', students ? `<table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Joined</th>
-    <th>Status</th><th style="text-align:right">Monthly Charge</th><th style="text-align:right">Paid</th>
-    <th style="text-align:right">Pending</th></tr></thead><tbody>${students}</tbody></table>`
-    : none('Nobody was on the roster in this period'))}
-
-  ${sec('Payments', payRows ? `<table><thead><tr><th>Date</th><th>Student</th><th>Room</th><th>Month</th>
-    <th>Method</th><th>Status</th><th style="text-align:right">Paid</th>
-    <th style="text-align:right">Outstanding</th></tr></thead><tbody>${payRows}</tbody></table>`
-    : none('No payments in this period'))}
-
-  ${sec('Outstanding', pendRows ? `<table><thead><tr><th>Student</th><th>Room</th><th>Month</th>
-    <th style="text-align:right">Owed</th></tr></thead><tbody>${pendRows}
-    <tr style="background:#f1f5f9;font-weight:800"><td colspan="3" style="text-align:right">Total outstanding</td>
-    <td style="text-align:right" class="re">${money(T.pending)}</td></tr></tbody></table>`
-    : none('Nothing was left unpaid in this period'))}
-
-  ${sec('Expenses by Category', groups.length ? expSections + `
-    <table style="margin-top:10px"><tbody><tr style="background:#e2e8f0;font-weight:900">
-      <td style="padding:9px 12px">GRAND TOTAL — ${groups.length} categor${groups.length===1?'y':'ies'}</td>
-      <td style="padding:9px 12px;text-align:right" class="re">${money(_rptGroupsTotal(groups))}</td>
-    </tr></tbody></table>` : none('Nothing was spent in this period'))}
-
-  ${sec('Cancellations', canRows ? `<table><thead><tr><th>Ref</th><th>Requested</th><th>Student</th>
-    <th>Room</th><th>Vacate</th><th>Reason</th><th>Status</th></tr></thead><tbody>${canRows}</tbody></table>`
-    : none('No cancellations were raised in this period'))}
-
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(hostel)} · Confidential</div>
-  </body></html>`;
-
-  _electronPDF(html, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_Archive_' + key + '.pdf',
-    { pageSize: 'A4' });
-}
-
-// One student's period record as its own document.
-function printArchiveStudent(studentId) {
-  const s = (DB.students || []).find(x => x.id === studentId);
-  const key = _arcKey(), label = _arcLabel();
-  const f = _arcStudentFigures(studentId, key);
-  const room = s ? (DB.rooms || []).find(r => r.id === s.roomId) : null;
-  const ch = (s && typeof resolveCharges === 'function') ? resolveCharges(s) : { total: 0 };
-  const hostel = DB.settings.hostelName || 'Hostel';
-  const money = n => 'PKR ' + Number(n || 0).toLocaleString('en-PK');
-
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>${escHtml(hostel)} — ${escHtml(s ? s.name : 'Student')} ${escHtml(label)}</title>
-  ${printDocStyles()}</head><body>
-  <div class="header"><div>
-    <div class="title">${escHtml(hostel)}</div>
-    <div style="font-size:12px;color:#666;margin-top:3px">Student record · ${escHtml(label)} · Generated ${new Date().toLocaleDateString()}</div>
-  </div></div>
-  <table><tbody>
-    <tr><td style="width:180px;font-weight:700">Student</td><td>${escHtml(s ? s.name : '—')}</td></tr>
-    <tr><td style="font-weight:700">Father</td><td>${escHtml((s && s.fatherName) || '—')}</td></tr>
-    <tr><td style="font-weight:700">Room</td><td>${room ? '#' + escHtml(String(room.number)) : '—'}</td></tr>
-    <tr><td style="font-weight:700">Phone</td><td>${escHtml((s && s.phone) || '—')}</td></tr>
-    <tr><td style="font-weight:700">CNIC</td><td>${escHtml((s && s.cnic) || '—')}</td></tr>
-    <tr><td style="font-weight:700">Joined</td><td>${escHtml((s && fmtDate(s.joinDate)) || '—')}</td></tr>
-    <tr><td style="font-weight:700">Status</td><td>${escHtml((s && s.status) || '—')}</td></tr>
-  </tbody></table>
-  <div class="kpi-grid" style="margin-top:16px">
-    <div class="kpi"><label>Monthly Charge</label><div class="val">${money(ch.total)}</div></div>
-    <div class="kpi"><label>Paid</label><div class="val green">${money(f.paid)}</div></div>
-    <div class="kpi"><label>Outstanding</label><div class="val red">${money(f.pending)}</div></div>
-  </div>
-  <h3>Payments — ${escHtml(label)}</h3>
-  ${f.pays.length ? `<table><thead><tr><th>Date</th><th>Month</th><th>Method</th><th>Status</th>
-    <th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>
-    ${f.pays.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(p=>`<tr>
-      <td>${escHtml(fmtDate(p.date)||'—')}</td><td>${escHtml(p.month||'—')}</td>
-      <td>${escHtml(p.method||'—')}</td><td>${escHtml(p.status||'—')}</td>
-      <td style="text-align:right" class="gr">${Number(p.amount)>0?money(p.amount):'—'}</td>
-      <td style="text-align:right" class="re">${p.status==='Pending'?money(outstandingOf(p)):'—'}</td>
-    </tr>`).join('')}
-    <tr style="background:#f1f5f9;font-weight:800"><td colspan="4" style="text-align:right">Total</td>
-      <td style="text-align:right" class="gr">${money(f.paid)}</td>
-      <td style="text-align:right" class="re">${money(f.pending)}</td></tr>
-    </tbody></table>` : `<table><tbody><tr><td style="text-align:center;color:#aaa;padding:10px">No payment records for this period</td></tr></tbody></table>`}
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(hostel)} · Confidential</div>
-  </body></html>`;
-
-  _electronPDF(html, hostel.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' +
-    String((s && s.name) || 'Student').replace(/\s+/g,'-') + '_' + key + '.pdf', { pageSize: 'A4' });
-}
-
-// ── CSV ──────────────────────────────────────────────────────────────────────
-// Every section in one file, each under its own heading, so the period can be
-// opened in a spreadsheet without losing which block a row belongs to.
-function downloadArchiveCSV() {
-  const T = _arcTotals(), key = _arcKey(), label = _arcLabel();
-  const rows = [];
-  const push = a => rows.push(a);
-  const blank = () => rows.push([]);
-
-  push([DB.settings.hostelName || 'Hostel', 'Annual Archive', label]);
-  blank();
-  push(['Summary']);
-  push(['Revenue', T.rev]); push(['Expenses', T.exp]); push(['Available Fund', T.net]);
-  push(['Pending', T.pending]); push(['Students', T.students.length]);
-  push(['Cancellations', T.cancels.length]);
-  blank();
-
-  push(['Students']);
-  push(['Name','Father','Room','Joined','Status','Monthly Charge','Paid','Pending']);
-  T.students.forEach(s => {
-    const f = _arcStudentFigures(s.id, key);
-    const room = (DB.rooms || []).find(r => r.id === s.roomId);
-    const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
-    push([s.name||'—', s.fatherName||'—', room?'#'+room.number:'—', s.joinDate||'—',
-          s.status||'—', ch.total, f.paid, f.pending]);
-  });
-  blank();
-
-  push(['Payments']);
-  push(['Date','Student','Room','Month','Method','Status','Paid','Outstanding']);
-  T.pays.forEach(p => push([p.date||'—', p.studentName||'—', '#'+(p.roomNumber||'—'), p.month||'—',
-    p.method||'—', p.status||'—', Number(p.amount||0),
-    outstandingOf(p)]));
-  blank();
-
-  push(['Expenses by Category']);
-  push(['Category','Date','Description','Amount']);
-  const groups = _rptByCategory(T.exps);
-  groups.forEach(g => {
-    g.items.forEach(e => push([g.cat, e.date||'—', e.description||'—', Number(e.amount||0)]));
-    push(['', '', 'Total — ' + g.cat, g.total]);
-    blank();
-  });
-  push(['', '', 'GRAND TOTAL', _rptGroupsTotal(groups)]);
-  blank();
-
-  push(['Cancellations']);
-  push(['Ref','Requested','Student','Room','Vacate','Reason','Status']);
-  T.cancels.forEach(c => push([c.seq?'CAN-'+String(c.seq).padStart(4,'0'):'—',
-    _arcCancDate(c)||'—', c.studentName||'—', '#'+(c.roomNumber||'—'),
-    c.vacateDate||'—', c.reason||'—', c.status||'—']));
-
-  const csv = rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g,'""') + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'Archive_' + key + '.csv';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-  toast('Downloaded: Archive_' + key + '.csv', 'success');
+  return '<div class="arc-charts">'
+    + panel('Revenue vs expenses (' + y + ')', anyMoney, moneySeries, moneyData, moneyMax,
+            'No payment or expense was recorded in ' + y + ', so there is nothing to plot.')
+    + panel('Student movement (' + y + ')', anyMove, moveSeries, moveData, moveMax,
+            'Nobody was admitted or left in ' + y + '.')
+    + '</div>';
 }

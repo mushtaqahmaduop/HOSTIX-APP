@@ -15,8 +15,18 @@
    dropped the status filter on the next toolbar change. The route argument is
    the authority, and renderCancellations mirrors it into `status` below so the
    toolbar can re-render into the same view. */
-let cancelFilter = { status:'All', search:'', type:'All', room:'All', from:'', to:'',
+/* `room`, `from` and `to` were removed on 2026-09-08 with the controls that
+   set them — see the toolbar. A filter with no control is one a warden cannot
+   see and cannot clear. */
+let cancelFilter = { status:'All', search:'', type:'All',
                      month:thisMonth(), page:1, pageSize:30, sortKey:'room', sortDir:'asc' };
+/* A fresh visit starts here. `month` is evaluated on every reset, not captured
+   at load, so a session left open past the turn of a month still opens on the
+   month it now is. See FILTER_REGISTRY in nav.js. */
+registerFilter('cancellations', cancelFilter, () => ({
+  status:'All', search:'', type:'All',
+  month:thisMonth(), page:1, sortKey:'room', sortDir:'asc',
+}));
 
 /* ── WHICH MONTH A CANCELLATION BELONGS TO ───────────────────────────────────
    The month the student LEAVES, not the month the form was filled in. Here the
@@ -104,27 +114,15 @@ function renderCancellations(filterStatus='All') {
   const byStatus = filterStatus==='All'?list:filterStatus==='Freed'?freed:list.filter(c=>c.status===filterStatus);
 
   // Toolbar narrowing, applied on top of the status the cards/route select.
+  // Shared with the exports so a printed register cannot hold a different set
+  // of departures from the page it was printed from.
   const q = cancelFilter.search.trim().toLowerCase();
-  let filtered = byStatus.filter(c => {
-    if (cancelFilter.type !== 'All' && (c.roomType||'') !== cancelFilter.type) return false;
-    if (cancelFilter.room !== 'All' && String(c.roomNumber||'') !== cancelFilter.room) return false;
-    if (cancelFilter.from && (c.requestDate||'') < cancelFilter.from) return false;
-    if (cancelFilter.to   && (c.requestDate||'') > cancelFilter.to)   return false;
-    if (!q) return true;
-    return [c.studentName, c.roomNumber, c.roomType, c.reason, c.status, _cancSeq(c, list)]
-      .some(v => String(v||'').toLowerCase().includes(q));
-  });
-  filtered = applySort(filtered, cancelFilter, {
-    student: c=>c.studentName||'', room: { get: c=>c.roomNumber||'', cmp: cmpRoomNo }, type: c=>c.roomType||'',
-    request: c=>c.requestDate||'', vacate: c=>c.vacateDate||'',
-    status:  c=>c.status||'',      reason: c=>c.reason||''
-  });
+  const filtered = cancellationsFiltered();
   const _pg = paginate(filtered, cancelFilter);
 
-  const roomNums = [...new Set(list.map(c=>String(c.roomNumber||'')).filter(Boolean))].sort(cmpRoomNo);
   const types    = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
-  const nActive  = [cancelFilter.type!=='All', cancelFilter.room!=='All',
-                    !!cancelFilter.from, !!cancelFilter.to, !!q].filter(Boolean).length;
+  const nActive  = [cancelFilter.type!=='All', cancelFilter.month!==thisMonth(), !!q]
+                   .filter(Boolean).length;
 
   const SV = {
     // Pending is genuinely "act on me", Confirmed is settled, Restored reversed.
@@ -165,10 +163,17 @@ function renderCancellations(filterStatus='All') {
           </div>
         </div>
       </td>
-      <td><div class="lk-room__n">#${escHtml(String(c.roomNumber||'—'))}</div></td>
-      <td>${c.roomType
-            ? `<span class="lk-chip${tc?'':' lk-chip--flat'}"${tc?` style="background:${tc}22;color:${tc}"`:''}>${escHtml(c.roomType)}</span>`
-            : '<span class="lk-dash">—</span>'}</td>
+      ${''/* THE ROOM CELL CARRIES ITS OWN TYPE, as `cancellations.2.png`
+             draws it — "#3 / 3-Seater". It used to have a column of its own,
+             painted with the owner's per-type colour from Settings: a CATEGORY
+             wearing a hue, three columns from a Status chip drawn out of the
+             same palette. The column it vacates goes to the settlement, which
+             is a fact about this cancellation rather than about the room. */}
+      <td>
+        <div class="lk-room__n">#${escHtml(String(c.roomNumber||'—'))}</div>
+        ${c.roomType ? `<div class="lk-sub">${escHtml(c.roomType)}</div>` : ''}
+      </td>
+      <td>${cancSettleCell(c)}</td>
       <td><div class="lk-when">${calSvg}${fmtDate(c.requestDate)}</div></td>
       <td>${c.vacateDate
             ? `<div class="lk-when">${calSvg}${fmtDate(c.vacateDate)}</div>`
@@ -244,8 +249,9 @@ function renderCancellations(filterStatus='All') {
     <div class="lk-tools">
       <div class="lk-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="canc-search" placeholder="Search student, room, reason, request ID…"
+        <input id="canc-search" class="lk-sin" placeholder="Search student, room, reason, request ID…"
                value="${escHtml(cancelFilter.search)}" oninput="canSearch(this.value)">
+        ${lkSearchX('canc-search','cancelFilter','cancellations')}
       </div>
 
       ${/* First control on the row on purpose: it governs every number above
@@ -266,27 +272,9 @@ function renderCancellations(filterStatus='All') {
         ${types.map(t=>`<option value="${escHtml(t)}" ${cancelFilter.type===t?'selected':''}>${escHtml(t)}</option>`).join('')}
       </select>
 
-      <select class="lk-select${cancelFilter.room!=='All'?' is-set':''}" onchange="canSet('room',this.value)" title="Filter by room">
-        <option value="All">All Rooms</option>
-        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${cancelFilter.room===r?'selected':''}>Room #${escHtml(r)}</option>`).join('')}
-      </select>
-
-      <div class="lk-range" title="Filter by request date">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-        <input class="cdp-trigger" type="text" readonly placeholder="From" value="${escHtml(cancelFilter.from)}"
-               onclick="showCustomDatePicker(this,event)" onchange="canSet('from',this.value)">
-        <span>→</span>
-        <input class="cdp-trigger" type="text" readonly placeholder="To" value="${escHtml(cancelFilter.to)}"
-               onclick="showCustomDatePicker(this,event)" onchange="canSet('to',this.value)">
-      </div>
-
       <div class="lk-tools__end">
-        ${nActive?`<button class="lk-btn lk-btn--on" onclick="canClearFilters()" title="Clear the toolbar filters">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-          Clear<span class="lk-btn__count">${nActive}</span></button>`:''}
-        <button class="lk-btn lk-btn--go" onclick="downloadCancellationReport()" title="Print / save the cancellation report">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-          Download Report</button>
+        ${tbExport({ id:'canc-export', excel:'exportCancellationsExcel()',
+                     pdf:'exportCancellationsPDF()' })}
       </div>
     </div>
 
@@ -310,7 +298,7 @@ function renderCancellations(filterStatus='All') {
     : `<div class="lk-table-wrap">
         <table class="lk-table">
           <thead><tr>
-            ${th('student','Student')}${th('room','Room')}${th('type','Type')}
+            ${th('student','Student')}${th('room','Room')}<th>Settlement</th>
             ${th('request','Request Date')}${th('vacate','Vacate By')}
             ${th('status','Status')}${th('reason','Reason')}
             <th>Actions</th>
@@ -329,11 +317,10 @@ function canSet(key, val) {
   renderPage('cancellations_' + cancelFilter.status);
 }
 const canSearch = debounce(function (v) { canSet('search', v); }, 220);
-function canClearFilters() {
-  cancelFilter.month = thisMonth(); cancelFilter.search = ''; cancelFilter.type = 'All'; cancelFilter.room = 'All';
-  cancelFilter.from = ''; cancelFilter.to = '';
-  canSet('page', 1);
-}
+/* Kept as a name because older call sites use it. The registry in nav.js is
+   the one definition of what a cleared bar looks like, so this cannot drift
+   from the Clear all button beside it. */
+function canClearFilters() { tbClearAll('cancellations'); }
 function canPager(pg, status) {
   const btn = (label, target, o) => {
     o = o || {};
@@ -368,41 +355,176 @@ function canPager(pg, status) {
   </div>`;
 }
 
-function showEditCancellationModal(cancId) {
-  const c = (DB.cancellations||[]).find(x=>x.id===cancId);
-  if(!c) return;
-  const student = DB.students.find(s=>s.id===c.studentId);
-  const room = DB.rooms.find(r=>r.id===c.roomId);
-  const statusOpts = ['Pending','Confirmed','Restored'].map(s=>`<option value="${s}" ${c.status===s?'selected':''}>${s==='Pending'?'⏳ Pending':s==='Confirmed'?'✅ Confirmed':'↩️ Restored'}</option>`).join('');
+/* ── EDIT A CANCELLATION ─────────────────────────────────────────────────────
+   Rebuilt 2026-09-09 to `add and edit cancellation.png`: a student card, the
+   dues position, and three numbered sections.
 
-  showModal('modal-md','✏️ Edit Cancellation Record',`
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-      <div style="width:40px;height:40px;border-radius:10px;background:var(--red-dim);display:flex;align-items:center;justify-content:center;font-size:18px">🚫</div>
-      <div>
-        <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(c.studentName||'—')}</div>
-        <div style="font-size:12px;color:var(--text3)">Room #${escHtml(c.roomNumber||'?')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
+   TWO DATES ARE EDITABLE NOW, not one (owner). Vacate By always was. REQUESTED
+   ON was printed in a read-only strip at the bottom — and it is the date the
+   register sorts and filters by, so a request entered on the wrong day could
+   not be corrected without deleting the record and making it again. It is a
+   field.
+
+   THE REFUND IS SHOWN WHERE THE RECORD IS READ. confirmCancellation() settles
+   a leaver and writes the outcome to `c.settlement`; until today nothing
+   displayed it. Section 3 reads it back — what was billed, what was collected,
+   what was refunded and by which method — and says plainly when a cancellation
+   has not been settled yet.                                                  */
+function showEditCancellationModal(cancId) {
+  const c = (DB.cancellations || []).find(x => x.id === cancId);
+  if (!c) return;
+  const student = DB.students.find(s => s.id === c.studentId);
+  const room = DB.rooms.find(r => r.id === c.roomId);
+  const s = student ? calculateSettlement(c.studentId) : null;
+  const due = s ? Number(s.outstanding || 0) : 0;
+
+  const STATUS = [
+    { k: 'Pending',   ico: 'clock', note: 'The seat is held until the vacate date.' },
+    { k: 'Confirmed', ico: 'check', note: 'The student is marked as Left on the vacate date.' },
+    { k: 'Restored',  ico: 'refreshCw', note: 'The student goes back to Active and keeps the seat.' },
+  ];
+
+  /* The reasons the hostel actually uses, plus whatever this record already
+     holds — a stored reason that is not in the list must not vanish on save. */
+  const REASONS = ['Course completed', 'Shifting to own house', 'Going back to hometown',
+                   'Transferred to another city', 'Financial reasons', 'Family reasons',
+                   'Discipline', 'Other'];
+  const known = REASONS.indexOf(c.reason) !== -1;
+
+  showModal('modal-md',
+    `<div class="hf-mh">
+       <div class="hf-mh__ico">${icon('edit', 'sm')}</div>
+       <div><div class="hf-mh__t">Edit Cancellation Record</div>
+       <div class="hf-mh__s">Update the details and save the changes.</div></div>
+     </div>`,
+    `<div class="cef">
+      <div class="cef-who">
+        <div class="cef-who__av">${escHtml(_cancInitials(c.studentName))}</div>
+        <div style="min-width:0">
+          <div class="cef-who__n">${escHtml(c.studentName || '—')}
+            ${due > 0 ? `<span class="lk-chip dh-red">${icon('warning','xs')}Dues pending</span>` : ''}</div>
+          <div class="cef-who__s">ID: ${escHtml(String(c.studentId || '—'))}${student && student.cnic ? ' · CNIC: ' + escHtml(student.cnic) : ''}${student && student.phone ? ' · ' + escHtml(student.phone) : ''}</div>
+        </div>
+        <div class="cef-who__room">
+          <div class="cef-who__rn">Room #${escHtml(String(c.roomNumber || '?'))}</div>
+          <div class="cef-who__rt">${escHtml(c.roomType || '—')}${room && room.floor ? ' · ' + escHtml(room.floor) : ''}</div>
+        </div>
       </div>
-    </div>
-    <div class="form-grid">
-      <div class="field"><label>Status</label>
-        <select class="form-control" id="f-cstatus" onchange="
-          const v=this.value;
-          document.getElementById('cancel-status-note').style.display=v==='Confirmed'?'block':'none';
-          document.getElementById('restore-status-note').style.display=v==='Restored'?'block':'none';
-        ">${statusOpts}</select>
-        <div id="cancel-status-note" style="display:${c.status==='Confirmed'?'block':'none'};font-size:11px;color:var(--red);margin-top:4px">${icon('warning','sm')} Student will be marked as Left</div>
-        <div id="restore-status-note" style="display:${c.status==='Restored'?'block':'none'};font-size:11px;color:var(--green);margin-top:4px">${icon('check','sm')} Student will be restored to Active</div>
+
+      ${due > 0 ? `
+      <div class="cef-due">
+        ${icon('warning', 'sm')}
+        <div style="flex:1;min-width:0">
+          <div class="cef-due__t">Outstanding dues: ${escHtml(fmtPKR(due))}</div>
+          <div class="cef-due__s">This student has unpaid months or fines. The cancellation can still be recorded — the money is settled when it is confirmed.</div>
+        </div>
+        <button class="set-btn" onclick="closeModal();showStudentPanel('${escHtml(String(c.studentId))}')">View dues</button>
+      </div>` : ''}
+
+      <div class="hf-sec">
+        <div class="hf-sec__h">
+          <span class="hf-num">1</span>
+          <span class="hf-sec__t">Cancellation status</span>
+          <span class="hf-sec__s">Where this request stands, and when the seat is given up</span>
+        </div>
+        <div class="hf-g2">
+          <div class="field"><label for="f-cstatus">Status<span class="req">*</span></label>
+            <div class="hf-in"><span class="hf-in__i">${icon('info','sm')}</span>
+            <select class="form-control" id="f-cstatus" onchange="cefStatusNote(this.value)">
+              ${STATUS.map(o => `<option value="${o.k}" ${c.status === o.k ? 'selected' : ''}>${o.k}</option>`).join('')}
+            </select></div>
+            <div class="hi-note" id="cef-status-note">${escHtml((STATUS.find(o => o.k === c.status) || STATUS[0]).note)}</div>
+          </div>
+          <div class="field"><label for="f-cvacate">Vacate by date<span class="req">*</span></label>
+            <div class="hf-in"><span class="hf-in__i">${icon('calendar','sm')}</span>
+            <input class="form-control cdp-trigger" id="f-cvacate" type="text" readonly
+                   onclick="showCustomDatePicker(this,event)" value="${escHtml(c.vacateDate || '')}"
+                   placeholder="End of month"></div>
+            <div class="hi-note">The day the seat is actually given up — it is the date the student is recorded as having left.</div>
+          </div>
+        </div>
       </div>
-      <div class="field"><label>Vacate By Date</label><input class="form-control cdp-trigger" id="f-cvacate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${c.vacateDate||''}"></div>
-      <div class="field col-full"><label>Reason / Notes</label><textarea class="form-control" id="f-creason" rows="3" placeholder="Reason for cancellation…">${escHtml(c.reason||'')}</textarea></div>
-    </div>
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
-      <div><span style="color:var(--text3)">Requested:</span> <strong>${fmtDate(c.requestDate)}</strong></div>
-      <div><span style="color:var(--text3)">Record ID:</span> <span style="font-family:var(--font-mono);color:var(--text3);font-size:10px">${c.id}</span></div>
+
+      <div class="hf-sec">
+        <div class="hf-sec__h">
+          <span class="hf-num">2</span>
+          <span class="hf-sec__t">Reason &amp; notes</span>
+          <span class="hf-sec__s">Why they are leaving</span>
+        </div>
+        <div class="field"><label for="f-creason-pick">Reason for cancellation</label>
+          <div class="hf-in"><span class="hf-in__i">${icon('fileText','sm')}</span>
+          <select class="form-control" id="f-creason-pick" onchange="cefPickReason(this.value)">
+            <option value="">Select a reason…</option>
+            ${REASONS.map(r => `<option ${known && c.reason === r ? 'selected' : ''}>${escHtml(r)}</option>`).join('')}
+          </select></div>
+        </div>
+        <div class="field"><label for="f-creason">Additional details</label>
+          <div class="hf-in hf-in--top"><span class="hf-in__i">${icon('fileText','sm')}</span>
+          <textarea class="form-control" id="f-creason" rows="3" maxlength="500"
+                    placeholder="e.g. Shifting to own house, going back to hometown…"
+                    oninput="cefCount()">${escHtml(c.reason || '')}</textarea></div>
+          <div class="hi-note" id="cef-count">${String(c.reason || '').length}/500</div>
+        </div>
+      </div>
+
+      <div class="hf-sec">
+        <div class="hf-sec__h">
+          <span class="hf-num">3</span>
+          <span class="hf-sec__t">Record &amp; settlement</span>
+          <span class="hf-sec__s">When it was raised, and what happened to the money</span>
+        </div>
+        <div class="hf-g2">
+          <div class="field"><label for="f-crequest">Requested on</label>
+            <div class="hf-in"><span class="hf-in__i">${icon('calendar','sm')}</span>
+            <input class="form-control cdp-trigger" id="f-crequest" type="text" readonly
+                   onclick="showCustomDatePicker(this,event)" value="${escHtml(c.requestDate || '')}"></div>
+            <div class="hi-note">The register sorts and filters by this date, so it is editable — a request entered on the wrong day used to need deleting and remaking.</div>
+          </div>
+          <div class="field"><label>Record ID</label>
+            <div class="hf-in is-readonly"><span class="hf-in__i">${icon('info','sm')}</span>
+            <input class="form-control" readonly value="${escHtml(String(c.id))}"></div>
+          </div>
+        </div>
+        ${c.settlement
+          ? `<div class="cef-settle">
+               <div class="cef-settle__h">${icon(c.settlement.action === 'refund' ? 'transfer' : 'card','xs')}
+                 <b>${c.settlement.action === 'refund' ? 'Refunded at checkout'
+                     : c.settlement.action === 'collect' ? 'Collected at checkout' : 'Nothing was owed'}</b></div>
+               ${cancSettleLines(c)}
+             </div>`
+          : `<div class="cef-settle is-pending">${icon('info','xs')}<span>Not settled yet. Confirming this cancellation works out what is owed or owing and, where there is a credit, <b>refunds it</b> — the outcome is recorded here.</span></div>`}
+      </div>
     </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-danger btn-sm" onclick="deleteCancellationRecord('${cancId}')"><span class=\"micon\" style=\"font-size:14px\">delete</span> Delete</button>
-   <button class="btn btn-primary" onclick="submitEditCancellation('${cancId}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="deleteCancellationRecord('${cancId}')">${icon('trash','xs')} Delete</button>
+     <button class="btn btn-primary" onclick="submitEditCancellation('${cancId}')">${icon('save','xs')} Save changes</button>`);
+}
+
+function cefStatusNote(v) {
+  const N = {
+    Pending: 'The seat is held until the vacate date.',
+    Confirmed: 'The student is marked as Left on the vacate date.',
+    Restored: 'The student goes back to Active and keeps the seat.',
+  };
+  const el = document.getElementById('cef-status-note');
+  if (el) el.textContent = N[v] || '';
+}
+
+/* The picker fills the notes box rather than replacing it, so a reason chosen
+   from the list and a sentence typed underneath can both survive. */
+function cefPickReason(v) {
+  if (!v) return;
+  const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('f-creason'));
+  if (!box) return;
+  const cur = box.value.trim();
+  box.value = cur && cur !== v ? v + ' — ' + cur : v;
+  cefCount();
+}
+
+function cefCount() {
+  const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('f-creason'));
+  const out = document.getElementById('cef-count');
+  if (box && out) out.textContent = box.value.length + '/500';
 }
 
 /* The room a student is leaving, read from the roster rather than from a field
@@ -422,6 +544,13 @@ async function submitEditCancellation(cancId) {
   const newStatus = document.getElementById('f-cstatus').value;
   const oldStatus = c.status;
   c.vacateDate = document.getElementById('f-cvacate').value;
+  /* THE REQUEST DATE IS A FIELD NOW (owner, 2026-09-09). It is what the
+     register sorts and filters by, and it was read-only — so a request
+     entered on the wrong day could only be corrected by deleting the record
+     and making it again, which loses its id and its place in the sequence.
+     An empty box keeps the stored date rather than blanking it. */
+  const _req = (document.getElementById('f-crequest') || {}).value;
+  if (_req) c.requestDate = _req;
   c.reason = document.getElementById('f-creason').value.trim();
   c.status = newStatus;
   // Update student status accordingly
@@ -688,9 +817,23 @@ async function confirmCancellation(cancId) {
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
 
-  const s = calculateSettlement(c.studentId);
-  const pmOpts = (DB.settings.paymentMethods||['Cash'])
-    .map(m => `<option>${escHtml(m)}</option>`).join('');
+  /* THE PART-MONTH RULE, WORKED OUT BEFORE THE SETTLEMENT IS SHOWN. It is
+     applied to the vacate month's record as a concession the moment the warden
+     confirms — see confirmCancellation() — so the settlement below is the
+     position AFTER the refund the hostel's own rule allows, not before it. */
+  const rf = _cancRefundOffer(c);
+  /* THE PREVIEW IS THE POSITION AFTER THE RULE, not before it. Computing the
+     settlement against the untouched records made the dialog say 'nothing
+     outstanding' for exactly the student the refund exists for — a paid month
+     is square until the concession lands — and the settle checkbox only
+     renders when there IS something to move, so the money never moved. The
+     records are cloned rather than written: nothing is committed until the
+     warden presses Confirm. */
+  const _preview = rf ? (DB.payments || []).map(p => (p && p.id === rf.paymentId)
+      ? Object.assign({}, p, { concession: money(p.concession != null ? p.concession : p.discount) + rf.amount })
+      : p) : null;
+  const s = calculateSettlement(c.studentId, _preview ? { payments: _preview } : undefined);
+  const pmOpts = pmOptions();
 
   const row = l => `
     <div class="canc-set__row">
@@ -716,6 +859,16 @@ async function confirmCancellation(cancId) {
        </div>
 
        ${verdict}
+
+       ${rf ? `
+       <label class="canc-rf">
+         <input type="checkbox" id="canc-rf-do" checked>
+         <span class="canc-rf__b">
+           <span class="canc-rf__t">Apply the part-month refund — ${escHtml(fmtPKR(rf.amount))}</span>
+           <span class="canc-rf__s">${escHtml(refundPolicyLabel())} · ${escHtml(rf.reason)}</span>
+           <span class="canc-rf__s">It is written onto the ${escHtml(rf.month)} record as a concession, so it shows on that payment and on every export.</span>
+         </span>
+       </label>` : ''}
 
        ${s.records
          ? `<div class="canc-set__lines">${s.lines.map(row).join('')}</div>`
@@ -749,6 +902,17 @@ async function confirmCancellation(cancId) {
 async function submitCancellationSettlement(cancId) {
   const c = DB.cancellations.find(x => x.id === cancId);
   if (!c) return;
+
+  /* THE PART-MONTH REFUND IS APPLIED FIRST, and the settlement is worked out
+     afterwards — deliberately, and in that order. It reduces the bill on the
+     vacate month's record, which is what turns a paid month into a credit; the
+     existing refund path below then hands that credit back through
+     reversePayment(). Computing the settlement first would have netted the
+     student's position against a bill the hostel had already agreed to drop. */
+  const offer = _cancRefundOffer(c);
+  const takeRefund = !document.getElementById('canc-rf-do') || !!document.getElementById('canc-rf-do').checked;
+  let refunded = 0;
+  if (offer && takeRefund) refunded = await _cancApplyRefund(c, offer);
 
   const s      = calculateSettlement(c.studentId);
   const doIt   = !!document.getElementById('canc-set-do')?.checked;
@@ -793,6 +957,17 @@ async function submitCancellationSettlement(cancId) {
     outstanding: s.outstanding, credit: s.credit,
     net: s.net, action: s.action,
     settledNow: moved,
+    /* What the hostel's own rule gave back, kept separately from what changed
+       hands at the counter: the concession reduced the bill, and `settledNow`
+       is the cash that followed it. A reader asking "why is this month less
+       than the others" gets the answer here rather than from the payment. */
+    refundPolicy: offer && takeRefund ? refundPolicyLabel() : '',
+    refundApplied: refunded,
+    /* WHICH WAY THE MONEY WENT. It was handed to applyPayment/reversePayment
+       and then forgotten, so a refund on this record could not say whether it
+       was cash or a transfer — the one question asked when a leaver telephones
+       a week later. */
+    method: method || '',
   };
   c.status = 'Confirmed';
 
@@ -833,100 +1008,250 @@ async function restoreFromCancellation(cancId) {
 // Rooms v5 adds a grid/list view switch.
 let roomFilter = {status:'All', type:'All', floor:'All', search:'', view:'grid',
                   page:1, sortKey:'number', sortDir:'asc'};
+/* `view` is NOT reset: grid-or-table is how this warden likes to read the
+   room list, not a filter hiding rows from them. */
+registerFilter('rooms', roomFilter, () => ({
+  status:'All', type:'All', floor:'All', search:'', page:1,
+  sortKey:'number', sortDir:'asc',
+}));
 
-function downloadCancellationReport() {
-  const list = DB.cancellations || [];
-  if(!list.length){ toast('No cancellation records to export','error'); return; }
+/* ── THE CANCELLATION LIST EVERY READER SEES ─────────────────────────────────
+   Shared by the screen and by both exports, so a printed report cannot hold a
+   different set of departures from the page it was printed from (§44). The old
+   report ignored the filters entirely and dumped every cancellation the
+   database had ever held, on a page a warden opens to answer "who is leaving
+   this month". */
+function cancellationsFiltered() {
+  const all   = DB.cancellations || [];
+  const scope = all.filter(_cancInScope);      // this month's departures (§10 of CLAUDE.md)
+  const st    = cancelFilter.status || 'All';
+  const byStatus = st === 'All' ? scope
+    : st === 'Freed' ? scope.filter(c => c.status === 'Pending' || c.status === 'Confirmed')
+    : scope.filter(c => c.status === st);
 
-  // Get last 2 months date range
-  const now = new Date();
-  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth()-2, 1);
-
-  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Cancellation Report — ${escHtml(DB.settings.hostelName||'Hostel')}</title>
-  <style>
-    @page { margin: 15mm; }
-    @media print { .no-print { display:none; } }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 20px; }
-    h1 { font-size: 20px; color: #0f1a2e; margin-bottom: 4px; }
-    .sub { color: #888; font-size: 11px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-    th { background: #0f1a2e; color: #a78bfa; padding: 8px 10px; text-align: left; font-size: 11px; letter-spacing: 0.5px; }
-    td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11px; }
-    tr:nth-child(even) td { background: #f8f9fb; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
-    .badge-red { background: #fee2e2; color: #dc2626; }
-    .badge-green { background: #dcfce7; color: #16a34a; }
-    .badge-amber { background: #fef3c7; color: #b45309; }
-    .badge-gray { background: #f3f4f6; color: #555; }
-    .section-title { font-size: 13px; font-weight: 800; color: #0f1a2e; border-left: 4px solid #7c3aed; padding-left: 10px; margin: 20px 0 10px; }
-    .pay-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #eee; font-size: 11px; }
-    .no-print { margin-bottom: 16px; }
-    button { padding: 8px 18px; background: #0f1a2e; color: #a78bfa; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; margin-right: 8px; }
-  </style></head><body>
-  <div class="no-print">
-    <button onclick="window.print()"><span class=\"micon\" style=\"font-size:15px\">print</span> Print</button>
-    <button onclick="window.close()">✕ Close</button>
-  </div>
-  <h1>📋 Cancellation Report</h1>
-  <div class="sub">${escHtml(DB.settings.hostelName||'Hostel')} · Generated: ${new Date().toLocaleString('en-PK')} · Includes last 2 months payment history</div>`;
-
-  list.forEach(c => {
-    const student = DB.students.find(s=>s.id===c.studentId);
-    // Get last 2 months of payments for this student
-    const payments = (DB.payments||[]).filter(p=>{
-      if(p.studentId !== c.studentId) return false;
-      const d = new Date(p.date||p.dueDate||'');
-      return d >= twoMonthsAgo;
-    }).sort((a,b)=>new Date(b.date||b.dueDate||0)-new Date(a.date||a.dueDate||0)).slice(0,6);
-
-    // BUG FIX: 'Confirmed' incorrectly mapped to badge-red (same as Pending).
-    // Fixed: Pending→red, Confirmed→amber, Cancelled/Vacated→gray, others→green.
-    const statusBadge = c.status==='Pending' ? 'badge-red'
-      : c.status==='Confirmed'  ? 'badge-amber'
-      : (c.status==='Cancelled' || c.status==='Vacated') ? 'badge-gray'
-      : 'badge-green';
-
-    html += `<div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div>
-          <div style="font-size:15px;font-weight:800;color:#0f1a2e">${escHtml(c.studentName||'—')}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">Room #${escHtml(c.roomNumber||'—')} · ${escHtml(c.roomType||'—')} · ${escHtml(student?.phone||'No phone')}</div>
-        </div>
-        <span class="badge ${statusBadge}">${c.status}</span>
-      </div>
-      <table>
-        <tr><th>Field</th><th>Details</th></tr>
-        <tr><td>Request Date</td><td>${fmtDate(c.requestDate)||'—'}</td></tr>
-        <tr><td>Vacate Date</td><td>${fmtDate(c.vacateDate)||'End of Month'}</td></tr>
-        <tr><td>Reason</td><td>${escHtml(c.reason||'—')}</td></tr>
-        <tr><td>Notes</td><td>${escHtml(c.notes||'—')}</td></tr>
-      </table>
-      <div class="section-title">💰 Payment History (Last 2 Months)</div>`;
-
-    if(payments.length) {
-      html += `<table><tr><th>Month</th><th>Rent</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Date</th><th>Status</th></tr>`;
-      payments.forEach(p=>{
-        const statusCls = p.status==='Paid'?'badge-green':'badge-red';
-        html += `<tr>
-          <td>${p.month||'—'}</td>
-          <td>${fmtPKR(p.monthlyRent||0)}</td>
-          <td>${fmtPKR(p.amount||0)}</td>
-          <td style="color:${outstandingOf(p)>0?'#dc2626':'#16a34a'};font-weight:700">${fmtPKR(outstandingOf(p))}</td>
-          <td>${escHtml(p.method||'—')}</td>
-          <td>${fmtDate(p.date)||'—'}</td>
-          <td><span class="badge ${statusCls}">${p.status}</span></td>
-        </tr>`;
-      });
-      html += `</table>`;
-    } else {
-      html += `<div style="color:#aaa;font-size:11px;padding:8px 0">No payment records in last 2 months</div>`;
-    }
-    html += `</div>`;
+  const q = (cancelFilter.search || '').trim().toLowerCase();
+  const filtered = byStatus.filter(c => {
+    if (cancelFilter.type !== 'All' && (c.roomType || '') !== cancelFilter.type) return false;
+    if (!q) return true;
+    return [c.studentName, c.roomNumber, c.roomType, c.reason, c.status, _cancSeq(c, scope)]
+      .some(v => String(v || '').toLowerCase().includes(q));
   });
 
-  html += `</body></html>`;
-
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Rent-Summary_'+today()+'.pdf', {pageSize:'A4'});
+  return applySort(filtered, cancelFilter, {
+    student: c => c.studentName || '',
+    room:    { get: c => c.roomNumber || '', cmp: cmpRoomNo },
+    type:    c => c.roomType || '',
+    request: c => c.requestDate || '',
+    vacate:  c => c.vacateDate || '',
+    status:  c => c.status || '',
+    reason:  c => c.reason || '',
+  });
 }
+
+/* ══ THE CANCELLATIONS EXPORT ══════════════════════════════════════════════
+   §37 — the export must make the cancellation lifecycle understandable without
+   opening the application: who is leaving, when they gave notice, when the bed
+   frees, why, what was owed on the day, what was collected or refunded, and
+   where the record stands now.
+
+   `settlement` is the position AT DEPARTURE, frozen onto the cancellation when
+   it was confirmed. The payment records stay editable forever, so it is the
+   only figure that still means what it meant on the day the student walked
+   out — and it is therefore the one this document prints, rather than
+   recomputing a number that would drift away from the receipt in the
+   student's hand.
+
+   This replaces a report that was navy-and-violet with emoji headings, listed
+   every cancellation ever recorded regardless of the filters on screen, and
+   printed a two-month payment history per student that made a 40-departure
+   month a forty-page document.                                              */
+function _cancExportDef(list) {
+  const scopeList = (DB.cancellations || []).filter(_cancInScope);
+  const seqOf = c => c.seq ? 'CAN-' + String(c.seq).padStart(4, '0') : _cancSeq(c, scopeList);
+  const set   = c => c.settlement || null;
+
+  const pending   = list.filter(c => c.status === 'Pending').length;
+  const confirmed = list.filter(c => c.status === 'Confirmed').length;
+  const restored  = list.filter(c => c.status === 'Restored').length;
+  const collected = list.reduce((s, c) => s + Number((set(c) || {}).collected || 0), 0);
+  const owed      = list.reduce((s, c) => s + Number((set(c) || {}).outstanding || 0), 0);
+  const refunded  = list.reduce((s, c) => s + Number((set(c) || {}).credit || 0), 0);
+
+  return {
+    module: 'Cancellations',
+    title:  'Cancellation Register',
+    scope:  _cancMonthLabel(cancelFilter.month),
+    sheet:  'Cancellations',
+
+    filters: [
+      ['Month',  _cancMonthLabel(cancelFilter.month)],
+      ['Status', cancelFilter.status !== 'All' ? cancelFilter.status : null],
+      ['Type',   cancelFilter.type   !== 'All' ? cancelFilter.type : null],
+      ['Search', cancelFilter.search || null],
+    ],
+
+    summary: [
+      { label: 'Departures',  value: String(list.length) },
+      { label: 'Pending',     value: String(pending), tone: pending ? 'warn' : '' },
+      { label: 'Confirmed',   value: String(confirmed), tone: 'pos' },
+      { label: 'Restored',    value: String(restored) },
+      { label: 'Settled',     value: EXPORT.fmt.money(collected), tone: 'pos' },
+      { label: 'Left owing',  value: EXPORT.fmt.money(owed), tone: owed > 0 ? 'neg' : '' },
+      { label: 'Refunded',    value: EXPORT.fmt.money(refunded) },
+    ],
+
+    columns: [
+      { label: 'Ref',  type: 'id', width: 12, value: c => seqOf(c) },
+      { label: 'Room', type: 'id', width: 9,
+        value: c => String(c.roomNumber || ''),
+        get:   c => '<b>#' + escHtml(String(c.roomNumber || '—')) + '</b>' },
+      { label: 'Student', type: 'text', width: 22,
+        value: c => c.studentName || '',
+        get:   c => '<b>' + escHtml(c.studentName || '—') + '</b>',
+        sub:   c => c.roomType || '' },
+      { label: 'Room type', type: 'text', width: 16, pdf: false, value: c => c.roomType || '' },
+      { label: 'Notice given', type: 'date', width: 14, value: c => c.requestDate || '' },
+      { label: 'Vacates',      type: 'date', width: 14,
+        value: c => c.vacateDate || '',
+        get:   c => c.vacateDate ? EXPORT.fmt.date(c.vacateDate)
+                                 : '<span style="color:#94A3B8">end of month</span>' },
+      { label: 'Settled on',   type: 'date', width: 14, pdf: false,
+        value: c => (set(c) || {}).on || '' },
+      { label: 'Reason', type: 'wrap', width: 30, value: c => c.reason || '' },
+
+      { label: 'Billed',      type: 'money', width: 14, total: 'sum', pdf: false,
+        value: c => set(c) ? Number(set(c).billed || 0) : null },
+      { label: 'Collected',   type: 'money', width: 14, total: 'sum',
+        value: c => set(c) ? Number(set(c).collected || 0) : null },
+      { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
+        value: c => set(c) ? Number(set(c).outstanding || 0) : null,
+        get:   c => { const s = set(c);
+          return s && Number(s.outstanding) > 0
+            ? '<span class="neg">' + fmtPKR(s.outstanding) + '</span>' : '—'; } },
+      { label: 'Refund',      type: 'money', width: 13, total: 'sum',
+        value: c => set(c) ? Number(set(c).credit || 0) : null },
+
+      { label: 'Status', type: 'status', width: 12, value: c => c.status || 'Pending' },
+      { label: 'Notes',  type: 'wrap', width: 30, pdf: false, value: c => c.notes || '' },
+    ],
+
+    rows: list,
+    /* §57 — a cancellation register IS an official record: it is the sheet a
+       departing student's account is closed against. Ordinary registers get no
+       signature block; this one does. */
+    signatures: ['Warden', 'Owner / Manager'],
+    note: 'Financial figures are the position recorded at departure.',
+    empty: 'No cancellations match the selected scope.',
+  };
+}
+
+function exportCancellationsPDF() {
+  const list = cancellationsFiltered();
+  if (!list.length) { toast('No cancellation records to export', 'error'); return; }
+  EXPORT.pdf(_cancExportDef(list));
+}
+
+function exportCancellationsExcel() {
+  const list = cancellationsFiltered();
+  if (!list.length) { toast('No cancellation records to export', 'error'); return; }
+  EXPORT.excel(_cancExportDef(list));
+}
+
+/* The name the toolbar button has always called. */
+function downloadCancellationReport() { exportCancellationsPDF(); }
+
 // ─────────────────────────────────────────────────────────────────────────────
+
+/* ── WHAT THE CHECKOUT DID WITH THE MONEY ───────────────────────────────────
+   `confirmCancellation()` already settles a leaver: it collects what is still
+   owed, or REFUNDS a credit through reversePayment(), and writes the position
+   at departure onto `c.settlement`. Nothing showed it. The register listed
+   nine cancellations and not one of them said whether money had changed hands
+   — so "did we refund Azat?" was a question you answered by opening the
+   payments page and reading dates (owner, 2026-09-09: "the refund detail
+   should be saved everywhere and as a labelled").
+
+   The cell names the outcome in one word and the amount under it. It reads
+   from the record written at departure, never from today's payments — the
+   payment rows stay editable forever and this is the only account of what was
+   true on the day the student walked out. */
+function cancSettleCell(c) {
+  const s = c && c.settlement;
+  if (!s) {
+    return c && c.status === 'Pending'
+      ? '<span class="lk-chip lk-chip--flat">Not settled</span>'
+      : '<span class="lk-dash">—</span>';
+  }
+  const moved = Number(s.settledNow || 0);
+  if (s.action === 'refund') {
+    return '<span class="lk-chip dh-amber">' + escHtml('Refunded') + '</span>'
+         + '<div class="lk-sub">' + escHtml(fmtPKR(moved > 0 ? moved : Number(s.credit || 0)))
+         + (moved > 0 ? '' : ' credit left') + '</div>';
+  }
+  if (s.action === 'collect') {
+    const left = Number(s.outstanding || 0) - moved;
+    return '<span class="lk-chip ' + (left > 0 ? 'dh-red' : 'dh-green') + '">'
+         + escHtml(left > 0 ? 'Part collected' : 'Collected') + '</span>'
+         + '<div class="lk-sub">' + escHtml(fmtPKR(moved))
+         + (left > 0 ? ' of ' + escHtml(fmtPKR(Number(s.outstanding || 0))) : '') + '</div>';
+  }
+  return '<span class="lk-chip dh-green">Settled</span>'
+       + '<div class="lk-sub">nothing owed</div>';
+}
+
+/* The same three facts, for the record's own card and the edit form. */
+function cancSettleLines(c) {
+  const s = c && c.settlement;
+  if (!s) return '';
+  const row = (l, v) => '<div class="hi-fact"><span class="hi-fact__l">' + escHtml(l)
+    + '</span><span class="hi-fact__v">' + escHtml(v) + '</span></div>';
+  return '<div class="hi-facts" style="border-top:none;margin-top:0;padding-top:0">'
+    + row('Settled on', s.on ? fmtDate(s.on) : '—')
+    + row('Billed to departure', fmtPKR(Number(s.billed || 0)))
+    + row('Collected', fmtPKR(Number(s.collected || 0)))
+    + (Number(s.credit || 0) > 0 ? row('Credit at departure', fmtPKR(Number(s.credit || 0))) : '')
+    + (Number(s.outstanding || 0) > 0 ? row('Outstanding at departure', fmtPKR(Number(s.outstanding || 0))) : '')
+    + row(s.action === 'refund' ? 'Refunded at checkout' : 'Taken at checkout', fmtPKR(Number(s.settledNow || 0)))
+    + (s.method ? row(s.action === 'refund' ? 'Refunded by' : 'Collected by', s.method) : '')
+    + '</div>';
+}
+
+/* ── THE PART-MONTH REFUND, AT CHECKOUT ──────────────────────────────────────
+   Finds the record for the month the student is leaving in and asks the
+   hostel's rule what comes back. Returns null when there is nothing to offer,
+   which is the common case and the default.
+
+   The record is found by MONTH, not by date: a payment for September is the
+   September record whenever it was taken, and a student leaving on 12 September
+   is leaving part of that month however early they paid for it. */
+function _cancRefundOffer(c) {
+  if (!c || !c.vacateDate) return null;
+  const pol = refundPolicy();
+  if (pol.mode === 'none') return null;
+  const mk = String(c.vacateDate).slice(0, 7);
+  const rec = (DB.payments || []).find(p => p && p.studentId === c.studentId && String(p.month || '') === mk);
+  if (!rec) return null;
+  const r = calculateMidMonthRefund(rec, c.vacateDate, { policy: pol });
+  if (!(r.amount > 0)) return null;
+  r.paymentId = rec.id;
+  r.month = mk;
+  return r;
+}
+
+/* Writes the rule's amount onto the record as a concession. This is the whole
+   integration: the bill for that month drops, the record goes into credit if it
+   was paid, and confirmCancellation()'s existing refund path hands the credit
+   back through reversePayment(). No second ledger, and the figure is visible
+   wherever that payment is. */
+async function _cancApplyRefund(c, offer) {
+  if (!offer || !offer.paymentId) return 0;
+  const rec = (DB.payments || []).find(p => p && p.id === offer.paymentId);
+  if (!rec) return 0;
+  const had = money(rec.concession != null ? rec.concession : rec.discount);
+  rec.concession = had + offer.amount;
+  rec.concessionDesc = 'Part-month refund — ' + refundPolicyLabel();
+  logActivity('Charges Updated',
+    (c.studentName || '—') + ' — part-month refund ' + fmtPKR(offer.amount)
+    + ' on ' + offer.month + ' (' + refundPolicyLabel() + ')', 'Finance');
+  return offer.amount;
+}

@@ -44,8 +44,8 @@
     font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
 }
 .arc-btn:hover     { background:var(--dash-sunk); color:var(--text); }
-.arc-btn--primary  { background:var(--accent); border-color:var(--accent); color:#fff; }
-.arc-btn--primary:hover { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+.arc-btn--primary  { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
+.arc-btn--primary:hover { background:var(--accent-strong); border-color:var(--accent-strong); color:var(--text-on-accent); }
 
 /* ── KPI strip ───────────────────────────────────────────────────────────── */
 .arc-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr));
@@ -77,7 +77,7 @@
 .arc-tabs button.is-on  { background:var(--accent-dim); color:var(--accent-strong); font-weight:700; }
 .arc-tabs .arc-tabs__n  { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px;
                           background:var(--card); color:var(--text3); }
-.arc-tabs button.is-on .arc-tabs__n { background:var(--accent); color:#fff; }
+.arc-tabs button.is-on .arc-tabs__n { background:var(--accent); color:var(--text-on-accent); }
 
 /* ── Panels + tables ─────────────────────────────────────────────────────── */
 .arc-panel { background:var(--card); border:1px solid var(--border); border-radius:16px;
@@ -159,4 +159,63 @@
     margin-top:10px; padding:10px 14px; border-radius:10px;
     background:var(--bg3); border:1px solid var(--border);
     font-size:11.5px; color:var(--text3); line-height:1.55;
+}
+
+/* ══ THE YEAR, DRAWN (archive.js: arcCharts) ══════════════════════════════
+   Two panels side by side under the month table, from `annual archive.png`.
+   Bars are grouped per month — two for money, three for movement — and every
+   height is a percentage of the year's own maximum, so a quiet year is not
+   flattened into a straight line by a scale borrowed from somewhere else. */
+.arc-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+.arc-chart__b { padding: 14px 16px 10px; }
+.arc-bars {
+    display: flex; align-items: flex-end; gap: 6px;
+    height: 132px;
+}
+/* .arc-cbar, NOT .arc-bar — that name was already the page toolbar at the top
+   of this file, and a chart column inheriting a 12px padding and a 1px border
+   is why the first cut drew twelve outlined boxes with hairlines inside. */
+.arc-cbar {
+    flex: 1; min-width: 0; height: 100%;
+    display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+    /* A FIXED inset, not a percentage: percentage padding on a flex item
+       resolves against the CONTAINER's width, not the item's own, so `0 12%`
+       was ~60px either side of a 40px column and the bars collapsed to zero. */
+    padding: 0 4px; border-radius: 5px;
+}
+.arc-cbar:hover { background: var(--dash-sunk); }
+.arc-cbar__b {
+    flex: 1 1 0; min-width: 4px; max-width: 14px;
+    background: var(--dh); border-radius: 3px 3px 0 0;
+    min-height: 2px;
+    transition: var(--transition);
+}
+.arc-axis {
+    display: flex; gap: 6px; margin-top: 7px;
+    font-size: 10px; color: var(--text3);
+}
+.arc-axis span { flex: 1; min-width: 0; text-align: center; }
+
+.arc-legend { margin-left: auto; display: flex; gap: 12px; flex-wrap: wrap; }
+.arc-legend__i { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); }
+.arc-legend__i i { width: 8px; height: 8px; border-radius: 3px; background: var(--dh); }
+
+/* An empty year says so rather than drawing twelve bars of nothing. */
+.arc-chart__empty {
+    padding: 34px 18px; text-align: center;
+    font-size: 12px; line-height: 1.5; color: var(--text3);
+}
+
+/* Six cards, one row. The strip wrapped 5 + 1 and the sixth sat alone on a
+   second line, costing 96px of a page whose whole point is the table under
+   it. */
+@media (min-width: 1180px) {
+    .arc-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    /* The four-card strip inside a panel keeps its own fit. */
+    .arc-panel .arc-kpis { grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); }
 }

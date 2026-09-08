@@ -64,8 +64,12 @@
 .pay-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; }
 
 .pay-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+/* NARROWER, SO THE BAR IS ONE LINE (owner, 2026-09-09: "reduce its searchbar
+   so that all the option align in one heading"). It was 240–320px and the
+   controls beside it wrapped onto a second row at the 1366 floor; the search is
+   the one thing on the bar that can give width back without losing a control. */
 .pay-search {
-    display:flex; align-items:center; gap:8px; flex:1 1 240px; min-width:200px; max-width:320px;
+    display:flex; align-items:center; gap:8px; flex:0 1 210px; min-width:150px; max-width:240px;
     height:40px; padding:0 12px; border-radius:11px;
     background:var(--card); border:1px solid var(--border2);
     transition:border-color .15s ease, box-shadow .15s ease;
@@ -95,7 +99,7 @@
 .pay-btn:hover  { background:var(--dash-sunk); color:var(--text); }
 .pay-btn--hue   { color:var(--dh); border-color:var(--dh); background:var(--dh-bg); }
 .pay-btn--hue:hover { background:var(--dh-bg); filter:brightness(1.06); color:var(--dh); }
-.pay-btn__count { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; font-weight:800; line-height:18px; text-align:center; }
+.pay-btn__count { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:var(--text-on-accent); font-size:10px; font-weight:800; line-height:18px; text-align:center; }
 
 /* Filters popover */
 .pay-pop {
@@ -250,7 +254,7 @@
 }
 .pay-pager button:hover:not(:disabled):not(.is-on) { background:var(--dash-sunk); color:var(--text); }
 .pay-pager button:disabled { opacity:.4; cursor:not-allowed; }
-.pay-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:#fff; }
+.pay-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 .pay-pager__gap { color:var(--text3); padding:0 3px; }
 
 @media (max-width:900px) { .pay-foot__info { order:3; flex-basis:100%; text-align:left; } }
@@ -469,7 +473,7 @@ input.ws__amt {
     font-family:var(--font); font-size:11.5px; font-weight:600; transition:var(--transition);
 }
 .ws__seg-b:hover      { color:var(--text2); }
-.ws__seg-b.is-on      { background:var(--accent); color:#fff; }
+.ws__seg-b.is-on      { background:var(--accent); color:var(--text-on-accent); }
 
 .ws__seg-b:focus-visible, .ws__chip:focus-visible, .ws__add:focus-visible,
 .ap-chip:focus-visible, .ap-mrail__nav:focus-visible,
@@ -608,7 +612,7 @@ input.ws__amt {
     font-family:var(--font); font-size:11px; font-weight:600; transition:var(--transition);
 }
 .ap-chip:hover { border-color:var(--accent); }
-.ap-chip.is-on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ap-chip.is-on { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 /* The marker says what that month holds for THIS student: a record exists, and
    whether anything is still owing on it. A bare chip is a month with no record
    — that is information, not a missing state. */
@@ -705,7 +709,7 @@ input.ws__amt {
     letter-spacing:var(--ant-num-track);
 }
 .ap-stub__bal.is-none  { background:var(--dash-sunk); border:1px solid var(--border); color:var(--text3); }
-.ap-stub__bal.is-due   { background:var(--accent); border:1px solid var(--accent); color:#fff; }
+.ap-stub__bal.is-due   { background:var(--accent); border:1px solid var(--accent); color:var(--text-on-accent); }
 .ap-stub__bal.is-clear { background:var(--green);  border:1px solid var(--green);  color:var(--bg); }
 .ap-stub__bal.is-none b, .ap-stub__bal.is-due b, .ap-stub__bal.is-clear b { color:inherit; }
 
@@ -807,7 +811,7 @@ input.ws__amt {
 .pf-out__btn {
     height:30px; padding:0 13px; border-radius:8px; cursor:pointer; white-space:nowrap;
     font-family:inherit; font-size:11.5px; font-weight:700;
-    background:var(--accent); color:#fff;
+    background:var(--accent); color:var(--text-on-accent);
     border:1px solid var(--accent);
     transition:var(--transition);
 }
@@ -854,8 +858,8 @@ input.ws__amt {
     font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
 }
 .pf-btn:hover       { background:var(--dash-sunk); color:var(--text); }
-.pf-btn--go         { background:var(--accent); border-color:var(--accent); color:#fff; }
-.pf-btn--go:hover   { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+.pf-btn--go         { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
+.pf-btn--go:hover   { background:var(--accent-strong); border-color:var(--accent-strong); color:var(--text-on-accent); }
 
 /* Student search hits inside the payment modal */
 .pf-hit { display:flex; align-items:center; gap:11px; padding:10px 13px; cursor:pointer;
@@ -978,4 +982,510 @@ input.ws__amt {
 .pay-rev__note {
     font-size:11.5px; color:var(--text3); line-height:1.65;
     border-top:1px solid var(--border2); padding-top:10px; margin-top:4px;
+}
+
+
+/* ══ COVERAGE BADGE — what the month's charge actually buys ═════════════════
+   Replaces the prose sub-line "PKR 10,000 rent + PKR 7,000 mess" under
+   Charge/Mo. That line was the widest element in the row and it restated two
+   numbers whose sum was printed directly above it; the badge says the same
+   thing categorically and the exact split moved to the cell's title.
+
+   Sized between .pay-arrear-tag and .pay-pill: it is a property of the figure
+   above it, not a state a warden acts on, so it must not compete with the
+   Status pill two columns to the right. Same hue vocabulary as every other
+   badge in the app (chargeCoverage() picks it), so Students and Payments say
+   "Rent + Mess" in the same green. */
+/* BLOCK, not inline-block. Beside the figure it made Charge/Mo the second
+   widest column in the table (137px) by adding its width to the amount's;
+   stacked under it the column is only as wide as the wider of the two, which
+   is how the reference draws it and ~40px cheaper at the QA floor. */
+.pay-cov {
+    display:block; width:fit-content; margin-top:3px; padding:1px 7px; border-radius:20px;
+    font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+    white-space:nowrap;
+}
+
+/* "September 2026" broke across two lines in a 76px column, which is a date
+   turned into two facts and an extra line of height on every row in the table. */
+.pay-table tbody td:nth-child(4) { white-space:nowrap; }
+/* NEUTRAL, AND THE HUE CLASS IS IGNORED ON PURPOSE.
+
+   chargeCoverage() returns a dh-green / dh-amber / dh-slate / dh-blue hue and
+   Students renders it, so the obvious thing was to render it here too — the
+   payments spec §15 asks for a green "RENT + MESS" and an amber "RENT ONLY"
+   badge by name. It was drawn that way first and it was wrong, for a reason
+   that only shows up on THIS table: the Status pill is three columns away in
+   the same row, drawn from the same three hues for a completely different
+   axis. A row then reads amber "RENT ONLY" beside amber "Partial", where the
+   first is a billing arrangement and the second is money missing. Students has
+   no status pill beside it, which is why the same badge is fine there.
+
+   So the label carries the fact and the colour is given back to state, per
+   CLAUDE.md ("categories are neutral; hue is reserved for state") and the
+   expenses spec §20, which asks for neutral method chips for the same reason.
+   The hue class stays on the element so this is one rule to revert if the
+   owner wants the spec's colours back. */
+.pay-table .pay-cov,
+.pay-table .pay-cov.dh-green,
+.pay-table .pay-cov.dh-amber,
+.pay-table .pay-cov.dh-slate,
+.pay-table .pay-cov.dh-blue { background:var(--ant-neutral-bg); color:var(--ant-neutral-fg); }
+
+/* ══ ARREARS — the amber tint the left rule was doing alone ═════════════════
+   Payments spec §24 asks for a subtle background tint AND the 2-3px left
+   border; the row had only the border. The reason given for not tinting was
+   that it "would fight the selection and hover states" — true of a flat fill,
+   because a td background paints over the tr background those states set. So
+   the states are restated here at td level rather than the tint being dropped:
+   hover still lifts an arrears row, selection still wins over both, and the
+   tint stays under all of it. Deliberately weak — §24 says do not make the
+   entire row red, and the red belongs to the Unpaid figure alone. */
+.pay-table tbody tr.is-arrear td        { background:color-mix(in srgb, var(--amber) 7%, transparent); }
+.pay-table tbody tr.is-arrear:hover td  { background:color-mix(in srgb, var(--amber) 12%, transparent); }
+.pay-table tbody tr.is-arrear.is-picked td { background:var(--dh-bg); }
+/* The pinned Actions cell is opaque (it has scrolling columns beneath it), so
+   every row state has to be restated on it over --card.
+
+   ALL THREE, in this order. The first version wrote only the flat arrears rule,
+   which — being later in the file and the same (0,3,3) specificity as the
+   pre-existing :hover and .is-picked rules above — silently beat both. The one
+   cell in the row that is always visible was then the one cell that never
+   answered the pointer, and a selected arrears row showed amber there while the
+   rest of the row showed the selection blue. This is the "later block wins"
+   failure this file already documents twice; the fix is to be explicit rather
+   than to reorder, because ordering is what broke it. */
+.pay-table tbody tr.is-arrear td.pay-col-act {
+    background:linear-gradient(color-mix(in srgb, var(--amber) 7%, transparent),
+                               color-mix(in srgb, var(--amber) 7%, transparent)), var(--card);
+}
+.pay-table tbody tr.is-arrear:hover td.pay-col-act {
+    background:linear-gradient(color-mix(in srgb, var(--amber) 12%, transparent),
+                               color-mix(in srgb, var(--amber) 12%, transparent)), var(--card);
+}
+.pay-table tbody tr.is-arrear.is-picked td.pay-col-act {
+    background:linear-gradient(var(--dh-bg), var(--dh-bg)), var(--card);
+}
+
+/* ══ ROW ACTION HIT AREA ════════════════════════════════════════════════════
+   Payments spec §25 asks for a minimum 40x40 click target. Growing the buttons
+   to 40x40 would add ~48px to the Actions column — on the one page whose whole
+   problem is fitting twelve columns at the 1366 QA floor, and this column is
+   pinned, so every pixel it takes is taken from the scrollable figures rather
+   than from slack.
+
+   So the TARGET grows and the BUTTON does not: a transparent ::after extends
+   the hit area 6px past each edge, giving 40x40 of clickable area around a
+   28x28 control. The gap between buttons is 5px, so neighbouring targets meet
+   rather than overlap — the 6px reaches 1px into a 5px gap that is otherwise
+   dead space, and the buttons keep their own 28px of visual separation. */
+.pay-act { position:relative; }
+.pay-act::after { content:''; position:absolute; inset:-6px; border-radius:12px; }
+
+
+/* ══ DENSITY, SO TWELVE COLUMNS FIT THE QA FLOOR ═══════════════════════════
+   The reference mockup was drawn on a 1536px canvas. At the 1366 QA floor,
+   minus the 212px rail and the content padding, the table gets ~1060px — and
+   the twelve columns the spec makes mandatory measured 1285px. The gap is not
+   in any figure; it is in 24px of horizontal padding on each of thirteen
+   columns, which is 312px of the 1285 spent on air.
+
+   Payments spec §43 asks for exactly this trade: "the Finance page is a
+   transaction-management page — prioritise scan, identify unpaid, inspect,
+   act… avoid excessive whitespace." Vertical padding is left alone, because
+   that is row rhythm and what makes a long table readable; only the horizontal
+   air goes, and only down to 8px, which still clears the 7px letter-spacing on
+   the uppercase headers.
+
+   Actions is pinned, so every pixel it holds is taken from the scrolling
+   figures rather than from slack — it gets the tightest treatment of all. */
+.pay-table thead th,
+.pay-table tbody td            { padding-left:8px; padding-right:8px; }
+.pay-table thead th:first-child,
+.pay-table tbody td:first-child { padding-left:10px; padding-right:4px; }
+.pay-table thead th.pay-col-act,
+.pay-table tbody td.pay-col-act { padding-left:6px; padding-right:8px; }
+.pay-acts                      { gap:4px; }
+
+
+/* ══ EDIT PAYMENT FORM — four sections and a running total ══════════════════
+   The form held thirteen controls in one flat .form-grid, so "Room Rent" and
+   "Due Date" carried identical weight and the warden had to know which fields
+   moved money and which merely described it. The reference groups them into
+   four numbered steps, and the grouping is the design: 1 sets what is owed,
+   2 adjusts it, 3 records how it was settled, 4 explains anything odd.
+
+   The summary panel beside them is the reason the grouping is worth doing. The
+   arithmetic was already correct and already live — recalcUnpaid() has run on
+   every keystroke for months — but it surfaced only as a number in a readonly
+   "Unpaid / Remaining" box near the BOTTOM of the form, below the fields that
+   change it. Total Due / Total Paid / Remaining puts the whole sum where the
+   typing is, so an operator can see a 17,000 bill meet a 17,000 payment
+   without scrolling to find out.
+
+   Prefixed .pef-* and kept in this file, not style.css — this shape belongs to
+   one form. */
+.pef-top { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(0,1fr); gap:14px; align-items:start; }
+@media (max-width:1080px) { .pef-top { grid-template-columns:minmax(0,1fr); } }
+
+.pef-sec {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    background:var(--card); margin-bottom:14px;
+}
+.pef-top .pef-sec { margin-bottom:0; }
+.pef-sec__n {
+    font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--accent-strong); display:flex; align-items:baseline; gap:6px;
+}
+.pef-sec__hint { font-size:11px; color:var(--text3); font-weight:400; margin:2px 0 10px; }
+
+/* ── The running total ───────────────────────────────────────────────────── */
+.pef-sum { border:1px solid var(--border); border-radius:10px; background:var(--bg3); overflow:hidden; }
+.pef-sum__hd {
+    display:flex; align-items:center; gap:7px; padding:10px 13px;
+    border-bottom:1px solid var(--border); background:var(--card);
+    font-size:12px; font-weight:800; color:var(--accent-strong);
+}
+.pef-sum__row {
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:8px 13px; font-size:12px; color:var(--text2);
+}
+.pef-sum__row + .pef-sum__row { border-top:1px solid var(--border); }
+.pef-sum__row b {
+    font-weight:800; color:var(--text); font-variant-numeric:tabular-nums;
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+}
+.pef-sum__row.is-paid b { color:var(--ant-success-fg); }
+.pef-sum__row.is-due  b { color:var(--red); }
+
+/* The verdict. It restates what the three rows above already add up to, and it
+   earns the space because "Remaining PKR 0" is a figure a tired warden reads as
+   a zero balance OR as a form that has not calculated yet. This says which. */
+.pef-verdict {
+    display:flex; align-items:center; gap:9px; margin:11px 13px 13px;
+    padding:9px 11px; border-radius:9px; font-size:12px;
+}
+.pef-verdict__t { font-weight:800; display:block; }
+.pef-verdict__s { font-size:11px; opacity:.85; }
+.pef-verdict.is-paid  { background:var(--ant-success-bg); color:var(--ant-success-fg); }
+.pef-verdict.is-part  { background:var(--ant-warning-bg); color:var(--ant-warning-fg); }
+.pef-verdict.is-none  { background:var(--ant-neutral-bg); color:var(--ant-neutral-fg); }
+.pef-verdict.is-over  { background:var(--accent-soft);    color:var(--accent-strong); }
+
+.pef-notes-count { float:right; font-size:10px; color:var(--text3); font-weight:600; }
+
+
+/* Overdue was bare red text under the status pill — the one mark on the row
+   that said its meaning in colour alone. It becomes a pill like the others
+   (dark-mode brief §6, badge sheet §1), sitting under the status rather than
+   replacing it, because a record can be Partial AND overdue. */
+.pay-pill--od {
+    margin-top:3px;
+    background:color-mix(in srgb, var(--red) 14%, transparent);
+    color:var(--red);
+}
+
+
+/* ══ THE PAGE, AGAINST payment page.png ════════════════════════════════════
+   Measured before any of this, on a six-row fixture:
+
+     1536px viewport   table 1230 in 1230   fits exactly, rows 78px
+     1366px viewport   table 1154 in 1060   94px over,    rows 94px
+     1093px viewport   table 1154 in  787   367px over
+
+   The reference was drawn on a 1536 canvas, which is why it looks effortless
+   there — at that width the design already works untouched. Everything below
+   is about the 1366 column, which is the QA floor and where the page is
+   actually used. The 367px at 1093 is not recoverable and keeps the drag-pan.
+
+   The 16px of extra ROW height at 1366 is the same bug as some of the width:
+   "Ground Floor" was wrapping to two lines. */
+
+/* 1. THE ROOM META STAYS ON ONE LINE. `Ground Floor` broke after "Ground",
+      which made every row in the table 16px taller than the reference's and
+      read as two facts where there is one. */
+.pay-room__t { white-space: nowrap; }
+
+/* 2. THE MONTH ABBREVIATES BELOW 1400px. Both spellings are in the markup and
+      this picks one — see the note on the <td> in payments.js. "September 2026"
+      is the widest cell in the row after the student's name; "Sep 2026" is
+      ~34px narrower and loses nothing a reader needs. */
+.pay-mo__abbr { display: none; }
+@media (max-width: 1400px) {
+    .pay-mo__full { display: none; }
+    .pay-mo__abbr { display: inline; }
+}
+
+/* 3. THE CELLS TIGHTEN, ONLY WHERE THEY MUST. 8px -> 6px each side across
+      thirteen columns is 52px, and it is horizontal air only: the vertical
+      padding that sets row rhythm is untouched, which is the same line this
+      file's earlier density pass drew. Above 1400 nothing changes, because
+      above 1400 nothing needs to. */
+@media (max-width: 1400px) {
+    .pay-table thead th,
+    .pay-table tbody td             { padding-left: 6px; padding-right: 6px; }
+    .pay-table thead th:first-child,
+    .pay-table tbody td:first-child { padding-left: 8px; padding-right: 3px; }
+    .pay-table thead th.pay-col-act,
+    .pay-table tbody td.pay-col-act { padding-left: 5px; padding-right: 6px; }
+    /* The method chip is a 15px glyph and a word in a pill; 8px of side padding
+       is enough for it to still read as a chip. */
+    .pay-method { padding-left: 8px; padding-right: 8px; }
+    .pay-acts   { gap: 3px; }
+    /* THE LAST 20px COMES OUT OF THE HEADER'S LETTER-SPACING. Three columns —
+       ADM. FEE, EXTRA CHARGES, CONCESSION — hold a dash in almost every row, so
+       their width is set entirely by the header word above them, and .7px of
+       tracking across ~35 uppercase characters is ~25px of pure air. At .2px
+       the labels still read as small-caps headers and no word is shortened or
+       wrapped, which is what truncating them would have cost.
+
+       0, NOT .2px, AND THE LAST COLUMN IS WHY. At .2px "CONCESSION" measures
+       ~62px of text in a 60px content box, so the header ran under the pinned
+       Actions cell and read "CONCESSI". The column cannot grow — the table is
+       already exactly its container's width — so the text has to shrink
+       instead, and tracking is the part of it that carries no information. */
+    .pay-table thead th { letter-spacing: 0; }
+    /* 28px -> 26px on four buttons and their gaps. The 40x40 pointer target is
+       drawn by .pay-act::after and is unaffected by the visual size. */
+    .pay-act { width: 26px; height: 26px; border-radius: 7px; }
+    /* AND THE LAST TWO PIXELS. "CONCESSION" is one ten-character word, so it
+       cannot wrap and cannot abbreviate, and the table is already exactly its
+       container's width — no column can grow. Its header was running a
+       character under the pinned Actions cell and reading "CONCESSIO".
+
+       The three columns it belongs to — ADM. FEE, EXTRA CHARGES, CONCESSION —
+       hold a dash in almost every row, so their padding is doing nothing for
+       legibility that the empty cell is not already doing. 6px -> 4px drops
+       each column's minimum by 4px, which is enough for the word and leaves
+       margin. Shrinking the header type was the alternative and was rejected:
+       the whole point of the 7 Sep small-type pass was that this app's labels
+       are already at the floor. */
+    .pay-table thead th:nth-child(10), .pay-table tbody td:nth-child(10),
+    .pay-table thead th:nth-child(11), .pay-table tbody td:nth-child(11),
+    .pay-table thead th:nth-child(12), .pay-table tbody td:nth-child(12) {
+        padding-left: 4px; padding-right: 4px;
+    }
+}
+
+
+/* ══ ONE CONTROL STRIP, THEN ONE SENTENCE ══════════════════════════════════
+   The reference runs search, four selects, Filters, CSV, PDF, Auto-Generate
+   and WhatsApp along a single line and puts "49 records — Total collected" on
+   its own line underneath. The markup now matches; this pushes the action half
+   to the right of the same strip.
+
+   IT WRAPS RATHER THAN SPLITTING. Those controls come to ~1230px, so they fit
+   on one line at the reference's 1536 and cannot at 1366. `flex-wrap` on the
+   strip means the buttons drop to a second line by themselves at exactly the
+   width where they stop fitting — which is the same two-row layout the page
+   had before, arrived at by measurement instead of by being hard-coded, and it
+   becomes the reference's single row the moment there is room. */
+.pay-tools__end { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pay-meta { margin: 12px 0 4px; }
+
+
+/* ══ THE SHARE, AS A BAR ═══════════════════════════════════════════════════
+   Paid and Pending are two counts that add to the whole, and that is the one
+   case where a bar earns its height: "16" and "33" are only comparable after
+   the reader has done the arithmetic. The bar does it for them, and the
+   percentage stays because a bar cannot be read to two figures.
+
+   It takes the card's own hue via --dh, so Paid is green and Pending amber
+   without either being stated twice. */
+.pay-stat__track {
+    flex: 1 1 40px; min-width: 34px; height: 5px; border-radius: 999px;
+    background: var(--dash-track, var(--bg3)); overflow: hidden;
+}
+.pay-stat__track > i {
+    display: block; height: 100%; border-radius: 999px;
+    background: var(--dh); transition: width .5s ease;
+}
+@media (prefers-reduced-motion: reduce) { .pay-stat__track > i { transition: none; } }
+/* The foot was a two-item row with the figure pushed right; with a bar between
+   them the label must not stretch. */
+.pay-stat__foot  { align-items: center; flex-wrap: nowrap; }
+.pay-stat__sub   { flex: 0 0 auto; white-space: nowrap; }
+/* Only the two counting cards carry a bar. Total Collected and Unpaid Amount
+   have no whole to be a share OF — their foot keeps wrapping as it did. */
+.pay-stat:not(:has(.pay-stat__track)) .pay-stat__foot { flex-wrap: wrap; }
+
+
+/* ══ THE FOOTER ════════════════════════════════════════════════════════════
+   Reference order: the sentence on the left, the pager on the right, the page
+   size last as one "30 / page" control. It was "Show [30] entries" on the left,
+   the sentence centred between two controls, and the pager on the right — the
+   one part a reader wants was the part with a control on either side of it. */
+.pay-foot__info { flex: 1 1 auto; text-align: left; }
+.pay-foot__size select { min-width: 92px; }
+
+
+/* The scroll track inside the table, for the same reason the dashboard's card
+   tracks were changed: style.css paints every track --bg2, the workspace
+   ground, which is right against the page and wrong inside a bordered panel.
+   At 1366 the table now fits exactly, so any track that does appear is one or
+   two pixels of overflow from an unusually long name — and a 5px tan band
+   drawn the full width of the table is a very loud way to say "two pixels".
+   The thumb keeps its colour, so the affordance survives. */
+body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
+.pay-table-wrap::-webkit-scrollbar-track { background: transparent; }
+
+
+/* ══ EDIT PAYMENT — THE COMPACT DIALOG, 2026-09-07 ══════════════════════════
+   To the owner's compact reference and the global viewport spec. The shell,
+   the density and the focus ring come from `forms.css`; everything here is
+   the shape of THIS dialog and nothing else.
+
+   Measured before: 1120 × 722 on a 768px window, with the overlay scrolling.
+   After: 920 wide, capped at the viewport minus its margin, and only the body
+   moves. The saving is not type size — it is the six-field settlement block
+   going from two columns to three, the adjustments row going from a nested
+   grid to a real two-column split, and the section chrome coming down to the
+   12–14px the specification asks for.                                       */
+
+/* The student, in one strip. Who is being billed is context for every field
+   below it, so it reads across rather than down. */
+/* Stretch, not start: the reference draws the charge card and the summary the
+   same height, and at `start` the shorter of the two left a band of backdrop
+   under it that read as a missing field. */
+.pef-top { align-items: stretch; }
+
+.pef-who {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 12px; margin-bottom: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.pef-who__av {
+    width: 36px; height: 36px; flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--text-on-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px;
+}
+.pef-who__id { flex: 1; min-width: 0; }
+.pef-who__n  { font-weight: 700; font-size: 13.5px; color: var(--text); }
+.pef-who__m  { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.pef-who__m b { color: var(--accent-strong); font-weight: 700; }
+.pef-who__amt {
+    flex-shrink: 0; text-align: right;
+    padding: 5px 11px; border-radius: 9px;
+    background: var(--ant-success-bg);
+}
+.pef-who__v {
+    font-size: 14px; font-weight: 800; color: var(--ant-success-fg);
+    font-variant-numeric: tabular-nums;
+}
+.pef-who__l { font-size: 9.5px; color: var(--ant-success-fg); opacity: .8; }
+
+/* Section chrome. The number is a filled disc now (`.hf-num`), so the head is
+   a row rather than a baseline-aligned pair, and the title stops shouting —
+   every other form in this app writes a section name in sentence case. */
+.pef-sec { margin-bottom: 10px; }
+.pef-sec__n {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0;
+    text-transform: none; color: var(--text);
+}
+.pef-sec__t { color: var(--text); }
+.pef-sec__hint { margin: 3px 0 9px 30px; }
+
+/* The note under a field — the mess line's "included for every student", and
+   the opt-out when the hostel makes mess optional. */
+.pef-note { font-size: 10.5px; color: var(--text3); margin-top: 3px; }
+.pef-messtoggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10.5px; color: var(--text2); font-weight: 600; cursor: pointer;
+}
+
+/* Adjustments: fees on the left, the extras panel on the right, at the ratio
+   the reference draws. It was a `.field.col-full` holding its own 1fr/1fr
+   grid — which put the admission fee in a column of its own above the pair
+   and left a third of the section empty. */
+.pef-adj {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.pef-adj__l { display: flex; flex-direction: column; gap: 9px; }
+@media (max-width: 760px) { .pef-adj { grid-template-columns: minmax(0, 1fr); } }
+
+.pef-extra {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg3); padding: 9px 10px;
+}
+.pef-extra__hd {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 8px;
+    font-size: 11.5px; font-weight: 700; color: var(--accent-strong);
+}
+.pef-extra__hd > span { display: inline-flex; align-items: center; gap: 6px; }
+.pef-extra__add {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--accent-strong);
+    font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 7px; cursor: pointer;
+    font-family: inherit;
+}
+.pef-extra__add:hover { background: var(--accent-soft); border-color: var(--accent); }
+.pef-extra__tot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 7px; padding: 7px 9px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+    font-size: 11.5px; color: var(--accent-strong); font-weight: 600;
+}
+.pef-extra__tot span:last-child { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* One extra-charge line. Was inline-styled with a `✕` glyph for remove; the
+   reference uses the same trash icon the footer's Delete does, and one icon
+   family is the point of the specification's icon rule. */
+.extra-charge-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.extra-charge-row .extra-charge-desc-input { flex: 1; min-width: 0; }
+.extra-charge-row .extra-charge-amt-input  { width: 96px; flex-shrink: 0; }
+.extra-charge-row .rm-btn {
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--danger-border, var(--border));
+    border-radius: 8px;
+    background: var(--ant-danger-bg, var(--bg4));
+    color: var(--red);
+    cursor: pointer;
+}
+.extra-charge-row .rm-btn:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.extra-charge-row .rm-btn svg { width: 14px; height: 14px; }
+
+.pef-notes-count { float: none; display: block; text-align: right; margin-top: 4px; }
+
+/* The summary card keeps its rules from above; only its head loses the
+   uppercase treatment so it matches the section names beside it. */
+.pef-sum__hd { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+
+
+/* ══ THE WORKSHEET'S LINE NUMBERS, 2026-09-07 ══════════════════════════════
+   The reference marks each of the six lines with a filled blue disc carrying
+   the numeral, and writes the line's name in sentence case. The column was a
+   grey "01" and an uppercase name with letter-spacing — which read as a table
+   of records rather than as the six terms of one equation, and made the two
+   payment surfaces (this page and the Edit Payment dialog, whose sections are
+   now discs) look like different products. */
+.ws__n {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--text-on-accent);
+    font-size: 10.5px;
+    font-weight: 800;
+    padding-top: 0;
+    margin-top: 1px;
+}
+.ws__p b {
+    font-size: 12.5px;
+    text-transform: none;
+    letter-spacing: 0;
 }

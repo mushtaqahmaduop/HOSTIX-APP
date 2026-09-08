@@ -33,8 +33,8 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     : reportPeriod==='year' ? thisYear()
     : (_plKeys.length ? _rptMonthName(_plKeys[0]) + ' – ' + _rptMonthName(_plKeys[_plKeys.length-1])
                       : 'Custom Range');
-  const csvBtn = (type, color) => `<button onclick="downloadDetailCSV('${type}')" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📥 CSV</button>`;
-  const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" style="background:var(--accent);color:#000;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📄 PDF</button>`;
+  const csvBtn = (type, color) => `<button onclick="downloadDetailExcel('${type}')" title="Export this report to Excel" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export Excel</button>`;
+  const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" title="Export this report as a PDF document" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export PDF</button>`;
 
   // PERF: index rooms by id and active students by room ONCE (see _buildRoomStudentIndex).
   const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom } = _buildRoomStudentIndex();
@@ -448,71 +448,6 @@ function _rptGroupsTotal(groups) {
   return (groups || []).reduce((s, g) => s + g.total, 0);
 }
 
-/* The same category register as printed HTML, shared by every PDF and the
-   Print view so the paper matches the screen section for section. Plain colours
-   rather than CSS variables: these documents are rendered outside the app's
-   stylesheet and a var() would come out black. */
-function _rptCatTablesHTML(rows) {
-  const groups = _rptByCategory(rows);
-  const grand  = _rptGroupsTotal(groups);
-  if (!groups.length)
-    return '<table><tbody><tr><td style="text-align:center;color:#aaa;padding:12px">No expenses this period</td></tr></tbody></table>';
-
-  const sections = groups.map(g => `
-    <h3 style="margin-top:16px">${g.cat} — ${g.items.length} record${g.items.length===1?'':'s'}</h3>
-    <table><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>
-      ${g.items.map(e=>`<tr>
-        <td>${fmtDate(e.date)||'—'}</td>
-        <td>${escHtml(e.description||'—')}</td>
-        <td class="red" style="text-align:right">${fmtPKR(e.amount)}</td>
-      </tr>`).join('')}
-      <tr style="background:#f1f5f9;font-weight:800">
-        <td colspan="2" style="text-align:right">Total — ${g.cat}</td>
-        <td class="red" style="text-align:right">${fmtPKR(g.total)}</td>
-      </tr>
-    </tbody></table>`).join('');
-
-  return sections + `
-    <table style="margin-top:18px"><tbody>
-      <tr style="background:#e2e8f0;font-weight:900;font-size:13px">
-        <td style="padding:10px 12px">GRAND TOTAL — ${groups.length} categor${groups.length===1?'y':'ies'}</td>
-        <td class="red" style="padding:10px 12px;text-align:right">${fmtPKR(grand)}</td>
-      </tr>
-    </tbody></table>`;
-}
-
-// Totals for an arbitrary set of period keys, so current and previous windows
-// are measured by exactly the same code.
-/* ── THE REPORT AUTHORITY (spec §14: "reports must reconcile against the same
-      financial authority") ──────────────────────────────────────────────────
-
-   Every figure this page, its detail cards, its CSVs and its PDFs print comes
-   from here. The money half now comes from `calculateReportTotals()` in
-   finance.js rather than from sums written out again in this file — the two
-   things §14 is asking for are that reports use the same authority as the rest
-   of the app, and that they use ONE of them rather than one per screen.
-
-   WHAT DID NOT CHANGE, AND WHY.
-
-   `rev` still comes from `calcRevenue()`. That is deliberate, not an oversight:
-   `calcRevenue()` is the ACCRUAL authority the dashboard, the cards, the CSVs
-   and the share sheets all read, and July's rent handed over in August is
-   July's revenue to all of them. Replacing it here with the layer's `collected`
-   would be replacing a shared answer with a second one — the exact shape of
-   D-1. The layer's `collected` is returned BESIDE it instead, and the two must
-   agree: both sum `p.amount` over the same scope, so a divergence means a
-   record carries a stored status that is neither Paid nor Pending, and the
-   report would then be quietly missing its money. `tests/report-totals.test.js`
-   asserts they reconcile and pins that failure mode.
-
-   `pending` still counts records whose STORED status is Pending, which is what
-   the dashboard's Pending card does too. It is now derived through the §14 name
-   rather than by a local reduce, but the scope is unchanged on purpose: a Paid
-   record carrying a recorded balance is reachable and `outstandingOf()` returns
-   that balance, yet no Pending card in the app counts it. That inconsistency is
-   real and pre-dates this change — see the handoff. It is not fixed here
-   because moving a headline figure on 50+ live installs is the owner's call,
-   and doing it silently inside a refactor is how a report loses trust.         */
 function _rptTotals(keys) {
   const pays = DB.payments.filter(p => keys.some(k => _payMatchesMonth(p, k)));
   const exps = _rptOutgoings(keys);
@@ -643,9 +578,13 @@ function renderReports() {
     </div>`).join('');
 
   // ── Payment methods (donut + legend) ──────────────────────────────────────
+  /* BY NAME, THROUGH THE SHARED AUTHORITY. This used to index into a local
+     ramp (`_RPT_METHOD_HUES[i % len]`), so Cash was green here and blue on the
+     dashboard, and a method added in Settings shifted every colour below it.
+     `i` is no longer read; it stays only so the map signature is unchanged. */
   const methods = (DB.settings.paymentMethods||[]).map((m,i) => {
     const amt = pays.filter(p=>p.status==='Paid'&&p.method===m).reduce((s,p)=>s+Number(p.amount),0);
-    return { m, amt, color:_RPT_METHOD_HUES[i%_RPT_METHOD_HUES.length] };
+    return { m, amt, color: methodHue(m) };
   }).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
   const methodTotal = methods.reduce((s,x)=>s+x.amt,0);
   // Percentages are of the collected total the donut draws, not of `rev` —
@@ -757,17 +696,23 @@ function renderReports() {
 
   <!-- ══ STAT STRIP — each card opens its own detail view ══ -->
   <div class="rpt-stats">
-    ${stat('financial','dh-green','Revenue',fmtPKR(rev),
+    ${/* COMPACT, THROUGH THE SAME HELPER THE DASHBOARD KPI ROW USES. These
+         printed fmtPKR() in full — "PKR 1,842,000" — beside a dashboard that
+         says "PKR 1.84M" for the same rupees, and at real hostel scale the
+         full figure simply ran out of card. moneyValue(compact) keeps the
+         exact number in the title attribute, so nothing is lost: hover, and
+         the reconcilable figure is there. */''}
+    ${stat('financial','dh-green','Revenue',moneyValue(rev,{compact:true}),
       `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
       '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
-    ${stat('pending','dh-amber','Pending',fmtPKR(pending),
+    ${stat('pending','dh-amber','Pending',moneyValue(pending,{compact:true}),
       `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
       '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
-    ${stat('expenses','dh-red','Expenses',fmtPKR(totalExp),
+    ${stat('expenses','dh-red','Expenses',moneyValue(totalExp,{compact:true}),
       `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
       '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>')}
     ${stat('netprofit','dh-violet','Available Fund',
-      `<span style="color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</span>`,
+      moneyValue(net,{compact:true,color:net>=0?'var(--green)':'var(--red)'}),
       `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
       '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>')}
     ${stat('rooms','dh-blue','Occupancy',`${occRate}%`,
@@ -940,11 +885,11 @@ function renderReports() {
 // Expenses are money going out, so a warm ramp led by red reads correctly.
 const _RPT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
                    '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
-// Payment methods are money coming IN — the same ramp painted Cash (first
-// method in settings) red, which reads as loss on a collections chart. This
-// ramp is led by green and carries no red at all.
-const _RPT_METHOD_HUES = ['#16a34a','#3b82f6','#8b5cf6','#f59e0b','#14b8a6',
-                          '#0ea5e9','#84cc16','#a855f7','#f97316','#64748b'];
+/* _RPT_METHOD_HUES IS GONE. Payment-method colour is one question with one
+   answer and it lives in utils.js as methodHue(); this file's own ramp was the
+   reason the two screens disagreed. _RPT_HUES above stays — that one paints
+   EXPENSE CATEGORIES, which the dashboard does not draw, so there is no second
+   opinion to reconcile. */
 let _rptTrendData = [];
 let _rptDonutData = [];
 let _rptTrendChart = null;
@@ -1131,276 +1076,388 @@ async function deleteTransfer(id) {
 
 
 
-function downloadDetailPDF(type) {
-  // Same window and the same arithmetic as the screen — _rptTotals() is what
-  // renderReports() itself calls, so a figure cannot differ between the page
-  // and the PDF printed from it.
-  const keys  = _rptKeys();
-  const key   = _rptExportLabel();
-  const label = _rptExportWord();
-  // Transfers are folded in as ordinary expense rows under their own category,
-  // so the itemised table adds up to the total printed above it.
-  const { pays, exps, rev, pending, pendingTotals, totalExp, totalTransfers, net } = _rptTotals(keys);
-  const css = printDocStyles();
-  let body = `<div class="hdr"><div><div class="ht">${escHtml(DB.settings.hostelName)}</div><div class="hs">${label} ${type==='financial'?'Revenue':type==='pending'?'Pending Payments':type==='netprofit'?'Available Fund Summary':'Expense'} Report · ${new Date().toLocaleDateString()}</div></div></div>`;
-  if(type==='financial'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Pending</span><div class="kv go">PKR ${pending.toLocaleString()}</div></div><div class="kc"><span class="kl">Transactions</span><div class="kv">${pays.length}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'gr':''}">PKR ${Number(p.amount).toLocaleString()}</td><td class="${outstandingOf(p)>0?'re':''}">PKR ${outstandingOf(p).toLocaleString()}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'gr':payStatusOf(p)==='Partial'?'part':'re'}">${payStatusOf(p)}</td><td>${p.date||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No records</td></tr>'}</tbody></table>`;
-  } else if(type==='pending'){
-    // Period-scoped like the table it is printed from. It read the whole
-    // payment table, so a monthly PDF carried every unpaid rent ever recorded.
-    const pend = pays.filter(p=>p.status==='Pending');
-    /* All three of these come from _rptTotals() — the same call renderReports()
-       makes — so the PDF cannot disagree with the screen it was printed from.
-       They used to be summed again here from the same records. */
-    body+=`<div class="kg"><div class="kc"><span class="kl">Unpaid Records</span><div class="kv re">${pendingTotals.count}</div></div><div class="kc"><span class="kl">Total Outstanding</span><div class="kv re">PKR ${pending.toLocaleString()}</div></div><div class="kc"><span class="kl">Partial Paid</span><div class="kv gr">PKR ${pendingTotals.collected.toLocaleString()}</div></div></div>`;
-    body+=`<table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Still Owed</th><th>Due Date</th></tr></thead><tbody>${pend.sort((a,b)=>new Date(a.dueDate||a.date)-new Date(b.dueDate||b.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="go">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'gr':''}">PKR ${Number(p.amount||0).toLocaleString()}</td><td class="re">PKR ${outstandingOf(p).toLocaleString()}</td><td>${p.dueDate||'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No pending payments</td></tr>'}</tbody></table>`;
-  } else if(type==='netprofit'){
-    body+=`<div class="kg"><div class="kc"><span class="kl">Revenue</span><div class="kv gr">PKR ${rev.toLocaleString()}</div></div><div class="kc"><span class="kl">Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div><div class="kc"><span class="kl">Available Fund</span><div class="kv" style="color:${net>=0?'#16a34a':'#dc2626'}">PKR ${net.toLocaleString()}</div></div></div>`;
-    // Category summary, then the full register underneath it so the reader can
-    // go from "Staff Salary was the biggest line" to the rows behind it.
-    const _g = _rptByCategory(exps);
-    body+=`<table><thead><tr><th>Category</th><th>Amount</th><th>% of Expenses</th></tr></thead><tbody>${_g.map(g=>`<tr><td>${g.cat}</td><td class="re">PKR ${g.total.toLocaleString()}</td><td>${totalExp>0?Math.round(g.total/totalExp*100):0}%</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:#aaa;padding:10px">No expenses</td></tr>'}</tbody></table>`;
-    body+=_rptCatTablesHTML(exps);
-  } else if(type==='expenses'){
-    body+=`<div class="kc" style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:18px"><span class="kl">Total Expenses</span><div class="kv re">PKR ${totalExp.toLocaleString()}</div></div>`;
-    body+=_rptCatTablesHTML(exps);
-  } else if(type==='students'){
-    const _idx=_buildRoomStudentIndex();
-    // Scoped to the period named in this PDF's own header. The on-screen table
-    // and the CSV already do this; the PDF did not, so the same report exported
-    // three ways disagreed about who was on the roster. Matched against every
-    // key in the window, not one — `key` is now a filename label and a custom
-    // range spans several months.
-    const _roster = studentsByRoom(DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
-      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
-    body+=`<table><thead><tr><th>ID</th><th>Name</th><th>Room</th><th>Father</th><th>Phone</th><th>Rent/mo</th><th>Join Date</th><th>Status</th></tr></thead><tbody>${_roster.map(t=>{const room=_idx.roomById.get(t.roomId);return `<tr><td style="font-size:10px;color:#aaa">#${t.id}</td><td>${escHtml(t.name)}</td><td class="go">${room?'#'+room.number:'—'}</td><td>${escHtml(t.fatherName||'—')}</td><td>${escHtml(t.phone||'—')}</td><td class="gr">PKR ${Number(t.rent||0).toLocaleString()}</td><td>${t.joinDate||'—'}</td><td class="${t.status==='Active'?'gr':t.status==='Blacklisted'?'re':''}">${t.status}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No students</td></tr>'}</tbody></table>`;
-  } else if(type==='rooms'){
-    const _idx=_buildRoomStudentIndex();
-    body+=`<table><thead><tr><th>Room</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Rent/mo</th><th>Status</th><th>Students</th></tr></thead><tbody>${DB.rooms.map(r=>{const t=getRoomType(r);const _sts=_idx.activeStudentsByRoom.get(r.id)||[];const oc=_sts.length;const names=_sts.map(s=>s.name);return `<tr><td class="go">#${r.number}</td><td>${escHtml(r.floor)}</td><td>${escHtml(t.name)}</td><td>${t.capacity} beds</td><td class="${oc>0?'gr':''}">${oc}/${t.capacity}</td><td class="gr">PKR ${Number(r.rent||0).toLocaleString()}</td><td class="${oc>0?'gr':'go'}">${oc>0?'Occupied':'Vacant'}</td><td>${names.join(', ')||'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:#aaa;padding:10px">No rooms</td></tr>'}</tbody></table>`;
-  }
-  body += `<div class="ft">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} · Confidential</div>`;
-  _electronPDF(`<!DOCTYPE html><html><head><title>${type} detail</title>${css}</head><body>${body}</body></html>`,
-    (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_'+type+'_'+key+'.pdf', {pageSize:'A4'});
+/* ══ THE REPORTS EXPORTS ═══════════════════════════════════════════════════
+   Seven detail reports and one overview, all from the global export engine.
+
+   What this replaced: `downloadReportDetailPDF` built seven documents inline,
+   `downloadDetailPDF` built the same seven again with different columns, and
+   `downloadDetailCSV` built them a third time as raw CSV. Three
+   implementations of one report is how the same period came out three ways —
+   the students PDF was not period-scoped while its CSV was, so a monthly
+   report exported twice disagreed about who was on the roster.
+
+   Now each detail is ONE definition and the two buttons are two renderers of
+   it (§60). `_rptTotals(_rptKeys())` is the same call renderReports() makes,
+   so no figure on paper can differ from the figure on the screen it was
+   printed from — including under Custom Range, which is a list of month keys
+   and not a string any date can be matched against with startsWith.        */
+const RPT_DETAIL_TITLES = {
+  financial: 'Revenue Report',
+  payments:  'Payment Transactions',
+  pending:   'Pending Payments',
+  expenses:  'Expenses by Category',
+  netprofit: 'Available Fund Summary',
+  students:  'Student Directory',
+  rooms:     'Room Occupancy',
+};
+
+/* The payment columns every finance report in this module shares. Defined once
+   so Revenue, Payment Transactions and Pending cannot describe a payment with
+   three different column sets. */
+function _rptPayColumns(opts) {
+  opts = opts || {};
+  return [
+    { label: 'Date',    type: 'date', width: 13, value: p => p.date || '' },
+    { label: 'Room',    type: 'id',   width: 9,  value: p => String(p.roomNumber || ''),
+      get: p => '<b>#' + escHtml(String(p.roomNumber || '—')) + '</b>' },
+    { label: 'Student', type: 'text', width: 24, value: p => p.studentName || '',
+      get: p => '<b>' + escHtml(p.studentName || '—') + '</b>' },
+    { label: 'Month',   type: 'text', width: 16, value: p => monthLabel(p.month) },
+    { label: opts.paidLabel || 'Collected', type: 'money', width: 14, total: 'sum',
+      value: p => Number(p.amount || 0) || null,
+      get:   p => Number(p.amount) > 0
+               ? '<span class="pos">' + fmtPKR(p.amount) + '</span>' : '—' },
+    { label: 'Still owed', type: 'money', width: 14, total: 'sum',
+      value: p => outstandingOf(p) || null,
+      get:   p => outstandingOf(p) > 0
+               ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' : '—' },
+    { label: 'Method', type: 'text',   width: 13, value: p => p.method || '' },
+    { label: 'Status', type: 'status', width: 11, value: p => payStatusOf(p) },
+  ];
 }
 
-function downloadReportDetailPDF(detailId) {
-  // Honours Custom Range like the screen does; `mo` is now only the label the
-  // header and filename carry.
+function _rptExpenseColumns() {
+  return [
+    { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
+    { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
+    { label: 'Amount', type: 'money', width: 15, total: 'sum',
+      value: e => Number(e.amount || 0),
+      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+  ];
+}
+
+/* Expenses as engine groups: one table per category, biggest spend first,
+   each with its own subtotal. The workbook flattens these into a Category
+   column, which is what a spreadsheet wants and a printed page does not. */
+function _rptExpenseGroups(exps) {
+  const groups = _rptByCategory(exps);
+  const grand  = _rptGroupsTotal(groups);
+  return groups.map(g => ({
+    label: g.cat,
+    meta: g.items.length + ' record' + (g.items.length === 1 ? '' : 's') +
+          (grand > 0 ? ' · ' + Math.round(g.total / grand * 100) + '% of spend' : ''),
+    rows: g.items,
+    total: { label: 'Total — ' + g.cat, value: fmtPKR(g.total) },
+  }));
+}
+
+function _rptBaseDef(type) {
+  const word = _rptExportWord();
+  return {
+    module: 'Report-' + (RPT_DETAIL_TITLES[type] || 'Detail').replace(/\s+/g, '-'),
+    title:  RPT_DETAIL_TITLES[type] || 'Report',
+    scope:  _rptPeriodWords(),
+    filters: [['Period', _rptPeriodWords()], ['Basis', word + ' report']],
+  };
+}
+
+/* The period a reader understands, rather than the key a filename needs.
+   '2026-09' is a database value; "September 2026" is a period. */
+function _rptPeriodWords() {
+  const ks = _rptKeys();
+  if (reportPeriod === 'year')   return thisYear();
+  if (reportPeriod === 'custom') {
+    return ks.length ? monthLabel(ks[0]) + ' to ' + monthLabel(ks[ks.length - 1]) : 'Custom range';
+  }
+  return monthLabel(ks[0]);
+}
+
+function _rptDetailDef(type) {
   const keys = _rptKeys();
-  const mo   = _rptExportLabel();
-  // Transfers ride along as expense rows under their own category, so totalExp
-  // is the whole outgoing and Available Fund is revenue minus it.
-  const { pays, exps, rev, pending, pendingTotals, totalExp, totalTransfers, net } = _rptTotals(keys);
-  // Escaped ONCE, here, because this value is interpolated into the print
-  // document in four places (the <title>, the header, the footer and the
-  // filename) and escaping it at each of those is how one gets missed.
-  const hostelRaw = DB.settings.hostelName || 'Hostel Name';
-  const hostel = escHtml(hostelRaw);
-  const titles = {financial:'Financial Summary',pending:'Pending Payments',netprofit:'Available Fund',students:'Student Directory',rooms:'Room Occupancy',expenses:'Expenses by Category',payments:'Payment Transactions'};
-  const title = titles[detailId] || 'Report';
-  let tableHTML = '';
-  if(detailId==='financial'||detailId==='payments') {
-    const p2 = detailId==='payments' ? pays.filter(x=>x.status==='Paid') : pays;
-    tableHTML = `<h3>Transactions</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>${p2.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${p.status}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
-  } else if(detailId==='expenses') {
-    tableHTML = `<h3>Expenses by Category</h3>` + _rptCatTablesHTML(exps);
-  } else if(detailId==='pending') {
-    // Period-scoped like the on-screen table this PDF is printed from.
-    const pendPays = pays.filter(p=>p.status==='Pending');
-    tableHTML = `<h3>Pending Payments</h3><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Partial Paid</th><th>Outstanding</th><th>Method</th><th>Date</th></tr></thead><tbody>${pendPays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td>#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${Number(p.amount)>0?'green':''}">${Number(p.amount)>0?fmtPKR(p.amount):'—'}</td><td class="red">${fmtPKR(outstandingOf(p))}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table>`;
-  } else if(detailId==='students') {
-    const _idx=_buildRoomStudentIndex();
-    // Same period scope as the on-screen table this PDF is printed from.
-    const _roster = studentsByRoom(DB.students.filter(t => keys.some(k => _studentInPeriod(t, k)) ||
-      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
-    tableHTML = `<h3>Student Directory</h3><table><thead><tr><th>Name</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>${_roster.map(t=>{const r=_idx.roomById.get(t.roomId);return `<tr><td>${escHtml(t.name)}</td><td>${r?'#'+r.number:'—'}</td><td>${fmtDate(t.joinDate)}</td><td class="green">${fmtPKR(t.rent)}</td><td>${t.status}</td><td>${escHtml(t.phone||'—')}</td></tr>`;}).join('')}</tbody></table>`;
-  } else if(detailId==='rooms') {
-    const _idx=_buildRoomStudentIndex();
-    tableHTML = `<h3>Room Occupancy</h3><table><thead><tr><th>Room</th><th>Type</th><th>Floor</th><th>Capacity</th><th>Students</th><th>Status</th></tr></thead><tbody>${DB.rooms.map(r=>{const type=getRoomType(r);const sts=_idx.activeStudentsByRoom.get(r.id)||[];const occ=sts.length;return `<tr><td class="gold">#${r.number}</td><td>${type.name}</td><td>${escHtml(r.floor)}</td><td>${occ}/${type.capacity}</td><td>${escHtml(sts.map(t=>t.name).join(', ')||'Empty')}</td><td>${occ>0?'Occupied':'Vacant'}</td></tr>`;}).join('')}</tbody></table>`;
-  } else if(detailId==='netprofit') {
-    // Full breakdown: revenue transactions + the category register.
-    // _periodTransfers() rather than a startsWith on `mo`, which is a filename
-    // label now and never matches a date under Custom Range.
-    const allTr = _periodTransfers();
-    const trTotal = allTr.reduce((s,t)=>s+Number(t.amount),0);
-    tableHTML = `
-      <div class="summary-box" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#16a34a;font-weight:700;margin-bottom:4px">Revenue</div><div style="font-size:22px;font-weight:900;color:#16a34a">${fmtPKR(rev)}</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#dc2626;font-weight:700;margin-bottom:4px">Total Outgoing</div><div style="font-size:22px;font-weight:900;color:#dc2626">${fmtPKR(totalExp)}</div><div style="font-size:10px;color:#666">Expenses ${fmtPKR(totalExp - trTotal)}${trTotal>0?' + Transfers '+fmtPKR(trTotal):''}</div></div>
-          <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${net>=0?'#16a34a':'#dc2626'};font-weight:700;margin-bottom:4px">Available Fund</div><div style="font-size:22px;font-weight:900;color:${net>=0?'#16a34a':'#dc2626'}">${fmtPKR(net)}</div></div>
-        </div>
-      </div>
-      <h3>💰 Revenue — Paid Transactions</h3>
-      <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Date</th></tr></thead><tbody>
-      ${pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="green">${fmtPKR(p.amount)}</td><td>${escHtml(p.method||'—')}</td><td>${fmtDate(p.date)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:10px">No paid transactions this period</td></tr>'}
-      </tbody></table>
-      <h3 style="margin-top:18px">📉 Expenses by Category</h3>
-      ${_rptCatTablesHTML(exps)}`;
-      // The transfers used to get a table of their own after this one. They are
-      // inside the register above under the Fund Transfer category now, so a
-      // second table would print the same money twice on one page.
+  const T    = _rptTotals(keys);
+  const pays = T.pays, exps = T.exps;
+  const def  = _rptBaseDef(type);
+
+  if (type === 'financial' || type === 'payments') {
+    const list = type === 'payments' ? pays.filter(p => p.status === 'Paid') : pays;
+    const sorted = list.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    return Object.assign(def, {
+      sheet: 'Payments',
+      summary: [
+        { label: 'Revenue',      value: EXPORT.fmt.money(T.rev), tone: 'pos' },
+        { label: 'Outstanding',  value: EXPORT.fmt.money(T.pending),
+          tone: T.pending > 0 ? 'neg' : '' },
+        { label: 'Transactions', value: String(sorted.length) },
+      ],
+      columns: _rptPayColumns(),
+      rows: sorted,
+      grand: { label: 'Collected in this period', value: fmtPKR(T.rev) },
+      empty: 'No payment records in this period.',
+    });
   }
-  _electronPDF(`<!DOCTYPE html><html><head><title>${title} — ${hostel}</title>${printDocStyles()}</head><body><div class="header"><div><div class="title">${hostel} — ${title}</div><div style="font-size:12px;color:#666;margin-top:3px">${mo} · Generated ${new Date().toLocaleDateString()}</div></div><div style="font-size:11px;color:#94a3b8">PDF Report</div></div><div class="kpi-grid"><div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div><div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(totalExp)}</div></div><div class="kpi"><label>Available Fund</label><div class="val ${net>=0?'green':'red'}">${fmtPKR(net)}</div></div></div>${tableHTML}<div class="footer">Generated ${new Date().toLocaleDateString()} · ${hostel} · Confidential</div></body></html>`,
-    hostelRaw.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'') + '_' + title.replace(/\s+/g,'-') + '_' + mo + '.pdf',
-    { pageSize: 'A4' });
+
+  if (type === 'pending') {
+    const pend = pays.filter(p => p.status === 'Pending')
+      .sort((a, b) => new Date(a.dueDate || a.date) - new Date(b.dueDate || b.date));
+    return Object.assign(def, {
+      sheet: 'Pending',
+      summary: [
+        { label: 'Unpaid records', value: String(T.pendingTotals.count), tone: 'neg' },
+        { label: 'Total outstanding', value: EXPORT.fmt.money(T.pending), tone: 'neg' },
+        { label: 'Part paid', value: EXPORT.fmt.money(T.pendingTotals.collected), tone: 'pos' },
+      ],
+      columns: _rptPayColumns({ paidLabel: 'Part paid' }).concat([
+        { label: 'Due', type: 'date', width: 13, pdf: false, value: p => p.dueDate || '' },
+      ]),
+      rows: pend,
+      grand: { label: 'Total outstanding', value: fmtPKR(T.pending) },
+      empty: 'Nothing was left unpaid in this period.',
+    });
+  }
+
+  if (type === 'expenses') {
+    const groups = _rptByCategory(exps);
+    return Object.assign(def, {
+      sheet: 'Expenses',
+      groupLabel: 'Category',
+      summary: [
+        { label: 'Transactions', value: String(exps.length) },
+        { label: 'Categories',   value: String(groups.length) },
+        { label: 'Largest category', value: groups.length ? groups[0].cat : '—' },
+        { label: 'Total spent',  value: EXPORT.fmt.money(T.totalExp), tone: 'neg' },
+      ],
+      columns: _rptExpenseColumns(),
+      groups: _rptExpenseGroups(exps),
+      grand: { label: 'Total across all categories', value: fmtPKR(T.totalExp) },
+      empty: 'Nothing was spent in this period.',
+    });
+  }
+
+  if (type === 'netprofit') {
+    /* One ledger of what came in and what went out, in date order, because
+       "available fund" is a subtraction and a reader must be able to see both
+       sides of it. Money out is written NEGATIVE so the column sums to the
+       fund itself in the workbook rather than to a figure that means nothing. */
+    const lines = pays.filter(p => p.status === 'Paid').map(p => ({
+      date: p.date || '', kind: 'Income',
+      what: (p.studentName || '—') + ' · ' + monthLabel(p.month),
+      amount: Number(p.amount || 0),
+    })).concat(exps.map(e => ({
+      date: e.date || '', kind: e._transfer ? 'Transfer' : 'Expense',
+      what: (e.category || 'Other') + ': ' + (e.description || '—'),
+      amount: -Number(e.amount || 0),
+    }))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    return Object.assign(def, {
+      sheet: 'Fund',
+      summary: [
+        { label: 'Revenue',  value: EXPORT.fmt.money(T.rev), tone: 'pos' },
+        { label: 'Expenses', value: EXPORT.fmt.money(T.totalExp), tone: 'neg' },
+        { label: 'Transfers', value: EXPORT.fmt.money(T.totalTransfers) },
+        { label: 'Available fund', value: EXPORT.fmt.money(T.net),
+          tone: T.net >= 0 ? 'pos' : 'neg' },
+      ],
+      columns: [
+        { label: 'Date', type: 'date', width: 13, value: l => l.date },
+        { label: 'Type', type: 'text', width: 12, value: l => l.kind },
+        { label: 'Detail', type: 'wrap', width: 46, value: l => l.what },
+        { label: 'Amount', type: 'money', width: 15, total: 'sum',
+          value: l => l.amount,
+          get:   l => l.amount >= 0
+                   ? '<span class="pos">' + fmtPKR(l.amount) + '</span>'
+                   : '<span class="neg">-' + fmtPKR(Math.abs(l.amount)) + '</span>' },
+      ],
+      rows: lines,
+      grand: { label: 'Available fund', value: fmtPKR(T.net) },
+      empty: 'No money moved in this period.',
+    });
+  }
+
+  if (type === 'students') {
+    const idx = _buildRoomStudentIndex();
+    /* The roster for the PERIOD in this document's own header — anyone living
+       here in it, or who paid for it. The PDF used to skip this scoping while
+       the CSV applied it, so one report exported twice named two rosters. */
+    let roster = studentsByRoom(DB.students.filter(t =>
+      keys.some(k => _studentInPeriod(t, k)) ||
+      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
+    if (studentReportFilter !== 'All') roster = roster.filter(t => t.status === studentReportFilter);
+
+    return Object.assign(def, {
+      sheet: 'Students',
+      filters: def.filters.concat([
+        ['Status', studentReportFilter !== 'All' ? studentReportFilter : null]]),
+      summary: [
+        { label: 'Students', value: String(roster.length) },
+        { label: 'Active',   value: String(roster.filter(t => t.status === 'Active').length), tone: 'pos' },
+        { label: 'Charged / month',
+          value: EXPORT.fmt.money(roster.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0)) },
+      ],
+      columns: [
+        { label: 'Room', type: 'id', width: 9,
+          value: t => { const r = idx.roomById.get(t.roomId); return r ? String(r.number) : ''; },
+          get:   t => { const r = idx.roomById.get(t.roomId);
+                        return r ? '<b>#' + escHtml(String(r.number)) + '</b>' : '—'; } },
+        { label: 'Student', type: 'text', width: 22, value: t => t.name || '',
+          get: t => '<b>' + escHtml(t.name || '—') + '</b>' },
+        { label: 'Father / Guardian', type: 'text', width: 22, value: t => t.fatherName || '' },
+        { label: 'Phone', type: 'text', width: 16, value: t => String(t.phone || '') },
+        { label: 'CNIC',  type: 'text', width: 18, pdf: false, value: t => String(t.cnic || '') },
+        { label: 'Joined', type: 'date', width: 13, value: t => t.joinDate || '' },
+        /* resolveCharges, not `t.rent`: the whole monthly charge is rent AND
+           mess, and every one of these reports quoted the rent half alone. */
+        { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+          value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; } },
+        { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
+      ],
+      rows: roster,
+      empty: 'Nobody was on the roster in this period.',
+    });
+  }
+
+  if (type === 'rooms') {
+    const idx = _buildRoomStudentIndex();
+    return Object.assign(def, {
+      sheet: 'Rooms',
+      summary: [
+        { label: 'Rooms', value: String(DB.rooms.length) },
+        { label: 'Occupied', value: String(DB.rooms.filter(r => idx.occ(r) > 0).length), tone: 'pos' },
+        { label: 'Beds', value: DB.students.filter(isResident).length + ' / ' +
+            DB.rooms.reduce((s, r) => s + ((getRoomType(r) || {}).capacity || 0), 0) },
+      ],
+      columns: [
+        { label: 'Room', type: 'id', width: 10, value: r => String(r.number),
+          get: r => '<b>#' + escHtml(String(r.number)) + '</b>' },
+        { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
+        { label: 'Type',  type: 'text', width: 16, value: r => (getRoomType(r) || {}).name || '' },
+        { label: 'Capacity', type: 'number', width: 10, pdf: false,
+          value: r => (getRoomType(r) || {}).capacity || 0 },
+        { label: 'Occupied', type: 'number', width: 10, value: r => getRoomOccupancy(r) },
+        { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
+        { label: 'Rent / mo', type: 'money', width: 14,
+          value: r => Number(r.rent != null && r.rent !== ''
+                       ? r.rent : ((getRoomType(r) || {}).defaultRent || 0)) || null },
+        { label: 'Status', type: 'status', width: 12,
+          value: r => getRoomOccupancy(r) > 0 ? 'Occupied' : 'Vacant' },
+        { label: 'Students', type: 'wrap', width: 34,
+          value: r => (idx.activeStudentsByRoom.get(r.id) || []).map(t => t.name).join(', ') },
+      ],
+      rows: roomsByNumber(DB.rooms),
+      empty: 'No rooms are recorded.',
+    });
+  }
+
+  return Object.assign(def, { columns: [], rows: [], empty: 'Nothing to export.' });
 }
 
-function printReport() {
-  // Same window as the screen, Custom Range included.
-  const keys=_rptKeys();
-  const mo=_rptExportLabel();
-  // Transfers are inside expTotal — Available Fund is revenue minus it, with no
-  // second deduction.
-  const { pays, exps, rev, pending, totalExp:expTotal } = _rptTotals(keys);
-  const _occIdx=_buildRoomStudentIndex();
-  const occ=DB.rooms.filter(r=>_occIdx.occ(r)>0).length;
-  const _rptHtml = `<!DOCTYPE html><html><head><title>${_rptExportWord()} Report — ${escHtml(DB.settings.hostelName)}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;padding:32px;font-size:13px}
-    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #7c3aed;margin-bottom:24px}
-    .title{font-size:22px;font-weight:800;color:#1a1a2e}
-    .subtitle{font-size:12px;color:#666;margin-top:3px}
-    .badge{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;background:#7c3aed22;color:#6d28d9;border:1px solid #7c3aed55}
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
-    .kpi label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
-    .kpi .val{font-size:20px;font-weight:900;color:#1e293b}
-    .section{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px}
-    .section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th{background:#f1f5f9;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:8px 12px;border-bottom:1px solid #f8fafc}
-    .green{color:#16a34a;font-weight:700}
-    .red{color:#dc2626;font-weight:700}
-    .gold{color:#5b21b6;font-weight:700}
-    .part{color:#b45309;font-weight:700}
-    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}
-    @media print{body{padding:16px}}
-  </style></head><body>
-  <div class="header">
-    <div><div class="title">${escHtml(DB.settings.hostelName)}</div><div class="subtitle">${_rptExportWord()} Report · ${escHtml(DB.settings.location||'')} · Generated ${new Date().toLocaleDateString()}</div></div>
-    <div class="badge">${_rptExportWord()} Report</div>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi"><label>Revenue</label><div class="val green">${fmtPKR(rev)}</div></div>
-    <div class="kpi"><label>Expenses</label><div class="val red">${fmtPKR(expTotal)}</div></div>
-    <div class="kpi"><label>Available Fund</label><div class="val" style="color:${rev-expTotal>=0?'#16a34a':'#dc2626'}">${fmtPKR(rev-expTotal)}</div></div>
-    <div class="kpi"><label>Pending</label><div class="val gold">${fmtPKR(pending)}</div></div>
-    <div class="kpi"><label>Rooms Occupied</label><div class="val">${occ}/${DB.rooms.length}</div></div>
-    <div class="kpi"><label>Active Students</label><div class="val">${DB.students.filter(t=>t.status==='Active').length}</div></div>
-    <div class="kpi"><label>Total Payments</label><div class="val">${pays.filter(p=>p.status==='Paid').length}</div></div>
-  </div>
-  <div class="section">
-    <h3>💳 Payment Transactions</h3>
-    ${''/* Collected AND Still Owed, because a table that prints only what was
-         taken cannot be reconciled against the Pending figure in the KPI row
-         directly above it -- the owner was reading a payments report with no
-         payable in it. */}
-    <table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Collected</th><th>Still Owed</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-    ${pays.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>`<tr><td>${escHtml(p.studentName||'—')}</td><td class="gold">#${escHtml(p.roomNumber||'—')}</td><td>${p.month||'—'}</td><td class="${p.status==='Paid'?'green':'red'}">${fmtPKR(p.amount)}</td><td class="${outstandingOf(p)>0?'red':''}">${outstandingOf(p)>0?fmtPKR(outstandingOf(p)):'—'}</td><td>${escHtml(p.method||'—')}</td><td class="${payStatusOf(p)==='Paid'?'green':payStatusOf(p)==='Partial'?'part':'red'}">${payStatusOf(p)}</td><td>${fmtDate(p.date)||'—'}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:12px">No transactions</td></tr>'}
-    </tbody></table>
-  </div>
-  <div class="section">
-    <h3>📉 Expense Breakdown by Category</h3>
-    ${_rptCatTablesHTML(exps)}
-  </div>
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${escHtml(DB.settings.hostelName)} Management System · Confidential</div>
-  </body></html>`;
-  _electronPDF(_rptHtml, (DB.settings.hostelName||'Report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Report_'+mo+'.pdf', {pageSize:'A4'});
+function downloadReportDetailPDF(detailId) { EXPORT.pdf(_rptDetailDef(detailId)); }
+function downloadDetailPDF(type)           { EXPORT.pdf(_rptDetailDef(type)); }
+function downloadDetailCSV(type)           { EXPORT.excel(_rptDetailDef(type)); }
+function downloadDetailExcel(type)         { EXPORT.excel(_rptDetailDef(type)); }
+
+/* ── THE PERIOD REPORT ───────────────────────────────────────────────────────
+   §40: a report is not a list export. It keeps the analytical hierarchy of the
+   screen — summary, then financial, then students, then rooms — rather than
+   flattening into one long table. The sections are the ones the Reports page
+   itself shows, in the order it shows them.                                 */
+function _rptOverviewDef() {
+  const keys = _rptKeys();
+  const T    = _rptTotals(keys);
+  const idx  = _buildRoomStudentIndex();
+  const occ  = DB.rooms.filter(r => idx.occ(r) > 0).length;
+  const paid = T.pays.filter(p => p.status === 'Paid');
+
+  const roster = studentsByRoom(DB.students.filter(t =>
+    keys.some(k => _studentInPeriod(t, k)) ||
+    DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
+
+  return {
+    module: 'Report',
+    title:  _rptExportWord() + ' Report',
+    scope:  _rptPeriodWords(),
+    orientation: 'landscape',
+    sheetPerSection: true,
+    filters: [['Period', _rptPeriodWords()]],
+
+    summary: [
+      { label: 'Revenue',        value: EXPORT.fmt.money(T.rev), tone: 'pos' },
+      { label: 'Expenses',       value: EXPORT.fmt.money(T.totalExp), tone: 'neg' },
+      { label: 'Available fund', value: EXPORT.fmt.money(T.net), tone: T.net >= 0 ? 'pos' : 'neg' },
+      { label: 'Outstanding',    value: EXPORT.fmt.money(T.pending), tone: T.pending > 0 ? 'neg' : '' },
+      { label: 'Payments',       value: String(paid.length) },
+      { label: 'Rooms occupied', value: occ + ' / ' + DB.rooms.length },
+      { label: 'Residents',      value: String(DB.students.filter(isResident).length) },
+    ],
+
+    sections: [
+      {
+        title: 'Payments',
+        meta: T.pays.length + ' record' + (T.pays.length === 1 ? '' : 's'),
+        columns: _rptPayColumns(),
+        rows: T.pays.slice().sort((a, b) => new Date(b.date) - new Date(a.date)),
+        grand: { label: 'Collected in this period', value: fmtPKR(T.rev) },
+        empty: 'No payment records in this period.',
+      },
+      {
+        title: 'Expenses by category',
+        meta: _rptByCategory(T.exps).length + ' categor' +
+              (_rptByCategory(T.exps).length === 1 ? 'y' : 'ies'),
+        groupLabel: 'Category',
+        columns: _rptExpenseColumns(),
+        groups: _rptExpenseGroups(T.exps),
+        grand: { label: 'Total outgoing', value: fmtPKR(T.totalExp) },
+        empty: 'Nothing was spent in this period.',
+      },
+      {
+        title: 'Students',
+        meta: roster.length + ' on the roster',
+        columns: [
+          { label: 'Room', type: 'id', width: 9,
+            value: t => { const r = idx.roomById.get(t.roomId); return r ? String(r.number) : ''; },
+            get:   t => { const r = idx.roomById.get(t.roomId);
+                          return r ? '<b>#' + escHtml(String(r.number)) + '</b>' : '—'; } },
+          { label: 'Student', type: 'text', width: 24, value: t => t.name || '' },
+          { label: 'Phone',   type: 'text', width: 16, value: t => String(t.phone || '') },
+          { label: 'Joined',  type: 'date', width: 13, value: t => t.joinDate || '' },
+          { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+            value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; } },
+          { label: 'Status',  type: 'status', width: 12, value: t => t.status || 'Active' },
+        ],
+        rows: roster,
+        empty: 'Nobody was on the roster in this period.',
+      },
+      {
+        title: 'Room occupancy',
+        meta: occ + ' of ' + DB.rooms.length + ' rooms occupied',
+        columns: [
+          { label: 'Room', type: 'id', width: 10, value: r => String(r.number),
+            get: r => '<b>#' + escHtml(String(r.number)) + '</b>' },
+          { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
+          { label: 'Type',  type: 'text', width: 16, value: r => (getRoomType(r) || {}).name || '' },
+          { label: 'Occupied', type: 'number', width: 10, value: r => getRoomOccupancy(r) },
+          { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
+          { label: 'Status', type: 'status', width: 12,
+            value: r => getRoomOccupancy(r) > 0 ? 'Occupied' : 'Vacant' },
+          { label: 'Students', type: 'wrap', width: 34,
+            value: r => (idx.activeStudentsByRoom.get(r.id) || []).map(t => t.name).join(', ') },
+        ],
+        rows: roomsByNumber(DB.rooms),
+        empty: 'No rooms are recorded.',
+      },
+    ],
+
+    empty: 'No records in this period.',
+  };
 }
+
+function printReport()       { EXPORT.pdf(_rptOverviewDef()); }
+function exportReportExcel() { EXPORT.excel(_rptOverviewDef()); }
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODAL SYSTEM
 // ════════════════════════════════════════════════════════════════════════════
 
-function downloadDetailCSV(type) {
-  // Same window as the screen and the PDFs, Custom Range included.
-  const keys = _rptKeys();
-  const key  = _rptExportLabel();
-  const _inPeriodPays = DB.payments.filter(p=>keys.some(k=>_payMatchesMonth(p,k)));
-  let rows = [], filename = '';
-  if (type === 'financial') {
-    filename = 'Revenue_'+key+'.csv';
-    rows.push(['Student','Room','Month','Amount Paid','Method','Date']);
-    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.date||'—']);
-    });
-  } else if (type === 'pending') {
-    // Period-scoped, and the period is now in the filename — this exported
-    // every unpaid record ever under a name that claimed nothing about when.
-    filename = 'Pending_Payments_'+key+'.csv';
-    rows.push(['Student','Room','Month','Partial Paid','Outstanding','Method','Date']);
-    _inPeriodPays.filter(p=>p.status==='Pending').forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',
-        Number(p.amount||0), outstandingOf(p),
-        p.method||'—', p.date||'—']);
-    });
-  } else if (type === 'expenses') {
-    // Grouped by category with a subtotal after each one and a grand total at
-    // the end, matching the register on screen. A flat dump of rows made the
-    // owner rebuild those subtotals in a spreadsheet by hand.
-    // _rptOutgoings carries the transfers too, under the Fund Transfer
-    // category, so this file totals the same as the Expenses figure on screen.
-    filename = 'Expenses_by_Category_'+key+'.csv';
-    rows.push(['Category','Date','Description','Amount']);
-    const _groups = _rptByCategory(_rptOutgoings(keys));
-    _groups.forEach(g => {
-      g.items.forEach(e => rows.push([g.cat, e.date||'—', e.description||'—', e.amount]));
-      rows.push(['', '', 'Total — '+g.cat, g.total]);
-      rows.push(['', '', '', '']);
-    });
-    rows.push(['', '', 'GRAND TOTAL', _rptGroupsTotal(_groups)]);
-  } else if (type === 'students') {
-    filename = 'Students_'+(studentReportFilter==='All'?'All':studentReportFilter)+'.csv';
-    rows.push(['Name','Father Name','Room','Phone','CNIC','Join Date','Rent','Status']);
-    // Same period scoping as the on-screen table, so the export and the table
-    // can never report different rosters for the same period.
-    const _sKeys = _rptKeys();
-    const _inPeriod = DB.students.filter(t => _sKeys.some(k => _studentInPeriod(t, k)));
-    const list = studentReportFilter==='All' ? _inPeriod : _inPeriod.filter(t=>t.status===studentReportFilter);
-    const _idx=_buildRoomStudentIndex();
-    list.forEach(t=>{
-      const r = _idx.roomById.get(t.roomId);
-      rows.push([t.name||'—',t.fatherName||'—',r?'#'+r.number:'—',t.phone||'—',t.cnic||'—',t.joinDate||'—',t.rent,t.status||'—']);
-    });
-  } else if (type === 'rooms') {
-    filename = 'Rooms_Occupancy.csv';
-    rows.push(['Room','Floor','Type','Capacity','Occupied','Rent','Status','Students']);
-    const _idx=_buildRoomStudentIndex();
-    DB.rooms.forEach(r=>{
-      const t=getRoomType(r); const _sts=_idx.activeStudentsByRoom.get(r.id)||[]; const oc=_sts.length;
-      const names=_sts.map(s=>s.name).join('; ');
-      rows.push(['#'+r.number,r.floor||'—',t.name||'—',t.capacity,oc,r.rent,oc>0?'Occupied':'Vacant',names||'—']);
-    });
-  } else if (type === 'payments') {
-    filename = 'PaymentMethods_'+key+'.csv';
-    rows.push(['Student','Room','Month','Amount Paid','Method','Status','Date']);
-    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
-      rows.push([p.studentName||'—','#'+(p.roomNumber||'—'),p.month||'—',p.amount,p.method||'—',p.status,p.date||'—']);
-    });
-  } else if (type === 'netprofit') {
-    filename = 'AvailableFund_'+key+'.csv';
-    rows.push(['Date','Type','Description','Amount']);
-    _inPeriodPays.filter(p=>p.status==='Paid').forEach(p=>{
-      rows.push([p.date||'—','Income',p.studentName+' · '+p.month,p.amount]);
-    });
-    _rptOutgoings(keys).forEach(e=>{
-      rows.push([e.date||'—','Expense',e.category+': '+e.description,'-'+e.amount]);
-    });
-  }
-  if (!rows.length) { toast('No data to export','error'); return; }
-  const csv = rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1500); // FIX 18: revoke blob URL to free memory
-  toast('Downloaded: '+filename,'success');
-}
 // calPopoverOpen declared in dashboard.js (shared)
 // ════════════════════════════════════════════════════════════════════════════
 // ANNUAL ARCHIVE — record classifier

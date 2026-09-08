@@ -193,8 +193,83 @@ function repairPaymentComposition() {
   return fixed;
 }
 
+/* "Sep 2026" from the same input monthLabel() takes, and by the same rules —
+   it delegates, then shortens, so a stored "2026-09" and a legacy "September
+   2026" label both come out the same shape. No second month table. */
+function payMonthShort(m) {
+  const full = monthLabel(m) || '';
+  const bits = full.split(' ');
+  if (bits.length !== 2) return full;
+  return bits[0].slice(0, 3) + ' ' + bits[1];
+}
+
 function payStatusHue(s) {
   return s === 'Paid' ? 'dh-green' : s === 'Partial' ? 'dh-amber' : 'dh-slate';
+}
+
+/* A GLYPH FOR EVERY STATUS, NOT JUST FOR PAID.
+
+   The pill drew a tick on Paid and nothing on Partial or Pending, so those two
+   were separated by hue alone — amber against slate. That is the one thing the
+   dark-mode brief §6 and the badge sheet both rule out ("do not communicate
+   meaning through colour alone"), and it is not an abstract concern here: the
+   two hues are a warning amber and a neutral grey at 9.5px, which is a
+   distinction that survives neither a red-green deficiency nor a cheap panel at
+   a hostel counter.
+
+   Shapes, not decoration: a full tick for settled, a half-filled circle for
+   part-paid, an open clock for nothing-yet, a warning for past due. The shape
+   says the same thing as the colour, so either one alone is enough. */
+function payStatusIcon(s) {
+  const o = 'width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+          + 'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"';
+  if (s === 'Paid')    return `<svg ${o}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
+  if (s === 'Partial') return `<svg ${o}><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20Z" fill="currentColor" stroke="none"/></svg>`;
+  if (s === 'Overdue') return `<svg ${o}><circle cx="12" cy="12" r="10"/><path d="M12 7v6"/><path d="M12 16.5v.5"/></svg>`;
+  return `<svg ${o}><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/></svg>`;   // Pending
+}
+
+/* ── TABLE MONEY — compact digits, exact figure on hover ─────────────────────
+   This table is SCANNED, not reconciled: a warden runs down the Unpaid column
+   looking for who owes, and "PKR 476.5K" answers that faster than
+   "PKR 476,500". The precise number is never lost — it is in the title here, on
+   the receipt, in the edit form, and in the CSV, which stays exact on purpose
+   (payments spec §33: UI "PKR 476.5K", CSV "476500").
+
+   It also buys the width the page actually needed. Twelve columns did not fit
+   at the 1366 QA floor while every money cell spelled out its thousands
+   separators, and Adm. Fee, Extra Charges and Concession were the three that
+   fell off the right edge — the three the spec says must never be hidden.
+
+   fmtPKRk() already implements the spec's thresholds exactly (§7: PKR 8K,
+   PKR 476.5K, PKR 1.24M), so this adds the tooltip and nothing else. Both
+   halves come from the one formatter, so there is never a second "PKR". */
+function payMoney(n) {
+  const compact = fmtPKRk(n), exact = fmtPKR(n);
+  return compact === exact ? compact : `<span title="${exact}">${compact}</span>`;
+}
+
+/* The split behind a Charge/Mo figure, for its tooltip.
+
+   NOT chargesBreakdown(). That helper reads resolveCharges()'s shape — it opens
+   on `if (!c.configured)` and goes on to read `rentSource` and `messOptIn`,
+   none of which paymentCharges() returns. Handing it a paymentCharges() object
+   does not throw; it just takes the first branch every time, so the tooltip
+   read "No rent configured — set it in Settings" on every row of a table full
+   of correctly configured rents. Silent, and invisible to any spec that does
+   not assert tooltip text.
+
+   The two are not interchangeable and should not be made so: resolveCharges()
+   answers "what does this STUDENT pay now", paymentCharges() answers "what did
+   THIS RECORD bill" — which is the right question for a row that may be months
+   old and predate a price change. So the sentence is built from the record's
+   own numbers here, and says exactly what the sub-line it replaced said. */
+function payChargeTitle(c) {
+  const rent = Number(c.rent || 0), mess = Number(c.mess || 0);
+  if (!rent && !mess) return 'No charge recorded on this payment';
+  if (c.messIncluded && mess > 0) return fmtPKR(rent) + ' rent + ' + fmtPKR(mess) + ' mess';
+  if (c.hasMess)                  return fmtPKR(rent) + ' rent · mess not charged this month';
+  return fmtPKR(rent) + ' rent';
 }
 
 // Stable avatar hue from the name, so a student keeps the same colour between
@@ -368,7 +443,24 @@ function renderPayments() {
     const a = sum(prev); if(!a) return null;
     return ((sum(cur)-a)/a)*100;
   })();
+  const _mPrevLabel = (()=>{
+    const d = new Date(), pd = new Date(d.getFullYear(), d.getMonth()-1, 1);
+    return pd.toLocaleString('en-IN', { month:'long', year:'numeric' });
+  })();
 
+  /* KPI FIGURES ARE COMPACT, AND THE EXACT ONE IS NEVER MORE THAN A GLANCE
+     AWAY. utils.js argues the opposite for the DASHBOARD's KPI row — that
+     rounding PKR 476,700 to "477K" throws away the figure a warden reconciles
+     against a cash drawer — and that reasoning is right there and wrong here,
+     for one reason: this page prints the exact total in the meta line directly
+     under the toolbar ("Total collected: PKR 84,000"), so the precise number is
+     already on screen. The card is the headline; the line under it is the
+     receipt. Both money KPIs also carry the exact figure in their title.
+
+     The payments spec asks for this explicitly and by example (§4 "PKR 476.5K",
+     §6 "PKR 1.24M", §7's whole table), so fmtCompactK is the formatter that
+     matches its thresholds — fmtCompact stays exact below ten million and would
+     print neither. */
   const upArrow   = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>';
   const downArrow = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7 17 17"/><path d="M17 9v8H9"/></svg>';
 
@@ -391,10 +483,21 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></div>
         <div class="pay-stat__label">Total Collected</div>
       </div>
-      <div class="pay-stat__val"><span class="cur">PKR</span>${fmtNum(total)}</div>
+      <div class="pay-stat__val" title="PKR ${fmtNum(total)}"><span class="cur">PKR</span>${fmtCompactK(total)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">${payFilter.month!=='All'?escHtml(payFilter.month):(payFilter.showAll?'All months':escHtml(moLabel))}</span>
-        ${_mDelta!==null?`<span class="pay-stat__delta ${_mDelta>=0?'dh-green':'dh-red'}">${_mDelta>=0?upArrow:downArrow}${Math.abs(_mDelta).toFixed(1)}%</span>`:''}
+        ${/* A PERCENTAGE AGAINST A NEAR-EMPTY MONTH IS NOISE, NOT A READING.
+             _mDelta only refuses to divide by an exactly-zero previous month, so
+             a month that took PKR 8,000 against this month's 76,000 printed
+             "850.0%" — true, and useless. Payments spec §6 rules this out by
+             name ("never display nonsensical values such as +15790211.2%"), and
+             the dashboard printed exactly that before its trend was capped.
+
+             Past ten-fold the ratio stops being a percentage anyone reads and
+             becomes a shape, so it is said as one. The exact figures are both on
+             this screen already — this month in the card above, last month one
+             click away in the month filter. */''}
+        ${_mDelta!==null?`<span class="pay-stat__delta ${_mDelta>=0?'dh-green':'dh-red'}" title="vs ${escHtml(_mPrevLabel)}">${_mDelta>=0?upArrow:downArrow}${Math.abs(_mDelta)>=1000?'>10×':Math.abs(_mDelta).toFixed(1)+'%'}</span>`:''}
       </div>
     </div>
 
@@ -404,8 +507,13 @@ function renderPayments() {
         <div class="pay-stat__label">Paid</div>
       </div>
       <div class="pay-stat__val">${nPaid}</div>
+      ${/* The share as a BAR as well as a figure, per the reference. Two counts
+           that must add to the whole are the one case where a bar earns its
+           height: "16" and "33" are only comparable after you have done the
+           arithmetic, and the two bars do it for you at a glance. */''}
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">Records</span>
+        <span class="pay-stat__track"><i style="width:${share(nPaid)}%"></i></span>
         <span class="pay-stat__delta">${share(nPaid)}%</span>
       </div>
     </div>
@@ -418,6 +526,7 @@ function renderPayments() {
       <div class="pay-stat__val">${nPending}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">Records</span>
+        <span class="pay-stat__track"><i style="width:${share(nPending)}%"></i></span>
         <span class="pay-stat__delta">${share(nPending)}%</span>
       </div>
     </div>
@@ -437,7 +546,7 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/></svg></div>
         <div class="pay-stat__label">Unpaid Amount</div>
       </div>
-      <div class="pay-stat__val"><span class="cur">PKR</span>${fmtNum(outstanding)}</div>
+      <div class="pay-stat__val" title="PKR ${fmtNum(outstanding)}"><span class="cur">PKR</span>${fmtCompactK(outstanding)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">Total outstanding</span>
         ${nArrears>0?`<span class="pay-stat__delta dh-red" title="${nArrears} unpaid record${nArrears>1?'s':''} carried over from earlier months">incl. ${fmtPKR(arrearsAmt)} arrears</span>`:''}
@@ -450,8 +559,9 @@ function renderPayments() {
     <div class="pay-tools">
       <div class="pay-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-payments" placeholder="Search student name, room…" value="${escHtml(payFilter.search)}"
+        <input id="search-payments" class="lk-sin" placeholder="Search student name, room…" value="${escHtml(payFilter.search)}"
           oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments()">
+        ${lkSearchX('search-payments','payFilter','payments')}
       </div>
 
       <select class="pay-select${payFilter.room!=='All'?' is-set':''}" onchange="payFilter.room=this.value;payFilter.page=1;renderPage('payments')" title="Filter by room">
@@ -464,10 +574,13 @@ function renderPayments() {
         ${monthOpts.map(m=>`<option value="${escHtml(m)}" ${payFilter.month===m?'selected':''}>${escHtml(m)}</option>`).join('')}
       </select>
 
-      <select class="pay-select${payFilter.method!=='All'?' is-set':''}" onchange="payFilter.method=this.value;payFilter.page=1;renderPage('payments')" title="Filter by payment method">
-        <option value="All">All Methods</option>${pmOpts}
-      </select>
-
+      ${''/* THE METHOD DROPDOWN IS GONE (owner, 2026-09-09). It was the fifth
+             control on a bar that has to fit one line, and the method is on
+             every row already — a warden looking for "the cash ones" reads the
+             column. `payFilter.method` survives in the filter object and in
+             studentsFiltered's test, because the command palette still sets it
+             ("show me JazzCash") and a saved value must keep working; what has
+             gone is the control that crowded the heading. */}
       <select class="pay-select${payFilter.status!=='All'?' is-set':''}" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')" title="Filter by status">
         ${['All','Paid','Partial','Pending'].map(s=>`<option value="${s}" ${payFilter.status===s?'selected':''}>${s==='All'?'All Status':s}</option>`).join('')}
       </select>
@@ -494,29 +607,37 @@ function renderPayments() {
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- ══ META ROW ══ -->
-    <div class="pay-meta">
-      <span class="pay-meta__txt">${pays.length} record${pays.length===1?'':'s'} &nbsp;·&nbsp; Total collected: <b>${fmtPKR(total)}</b></span>
-      <div class="pay-meta__acts">
-        <button class="pay-btn" onclick="exportPaymentsCSV()" title="Export the current list to CSV">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-          CSV
-        </button>
-        <button class="pay-btn" onclick="exportPaymentsPDF()" title="Print the current list">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-          PDF
-        </button>
+      ${''/* Pushed to the right of the same strip by .pay-tools__end. The two
+             verbs are SHORT (owner, 2026-09-09: "reduce its searchbar so that
+             all the option align in one heading" — the search was only half the
+             problem; "Auto-Generate Month" and "WhatsApp Reminders" together ran
+             ~345px and pushed the strip onto a second line at the 1366 floor).
+             Each button keeps its full sentence on the title, and the WhatsApp
+             mark beside "Reminders" says which channel it is. */}
+      <div class="pay-tools__end">
+        ${tbExport({ id:'pay-export', cls:'pay-btn',
+                     excel:'exportPaymentsExcel()', pdf:'exportPaymentsPDF()' })}
         <button class="pay-btn pay-btn--hue dh-blue" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-          Auto-Generate Month
+          Generate Month
         </button>
         <button class="pay-btn pay-btn--hue dh-green" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
-          WhatsApp Reminders
+          Reminders
         </button>
       </div>
+    </div>
+
+    ${''/* THE COUNT LINE, ON ITS OWN. The four action buttons that shared this
+           row have moved up into the filter row above, which is where the
+           reference draws them — one control strip, then one sentence about
+           what the strip is currently showing. The strip wraps to two lines
+           below ~1500px rather than being split in the markup, so the layout
+           degrades by itself instead of by a second structure. */}
+    <!-- ══ COUNT LINE ══ -->
+    <div class="pay-meta">
+      <span class="pay-meta__txt">${pays.length} record${pays.length===1?'':'s'} &nbsp;·&nbsp; Total collected: <b>${fmtPKR(total)}</b></span>
     </div>
 
     ${paySelected.size>0?`
@@ -542,11 +663,17 @@ function renderPayments() {
           ${th('unpaid','Unpaid')}
           ${th('method','Method')}
           ${th('status','Status')}
-          <!-- Secondary money columns sit after Status: they are usually "—", and
-               keeping them left of it pushed the columns that matter off-screen.
-               They are hidden until the sidebar is collapsed — see payments.css. -->
+          <!-- Secondary money columns sit after Status: they are usually "—", so
+               they sit right of the figures a warden actually scans down.
+               They are ALWAYS VISIBLE. This comment used to claim they were
+               "hidden until the sidebar is collapsed — see payments.css"; no such
+               rule was ever written, .pay-col-x styles nothing anywhere in the
+               app, and the columns were simply overflowing off the right edge
+               into the horizontal pan. Hiding them is forbidden outright
+               (payments spec §23, §46) — an absent Adm. Fee column and an empty
+               one mean different things to whoever is reading the row. -->
           <th class="pay-col-x">Adm. Fee</th>
-          <th class="pay-col-x">Extra Chrgs</th>
+          <th class="pay-col-x">Extra Charges</th>
           <th class="pay-col-x">Concession</th>
           <th class="pay-col-act">Actions</th>
         </tr></thead>
@@ -588,35 +715,65 @@ function renderPayments() {
               ${rtype?`<div class="pay-room__t">${escHtml(rtype.name)}</div>`:''}
               ${room&&room.floor?`<div class="pay-room__t">${escHtml(room.floor)} Floor</div>`:''}
             </td>
-            <td>
-              ${escHtml(p.month||'—')}
+            ${/* BOTH SPELLINGS, ONE SHOWN. "September 2026" is what the
+                 reference prints and it is the right label when there is room;
+                 at 1366 it is the single widest cell in the row after the
+                 student, and the table was overflowing by 94px. A media query
+                 swaps to "Sep 2026" under 1400px — the month is still named and
+                 the year is still there, which is more than truncation would
+                 leave. Rendering both and hiding one keeps the decision in CSS,
+                 where the width is actually known. */''}
+            <td class="pay-mo">
+              <span class="pay-mo__full">${escHtml(monthLabel(p.month)||'—')}</span>
+              <span class="pay-mo__abbr">${escHtml(payMonthShort(p.month)||'—')}</span>
               ${arrear?'<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>':''}
             </td>
-            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));return `<td class="pay-money">${fmtPKR(_c.monthly||p.amount)}${_c.messIncluded?`<span class="pay-charge__sub">${fmtPKR(_c.rent)} rent + ${fmtPKR(_c.mess)} mess</span>`:_c.hasMess?`<span class="pay-charge__sub">rent only · mess off</span>`:''}</td>`;})()}
-            <td class="pay-money pay-money--in">${fmtPKR(p.amount)}</td>
-            <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${fmtPKR(unpaid)}</td>
+            ${/* CHARGE/MO — the figure, then what it covers, as a badge.
+                 It read "PKR 10,000 rent + PKR 7,000 mess": the widest thing in
+                 the row, restating two numbers whose total is printed directly
+                 above them. chargeCoverage() is the app's existing answer to the
+                 same question — Students has drawn this badge since 2026-08 — so
+                 this is a shared component arriving here, not one invented for
+                 the mockup.
+
+                 It carries FOUR states where the spec named two. A hostel that
+                 serves no food has never set a mess charge, which is a different
+                 fact from a student taken off mess, and a flat "RENT ONLY" would
+                 assert the wrong one. The breakdown moves into the title, where
+                 it costs no width. */''}
+            ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
+                    const _cov=chargeCoverage(_c);
+                    return `<td class="pay-money"><span title="${escHtml(payChargeTitle(_c))}">${payMoney(_c.monthly||p.amount)}</span>`
+                         + `<span class="pay-cov ${_cov.hue}">${escHtml(_cov.label)}</span></td>`;})()}
+            <td class="pay-money pay-money--in">${payMoney(p.amount)}</td>
+            <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${payMoney(unpaid)}</td>
             <td>${pmBadge(p.method)}</td>
             <td>
               <span class="pay-pill ${sHue}">
-                ${sLabel==='Paid'?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>':''}
+                ${payStatusIcon(sLabel)}
                 ${sLabel}
               </span>
-              ${payIsOverdue(p)?'<div style="font-size:10px;font-weight:700;color:var(--red);margin-top:3px">Overdue</div>':''}
+              ${/* Overdue is a second, independent fact — a Partial record can be
+                   overdue and a Pending one usually is — so it stays its own
+                   mark rather than replacing the status. It gains the glyph and
+                   the pill shape the badge sheet gives it; as bare red text it
+                   was the only status on the row saying its meaning in colour
+                   alone. */''}
+              ${payIsOverdue(p)?`<span class="pay-pill pay-pill--od">${payStatusIcon('Overdue')}Overdue</span>`:''}
             </td>
-            <td class="pay-col-x">${admFee>0?`<span class="pay-money">${fmtPKR(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
-            <td class="pay-col-x">${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${fmtPKR(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
-            <td class="pay-col-x">${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${fmtPKR(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${admFee>0?`<span class="pay-money">${payMoney(admFee)}</span>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${extras.length?`<div class="pay-extra">${extras.map(c=>`${c.label?escHtml(c.label)+':':''}<b>${payMoney(c.amount)}</b>`).join('')}</div>`:'<span class="pay-dash">—</span>'}</td>
+            <td class="pay-col-x">${conc>0?`<div class="pay-extra">${concD?escHtml(concD)+':':''}<b>−${payMoney(conc)}</b></div>`:'<span class="pay-dash">—</span>'}</td>
+            ${''/* FOUR COLOURED GLYPHS BECAME ONE LABELLED BUTTON (owner,
+                   2026-09-09: "make the labelled 3dot action button for the
+                   payment page actions"). The strip asked a warden to know
+                   what a glyph meant, painted four hues in a row so none of
+                   them signalled anything, and put Delete one pixel from
+                   Reverse — the two actions on this page you least want
+                   confused. The menu names each one, and Delete is separated
+                   and red at the bottom. Shared with Students: lkRowMenu(). */}
             <td class="pay-col-act">
-              <div class="pay-acts">
-                <button class="pay-act dh-blue"  onclick="event.stopPropagation();showEditPaymentModal('${p.id}')" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-                <button class="pay-act dh-green" onclick="event.stopPropagation();printReceipt('${p.id}')" title="Receipt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
-                ${''/* Reverse is offered only where there is something to
-                     reverse. On a record that collected nothing the button
-                     would be a dead control on every untouched row of a freshly
-                     generated month — which is most of the table on the 1st. */}
-                ${money(p.amount) > 0 ? `<button class="pay-act dh-amber" onclick="event.stopPropagation();showReversePaymentModal('${p.id}')" title="Reverse a collection"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>` : ''}
-                <button class="pay-act dh-red"   onclick="event.stopPropagation();deletePayment('${p.id}')" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-              </div>
+              ${lkKebab("event.stopPropagation();payRowMenu('" + p.id + "',this)", 'Actions for this payment')}
             </td>
           </tr>`;
         }).join('')}
@@ -644,21 +801,25 @@ function payPager(pg) {
   for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
   if (hi < pages) nums += (hi<pages-1?'<span class="pay-pager__gap">…</span>':'') + btn(String(pages), pages);
 
+  /* THE REFERENCE'S ORDER: the sentence on the left, the pager on the right,
+     the page size last as a single "30 / page" control. It was "Show [30]
+     entries" on the left, the sentence in the middle and the pager on the
+     right — three things competing for the middle of a wide bar, with the one
+     sentence a reader actually wants buried between two controls. */
   return `<div class="pay-foot">
-    <div class="pay-foot__size">
-      Show
-      <select onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')">
-        ${[10,30,50,100].map(n=>`<option value="${n}" ${payFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
-      </select>
-      entries
-    </div>
-    <div class="pay-foot__info">${pg.total?`Showing ${pg.from} to ${pg.to} of ${pg.total} entries`:'No entries'}</div>
+    <div class="pay-foot__info">${pg.total?`Showing ${pg.from}\u2013${pg.to} of ${pg.total} record${pg.total===1?'':'s'}`:'No records'}</div>
     <div class="pay-pager">
       ${btn('«',1,{disabled:page<=1})}
       ${btn('‹',page-1,{disabled:page<=1})}
       ${nums}
       ${btn('›',page+1,{disabled:page>=pages})}
       ${btn('»',pages,{disabled:page>=pages})}
+    </div>
+    <div class="pay-foot__size">
+      <select onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')"
+              title="Rows per page" aria-label="Rows per page">
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${payFilter.pageSize===n?'selected':''}>${n} / page</option>`).join('')}
+      </select>
     </div>
   </div>`;
 }
@@ -729,102 +890,167 @@ async function payBulkMarkPaid() {
     });
 }
 
-function payBulkExport() {
-  const ids = [...paySelected];
-  const rows = [['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
-  payFiltered().filter(p => ids.includes(p.id)).forEach(p => {
-    const admFee = Number(p.admissionFee||p.fee||0);
-    const extras = (p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
-    const conc   = Number(p.concession||p.discount||0);
-    // The rent and the mess as their own columns, and the monthly CHARGE as a
-    // third — a sheet that quoted rent alone could not be reconciled against
-    // what the student actually paid. See paymentCharges() in utils.js.
-    const _c = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',
-      _c.rent||0, _c.messIncluded?_c.mess:0, _c.monthly||0,
-      p.amount||0, outstandingOf(p), p.method||'', payStatusOf(p),
-      admFee||'', extras||'', conc||'', p.date||'']);
-  });
-  downloadCSV(rows, 'Payments_Selected.csv');
-}
+/* ══ THE PAYMENTS EXPORT ═══════════════════════════════════════════════════
+   One definition, two files (§60). The PDF is the document an owner files or
+   sends on; the workbook is the one an accountant filters and adds up. Both
+   are rendered by the global export engine from THIS object, so they cannot
+   describe different records, different totals or a different month.
 
+   `payFiltered()` again — the table, the PDF and the workbook read the same
+   list in the same order, which is room ascending by default because a warden
+   reads a payment sheet while walking the building.
 
-/* Export the payments on screen as a PDF.
-
-   payFiltered() again — the table, the CSV and this document cannot disagree
-   about which records are in scope or what order they are in.
-
-   The money columns are the point of this sheet, so it prints the monthly
-   charge with its rent/mess split underneath (paymentCharges), what was
-   collected, and what is still owed. `Collected` here is the sum of what these
-   rows actually took, which is deliberately NOT calcRevenue(): this document
-   describes a filtered set of records, not a month's books. */
-function exportPaymentsPDF() {
-  const list = payFiltered();
-  if (!list.length) { toast('No payments to export', 'error'); return; }
-
+   The money is split across columns rather than summarised into one: the
+   monthly CHARGE (rent + mess, from paymentCharges — never `monthlyRent`
+   alone, which cannot be reconciled against what was actually paid), what was
+   collected, and what is still owed. Admission fees, extras and concessions
+   are carried by the workbook, where somebody may need to reconcile them, and
+   folded into the printed page's Paid column, where twelve money columns would
+   force the type down to something nobody can read (§14).                    */
+function _payExportDef(list, opts) {
+  opts = opts || {};
   const stuById   = new Map((DB.students || []).map(s => [s.id, s]));
+  const charges   = p => paymentCharges(p, stuById.get(p.studentId));
+  const extrasOf  = p => (p.extraCharges || []).filter(c => Number(c.amount) > 0);
+  const extrasSum = p => extrasOf(p).reduce((n, c) => n + Number(c.amount || 0), 0);
+
   const collected = list.reduce((s, p) => s + Number(p.amount || 0), 0);
   const owing     = list.reduce((s, p) => s + outstandingOf(p), 0);
   const settled   = list.filter(p => payStatusOf(p) === 'Paid').length;
+  const billed    = collected + owing;
 
-  const scope = payFilter.month !== 'All' ? String(payFilter.month)
+  const scope = payFilter.month !== 'All' ? monthLabel(payFilter.month)
               : payFilter.showAll ? 'All months' : thisMonthLabel();
 
-  const html = printListDocument({
-    title: 'Payment Register',
-    subtitle: scope +
-      (payFilter.status !== 'All' ? ' · ' + payFilter.status : '') +
-      (payFilter.unpaidOnly ? ' · unpaid only' : ''),
-    kpis: [
-      { label: 'Records',   value: String(list.length) },
-      { label: 'Settled',   value: settled + ' of ' + list.length, cls: 'green' },
-      { label: 'Collected', value: fmtPKR(collected), cls: 'green' },
-      { label: 'Still owed', value: fmtPKR(owing), cls: owing > 0 ? 'red' : '' },
+  return {
+    module: 'Payments',
+    title:  opts.title || 'Payment Register',
+    scope:  opts.scope || scope,
+    sheet:  'Payments',
+
+    /* §16 — the scope is stated on the file, not left in the reader's head. A
+       register of nine rows is either a quiet month or a filtered view of a
+       busy one, and only the export can say which. */
+    filters: [
+      ['Month',     scope],
+      ['Status',    payFilter.status !== 'All' ? payFilter.status : null],
+      ['Room',      payFilter.room   !== 'All' ? '#' + payFilter.room : null],
+      ['Method',    payFilter.method !== 'All' ? payFilter.method : null],
+      ['Search',    payFilter.search || null],
+      ['Only',      payFilter.unpaidOnly ? 'Records with a balance' : null],
+      ['Selection', opts.selection || null],
     ],
+
+    /* §15 — the screen's own headline figures, counted from the rows in THIS
+       file. `collected` is what these records took; it is deliberately not
+       calcRevenue(), which answers a different question (a month's books). */
+    summary: [
+      { label: 'Payments',        value: String(list.length) },
+      { label: 'Settled',         value: settled + ' of ' + list.length, tone: 'pos' },
+      { label: 'Collected',       value: EXPORT.fmt.money(collected), tone: 'pos' },
+      { label: 'Outstanding',     value: EXPORT.fmt.money(owing), tone: owing > 0 ? 'neg' : '' },
+      { label: 'Collection rate', value: billed > 0 ? Math.round(collected / billed * 100) + '%' : '—' },
+    ],
+
     columns: [
-      { label: 'Room',    get: p => `<b>#${escHtml(String(p.roomNumber || ''))}</b>` },
-      { label: 'Student', get: p => `<b>${escHtml(p.studentName || '')}</b>` },
-      { label: 'Month',   get: p => escHtml(p.month || '—') },
-      { label: 'Charge / mo', align: 'right', get: p => {
-          const c = paymentCharges(p, stuById.get(p.studentId));
-          return `<b>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}</b><span class="sub">` +
-                 (c.messIncluded ? `${fmtPKR(c.rent)} rent + ${fmtPKR(c.mess)} mess`
-                  : c.hasMess ? 'rent only · mess off' : '') + '</span>'; } },
-      { label: 'Paid',    align: 'right', cls: 'green', get: p => {
-          const adm    = Number(p.admissionFee || p.fee || 0);
-          const extras = (p.extraCharges || []).filter(c => Number(c.amount) > 0);
-          return `<b>${fmtPKR(p.amount)}</b>` +
-            (adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : '') +
-            extras.map(c => `<span class="sub">+ ${fmtPKR(c.amount)} ${escHtml(c.description || c.desc || c.label || 'extra')}</span>`).join(''); } },
-      { label: 'Unpaid',  align: 'right', get: p => outstandingOf(p) > 0
-                            ? `<span class="red">${fmtPKR(outstandingOf(p))}</span>` : '—' },
-      { label: 'Method',  get: p => escHtml(p.method || '—') },
-      { label: 'Status',  get: p => escHtml(payStatusOf(p)) },
-      { label: 'Date',    get: p => fmtDate(p.date) },
+      { label: 'Room', type: 'id', width: 9,
+        value: p => String(p.roomNumber || ''),
+        get:   p => '<b>#' + escHtml(String(p.roomNumber || '')) + '</b>' },
+
+      { label: 'Student', type: 'text', width: 24,
+        value: p => p.studentName || '',
+        get:   p => '<b>' + escHtml(p.studentName || '') + '</b>',
+        sub:   p => { const st = stuById.get(p.studentId); return st && st.fatherName ? st.fatherName : ''; } },
+
+      { label: 'Month', type: 'text', width: 16, value: p => monthLabel(p.month) },
+
+      { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+        value: p => charges(p).monthly,
+        get:   p => { const c = charges(p);
+          return '<b>' + (c.monthly > 0 ? fmtPKR(c.monthly) : '—') + '</b>' +
+            (c.messIncluded ? '<span class="sub">' + fmtPKR(c.rent) + ' rent + ' + fmtPKR(c.mess) + ' mess</span>'
+             : c.hasMess ? '<span class="sub">rent only · mess off</span>' : ''); } },
+
+      /* The two halves of the charge, in the workbook only. The printed page
+         carries them as a sub-line under the charge; a spreadsheet needs them
+         as columns, because reconciling a payment against a rent rise means
+         subtracting the mess from it. */
+      /* Both are written even when they are zero, and that is deliberate: a
+         mess that is switched off billed ZERO, which is a fact, where a blank
+         cell means "not recorded". The two columns must always add up to the
+         charge beside them or the sheet cannot be reconciled. */
+      { label: 'Rent / mo', type: 'money', width: 13, total: 'sum', pdf: false,
+        value: p => Number(charges(p).rent || 0) },
+      { label: 'Mess / mo', type: 'money', width: 13, total: 'sum', pdf: false,
+        value: p => charges(p).messIncluded ? Number(charges(p).mess || 0) : 0 },
+
+      { label: 'Concession', type: 'money', width: 13, total: 'sum', pdf: false,
+        value: p => Number(p.concession || p.discount || 0) },
+
+      { label: 'Admission fee', type: 'money', width: 14, total: 'sum', pdf: false,
+        value: p => Number(p.admissionFee || p.fee || 0) },
+
+      { label: 'Extras', type: 'money', width: 12, total: 'sum', pdf: false,
+        value: p => extrasSum(p) },
+
+      { label: 'Extra charges', type: 'wrap', width: 28, pdf: false,
+        value: p => extrasOf(p).map(c =>
+          (c.description || c.desc || c.label || 'extra') + ' ' + Number(c.amount || 0)).join('; ') },
+
+      { label: 'Paid', type: 'money', width: 14, total: 'sum',
+        value: p => Number(p.amount || 0),
+        get:   p => { const adm = Number(p.admissionFee || p.fee || 0);
+          return '<span class="pos">' + fmtPKR(p.amount) + '</span>' +
+            (adm > 0 ? '<span class="sub">+ ' + fmtPKR(adm) + ' admission</span>' : '') +
+            extrasOf(p).map(c => '<span class="sub">+ ' + fmtPKR(c.amount) + ' ' +
+              escHtml(c.description || c.desc || c.label || 'extra') + '</span>').join(''); } },
+
+      { label: 'Unpaid', type: 'money', width: 14, total: 'sum',
+        value: p => outstandingOf(p),
+        get:   p => outstandingOf(p) > 0
+                 ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' : '—' },
+
+      { label: 'Method', type: 'text',   width: 13, value: p => p.method || '' },
+      { label: 'Status', type: 'status', width: 11, value: p => payStatusOf(p) },
+      { label: 'Date',   type: 'date',   width: 13, value: p => p.date || '' },
+
+      { label: 'Receipt', type: 'id', width: 14, pdf: false, value: p => String(p.id || '') },
     ],
-    groups: [{ rows: list }],
+
+    rows: list,
     grand: { label: 'Collected in this selection', value: fmtPKR(collected) },
-  });
-
-  _electronPDF(html, printFileName('Payments', scope), { pageSize: 'A4', landscape: true });
+    empty: 'No payment records match the selected filters.',
+  };
 }
 
-// Export the currently filtered + sorted payments to CSV. (Mirrors renderPayments' filter/sort.)
-function exportPaymentsCSV() {
-  const mo = thisMonth();
-  // Reuses payFiltered() — the export and the table can no longer drift apart,
-  // which they previously could since each kept its own copy of the filter.
-  const rows=[['Student','Room','Month','Rent/Mo','Mess/Mo','Charge/Mo','Amount Paid','Unpaid','Method','Status','Adm.Fee','Extra Charges','Concession','Date']];
-  payFiltered().forEach(p=>{
-    const _paf=Number(p.admissionFee||p.fee||0);
-    const _pex=(p.extraCharges||[]).filter(c=>Number(c.amount)>0).map(c=>(c.label?c.label+' ':'')+c.amount).join('; ');
-    const _pc=Number(p.concession||p.discount||0);
-    const _pch = paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
-    rows.push([p.studentName||'','#'+(p.roomNumber||''),p.month||'',_pch.rent||0,_pch.messIncluded?_pch.mess:0,_pch.monthly||0,p.amount||0,outstandingOf(p),p.method||'',payStatusOf(p),_paf||'',_pex||'',_pc||'',p.date||'']);
-  });
-  downloadCSV(rows, 'Payments_'+(payFilter.month!=='All'?String(payFilter.month).replace(/\s+/g,'_'):payFilter.showAll?'AllMonths':mo)+'.csv');
+/* The selection bar's export. A workbook, not a printed page: a warden ticking
+   rows is picking records to work on, not records to file. */
+function payBulkExport() {
+  const ids  = new Set([...paySelected]);
+  const list = payFiltered().filter(p => ids.has(p.id));
+  if (!list.length) { toast('Nothing selected to export', 'error'); return; }
+  EXPORT.excel(_payExportDef(list, {
+    selection: list.length + ' selected record' + (list.length === 1 ? '' : 's'),
+  }));
 }
+
+function exportPaymentsPDF() {
+  const list = payFiltered();
+  if (!list.length) { toast('No payments to export', 'error'); return; }
+  EXPORT.pdf(_payExportDef(list));
+}
+
+function exportPaymentsExcel() {
+  const list = payFiltered();
+  if (!list.length) { toast('No payments to export', 'error'); return; }
+  EXPORT.excel(_payExportDef(list));
+}
+
+/* Kept as the name older call sites still use. It no longer writes a CSV: a
+   CSV cannot carry the hostel, the period, the filters, a number format or a
+   print setup, which is most of what the export standard is about — and "the
+   spreadsheet one" is what the button always meant. */
+function exportPaymentsCSV() { exportPaymentsExcel(); }
 
 async function generateMonthlyRents() {
   // FIX: use thisMonthLabel() — locale-safe, matches how all payment records store month strings.
@@ -1619,6 +1845,56 @@ function recalcUnpaid() {
     concession: conc, total: total, paid: pa, unpaid: u
   });
   apUpdateSteps();
+  pefPaintSummary(total, pa, u);
+}
+
+/* ── THE EDIT FORM'S SUMMARY PANEL ───────────────────────────────────────────
+   Called from the end of recalcUnpaid() with the figures it has just worked
+   out, so there is exactly one place that decides what is owed on this form and
+   this only paints it. No-ops on every other screen, where the nodes are absent
+   — the Add Payment page has its own itemised summary (pfRenderSummary above).
+
+   The verdict line is not decoration. "Remaining PKR 0" is read two ways by a
+   tired warden at a counter: settled, or a form that has not calculated yet.
+   Four states, because over-payment is a real one here — the form deliberately
+   accepts up to twice the bill and records the excess as a refundable credit
+   (see the typo guard above), so it must be able to say so rather than showing
+   a bare zero. */
+function pefPaintSummary(total, paid, unpaid) {
+  const due = document.getElementById('pef-due');
+  if (!due) return;                                   // not the edit form
+  const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  set('pef-due',  fmtPKR(total));
+  set('pef-paid', fmtPKR(paid));
+  set('pef-rem',  fmtPKR(unpaid));
+
+  const remRow = document.getElementById('pef-rem-row');
+  if (remRow) remRow.className = 'pef-sum__row' + (unpaid > 0 ? ' is-due' : '');
+
+  const over = money(paid) - money(total);
+  let cls, title, sub;
+  if (total <= 0)          { cls = 'is-none'; title = 'No charge set';
+                             sub  = 'Enter a room rent to bill this month.'; }
+  else if (over > 0)       { cls = 'is-over'; title = 'Overpaid by ' + fmtPKR(over);
+                             sub  = 'Held as a credit and refundable at checkout.'; }
+  else if (unpaid <= 0)    { cls = 'is-paid'; title = 'Fully Paid';
+                             sub  = "This month's fee is complete."; }
+  else if (money(paid) > 0){ cls = 'is-part'; title = 'Partially Paid';
+                             sub  = fmtPKR(unpaid) + ' still to collect.'; }
+  else                     { cls = 'is-part'; title = 'Nothing Collected';
+                             sub  = fmtPKR(unpaid) + ' outstanding for this month.'; }
+
+  const v = document.getElementById('pef-verdict');
+  if (v) v.className = 'pef-verdict ' + cls;
+  set('pef-verdict-t', title);
+  set('pef-verdict-s', sub);
+}
+
+/* The notes field is capped at 250 (maxlength), so the count says how much room
+   is left rather than letting the field simply stop accepting keystrokes. */
+function pefNoteCount() {
+  const ta = document.getElementById('f-pnotes'), out = document.getElementById('f-pnotes-count');
+  if (ta && out) out.textContent = (ta.value || '').length + '/250';
 }
 
 function getExtraChargesTotal() {
@@ -1651,13 +1927,14 @@ function addExtraChargeRow(descOrLabel='', amount='') {
   const div = document.createElement('div');
   div.className = 'extra-charge-row';
   div.id = rowId;
-  div.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  // Layout moved to .extra-charge-row in payments.css — the row appears inside
+  // two different dialogs and an inline style cannot be responsive in either.
   // Description first, then the amount (owner reference). getExtraChargesData()
   // reads both by class, not by position, so the swap is presentation only.
   div.innerHTML = `
-    <input class="form-control extra-charge-desc-input" type="text" placeholder="Description (e.g. Cooler Fee)" value="${escHtml(descOrLabel)}" style="flex:1;min-width:0" oninput="recalcUnpaid()">
-    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount (PKR)" value="${amount}" min="0" style="width:110px;flex-shrink:0" oninput="recalcUnpaid()">
-    <button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcUnpaid()" title="Remove" style="flex-shrink:0">✕</button>
+    <input class="form-control extra-charge-desc-input" type="text" placeholder="Extra charge" value="${escHtml(descOrLabel)}" oninput="recalcUnpaid()">
+    <input class="form-control extra-charge-amt-input charge-amt" type="number" placeholder="Amount" value="${amount}" min="0" oninput="recalcUnpaid()">
+    <button type="button" class="rm-btn" onclick="document.getElementById('${rowId}').remove();recalcUnpaid()" title="Remove this charge" aria-label="Remove this charge">${icon('trash','sm')}</button>
   `;
   list.appendChild(div);
   recalcUnpaid();
@@ -1670,7 +1947,7 @@ function showAddPaymentForStudent(studentId) {
   if (!t) return;
   const c = resolveCharges(t);
   const room = c.room;
-  const pmOpts = DB.settings.paymentMethods.map(m => `<option ${m===t.paymentMethod?'selected':''}>${m}</option>`).join('');
+  const pmOpts = pmOptions(t.paymentMethod);
   showModal('modal-md', `💳 Add Payment — ${escHtml(t.name)}`, `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">${icon('student','sm')}</div>
@@ -1993,7 +2270,7 @@ function _apEnteredBy() {
 function renderAddPayment() {
   // Add Payment is a PAGE, so navigate() reaches it without the button.
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
-  const pmOpts = DB.settings.paymentMethods.map(m => `<option>${escHtml(m)}</option>`).join('');
+  const pmOpts = pmOptions();
   const dueDefault = (() => { const d = new Date(); d.setDate(6); return ymd(d); })();
 
   // Line 01's only control. A hostel that bills mess with the rent, or does not
@@ -2746,6 +3023,21 @@ function printAndSubmitPaymentForStudent() {
   window._printAfterSave = true;
   submitPaymentForStudent();
 }
+/* ══ EDIT PAYMENT ══════════════════════════════════════════════════════════
+   Relaid out 2026-09-07 to the owner's compact reference and the global
+   viewport specification. Measured before the change, on the 1366×768 QA
+   floor: the dialog opened 1120px wide and 722px tall — 94vh of a 768px
+   window — with the OVERLAY scrolling rather than the body, so a warden saw
+   section 1, half of section 2, and had to scroll the header off the screen to
+   reach Save. The form was never too long; the shell was given the whole
+   window and then allowed to spill.
+
+   What changed is the shell, the density and the grid. What did NOT change is
+   the arithmetic or a single field id: recalcUnpaid() and submitEditPayment()
+   find their inputs by id, so a rename here is silent data loss there. Every
+   `f-p*` id below is the one that was here before, and the four sections are
+   still in the order the money moves — 1 sets the bill, 2 adjusts it, 3
+   records the settlement, 4 explains anything unusual.                      */
 function showEditPaymentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
@@ -2755,9 +3047,7 @@ function showEditPaymentModal(id) {
   // The record's own method is always offered, even if it has since been
   // removed from Settings — otherwise editing anything else on an older payment
   // silently rewrote how the money came in.
-  const _pmList = DB.settings.paymentMethods.slice();
-  if (p.method && _pmList.indexOf(p.method) === -1) _pmList.unshift(p.method);
-  const pmOpts = _pmList.map(m=>`<option ${p.method===m?'selected':''}>${escHtml(m)}</option>`).join('');
+  const pmOpts = pmOptions(p.method);
   // BUG FIX: Use the student's CURRENT rent (t.rent) as the primary value.
   // p.monthlyRent is the rent at the time the payment was recorded and may be stale
   // if the warden has since updated fees in Settings. t.rent is always kept in sync.
@@ -2772,76 +3062,153 @@ function showEditPaymentModal(id) {
   const concession   = p.concession || p.discount || 0;
   const concessionDesc = p.concessionDesc || p.discountDesc || '';
   const unpaid = outstandingOf(p);
-  showModal('modal-lg', `✏️ Edit Payment — ${escHtml(p.studentName||'Student')}`, `
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <div style="width:38px;height:38px;border-radius:9px;background:var(--accent-dim);color:var(--accent-strong);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;flex-shrink:0">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:14px;color:var(--text)">${escHtml(p.studentName||'—')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">Room <span style="color:var(--accent-strong);font-weight:700">#${room?.number||'?'}</span>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>
+
+  /* A field wearing the reference's icon chip. `input` is the control's own
+     HTML so every id, handler and value stays exactly where it was; this only
+     wraps it. */
+  const F = (label, ico, input, opts) => {
+    const o = opts || {};
+    return `<div class="field">
+      <label${o.for ? ` for="${o.for}"` : ''}>${escHtml(label)}${o.req ? '<span class="req">*</span>' : ''}${o.opt ? '<span class="opt">(optional)</span>' : ''}</label>
+      <div class="hf-in${o.cls ? ' ' + o.cls : ''}"><span class="hf-in__i">${icon(ico, 'sm')}</span>${input}</div>
+      ${o.note ? `<div class="pef-note">${o.note}</div>` : ''}
+    </div>`;
+  };
+
+  const secHead = (n, title, hint) => `
+    <div class="pef-sec__n"><span class="hf-num">${n}</span>
+      <span class="pef-sec__t">${escHtml(title)}</span></div>
+    ${hint ? `<div class="pef-sec__hint">${escHtml(hint)}</div>` : ''}`;
+
+  showModal('modal-form', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon('edit', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">Edit Payment — ${escHtml(p.studentName||'Student')}</span>
+        <span class="hf-mh__s">Update payment details, charges and adjustments for this student.</span>
+      </span>
+    </div>`, `
+    <div class="pef-who">
+      <div class="pef-who__av">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>
+      <div class="pef-who__id">
+        <div class="pef-who__n">${escHtml(p.studentName||'—')}</div>
+        <div class="pef-who__m">Room <b>#${escHtml(String(room?.number ?? '?'))}</b>${rtype?` · ${escHtml(rtype.name)}`:''}${t?.phone?` · ${escHtml(t.phone)}`:''}</div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:13px;font-weight:900;color:var(--green)">${fmtPKR(monthlyRent + (messIncluded?messCharge:0))}</div>
-        <div style="font-size:9px;color:var(--text3)">Monthly Charge</div>
+      <div class="pef-who__amt">
+        <div class="pef-who__v">${fmtPKR(monthlyRent + (messIncluded?messCharge:0))}</div>
+        <div class="pef-who__l">Monthly charge</div>
       </div>
     </div>
-    <div class="form-grid">
-      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()"></div>
-      <!-- MESS — this modal used to omit it, so saving an edit recomputed the
-           total without the food charge while leaving p.messCharge on the
-           record: the balance and the printed receipt disagreed. -->
-      ${!hostelServesMess() ? '' : `
-      <div class="field"><label>Mess Charges (PKR)</label>
-        <input class="form-control" id="f-pmess" type="number" min="0" value="${messCharge||''}" placeholder="0" ${messIncluded?'':'disabled'} oninput="recalcUnpaid()">
-        ${!messIsOptional() ? `<div class="mess-fixed">Included for every student</div>` : `
-        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer">
-          <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
-          <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
-        </label>`}
-      </div>`}
-      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()"></div>
-      <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-padmfee" type="number" placeholder="0" min="0" value="${admissionFee||0}" oninput="recalcUnpaid()"></div>
-      <!-- Concession + Extra Charges side by side -->
-      <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
-        <!-- LEFT: Concession PKR + Description stacked -->
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div>
-            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession / Discount (PKR)</label>
-            <input class="form-control" id="f-pconcession" type="number" placeholder="0" min="0" value="${concession||0}" oninput="recalcUnpaid()">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession Description <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label>
-            <input class="form-control" id="f-pconcession-desc" placeholder="e.g. Scholarship, Hardship…" value="${escHtml(concessionDesc)}">
-          </div>
+
+    <div class="pef-top">
+      <div class="pef-sec">
+        ${secHead(1, 'Monthly charge (PKR)', 'Set the standard charges for this student.')}
+        <div class="hf-g3">
+          ${F('Room rent (PKR)', 'home',
+             `<input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()">`,
+             { req: true, for: 'f-pamt' })}
+          ${/* MESS — this modal used to omit it, so saving an edit recomputed the
+                total without the food charge while leaving p.messCharge on the
+                record: the balance and the printed receipt disagreed. */''}
+          ${!hostelServesMess() ? '' :
+            F('Mess charges (PKR)', 'utensils',
+              `<input class="form-control" id="f-pmess" type="number" min="0" value="${messCharge||''}" placeholder="0" ${messIncluded?'':'disabled'} oninput="recalcUnpaid()">`,
+              { for: 'f-pmess',
+                note: !messIsOptional()
+                  ? 'Included for every student'
+                  : `<label class="pef-messtoggle">
+                       <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
+                       <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
+                     </label>` })}
+          ${F('Amount paid (PKR)', 'wallet',
+             `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()">`,
+             { req: true, for: 'f-ppaid' })}
         </div>
-        <!-- RIGHT: Extra Charges panel -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
-          <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">
-            <span>➕ Extra Charges</span>
-            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 9px" onclick="addExtraChargeRow()">+ Add</button>
-          </label>
+      </div>
+
+      ${/* THE SUM, WHERE THE TYPING IS. recalcUnpaid() has computed all three of
+           these on every keystroke for months; the only place they surfaced was
+           the readonly "Unpaid / Remaining" box, which sits in section 3 —
+           BELOW the fields that change it. Nothing here is a new calculation.
+           It is the existing one, moved to where it can be read while the
+           number is still being entered. */''}
+      <div class="pef-sum">
+        <div class="pef-sum__hd">${icon('fileText','sm')} Payment summary</div>
+        <div class="pef-sum__row"><span>Total due</span><b id="pef-due">-</b></div>
+        <div class="pef-sum__row is-paid"><span>Total paid</span><b id="pef-paid">-</b></div>
+        <div class="pef-sum__row" id="pef-rem-row"><span>Remaining</span><b id="pef-rem">-</b></div>
+        <div class="pef-verdict is-none" id="pef-verdict">
+          <span><span class="pef-verdict__t" id="pef-verdict-t">-</span><span class="pef-verdict__s" id="pef-verdict-s"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pef-sec">
+      ${secHead(2, 'Adjustments (PKR)', 'Additional fees or concessions for this month.')}
+      <div class="pef-adj">
+        <div class="pef-adj__l">
+          ${F('Admission fee (PKR)', 'graduation',
+             `<input class="form-control" id="f-padmfee" type="number" placeholder="0" min="0" value="${admissionFee||0}" oninput="recalcUnpaid()">`,
+             { for: 'f-padmfee' })}
+          ${F('Concession / discount (PKR)', 'tag',
+             `<input class="form-control" id="f-pconcession" type="number" placeholder="0" min="0" value="${concession||0}" oninput="recalcUnpaid()">`,
+             { for: 'f-pconcession' })}
+          ${F('Concession description', 'list',
+             `<input class="form-control" id="f-pconcession-desc" placeholder="e.g. Scholarship, hardship…" value="${escHtml(concessionDesc)}">`,
+             { for: 'f-pconcession-desc', opt: true })}
+        </div>
+        <div class="pef-extra">
+          <div class="pef-extra__hd">
+            <span>${icon('plus','sm')} Extra charges</span>
+            <button type="button" class="pef-extra__add" onclick="addExtraChargeRow()">+ Add</button>
+          </div>
           <div id="extra-charges-list"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:12px">
-            <span style="color:var(--text3)">Total Extra:</span>
-            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">PKR ${Number(p.extraTotal||0).toLocaleString('en-PK')}</span>
+          <div class="pef-extra__tot">
+            <span>Total extra</span>
+            <span id="extra-charges-total">PKR ${Number(p.extraTotal||0).toLocaleString('en-PK')}</span>
           </div>
         </div>
       </div>
-      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-punpaid" type="number" value="${unpaid||0}" readonly style="color:${unpaid>0?'var(--red)':'var(--green)'};font-weight:700;background:var(--bg3)"></div>
-      <div class="field"><label>Status</label>
-        <select class="form-control" id="f-pstat">
-          <option value="Paid" ${unpaid===0&&monthlyRent>0?'selected':''}>✓ Paid</option>
-          <option value="Pending" ${unpaid>0||!monthlyRent?'selected':''}>⏳ Unpaid / Pending</option>
-        </select>
+    </div>
+
+    <div class="pef-sec">
+      ${secHead(3, 'Payment details', 'Record how and when the payment was made.')}
+      ${/* Two rows of three, which is the reference's grid and the one that
+            fits: remaining/status/method is the settlement, month/paid/due is
+            when. Six fields in a two-column grid ran the section 90px taller
+            than the modal had to spare. */''}
+      <div class="hf-g3">
+        ${F('Unpaid / remaining (PKR)', 'clock',
+           `<input class="form-control" id="f-punpaid" type="number" value="${unpaid||0}" readonly>`,
+           { for: 'f-punpaid', cls: 'is-readonly' + (unpaid > 0 ? ' is-warn' : ' is-good') })}
+        ${F('Status', 'bookmark', `<select class="form-control" id="f-pstat">
+             <option value="Paid" ${unpaid===0&&monthlyRent>0?'selected':''}>Paid</option>
+             <option value="Pending" ${unpaid>0||!monthlyRent?'selected':''}>Unpaid / Pending</option>
+           </select>`, { for: 'f-pstat' })}
+        ${F('Payment method', 'card', `<select class="form-control" id="f-pmethod">${pmOpts}</select>`,
+           { for: 'f-pmethod' })}
+        ${F('Month', 'calendar', `<select class="form-control" id="f-pmonth">${payMonthPickerOptions(p.month || '', p.studentId || '')}</select>`,
+           { for: 'f-pmonth' })}
+        ${F('Payment date', 'calendar',
+           `<input class="form-control cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${escHtml(p.date||'')}">`,
+           { for: 'f-pdate' })}
+        ${F('Due date', 'calendar',
+           `<input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" placeholder="Select due date" value="${escHtml(p.dueDate||'')}">`,
+           { for: 'f-pdue' })}
       </div>
-      <div class="field"><label>Payment Method</label><select class="form-control" id="f-pmethod">${pmOpts}</select></div>
-      <div class="field"><label>Month</label><select class="form-control" id="f-pmonth">${payMonthPickerOptions(p.month || '', p.studentId || '')}</select></div>
-      <div class="field"><label>Payment Date</label><input class="form-control cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${p.date||''}"></div>
-      <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${p.dueDate||''}"></div>
-      <div class="field col-full"><label>Notes</label><textarea class="form-control" id="f-pnotes" rows="2">${escHtml(p.notes||'')}</textarea></div>
+    </div>
+
+    <div class="pef-sec">
+      ${secHead(4, 'Notes', '')}
+      <div class="hf-in hf-in--top">
+        <span class="hf-in__i">${icon('fileText','sm')}</span>
+        <textarea class="form-control" id="f-pnotes" rows="2" maxlength="250" placeholder="Anything worth remembering about this payment…" oninput="pefNoteCount()">${escHtml(p.notes||'')}</textarea>
+      </div>
+      <div class="pef-notes-count" id="f-pnotes-count"></div>
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-danger btn-sm" onclick="deletePayment('${id}')">🗑 Delete</button>
-   <button class="btn btn-primary" onclick="submitEditPayment('${id}')">💾 Save Changes</button>`);
+   <button class="btn btn-danger btn-sm" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete</button>
+   <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Save Changes</button>`);
   setTimeout(function() {
     const ecl = document.getElementById('extra-charges-list');
     if(ecl && p.extraCharges && p.extraCharges.length) {
@@ -2849,6 +3216,7 @@ function showEditPaymentModal(id) {
       p.extraCharges.forEach(c => addExtraChargeRow(c.description||c.desc||c.label||'', c.amount));
     }
     recalcUnpaid();
+    pefNoteCount();
   }, 50);
 }
 async function submitEditPayment(id) {
@@ -3040,6 +3408,12 @@ async function submitReversePayment(id) {
 // EXPENSES
 // ════════════════════════════════════════════════════════════════════════════
 let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSize:30, sortKey:'date', sortDir:'desc'};
+/* `month:''` means "all months" here, and that IS the default — Expenses
+   opens on the whole register rather than on this month. */
+registerFilter('expenses', expFilter, () => ({
+  cat:'All', search:'', showAll:false, month:'', page:1,
+  sortKey:'date', sortDir:'desc',
+}));
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAYMENTS TABLE — DRAG TO PAN
@@ -3103,3 +3477,27 @@ let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSiz
     e.preventDefault();
   }, true);
 })();
+
+/* The payment row's actions, in words. Reverse appears only where there is
+   something to reverse — on a record that collected nothing it would be a dead
+   item on every untouched row of a freshly generated month. */
+function payRowMenu(id, btn) {
+  const p = (DB.payments || []).find(function (x) { return String(x.id) === String(id); });
+  if (!p) return;
+  const S = {
+    edit:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+    reverse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>',
+    del:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  };
+  const items = [
+    { label: 'Edit payment',  svg: S.edit,    on: "showEditPaymentModal('" + id + "')" },
+    { label: 'Print receipt', svg: S.receipt, on: "printReceipt('" + id + "')" },
+  ];
+  if (money(p.amount) > 0) {
+    items.push({ label: 'Reverse a collection', svg: S.reverse, on: "showReversePaymentModal('" + id + "')" });
+  }
+  items.push('sep');
+  items.push({ label: 'Delete payment', svg: S.del, danger: true, on: "deletePayment('" + id + "')" });
+  lkRowMenu(btn, items);
+}

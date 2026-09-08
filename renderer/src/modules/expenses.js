@@ -121,11 +121,10 @@ function expensesScoped() {
 /* Just the rows — what the table and the PDF export both iterate. */
 function expensesFiltered() { return expensesScoped().rows; }
 
-/* Export the expenses on screen as a PDF.
-
-   Owner's requirement: print ONE category when one is selected, or every
-   category combined when none is. Those are genuinely two documents and this
-   builds both from the same rows:
+/* ══ THE EXPENSES EXPORT ═══════════════════════════════════════════════════
+   Owner's requirement, unchanged by the move to the global engine: print ONE
+   category when one is selected, or every category when none is. Those are
+   genuinely two documents and both are built from the same rows —
 
      · a category selected → one table, that category's records, its total
      · All Categories      → a table PER category, each with its own subtotal,
@@ -136,17 +135,21 @@ function expensesFiltered() { return expensesScoped().rows; }
    warden checking last month's spending wants to know what went on electricity
    as a figure, not to add fourteen scattered rows up by hand.
 
-   The rows are expensesFiltered(), so the month, the search box and the sort on
-   screen all carry into the document. */
-function exportExpensesPDF() {
-  const rows = expensesFiltered();
-  if (!rows.length) { toast('No expenses to export', 'error'); return; }
+   The WORKBOOK inverts that deliberately (§61): grouping headings inside a
+   data table break sorting and filtering, so the engine flattens the groups
+   into a real Category column there. Same rows, same totals, two shapes,
+   each right for what it is opened in.
 
+   §35 lists a payment method, a vendor and a "paid by" for expenses. This app
+   records none of them — an expense is {date, category, description, amount} —
+   and inventing the columns would put empty headings on an owner's document.
+   They belong to the expense FORM before they belong to its export.        */
+function _expExportDef(rows) {
   const one   = expFilter.cat !== 'All';
   const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
   const scope = expFilter.showAll ? 'All months'
               : (expFilter.month || thisMonth()) === thisMonth() ? thisMonthLabel()
-              : expFilter.month;
+              : monthLabel(expFilter.month);
 
   // Group, then order by spend — biggest first, because that is the order the
   // question "where did the money go" is actually asked in.
@@ -158,13 +161,22 @@ function exportExpensesPDF() {
   });
   const catTotal = list => list.reduce((s, e) => s + Number(e.amount || 0), 0);
   const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
+  const largest  = rows.reduce((m, e) => Math.max(m, Number(e.amount || 0)), 0);
 
   const columns = [
-    { label: 'Date',        get: e => fmtDate(e.date) },
-    { label: 'Category',    get: e => escHtml(e.category || 'Uncategorised') },
-    { label: 'Description', get: e => escHtml(e.description || '—') +
-                                     (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
-    { label: 'Amount', align: 'right', get: e => `<b>${fmtPKR(e.amount)}</b>` },
+    { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
+    { label: 'Category', type: 'text', width: 18, excel: false,
+      value: e => e.category || 'Uncategorised' },
+    { label: 'Description', type: 'wrap', width: 40,
+      value: e => e.description || '',
+      get:   e => escHtml(e.description || '—') +
+                  (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Type', type: 'text', width: 14, pdf: false,
+      value: e => e._transfer ? 'Funds transfer' : 'Expense' },
+    { label: 'Amount', type: 'money', width: 15, total: 'sum',
+      value: e => Number(e.amount || 0),
+      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+    { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
   ];
 
   const groups = one
@@ -172,27 +184,88 @@ function exportExpensesPDF() {
     : ordered.map(([cat, list]) => ({
         label: cat,
         meta: list.length + ' record' + (list.length === 1 ? '' : 's') +
-              ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend',
+              (total > 0 ? ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend' : ''),
         rows: list,
         total: { label: cat + ' total', value: fmtPKR(catTotal(list)) },
       }));
 
-  const html = printListDocument({
-    title: one ? 'Expenses — ' + expFilter.cat : 'Expense Register',
-    subtitle: scope + (one ? '' : ' · ' + ordered.length + ' categor' + (ordered.length === 1 ? 'y' : 'ies')),
-    kpis: one
+  return {
+    module: 'Expenses',
+    title:  one ? 'Expenses — ' + expFilter.cat : 'Expense Register',
+    /* §32 — the scope in the FILENAME as well as on the page. A file holding
+       only the electricity records, named for the month alone, is the one that
+       gets forwarded as though it were the month's whole spend. */
+    scope:  one ? expFilter.cat + ' ' + scope : scope,
+    sheet:  'Expenses',
+    groupLabel: 'Category',
+
+    filters: [
+      ['Month',    scope],
+      ['Category', one ? expFilter.cat : 'All categories'],
+      ['Search',   expFilter.search || null],
+    ],
+
+    summary: one
       ? [{ label: 'Records', value: String(rows.length) },
-         { label: expFilter.cat, value: fmtPKR(total), cls: 'red' }]
-      : [{ label: 'Records',    value: String(rows.length) },
-         { label: 'Categories', value: String(ordered.length) },
-         { label: 'Largest',    value: ordered.length ? escHtml(ordered[0][0]) : '—' },
-         { label: 'Total spent', value: fmtPKR(total), cls: 'red' }],
+         { label: expFilter.cat, value: EXPORT.fmt.money(total), tone: 'neg' },
+         { label: 'Largest', value: EXPORT.fmt.money(largest) }]
+      : [{ label: 'Transactions', value: String(rows.length) },
+         { label: 'Categories',   value: String(ordered.length) },
+         { label: 'Largest category', value: ordered.length ? ordered[0][0] : '—' },
+         { label: 'Largest expense',  value: EXPORT.fmt.money(largest) },
+         { label: 'Total spent',      value: EXPORT.fmt.money(total), tone: 'neg' }],
+
     columns,
     groups,
-    grand: { label: one ? expFilter.cat + ' — total' : 'Total across all categories', value: fmtPKR(total) },
-  });
+    grand: { label: one ? expFilter.cat + ' — total' : 'Total across all categories',
+             value: fmtPKR(total) },
+    empty: 'No expenses match the selected filters.',
+  };
+}
 
-  _electronPDF(html, printFileName('Expenses', one ? expFilter.cat : scope), { pageSize: 'A4' });
+function exportExpensesPDF() {
+  const rows = expensesFiltered();
+  if (!rows.length) { toast('No expenses to export', 'error'); return; }
+  EXPORT.pdf(_expExportDef(rows));
+}
+
+function exportExpensesExcel() {
+  const rows = expensesFiltered();
+  if (!rows.length) { toast('No expenses to export', 'error'); return; }
+  EXPORT.excel(_expExportDef(rows));
+}
+
+/* Compact money for this register, with the exact figure on hover — the same
+   treatment and the same formatter as the Payments table, so the two finance
+   screens do not round differently. Expenses spec §8 gives the thresholds by
+   example (PKR 8K / PKR 41.5K / PKR 1.25M) and they are fmtPKRk()'s already;
+   §8 also requires the exact value to survive in tooltips and both exports,
+   which is why this is display-only and the CSV/PDF paths are untouched. */
+function expMoney(n) {
+  const compact = fmtPKRk(n), exact = fmtPKR(n);
+  return compact === exact ? compact : `<span title="${exact}">${compact}</span>`;
+}
+
+/* Period-over-period movement for the headline card (spec §6.1, §7).
+
+   Returns null rather than a number when there is nothing honest to compare
+   against — an 'All months' scope has no previous period, and a first month has
+   no predecessor. §7 is explicit that the card then says "No comparison"
+   instead of a fabricated percentage, which is the same trap the dashboard hit
+   when it printed "+157902725.6%" against a near-zero base. A previous period
+   of zero is that case, so it is treated as no comparison too. */
+function expPrevDelta(scope) {
+  if (!scope || scope === 'All') return null;
+  const y = Number(scope.slice(0, 4)), m = Number(scope.slice(5, 7));
+  if (!y || !m) return null;
+  const d = new Date(y, m - 2, 1);
+  const prev = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const sum = key => DB.expenses.concat(DB.transfers || [])
+    .filter(e => String(e.date || '').slice(0, 7) === key)
+    .reduce((t, e) => t + Number(e.amount || 0), 0);
+  const before = sum(prev);
+  if (!before) return null;
+  return { pct: ((sum(scope) - before) / before) * 100, prev: fmtMonthLabel(prev) };
 }
 
 function renderExpenses() {
@@ -239,12 +312,35 @@ function renderExpenses() {
                    : scope === mo    ? 'This Month'
                    : fmtMonthLabel(scope);
 
-  const stat = (hue, icon, label, value, sub, series) => `
+  /* §6.1 wants the movement against the previous comparable period on the
+     headline card. It is a span rather than a second stat line because §7 asks
+     for "a simple indicator", and because the card already carries a sparkline
+     of the same series — two large trend graphics on one card is what §7's
+     warning about decoration reducing readability is about. */
+  const _d = expPrevDelta(scope);
+  const _expTrend = _d === null
+    ? `<span class="exp-stat__trend is-none" title="No previous period to compare against">No comparison</span>`
+    : `<span class="exp-stat__trend ${_d.pct >= 0 ? 'is-up' : 'is-down'}" title="vs ${escHtml(_d.prev)}">`
+      + `${_d.pct >= 0 ? '\u2197' : '\u2198'} `
+      /* Past ten-fold, a ratio stops being a percentage anyone reads and becomes
+         a shape, so it is said as one. A month that spent PKR 8,000 followed by
+         one that spent 76,000 is "850.0%" \u2014 true and useless, and the exact kind
+         of figure the expenses spec \u00a77 and payments spec \u00a76 both rule out. */
+      + `${Math.abs(_d.pct) >= 1000 ? '>10\u00d7' : Math.abs(_d.pct).toFixed(1) + '%'}</span>`;
+
+  /* `trend` is a SIBLING of the value, never inside it. Putting it in the value
+     element made .exp-stat__v read "PKR 16.7K \u2197 83.3%" — one node holding two
+     different numbers, which is wrong for a screen reader and broke a spec that
+     reads the headline figure to check it equals the sum of the rows. */
+  const stat = (hue, icon, label, value, sub, series, trend) => `
     <div class="exp-stat ${hue}">
       <span class="exp-stat__ic">${icon}</span>
       <div class="exp-stat__c">
         <div class="exp-stat__l">${label}</div>
-        <div class="exp-stat__v">${value}</div>
+        <div class="exp-stat__vrow">
+          <div class="exp-stat__v">${value}</div>
+          ${trend || ''}
+        </div>
         <div class="exp-stat__s">${sub}</div>
       </div>
       ${expSpark(series)}
@@ -253,11 +349,12 @@ function renderExpenses() {
   const stats = `
   <div class="exp-stats">
     ${stat('dh-violet','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
-          'Total Expenses', fmtPKR(scopedTotal),
+          'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">${expMoney(scopedTotal)}</span>`,
           scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
-          daySeries)}
+          daySeries, _expTrend)}
     ${stat('dh-blue','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
-          'Average Daily', fmtPKR(avgDaily), 'Avg per day', daySeries)}
+          'Average Daily', expMoney(avgDaily),
+          `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`, daySeries)}
     ${stat('dh-green','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
           'Total Records', String(scoped.length), scopeLabel, cntSeries)}
     ${stat('dh-amber','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
@@ -288,8 +385,9 @@ function renderExpenses() {
   <div class="exp-tools">
     <div class="exp-search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search-expenses" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
+      <input id="search-expenses" class="lk-sin" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
              oninput="capFirstChar(this);expFilter.search=this.value;expFilter.page=1;_dExpenses()">
+      ${lkSearchX('search-expenses','expFilter','expenses')}
     </div>
     <select class="exp-select${expFilter.cat!=='All'?' is-set':''}" onchange="expFilter.cat=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by category">
       <option value="All">All Categories</option>${catOpts}
@@ -308,11 +406,8 @@ function renderExpenses() {
         ${monthOpts}
       </select>
     </div>
-    <button class="exp-catadd" onclick="exportExpensesPDF()"
-            title="${expFilter.cat==='All'?'Print every category, each with its own total':'Print the '+expFilter.cat+' records'}">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-      ${expFilter.cat==='All'?'Export PDF':'Export '+expFilter.cat}
-    </button>
+    ${tbExport({ id:'exp-export', cls:'exp-catadd',
+                 excel:'exportExpensesExcel()', pdf:'exportExpensesPDF()' })}
     <div class="exp-count">${_pg.total} record${_pg.total!==1?'s':''} &middot; <b>${fmtPKR(total)}</b></div>
   </div>`;
 
@@ -328,7 +423,7 @@ function renderExpenses() {
         </span>
       </td>
       <td class="exp-desc">${e.description ? escHtml(e.description) : '<span class="exp-dash">—</span>'}</td>
-      <td class="exp-amt">${fmtPKR(e.amount)}</td>
+      <td class="exp-amt">${expMoney(e.amount)}</td>
       <td>
         <div class="exp-acts">
           <button class="exp-act dh-blue" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>

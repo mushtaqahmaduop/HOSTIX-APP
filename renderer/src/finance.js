@@ -494,3 +494,117 @@ function calculateReportTotals(payments, opts) {
   t.safe = Object.keys(t).every(k => k === 'count' || moneyIsSafe(t[k]));
   return t;
 }
+
+/* ── THE MID-MONTH REFUND RULE ────────────────────────────────────────────────
+   Four modes, because hostels differ and the owner named two of them:
+
+     none  — nothing is given back. The month is charged in full however early
+             the student leaves. This is the DEFAULT and it is what every
+             existing install has been doing, so nobody's figures move until
+             somebody chooses otherwise.
+     mess  — the food is refunded for the days not eaten; the bed is not. This
+             is the common one: the room was held and could not be re-let, the
+             mess was not cooked.
+     both  — bed and food are both refunded for the unused days.
+     full  — the whole month is returned, but only when they leave on or before
+             the cut-off day.
+
+   PRO-RATA IS BY DAY OF THE VACATE MONTH, and the divisor is that month's real
+   length — 28, 30 or 31. A fixed 30 would quietly overpay every February and
+   underpay every 31-day month, and a hostel that checks the arithmetic once
+   will not trust the screen again.
+
+   THE DAY THEY LEAVE IS A DAY THEY STAYED. A student vacating on the 12th of a
+   30-day month used 12 days and has 18 unused, not 19: they slept there on the
+   12th. */
+const REFUND_MODES = ['none', 'mess', 'both', 'full'];
+
+function refundPolicy() {
+  const s = (typeof DB !== 'undefined' && DB.settings) || {};
+  const p = s.refundPolicy || {};
+  const mode = REFUND_MODES.indexOf(p.mode) !== -1 ? p.mode : 'none';
+  /* A cut-off of 0 or absent means "no cut-off" for the pro-rata modes; `full`
+     is meaningless without one, so it falls back to the 7th. */
+  let cutoff = Number(p.cutoffDay || 0);
+  if (!(cutoff > 0 && cutoff <= 28)) cutoff = mode === 'full' ? 7 : 0;
+  return { mode, cutoff };
+}
+
+/** How many days that month has. `YYYY-MM` or `YYYY-MM-DD`. */
+function _daysInMonthOf(ymdStr) {
+  const m = /^(\d{4})-(\d{2})/.exec(String(ymdStr || ''));
+  if (!m) return 30;
+  return new Date(Number(m[1]), Number(m[2]), 0).getDate();
+}
+
+/* What the hostel's rule gives back on ONE record, for a student leaving on
+   `vacateDate`. Returns zero — with a reason — far more often than not, and the
+   reason is what the confirm dialog shows.
+
+   It never returns more than the record was actually billed for the components
+   the rule covers, and never more than was collected: a refund is money coming
+   back out, and there is nothing to bring back out of a month nobody paid. */
+function calculateMidMonthRefund(record, vacateDate, opts) {
+  const pol   = (opts && opts.policy) || refundPolicy();
+  const rec   = record || {};
+  const out   = { amount: 0, mode: pol.mode, days: 0, of: 0, basis: 0, reason: '' };
+
+  if (pol.mode === 'none') { out.reason = 'The hostel refunds nothing for a part month.'; return out; }
+
+  const day = Number(String(vacateDate || '').slice(8, 10));
+  if (!(day >= 1 && day <= 31)) { out.reason = 'No vacate date, so there is nothing to pro-rate.'; return out; }
+
+  const total = _daysInMonthOf(vacateDate);
+  out.of = total;
+  out.days = Math.max(0, total - day);
+
+  if (pol.cutoff && day > pol.cutoff) {
+    out.reason = 'They left on the ' + day + ', after the ' + pol.cutoff
+      + '-day cut-off, so the month is charged in full.';
+    return out;
+  }
+  if (out.days === 0) { out.reason = 'They stayed the whole month.'; return out; }
+
+  const messOn = rec.messIncluded !== false;
+  const rent   = money(rec.monthlyRent != null ? rec.monthlyRent : rec.rent);
+  const mess   = messOn ? money(rec.messCharge != null ? rec.messCharge : rec.mess) : 0;
+
+  /* `full` returns the month itself, not a fraction of it — that is the whole
+     point of having a cut-off on it. */
+  const basis = pol.mode === 'mess' ? mess
+              : pol.mode === 'both' ? rent + mess
+              : rent + mess;
+  out.basis = basis;
+  if (basis <= 0) {
+    out.reason = pol.mode === 'mess'
+      ? 'This student was not on the mess that month.'
+      : 'Nothing was charged for that month.';
+    return out;
+  }
+
+  let amount = pol.mode === 'full' ? basis : Math.round(basis * out.days / total);
+
+  /* Never give back more than came in. `collected` is what the record holds;
+     an unpaid month has nothing to return and the student simply owes less —
+     which the concession below already achieves by reducing the bill. */
+  const collected = money(rec.amount);
+  const already   = money(rec.concession != null ? rec.concession : rec.discount);
+  amount = Math.min(amount, Math.max(0, basis - already));
+
+  out.amount = amount;
+  out.cash   = Math.min(amount, collected);
+  out.reason = pol.mode === 'full'
+    ? 'They left on the ' + day + ', on or before the ' + pol.cutoff + '-day cut-off, so the month is returned in full.'
+    : out.days + ' of ' + total + ' days unused, on '
+      + (pol.mode === 'mess' ? 'the mess charge' : 'rent and mess') + '.';
+  return out;
+}
+
+/** The rule in one line, for a settings card or a confirm dialog. */
+function refundPolicyLabel(pol) {
+  const p = pol || refundPolicy();
+  if (p.mode === 'none') return 'No refund for a part month';
+  if (p.mode === 'mess') return 'Mess refunded for unused days' + (p.cutoff ? ', if they leave by the ' + p.cutoff : '');
+  if (p.mode === 'both') return 'Rent and mess refunded for unused days' + (p.cutoff ? ', if they leave by the ' + p.cutoff : '');
+  return 'Whole month refunded if they leave by the ' + p.cutoff;
+}

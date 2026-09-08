@@ -121,6 +121,10 @@ function studentsFiltered() {
     const room = byId.get(t.roomId);
     if (studentFilter.room !== 'All' && String(room ? room.number : '') !== studentFilter.room) return false;
     if (studentFilter.course !== 'All' && String(t.occupation || t.course || '') !== studentFilter.course) return false;
+    /* The charge plan, resolved the same way the Charges column resolves it.
+       'course' stays in the object because Advanced Filters still reports it
+       and a saved value must keep working; it simply has no control any more. */
+    if (studentFilter.plan && studentFilter.plan !== 'All' && stuPlanOf(t) !== studentFilter.plan) return false;
     // Paid / Pending / Overdue, from calculateFeeStatus() in finance.js — which
     // aggregates calculateOutstanding() and payments.js's payIsOverdue() rather
     // than deciding anything itself, so this filter cannot disagree with the
@@ -248,7 +252,7 @@ function renderStudents() {
 
   const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))].sort(cmpRoomNo);
   const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
-  const activeFilters = [studentFilter.room!=='All', studentFilter.course!=='All',
+  const activeFilters = [studentFilter.room!=='All', (studentFilter.plan||'All')!=='All',
                          studentFilter.fee!=='All'].filter(Boolean).length;
 
   const th = (key,label,extra) => {
@@ -256,7 +260,19 @@ function renderStudents() {
     const arw = on ? (studentFilter.sortDir==='asc'?'▲':'▼') : '⇅';
     return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(studentFilter,'students','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
   };
-  const waIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 9 0 0 0-10 9 8.76 8.76 0 0 0 3 6.55V21a1 1 0 0 0 1.49.87L9.85 20A10.66 10.66 0 0 0 12 20a10 9 0 0 0 10-9 10 9 0 0 0-10-9Z"/></svg>';
+  /* THE OFFICIAL MARK, drawn neutral (owner, 2026-09-09: "use official neutral
+     whatsapp logo"). The old one was a hand-approximated speech bubble with no
+     handset in it — recognisable as "a chat app", not as WhatsApp. This is the
+     brand's own outline: the bubble with the tail bottom-left and the handset
+     inside it. It takes currentColor rather than the brand green, because a
+     table of forty rows with forty saturated green marks in it is a table with
+     a colour problem, and the column beside it is already carrying meaning. */
+  const waIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-label="WhatsApp">'
+    + '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2Zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.25 8.24a8.24 8.24 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.26-8.24Z"/>'
+    + '<path d="M9.36 7.2c-.19-.42-.38-.43-.56-.44h-.47c-.16 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.89 2.38 1.01 2.54c.12.17 1.71 2.74 4.22 3.73 2.09.82 2.51.66 2.97.62.46-.04 1.48-.6 1.69-1.19.21-.58.21-1.08.15-1.19-.06-.1-.23-.16-.47-.29-.25-.12-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.34-.75-1.83Z"/></svg>';
+  /* A pin, not a coloured map marker (owner: "use neutral location svg"). */
+  const pinIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+  const phIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
 
   return `
   <!-- ══ STAT STRIP ══ -->
@@ -303,9 +319,10 @@ function renderStudents() {
     <div class="stu-tools">
       <div class="stu-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-students" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
+        <input id="search-students" class="lk-sin" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
           value="${escHtml(studentFilter.search)}"
           oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents()">
+        ${lkSearchX('search-students','studentFilter','students')}
       </div>
 
       <select class="stu-select${studentFilter.month?' is-set':''}" onchange="stuSetMonth(this.value)" title="Show the roster for one month">
@@ -318,9 +335,18 @@ function renderStudents() {
         ${roomNums.map(r=>`<option value="${escHtml(r)}" ${studentFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
       </select>
 
-      <select class="stu-select${studentFilter.course!=='All'?' is-set':''}" onchange="studentFilter.course=this.value;studentFilter.page=1;renderPage('students')" title="Filter by course">
-        <option value="All">All Courses</option>
-        ${courses.map(c=>`<option value="${escHtml(c)}" ${studentFilter.course===c?'selected':''}>${escHtml(c)}</option>`).join('')}
+      ${''/* COURSES OUT, CHARGE PLAN IN (owner, 2026-09-09). The course is on
+             every row already and a hostel's list of them is long and
+             unstable — it was a dropdown nobody filtered by. What a warden
+             does ask for is "who is on the mess", which nothing could answer
+             until now: the plan is resolved per student by resolveCharges(),
+             the same call the Charges column prints, so the filter and the
+             column can never disagree. */}
+      <select class="stu-select${studentFilter.plan&&studentFilter.plan!=='All'?' is-set':''}" onchange="studentFilter.plan=this.value;studentFilter.page=1;renderPage('students')" title="Filter by what the student is charged for">
+        <option value="All">Rent &amp; mess: all</option>
+        <option value="both" ${studentFilter.plan==='both'?'selected':''}>Rent + mess</option>
+        <option value="rent" ${studentFilter.plan==='rent'?'selected':''}>Rent only</option>
+        <option value="mess" ${studentFilter.plan==='mess'?'selected':''}>Mess only</option>
       </select>
 
       <select class="stu-select${studentFilter.status!=='All'?' is-set':''}" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')" title="Filter by status">
@@ -363,7 +389,7 @@ function renderStudents() {
           <div class="stu-pop__sep"></div>
           <div class="stu-pop__t">Active filters</div>
           <div class="stu-pop__row" style="cursor:default">Room: <b style="color:var(--text)">${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
-          <div class="stu-pop__row" style="cursor:default">Course: <b style="color:var(--text)">${studentFilter.course==='All'?'Any':escHtml(studentFilter.course)}</b></div>
+          <div class="stu-pop__row" style="cursor:default">Charged for: <b style="color:var(--text)">${(studentFilter.plan||'All')==='All'?'Any':(studentFilter.plan==='both'?'Rent + mess':studentFilter.plan==='rent'?'Rent only':'Mess only')}</b></div>
           <div class="stu-pop__row" style="cursor:default">Status: <b style="color:var(--text)">${studentFilter.status}</b></div>
           <div class="stu-pop__sep"></div>
           <div class="stu-pop__row" onclick="stuResetFilters()">
@@ -377,14 +403,13 @@ function renderStudents() {
         </div>
       </div>
 
-      <button class="stu-btn" style="margin-left:auto" onclick="exportStudentsPDF()" title="Print the current list">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-        Export PDF
-      </button>
-      <button class="stu-btn stu-btn--primary" onclick="exportStudentsExcel()" title="Export the current list to Excel">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-        Export Excel
-      </button>
+      ${/* One Export control, both formats inside it (owner, 2026-09-08).
+            Clear all sits beside it and appears only when something is set —
+            both come from src/toolbar.js, so all six list screens behave the
+            same way. */''}
+      <span style="margin-left:auto"></span>
+      ${tbExport({ id:'stu-export', cls:'stu-btn stu-btn--primary',
+                   excel:'exportStudentsExcel()', pdf:'exportStudentsPDF()' })}
     </div>
 
     ${stuSelected.size>0?`
@@ -420,17 +445,16 @@ function renderStudents() {
                  a narrower measure. Still sums to exactly 100. */}
           <col style="width:2.6%">   <!-- select      -->
           <col style="width:3.6%">   <!-- ID          -->
-          <col style="width:13.8%">  <!-- student     -->
+          <col style="width:15.3%">  <!-- student     -->
           <col style="width:9%">     <!-- room        -->
-          <col style="width:10.5%">  <!-- contact     -->
+          <col style="width:11.5%">  <!-- contact     -->
           <col style="width:7%">     <!-- CNIC        -->
           <col style="width:8%">     <!-- course      -->
           <col style="width:7.5%">   <!-- address     -->
           <col style="width:7%">     <!-- nationality -->
-          <col style="width:10%">    <!-- charges     -->
-          <col style="width:8%">     <!-- fee status  -->
+          <col style="width:11%">    <!-- charges     -->
           <col style="width:8%">     <!-- status      -->
-          <col style="width:5%">     <!-- actions     -->
+          <col style="width:9%">     <!-- actions     -->
         </colgroup>
         <thead><tr>
           <th><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
@@ -447,13 +471,20 @@ function renderStudents() {
                 badge saying which components are in it, so the heading naming
                 them again was the third time the same fact appeared in one
                 column. */}
+          ${''/* FEE STATUS IS NOT A COLUMN ANY MORE (owner, 2026-09-09:
+                 "remove payment status"). Whether this month is paid is a
+                 question about a PAYMENT, and the payments register answers it
+                 with the record attached; here it was a pill that went stale
+                 the moment money was taken on another screen, in a table
+                 already short of width. It survives as a FILTER in Advanced
+                 Filters, which is how a warden actually uses it: "show me who
+                 has not paid", not "read down this column". */}
           <th>Charges / month</th>
-          ${th('fee','Fee Status')}
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="13"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="12"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -478,11 +509,17 @@ function renderStudents() {
             </td>
             <td>
               <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
-              ${room?`<div class="stu-room__t">${escHtml(rtype?rtype.name:'')} · ${escHtml(room.floor||'')} Floor</div>`:''}
+              ${room&&room.floor?`<div class="stu-room__t">${escHtml(stuFloorShort(room.floor))}</div>`:''}
             </td>
+            ${''/* THE WHATSAPP MARK BELONGS TO THE STUDENT'S NUMBER, not the
+                   guardian's (owner, 2026-09-09). The first number the intake
+                   form asks for IS the student's WhatsApp — it is how the
+                   hostel sends a receipt — and the second is the guardian's
+                   voice line. The two glyphs were the wrong way round, which
+                   told a warden to message the father and telephone the son. */}
             <td>
-              <div class="stu-contact">${escHtml(t.phone||'—')}</div>
-              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i>${waIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
+              <div class="stu-contact"><i class="stu-wa" title="Student's WhatsApp">${waIcon}</i>${escHtml(t.phone||'—')}</div>
+              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i class="stu-ph" title="Guardian">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
             ${''/* A CNIC BREAKS ON ITS OWN HYPHENS, over two lines (owner).
                    It is 15 characters and the column cannot hold them on one
@@ -493,7 +530,7 @@ function renderStudents() {
                    nowrap, so the two cannot share a class. */}
             <td>${t.cnic?`<span class="stu-cnic">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
-            <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}">${escHtml(t.address)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
@@ -506,15 +543,9 @@ function renderStudents() {
                        that was 116px wide in a table overflowing by 444px.
                        Total plus badge; the split is on the student's profile
                        and in the Rent & Mess settings that produced it. */}
-                <div class="stu-charge" title="${c.configured?escHtml(fmtPKR(c.rent)+' rent'+(c.messOptIn&&c.mess>0?' + '+fmtPKR(c.mess)+' mess':'')):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
+                <div class="stu-charge" title="${c.configured?escHtml(cov.label):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
                 <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
               </td>`;})()}
-            ${(()=>{const f=_stuFee(t.id);
-              /* SEPARATE FROM THE CELL TO ITS LEFT, and the spec says so twice.
-                 Rent + Mess answers "what is this student charged and on what
-                 plan"; this answers "have they paid". Reading one as the other
-                 is how a warden chases a student who is paid up. */
-              return `<td><span class="stu-pill ${stuFeeHue(f.status)}" title="${escHtml(stuFeeTitle(f))}"><i></i>${f.status}</span></td>`;})()}
             <td><span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(status)}"><i></i>${escHtml(status)}</span></td>
             ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
                    Three always-visible icons were 124px — the widest ornament
@@ -524,6 +555,13 @@ function renderStudents() {
                    pixel from Edit, which is the adjacency that produces the
                    deletion nobody meant. */}
             <td class="stu-actc">
+              ${''/* THREE DOTS, NO WORD (owner, 2026-09-09, second pass:
+                     "the action buttons should be inside 3dots without actions
+                     letters"). The labelling that matters is on the ITEMS —
+                     View profile, Edit student, Delete student — which is where
+                     a reader who opens the menu actually needs the words. The
+                     word on the button itself cost 46px of a table that is
+                     short of width, on every row. */}
               <button class="stu-kebab" onclick="event.stopPropagation();stuRowMenu('${t.id}',this)"
                       aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
@@ -591,7 +629,7 @@ function stuSetStatus(s) {
   renderPage('students');
 }
 function stuResetFilters() {
-  studentFilter.month=thisMonth(); studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All';
+  studentFilter.month=thisMonth(); studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All'; studentFilter.plan='All';
   studentFilter.fee='All';
   studentFilter.search=''; studentFilter.page=1;
   stuSelected.clear();
@@ -1266,7 +1304,7 @@ function stuLedgerMenu(payId, studentId, btn) {
   const a = escHtml(payId), b = escHtml(studentId);
 
   const el = document.createElement('div');
-  el.className = 'stu-rmenu';
+  el.className = 'lk-rmenu';
   el.id = 'stu-rmenu';
   el.setAttribute('role', 'menu');
   el.innerHTML =
@@ -1476,7 +1514,7 @@ function stuRowMenu(id, btn) {
   if (!t) return;
 
   const el = document.createElement('div');
-  el.className = 'stu-rmenu';
+  el.className = 'lk-rmenu';
   el.id = 'stu-rmenu';
   el.setAttribute('role', 'menu');
   el.innerHTML =
@@ -1484,7 +1522,7 @@ function stuRowMenu(id, btn) {
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></svg>View profile</button>`
     + `<button role="menuitem" onclick="closeStuRowMenu();showEditStudentModal('${escHtml(id)}')">`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit student</button>`
-    + `<div class="stu-rmenu__sep"></div>`
+    + `<div class="lk-rmenu__sep"></div>`
     + `<button role="menuitem" class="is-danger" onclick="closeStuRowMenu();confirmDeleteStudent('${escHtml(id)}')">`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete student</button>`;
   document.body.appendChild(el);
@@ -1525,204 +1563,175 @@ function stuToggleAll(on) {
   });
   renderPage('students');
 }
-function stuBulkExport() {
-  const ids = [...stuSelected];
-  _stuWriteWorkbook(studentsFiltered().filter(t => ids.includes(t.id)),
-    'Students_Selected_' + today() + '.xlsx',
-    'STUDENT RECORDS — ' + ids.length + ' selected');
-}
+/* ══ THE STUDENTS EXPORT ═══════════════════════════════════════════════════
+   One definition, two files (§60), rendered by the global export engine.
 
-/* ── THE EXPORT ──────────────────────────────────────────────────────────────
-   One workbook writer, shared by the toolbar export and the bulk-selection
-   export so the two can never produce different columns.
+   The PDF is the roster a warden carries up the stairs: who, where, how to
+   reach them, what they are charged, what they owe. The workbook is the
+   complete record — the CNIC, the address, the guardian's number, the fields
+   an office needs and a corridor does not (§33: "Excel may contain additional
+   fields that are not suitable for the PDF").
 
-   This writes a real .xlsx, not a CSV with a spreadsheet icon. The owner's
-   reference sheet has a title band, a line stating how many students it holds,
-   and columns wide enough to read a Waziristan address in. None of that can
-   live in a CSV: a CSV is text, and every column width belongs to whoever
-   opens it.
+   Both come from studentsFiltered(), so the screen, the sheet and the printed
+   page hold the same students in the same order: room ascending, because a
+   name-ordered roster sends the reader up and down the building.
 
-   Two typing rules matter more than the layout:
+   TWO TYPING RULES CARRY OVER FROM THE SHEETJS WORKBOOK THIS REPLACED, and
+   they are the ones that quietly ruin a roster:
 
-   • Phone, emergency phone and CNIC go out as TEXT. `03310045835` written as a
+   · Phone, emergency phone and CNIC are TEXT. `03310045835` written as a
      number loses its leading zero and comes back as 3,310,045,835 — the
-     warden's contact list quietly turned into arithmetic.
-   • Join date and date of birth go out as real DATES built at LOCAL midnight
-     via `_stuXlDate`. Handing the string to `new Date()` parses it as UTC, and
-     five hours east of Greenwich that lands the cell on the day before — the
-     same bug class as the `today()` fix in the 19 Aug audit.
+     warden's contact list has become arithmetic.
+   · Join date and date of birth are real DATES, built from the local calendar
+     parts by the writer (see _xwSerial). Handed to `new Date()` they parse as
+     UTC, and five hours east of Greenwich the cell lands on the day before.
+   ─────────────────────────────────────────────────────────────────────────── */
 
-   Column widths are `wch` (character widths), which is what SheetJS 0.20
-   writes. Fonts, fills and frozen panes are not writable by the community
-   build we vendor, so the sheet is structured, not painted.
-   ──────────────────────────────────────────────────────────────────────── */
-
-// [header, character width] — one source for both, so a column can never be
-// added to the sheet without being given a width.
-const STU_EXPORT_COLUMNS = [
-  ['ID', 6], ['Name', 22], ['Father Name', 22], ['Room', 8], ['Floor', 10],
-  ['Phone', 16], ['Emergency Contact', 20], ['Emergency Phone', 16], ['CNIC', 18],
-  ['Date of Birth', 14], ['Gender', 9], ['Nationality', 13], ['Address', 28],
-  ['Course', 22], ['Session', 12], ['Blood Group', 12], ['Join Date', 13], ['Status', 11],
-];
-// Zero-based indexes into the row above that hold real dates.
-const STU_EXPORT_DATE_COLS = [9, 16];
-// The table starts here: title, meta, blank, header.
-const STU_EXPORT_HEADER_ROW = 3;
-
-// 'YYYY-MM-DD' → a Date at LOCAL midnight, so the cell cannot slip a day.
-// Anything that is not a plain date is passed through untouched rather than
-// guessed at.
-function _stuXlDate(v) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : (v || '');
-}
-
-// "58 students · 44 active, 14 left" — every figure counted from the rows
-// actually being written, never from DB totals the file does not contain.
+/* "58 students · 44 active, 14 left" — every figure counted from the rows
+   actually being written, never from DB totals the file does not contain. */
 function _stuExportMeta(list) {
   const byStatus = {};
   list.forEach(t => { const s = t.status || 'Active'; byStatus[s] = (byStatus[s] || 0) + 1; });
-  const parts = Object.keys(byStatus).sort().map(s => byStatus[s] + ' ' + s.toLowerCase());
-  return [
-    DB.settings.hostelName || 'Hostel',
-    'Total Students: ' + list.length,
-    parts.join(', '),
-    'Exported ' + fmtDate(today()),
-  ].filter(Boolean).join('  ·  ');
+  return Object.keys(byStatus).sort().map(s => byStatus[s] + ' ' + s.toLowerCase()).join(', ');
 }
 
-function _stuWriteWorkbook(list, filename, title) {
-  if (!list || list.length === 0) { toast('No students to export', 'error'); return; }
-  if (typeof XLSX === 'undefined') { toast('Spreadsheet library not loaded — export unavailable', 'error'); return; }
+function _stuExportDef(list, opts) {
+  opts = opts || {};
+  const byId    = _stuRoomMap();
+  const roomOf  = t => { const r = byId.get(t.roomId); return r ? String(r.number) : ''; };
+  const floorOf = t => { const r = byId.get(t.roomId); return r ? (r.floor || '') : ''; };
 
-  const byId = _stuRoomMap();
-  const aoa = [
-    [title],
-    [_stuExportMeta(list)],
-    [],
-    STU_EXPORT_COLUMNS.map(c => c[0]),
-  ];
+  const active  = list.filter(t => (t.status || 'Active') === 'Active').length;
+  const notice  = list.filter(t => t.status === 'Cancelling' || t.status === 'On Notice').length;
+  const left    = list.filter(t => t.status === 'Left').length;
+  const black   = list.filter(t => t.status === 'Blacklisted').length;
+  const charged = list.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0);
 
-  list.forEach(t => {
-    const r = byId.get(t.roomId);
-    aoa.push([
-      t.id, t.name || '', t.fatherName || '',
-      r ? '#' + r.number : '', r ? r.floor : '',
-      String(t.phone || ''), t.emergencyContact || '', String(t.emergencyPhone || ''),
-      String(t.cnic || ''),
-      _stuXlDate(t.dob), t.gender || '', t.nationality || '', t.address || '',
-      t.occupation || t.course || '', t.session || '', t.bloodGroup || '',
-      _stuXlDate(t.joinDate), t.status || 'Active',
-    ]);
+  /* What a student still owes, asked of calculateOutstanding() rather than
+     read off `p.unpaid` — the stored field is 0 on legacy records, which is
+     how a real debtor prints as settled.
+
+     Bucketed in ONE pass over the payments rather than a filter per student.
+     The naive version is O(students × payments), and this column is read three
+     times per row (the value, the printed cell, the summary): a 500-student
+     hostel with three years of records would have spent minutes here. §43. */
+  const _due = new Map();
+  (DB.payments || []).forEach(p => {
+    const d = calculateOutstanding(p);
+    if (d > 0) _due.set(p.studentId, (_due.get(p.studentId) || 0) + d);
   });
+  const owedBy = t => _due.get(t.id) || 0;
+  const owed = list.reduce((s, t) => s + owedBy(t), 0);
 
-  const ws   = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
-  const last = STU_EXPORT_COLUMNS.length - 1;
-  const end  = STU_EXPORT_HEADER_ROW + list.length;
+  const scope = _stuMonthLabel(studentFilter.month);
 
-  // Dates print the way the app prints them everywhere else.
-  for (let i = 0; i < list.length; i++) {
-    STU_EXPORT_DATE_COLS.forEach(c => {
-      const cell = ws[XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW + 1 + i, c })];
-      // `w` is the cached display string aoa_to_sheet already wrote from the
-      // DEFAULT date format. Setting `z` without dropping it leaves a cell that
-      // writes as 01-Mar-2007 but still reads back as 3/1/07 to anything in
-      // this process that trusts `w`.
-      if (cell && cell.t === 'd') { cell.z = 'dd-mmm-yyyy'; delete cell.w; }
-    });
-  }
+  return {
+    module: 'Students',
+    title:  opts.title || 'Student Roster',
+    scope:  opts.scope || scope,
+    sheet:  'Students',
 
-  ws['!cols']   = STU_EXPORT_COLUMNS.map(c => ({ wch: c[1] }));
-  ws['!rows']   = [{ hpt: 22 }, { hpt: 16 }, { hpt: 6 }, { hpt: 18 }];
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: last } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: last } },
-  ];
-  // Filter over the header row and the data under it — not the title band,
-  // which would otherwise be swept into the filter range.
-  ws['!autofilter'] = {
-    ref: XLSX.utils.encode_cell({ r: STU_EXPORT_HEADER_ROW, c: 0 }) + ':' +
-         XLSX.utils.encode_cell({ r: end, c: last }),
+    filters: [
+      ['Month',     scope],
+      ['Status',    studentFilter.status !== 'All' ? studentFilter.status : null],
+      ['Room',      studentFilter.room && studentFilter.room !== 'All' ? '#' + studentFilter.room : null],
+      ['Search',    studentFilter.search || null],
+      ['Selection', opts.selection || null],
+      ['Roll-up',   _stuExportMeta(list)],
+    ],
+
+    summary: [
+      { label: 'Students',        value: String(list.length) },
+      { label: 'Active',          value: String(active), tone: 'pos' },
+      { label: 'On notice',       value: String(notice), tone: notice ? 'warn' : '' },
+      { label: 'Left',            value: String(left) },
+      { label: 'Blacklisted',     value: String(black), tone: black ? 'neg' : '' },
+      { label: 'Charged / month', value: EXPORT.fmt.money(charged) },
+      { label: 'Outstanding',     value: EXPORT.fmt.money(owed), tone: owed > 0 ? 'neg' : '' },
+    ],
+
+    columns: [
+      { label: 'ID', type: 'id', width: 7, value: t => String(t.id == null ? '' : t.id) },
+
+      { label: 'Student', type: 'text', width: 22,
+        value: t => t.name || '',
+        get:   t => '<b>' + escHtml(t.name || '') + '</b>',
+        sub:   t => t.fatherName || '' },
+
+      { label: 'Father / Guardian', type: 'text', width: 22, pdf: false,
+        value: t => t.fatherName || '' },
+
+      { label: 'Room', type: 'id', width: 9,
+        value: t => roomOf(t),
+        get:   t => { const r = roomOf(t);
+          return (r ? '<b>#' + escHtml(r) + '</b>' : '—') +
+                 (floorOf(t) ? '<span class="sub">' + escHtml(floorOf(t)) + ' floor</span>' : ''); } },
+
+      { label: 'Floor', type: 'text', width: 11, pdf: false, value: t => floorOf(t) },
+
+      { label: 'Phone', type: 'text', width: 16,
+        value: t => String(t.phone || ''),
+        get:   t => escHtml(t.phone || '—') +
+                    (t.emergencyPhone ? '<span class="sub">' + escHtml(t.emergencyPhone) + '</span>' : '') },
+
+      { label: 'Emergency Contact', type: 'text', width: 20, pdf: false,
+        value: t => t.emergencyContact || '' },
+      { label: 'Emergency Phone', type: 'text', width: 16, pdf: false,
+        value: t => String(t.emergencyPhone || '') },
+      { label: 'CNIC', type: 'text', width: 18, pdf: false,
+        value: t => String(t.cnic || '') },
+      { label: 'Date of Birth', type: 'date', width: 14, pdf: false, value: t => t.dob || '' },
+      { label: 'Gender', type: 'text', width: 9, pdf: false, value: t => t.gender || '' },
+      { label: 'Nationality', type: 'text', width: 13, pdf: false, value: t => t.nationality || '' },
+      { label: 'Address', type: 'wrap', width: 30, pdf: false, value: t => t.address || '' },
+
+      { label: 'Course', type: 'text', width: 22, value: t => t.occupation || t.course || '' },
+      { label: 'Session', type: 'text', width: 12, pdf: false, value: t => t.session || '' },
+      { label: 'Blood Group', type: 'text', width: 12, pdf: false, value: t => t.bloodGroup || '' },
+
+      { label: 'Join', type: 'date', width: 13, value: t => t.joinDate || '' },
+
+      { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+        value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
+        get:   t => { const c = resolveCharges(t);
+          if (!c.configured) return '<span style="color:#94A3B8">not set</span>';
+          return '<b>' + fmtPKR(c.total) + '</b><span class="sub">' +
+                 (c.messOptIn && c.mess > 0 ? fmtPKR(c.rent) + ' rent + ' + fmtPKR(c.mess) + ' mess'
+                  : c.mess > 0 ? 'rent only · mess off' : 'rent only') + '</span>'; } },
+
+      { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
+        value: t => owedBy(t) || null,
+        get:   t => owedBy(t) > 0 ? '<span class="neg">' + fmtPKR(owedBy(t)) + '</span>' : '—' },
+
+      { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
+    ],
+
+    rows: list,
+    empty: 'No students match the selected filters.',
   };
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Students');
-  XLSX.writeFile(wb, filename);
-  toast('Downloaded: ' + filename, 'success');
 }
 
-// Export the currently filtered + sorted students. Reuses studentsFiltered(),
-// so the file always matches what is on screen — the two previously kept
-// separate copies of the filter and could disagree.
-/* Export the students on screen as a PDF.
+/* The selection bar's export — a workbook, because a ticked set of students is
+   a working list, not a document to file. */
+function stuBulkExport() {
+  const ids  = new Set([...stuSelected]);
+  const list = studentsFiltered().filter(t => ids.has(t.id));
+  if (!list.length) { toast('Nothing selected to export', 'error'); return; }
+  EXPORT.excel(_stuExportDef(list, {
+    selection: list.length + ' selected student' + (list.length === 1 ? '' : 's'),
+  }));
+}
 
-   The same list the table and the Excel export use — studentsFiltered() — so
-   all three answer with the same students in the same order. Room-ascending,
-   which for this document is not a preference: a warden reads a printed roster
-   while walking the building.
-
-   Landscape. Eighteen columns will not fit an A4 page in portrait and the
-   honest answer is fewer columns, not smaller type — so this prints what
-   someone standing in a corridor needs (who, where, how to reach them, what
-   they owe) and the Excel export remains the complete record. */
 function exportStudentsPDF() {
   const list = studentsFiltered();
   if (!list.length) { toast('No students to export', 'error'); return; }
-
-  const byId    = _stuRoomMap();
-  const active  = list.filter(t => (t.status || 'Active') === 'Active').length;
-  const left    = list.filter(t => t.status === 'Left').length;
-  const charged = list.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0);
-
-  const roomOf = t => { const r = byId.get(t.roomId); return r ? '#' + r.number : '—'; };
-  const html = printListDocument({
-    title: 'Student Roster',
-    subtitle: _stuMonthLabel(studentFilter.month) +
-              (studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only'),
-    kpis: [
-      { label: 'Students',        value: String(list.length) },
-      { label: 'Active',          value: String(active), cls: 'green' },
-      { label: 'Left',            value: String(left) },
-      { label: 'Charged / month', value: fmtPKR(charged) },
-    ],
-    columns: [
-      { label: '#',        get: t => escHtml(String(t.id || '')) },
-      { label: 'Student',  get: t => `<b>${escHtml(t.name || '')}</b>` +
-                                     (t.fatherName ? `<span class="sub">${escHtml(t.fatherName)}</span>` : '') },
-      { label: 'Room',     get: t => { const r = byId.get(t.roomId);
-                                       return `<b>${escHtml(roomOf(t))}</b>` +
-                                              (r && r.floor ? `<span class="sub">${escHtml(r.floor)} Floor</span>` : ''); } },
-      { label: 'Phone',    get: t => escHtml(t.phone || '—') +
-                                     (t.emergencyPhone ? `<span class="sub">${escHtml(t.emergencyPhone)}</span>` : '') },
-      { label: 'Course',   get: t => escHtml(t.occupation || t.course || '—') },
-      { label: 'Join',     get: t => fmtDate(t.joinDate) },
-      { label: 'Charge / mo', align: 'right', get: t => {
-          const c = resolveCharges(t);
-          if (!c.configured) return '<span style="color:#94a3b8">not set</span>';
-          return `<b>${fmtPKR(c.total)}</b><span class="sub">` +
-                 (c.messOptIn && c.mess > 0
-                    ? `${fmtPKR(c.rent)} rent + ${fmtPKR(c.mess)} mess`
-                    : c.mess > 0 ? 'rent only · mess off' : 'rent only') + '</span>'; } },
-      { label: 'Status',   get: t => escHtml(t.status || 'Active') },
-    ],
-    groups: [{ rows: list }],
-  });
-
-  _electronPDF(html, printFileName('Student-Roster',
-    studentFilter.status === 'All' ? '' : studentFilter.status), { pageSize: 'A4', landscape: true });
+  EXPORT.pdf(_stuExportDef(list));
 }
 
 function exportStudentsExcel() {
-  // The scope belongs in the filename AND in the title band. A file called
-  // Students_All_2026-08-30.xlsx that actually holds only August's roster is
-  // the kind of thing that gets mailed to an owner as if it were everybody.
-  const scope  = studentFilter.month ? studentFilter.month : 'AllMonths';
-  const status = studentFilter.status === 'All' ? '' : ' · ' + studentFilter.status + ' only';
-  _stuWriteWorkbook(
-    studentsFiltered(),
-    'Students_' + (studentFilter.status === 'All' ? 'All' : studentFilter.status) + '_' + scope + '_' + today() + '.xlsx',
-    'STUDENT RECORDS — ' + _stuMonthLabel(studentFilter.month) + status);
+  const list = studentsFiltered();
+  if (!list.length) { toast('No students to export', 'error'); return; }
+  EXPORT.excel(_stuExportDef(list));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2074,7 +2083,11 @@ function renderAddStudent() {
               <div class="sf-f"><label for="f-texpstay">Stay until</label>
                 <input class="sf-in" id="f-texpstay" type="date"></div>
             </div>
-            <input type="hidden" id="f-tpm" value="${escHtml(DB.settings.paymentMethods[0]||'Cash')}">`)}
+            ${/* The intake form does not ask how the FIRST payment will
+                  arrive, so it carries the hostel's first ACTIVE method as the
+                  default. Reading [0] took a retired one whenever the first in
+                  the list had been retired. */''}
+            <input type="hidden" id="f-tpm" value="${escHtml((DB.settings.paymentMethods||[]).filter(cfgMethodActive)[0] || DB.settings.paymentMethods[0] || 'Cash')}">`)}
         </div>
 
         ${sec('05', ico.health, 'Health & notes', 'Optional', `
@@ -2394,7 +2407,7 @@ function showViewStudentModal(id) {
             if(conc>0) paidCell+='<span class="svw-sub is-conc">−'+fmtPKR(conc)+' concession</span>';
             return '<tr>'
             +'<td class="svw-t__month">'+escHtml(p.month||'—')+'</td>'
-            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+(_ch.messIncluded?'<span class="svw-sub">'+fmtPKR(_ch.rent)+' rent + '+fmtPKR(_ch.mess)+' mess</span>':_ch.hasMess?'<span class="svw-sub">rent only · mess off</span>':'')+'</td>'
+            +'<td class="svw-t__num">'+(mRent>0?fmtPKR(mRent):'<span class="is-empty">—</span>')+(_ch.messIncluded?'<span class="svw-sub">Rent + Mess</span>':_ch.hasMess?'<span class="svw-sub">Rent only</span>':'')+'</td>'
             +'<td class="svw-t__conc">'+(conc>0?'−'+fmtPKR(conc):'<span class="is-empty">—</span>')+'</td>'
             +'<td>'+paidCell+'</td>'
             +'<td class="svw-t__unpaid'+(due>0?' is-due':'')+'">'+(due>0?fmtPKR(due):'<span class="is-empty">—</span>')+'</td>'
@@ -2860,7 +2873,7 @@ function showEditStudentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||roomFreeBeds(r)>0));
-  const pmOpts=DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
+  const pmOpts = pmOptions(t.paymentMethod);
   // The student's own status is always in the list. It used to be built from
   // three fixed values, so a student on the cancellation list ('Cancelling')
   // matched none of them, the browser selected the first — Active — and merely
@@ -2873,44 +2886,58 @@ function showEditStudentModal(id) {
   const curRt=curRoom?getRoomType(curRoom):null;
   const presetLabel=curRoom?`Room #${curRoom.number} · ${curRt?.name||''} · ${curRoom.floor||''} Floor`:'';
   const statSel = _statuses.map(s=>`<option value="${escHtml(s)}" ${t.status===s?'selected':''}>${escHtml(s)}</option>`).join('');
-  showModal('modal-lg',`Edit Student — ${escHtml(t.name)}`,`
+  /* The form modal from forms.css: 920px, capped at the viewport, only the
+     body scrolling. It opened `modal-lg` — 1120 x 722 on a 768px window —
+     which showed the photo block and one and a half sections, with Save below
+     the fold. Not one field id below changed; submitEditStudent() reads this
+     form by id and a rename here is silent data loss there. */
+  showModal('modal-form', `
+    <div class="hf-mh">
+      <span class="hf-mh__ico">${icon('edit', 'sm')}</span>
+      <span style="min-width:0">
+        <span class="hf-mh__t">Edit Student — ${escHtml(t.name)}</span>
+        <span class="hf-mh__s">Update student information, contact details and hostel allocation.</span>
+      </span>
+    </div>`, `
   <div class="sf-wrap sf-wrap--modal">
 
-    <!-- ══ PHOTO + STUDENT ID ══ -->
-    <div class="sf-head">
-      <div class="sf-photo-block">
-        <div>
-          <div style="font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px">Student Photo</div>
-          <div class="sf-photo" id="edit-student-photo-preview" onclick="document.getElementById('edit-student-photo-file').click()" title="Click to upload a photo">
-            ${t.docs?.photo
-              ? `<img src="${t.docs.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`
-              : `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>`}
-          </div>
+    <!-- ══ PHOTO + STUDENT ID ══════════════════════════════════════════
+         A row, not a column. The page's photo block is a 140px well with a
+         drop zone under it and two buttons under that — right on the Student
+         intake page, where the rail has the height to spend, and 260px of a
+         dialog that has 620px for the whole form. Here the well is 76px and
+         the actions sit beside it, which is the shape the reference draws.
+
+         Every id is the page's: loadEditStudentPhoto(), clearEditStudentPhoto()
+         and captureEditStudentPhoto() find the preview, the hidden data field
+         and the Remove button by id, and none of them care where they sit. -->
+    <div class="esf-head">
+      <div class="esf-photo">
+        <div class="esf-photo__well" id="edit-student-photo-preview"
+             onclick="document.getElementById('edit-student-photo-file').click()"
+             title="Click to upload a photo"
+             ondragover="event.preventDefault();this.classList.add('is-over')"
+             ondragleave="this.classList.remove('is-over')"
+             ondrop="event.preventDefault();this.classList.remove('is-over');var f=event.dataTransfer.files[0];if(f){var i=document.getElementById('edit-student-photo-file');i.files=event.dataTransfer.files;loadEditStudentPhoto(i);}">
+          ${t.docs?.photo
+            ? `<img src="${t.docs.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`
+            : `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>`}
         </div>
-        <div class="sf-photo-acts" style="margin-top:22px">
-          <div class="sf-drop" onclick="document.getElementById('edit-student-photo-file').click()"
-               ondragover="event.preventDefault();this.classList.add('is-over')"
-               ondragleave="this.classList.remove('is-over')"
-               ondrop="event.preventDefault();this.classList.remove('is-over');var f=event.dataTransfer.files[0];if(f){var i=document.getElementById('edit-student-photo-file');i.files=event.dataTransfer.files;loadEditStudentPhoto(i);}">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
-            <b>Upload Photo</b><span>or drag and drop</span>
-          </div>
-          <button type="button" class="sf-btn sf-btn--ghost" style="width:190px;justify-content:center" onclick="openEditStudentCamera()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
-            Take Photo
+        <div class="esf-photo__acts">
+          <div class="esf-photo__l">Student photo</div>
+          <button type="button" class="sf-btn" onclick="document.getElementById('edit-student-photo-file').click()">
+            ${icon('upload','sm')} Upload photo
           </button>
-          <button type="button" class="sf-btn" id="edit-student-clear-btn" style="width:190px;justify-content:center;color:var(--red);display:${t.docs?.photo?'flex':'none'}" onclick="clearEditStudentPhoto()">Remove photo</button>
-          <input type="file" id="edit-student-photo-file" accept="image/*" style="display:none" onchange="loadEditStudentPhoto(this)">
-          <input type="hidden" id="edit-student-photo-data" value="${escHtml(t.docs?.photo||'')}">
-          <div id="edit-student-cam-box" style="display:none;width:190px">
-            <video id="edit-student-cam-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000"></video>
-            <canvas id="edit-student-cam-canvas" style="display:none"></canvas>
-            <div style="display:flex;gap:6px;margin-top:6px">
-              <button type="button" class="sf-btn sf-btn--go" style="flex:1;justify-content:center;padding:0 10px" onclick="captureEditStudentPhoto()">Capture</button>
-              <button type="button" class="sf-btn" style="flex:1;justify-content:center;padding:0 10px" onclick="closeEditStudentCamera()">Close</button>
-            </div>
-          </div>
+          <button type="button" class="sf-btn" onclick="openEditStudentCamera()">
+            ${icon('eye','sm')} Take photo
+          </button>
+          <button type="button" class="sf-btn esf-photo__rm" id="edit-student-clear-btn"
+                  style="display:${t.docs?.photo?'inline-flex':'none'}" onclick="clearEditStudentPhoto()">
+            ${icon('trash','sm')} Remove
+          </button>
         </div>
+        <input type="file" id="edit-student-photo-file" accept="image/*" style="display:none" onchange="loadEditStudentPhoto(this)">
+        <input type="hidden" id="edit-student-photo-data" value="${escHtml(t.docs?.photo||'')}">
       </div>
 
       <div class="sf-idcard">
@@ -2923,26 +2950,35 @@ function showEditStudentModal(id) {
       </div>
     </div>
 
+    <div id="edit-student-cam-box" class="esf-cam" style="display:none">
+      <video id="edit-student-cam-video" autoplay playsinline></video>
+      <canvas id="edit-student-cam-canvas" style="display:none"></canvas>
+      <div class="esf-cam__acts">
+        <button type="button" class="sf-btn sf-btn--go" onclick="captureEditStudentPhoto()">Capture</button>
+        <button type="button" class="sf-btn" onclick="closeEditStudentCamera()">Close</button>
+      </div>
+    </div>
+
     <!-- ══ STUDENT IDENTITY ══ -->
     <div class="sf-sec">
       <div class="sf-sec__h">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
-        Student Identity
+        <span class="asf-n">01</span> Student identity
       </div>
       <div class="sf-grid">
-        <div class="sf-f"><label for="f-tname">Full Name<span class="req">*</span></label>
+        <div class="sf-f"><label for="f-tname">Full name<span class="req">*</span></label>
           <input class="sf-in" id="f-tname" value="${escHtml(t.name)}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
-        <div class="sf-f"><label for="f-tfname">Father's Name</label>
+        <div class="sf-f"><label for="f-tfname">Father's name</label>
           <input class="sf-in" id="f-tfname" value="${escHtml(t.fatherName||'')}" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
         <div class="sf-f"><label for="f-tcnic">CNIC</label>
           <input class="sf-in" id="f-tcnic" value="${escHtml(t.cnic||'')}" placeholder="35202-1234567-1" maxlength="15" oninput="fmtCnic(this)"></div>
       </div>
       <div class="sf-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr 1fr">
-        <div class="sf-f"><label for="f-tocc">Course / Study Field</label>
+        <div class="sf-f"><label for="f-tocc">Course / study field</label>
           <input class="sf-in" id="f-tocc" value="${escHtml(t.occupation||t.course||'')}" placeholder="BS Computer Science"></div>
         <div class="sf-f"><label for="f-tstat">Status</label>
           <select class="sf-sel" id="f-tstat">${statSel}</select></div>
-        <div class="sf-f"><label for="f-tjoin">Join Date</label>
+        <div class="sf-f"><label for="f-tjoin">Join date</label>
           <input class="sf-in" id="f-tjoin" type="date" value="${escHtml(t.joinDate||'')}"></div>
       </div>
     </div>
@@ -2951,18 +2987,18 @@ function showEditStudentModal(id) {
     <div class="sf-sec">
       <div class="sf-sec__h">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>
-        Contact Information
+        <span class="asf-n">02</span> Contact information
       </div>
       <div class="sf-grid">
-        <div class="sf-f"><label for="f-tphone">Phone Number</label>
+        <div class="sf-f"><label for="f-tphone">Phone number</label>
           <input class="sf-in" id="f-tphone" value="${escHtml(t.phone||'')}" placeholder="03XX XXXXXXX" maxlength="12" oninput="fmtPhone(this)"></div>
-        <div class="sf-f"><label for="f-temerg">Emergency Contact</label>
+        <div class="sf-f"><label for="f-temerg">Emergency contact</label>
           <input class="sf-in" id="f-temerg" value="${escHtml(t.emergencyContact||'')}" placeholder="Guardian / family phone"></div>
-        <div class="sf-f"><label for="f-temail">Email Address</label>
+        <div class="sf-f"><label for="f-temail">Email address</label>
           <input class="sf-in" id="f-temail" value="${escHtml(t.email||'')}" placeholder="email@gmail.com"></div>
       </div>
       <div class="sf-grid" style="margin-top:14px">
-        <div class="sf-f sf-f--wide"><label for="f-taddress">Home Address</label>
+        <div class="sf-f sf-f--wide"><label for="f-taddress">Home address</label>
           <div class="sf-wrapin">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
             <input class="sf-in" id="f-taddress" value="${escHtml(t.address||'')}" placeholder="House # 25, Street 4, Peshawar, KPK"
@@ -2978,7 +3014,7 @@ function showEditStudentModal(id) {
       <div class="sf-sec__h" style="justify-content:space-between">
         <span style="display:inline-flex;align-items:center;gap:8px">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/></svg>
-          Assign Room<span class="req">*</span>
+          <span class="asf-n">03</span> Assign room<span class="req">*</span>
         </span>
         <span id="f-troom-selected-label" style="font-size:11px;color:var(--green);font-weight:700">${escHtml(presetLabel)}</span>
       </div>
@@ -3017,7 +3053,7 @@ function showEditStudentModal(id) {
     <div class="sf-sec">
       <div class="sf-sec__h">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-        Notes
+        <span class="asf-n">04</span> Notes
       </div>
       <div class="sf-grid">
         <div class="sf-f sf-f--wide">
@@ -3027,7 +3063,9 @@ function showEditStudentModal(id) {
     </div>
 
   </div>`,
-  `<button class="btn btn-danger" onclick="confirmDeleteStudent('${id}')">Delete</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditStudent('${id}')">Save Changes</button>`);
+  `<button class="btn btn-danger btn-sm hf-actions__spacer" onclick="confirmDeleteStudent('${id}')">${icon('trash','sm')} Delete</button>
+   <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+   <button class="btn btn-primary" onclick="submitEditStudent('${id}')">${icon('save','sm')} Save Changes</button>`);
 }
 
 async function submitEditStudent(id) {
@@ -3317,6 +3355,14 @@ let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
                  showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
                  page:1, sortKey:'room', sortDir:'asc'};
 let paySelected = new Set();
+/* `arrears:true` is a default that is ON — the screen shows arrears rows
+   unless a reader turns them off, and a fresh visit restores that. Same
+   selection reasoning as Students. */
+registerFilter('payments', payFilter, () => ({
+  status:'All', method:'All', room:'All', month:'All', search:'',
+  showAll:false, unpaidOnly:false, arrears:true, page:1,
+  sortKey:'room', sortDir:'asc',
+}), () => paySelected.clear());
 
 // ── FORMER STUDENTS — search & restore ───────────────────────────────────────
 function showFormerStudentsModal() {
@@ -3418,7 +3464,7 @@ function openRestoreStudentForm(studentId) {
   const t = DB.students.find(x=>x.id===studentId); if(!t) return;
   const availRooms = roomsByNumber(_getAvailableRooms());
   const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${escHtml(String(r.number))} — ${escHtml(type?.name||'')} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
-  const pmOpts = DB.settings.paymentMethods.map(m=>`<option ${t.paymentMethod===m?'selected':''}>${escHtml(m)}</option>`).join('');
+  const pmOpts = pmOptions(t.paymentMethod);
   const today = ymd(new Date());
   const thisMonthKey = today.slice(0,7);
   const payHistory = DB.payments.filter(p=>p.studentId===t.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -4015,14 +4061,15 @@ function doGenerateStudentsPDF(monthKey) {
 
   html += '</body></html>';
 
-  // ── Open PDF in a separate window via main process ────────────────────────
-  var _pdfTitle = escHtml(hostel) + ' — Students Fee Report · ' + monthLabel;
-  if (window.electronAPI && window.electronAPI.openPdfWindow) {
-    window.electronAPI.openPdfWindow(html, _pdfTitle);
-  } else {
-    var w = window.open('', '_blank', 'width=1000,height=700');
-    if (w) { w.document.open(); w.document.write(html); w.document.close(); }
-  }
+  /* THROUGH _electronPDF(), NOT STRAIGHT TO THE WINDOW. This was the one report
+     that called openPdfWindow itself, so it was the one report with no Download
+     and no Print button — the bar, the @page margins and the print CSS are all
+     injected by _electronPDF, and a document that skips it arrives bare (owner,
+     2026-09-09: "the all student pdf in reports still have no new download and
+     print buttons"). It also loses the popup fallback, which _electronPDF has
+     its own, better version of. */
+  _electronPDF(html, escHtml(hostel) + ' — Students Fee Report · ' + monthLabel,
+               { landscape: true });
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────
@@ -4149,3 +4196,41 @@ function getEmailValue() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── CANCELLATION DOWNLOAD REPORT ─────────────────────────────────────────────
+
+/* THE FLOOR, SHORTENED — and the seater dropped (owner, 2026-09-09: "remove
+   the room seater detail also as a warden already knows how many seats are
+   there, only add there floor").
+
+   The seat count was the room TYPE repeated on every one of its rooms, in a
+   column whose job is to say WHERE. The floor is the thing a warden walking to
+   the room needs, and the long form ("Ground Floor") is two words for a cell
+   that has room for one. */
+function stuFloorShort(floor) {
+  const f = String(floor || '').trim();
+  if (!f) return '';
+  const low = f.toLowerCase();
+  if (low.startsWith('base') || low.startsWith('cellar')) return 'Base-Floor';
+  if (low.startsWith('ground') || low === 'g')            return 'G-Floor';
+  /* '1st', '2nd', '3rd', '4th' — the app's own floor names — keep their
+     ordinal and gain the suffix. Anything a hostel has typed for itself is
+     passed through with the same suffix rather than guessed at. */
+  const m = f.match(/^(\d+)(st|nd|rd|th)?/i);
+  if (m) {
+    const n = Number(m[1]);
+    const suf = n % 10 === 1 && n % 100 !== 11 ? 'st'
+              : n % 10 === 2 && n % 100 !== 12 ? 'nd'
+              : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th';
+    return n + suf + '-Floor';
+  }
+  return f + '-Floor';
+}
+
+/* WHICH PLAN A STUDENT IS ON, for the charge-plan filter. It reads the same
+   resolveCharges() → chargeCoverage() pair the Charges column prints, so the
+   filter can never select a row the column then contradicts. */
+function stuPlanOf(t) {
+  const c = resolveCharges(t);
+  return chargeCoverage({ rent: c.rent, mess: c.mess,
+                          messIncluded: c.messOptIn && c.mess > 0,
+                          hasMess: c.mess > 0 }).key;
+}

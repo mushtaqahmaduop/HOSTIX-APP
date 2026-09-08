@@ -15,7 +15,7 @@
     font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
 }
 .rpt-seg button:hover  { color:var(--text); }
-.rpt-seg button.is-on  { background:var(--accent); color:#fff; }
+.rpt-seg button.is-on  { background:var(--accent); color:var(--text-on-accent); }
 .rpt-bar__end { margin-left:auto; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
 
 .rpt-range { display:flex; align-items:center; gap:8px; height:40px; padding:0 12px; border-radius:11px;

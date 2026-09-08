@@ -40,16 +40,16 @@
                    overflow-wrap:anywhere; }
 /* Base size fits the narrowest card the five-across row produces; @container
    scales up when there is room. Ellipsis is the backstop against spill. */
-.stu-stat__val   { font-size:22px; font-weight:700; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stu-stat__val   { font-size:18px; font-weight:700; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* Colour is reserved for the two figures where it states something: how many
    students are living here, and how many are barred. Total, Left and Occupied
    stay ink — a number is not good or bad for being large. */
 .stu-stat__val.is-good { color:var(--green); }
 .stu-stat__val.is-bad  { color:var(--red); }
-@container (min-width:190px) { .stu-stat__val { font-size:24px; } }
-@container (min-width:220px) { .stu-stat__val { font-size:28px; } }
+@container (min-width:190px) { .stu-stat__val { font-size:19px; } }
+@container (min-width:220px) { .stu-stat__val { font-size:21px; } }
 .stu-stat__val small { font-size:.62em; font-weight:700; color:var(--text3); }
-.stu-stat__sub   { font-size:11px; color:var(--text3); margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-stat__sub   { font-size:10.5px; color:var(--text3); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Below this the row would crush the cards past reading — fall back to wrapping. */
 @media (max-width:900px) {
@@ -93,10 +93,10 @@
     font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
 }
 .stu-btn:hover      { background:var(--dash-sunk); color:var(--text); }
-.stu-btn--primary   { background:var(--accent); border-color:var(--accent); color:#fff; }
-.stu-btn--primary:hover { background:var(--accent); filter:brightness(1.08); color:#fff; }
+.stu-btn--primary   { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
+.stu-btn--primary:hover { background:var(--accent); filter:brightness(1.08); color:var(--text-on-accent); }
 .stu-btn--hue       { background:var(--dh-bg); border-color:var(--dh); color:var(--dh); }
-.stu-btn__count     { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; font-weight:800; line-height:18px; text-align:center; }
+.stu-btn__count     { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:var(--text-on-accent); font-size:10px; font-weight:800; line-height:18px; text-align:center; }
 
 .stu-pop {
     position:absolute; top:calc(100% + 8px); right:0; z-index:900; min-width:250px; padding:12px;
@@ -127,7 +127,7 @@
 .stu-table thead th.is-sorted { color:var(--accent-strong); }
 .stu-table thead th.is-sorted .arw { opacity:1; }
 
-.stu-table tbody td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:12.5px; color:var(--text2); }
+.stu-table tbody td { padding:13px 12px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13.5px; color:var(--text2); }
 .stu-table tbody tr:last-child td { border-bottom:none; }
 .stu-table tbody tr { transition:background .12s ease; }
 .stu-table tbody tr:hover     { background:var(--dash-sunk); }
@@ -144,14 +144,14 @@
 .stu-who__av   { width:36px; height:36px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
                  font-size:13px; font-weight:800; background:var(--dh-bg); color:var(--dh); overflow:hidden; }
 .stu-who__av img { width:100%; height:100%; object-fit:cover; }
-.stu-who__name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; }
-.stu-who__sub  { font-size:11px; color:var(--text3); margin-top:2px; white-space:nowrap; }
+.stu-who__name { font-size:14.5px; font-weight:700; color:var(--text); white-space:nowrap; }
+.stu-who__sub  { font-size:12px; color:var(--text3); margin-top:3px; white-space:nowrap; }
 
-.stu-room__n { font-size:13px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-.stu-room__t { font-size:10.5px; color:var(--text3); margin-top:2px; white-space:nowrap; }
+.stu-room__n { font-size:14px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+.stu-room__t { font-size:11.5px; color:var(--text3); margin-top:3px; white-space:nowrap; }
 
-.stu-contact      { font-size:12px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.stu-contact__em  { display:flex; align-items:center; gap:5px; margin-top:3px; font-size:11px; color:var(--text3); white-space:nowrap; }
+.stu-contact      { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stu-contact__em  { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:12.5px; color:var(--text3); white-space:nowrap; }
 .stu-contact__em i{ width:14px; height:14px; border-radius:4px; background:var(--bg3); flex-shrink:0;
                     display:inline-flex; align-items:center; justify-content:center; }
 .stu-contact__em i svg { width:9px; height:9px; color:var(--text3); }
@@ -218,7 +218,7 @@
 }
 .stu-pager button:hover:not(:disabled):not(.is-on) { background:var(--dash-sunk); color:var(--text); }
 .stu-pager button:disabled { opacity:.4; cursor:not-allowed; }
-.stu-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:#fff; }
+.stu-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
 .stu-pager__gap { color:var(--text3); padding:0 3px; }
 
 @media (max-width:900px) { .stu-foot__info { order:3; flex-basis:100%; text-align:left; } }
@@ -325,8 +325,8 @@
     font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
 }
 .sf-btn:hover          { background:var(--dash-sunk); color:var(--text); }
-.sf-btn--go            { background:var(--accent); border-color:var(--accent); color:#fff; }
-.sf-btn--go:hover      { background:var(--accent-strong); border-color:var(--accent-strong); color:#fff; }
+.sf-btn--go            { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
+.sf-btn--go:hover      { background:var(--accent-strong); border-color:var(--accent-strong); color:var(--text-on-accent); }
 .sf-btn--ghost         { background:var(--dash-sunk); }
 
 /* Room picker dropdown reuses the form input shell */
@@ -368,7 +368,7 @@
 .svw-hero__av {
     width:76px; height:76px; border-radius:50%; flex-shrink:0; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
-    background:var(--accent); color:#fff;
+    background:var(--accent); color:var(--text-on-accent);
     font-size:30px; font-weight:800; letter-spacing:-.02em;
 }
 .svw-hero__av img   { width:100%; height:100%; object-fit:cover; }
@@ -552,7 +552,7 @@
 /* The profile hero keeps its accent ground. `.stu-av` is appended after
    `.svw-hero__av` in this file, and both are single-class selectors, so source
    order would otherwise hand the hero the muted table-cell palette. */
-.stu-av.svw-hero__av { background:var(--accent); color:#fff; border:none; }
+.stu-av.svw-hero__av { background:var(--accent); color:var(--text-on-accent); border:none; }
 
 /* ══ ADD STUDENT — the intake page ═══════════════════════════════════════════
    Relaid out 2026-09-03. The previous pass built this screen as a "registry
@@ -746,7 +746,7 @@
 }
 .stu-pop__chip:hover { border-color:var(--accent); color:var(--accent); }
 .stu-pop__chip.is-on {
-    background:var(--accent); border-color:var(--accent); color:#fff;
+    background:var(--accent); border-color:var(--accent); color:var(--text-on-accent);
 }
 .stu-pop__chip:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 
@@ -889,10 +889,23 @@
 /* Address: the one free-text column, so it is the one that must be stopped from
    setting its own width. Two lines then an ellipsis; the full value is on the
    cell's title and on the profile. */
+/* The pin sits BESIDE the text, not inside the clamp. A -webkit-box lays its
+   children out as block-level boxes, so an <i> in there became a full-width row
+   and the SVG — which has no intrinsic size — grew to fill it. The row is a
+   flex line now; only the text clamps. */
 .stu-addr {
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden; font-size: 10.5px; line-height: 1.3; color: var(--text2);
+    display: flex; align-items: flex-start; gap: 4px; min-width: 0;
+    font-size: 10.5px; line-height: 1.3; color: var(--text2);
 }
+.stu-addr__t {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-width: 0;
+}
+.stu-pin {
+    flex: 0 0 12px; width: 12px; height: 12px; margin-top: 1px;
+    color: var(--text3); display: inline-flex;
+}
+.stu-pin svg { width: 12px; height: 12px; display: block; }
 
 /* ── ROW ACTIONS: ONE KEBAB ──────────────────────────────────────────────── */
 .stu-actc  { text-align: center; }
@@ -906,29 +919,10 @@
 .stu-kebab.is-on { background: var(--bg3); color: var(--accent); border-color: var(--border2); }
 .stu-kebab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* `position: fixed` because the menu is appended to <body> and anchored from
-   the button's viewport rect — inside the table it would be clipped by
-   .stu-table-wrap's `overflow-x: auto`, which is the whole reason it is not a
-   child of the row. */
-.stu-rmenu {
-    position: fixed; z-index: 1200; min-width: 176px; padding: 5px;
-    background: var(--card); border: 1px solid var(--border2); border-radius: 10px;
-    box-shadow: 0 10px 30px rgba(15,23,42,.14);
-    display: flex; flex-direction: column; gap: 1px;
-}
-.stu-rmenu button {
-    display: flex; align-items: center; gap: 9px; width: 100%;
-    padding: 8px 10px; border: 0; border-radius: 7px; cursor: pointer;
-    background: none; color: var(--text2); text-align: left;
-    font-family: inherit; font-size: 12.5px; font-weight: 600;
-}
-.stu-rmenu button svg { width: 14px; height: 14px; flex-shrink: 0; }
-.stu-rmenu button:hover { background: var(--bg3); color: var(--text); }
-/* Delete is separated and coloured. It used to sit one pixel from Edit, which
-   is the adjacency that produces the deletion nobody meant. */
-.stu-rmenu__sep { height: 1px; background: var(--border2); margin: 4px 2px; }
-.stu-rmenu .is-danger { color: var(--ant-danger-fg); }
-.stu-rmenu .is-danger:hover { background: var(--ant-danger-bg); color: var(--ant-danger-fg); }
+/* The row menu moved to listkit.css on 2026-09-09, as `.lk-rmenu` — Payments
+   draws the same component now, and a menu defined in the Students stylesheet
+   was going to be copied rather than reused. `.stu-rmenu` no longer exists;
+   stuRowMenu() emits the shared class. */
 
 /* ── ONE TOOLBAR ROW ─────────────────────────────────────────────────────────
    Eight controls on one line, as the reference draws them. The search box and
@@ -1097,7 +1091,7 @@
     display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
     min-width: 0;
     height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer;
-    background: var(--accent); border: 1px solid var(--accent); color: #fff;
+    background: var(--accent); border: 1px solid var(--accent); color: var(--text-on-accent);
     font-family: inherit; font-size: 11.5px; font-weight: 650; white-space: nowrap;
 }
 .stu-pan__print svg { width: 14px; height: 14px; }
@@ -1504,3 +1498,132 @@
 .stu-pan__tl__t { font-size: 13px; font-weight: 650; color: var(--text); }
 .stu-pan__tl__s { font-size: 11.5px; color: var(--text2); }
 .stu-pan__tl__w { font-size: 11px; color: var(--text3); }
+
+
+/* ══ EDIT STUDENT — THE DIALOG'S OWN HEAD, 2026-09-07 ═══════════════════════
+   Prefixed `.esf-*` and scoped to the modal on purpose. The Student intake
+   PAGE and this dialog share the whole `.sf-*` form vocabulary — the sections,
+   the grid, the inputs — and that sharing is the point: one field must not
+   read one way on the page and another in the dialog.
+
+   What cannot be shared is the photo block. On the page it is a 140px well
+   with a drop zone beneath it and two full-width buttons beneath that: right
+   in a rail that has the height to spend. In a dialog capped at the viewport
+   it was 260px of a form that has about 620px for everything, which is why
+   the dialog opened on a photograph and half of section one.                */
+
+.esf-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.esf-photo { display: flex; align-items: flex-start; gap: 11px; }
+
+.esf-photo__well {
+    width: 76px; height: 76px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    border: 1px dashed var(--border2);
+    background: var(--bg3);
+    color: var(--text3);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    transition: var(--transition);
+}
+.esf-photo__well:hover,
+.esf-photo__well.is-over { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+
+.esf-photo__acts { display: flex; flex-direction: column; gap: 6px; }
+.esf-photo__l {
+    font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 1px;
+}
+.esf-photo__acts .sf-btn {
+    justify-content: flex-start;
+    width: 148px;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 7px;
+}
+.esf-photo__rm { color: var(--red); }
+.esf-photo__rm:hover { border-color: var(--red); }
+
+/* The camera drops in under the head rather than inside a 190px column, so the
+   preview is big enough to aim with. */
+.esf-cam {
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--bg3);
+    max-width: 320px;
+}
+.esf-cam video { width: 100%; border-radius: 9px; background: #000; display: block; }
+.esf-cam__acts { display: flex; gap: 7px; margin-top: 8px; }
+.esf-cam__acts .sf-btn { flex: 1; justify-content: center; padding: 0 10px; }
+
+/* Section chrome inside the dialog. The page numbers its sections 01–04 in the
+   head; the dialog now carries the same badge, so a warden being talked
+   through "section three" finds the same block on either surface. */
+.sf-wrap--modal .sf-sec { margin-bottom: 10px; padding: 12px 14px; }
+.sf-wrap--modal .sf-sec__h {
+    gap: 8px;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
+}
+.sf-wrap--modal .sf-sec__h svg { color: var(--accent-strong); }
+.sf-wrap--modal .sf-grid { gap: 10px 12px; }
+.sf-wrap--modal .sf-grid[style*="margin-top:14px"] { margin-top: 10px !important; }
+.sf-wrap--modal .sf-ta { min-height: 64px; }
+
+
+/* ══ SECTION HEADS, 2026-09-07 ═════════════════════════════════════════════
+   To the Student intake reference: the glyph in a filled blue tile, the
+   number beside it, the section's name in sentence case at reading size. It
+   was an 11px uppercase line with 1.1px of tracking in accent — the same
+   weight the app gives a table column heading, for what is the title of a
+   block of ten fields.
+
+   Both the page and the dialog, because they are the same form. */
+.sf-sec__h {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
+    margin-bottom: 12px;
+}
+.sf-sec__h > svg {
+    width: 26px; height: 26px;
+    padding: 5px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--text-on-accent);
+    box-sizing: border-box;
+}
+.asf-n {
+    color: var(--accent-strong);
+    font-size: 12.5px;
+}
+
+/* ── The two numbers ─────────────────────────────────────────────────────────
+   WhatsApp on the student's own line, a handset on the guardian's. The colour
+   is the only thing that separates them at a glance, so the marks carry it and
+   the numbers stay in the text ramp. */
+.stu-wa, .stu-ph { display:flex; flex-shrink:0; }
+.stu-wa svg { width:14px; height:14px; color:#25b862; }
+.stu-ph svg { width:13px; height:13px; color:var(--text3); }
+body.light-theme .stu-wa svg { color:#1da851; }
+
+/* ── The strip, compact ───────────────────────────────────────────────────── */
+.stu-stat { padding:11px 13px; }
+
+/* ── A labelled action button ─────────────────────────────────────────────── */
+.stu-kebab { gap:5px; width:auto; padding:0 10px 0 7px; }
+.stu-kebab span { font-size:12px; font-weight:600; letter-spacing:.01em; }

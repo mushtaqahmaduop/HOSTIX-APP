@@ -116,27 +116,12 @@ function renderRooms() {
   const _occOf = id => (_activeByRoom.get(id) ? _activeByRoom.get(id).count : 0);
   const _vacOf = id => (_activeByRoom.get(id) ? _activeByRoom.get(id).vacating : 0);
 
-  let rooms = DB.rooms.filter(r=>{
-    const occ = _occOf(r.id) > 0;
-    if(roomFilter.status==='Occupied' && !occ) return false;
-    if(roomFilter.status==='Vacant' && occ) return false;
-    if(roomFilter.type!=='All' && r.typeId!==roomFilter.type) return false;
-    if(roomFilter.floor!=='All' && r.floor!==roomFilter.floor) return false;
-    if(roomFilter.search && !String(r.number).toLowerCase().includes(roomFilter.search.toLowerCase())) return false;
-    return true;
-  });
+  // Shared with the exports, so the sheet and the screen cannot disagree.
 
   const typeOptions = DB.settings.roomTypes.map(t=>`<option value="${t.id}" ${roomFilter.type===t.id?'selected':''}>${escHtml(t.name)}</option>`).join('');
   const floorOptions = DB.settings.floors.map(f=>`<option value="${escHtml(f)}" ${roomFilter.floor===f?'selected':''}>${escHtml(f)} Floor</option>`).join('');
 
-  rooms = applySort(rooms, roomFilter, {
-    // cmpRoomNo: 'A 01' is a legal room number here, and a plain compare
-    // orders 1, 10, 2.
-    number:    { get: r => r.number, cmp: cmpRoomNo },
-    occupancy: r => _occOf(r.id),
-    floor:     r => r.floor,
-    type:      r => getRoomType(r).name
-  });
+  const rooms = roomsFiltered(_occOf);
   const _pg = paginate(rooms, roomFilter);
 
   // ── Stat strip — always describes the whole hostel, not the filtered view.
@@ -296,8 +281,9 @@ function renderRooms() {
     <div class="rms-tools">
       <div class="rms-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input id="search-rooms" placeholder="Search by room number…" value="${escHtml(roomFilter.search)}"
+        <input id="search-rooms" class="lk-sin" placeholder="Search by room number…" value="${escHtml(roomFilter.search)}"
           oninput="capFirstChar(this);roomFilter.search=this.value;roomFilter.page=1;_dRooms()">
+        ${lkSearchX('search-rooms','roomFilter','rooms')}
       </div>
 
       <div class="rms-seg">
@@ -321,10 +307,8 @@ function renderRooms() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M17.5 14.5v6"/><path d="M14.5 17.5h6"/></svg>
         Bulk Add
       </button>
-      <button class="rms-btn" onclick="exportRoomsCSV()" title="Export the current list to CSV">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-        CSV
-      </button>
+      ${tbExport({ id:'rms-export', cls:'rms-btn',
+                   excel:'exportRoomsExcel()', pdf:'exportRoomsPDF()' })}
       <button class="rms-btn" onclick="printSeatAvailability()" title="Print a room + occupancy sheet by floor">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
         Print
@@ -369,32 +353,146 @@ function setRoomView(v) {
   renderPage('rooms');
 }
 
-// Export the currently filtered + sorted rooms to CSV. (Mirrors renderRooms' filter/sort.)
-function exportRoomsCSV() {
-  const activeByRoom = new Map();
-  for (const t of DB.students) { if(t.status!=='Active') continue; activeByRoom.set(t.roomId,(activeByRoom.get(t.roomId)||0)+1); }
-  const occ = id => activeByRoom.get(id)||0;
-  let rooms = DB.rooms.filter(r=>{
-    const o = occ(r.id) > 0;
-    if(roomFilter.status==='Occupied' && !o) return false;
-    if(roomFilter.status==='Vacant' && o) return false;
-    if(roomFilter.type!=='All' && r.typeId!==roomFilter.type) return false;
-    if(roomFilter.floor!=='All' && r.floor!==roomFilter.floor) return false;
-    if(roomFilter.search && !String(r.number).toLowerCase().includes(roomFilter.search.toLowerCase())) return false;
+/* ── THE ROOM LIST EVERY READER SEES ─────────────────────────────────────────
+   One filter, used by the screen and by both exports (§44: the exported
+   dataset must be the displayed dataset). The export used to keep a SECOND
+   copy of these rules, and that copy counted occupancy as `status === 'Active'`
+   — so a room whose only occupant had given notice printed as Vacant while the
+   very same room showed Occupied on screen. Occupancy has one definition
+   (getRoomOccupancy → isResident) and this is the only place it is asked from
+   on behalf of a list.
+
+   `occOf` is an optional fast accessor: renderRooms already builds an
+   occupancy map in one pass over the students and passes it in, rather than
+   paying O(rooms × students) twice on every keystroke. */
+function roomsFiltered(occOf) {
+  const occ = occOf || (id => {
+    const r = DB.rooms.find(x => x.id === id);
+    return r ? getRoomOccupancy(r) : 0;
+  });
+  let rooms = DB.rooms.filter(r => {
+    const isOcc = occ(r.id) > 0;
+    if (roomFilter.status === 'Occupied' && !isOcc) return false;
+    if (roomFilter.status === 'Vacant'   &&  isOcc) return false;
+    if (roomFilter.type  !== 'All' && r.typeId !== roomFilter.type) return false;
+    if (roomFilter.floor !== 'All' && r.floor  !== roomFilter.floor) return false;
+    if (roomFilter.search &&
+        !String(r.number).toLowerCase().includes(roomFilter.search.toLowerCase())) return false;
     return true;
   });
-  rooms = applySort(rooms, roomFilter, {
-    number:{ get:r=>r.number, cmp:cmpRoomNo }, occupancy:r=>occ(r.id),
-    floor:r=>r.floor, type:r=>getRoomType(r).name
+  return applySort(rooms, roomFilter, {
+    // cmpRoomNo: 'A 01' is a legal room number here, and a plain compare
+    // orders 1, 10, 2.
+    number:    { get: r => r.number, cmp: cmpRoomNo },
+    occupancy: r => occ(r.id),
+    floor:     r => r.floor,
+    type:      r => getRoomType(r).name,
   });
-  const rows=[['Room','Type','Floor','Capacity','Occupied','Vacant','Status','Students']];
-  rooms.forEach(r=>{
-    const t=getRoomType(r); const o=occ(r.id);
-    const names=DB.students.filter(s=>s.roomId===r.id&&s.status==='Active').map(s=>s.name).join('; ');
-    rows.push(['#'+r.number,t.name,r.floor,t.capacity,o,Math.max(0,t.capacity-o),o>0?'Occupied':'Vacant',names]);
-  });
-  downloadCSV(rows, 'Rooms_'+today()+'.csv');
 }
+
+/* ══ THE ROOMS EXPORT ══════════════════════════════════════════════════════
+   §36. A bed has three numbers here and they are not interchangeable, so the
+   inventory prints all three rather than one that is wrong for two of the
+   questions asked of it: beds SLEPT IN (getRoomOccupancy), beds ON NOTICE
+   (getRoomVacating), and beds that can be SOLD (roomFreeBeds — a bed on notice
+   is not free, it is reservable). A sheet that carries only "2/3" cannot tell
+   a warden whether the third bed is available this week.                    */
+function _roomExportDef(list) {
+  const typeOf  = r => getRoomType(r) || { name: '', capacity: 0 };
+  const rentOf  = r => Number(r.rent != null && r.rent !== '' ? r.rent : (typeOf(r).defaultRent || 0));
+  const messOf  = r => Number(typeOf(r).defaultMess || 0);
+  const occOf   = r => getRoomOccupancy(r);
+  const vacOf   = r => getRoomVacating(r);
+  const peopleOf = r => DB.students.filter(t => t.roomId === r.id && isResident(t));
+
+  const beds     = list.reduce((s, r) => s + (typeOf(r).capacity || 0), 0);
+  const filled   = list.reduce((s, r) => s + occOf(r), 0);
+  const onNotice = list.reduce((s, r) => s + vacOf(r), 0);
+  const occupied = list.filter(r => occOf(r) > 0).length;
+  const monthly  = list.reduce((s, r) => s + occOf(r) * (rentOf(r) + messOf(r)), 0);
+
+  const typeName = roomFilter.type !== 'All'
+    ? (DB.settings.roomTypes.find(t => t.id === roomFilter.type) || {}).name : null;
+
+  return {
+    module: 'Rooms',
+    title:  'Room Inventory',
+    scope:  '',
+    sheet:  'Rooms',
+
+    filters: [
+      ['Status', roomFilter.status !== 'All' ? roomFilter.status : null],
+      ['Type',   typeName],
+      ['Floor',  roomFilter.floor !== 'All' ? roomFilter.floor + ' floor' : null],
+      ['Search', roomFilter.search || null],
+    ],
+
+    summary: [
+      { label: 'Rooms',        value: String(list.length) },
+      { label: 'Occupied',     value: occupied + ' of ' + list.length, tone: 'pos' },
+      { label: 'Beds',         value: filled + ' / ' + beds },
+      { label: 'On notice',    value: String(onNotice), tone: onNotice ? 'warn' : '' },
+      { label: 'Free beds',    value: String(list.reduce((s, r) => s + roomFreeBeds(r), 0)) },
+      { label: 'Billed / month', value: EXPORT.fmt.money(monthly) },
+    ],
+
+    columns: [
+      { label: 'Room', type: 'id', width: 10,
+        value: r => String(r.number),
+        get:   r => '<b>#' + escHtml(String(r.number)) + '</b>' },
+      { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
+      { label: 'Type',  type: 'text', width: 16, value: r => typeOf(r).name || '' },
+
+      { label: 'Capacity', type: 'number', width: 10, pdf: false,
+        value: r => typeOf(r).capacity || 0 },
+      { label: 'Occupied', type: 'number', width: 10, pdf: false, value: r => occOf(r) },
+      { label: 'On notice', type: 'number', width: 11, pdf: false, value: r => vacOf(r) },
+
+      { label: 'Beds', type: 'text', width: 12, excel: false,
+        value: r => occOf(r) + ' / ' + (typeOf(r).capacity || 0),
+        get:   r => '<b>' + occOf(r) + ' / ' + (typeOf(r).capacity || 0) + '</b>' +
+                    (vacOf(r) ? '<span class="sub">' + vacOf(r) + ' on notice</span>' : '') },
+
+      { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
+
+      { label: 'Rent / mo', type: 'money', width: 14, value: r => rentOf(r) || null },
+      { label: 'Mess / mo', type: 'money', width: 14, value: r => messOf(r) || null },
+
+      { label: 'Status', type: 'status', width: 12,
+        value: r => occOf(r) >= (typeOf(r).capacity || 0) && (typeOf(r).capacity || 0) > 0
+                  ? 'Full' : occOf(r) > 0 ? 'Occupied' : 'Vacant' },
+
+      { label: 'Students', type: 'wrap', width: 34,
+        value: r => peopleOf(r).map(t => t.name).join(', '),
+        get:   r => { const p = peopleOf(r);
+          return p.length ? p.map(t => escHtml(t.name)).join(', ') : '—'; } },
+
+      { label: 'Amenities', type: 'wrap', width: 30, pdf: false,
+        value: r => (r.amenities || []).join(', ') },
+      { label: 'Notes', type: 'wrap', width: 30, pdf: false, value: r => r.notes || '' },
+    ],
+
+    rows: list,
+    empty: 'No rooms match the selected filters.',
+  };
+}
+
+function exportRoomsPDF() {
+  const list = roomsFiltered();
+  if (!list.length) { toast('No rooms to export', 'error'); return; }
+  EXPORT.pdf(_roomExportDef(list));
+}
+
+function exportRoomsExcel() {
+  const list = roomsFiltered();
+  if (!list.length) { toast('No rooms to export', 'error'); return; }
+  EXPORT.excel(_roomExportDef(list));
+}
+
+/* The old name, kept for the call sites that still use it. It writes a
+   workbook now, for the same reason every other module's does. */
+function exportRoomsCSV() { exportRoomsExcel(); }
+
 
 function showRoomDetail(id) {
   const r = DB.rooms.find(x=>x.id===id); if(!r) return;
@@ -927,7 +1025,7 @@ async function confirmDeleteRoom(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // Students v5 adds room / course selects, a page-size picker and a row-selection
 // set, matching the payments screen.
-let studentFilter = {status:'All', room:'All', course:'All', search:'',
+let studentFilter = {status:'All', room:'All', course:'All', plan:'All', search:'',
                      /* Fee status is SEPARATE from the Rent + Mess cell beside it.
                         That cell answers "what is this student charged"; this one
                         answers "have they paid", and the spec is explicit that one
@@ -942,3 +1040,10 @@ let studentFilter = {status:'All', room:'All', course:'All', search:'',
                      // 2026-08-31. Still user-sortable by any column.
                      pageSize:30, page:1, sortKey:'room', sortDir:'asc'};
 let stuSelected = new Set();
+/* The row selection is cleared with the filters for a reason that is not
+   cosmetic: a selection left over from a previous visit sits invisibly behind
+   the bulk action bar on the next one. See FILTER_REGISTRY in nav.js. */
+registerFilter('students', studentFilter, () => ({
+  status:'All', room:'All', course:'All', search:'', fee:'All',
+  month:thisMonth(), page:1, sortKey:'room', sortDir:'asc',
+}), () => stuSelected.clear());
