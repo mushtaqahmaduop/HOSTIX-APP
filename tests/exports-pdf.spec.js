@@ -177,7 +177,15 @@ test('every printed monthly charge carries the mess, not just the rent', async (
 
   // 8,000 rent + 6,500 mess = 14,500 — the figure that was missing everywhere.
   expect(doc.text, 'the sheet quotes the rent half alone').toContain('14,500');
-  expect(doc.text).toContain('8,000 rent + PKR 6,500 mess');
+  /* WHAT IT COVERS IS NAMED, NOT ADDED UP AGAIN (owner, 2026-09-10). This used
+     to assert the sub-line "PKR 8,000 rent + PKR 6,500 mess", which restated
+     two numbers whose total is printed in bold directly above them and was the
+     widest thing in the column. The bug this test exists for is unchanged and
+     still asserted on the line above: the printed charge must be the ALL-IN
+     figure, never the rent half alone. The workbook still carries Rent / mo and
+     Mess / mo as their own columns for anyone reconciling a price rise. */
+  expect(doc.text, 'the sheet does not say what the charge covers').toContain('Rent + Mess');
+  expect(doc.text, 'the old two-number sub-line is back').not.toContain('rent + PKR');
   expect(doc.headers).toContain('Charge / mo');
   // …and it comes out in room order too.
   expect(doc.firstCells).toEqual(['#1', '#2', '#10', '#A 01']);

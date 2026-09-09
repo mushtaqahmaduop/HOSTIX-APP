@@ -957,6 +957,10 @@ function _payExportDef(list, opts) {
 
   const _sk = payScopeKey();
   const scope = _sk ? monthLabel(_sk) : 'All months';
+  /* Arrears only mean something against a month. With "All Months" on screen
+     there is no month to be earlier than, and every unpaid row would otherwise
+     be tagged as an arrear of itself. */
+  const _exArrear = p => !!_sk && payIsArrear(p, _sk);
 
   return {
     module: 'Payments',
@@ -1000,12 +1004,27 @@ function _payExportDef(list, opts) {
 
       { label: 'Month', type: 'text', width: 16, value: p => monthLabel(p.month) },
 
+      /* WHAT THE CHARGE COVERS, NAMED — NOT ADDED UP AGAIN (owner, 2026-09-10:
+         "remove this line PKR 10,000 rent + PKR 7,000 mess from all pdfs and
+         excel ... simply use rent+mess or Rent only or Mess only label").
+
+         The sub-line restated two numbers whose total is printed in bold
+         directly above them, and it was the widest thing in the column. The
+         workbook already carries Rent / mo and Mess / mo as their own columns
+         for anyone reconciling a price rise, so nothing here is the only copy
+         of a figure.
+
+         chargeCoverage() is the app's own four-state answer and the same one
+         the screen draws — the page wears it as a coloured badge, the export
+         prints it as plain text. Colour is a page's job; a printed register
+         that reaches a landlord in black and white cannot carry meaning in a
+         hue. */
       { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
         value: p => charges(p).monthly,
         get:   p => { const c = charges(p);
+          const cov = chargeCoverage(c);
           return '<b>' + (c.monthly > 0 ? fmtPKR(c.monthly) : '—') + '</b>' +
-            (c.messIncluded ? '<span class="sub">' + fmtPKR(c.rent) + ' rent + ' + fmtPKR(c.mess) + ' mess</span>'
-             : c.hasMess ? '<span class="sub">rent only · mess off</span>' : ''); } },
+            (c.monthly > 0 ? '<span class="sub">' + escHtml(cov.label) + '</span>' : ''); } },
 
       /* The two halves of the charge, in the workbook only. The printed page
          carries them as a sub-line under the charge; a spreadsheet needs them
@@ -1041,10 +1060,28 @@ function _payExportDef(list, opts) {
             extrasOf(p).map(c => '<span class="sub">+ ' + fmtPKR(c.amount) + ' ' +
               escHtml(c.description || c.desc || c.label || 'extra') + '</span>').join(''); } },
 
+      /* AN ARREAR SAYS SO, AND SAYS WHICH MONTH (owner, 2026-09-10: "mention
+         arrears in unpaid columns in pdfs and records").
+
+         The register carries rows from earlier months whenever "Carry forward
+         unpaid earlier months" is on, which is the default. On screen those
+         rows wear an Arrears tag in the Month cell; printed, they were an
+         ordinary red figure among this month's, and the totals at the foot then
+         looked wrong to anyone adding up the month they thought they had asked
+         for. The month it belongs to is named, because "arrears" without a date
+         is the same problem one level down. */
       { label: 'Unpaid', type: 'money', width: 14, total: 'sum',
         value: p => outstandingOf(p),
         get:   p => outstandingOf(p) > 0
-                 ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>' : '—' },
+                 ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>'
+                   + (_exArrear(p) ? '<span class="sub">Arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
+                 : '—' },
+
+      /* The same fact as a column, for the workbook — a spreadsheet cannot read
+         a sub-line, and "which of these balances are old" is exactly the thing
+         somebody sorts a sheet by. */
+      { label: 'Arrears from', type: 'text', width: 16, pdf: false,
+        value: p => _exArrear(p) ? (monthLabel(p.month) || '') : '' },
 
       { label: 'Method', type: 'text',   width: 13, value: p => p.method || '' },
       { label: 'Status', type: 'status', width: 11, value: p => payStatusOf(p) },

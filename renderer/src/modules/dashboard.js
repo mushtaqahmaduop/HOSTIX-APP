@@ -2103,9 +2103,16 @@ function _dashRecentPayments(list, mo, collected) {
         + '<span class="dash-rp-name">' + escHtml(name) + '</span></div></td>'
       + '<td><span class="dash-rp-room">#' + escHtml(String(p.roomNumber || '')) + '</span></td>'
       + '<td><span class="dash-rp-num">' + (ch.monthly > 0 ? fmtPKR(ch.monthly) : '—') + '</span>'
-        + (ch.messIncluded
-            ? '<div class="dash-rp-sub">' + fmtPKR(ch.rent) + ' rent + ' + fmtPKR(ch.mess) + ' mess</div>'
-            : ch.hasMess ? '<div class="dash-rp-sub">rent only · mess off</div>' : '')
+        /* WHAT IT COVERS, NAMED (owner, 2026-09-10). This read "PKR 10,000
+           rent + PKR 7,000 mess" — two numbers whose total is printed in the
+           same cell directly above them — and the alternative branch said
+           "rent only · mess off", which is the same fact in a different
+           vocabulary. chargeCoverage() names all four cases in one word each,
+           and it is the badge the students register and the payments register
+           already draw. */
+        + (ch.monthly > 0
+            ? (c => '<span class="lk-cov ' + c.hue + '">' + escHtml(c.label) + '</span>')(chargeCoverage(ch))
+            : '')
       + '</td>'
       + '<td><span class="dash-rp-num">' + fmtPKR(p.amount) + '</span>'
         + _dashExtraLines(p).map(l =>

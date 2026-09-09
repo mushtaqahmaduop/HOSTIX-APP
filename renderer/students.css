@@ -541,11 +541,11 @@
    cell: how much, made of what, and does it include food. */
 .stu-charge      { font-size:12.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-charge__sub { font-size:10.5px; font-weight:600; color:var(--text3); margin-top:1px; white-space:nowrap; }
-.stu-cov {
-    display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px;
-    font-size:9.5px; font-weight:800; letter-spacing:.3px; text-transform:uppercase;
-    background:var(--dh-bg); color:var(--dh); white-space:nowrap;
-}
+/* THE RULES MOVED TO listkit.css ON 2026-09-10, as `.lk-cov`, with `.stu-cov`
+   kept in the selector so this page's markup is unchanged. The dashboard's
+   Recent Payments card draws the same badge now — the owner asked for this
+   label "globally", coloured on a page and plain in a PDF. The narrow-width
+   sizes further down this file still apply. */
 /* Nationality is a category, so it reads as a neutral chip rather than as
    plain text competing with the name beside it. */
 .stu-nat {

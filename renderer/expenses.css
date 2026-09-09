@@ -309,3 +309,19 @@
    what that leaves. */
 .exp-stats .exp-stat        { padding: 14px 15px; }
 .exp-stats .exp-stat__vrow  { flex-wrap: nowrap; }
+
+
+/* ══ DESCRIPTION TAKES THE SLACK (owner, 2026-09-10) ═══════════════════════
+   This table has seven columns and a fixed-width figure in most of them, so on
+   a 1366 laptop it finishes with a few hundred pixels of nothing — spread
+   evenly across every column by the browser's auto layout, which gives the
+   free space to Date and Amount, neither of which can use it, and leaves the
+   one free-text column truncating.
+
+   `width:100%` on a single cell of an auto-layout table is the standard way to
+   say "this one takes what is left": every other column sizes to its content
+   and Description gets the remainder. It wraps rather than ellipsising, because
+   what a warden wrote about a bill is the reason the row exists. */
+.exp-table thead th:nth-child(3),
+.exp-table tbody td.exp-desc { width:100%; }
+.exp-desc { white-space:normal; line-height:1.4; }

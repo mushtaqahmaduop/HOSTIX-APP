@@ -404,3 +404,18 @@ body.light-theme .lk-sin:focus {
    10-Sept-20" is not a short 2026. Two short lines is the worst it can do. */
 .lk-statdate { margin-top:3px; font-size:10.5px; color:var(--text3);
                white-space:normal; line-height:1.3; }
+
+
+/* ══ WHAT A CHARGE COVERS (owner, 2026-09-10) ══════════════════════════════
+   "Rent + Mess", "Rent only", "Mess only" — chargeCoverage() in utils.js names
+   the four cases and this is how a PAGE wears them: the hue comes from the
+   card's own `dh-*` class, so the badge says which of the four at a glance.
+   An export prints the same label as plain text, because a register that
+   reaches a landlord in black and white cannot carry meaning in a colour.
+
+   Moved here from students.css, where it was `.stu-cov` and served one page. */
+.lk-cov, .stu-cov {
+    display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px;
+    font-size:9.5px; font-weight:800; letter-spacing:.3px; text-transform:uppercase;
+    background:var(--dh-bg); color:var(--dh); white-space:nowrap;
+}

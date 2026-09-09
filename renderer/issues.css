@@ -157,3 +157,18 @@
     .iss-tabs { grid-template-columns:1fr; }
     .iss-tab  { border-right:none; border-bottom:1px solid var(--border); }
 }
+
+
+/* ══ THE ISSUE COLUMN TAKES THE SLACK (owner, 2026-09-10) ══════════════════
+   `.iss-c-title` was capped at 340px, which was right when this table had to
+   fit eleven columns of content; with the register's usual shape — most rows
+   carrying no student, no room and no assignee — the cap left the title and
+   its description clamped inside 340px while the columns beside them held a
+   dash each.
+
+   The cap becomes a floor: the column takes whatever the fixed columns leave
+   (`width:100%` on one cell of an auto-layout table) and never drops below the
+   340 it used to be pinned at. The description still clamps to two lines —
+   that is a row-height decision, not a width one, and a register whose rows
+   are three lines tall stops being scannable. */
+.iss-c-title { max-width:none; width:100%; min-width:340px; }
