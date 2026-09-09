@@ -680,6 +680,24 @@ if (typeof capFirstChar === 'undefined') {
     input.form-control[placeholder*="name"], input.form-control[placeholder*="Name"] {
       text-transform: capitalize;
     }
+    /* AN EMAIL IS NOT A NAME, AND THE RULE ABOVE CANNOT TELL (2026-09-10).
+       NOTE: no backticks in this comment - this stylesheet is a JS template
+       literal, and one would end the string. The rest would then parse as
+       code, which is exactly what happened on the first attempt at this note:
+       "placeholder is not defined", thrown from an IIFE that runs at load, so
+       modals.js stopped evaluating and every function below it went missing.
+       The selector matching on a placeholder containing "name" also matches
+       "name@example.com" - the most natural placeholder there is for an email
+       box - so an address typed in lower case was DISPLAYED as "X2@Mail.Com"
+       while the value underneath stayed correct. A field that shows something
+       other than what it holds is worse than one that is not prettified at
+       all, and it is invisible to any test that reads .value. Found on the
+       re-admit form; it applies to every email box in the app that names
+       itself in its placeholder. */
+    input.form-control[type="email"],
+    input.form-control[id*="email"],
+    input.form-control[id*="mail"] { text-transform: none; }
+
     /* Prevent ALL-CAPS display in tables – normalize to Title Case via CSS */
     table td { font-variant: normal; text-transform: none; }
     table td .td-name div { text-transform: capitalize; }

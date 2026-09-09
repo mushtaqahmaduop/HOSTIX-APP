@@ -37,6 +37,9 @@ const SIZES = [
 
 const PAGES = ['dashboard', 'students', 'payments', 'rooms', 'expenses',
   'cancellations', 'reports', 'issues', 'activitylog', 'settings',
+  // Former Students became a page on 2026-09-10 — it was a modal off the
+  // account menu, and a modal is not walked by this probe.
+  'former',
   'addstudent', 'addpayment'];
 
 function launchOpts() {

@@ -30,6 +30,8 @@ const PROFILE = process.env.HOSTIX_TEST_PROFILE;
 const ELECTRON = require('electron'); // resolves to the electron.exe path
 
 const PAGES = ['rooms', 'students', 'payments', 'expenses', 'cancellations',
+  // 'former' joined on 2026-09-10 — Former Students was a modal until then.
+  'former',
   'reports', 'issues', 'activitylog', 'settings', 'dashboard'];
 
 function launchOpts() {

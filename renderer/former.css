@@ -1,0 +1,177 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   FORMER STUDENTS — the page (owner ref: `former student page.png`).
+
+   ALMOST NOTHING LIVES HERE, and that is the point. The register itself is the
+   shared listkit: `.lk-stats`, `.lk-tools`, `.lk-table`, `.lk-foot` — the same
+   components Cancellations and Complaints draw, so a warden who can read one
+   of those can read this without learning anything, and a change to the shared
+   component reaches all three. What follows is only what this page has that
+   the others do not: a two-line contact cell, a money cell, and the dot on its
+   status chip.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Phone over email. The reference stacks them, and it is right to: they are
+   two ways of reaching the same person, not two facts, so they belong in one
+   cell rather than in two columns of a table that is already nine wide. */
+.fm-c {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12.5px; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fm-c svg { flex-shrink: 0; width: 12px; height: 12px; color: var(--text3); }
+.fm-c--2 {
+    margin-top: 3px; font-size: 11.5px; color: var(--text3);
+    font-family: var(--font); letter-spacing: normal;
+    overflow: hidden; text-overflow: ellipsis; max-width: 190px;
+}
+
+.fm-money {
+    font-size: 13px; font-weight: 800; color: var(--text); white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+}
+
+/* The status chip's dot. "Left" is a terminal state and wears the neutral
+   slate every other terminal state on this app wears — the hue is not spare
+   decoration, it is the same slate the Restored chip uses on Cancellations. */
+.fm-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    background: currentColor; display: inline-block; margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* Restore is a LABELLED button inside the icon widget, and it is the only one
+   on this page that is: it is the verb the page exists for, and the reference
+   draws it with its word. The kebab beside it carries everything else. */
+.lk-acts--widget .lk-act--hue.dh-green {
+    width: auto; padding: 0 9px; gap: 5px;
+    font-size: 11.5px; font-weight: 700;
+    background: var(--dh-bg); color: var(--dh);
+}
+.lk-acts--widget .lk-act--hue.dh-green:hover { border-color: var(--dh); }
+
+/* THE REASON COLUMN TAKES THE SLACK, and it is the only free-text column on
+   the page. `width:100%` on one cell of an auto-layout table hands it whatever
+   the eight fixed columns leave, which is what stopped "BS Computer Science"
+   from wrapping onto three lines in a 90px Occupation column beside a Reason
+   column holding one word. */
+.lk-table th.fm-reason,
+.lk-table td.fm-reason { width: 100%; white-space: normal; min-width: 120px; }
+.fm-occ { white-space: nowrap; }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RE-ADMIT A FORMER STUDENT (owner ref: `re admit former student form.png`)
+
+   The form itself is the shared `.hf-*` system — sections, fields, inputs — so
+   only what this dialog has and the others do not lives here: the identity
+   band, the previous-stay ledger, and the running total.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* WHO THIS IS, BEFORE ANY FIELD. A warden re-admitting somebody is checking
+   they have the right person: the name, the ID and CNIC to check it against,
+   when they were last here and which room they had. Everything in the band is
+   read from the record; nothing in it is editable, because correcting a name
+   is what the first section is for. */
+.rsf-band {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 13px 15px; margin-bottom: 10px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+}
+.rsf-band__id { min-width: 0; flex: 1 1 240px; }
+.rsf-band__n {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 16px; font-weight: 800; color: var(--text);
+}
+.rsf-band__m {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 4px; font-size: 11.5px; color: var(--text3); overflow-wrap: anywhere;
+}
+.rsf-band__m svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* The two facts that decide whether this is a re-admission or a fresh one.
+   Each is a bordered cell rather than another line of the meta block: they are
+   about the LAST stay, and the block above them is about the person. */
+.rsf-band__f {
+    display: flex; align-items: flex-start; gap: 9px; flex: 0 0 auto;
+    padding: 9px 12px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border);
+}
+.rsf-band__fi {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.rsf-band__fk { font-size: 10.5px; color: var(--text3); }
+.rsf-band__fv { margin-top: 2px; font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.rsf-band__fs { margin-top: 2px; font-size: 10.5px; color: var(--text3); white-space: nowrap; }
+
+.rsf-note {
+    display: flex; align-items: flex-start; gap: 9px; margin-bottom: 12px;
+    padding: 10px 13px; border-radius: 10px;
+    background: var(--accent-soft); border: 1px solid var(--accent-dim);
+    font-size: 11.5px; line-height: 1.55; color: var(--text2);
+}
+.rsf-note svg { flex-shrink: 0; margin-top: 1px; color: var(--accent-strong); }
+
+/* THE PREVIOUS LEDGER, and it is the one thing here the reference has no room
+   for. A student who left owing PKR 3,200 is a different re-admission from one
+   who left square, and the warden filling this form is the person who decides
+   what to do about it. Six rows: enough to see the shape of a stay, and the
+   whole ledger is one click away on the student panel. */
+.rsf-sum { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rsf-h-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.rsf-h { width: 100%; border-collapse: separate; border-spacing: 0; }
+.rsf-h thead th {
+    position: sticky; top: 0;
+    background: var(--dash-sunk); border-bottom: 1px solid var(--border);
+    padding: 8px 11px; text-align: left; white-space: nowrap;
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text3);
+}
+.rsf-h tbody td {
+    padding: 8px 11px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--text2); white-space: nowrap;
+}
+.rsf-h tbody tr:last-child td { border-bottom: none; }
+.rsf-h__n {
+    font-weight: 700; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.rsf-h__n.is-owed { color: var(--red); }
+
+.rsf-add { margin-left: auto; }
+
+/* The running total. One line of four cells and three operators — the
+   arithmetic is the point, so it is drawn as arithmetic rather than as four
+   labelled boxes a reader has to work out the relationship between. */
+.rsf-tot {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-top: 10px; padding: 11px 14px; border-radius: 10px;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.rsf-tot__c { min-width: 0; }
+.rsf-tot__c span {
+    display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 3px; white-space: nowrap;
+}
+.rsf-tot__op { font-size: 15px; color: var(--text3); }
+.rsf-tot__c--net {
+    margin-left: auto; padding: 7px 13px; border-radius: 9px;
+    background: var(--accent-soft); border: 1px solid var(--accent-dim);
+}
+.rsf-tot__c--net span { color: var(--accent-strong); }
+
+/* The extra-charge rows rsAddExtraRow() appends. They are built in JS with an
+   inline style attribute today; this gives the pair a shape without touching
+   that function's contract. */
+#rs-extra-list > div { margin-bottom: 8px; }
+#rs-extra-list .rs-extra-amt { text-align: right; }
+
+@media (max-width: 760px) {
+    .rsf-band__f { flex: 1 1 100%; }
+    .rsf-tot__c--net { margin-left: 0; }
+}

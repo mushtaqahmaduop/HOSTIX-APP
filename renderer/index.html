@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="issues.css">
   <link rel="stylesheet" href="reports.css">
   <link rel="stylesheet" href="expenses.css">
+  <link rel="stylesheet" href="former.css">
   <link rel="stylesheet" href="cancellations.css">
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="whatsapp.css">
@@ -497,6 +498,14 @@
       </svg>
       <span class="nav-label">Students</span>
     </div>
+    <div class="nav-item" onclick="navRail('former')" data-page="former" title="Former Students — everyone who has left">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="m17 11 2 2 4-4" />
+      </svg>
+      <span class="nav-label">Former Students</span>
+    </div>
     <div class="nav-item" onclick="navRail('cancellations')" data-page="cancellations" title="Cancellations">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10" />
@@ -600,7 +609,7 @@
         <b id="user-menu-name">Warden</b>
         <span id="user-menu-role">Admin</span>
       </div>
-      <button class="hdr-menu__item" onclick="closeHdrMenus();showFormerStudentsModal()">
+      <button class="hdr-menu__item" onclick="closeHdrMenus();navigate('former')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
         Former Students
       </button>
@@ -749,6 +758,7 @@
   <script src="src/modules/nav.js"></script>
   <script src="src/modules/dashboard.js"></script>
   <script src="src/modules/cancellations.js"></script>
+  <script src="src/modules/former.js"></script>
   <script src="src/modules/rooms.js"></script>
   <script src="src/modules/students.js"></script>
   <script src="src/modules/payments.js"></script>

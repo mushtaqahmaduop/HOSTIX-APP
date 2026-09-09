@@ -110,6 +110,11 @@ const pageConfig = {
   payments:      { title:'Finance', sub:'', action:'Add Payment' },
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
   cancellations: { title:'Cancellations', sub:'', action:'Add Cancellation' },
+  /* Former Students was a MODAL behind the account menu until 2026-09-10.
+     `action:null` on purpose: the page's own verb is Restore, on a row, and
+     there is no such thing as adding a former student — somebody becomes one
+     by leaving. */
+  former:        { title:'Former Students', sub:'', action:null },
   reports:       { title:'Reports', sub:'', action:null },
   issues:        { title:'Complaints', sub:'', action:'Add Issue' },
   activitylog:   { title:'Activity Log', sub:'', action:null },
@@ -475,6 +480,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='payments') el.innerHTML = renderPayments();
       else if(basePage==='expenses') el.innerHTML = renderExpenses();
       else if(basePage==='cancellations') el.innerHTML = renderCancellations(cancFilter);
+      else if(basePage==='former') el.innerHTML = renderFormerStudents();
       else if(basePage==='reports') el.innerHTML = renderReports();
       else if(basePage==='maintenance') { issuesTab='maintenance'; el.innerHTML = renderIssues(); }
       else if(basePage==='complaints') { issuesTab='complaints'; el.innerHTML = renderIssues(); }

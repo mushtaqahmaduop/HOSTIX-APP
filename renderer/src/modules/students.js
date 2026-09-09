@@ -3588,88 +3588,265 @@ function _getAvailableRooms() {
   return DB.rooms.filter(r=>{ const t=getRoomType(r); return getRoomOccupancy(r)<(t?.capacity||1); });
 }
 
-function openRestoreStudentForm(studentId) {
-  const t = DB.students.find(x=>x.id===studentId); if(!t) return;
-  const availRooms = roomsByNumber(_getAvailableRooms());
-  const roomOpts = availRooms.map(r=>{ const type=getRoomType(r); return `<option value="${r.id}">Room #${escHtml(String(r.number))} — ${escHtml(type?.name||'')} (${getRoomOccupancy(r)}/${type?.capacity||1} filled)</option>`; }).join('');
-  const pmOpts = pmOptions(t.paymentMethod);
-  const today = ymd(new Date());
-  const thisMonthKey = today.slice(0,7);
-  const payHistory = DB.payments.filter(p=>p.studentId===t.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const totalPaid = payHistory.filter(p=>p.status==='Paid').reduce((s,p)=>s+Number(p.amount||0),0);
-  const pendRecs  = payHistory.filter(p=>calculateOutstanding(p)>0);
-  const totalPend = pendRecs.reduce((s,p)=>s+calculateOutstanding(p),0);
-  const histRows  = payHistory.slice(0,6).map((p,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--bg3)':'transparent'}"><td style="padding:7px 10px;font-weight:600;font-size:11px">${escHtml(p.month||'—')}</td><td style="padding:7px 10px;color:var(--green);font-weight:700;font-size:11px">${fmtPKR(p.amount)}</td><td style="padding:7px 10px;color:${calculateOutstanding(p)>0?'var(--red)':'var(--text3)'};font-weight:700;font-size:11px">${calculateOutstanding(p)>0?fmtPKR(calculateOutstanding(p)):'—'}</td><td style="padding:7px 10px;font-size:11px">${escHtml(p.method||'—')}</td><td style="padding:7px 10px;font-size:11px;color:${p.status==='Paid'?'var(--green)':'var(--red)'};font-weight:700">${p.status==='Paid'?icon('checkmark','xs'):'⏳'} ${p.status}</td><td style="padding:7px 10px;font-size:10px;color:var(--text3)">${fmtDate(p.date)||'—'}</td></tr>`).join('');
+/* ============================================================================
+   RE-ADMIT A FORMER STUDENT - rebuilt 2026-09-10 to
+   `re admit former student form.png`.
 
-  showModal('modal-lg', `<span style="color:var(--green)">🔄 Restore — ${escHtml(t.name)}</span>`,
-    `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;background:var(--green-dim);border:1px solid rgba(46,201,138,0.25);border-radius:8px;padding:10px 14px">All previous details are pre-filled. Update the room and payment details.</div>
-    ${payHistory.length?`<div style="margin-bottom:16px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div style="font-size:12px;font-weight:700;color:var(--blue)">📋 Past Payment History</div>
-        <div style="display:flex;gap:8px">
-          <span style="font-size:11px;font-weight:700;color:var(--green)">Paid: ${fmtPKR(totalPaid)}</span>
-          ${totalPend>0?`<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(255,77,109,0.1);padding:2px 8px;border-radius:5px">${icon('warning','sm')} Past pending: ${fmtPKR(totalPend)}</span>`:`<span style="font-size:11px;color:var(--green)">${icon('checkmark','xs')} No past dues</span>`}
-        </div>
-      </div>
-      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:var(--bg4)"><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Month</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Paid</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Unpaid</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Method</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Status</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Date</th></tr></thead>
-        <tbody>${histRows}</tbody>
-      </table></div>
-      ${payHistory.length>6?`<div style="padding:7px 14px;font-size:10px;color:var(--text3);border-top:1px solid var(--border)">Showing 6 of ${payHistory.length} records</div>`:''}
-    </div>`:''}
-    <div class="form-grid">
-      <input type="hidden" id="rs-studentId" value="${escHtml(t.id)}">
-      <div class="field"><label>Full Name</label><input class="form-control" id="rs-name" value="${escHtml(t.name||'')}" style="text-transform:capitalize" oninput="autoCapName(this)"></div>
-      <div class="field"><label>Father Name</label><input class="form-control" id="rs-fname" value="${escHtml(t.fatherName||'')}" style="text-transform:capitalize" oninput="autoCapName(this)"></div>
-      <div class="field"><label>CNIC</label><input class="form-control" id="rs-cnic" value="${escHtml(t.cnic||'')}" placeholder="XXXXX-XXXXXXX-X" maxlength="15" oninput="fmtCnic(this)"></div>
-      <div class="field"><label>Phone</label><input class="form-control" id="rs-phone" value="${escHtml(t.phone||'')}"></div>
-      <div class="field"><label>Email</label><input class="form-control" id="rs-email" value="${escHtml(t.email||'')}"></div>
-      <div class="field"><label>Occupation</label><input class="form-control" id="rs-occ" value="${escHtml(t.occupation||'')}"></div>
-      <div class="field col-full"><label>Home Address</label><input class="form-control" id="rs-address" value="${escHtml(t.address||'')}"></div>
-      <div class="field"><label>Emergency Contact</label><input class="form-control" id="rs-emerg" value="${escHtml(t.emergencyContact||'')}"></div>
-      <div class="field"><label>Re-join Date</label><input class="form-control cdp-trigger" id="rs-join" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today}"></div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">🏠 New Room Assignment</div></div>
-      <div class="field col-full"><label>Assign Room *</label><select class="form-control" id="rs-room" onchange="rsRecalc()"><option value="">— Select available room —</option>${roomOpts}</select><div style="font-size:11px;color:var(--text3);margin-top:4px">Monthly charge (room rent + mess) is taken from the room's configured rate in Settings.</div></div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--accent-strong);margin-bottom:10px">${icon('money')} First Month Payment</div></div>
-      <div class="field"><label>Payment Month</label><input class="form-control" id="rs-month" type="text" value="${thisMonthLabel()}" oninput="rsCheckMonthDuplicate('${t.id}',this.value)" placeholder="e.g. March 2026"></div>
-      <div class="field"><label>Payment Method</label><select class="form-control" id="rs-pm">${pmOpts}</select></div>
-      <div id="rs-month-warning" class="field col-full" style="display:none"></div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--red)">➕ Extra Charges</div>
-          <button type="button" onclick="rsAddExtraRow()" style="background:var(--red-dim);border:1px solid rgba(255,77,109,0.3);color:var(--red);border-radius:7px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer">+ Add Charge</button>
-        </div>
-        <div id="rs-extra-list"></div>
-      </div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--teal);margin-bottom:10px">🎁 Concession / Discount</div></div>
-      <div class="field"><label>Concession Amount (PKR)</label><input class="form-control" id="rs-concession" type="number" min="0" placeholder="0" oninput="rsRecalc()"></div>
-      <div class="field"><label>Concession Reason</label><input class="form-control" id="rs-conc-reason" placeholder="e.g. Loyalty discount…"></div>
-      <!-- Net Payable summary -->
-      <div class="field col-full">
-        <div id="rs-total-box" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Monthly Charge</div><div id="rs-tot-rent">${moneyValue(0,{size:"body",color:"var(--blue)"})}</div></div>
-          <div style="color:var(--border2);font-size:20px">+</div>
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Extra Charges</div><div id="rs-tot-extra">${moneyValue(0,{size:"body",color:"var(--red)"})}</div></div>
-          <div style="color:var(--border2);font-size:20px">−</div>
-          <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Concession</div><div id="rs-tot-conc">${moneyValue(0,{size:"body",color:"var(--teal)"})}</div></div>
-          <div style="color:var(--border2);font-size:20px">=</div>
-          <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-radius:8px;padding:8px 14px">
-            <div style="font-size:10px;color:var(--accent-strong);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Net Payable</div>
-            <div id="rs-tot-net">${moneyValue(0,{size:"section",color:"var(--accent-strong)"})}</div>
-          </div>
-        </div>
-      </div>
-      <div class="field col-full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:10px">✍️ Payment Entry</div></div>
-      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="rs-amount" type="number" placeholder="Leave empty to skip" oninput="rsRecalc()"></div>
-      <div class="field"><label>Pending / Unpaid (PKR)</label><input class="form-control" id="rs-pending" type="number" min="0" placeholder="Auto-calculated" oninput="this.dataset.manual=1"><div style="font-size:10px;color:var(--text3);margin-top:4px">Auto: Net − Amount Paid. Override if needed.</div></div>
-      <div class="field"><label>Payment Status</label><select class="form-control" id="rs-pstatus" onchange="rsRecalc()"><option value="Paid">✅ Paid</option><option value="Pending">⏳ Pending</option></select></div>
-      <div class="field"><label>Notes</label><input class="form-control" id="rs-notes" placeholder="Optional note…"></div>
-    </div>`,
-    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="submitRestoreStudent('${studentId}')">🔄 Restore &amp; Save</button>`
-  );
-  // Run duplicate-month check immediately for the default month
-  setTimeout(function(){ rsCheckMonthDuplicate('${t.id}', document.getElementById('rs-month')?.value); }, 80);
+   It was a modal-lg of inline styles with eight emoji sub-headings and a raw
+   `form-grid` under them. Every field it had, it still has, and every id below
+   is the one submitRestoreStudent() already reads - this is the form's shape,
+   not its behaviour.
+
+   WHAT THE REFERENCE ADDS AND THIS KEEPS: the identity band. A warden
+   re-admitting somebody is checking that this is the right person before they
+   touch a single field, and the band answers it - who, their ID and CNIC, when
+   they stayed last, and which room they had. `Last stay` is derived from the
+   dates the record already carries (admission to departure); `Previous room`
+   is `lastRoom`, which the cancellation flow stamps when it confirms.
+
+   WHAT THE REFERENCE DRAWS AND THIS DOES NOT: a four-step wizard. This form
+   posts in one go - there is no draft, no server, and nothing to resume - so
+   tabs numbered 1 to 4 over a single submit would be four ways of scrolling
+   one page while implying you could stop at step two and come back. The
+   sections are numbered instead, which is what every other form built this
+   month does (`add and edit cancellation.png`, `add and edit expense.png`) and
+   what the app's own `.hf-sec` component is for. "Save as Draft" goes with it,
+   for the same reason: there is nowhere to save a draft to.
+
+   THE PAST LEDGER STAYS, and it is the one thing here the reference has no
+   room for. A student who left owing PKR 3,200 is a different re-admission
+   from one who left square, and the warden filling this form is the person who
+   decides what to do about it.
+   ============================================================================ */
+function openRestoreStudentForm(studentId) {
+  const t = DB.students.find(x => x.id === studentId); if (!t) return;
+  const availRooms = roomsByNumber(_getAvailableRooms());
+  const roomOpts = availRooms.map(r => {
+    const type = getRoomType(r);
+    return '<option value="' + r.id + '">Room #' + escHtml(String(r.number)) + ' — ' +
+      escHtml(type ? type.name : '') + ' · ' + escHtml(r.floor || '') + ' (' +
+      getRoomOccupancy(r) + '/' + (type ? type.capacity : 1) + ' filled)</option>';
+  }).join('');
+  const pmOpts = pmOptions(t.paymentMethod);
+  const todayStr = ymd(new Date());
+
+  const payHistory = DB.payments.filter(p => p.studentId === t.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const totalPaid = payHistory.filter(p => p.status === 'Paid')
+    .reduce((n, p) => n + Number(p.amount || 0), 0);
+  const pendRecs = payHistory.filter(p => calculateOutstanding(p) > 0);
+  const totalPend = pendRecs.reduce((n, p) => n + calculateOutstanding(p), 0);
+
+  /* THE STAY, FROM THE TWO DATES THE RECORD ALREADY HAS. `joinDate` is the
+     admission and `leftDate` the departure; where a month is missing the band
+     says so rather than printing half a range. */
+  const stayFrom = t.joinDate ? monthLabel(String(t.joinDate).slice(0, 7)) : '';
+  const stayTo   = t.leftDate ? monthLabel(String(t.leftDate).slice(0, 7)) : '';
+  const stay = stayFrom && stayTo ? stayFrom + ' – ' + stayTo
+             : stayFrom || stayTo || 'Not recorded';
+  const gone = (() => {
+    if (!t.leftDate) return '';
+    const d = new Date(String(t.leftDate) + 'T00:00:00');
+    if (isNaN(d.getTime())) return '';
+    const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (days < 0) return 'Leaves ' + fmtDateShort(t.leftDate);
+    if (days === 0) return 'Left today';
+    if (days < 31) return 'Left ' + days + ' day' + (days === 1 ? '' : 's') + ' ago';
+    const months = Math.round(days / 30.44);
+    if (months < 12) return 'Left ' + months + ' month' + (months === 1 ? '' : 's') + ' ago';
+    const years = Math.floor(months / 12);
+    return 'Left ' + years + ' year' + (years === 1 ? '' : 's') + ' ago';
+  })();
+
+  const lastRoomNo = String(t.lastRoom || t.roomNumber || '');
+  const lastRoomRec = lastRoomNo ? DB.rooms.find(r => String(r.number) === lastRoomNo) : null;
+  const lastRoomType = lastRoomRec ? getRoomType(lastRoomRec) : null;
+
+  const histRows = payHistory.slice(0, 6).map(p => {
+    const owed = calculateOutstanding(p);
+    return '<tr>' +
+      '<td>' + escHtml(monthLabel(p.month) || '—') + '</td>' +
+      '<td class="rsf-h__n">' + escHtml(fmtPKR(p.amount)) + '</td>' +
+      '<td class="rsf-h__n' + (owed > 0 ? ' is-owed' : '') + '">' + (owed > 0 ? escHtml(fmtPKR(owed)) : '—') + '</td>' +
+      '<td>' + escHtml(p.method || '—') + '</td>' +
+      '<td>' + statusBadge(p.status) + '</td>' +
+      '<td>' + escHtml(fmtDate(p.date) || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  const band =
+    '<div class="rsf-band">' +
+      studentAvatar(t, 54, stuAvatarHue(String(t.name || '?'))) +
+      '<div class="rsf-band__id">' +
+        '<div class="rsf-band__n">' + escHtml(t.name || '—') +
+          '<span class="lk-chip dh-slate">Former student</span></div>' +
+        '<div class="rsf-band__m">ID: #' + escHtml(String(t.id)) +
+          (t.cnic ? '  ·  CNIC: ' + escHtml(t.cnic) : '') + '</div>' +
+        '<div class="rsf-band__m">' +
+          (t.phone ? icon('phone', 'xs') + escHtml(t.phone) : '') +
+          (t.email ? icon('mail', 'xs') + escHtml(t.email) : '') +
+          (!t.phone && !t.email ? 'No contact recorded' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="rsf-band__f">' +
+        '<span class="rsf-band__fi">' + icon('calendar', 'sm') + '</span>' +
+        '<div><div class="rsf-band__fk">Last stay</div>' +
+        '<div class="rsf-band__fv">' + escHtml(stay) + '</div>' +
+        (gone ? '<div class="rsf-band__fs">' + escHtml(gone) + '</div>' : '') + '</div>' +
+      '</div>' +
+      '<div class="rsf-band__f">' +
+        '<span class="rsf-band__fi">' + icon('bed', 'sm') + '</span>' +
+        '<div><div class="rsf-band__fk">Previous room</div>' +
+        '<div class="rsf-band__fv">' + (lastRoomNo ? 'Room #' + escHtml(lastRoomNo) : 'Not recorded') + '</div>' +
+        (lastRoomType || (lastRoomRec && lastRoomRec.floor)
+          ? '<div class="rsf-band__fs">' + escHtml(lastRoomType ? lastRoomType.name : '') +
+            (lastRoomRec && lastRoomRec.floor ? ' · ' + escHtml(lastRoomRec.floor) + ' Floor' : '') + '</div>'
+          : '') + '</div>' +
+      '</div>' +
+    '</div>';
+
+  const note =
+    '<div class="rsf-note">' + icon('info', 'sm') +
+      '<div>Their previous details are filled in below — correct anything that has changed. ' +
+      'The record keeps its ID and its whole payment history; this adds a new admission to it.</div>' +
+    '</div>';
+
+  const ledger = payHistory.length
+    ? '<div class="hf-sec">' +
+        '<div class="hf-sec__h"><span class="hf-num">1</span>' +
+          '<span class="hf-sec__t">What they left behind</span>' +
+          '<span class="hf-sec__s">The last six records of their previous stay</span>' +
+          '<span class="rsf-sum">' +
+            '<span class="lk-chip dh-green">' + escHtml(fmtPKR(totalPaid)) + ' collected</span>' +
+            (totalPend > 0
+              ? '<span class="lk-chip dh-red">' + escHtml(fmtPKR(totalPend)) + ' still owed</span>'
+              : '<span class="lk-chip dh-slate">Nothing owed</span>') +
+          '</span>' +
+        '</div>' +
+        '<div class="rsf-h-wrap"><table class="rsf-h">' +
+          '<thead><tr><th>Month</th><th>Paid</th><th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead>' +
+          '<tbody>' + histRows + '</tbody></table></div>' +
+        (payHistory.length > 6
+          ? '<div class="hi-note">Showing 6 of ' + payHistory.length + ' records — the whole ledger is on the student panel.</div>'
+          : '') +
+      '</div>'
+    : '';
+
+  const n = k => String(ledger ? k + 1 : k);
+
+  /* `label` is HTML, not text: every call site is a literal in this function and
+     two of them carry markup — the required-field asterisk and a typographic
+     apostrophe. Escaping it printed "Father&rsquo;s name" and the raw
+     <span class="req"> tag on screen. */
+  const fld = (id, label, ico, input, hint) =>
+    '<div class="field"><label for="' + id + '">' + label + '</label>' +
+    '<div class="hf-in"><span class="hf-in__i">' + icon(ico, 'sm') + '</span>' + input + '</div>' +
+    (hint ? '<div class="hi-note">' + hint + '</div>' : '') + '</div>';
+
+  const identity =
+    '<div class="hf-sec">' +
+      '<div class="hf-sec__h"><span class="hf-num">' + n(1) + '</span>' +
+        '<span class="hf-sec__t">Student information</span>' +
+        '<span class="hf-sec__s">Check what has changed since they were here</span></div>' +
+      '<input type="hidden" id="rs-studentId" value="' + escHtml(String(t.id)) + '">' +
+      '<div class="hf-g2">' +
+        fld('rs-name', 'Full name', 'person',
+          '<input class="form-control" id="rs-name" value="' + escHtml(t.name || '') + '" oninput="autoCapName(this)">') +
+        fld('rs-fname', 'Father&rsquo;s name', 'person',
+          '<input class="form-control" id="rs-fname" value="' + escHtml(t.fatherName || '') + '" oninput="autoCapName(this)">') +
+        fld('rs-cnic', 'CNIC', 'card',
+          '<input class="form-control" id="rs-cnic" value="' + escHtml(t.cnic || '') + '" placeholder="XXXXX-XXXXXXX-X" maxlength="15" oninput="fmtCnic(this)">') +
+        fld('rs-phone', 'Phone', 'phone',
+          '<input class="form-control" id="rs-phone" value="' + escHtml(t.phone || '') + '" placeholder="03xx xxxxxxx">') +
+        fld('rs-email', 'Email', 'mail',
+          '<input class="form-control" id="rs-email" value="' + escHtml(t.email || '') + '" placeholder="name@example.com">') +
+        fld('rs-occ', 'Occupation', 'bookmark',
+          '<input class="form-control" id="rs-occ" value="' + escHtml(t.occupation || '') + '" placeholder="e.g. BS Computer Science">') +
+        fld('rs-emerg', 'Emergency contact', 'phone',
+          '<input class="form-control" id="rs-emerg" value="' + escHtml(t.emergencyContact || '') + '" placeholder="Name and number">') +
+        fld('rs-address', 'Home address', 'pin',
+          '<input class="form-control" id="rs-address" value="' + escHtml(t.address || '') + '">') +
+      '</div>' +
+    '</div>';
+
+  const admission =
+    '<div class="hf-sec">' +
+      '<div class="hf-sec__h"><span class="hf-num">' + n(2) + '</span>' +
+        '<span class="hf-sec__t">Room &amp; new admission</span>' +
+        '<span class="hf-sec__s">Where they are going and from when</span></div>' +
+      fld('rs-room', 'Assign room<span class="req">*</span>', 'bed',
+        '<select class="form-control" id="rs-room" onchange="rsRecalc()">' +
+          '<option value="">— Select an available room —</option>' + roomOpts + '</select>',
+        'The monthly charge — rent plus mess — comes from the room&rsquo;s configured rate in Settings.') +
+      '<div class="hf-g2">' +
+        fld('rs-join', 'Admission date', 'calendar',
+          '<input class="form-control cdp-trigger" id="rs-join" type="text" readonly onclick="showCustomDatePicker(this,event)" value="' + escHtml(todayStr) + '">') +
+        fld('rs-month', 'First month billed', 'calendar',
+          '<input class="form-control" id="rs-month" type="text" value="' + escHtml(thisMonthLabel()) + '" placeholder="e.g. March 2026" oninput="rsCheckMonthDuplicate(\'' + escHtml(String(t.id)) + '\',this.value)">') +
+      '</div>' +
+      '<div id="rs-month-warning" class="field" style="display:none"></div>' +
+    '</div>';
+
+  const charges =
+    '<div class="hf-sec">' +
+      '<div class="hf-sec__h"><span class="hf-num">' + n(3) + '</span>' +
+        '<span class="hf-sec__t">Charges for the first month</span>' +
+        '<span class="hf-sec__s">Anything on top of the rent, and anything off it</span>' +
+        '<button type="button" class="set-btn rsf-add" onclick="rsAddExtraRow()">' + icon('plus', 'xs') + ' Add a charge</button></div>' +
+      '<div id="rs-extra-list"></div>' +
+      '<div class="hf-g2">' +
+        fld('rs-concession', 'Concession (PKR)', 'money',
+          '<input class="form-control" id="rs-concession" type="number" min="0" placeholder="0" oninput="rsRecalc()">') +
+        fld('rs-conc-reason', 'Concession reason', 'fileText',
+          '<input class="form-control" id="rs-conc-reason" placeholder="e.g. returning student discount">') +
+      '</div>' +
+      '<div class="rsf-tot" id="rs-total-box">' +
+        '<div class="rsf-tot__c"><span>Monthly charge</span><div id="rs-tot-rent">' + moneyValue(0, { size: 'body' }) + '</div></div>' +
+        '<span class="rsf-tot__op">+</span>' +
+        '<div class="rsf-tot__c"><span>Extra charges</span><div id="rs-tot-extra">' + moneyValue(0, { size: 'body' }) + '</div></div>' +
+        '<span class="rsf-tot__op">−</span>' +
+        '<div class="rsf-tot__c"><span>Concession</span><div id="rs-tot-conc">' + moneyValue(0, { size: 'body' }) + '</div></div>' +
+        '<span class="rsf-tot__op">=</span>' +
+        '<div class="rsf-tot__c rsf-tot__c--net"><span>Net payable</span><div id="rs-tot-net">' + moneyValue(0, { size: 'section' }) + '</div></div>' +
+      '</div>' +
+    '</div>';
+
+  const payment =
+    '<div class="hf-sec">' +
+      '<div class="hf-sec__h"><span class="hf-num">' + n(4) + '</span>' +
+        '<span class="hf-sec__t">Payment taken now</span>' +
+        '<span class="hf-sec__s">Leave the amount empty to admit them without collecting yet</span></div>' +
+      '<div class="hf-g2">' +
+        fld('rs-amount', 'Amount paid (PKR)', 'money',
+          '<input class="form-control" id="rs-amount" type="number" placeholder="Leave empty to skip" oninput="rsRecalc()">') +
+        fld('rs-pending', 'Still unpaid (PKR)', 'money',
+          '<input class="form-control" id="rs-pending" type="number" min="0" placeholder="Auto-calculated" oninput="this.dataset.manual=1">',
+          'Net payable less what was handed over. Type over it if the two do not match.') +
+        fld('rs-pm', 'Payment method', 'wallet',
+          '<select class="form-control" id="rs-pm">' + pmOpts + '</select>') +
+        fld('rs-pstatus', 'Record as', 'check',
+          '<select class="form-control" id="rs-pstatus" onchange="rsRecalc()">' +
+            '<option value="Paid">Paid</option><option value="Pending">Pending</option></select>') +
+      '</div>' +
+      fld('rs-notes', 'Notes', 'fileText',
+        '<input class="form-control" id="rs-notes" placeholder="Optional note on this admission…">') +
+    '</div>';
+
+  const head =
+    '<div class="hf-mh"><div class="hf-mh__ico">' + icon('refreshCw', 'sm') + '</div>' +
+    '<div><div class="hf-mh__t">Re-admit Former Student</div>' +
+    '<div class="hf-mh__s">Restore their record and open a new admission</div></div></div>';
+
+  showModal('modal-form', head,
+    '<div class="rsf">' + band + note + ledger + identity + admission + charges + payment + '</div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="submitRestoreStudent(\'' + studentId + '\')">' +
+      icon('refreshCw', 'sm') + ' Re-admit student</button>');
+
+  // The duplicate-month check runs on the default month, not only on a change.
+  setTimeout(function () {
+    rsCheckMonthDuplicate(String(t.id), (document.getElementById('rs-month') || {}).value);
+  }, 80);
 }
 
 function rsAddExtraRow(label='',amount='') {
