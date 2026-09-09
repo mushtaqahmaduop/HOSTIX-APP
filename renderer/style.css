@@ -3623,7 +3623,22 @@ body.light-theme .stat-card.glass {
     letter-spacing: -0.02em;
     color: inherit;
 }
-.money-value--display { font-size: var(--fs-display); }
+/* ── THE KPI FIGURE STACKS: PKR ON ITS OWN LINE (owner ref: `ff.png`) ──────
+   Drawn over the Expenses tile — "PKR" written above "5000" rather than beside
+   it. `display` is used by nothing but the five KPI tiles, so the modifier is
+   the size itself.
+
+   WHY IT IS ALSO THE BETTER SHAPE HERE: inline, the currency word and the
+   figure compete for one line in a tile whose width is fixed and whose value is
+   unbounded — "PKR 1,245,600" is the case that clipped. Stacked, the whole line
+   belongs to the number. The Collection by Method ring has printed it this way
+   since the 7 Sep pass, for the same reason. */
+.money-value--display {
+    font-size: var(--fs-display);
+    display: inline-flex; flex-direction: column; align-items: flex-start;
+    gap: 0; line-height: 1.02;
+}
+.money-value--display .money-cur { font-size: 0.34em; line-height: 1.35; }
 .money-value--section  { font-size: var(--fs-section); font-weight: var(--fw-section); }
 .money-value--body     { font-size: var(--fs-body); }
 .money-value--label    { font-size: var(--fs-label); }

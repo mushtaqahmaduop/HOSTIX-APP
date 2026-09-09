@@ -2888,8 +2888,35 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
    is six rows that the fold work pins to one line each (dashboard-cards.spec.js
    asserts that). If a seventh glance row is ever added, this number is the
    thing to change. */
-.dash-row-b            { height: 311px; }
+/* ── ROWS B AND C ARE CUT TO THE LINES THE OWNER DREW (`ff.png`) ──────────
+   311 and 215 put the bottom of row C below the window. The two pencil lines
+   sit under the trend chart and under the quick-action tiles, which is 237 and
+   180 — and 96 of chrome plus 157 of row A plus those two plus their margins
+   comes to 691 in a 738px viewport, so the whole dashboard is on screen with
+   room to spare.
+
+   Locked, not merely capped, so row C starts at the same y on every render.
+   Each card gets `min-height:0` and its own overflow, so the three take the
+   squeeze in their scroll containers rather than spilling — the seat grid and
+   the room list already scroll, and the glance is six one-line rows. */
+.dash-row-b            { height: 237px; }
 .dash-row-b > .dash-sec { min-height: 0; overflow: hidden; }
+
+/* ROW C IS NOT LOCKED, AND THAT IS THE MEASUREMENT TALKING. Cut to the drawn
+   180px it clipped all three of its cards by 32-35px — the second rank of
+   quick-action tiles, the last Needs Action row's closing line, and the room
+   list's fourth type. Left to its content it is 215px, which puts the bottom of
+   row C at exactly 738 in a 738px viewport: the whole dashboard on screen, and
+   nothing cut off to get there. Row B carries the lock, which is what was
+   asked for and what keeps row C starting at the same y. */
+
+/* The chart is the one thing in row B that is pure area, so it takes the cut. */
+#trend-chart-wrap { height: 160px !important; }
+
+/* Six rows and a closing line in 237px: the rows go back to 3px of padding.
+   They are still one line each, which is what the fold test asserts. */
+.dash-row-b .dl-glance__row { padding: 3px 14px; }
+.dl-foot--tint { margin: 4px 10px 8px; padding: 5px 9px; }
 
 /* ── THE KPI TILE GIVES 15% BACK (owner, 2026-09-09) ──────────────────────
    The tagline and the closing line took row A from 159px to 214. The owner
