@@ -718,6 +718,14 @@ body:not(.light-theme) .tsk-foot { box-shadow: 0 -4px 14px rgba(0, 0, 0, .30); }
    that the dashboard had already compacted, tall enough that the chrome above
    it had not. Matching the 720 step closes it, and the ladder now reads 20px of
    content padding above 800, 12px from 721-800, 10px at or below 720. */
+/* 56px, NOT 66 (owner, 2026-09-09: "reduce the size of the header to have more
+   viewport"). Ten pixels back on every screen in the product, not just the
+   dashboard — the header carries a title, a greeting and a search field, and at
+   56px all three still sit on one line with their own padding. The ladder below
+   still steps to 50 on a short window, which is now a smaller step than it was.
+   Chrome, not type: the 13.5px title and the search field are untouched. */
+:root { --header-h: 56px; }
+
 @media (max-height: 720px) {
     :root    { --header-h: 50px; }
     #content { padding-top: 10px; }

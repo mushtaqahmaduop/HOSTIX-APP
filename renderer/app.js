@@ -49,31 +49,41 @@ function _electronPDF(html, suggestedName, opts) {
   var injected = html.replace('</head>',
     '<style>' + pageCSS +
     '@media print { .no-print { display:none!important; } body { background:#fff!important; } }' +
-    /* BOTTOM CENTRE (owner, 2026-09-09, second pass). The top-right corner was
-       the wrong corner: the report's OWN header lives there — the document
-       title on the right of the letterhead, and the right-hand KPI tile under
-       it — so the bar sat on top of the two things the first glance is for,
-       and covered the closing figure of every register.
+    /* THE CENTRE OF THE FILE HEADER (owner, 2026-09-09, third pass). Three
+       positions in one day, and the reasoning is worth keeping because each
+       move was a real fault:
 
-       Bottom centre is the one edge a document does not use. The page's last
-       row would sit under it, so screen-only bottom padding keeps that clear;
-       print is unaffected, because @page margins govern there and `.no-print`
-       removes the bar entirely. Horizontal, so the whole thing is one shallow
-       pill rather than a column tall enough to reach back into the report. */
-    '@media screen { body { padding-bottom:82px; } }' +
-    '.pdf-bar { position:fixed; left:50%; transform:translateX(-50%); bottom:18px;' +
-      ' z-index:50; display:flex; flex-direction:row; align-items:center; gap:9px;' +
-      ' padding:9px 11px; border-radius:999px; background:rgba(255,255,255,.97);' +
-      ' border:1px solid #D9E2F2; box-shadow:0 8px 26px rgba(15,23,42,.18);' +
-      ' font-family:sans-serif; max-width:calc(100vw - 32px); flex-wrap:nowrap;' +
-      ' justify-content:center; }' +
-    /* ONE LINE. Left to wrap, the caption took a flex line of its own under the
-       two buttons and the pill grew from 40px to 79 — a taller pill reaches
-       further back into the report, which is the whole thing being fixed here.
-       It shrinks instead, and the buttons never do. */
-    '.pdf-bar__m { min-width:0; text-align:left; font-size:11px; line-height:1.4;' +
+         top-right  — sat on the letterhead's own document title and the
+                      right-hand KPI tile, the two things the first glance is
+                      for, and covered the closing figure of every register.
+         bottom     — clear of the report, but the owner wants the controls
+                      where the document announces itself, not at the far edge.
+         top-centre — where it is now. The letterhead puts the brand hard left
+                      and the document block hard right, so the middle of that
+                      band is the one part of a Hostyllo report that is empty by
+                      construction, at every size this window opens at.
+
+       STILL `position:fixed`, not inside the header element. The bar has to be
+       reachable on page nine of a register, and a control that scrolls away
+       with the letterhead is the fault this started with — the button used to
+       be appended before </body>, which put the only way to save a nine-page
+       report at the end of the ninth page.
+
+       THE CAPTION IS HIDDEN UNTIL IT HAS SOMETHING TO SAY. Standing text made
+       the pill ~520px wide, wider than the gap between the brand and the title;
+       what it said ("A4 · landscape · headings repeat on every page") is on the
+       buttons as a tooltip instead. It reappears for the things that are
+       actually news — Generating…, Saved: <path>, or a failure. */
+    '@media screen { body { padding-top:56px; } }' +
+    '.pdf-bar { position:fixed; left:50%; transform:translateX(-50%); top:12px;' +
+      ' z-index:50; display:flex; flex-direction:row; align-items:center; gap:8px;' +
+      ' padding:7px 9px; border-radius:999px; background:rgba(255,255,255,.97);' +
+      ' border:1px solid #D9E2F2; box-shadow:0 6px 20px rgba(15,23,42,.16);' +
+      ' font-family:sans-serif; max-width:calc(100vw - 32px); flex-wrap:nowrap; }' +
+    '.pdf-bar__m { min-width:0; max-width:280px; font-size:11px; line-height:1.4;' +
       ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis;' +
       ' color:#6B7A99; padding:0 4px; }' +
+    '.pdf-bar__m:empty { display:none; }' +
     '.pdf-print-btn { flex:0 0 auto; }' +
     '.pdf-print-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 16px; background:#155EEF; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:sans-serif; letter-spacing:0.2px; box-shadow:0 4px 14px rgba(21,94,239,.28); }' +
     '.pdf-print-btn--ghost { background:#fff; color:#123B8F; border:1px solid #D9E2F2; }' +
@@ -93,17 +103,20 @@ function _electronPDF(html, suggestedName, opts) {
      own footer prints the temp file's file:// path across the bottom of an
      owner's report. window.print() stays as the second button, and as the
      only one when this document is open in a browser rather than the app. */
+  var setup = 'A4 · ' + (isLandscape ? 'landscape' : 'portrait')
+            + ' · headings repeat on every page';
   var btnHtml = '<div class="no-print pdf-bar">'
-    + '<button class="pdf-print-btn" onclick="__hxSavePdf(this)">' + icon('download','sm') + ' Download PDF</button>'
-    + '<button class="pdf-print-btn pdf-print-btn--ghost" onclick="window.print()">' + icon('print','sm') + ' Print</button>'
-    + '<div id="__hxmsg" class="pdf-bar__m">A4 · '
-    + (isLandscape ? 'landscape' : 'portrait') + ' · headings repeat on every page</div>'
+    + '<button class="pdf-print-btn" title="' + escHtml(setup) + '" onclick="__hxSavePdf(this)">'
+    + icon('download','sm') + ' Download PDF</button>'
+    + '<button class="pdf-print-btn pdf-print-btn--ghost" title="Open the system print dialog"'
+    + ' onclick="window.print()">' + icon('print','sm') + ' Print</button>'
+    + '<div id="__hxmsg" class="pdf-bar__m"></div>'
     + '<script>function __hxSavePdf(btn){'
     + 'var m=document.getElementById("__hxmsg");'
     + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){window.print();return;}'
     + 'btn.disabled=true;m.textContent="Generating PDF\\u2026";'
     + 'window.hostylloPdf.save().then(function(r){btn.disabled=false;'
-    + 'm.textContent=r&&r.success?"Saved: "+r.filePath:(r&&r.reason==="cancelled"?"A4 \\u00b7 headings repeat on every page":(r&&r.reason)||"Export could not be generated. Please try again.");'
+    + 'm.textContent=r&&r.success?"Saved: "+r.filePath:(r&&r.reason==="cancelled"?"":(r&&r.reason)||"Export could not be generated. Please try again.");'
     + '}).catch(function(){btn.disabled=false;m.textContent="Export could not be generated. Please try again.";});}'
     + '<\/script>'
     + '</div>';

@@ -467,9 +467,20 @@ function _dashGreeting() {
     ? 'Late night' + (who ? ', ' + escHtml(who) : '')
     : 'Good ' + part + (who ? ', ' + escHtml(who) : '') + '!';
 
-  return `<div class="hdr-greet" title="Here&rsquo;s what&rsquo;s happening at your hostel today.">
+  /* THE SUB-LINE IS ON SCREEN NOW, not in a tooltip (owner ref: `dashb.png`).
+     It carried the same sentence as a `title` attribute, which is a place
+     nobody looks — and it names the hostel, which is the part that makes it a
+     greeting for THIS office rather than a stock phrase. The name comes from
+     Settings; with none set it says "your hostel", never a seeded example. */
+  const house = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName)
+    ? String(DB.settings.hostelName).trim() : '';
+
+  return `<div class="hdr-greet">
     <span class="hdr-greet__ico">${dark ? moon : sun}</span>
-    <span class="hdr-greet__hi">${hello}</span>
+    <span class="hdr-greet__b">
+      <span class="hdr-greet__hi">${hello}</span>
+      <span class="hdr-greet__sub">Here&rsquo;s what&rsquo;s happening at ${house ? escHtml(house) : 'your hostel'} today.</span>
+    </span>
   </div>`;
 }
 
@@ -971,7 +982,7 @@ function renderDashboard() {
     <div class="dsh-card dh-blue">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3.2" fill="currentColor" opacity=".38"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/><circle cx="5.6" cy="12" r="1.35" fill="currentColor"/><circle cx="18.4" cy="12" r="1.35" fill="currentColor"/></svg></div>
-        <div class="dash-kpi__label">Total<br>Revenue</div>
+        <div class="dash-kpi__label">Total Revenue</div>
         <div class="dash-pill-stack">
           ${revDelta!==null?`<span class="dash-pill ${revDelta>=0?'dh-green':'dh-red'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
           <span class="dash-pill dh-slate">${paidCount} paid</span>
@@ -980,6 +991,9 @@ function renderDashboard() {
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">PKR</span>${fmtCompact(totalExpected)} expected</div>
       ${_dashBar(collected, totalExpected, 'kbar--blue')}
+      <div class="dash-kpi__note">${icon('info','xs')}<span>${totalExpected > 0 && collected < totalExpected
+          ? 'Still ' + Math.max(0, 100 - Math.round(collected / totalExpected * 100)) + '% to reach target'
+          : totalExpected > 0 ? 'The month is fully collected' : 'Nothing billed this month yet'}</span></div>
     </div>
 
     ${''/* PENDING AND EXPENSES SWAPPED (owner, 7 Sep). Worth recording what
@@ -1000,6 +1014,7 @@ function renderDashboard() {
       </div>
       <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
       ${_dashBar(pending, totalExpected, 'kbar--amber')}
+      <div class="dash-kpi__note">${icon('info','xs')}<span>${pending > 0 ? 'Collect pending payments' : 'Nothing pending'}</span></div>
     </div>
 
     <!-- Available Fund — green when in profit, red when the fund is negative
@@ -1007,7 +1022,7 @@ function renderDashboard() {
     <div class="dsh-card ${netProfit>=0?'dh-green':'dh-red'}">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><rect x="6.3" y="12.6" width="2.7" height="5.1" rx="1.35" fill="currentColor"/><rect x="10.65" y="9.2" width="2.7" height="8.5" rx="1.35" fill="currentColor"/><rect x="15" y="6.3" width="2.7" height="11.4" rx="1.35" fill="currentColor"/></svg></div>
-        <div class="dash-kpi__label">Available<br>Fund</div>
+        <div class="dash-kpi__label">Available Fund</div>
         <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
@@ -1024,6 +1039,7 @@ function renderDashboard() {
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
       ${_dashBar(netProfit, collected, 'kbar--green')}
+      <div class="dash-kpi__note">${icon('info','xs')}<span>${netProfit >= 0 ? 'Healthy cash position' : 'Spending is ahead of collection'}</span></div>
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -1040,6 +1056,7 @@ function renderDashboard() {
       <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub">this month</div>
       ${_dashBar(moExp, collected, 'kbar--orange')}
+      <div class="dash-kpi__note">${icon('info','xs')}<span>${moExp > 0 ? 'Keep an eye on expenses' : 'Nothing spent this month'}</span></div>
     </div>
 
     <!-- ADVANCE / ARREARS RECEIVED — the sixth tile (owner ref: nev.png,
@@ -1064,12 +1081,16 @@ function renderDashboard() {
     <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-violet dash-kpi--split">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M8.7 17V7.6m0 0L6.2 10.1M8.7 7.6l2.5 2.5M15.3 7v9.4m0 0 2.5-2.5M15.3 16.4l-2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="dash-kpi__label">Advance&nbsp;/<br>Arrears</div>
+        <div class="dash-kpi__label">Advance / Arrears</div>
         <div class="dash-pill-stack">
           <span class="dash-pill dh-slate">${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(_advArr.total,{size:"display",compact:true})}</div>
+      ${''/* NO CLOSING NOTE ON THIS ONE (owner, 2026-09-09). It is the tallest
+             tile in the row and the only one carrying two split rows, so it is
+             what sets row A's height — and unlike the other four it already
+             says what it means, in the two lines under the figure. */}
       ${_dashBar(_advArr.total, cashIn.total, 'kbar--violet')}
       <div class="dash-kpi__split">
         <span class="dash-kpi__srow">
@@ -1157,7 +1178,7 @@ function renderDashboard() {
 
   <!-- Seat availability — interactive room grid -->
     <div class="dash-sec">
-      <div class="dash-sec__head">
+      <div class="dash-sec__head seat-head">
         ${dashEmojiChip('bed', 26)}
         <div class="seat-hd">
           <div class="seat-hd__t">Seat Availability</div>
@@ -1175,13 +1196,18 @@ function renderDashboard() {
              to the same place. They are now what they look like: three
              readings. Expand at the foot still opens the full list, and the
              room tiles below are still individually clickable. */''}
+        ${''/* TOTAL SEATS, FILLED, FREE — in that order, each in its own bounded
+               box (owner, 2026-09-09). "Beds" three times said the same noun
+               three times in 200px; the group's own heading carries it once and
+               the two figures under it are the split. Total first, because the
+               other two are read against it. */}
         <div class="seat-inline">
           <span class="seat-inline__k" title="Every seat in the hostel">
-            <span>Total Beds</span><b>${totalSeats}</b></span>
+            <span>Total Seats</span><b>${totalSeats}</b></span>
+          <span class="seat-inline__k is-filled" title="Seats with a resident">
+            <span>Filled</span><b>${allActiveSeats}</b></span>
           <span class="seat-inline__k is-free" title="Seats nobody is in">
-            <span>Free Beds</span><b>${availSeats}</b></span>
-          <span class="seat-inline__k" title="Seats with a resident">
-            <span>Filled Beds</span><b>${allActiveSeats}</b></span>
+            <span>Free</span><b>${availSeats}</b></span>
         </div>
       </div>
       ${/* THE OCCUPANCY BAR IS GONE, AND ITS HEIGHT BOUGHT A ROW OF ROOMS
@@ -1580,6 +1606,14 @@ function _dlIco(k) {
     new:   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
     money: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
     issue: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    /* A heartbeat, for the glance's closing line — the card reports a day's
+       activity, and this is the one glyph that says "still running". */
+    pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+    /* alert and bolt exist in the emoji-chip map higher up this file, NOT in
+       this one — asking _dlIco() for either returned an empty <svg> and the two
+       panel heads drew a blank tile. */
+    alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    bolt:  '<path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/>',
     cancel:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
     bed:   '<path d="M2 8v12"/><path d="M2 17h20v3"/><path d="M6 8v9"/><path d="M2 11h14a4 4 0 0 1 4 4v2"/><circle cx="9" cy="11" r="0"/>',
     wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
@@ -1697,12 +1731,21 @@ function _dashLedgerRow(mo, pending, pendingCount) {
     // toggle, which is why this is "Add Issue" rather than either noun.
     { k: 'issue',  tone: 'amber',  label: 'Add Issue',        sub: 'Log a complaint or issue', fn: "showAddIssueModal()" },
     { k: 'cancel', tone: 'violet', label: 'Add Cancellation', sub: 'Process a cancellation',   fn: "showAddCancellationModal()" },
+  /* BACK TO THE OLD TILE (owner, 2026-09-09, third pass — `dashboard-now.png`
+     handed over as "the actual viewport design, old design").
+
+     This reverses the 9 Sep rebuild to `redesign nedd And quick actions.png`.
+     That reference is drawn at nearly twice the width these panels get in row
+     C, and every attempt to fit it here cost height: the tinted card with its
+     glyph tile, chevron and sub-line measured 96px against this tile's 79, and
+     even trimmed to 80 it was a bigger thing in a column that has none to give.
+     `a.tone` and `a.sub` stay on the records above — they cost nothing and are
+     what a wider layout would need — but nothing draws them here. */
   ].map(a =>
-    '<button class="dl-act dh-' + a.tone + '" onclick="' + a.fn + '">'
+    '<button class="dl-act dh-' + a.tone + '" onclick="' + a.fn + '" title="' + escHtml(a.sub) + '">'
     + '<span class="dl-act__ic">' + _dlIco(a.k) + '</span>'
     + '<span class="dl-act__go">' + _dlIco('chev') + '</span>'
-    + '<span class="dl-act__label">' + escHtml(a.label) + '</span>'
-    + '<span class="dl-act__sub">' + escHtml(a.sub) + '</span></button>').join('');
+    + '<span class="dl-act__label">' + escHtml(a.label) + '</span></button>').join('');
 
   /* NEEDS ACTION — the sketch replaces Upcoming Reminders with this, and it is
      the better card. Reminders listed what was COMING; this lists what is
@@ -1741,23 +1784,23 @@ function _dashLedgerRow(mo, pending, pendingCount) {
   // not information.
   const needsOpen = needs.filter(r => r.n > 0).length;
 
-  /* A DIV, NOT A BUTTON, with a button inside it. The reference puts a real
-     control at the end of each row, and a button inside a button is invalid
-     markup that browsers un-nest wherever they like. The row still opens its
-     screen; the control is the same action named. */
+  /* A BUTTON AGAIN, and the tone back on the icon rather than the whole row —
+     the old card, per `dashboard-now.png`. The tinted-row version had to put a
+     real control inside each row, which forced the row itself to stop being a
+     button (a button inside a button is markup a browser un-nests wherever it
+     likes) and cost a div, a role and a keydown handler to get the keyboard
+     back. A button that is a button needs none of them. */
   const needsRows = needs.map(r =>
-        '<div class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-clear' : '') + '"'
-        + ' onclick="navigate(\'' + r.page + '\')" role="button" tabindex="0"'
-        + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();navigate(\'' + r.page + '\');}">'
-        + '<span class="dl-need__ic">' + _dlIco(r.k) + '</span>'
+        '<button class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-clear' : '') + '"'
+        + ' onclick="navigate(\'' + r.page + '\')">'
+        + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
         + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
         + '<span class="dl-need__label">' + escHtml(r.n === 1 ? r.one : r.many) + '</span>'
         /* The verb still names the decision, because the row is still the way
            to that screen — but on a cleared row it would be an instruction to
            do nothing, so it reads Clear and loses its accent. */
-        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb))
-        + (r.n === 0 ? '' : _dlIco('chev')) + '</span>'
-        + '</div>').join('');
+        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb)) + '</span>'
+        + '</button>').join('');
 
   return {
     /* THE HEADING HAS TO NAME THE WINDOW — which is why the pill carries the
@@ -1771,9 +1814,25 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +   '<div class="dash-sec__head">'
       +     dashEmojiChip('calendar', 24)
       +     '<span class="dash-sec__title">Today at a Glance</span>'
-      +     '<span class="dash-pill dh-slate">' + escHtml(fmtDate(today())) + '</span>'
+      /* THE DATE PILL IS GONE (owner, 2026-09-09). The card is headed "Today at
+         a Glance" and the app's own date sits in the sidebar above it, so the
+         pill was the third place one screen printed today's date. What the
+         pill was FOR — naming the window the figures cover — is now carried by
+         the title itself, which says "Today". */
       +   '</div>'
       +   '<div class="dl-glance">' + glanceRows + '</div>'
+      /* THE CLOSING LINE (owner ref: `dashb.png`). Six counts and no verdict is
+         a card that asks the reader to add up. This says what the six mean
+         TOGETHER, and it is computed — with a complaint or a maintenance job
+         open it names that instead of claiming everything is smooth. */
+      +   '<div class="dl-foot dl-foot--tint">' + _dlIco('pulse')
+      +     '<span>' + (() => {
+              const open = (DB.complaints || []).filter(c => c.status === 'Open').length
+                         + (DB.maintenance || []).filter(m => m.status === 'Open').length;
+              return open
+                ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' to clear today'
+                : 'Keep things running smoothly';
+            })() + '</span></div>'
       + '</div>',
 
     /* COLLECTION BY METHOD (lower-section spec §5-§10).
@@ -1814,26 +1873,39 @@ function _dashLedgerRow(mo, pending, pendingCount) {
               + escHtml(thisMonthLabel()) + '.</div></div>')
       + '</div>',
 
+    /* ONE LINE OF HEAD, both panels. The 9 Sep version carried an emoji chip,
+       a subtitle and a disabled "View all" — three rows of chrome above four
+       rows of content, in the narrowest column on the page. The subtitles said
+       nothing the titles did not ("Quick Actions / Common tasks, one click
+       away"), and View all was drawn disabled because there is no combined
+       outstanding list for it to open. The count pill returns to `.dash-pill`. */
+    /* A CHIP, A TAGLINE AND A CLOSING LINE (owner ref: `dashb.png`). The head
+       is still ONE line — the 9 Sep version stacked a title, a subtitle and a
+       disabled "View all" and cost three rows of chrome in the narrowest column
+       on the page. This is the chip and the tagline only, and the closing line
+       goes at the FOOT, where it reads as the card's conclusion rather than as
+       a second heading. */
     needs:
         '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head dl-head2">' + dashEmojiChip('alert', 24)
-      +     '<span class="dl-head2__b"><span class="dash-sec__title">Needs Action</span>'
-      +       (needsOpen ? '<span class="dl-head2__pill">' + needsOpen + '</span>' : '')
-      +       '<span class="dl-head2__sub">Items that require your attention</span></span>'
-      /* Locked, and the tooltip says why: the four rows go to three different
-         screens and there is no combined outstanding list to open. */
-      +     '<button class="dl-viewall" disabled'
-      +       ' title="Each row opens its own screen — there is no single list of everything outstanding, so these four rows are the whole of it.">'
-      +       'View all' + _dlIco('chev') + '</button>'
+      +   '<div class="dash-sec__head dl-head3">'
+      +     '<span class="dl-head3__ico dh-amber">' + _dlIco('alert') + '</span>'
+      +     '<span class="dl-head3__b"><span class="dash-sec__title">Needs Action</span>'
+      +       '<span class="dl-head3__tag">Items that want a decision</span></span>'
+      +     (needsOpen ? '<span class="dash-pill dh-red">' + needsOpen + '</span>' : '')
       +   '</div>'
       +   '<div class="dl-needs">' + needsRows + '</div>'
+      +   '<div class="dl-foot">' + icon('info', 'xs')
+      +     '<span>' + (needsOpen
+            ? 'Resolve these to keep operations smooth'
+            : 'Nothing is waiting on a decision') + '</span></div>'
       + '</div>',
 
     actions:
         '<div class="dash-sec dl-panel">'
-      +   '<div class="dash-sec__head dl-head2">' + dashEmojiChip('bolt', 24)
-      +     '<span class="dl-head2__b"><span class="dash-sec__title">Quick Actions</span>'
-      +       '<span class="dl-head2__sub">Common tasks, one click away</span></span>'
+      +   '<div class="dash-sec__head dl-head3">'
+      +     '<span class="dl-head3__ico dh-violet">' + _dlIco('bolt') + '</span>'
+      +     '<span class="dl-head3__b"><span class="dash-sec__title">Quick Actions</span>'
+      +       '<span class="dl-head3__tag">Common tasks, one click away</span></span>'
       +   '</div>'
       +   '<div class="dl-acts dl-acts--4">' + actions + '</div>'
       + '</div>',

@@ -143,7 +143,12 @@ test('the glance counts today, and the heading says which day', async () => {
   // The heading names the window. It cannot say "This Month" over day figures
   // any more than it could say "Today" over month figures.
   expect(g.title).toBe('Today at a Glance');
-  expect(g.pill, 'the pill names WHICH day the numbers cover').toBe(g.today);
+  /* THE DATE PILL IS GONE (owner, 2026-09-09) and the title carries the window
+     on its own. It was the third place one screen printed today's date — the
+     sidebar's date picker and the header both do — so what this now pins is
+     that the heading still NAMES the window, which is the invariant this card
+     has broken twice. */
+  expect(g.pill, 'the date pill was retired; the title names the window').toBeNull();
 
   const by = k => g.computed.find(r => r.k === k).n;
   expect(by('in')).toBe(1);        // the check-in from earlier in the month is out of scope
@@ -210,7 +215,9 @@ test('the glance and Collection by Method cover different windows, and each says
   // Each card names the window it covers, which is what stops the two figures
   // reading as a contradiction.
   expect(scopes.glanceTitle).toBe('Today at a Glance');
-  expect(scopes.glancePill).toBe(scopes.todayLabel);
+  // The pill went with the 9 Sep pass; the title is what separates the two
+  // cards' windows now, and it says "Today" in as many words.
+  expect(scopes.glancePill, 'the date pill was retired').toBeNull();
 
   await app.close();
 });
@@ -275,11 +282,13 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   let n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
       text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
-    /* `.dl-head2__pill`, not `.dash-pill`: the panel head was rebuilt on
-       2026-09-09 and the count moved into it. The badge itself never went
-       away — only this selector went stale. */
+    /* `.dash-pill` again. This selector has now been right, wrong and right
+       within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
+       and the owner's 9 Sep revert to the old card moved it back. The badge
+       itself never went anywhere — it counts the rows that still want
+       something, and only the head around it changed. */
     pill: [...document.querySelectorAll('.dl-panel')]
-      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dl-head2__pill')?.innerText.trim() || null,
+      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dash-pill')?.innerText.trim() || null,
   }));
 
   expect(n.rows.length, 'all four rows are always present').toBe(4);
@@ -309,11 +318,13 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
       text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
-    /* `.dl-head2__pill`, not `.dash-pill`: the panel head was rebuilt on
-       2026-09-09 and the count moved into it. The badge itself never went
-       away — only this selector went stale. */
+    /* `.dash-pill` again. This selector has now been right, wrong and right
+       within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
+       and the owner's 9 Sep revert to the old card moved it back. The badge
+       itself never went anywhere — it counts the rows that still want
+       something, and only the head around it changed. */
     pill: [...document.querySelectorAll('.dl-panel')]
-      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dl-head2__pill')?.innerText.trim() || null,
+      .find(p => /Needs Action/.test(p.innerText))?.querySelector('.dash-pill')?.innerText.trim() || null,
   }));
 
   expect(n.rows.length).toBe(4);
@@ -477,6 +488,7 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
     await win.waitForTimeout(700);
     const m = await win.evaluate(() => ({
       bottom: Math.round(document.querySelector('.dash-row-c').getBoundingClientRect().bottom),
+      top: Math.round(document.querySelector('.dash-row-c').getBoundingClientRect().top),
       vp: window.innerHeight,
       // Every glance row must be ONE line. A re-wrap is ~65px of fold going
       // quietly missing, so it is asserted rather than left to be noticed.
@@ -484,7 +496,20 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
               .map(r => Math.round(r.getBoundingClientRect().height)),
       overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
     }));
-    if (m.bottom > m.vp) misses.push(`${s.label}: row C ends at ${m.bottom}, viewport ${m.vp}`);
+    /* ROW C NOW STARTS ABOVE THE FOLD RATHER THAN ENDING ABOVE IT, and that is
+       a decision, not a regression. On 2026-09-09 the owner locked row B to
+       311px — "enlarge the height of the row B so that the row C moves little
+       lower" — and added a closing line to the glance, a tagline and a badge to
+       Needs Action and Quick Actions, and colour to their rows. All of it is
+       content above row C, and it does not fit in 738px with row C whole.
+
+       What the guard protects is unchanged in spirit: a warden must be able to
+       SEE that Needs Action and Quick Actions are there without scrolling for
+       them. So the assertion follows the top edge of row C instead of the
+       bottom. If row C ever stops starting on screen, the dashboard has gone
+       back to burying its two action panels, which is what this test has always
+       been about. */
+    if (m.top > m.vp - 40) misses.push(`${s.label}: row C starts at ${m.top}, viewport ${m.vp}`);
     expect(m.overflowX, `${s.label} must not scroll sideways`).toBe(false);
     // Six rows, and the tallest no more than a line and a half — the money row
     // carries a second line at full height and drops it under 700px.
@@ -492,7 +517,7 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
     expect(Math.max(...m.rows), `${s.label}: a glance label has wrapped again`)
       .toBeLessThanOrEqual(50);
   }
-  expect(misses, 'rows A-C must reach the fold at every shipped size').toEqual([]);
+  expect(misses, 'row C must at least START above the fold at every shipped size').toEqual([]);
 
   // The seat header carries a title, a subtitle and three bed counts; it is
   // allowed two lines for them and no more.
