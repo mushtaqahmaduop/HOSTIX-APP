@@ -49,17 +49,32 @@ function _electronPDF(html, suggestedName, opts) {
   var injected = html.replace('</head>',
     '<style>' + pageCSS +
     '@media print { .no-print { display:none!important; } body { background:#fff!important; } }' +
-    /* TOP RIGHT, UNDER THE WINDOW'S CLOSE BUTTON (owner, 2026-09-09). It was a
-       full-width strip across the top of the document, which pushed the report
-       down and put a band of chrome between the reader and the first heading.
-       A fixed column in the corner stays reachable on every page of a long
-       register, costs the document no vertical space, and sits where the eye
-       already goes for window controls. `position:fixed` rather than sticky
-       because the document scrolls under it. */
-    '.pdf-bar { position:fixed; top:14px; right:18px; z-index:50; display:flex;' +
-      ' flex-direction:column; align-items:stretch; gap:8px; font-family:sans-serif; }' +
-    '.pdf-bar__m { max-width:190px; text-align:right; font-size:11px; line-height:1.45;' +
-      ' color:#6B7A99; background:rgba(255,255,255,.92); border-radius:6px; padding:2px 4px; }' +
+    /* BOTTOM CENTRE (owner, 2026-09-09, second pass). The top-right corner was
+       the wrong corner: the report's OWN header lives there — the document
+       title on the right of the letterhead, and the right-hand KPI tile under
+       it — so the bar sat on top of the two things the first glance is for,
+       and covered the closing figure of every register.
+
+       Bottom centre is the one edge a document does not use. The page's last
+       row would sit under it, so screen-only bottom padding keeps that clear;
+       print is unaffected, because @page margins govern there and `.no-print`
+       removes the bar entirely. Horizontal, so the whole thing is one shallow
+       pill rather than a column tall enough to reach back into the report. */
+    '@media screen { body { padding-bottom:82px; } }' +
+    '.pdf-bar { position:fixed; left:50%; transform:translateX(-50%); bottom:18px;' +
+      ' z-index:50; display:flex; flex-direction:row; align-items:center; gap:9px;' +
+      ' padding:9px 11px; border-radius:999px; background:rgba(255,255,255,.97);' +
+      ' border:1px solid #D9E2F2; box-shadow:0 8px 26px rgba(15,23,42,.18);' +
+      ' font-family:sans-serif; max-width:calc(100vw - 32px); flex-wrap:nowrap;' +
+      ' justify-content:center; }' +
+    /* ONE LINE. Left to wrap, the caption took a flex line of its own under the
+       two buttons and the pill grew from 40px to 79 — a taller pill reaches
+       further back into the report, which is the whole thing being fixed here.
+       It shrinks instead, and the buttons never do. */
+    '.pdf-bar__m { min-width:0; text-align:left; font-size:11px; line-height:1.4;' +
+      ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis;' +
+      ' color:#6B7A99; padding:0 4px; }' +
+    '.pdf-print-btn { flex:0 0 auto; }' +
     '.pdf-print-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 16px; background:#155EEF; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:sans-serif; letter-spacing:0.2px; box-shadow:0 4px 14px rgba(21,94,239,.28); }' +
     '.pdf-print-btn--ghost { background:#fff; color:#123B8F; border:1px solid #D9E2F2; }' +
     '.pdf-print-btn[disabled] { opacity:.55; cursor:default; }' +
@@ -94,7 +109,7 @@ function _electronPDF(html, suggestedName, opts) {
     + '</div>';
   // FIX-PRINT: Auto-print removed — calling window.print() automatically in a child
   // window.open() window hangs the Electron renderer on Windows. User presses the button.
-  /* IN THE MARKUP EARLY, ON SCREEN TOP-RIGHT. It was appended before </body>,
+  /* IN THE MARKUP EARLY, ON SCREEN AT THE BOTTOM. It was appended before </body>,
      which put the only way to save a nine-page register at the end of the ninth
      page. It goes in right after <body> so it exists before the report, and the
      CSS above fixes it under the window's close button; `no-print` keeps it off

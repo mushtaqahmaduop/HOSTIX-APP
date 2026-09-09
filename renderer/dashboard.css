@@ -2734,10 +2734,28 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
    three lines, so it yields and the label gets the room. Wider windows, and
    the standalone layouts, keep the reference exactly. */
 .dash-sec.dl-panel { container-type: inline-size; }
+
+/* THE OLD FOOTPRINT, MEASURED — not estimated (owner, 2026-09-09, second pass:
+   "restore the old viewport of the need actions and quick actions cards").
+   At 1366x768 each panel is 211px wide, so a 2x2 quick action gets ~95px and
+   EVERY label wraps to two lines. That is what made the card expensive: at a
+   14px label those two lines cost 30px, and with a 30px glyph tile the card
+   measured 96px against the previous card's 79px — 17px each, 34px of row C,
+   which is the height the owner is asking for back.
+
+   Dropping the description was not enough on its own because it was already
+   dropped here. The numbers below are set so the card lands at 78px, one under
+   what it replaced; the SHAPE from the reference is untouched — tinted card,
+   glyph top-left, chevron top-right, the job named under the button's name.
+   Anything wider than 380px of panel keeps the reference exactly. */
 @container (max-width: 380px) {
-    .dl-act { padding: 11px; }
+    .dl-act { padding: 9px; gap: 2px 7px; }
     .dl-act__sub { display: none; }
-    .dl-act__label { font-size: 14px; line-height: 19px; margin-top: 6px; }
+    .dl-act__ic { width: 24px; height: 24px; border-radius: 8px; }
+    .dl-act__ic svg { width: 13px; height: 13px; }
+    .dl-act__go { width: 16px; height: 16px; }
+    .dl-act__go svg { width: 10px; height: 10px; }
+    .dl-act__label { font-size: 11.5px; line-height: 15px; margin-top: 4px; }
 }
 
 @media (max-height: 760px) {
