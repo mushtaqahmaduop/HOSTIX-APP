@@ -1317,3 +1317,120 @@ function waMark(size) {
     + '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2Zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.25 8.24a8.24 8.24 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.26-8.24Z"/>'
     + '<path d="M9.36 7.2c-.19-.42-.38-.43-.56-.44h-.47c-.16 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.89 2.38 1.01 2.54c.12.17 1.71 2.74 4.22 3.73 2.09.82 2.51.66 2.97.62.46-.04 1.48-.6 1.69-1.19.21-.58.21-1.08.15-1.19-.06-.1-.23-.16-.47-.29-.25-.12-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.34-.75-1.83Z"/></svg>';
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE ROOM CELL, IN ONE PLACE (owner, 2026-09-10: "label room number and floor
+   just like the students page room number globally").
+
+   Four registers print a room and every one of them printed it differently:
+   Students in a pale box, Payments as three loose lines ("#1", "1-Seater",
+   "Ground Floor"), Complaints and Cancellations as two. The box is the one the
+   owner drew and the one that works — two loose lines of text in the middle of
+   a wide row do not group, and the number is the thing being scanned for.
+
+   PALE, NOT TINTED. What sits under the number is a category, and CLAUDE.md
+   keeps hue for state.
+
+   The floor is SHORTENED, never truncated: "Ground" becomes "G-Floor", "1st"
+   becomes "1st-Floor", and a name a hostel typed for itself is passed through
+   with the same suffix rather than guessed at.
+   ════════════════════════════════════════════════════════════════════════════ */
+function floorShort(floor) {
+  const f = String(floor || '').trim();
+  if (!f) return '';
+  const low = f.toLowerCase();
+  if (low.startsWith('base') || low.startsWith('cellar')) return 'Base-Floor';
+  if (low.startsWith('ground') || low === 'g')            return 'G-Floor';
+  const m = f.match(/^(\d+)(st|nd|rd|th)?/i);
+  if (m) {
+    const n = Number(m[1]);
+    const suf = n % 10 === 1 && n % 100 !== 11 ? 'st'
+              : n % 10 === 2 && n % 100 !== 12 ? 'nd'
+              : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th';
+    return n + suf + '-Floor';
+  }
+  return f + '-Floor';
+}
+
+/**
+ * The boxed room label: the number, with the floor under it when there is one.
+ * `number` may be a room object or a bare number/string.
+ */
+function roomLabel(number, floor) {
+  const room = (number && typeof number === 'object') ? number : null;
+  const n = room ? room.number : number;
+  const f = floorShort(room ? room.floor : floor);
+  const shown = (n === 0 || n) && String(n).trim() !== '' ? '#' + escHtml(String(n)) : '—';
+  return '<span class="lk-room">'
+       + '<span class="lk-room__n">' + shown + '</span>'
+       + (f ? '<span class="lk-room__t">' + escHtml(f) + '</span>' : '')
+       + '</span>';
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   "LEFT" AND "ON NOTICE" NAME A DATE — SO PRINT IT (owner, 2026-09-10:
+   "mention labelled left or vacate date with the left status globally to have
+   clarification").
+
+   Both statuses are about a moment, and neither said which one. "Left" on a
+   register of two hundred students answers nothing a warden asks next — left
+   when? — and "On Notice" is worse, because the bed is still occupied and the
+   only useful fact is the day it frees.
+
+   THE DATE COMES FROM A DIFFERENT PLACE FOR EACH. A departed student carries
+   their own `leftDate`; a student on notice does not carry a vacate date at all
+   — it lives on their PENDING cancellation record, and there can be more than
+   one if a request was filed, restored and filed again. The soonest is the one
+   that matters: it is the day the bed actually frees.
+
+   Returns '' for Active and Blacklisted, which name no date.
+   ════════════════════════════════════════════════════════════════════════════ */
+function statusDate(t) {
+  if (!t) return '';
+  const st = String(t.status || '');
+  if (st === 'Left') return t.leftDate || '';
+  if (st === 'Cancelling' || st === 'On Notice') {
+    const mine = (DB.cancellations || [])
+      .filter(c => c && c.status === 'Pending' && String(c.studentId) === String(t.id) && c.vacateDate)
+      .map(c => c.vacateDate).sort();
+    return mine[0] || '';
+  }
+  return '';
+}
+
+/* THE YEAR IS DROPPED WHEN IT IS THIS YEAR, and that is a width decision made
+   against a measurement: the status column on the students register is 74px,
+   and "Left 10-Sept-2026" is 95. Clipped, it read "Left 10-Sept-20", which is a
+   wrong date rather than a short one. Everything from an earlier year keeps its
+   year, because that is exactly when the year is the part you need. */
+function fmtDateShort(d) {
+  if (!d) return '';
+  try {
+    const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T00:00:00') : new Date(d);
+    if (isNaN(dt.getTime())) return String(d);
+    /* Two literal calls rather than one options object: a `{day, month}` object
+       widens to `{day: string, month: string}` and stops satisfying
+       DateTimeFormatOptions, which `npm run typecheck` covers this file for. */
+    return dt.getFullYear() === new Date().getFullYear()
+      ? dt.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' })
+      : dt.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch (e) { return String(d); }
+}
+
+/** "Left 10-Sept" / "Vacates 30-Sept", or '' when the status names no date. */
+function statusDateText(t) {
+  const d = statusDate(t);
+  if (!d) return '';
+  return (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDateShort(d);
+}
+
+/** The same, as the small line that sits under a status pill. The full date
+    stays on the title, so a shortened one is never the only copy. */
+function statusDateNote(t) {
+  const s = statusDateText(t);
+  if (!s) return '';
+  const full = (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDate(statusDate(t));
+  return '<div class="lk-statdate" title="' + escHtml(full) + '">' + escHtml(s) + '</div>';
+}

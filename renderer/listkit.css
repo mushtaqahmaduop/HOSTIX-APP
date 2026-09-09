@@ -372,3 +372,35 @@ body.light-theme .lk-sin:focus {
 .lk-stats .lk-stat__chip { width: 24px; height: 24px; border-radius: 8px; }
 .lk-stats .lk-stat__chip svg { width: 14px; height: 14px; }
 .lk-stats .lk-stat__sub  { margin-top: 1px; }
+
+
+/* ══ THE ROOM CELL, ONE DEFINITION (owner, 2026-09-10) ══════════════════════
+   Moved here from students.css, where it was `.stu-room` and served one page.
+   `.stu-room` is kept in the selector so the students register's own markup
+   needs no change; every other register emits roomLabel() from utils.js, which
+   draws these classes. The narrow-width sizes for `.stu-room__*` still live in
+   students.css and still win there — they are in media queries and this is the
+   base. */
+.lk-room, .stu-room {
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px;
+    padding:5px 9px; border-radius:8px;
+    background:var(--bg3); border:1px solid var(--border);
+}
+.lk-room__n, .stu-room__n {
+    font-size:13.5px; font-weight:800; color:var(--text);
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+    font-variant-numeric:tabular-nums;
+}
+.lk-room__t, .stu-room__t {
+    font-size:11px; font-weight:500; color:var(--text3); margin-top:0; white-space:nowrap;
+}
+
+
+/* The date under a Left / On Notice pill — see statusDateNote() in utils.js.
+   Neutral and small: the pill already carries the state and its hue, and this
+   is the fact the state is about, not a second state. */
+/* It WRAPS rather than clipping. This line sits in the narrowest column of the
+   widest table in the app, and a clipped date is a wrong date — "Left
+   10-Sept-20" is not a short 2026. Two short lines is the worst it can do. */
+.lk-statdate { margin-top:3px; font-size:10.5px; color:var(--text3);
+               white-space:normal; line-height:1.3; }

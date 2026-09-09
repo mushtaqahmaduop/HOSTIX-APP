@@ -148,18 +148,14 @@
 .stu-who__sub  { font-size:12px; color:var(--text3); margin-top:3px; white-space:nowrap; }
 
 /* THE ROOM READS AS ONE LIGHT LABEL (owner, 2026-09-09 — `students red.png`
-   sets the number and what is under it in a pale box). Two loose lines of text
-   in the middle of a wide row do not group, and the number is the thing being
-   scanned for; a light ground gathers the pair and separates them from the
-   contact column beside them without adding a colour. Pale, not tinted: what
-   sits under the number is a category, and CLAUDE.md keeps hue for state. */
-.stu-room {
-    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px;
-    padding:5px 9px; border-radius:8px;
-    background:var(--bg3); border:1px solid var(--border);
-}
-.stu-room__n { font-size:13.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-.stu-room__t { font-size:11px; font-weight:500; color:var(--text3); margin-top:0; white-space:nowrap; }
+   sets the number and what is under it in a pale box).
+
+   THE RULES MOVED TO listkit.css ON 2026-09-10, as `.lk-room`, with `.stu-room`
+   kept in the selector so this page's markup is unchanged. Payments,
+   Complaints and Cancellations draw the same label now — the owner asked for
+   this cell "globally" — and a shared component defined in one page's
+   stylesheet is a component about to be copied. The narrow-width sizes further
+   down this file still apply: they are media queries over that base. */
 
 .stu-contact      { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-contact__em  { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:12.5px; color:var(--text3); white-space:nowrap; }

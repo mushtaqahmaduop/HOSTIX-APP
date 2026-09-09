@@ -733,10 +733,21 @@ function renderPayments() {
                 </div>
               </div>
             </td>
+            ${''/* THE BOXED LABEL, AS THE STUDENTS REGISTER DRAWS IT (owner,
+                   2026-09-10: "label room number and floor just like the
+                   students page room number globally"). This was three loose
+                   lines — "#1", "1-Seater", "Ground Floor" — stacked in the
+                   middle of a thirteen-column row, which does not group and
+                   cost a line of row height for the word "Floor".
+
+                   The BOX holds the number and the floor, which is what the
+                   students cell holds. The room type stays under it as an
+                   ordinary sub-line: it is a fact about the room's class, not
+                   about where the room is, and it is also the one of the three
+                   that already has a column of its own on other registers. */}
             <td>
-              <div class="pay-room__n">#${escHtml(String(p.roomNumber||'—'))}</div>
+              ${roomLabel(p.roomNumber, room && room.floor)}
               ${rtype?`<div class="pay-room__t">${escHtml(rtype.name)}</div>`:''}
-              ${room&&room.floor?`<div class="pay-room__t">${escHtml(room.floor)} Floor</div>`:''}
             </td>
             ${/* BOTH SPELLINGS, ONE SHOWN. "September 2026" is what the
                  reference prints and it is the right label when there is room;

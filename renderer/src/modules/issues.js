@@ -377,8 +377,7 @@ function renderIssues() {
         : `<span class="lk-dash" title="Maintenance is logged against a room, not a student">—</span>`}
       </td>
       <td>
-        ${i.roomNo ? `<div class="lk-room__n">#${escHtml(i.roomNo)}</div>
-                      ${rm&&rm.floor?`<div class="lk-room__t">${escHtml(String(rm.floor))}</div>`:''}`
+        ${i.roomNo ? roomLabel(i.roomNo, rm && rm.floor)
                    : '<span class="lk-dash">—</span>'}
       </td>
       <td>${i.category

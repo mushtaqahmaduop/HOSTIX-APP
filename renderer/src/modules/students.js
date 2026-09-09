@@ -552,7 +552,13 @@ function renderStudents() {
                 <div class="stu-charge" title="${c.configured?escHtml(cov.label):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
                 <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
               </td>`;})()}
-            <td><span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(status)}"><i></i>${escHtml(status)}</span></td>
+            ${''/* THE STATUS NAMES A DATE, SO THE CELL PRINTS IT (owner,
+                   2026-09-10). "Left" answers nothing a warden asks next, and
+                   "On Notice" is worse — the bed is still occupied and the only
+                   useful fact is the day it frees. statusDateNote() is shared,
+                   so the same line appears wherever this status does. */}
+            <td><span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(status)}"><i></i>${escHtml(status)}</span>
+                ${statusDateNote(t)}</td>
             ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
                    Three always-visible icons were 124px — the widest ornament
                    on the row, in a table that could not fit its columns. A menu
@@ -900,7 +906,7 @@ function _stuPanelHtml(t) {
       ${studentAvatar(t, 54, stuAvatarHue(String(t.name || '?')))}
       <div class="stu-pan__idtext">
         <div class="stu-pan__name">${escHtml(t.name || '—')}
-          <span class="stu-pill ${stuStatusHue(status)}"><i></i>${escHtml(status)}</span>
+          <span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(statusDateText(t) || status)}"><i></i>${escHtml(status)}</span>
         </div>
         <div class="stu-pan__idmeta">
           <span class="stu-pan__idno">#${id}</span>
@@ -2329,6 +2335,7 @@ function showViewStudentModal(id) {
           <div class="svw-hero__no">#${escHtml(t.id)}</div>
           <div class="svw-hero__tags">
             ${statusBadge(t.status||'Active')}
+            ${statusDateText(t)?`<span class="badge badge-gray">${escHtml(statusDateText(t))}</span>`:''}
             ${room?`<span class="badge badge-blue">Room #${escHtml(String(room.number))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
             <span class="badge badge-gray">${escHtml(t.paymentMethod||'Cash')}</span>
           </div>
@@ -4220,25 +4227,15 @@ function getEmailValue() {
    column whose job is to say WHERE. The floor is the thing a warden walking to
    the room needs, and the long form ("Ground Floor") is two words for a cell
    that has room for one. */
+/* THE ONE IMPLEMENTATION IS floorShort() IN utils.js (2026-09-10). It moved
+   there when Payments, Complaints and Cancellations started drawing the same
+   boxed room label this page draws; a second copy here would be the same
+   function in two files, differing the first time either is touched. This name
+   stays because this file calls it in several places. */
 function stuFloorShort(floor) {
-  const f = String(floor || '').trim();
-  if (!f) return '';
-  const low = f.toLowerCase();
-  if (low.startsWith('base') || low.startsWith('cellar')) return 'Base-Floor';
-  if (low.startsWith('ground') || low === 'g')            return 'G-Floor';
-  /* '1st', '2nd', '3rd', '4th' — the app's own floor names — keep their
-     ordinal and gain the suffix. Anything a hostel has typed for itself is
-     passed through with the same suffix rather than guessed at. */
-  const m = f.match(/^(\d+)(st|nd|rd|th)?/i);
-  if (m) {
-    const n = Number(m[1]);
-    const suf = n % 10 === 1 && n % 100 !== 11 ? 'st'
-              : n % 10 === 2 && n % 100 !== 12 ? 'nd'
-              : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th';
-    return n + suf + '-Floor';
-  }
-  return f + '-Floor';
+  return floorShort(floor);
 }
+
 
 /* WHICH PLAN A STUDENT IS ON, for the charge-plan filter. It reads the same
    resolveCharges() → chargeCoverage() pair the Charges column prints, so the

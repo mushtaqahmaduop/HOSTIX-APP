@@ -153,14 +153,30 @@ function renderCancellations(filterStatus='All') {
     const tc  = _cancTypeColor(c.roomType);
     // Pending can be confirmed or reversed; Confirmed can still be reversed;
     // Restored is terminal. Same rules the previous list enforced.
+    /* ICONS ONLY, ONE ROW (owner, 2026-09-10: "the action button should only be
+       svgs and in widget way to take less space").
+
+       Four labelled buttons — Edit, Delete, Confirm, Restore — came to ~300px
+       and wrapped onto a second line in a 13-column register, which made the
+       row two lines tall for every pending departure on the page. As icons they
+       are 4 x 28 plus gaps: 124px, one line, and the row height goes back to
+       being set by the student cell.
+
+       NOTHING IS UNLABELLED, which is the trade this has to survive. Each
+       button keeps its full sentence on `title` and its own `aria-label`, and
+       the two that change a student's life — Confirm marks them Left, Restore
+       puts them back — keep their hue, which is what tells them apart at a
+       glance in a row of grey. */
+    const _ic = (hue, onclick, label, path) =>
+      `<button class="lk-act lk-act--icon${hue ? ' lk-act--hue ' + hue : ''}" onclick="${onclick}"
+               title="${escHtml(label)}" aria-label="${escHtml(label)}">
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${path}</svg>
+       </button>`;
     const acts = c.status==='Pending'
-      ? `<button class="lk-act lk-act--hue dh-green" onclick="confirmCancellation('${c.id}')" title="Confirm — marks the student Left">
-           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Confirm</button>
-         <button class="lk-act lk-act--hue dh-blue" onclick="restoreFromCancellation('${c.id}')" title="Restore the student to Active">
-           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Restore</button>`
+      ? _ic('dh-green', `confirmCancellation('${c.id}')`, 'Confirm — marks the student Left', '<polyline points="20 6 9 17 4 12"/>')
+        + _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')
       : c.status==='Confirmed'
-        ? `<button class="lk-act lk-act--hue dh-blue" onclick="restoreFromCancellation('${c.id}')" title="Restore the student to Active">
-             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Restore</button>`
+        ? _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')
         : '';
     return `<tr>
       <td>
@@ -180,7 +196,7 @@ function renderCancellations(filterStatus='All') {
              same palette. The column it vacates goes to the settlement, which
              is a fact about this cancellation rather than about the room. */}
       <td>
-        <div class="lk-room__n">#${escHtml(String(c.roomNumber||'—'))}</div>
+        ${roomLabel(c.roomNumber, (DB.rooms.find(r => String(r.number) === String(c.roomNumber)) || {}).floor)}
         ${c.roomType ? `<div class="lk-sub">${escHtml(c.roomType)}</div>` : ''}
       </td>
       <td>${cancSettleCell(c)}</td>
@@ -194,12 +210,10 @@ function renderCancellations(filterStatus='All') {
       </td>
       <td style="max-width:170px;white-space:normal">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
       <td>
-        <div class="lk-acts">
-          <button class="lk-act" onclick="showEditCancellationModal('${c.id}')" title="Edit this record">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</button>
-          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="deleteCancellationRecord('${c.id}')" title="Delete this record">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+        <div class="lk-acts lk-acts--widget">
+          ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>')}
           ${acts}
+          ${_ic('dh-red', `deleteCancellationRecord('${c.id}')`, 'Delete this record', '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>')}
         </div>
       </td>
     </tr>`;

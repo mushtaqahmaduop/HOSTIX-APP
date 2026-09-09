@@ -223,3 +223,20 @@
 .caf-opt__s { font-size: 11px; color: var(--text3); margin-top: 1px;
               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .caf-opt__empty { padding: 13px; text-align: center; font-size: 12px; color: var(--text3); }
+
+
+/* ══ THE ROW ACTIONS ARE A WIDGET (owner, 2026-09-10) ══════════════════════
+   One row of icon buttons in a single bordered group, rather than four
+   labelled buttons that wrapped to two lines. The group is what makes them read
+   as one control with four faces instead of four loose chips — and it is why
+   the buttons themselves lose their own borders. */
+.lk-acts--widget {
+    display:inline-flex; align-items:center; gap:2px; flex-wrap:nowrap;
+    padding:2px; border-radius:9px;
+    background:var(--card); border:1px solid var(--border);
+}
+.lk-acts--widget .lk-act {
+    border-color:transparent; background:none; padding:0;
+    width:26px; height:26px; border-radius:7px;
+}
+.lk-acts--widget .lk-act:hover { background:var(--bg3); border-color:var(--border2); }
