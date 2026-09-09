@@ -1076,8 +1076,13 @@ function renderDashboard() {
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M8.7 17V7.6m0 0L6.2 10.1M8.7 7.6l2.5 2.5M15.3 7v9.4m0 0 2.5-2.5M15.3 16.4l-2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Advance / Arrears</div>
+        ${''/* THE PILL TAKES THE CARD'S OWN VIOLET AND A CARD GLYPH
+               (owner ref: arrears.png, 2026-09-10). It was slate and wordless:
+               the reference draws a pale tint of the tile's hue with a payment
+               glyph in front of the count, which is what makes it read as "how
+               many payments made up this figure" rather than as a status. */}
         <div class="dash-pill-stack">
-          <span class="dash-pill dh-slate">${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
+          <span class="dash-pill"><svg class="dash-pill__ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(_advArr.total,{size:"display",compact:true})}</div>
@@ -1086,18 +1091,54 @@ function renderDashboard() {
              what sets row A's height — and unlike the other four it already
              says what it means, in the two lines under the figure. */}
       ${_dashBar(_advArr.total, cashIn.total, 'kbar--violet')}
+      ${''/* ONE LINE, TWO BUCKETS, A RULE BETWEEN THEM (owner ref:
+             arrears.png, 2026-09-10). They were two stacked rows, and the
+             reference draws them side by side — "Upcoming PKR 0 | Previous
+             PKR 5,800" — which is the same two readings in HALF the height.
+
+             THE HEIGHT IT SAVES IS THE FOLD'S, NOT THE ROOM LIST'S. Row A is
+             as tall as its tallest tile and this is that tile: 160 before, 153
+             after, measured at 1366x768. Row C is unchanged at 202 and now ends
+             at 730 of 738 rather than flush against it, which is the margin the
+             QA floor has been failing by. Anything added back here spends that
+             margin — this tile stands 3px above the 150 the other five cards in
+             the row need, so it is the one card in row A where height is real.
+
+             THE PER-BUCKET COUNTS COME OFF, and the reference has none either.
+             The pill above already gives the tally for both buckets together,
+             and a bare count sitting beside a bare rupee figure on one line
+             reads as part of it. The split figures they belonged to are
+             unchanged, both still carry the full PKR amount on hover, and
+             showCashReceivedModal() — which this card still opens — lists every
+             payment behind them.
+
+             THE LABELS ARE THE REFERENCE'S OWN, one word each. "Advance
+             (Upcoming)" and "Previous Months" do not fit a half-width line, and
+             the card is titled Advance / Arrears directly above: Upcoming is
+             the advance, Previous is the arrears. The long form is on hover.
+
+             THE WORD SITS ABOVE ITS FIGURE, WHICH IS THE ONE PLACE THIS PARTS
+             FROM THE REFERENCE, and it was measured before it was decided. The
+             reference draws "Upcoming PKR 0" on one line inside a card more
+             than twice this one's width; this tile gives each bucket 87px, and
+             a real figure — PKR 125,000 — takes 63 of them. Rendered on one
+             line the two labels ellipsised to "U." and "P.", which is a word
+             deleted rather than shortened, and the rule in this file is that a
+             tight card loses chrome, never a reading. Stacked, every word and
+             both exact figures survive inside the same 87px.
+
+             The reference's actual move is kept: the two buckets sit SIDE BY
+             SIDE with a rule between them, where they were a stacked pair of
+             full-width rows. That is what halves the block. */}
       <div class="dash-kpi__split">
-        <span class="dash-kpi__srow">
-          <i class="dash-kpi__sdot dh-green"></i>
-          <span class="dash-kpi__slabel">Advance (Upcoming)</span>
+        <span class="dash-kpi__srow" title="Cash taken this month against a LATER month">
+          <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-green"></i>Upcoming</span>
           <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.advance))}</b>
-          <em>${fmtNum(cashIn.nAdvance)}</em>
         </span>
-        <span class="dash-kpi__srow">
-          <i class="dash-kpi__sdot dh-violet"></i>
-          <span class="dash-kpi__slabel">Previous Months</span>
+        <i class="dash-kpi__srule"></i>
+        <span class="dash-kpi__srow" title="Cash taken this month against an EARLIER month — arrears collected">
+          <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-violet"></i>Previous</span>
           <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.arrears))}</b>
-          <em>${fmtNum(cashIn.nArrears)}</em>
         </span>
       </div>
       ${''/* Still opens showCashReceivedModal(), NOT the payments page — that
@@ -1289,11 +1330,17 @@ function renderDashboard() {
        it is a log, and a log is what you scroll TO. -->
   <div class="dash-row-c">
   <div class="dash-sec">
+    ${''/* THE TAGLINE IS OFF AND THE CHIP IS 26 (owner, 2026-09-10).
+           "Overview of seat occupancy by room type" restated the title beside
+           it word for word, and the head it sat in was 33px against the 26px
+           heads of the other two cards in this row. Seven pixels, and they are
+           not cosmetic: they are part of the 25 this card needed before its
+           list could show a FOURTH room type instead of eight pixels of one.
+           See the ceiling note in dashboard.css. */}
     <div class="dash-sec__head" style="margin-bottom:4px">
-      ${dashEmojiChip('building', 30)}
+      ${dashEmojiChip('building', 26)}
       <div style="min-width:0">
         <div class="dash-sec__title">Occupancy by Room Type</div>
-        <div class="dash-sec__sub">Overview of seat occupancy by room type</div>
       </div>
       <span class="rt-full ${seatPct>=90?'is-high':''}" style="margin-left:auto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
@@ -1466,7 +1513,7 @@ function renderDashboard() {
    now correct rather than misleading — the KPI row above it reads zero too,
    because nothing has happened yet in the window both are describing. */
 
-/** Counts for the glance — six figures, each from its own table, one month. */
+/** Counts for the glance — seven figures, each from its own table, one day. */
 /* WHAT HAPPENED TODAY — not this month (owner, 2026-09-09).
 
    The card was scoped to the sidebar's month like everything else on the page,
@@ -1514,6 +1561,15 @@ function _dlGlance(mo) {
     { k: 'in',    label: 'Check-ins',   full: 'Check-ins today',            n: log.filter(c => isToday(c.date) && c.type !== 'Check-out').length, page: null },
     { k: 'out',   label: 'Check-outs',  full: 'Check-outs today',           n: log.filter(c => isToday(c.date) && c.type === 'Check-out').length, page: null },
     { k: 'new',   label: 'Admissions',  full: 'Students admitted today',    n: (DB.students || []).filter(s => isToday(s.joinDate)).length,       page: 'students' },
+    /* CANCELLATIONS, DIRECTLY UNDER ADMISSIONS (owner, 2026-09-10). The card
+       reports the counter's day, and filing a departure is the other half of
+       the work admitting one is — the two rows read as the register opening and
+       closing. It counts by `requestDate`, the day the request was FILED, for
+       the same reason the payments row counts by the day the money was taken:
+       this card asks what was done today, not what falls due today. A departure
+       filed in August for a bed that empties in September belongs to August's
+       day, and Needs Action in row C already carries the pending ones. */
+    { k: 'cancel',label: 'Cancellations',full: 'Cancellations filed today',  n: (DB.cancellations || []).filter(c => isToday(c.requestDate)).length,  page: 'cancellations' },
     { k: 'money', label: 'Payments',    full: 'Payments collected today',   n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
     { k: 'issue', label: 'Complaints',  full: 'Complaints raised today',    n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
     { k: 'wrench',label: 'Maintenance', full: 'Maintenance raised today',   n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },

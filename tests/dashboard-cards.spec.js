@@ -495,6 +495,21 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
       rows: [...document.querySelectorAll('.dash-row-b .dl-glance__row')]
               .map(r => Math.round(r.getBoundingClientRect().height)),
       overflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
+      /* HOW FAR THE GLANCE'S LAST ELEMENT OVERRUNS ITS OWN CARD. Row B is
+         `height:254px` and `.dash-row-b > .dash-sec` is `overflow:hidden`, so
+         this card cannot report a fault the way everything else on the page
+         does — it does not push the fold down, it silently swallows whatever
+         does not fit, bottom edge first. The seventh glance row did exactly
+         that to the closing line before the row padding came down. */
+      glanceCut: (() => {
+        const card = [...document.querySelectorAll('.dash-row-b > .dash-sec')]
+          .find(c => c.querySelector('.dl-glance'));
+        if (!card) return 0;
+        const last = card.lastElementChild;
+        const pad = parseFloat(getComputedStyle(card).paddingBottom) || 0;
+        return Math.round(last.getBoundingClientRect().bottom
+                          - (card.getBoundingClientRect().bottom - pad));
+      })(),
     }));
     /* ROW C NOW STARTS ABOVE THE FOLD RATHER THAN ENDING ABOVE IT, and that is
        a decision, not a regression. On 2026-09-09 the owner locked row B to
@@ -511,9 +526,19 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
        been about. */
     if (m.top > m.vp - 40) misses.push(`${s.label}: row C starts at ${m.top}, viewport ${m.vp}`);
     expect(m.overflowX, `${s.label} must not scroll sideways`).toBe(false);
-    // Six rows, and the tallest no more than a line and a half — the money row
-    // carries a second line at full height and drops it under 700px.
-    expect(m.rows.length).toBe(6);
+    expect(m.glanceCut, `${s.label}: the glance's closing line is cut by its own card`)
+      .toBeLessThanOrEqual(0);
+    // SEVEN rows since 2026-09-10 — Cancellations joined the glance, directly
+    // under Admissions, because filing a departure is the other half of the
+    // counter's day. The count is asserted rather than left open: row B is
+    // `height:254px` and its cards are `overflow:hidden`, so an eighth row
+    // would not fail by growing the page — it would quietly cut the card's
+    // closing line off at the bottom edge, which is exactly what the seventh
+    // did until the row padding came down to 2px.
+    //
+    // The tallest is no more than a line and a half — the money row carries a
+    // second line at full height and drops it under 700px.
+    expect(m.rows.length).toBe(7);
     expect(Math.max(...m.rows), `${s.label}: a glance label has wrapped again`)
       .toBeLessThanOrEqual(50);
   }

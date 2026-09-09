@@ -1529,32 +1529,42 @@ body:not(.light-theme) .dl-pending {
    five by design — the split is the point of the card — and the KPI grid rows
    stretch, so the other five grow with it rather than the row going ragged. */
 .dash-kpi--split .dash-kpi__value { margin-bottom: 7px; }
+/* SIDE BY SIDE, NOT STACKED (owner ref: arrears.png, 2026-09-10). The two
+   buckets were a column of two rows and are one line now, split by a hairline
+   rule exactly as the reference draws them. It halves the block — 41px to 21 —
+   and that 20px is row C's, not spare: see the note in dashboard.js.
+
+   EACH BUCKET OWNS HALF THE LINE (`flex:1 1 0`, not `auto`), so the divider
+   sits dead centre whatever the two figures are. Sized by content it would
+   slide left and right as money came in, and a rule that moves reads as a
+   layout fault rather than a separator. */
 .dash-kpi__split {
-    display: flex; flex-direction: column; gap: 3px;
-    padding-top: 7px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: row; align-items: center; gap: 7px;
+    padding-top: 6px; border-top: 1px solid var(--border);
 }
+/* Each half is a two-line stack — the bucket's name over its figure. On one
+   line an exact six-digit rupee figure leaves ~20px for the word and the label
+   ellipsises to "U."; stacked, both survive in the same 87px. See the note in
+   dashboard.js. */
 .dash-kpi__srow {
-    display: grid;
-    /* dot | label (elastic) | amount | count */
-    grid-template-columns: 8px minmax(0, 1fr) auto 20px;
-    align-items: center; gap: 6px;
-    font-size: 11px; line-height: 1.5;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+    flex: 1 1 0; min-width: 0;
+    font-size: 10.5px; line-height: 1.35;
 }
-.dash-kpi__sdot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.dash-kpi__sdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+                  flex: 0 0 6px; display: inline-block; margin-right: 4px; vertical-align: middle; }
 .dash-kpi__slabel {
-    color: var(--text3);
+    color: var(--text3); max-width: 100%;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.dash-kpi__srow b { font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dash-kpi__srow b .pkr { font-size: 8.5px; font-weight: 700; color: var(--text3); margin-right: 2px; }
-/* The count sits in its own well, as the reference draws it — it is a tally,
-   not money, and without the well it reads as part of the figure beside it. */
-.dash-kpi__srow em {
-    font-style: normal; font-weight: 700; font-size: 10.5px;
-    color: var(--text2); text-align: center;
-    background: var(--card); border-radius: 5px; padding: 1px 0;
-    font-variant-numeric: tabular-nums;
-}
+.dash-kpi__srow b { max-width: 100%; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dash-kpi__srow b .pkr { font-size: 8px; font-weight: 700; color: var(--text3); margin-right: 2px; }
+.dash-kpi__srule { flex: 0 0 1px; align-self: stretch; background: var(--border); }
+
+/* The count glyph on the header pill (arrears.png). Nothing else in the KPI row
+   carries one, and this pill is the only one that counts records rather than
+   naming a state. */
+.dash-pill__ic { width: 12px; height: 12px; flex: 0 0 12px; vertical-align: -2px; margin-right: 4px; }
 
 
 /* A configured method nobody used this month. It is listed because its absence
@@ -1619,9 +1629,9 @@ body:not(.light-theme) .dl-pending {
   .seat-foot { margin-top:6px; gap:9px; }
   .seat-foot__acts { flex:0 0 auto; margin-left:auto; margin-top:0; }
 
-  /* The split rows tighten; both figures and both counts stay. */
-  .dash-kpi__split { padding-top:5px; gap:1px; }
-  .dash-kpi__srow { font-size:10px; line-height:1.35; }
+  /* The split line tightens; both figures stay. */
+  .dash-kpi__split { padding-top:5px; gap:5px; }
+  .dash-kpi__srow { font-size:10px; line-height:1.35; gap:3px; }
 
   .dash-row-c .rt-donut { width:118px; height:118px; max-width:118px; }
   .dash-row-c .rt-body { grid-template-columns:118px minmax(0,1fr); gap:12px; }
@@ -1635,10 +1645,13 @@ body:not(.light-theme) .dl-pending {
    is 17px for no lost number, which is the whole rule here — a screen this
    short loses chrome, never a reading. */
 @media (max-height:665px) {
-  .dash-kpi__split { flex-direction:row; gap:10px; align-items:center; padding-top:5px; }
-  .dash-kpi__srow  { grid-template-columns:8px auto auto; gap:4px; font-size:10px; }
+  /* The line is already a row; at this height it is the LABELS that go. The dot
+     carries which bucket is which (green up = advance, violet = previous) and
+     both figures survive, which is the rule here — a screen this short loses
+     chrome, never a reading. */
+  .dash-kpi__split { gap:8px; padding-top:4px; }
+  .dash-kpi__srow  { font-size:10px; line-height:1.3; }
   .dash-kpi__slabel { display:none; }
-  .dash-kpi__srow em { background:none; padding:0; min-width:0; color:var(--text3); }
   .seat-inline__k b { font-size:13px; }
 
   .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom:4px; }
@@ -1955,9 +1968,17 @@ body:not(.light-theme) .kbar--violet { --kbar-fg:#A78BFA; }
 .dash-kpi-grid .kbar { padding-top: 5px; }
 .dash-kpi-grid .kbar__pct  { margin-bottom: 2px; }
 .dash-kpi-grid .kbar__ends { margin-top: 2px; }
-/* The split card's two rows tighten to match, both figures intact. */
-.dash-kpi--split .dash-kpi__split { padding-top: 5px; gap: 1px; }
-.dash-kpi--split .dash-kpi__srow  { line-height: 1.4; }
+/* THE SPLIT PAYS FOR ITSELF, AND THE MEASUREMENT IS THE WHOLE ARGUMENT. Its
+   two halves are stacked label-over-figure, so the block is two lines of type
+   whatever the leading is, and at 1.4 the tile came to 157 and pushed row C to
+   735 of 738. At 1.25, with 4px above the block and 2px under the figure, the
+   tile is 153: still the tallest in row A by 3px over the 150 the other five
+   need, but 7px shorter than the 160 it was, and that is where row C's
+   clearance comes from. Leading and padding, not type size — both figures are
+   unchanged and neither label is shortened. */
+.dash-kpi--split .dash-kpi__split { padding-top: 4px; gap: 6px; }
+.dash-kpi--split .dash-kpi__srow  { line-height: 1.25; }
+.dash-kpi--split .dash-kpi__value { margin-bottom: 2px; }
 /* The bar belongs to the card floor; on the split card the rows come after it,
    so it must not claim the slack there. */
 .dash-kpi--split .kbar { margin-top: 4px; }
@@ -1970,7 +1991,7 @@ body:not(.light-theme) .kbar--violet { --kbar-fg:#A78BFA; }
    it already name both figures and both counts; on the other four cards, where
    the bar is the only ratio shown, the labels stay. That is ~20px off every
    card in the row. */
-.dash-kpi--split .kbar { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.dash-kpi--split .kbar { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
 .dash-kpi--split .kbar__pct   { margin: 0; order: 2; flex: 0 0 auto; font-size: 10.5px; }
 .dash-kpi--split .kbar__track { order: 1; flex: 1 1 auto; height: 6px; }
 .dash-kpi--split .kbar__ends  { display: none; }
@@ -2392,12 +2413,22 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
       the three tiers at :813, :1114 and :1982 that would otherwise race it.
       This file has now been bitten four times by rules that were only correct
       in the order they happened to be written in. */
-/* 124px = three rows exactly (38px tile + 5px gap, x3, less the trailing gap).
-   118 was measured before the tiles were centred and left the third row cut by
-   the fade — which is the fade doing its job, but the whole point of dropping
-   the bar was to SHOW that row. The card still ends up 3px shorter than it was
-   with the bar (121px), so this gives the fold slack rather than spending it. */
-.dash-row-b .dash-sec .dash-room-wrap { min-height: 124px; max-height: 124px; }
+/* 167px = FOUR rows exactly (38px tile + 5px gap, x4, less the trailing gap),
+   and it costs the fold nothing (owner, 2026-09-10: "show more rooms").
+
+   124 was three rows, and it was three rows because it was set from what the
+   removed occupancy bar had left, not from what the card had. Measured at
+   1366x768 the card ran head 32 + grid 124 + foot 24 = 192 inside a 254px row
+   whose height is set by the Revenue Trend chart next door: FORTY-FOUR PIXELS
+   of this card were blank, below the foot, in the row that is hardest to get
+   height out of. Spent on the grid they are a whole fourth rank — 24 of 42
+   demo rooms on screen instead of 18.
+
+   12 + 32 + 6 + 167 + 24 + 12 = 253 against row B's 254, so the card now fills
+   the row it was already occupying and row B does not move. Anything added to
+   this card from here DOES move it, and row B is the one row on this page with
+   nothing left to give. */
+.dash-row-b .dash-sec .dash-room-wrap { min-height: 167px; max-height: 167px; }
 /* The short tiers still give height back, they just start from the new floor.
    Two rows at 640px rather than one: the bar it replaces was already hidden at
    this height, so this spends nothing the fold was relying on. */
@@ -2920,8 +2951,20 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
 
 /* Six rows and a closing line in 237px: the rows go back to 3px of padding.
    They are still one line each, which is what the fold test asserts. */
-.dash-row-b .dl-glance__row { padding: 3px 14px; }
-.dl-foot--tint { margin: 4px 10px 8px; padding: 5px 9px; }
+/* SEVEN ROWS IN THE SAME CARD (owner, 2026-09-10: Cancellations joins the
+   glance). Row B is `height:254px` at :2928 and its cards are `overflow:hidden`,
+   so a seventh row at the old 3px of vertical padding did not make the row
+   taller — it pushed "Keep things running smoothly" 5px under the card's own
+   edge and cut it. 2px a side gives 14px back across seven rows, which is 3
+   more than the 11 needed, and it comes out of the gaps: nothing here is a
+   figure, a label or an icon. */
+.dash-row-b .dl-glance__row { padding: 2px 14px; }
+/* The closing line's own box gives up 4px for the seventh glance row (owner,
+   2026-09-10). At 1366x738 with a 40-student hostel the row above it pushed the
+   tint 2px under the card's floor — and because row B is `overflow:hidden`,
+   that is a line quietly sliced, not a layout that reports itself. 2px of the
+   margin over it and 1px of its own padding, both sides. */
+.dl-foot--tint { margin: 2px 10px 8px; padding: 4px 9px; }
 
 /* ── THE KPI TILE GIVES 15% BACK (owner, 2026-09-09) ──────────────────────
    The tagline and the closing line took row A from 159px to 214. The owner
@@ -3019,6 +3062,54 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
    120px still shows four room types before it scrolls, which is the whole of a
    typical hostel's list; the list has always scrolled past that. Row C falls to
    about 187 and row B takes what it leaves. Chrome, not type. */
-.dash-row-c .dash-sec .rt-right { max-height: 120px; }
+
+/* ── 120 SHOWED THREE ROOM TYPES AND EIGHT PIXELS OF A FOURTH ──────────────
+   (owner, 2026-09-10: "the other bars should have the same size as the seater
+   room bar so that all four show".)
+
+   The note above is arithmetic that forgot the column header. Measured at
+   1366x768 on the seeded five-type hostel: `.rt-list__hd` is 21px and a row is
+   28 + 3 of margin, so 120px buys 21 + 3x31 = 114 and spends the last 6 on the
+   top sliver of 4-Seater. A row cut in half is worse than a row not shown — it
+   is the one thing on this card that looks like a rendering fault rather than a
+   list that scrolls.
+
+   THE CEILING IS NOW AN EXACT NUMBER OF WHOLE ROWS, and it was MEASURED, not
+   derived: with the header at 19 the fourth row ends 137px down and its margin
+   closes at 139, and the fifth begins at 141. 141 therefore showed a 2px sliver
+   of the fifth — the same fault one row further on — so the cut is 139. A fifth
+   type starts below it and scrolls to; the list never shows a partial row at
+   this size. Four is the number the owner asked for and the whole of a typical
+   hostel's list; a five-type hostel scrolls by one.
+
+   THE 19px WAS ALREADY IN THE CARD, WHICH IS THE POINT. Row C's 202 is set by
+   Needs Action, not by this card: measured before the change, `.rt-body` ended
+   at 721 inside a card whose floor is 726, so five of the pixels were simply
+   unused and the 120px ceiling was never what the card could afford. The rest
+   is the body's own padding (4), the row margins 3 -> 2 and the header's
+   padding-bottom (6), and the ceiling itself. Row C is still 202 and still ends
+   its row; nothing below the fold moved to pay for this.
+
+   THE TAGLINE AND THE 26px CHIP CAME OUT TOO, and they bought nothing here —
+   the head measures 33 either way, because `.rt-full` (the "N% Full" pill) is
+   33 and it is the tallest thing in the row. They went for consistency with the
+   26px heads on the other two cards in row C, not for height. What DID move the
+   fold is row A: Advance / Arrears splitting its two buckets side by side drops
+   the KPI row from 160 to 153, so row C now ends at 730 of 738 instead of flush
+   against it — eight pixels of margin on the one measurement the QA floor keeps
+   failing by.
+
+   THE SHORT TIERS ARE RESTATED BELOW THIS RULE, not left to the four at :2463.
+   This selector is (0,3,0) and later in the file than every one of them, so an
+   unconditional value here silently becomes the value at EVERY height — which
+   is what the 120px rule this replaces was already doing to them. Restating
+   720-and-under at that same 120 keeps short windows exactly as they were
+   before this change; only the band above it, where the fold has the room,
+   moves. */
+.dash-row-c .dash-sec .rt-right { max-height: 139px; }
+@media (max-height: 720px) { .dash-row-c .dash-sec .rt-right { max-height: 120px; } }
+.dash-row-c .dash-sec .rt-row   { margin-bottom: 2px; }
+.dash-row-c .dash-sec .rt-body  { padding: 1px 0 1px; }
+.dash-row-c .dash-sec .rt-list__hd { padding-bottom: 4px; }
 .dash-row-c .dl-needs { gap: 2px; padding: 3px 8px 4px; }
 .dash-row-c .dl-acts  { gap: 6px; padding: 6px 10px 8px; }
