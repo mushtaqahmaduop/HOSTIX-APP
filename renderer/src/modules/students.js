@@ -507,9 +507,15 @@ function renderStudents() {
                 </div>
               </div>
             </td>
+            ${''/* ONE LIGHT LABEL, not two loose lines (owner, 2026-09-09 —
+                   `students red.png`). The wrapper is what the pale ground and
+                   the border hang on; without it the number and the floor were
+                   two unrelated strings in the middle of a wide row. */}
             <td>
-              <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
-              ${room&&room.floor?`<div class="stu-room__t">${escHtml(stuFloorShort(room.floor))}</div>`:''}
+              <div class="stu-room">
+                <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
+                ${room&&room.floor?`<div class="stu-room__t">${escHtml(stuFloorShort(room.floor))}</div>`:''}
+              </div>
             </td>
             ${''/* THE WHATSAPP MARK BELONGS TO THE STUDENT'S NUMBER, not the
                    guardian's (owner, 2026-09-09). The first number the intake

@@ -181,17 +181,18 @@
               font-size:10.5px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
 .pay-pill svg { flex-shrink:0; }
 
-/* Actions stay pinned to the right edge. The table carries 13 columns and
-   scrolls horizontally, which used to push the row buttons off-screen entirely
-   — there was no way to open, print or delete a payment without scrolling.
-   The header cell needs the higher z-index because thead is already sticky on
-   the vertical axis, so the two sticky contexts overlap in that one corner. */
+/* NOT PINNED (owner, 2026-09-09: "not as a second layer", Students and Payments
+   both). It was `position:sticky; right:0` with its own background and a left
+   border, which is what made it read as a strip laid over the table rather than
+   its last column.
+
+   THE COST IS REAL HERE AND IS THE OWNER'S CALL: this table carries 13 columns
+   and pans by dragging, and the pin existed because the row actions used to end
+   up off-screen entirely. They can again on a narrow window — the kebab is
+   reached by panning to it, like every other column past the fold. */
 .pay-table thead th.pay-col-act,
-.pay-table tbody td.pay-col-act {
-    position:sticky; right:0;
-    background:var(--card);
-    border-left:1px solid var(--border);
-}
+.pay-table tbody td.pay-col-act { white-space:nowrap; }
+
 /* Secondary money columns (Adm. Fee, Extra Chrgs, Concession) sit past the
    right edge rather than being display:none — a hidden column cannot be
    scrolled to, and the table is drag-pannable now. At rest the view starts at

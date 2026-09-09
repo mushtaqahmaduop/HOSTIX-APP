@@ -147,8 +147,19 @@
 .stu-who__name { font-size:14.5px; font-weight:700; color:var(--text); white-space:nowrap; }
 .stu-who__sub  { font-size:12px; color:var(--text3); margin-top:3px; white-space:nowrap; }
 
-.stu-room__n { font-size:14px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-.stu-room__t { font-size:11.5px; color:var(--text3); margin-top:3px; white-space:nowrap; }
+/* THE ROOM READS AS ONE LIGHT LABEL (owner, 2026-09-09 — `students red.png`
+   sets the number and what is under it in a pale box). Two loose lines of text
+   in the middle of a wide row do not group, and the number is the thing being
+   scanned for; a light ground gathers the pair and separates them from the
+   contact column beside them without adding a colour. Pale, not tinted: what
+   sits under the number is a category, and CLAUDE.md keeps hue for state. */
+.stu-room {
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px;
+    padding:5px 9px; border-radius:8px;
+    background:var(--bg3); border:1px solid var(--border);
+}
+.stu-room__n { font-size:13.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+.stu-room__t { font-size:11px; font-weight:500; color:var(--text3); margin-top:0; white-space:nowrap; }
 
 .stu-contact      { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stu-contact__em  { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:12.5px; color:var(--text3); white-space:nowrap; }
@@ -180,21 +191,19 @@
 }
 .stu-act:hover { background:var(--dh-bg); border-color:var(--dh); }
 
-/* Pin the actions column to the right edge. With nine columns the table scrolls
-   horizontally on smaller screens and the last button (Delete) was ending up
-   off-screen / half-clipped. Pinning keeps View/Edit/Delete visible however far
-   the table is scrolled. Backgrounds mirror the row states so nothing shows
-   through the sticky cell; width:1% shrinks the column to exactly the buttons. */
+/* NOT PINNED (owner, 2026-09-09: "not as a second layer"). This column used to
+   be `position:sticky; right:0` with its own background and a left drop shadow,
+   so it floated over the scrolling table — which is exactly what it looked
+   like, a panel laid on the row rather than the last cell of it.
+   `students red.png` draws it as an ordinary column, and it is one now.
+
+   THE COST, STATED: the pin was there because the table scrolls horizontally
+   and the row actions used to end up off-screen. They can again, at a width
+   where the table overflows — the kebab is then reached by scrolling the table,
+   the same way every other column is. `width:1%` stays: it shrinks the column
+   to exactly the button rather than letting it take a share of the free space. */
 .stu-table thead th:last-child,
-.stu-table tbody td:last-child {
-    position:sticky; right:0;
-    width:1%; white-space:nowrap;
-    box-shadow:-8px 0 8px -8px rgba(0,0,0,.18);
-}
-.stu-table thead th:last-child { z-index:3; background:var(--dash-sunk); }
-.stu-table tbody td:last-child { z-index:1; background:var(--card); }
-.stu-table tbody tr:hover td:last-child     { background:var(--dash-sunk); }
-.stu-table tbody tr.is-picked td:last-child { background:var(--dh-bg); }
+.stu-table tbody td:last-child { width:1%; white-space:nowrap; }
 
 .stu-empty { padding:44px 20px; text-align:center; color:var(--text3); font-size:13px; }
 
@@ -909,14 +918,18 @@
 
 /* ── ROW ACTIONS: ONE KEBAB ──────────────────────────────────────────────── */
 .stu-actc  { text-align: center; }
+/* A BUTTON THAT LOOKS LIKE ONE AT REST (owner, 2026-09-09 — `students red.png`
+   draws a bordered box, not three bare dots). Transparent chrome made the cell
+   read as decoration until it was hovered, and a control nobody can see is a
+   control nobody presses. */
 .stu-kebab {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
-    background: none; border: 1px solid transparent; color: var(--text3);
+    width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border); color: var(--text3);
     transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
 .stu-kebab:hover,
-.stu-kebab.is-on { background: var(--bg3); color: var(--accent); border-color: var(--border2); }
+.stu-kebab.is-on { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
 .stu-kebab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* The row menu moved to listkit.css on 2026-09-09, as `.lk-rmenu` — Payments
@@ -1303,6 +1316,19 @@
 .stu-pan__ledger { border: 0; border-radius: 12px 12px 0 0; }
 .stu-pan__ledger .svw-card__head--bar { flex-wrap: wrap; gap: 4px 8px; font-size: 12px; }
 .stu-pan__ledger .svw-card__meta { margin-left: auto; white-space: nowrap; }
+/* NINE COLUMNS IN 572px, AND THE TYPE CHANGED UNDER THEM. The ledger holds
+   Month, Monthly Rent, Concession, Paid (+extras), Unpaid, Method, Status, Date
+   and Actions — measured at 584px against a 572px card, and on the spec's
+   fixture 45px past a 40px budget. Nothing here grew: the 2026-09-09 typography
+   pass moved the app from Barlow to Inter, which is a wider face at the same
+   size, and nine columns is where that first shows.
+
+   THREE PIXELS A SIDE INSTEAD OF FOUR — eighteen across the table, which is
+   more than the overrun. Chrome, not type: every figure in this ledger is the
+   size it was, because these are the numbers a warden reconciles against a
+   receipt. `.svw-tw` still scrolls if a hostel's own data outgrows even this;
+   what must never happen is the overflow escaping into the panel body, and
+   that is the assertion next to this one in students-panel.spec.js. */
 .stu-pan__ledger .svw-t th,
 .stu-pan__ledger .svw-t td { white-space: nowrap; }
 .stu-pan__ledger .svw-t__acts { flex-wrap: nowrap; }
@@ -1394,11 +1420,23 @@
 
    Cells still refuse to wrap. A wrapped FIGURE is unreadable in a money column
    — the eye stops trusting a number that is on two lines. */
+/* NINE COLUMNS IN 572px, AND THE TYPE CHANGED UNDER THEM. Month, Monthly Rent,
+   Concession, Paid (+extras), Unpaid, Method, Status, Date and Actions measured
+   584px against a 572px card. Nothing here grew: the 2026-09-09 typography pass
+   moved the app from Barlow to Inter, a wider face at the same size, and nine
+   columns is where that shows first.
+
+   THREE PIXELS A SIDE INSTEAD OF FOUR — eighteen across the table, more than
+   the overrun. Chrome, not type: every figure keeps its size, because these are
+   the numbers a warden reconciles against a receipt.
+   (The first attempt at this set padding-left/right in the block at :1428,
+   which has the same specificity as this rule and comes BEFORE it — so it lost,
+   silently, and measured identically. This is the declaration that wins.) */
 .stu-pan__ledger .svw-t th {
-    padding:7px 4px; white-space:normal; line-height:1.2; letter-spacing:.3px;
+    padding:7px 3px; white-space:normal; line-height:1.2; letter-spacing:.3px;
     font-size:9px; vertical-align:bottom;
 }
-.stu-pan__ledger .svw-t td { padding:7px 4px; font-size:11.5px; }
+.stu-pan__ledger .svw-t td { padding:7px 3px; font-size:11.5px; }
 .stu-pan__ledger .svw-paid { font-size:11.5px; }
 
 /* THE SUB-LINES WRAP; THE FIGURES DO NOT. "PKR 10,000 rent + PKR 7,000 mess"
@@ -1624,6 +1662,7 @@ body.light-theme .stu-wa svg { color:#1da851; }
 /* ── The strip, compact ───────────────────────────────────────────────────── */
 .stu-stat { padding:11px 13px; }
 
-/* ── A labelled action button ─────────────────────────────────────────────── */
-.stu-kebab { gap:5px; width:auto; padding:0 10px 0 7px; }
-.stu-kebab span { font-size:12px; font-weight:600; letter-spacing:.01em; }
+/* The labelled variant of this button is gone — the word came off the kebab on
+   2026-09-09 — and so are the two rules that widened it for a <span> the markup
+   no longer emits. Left in place they made a square button 30-odd pixels wide
+   with nothing in the extra space. */

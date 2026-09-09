@@ -81,7 +81,20 @@ async function seed(win) {
   await win.waitForTimeout(300);
 }
 
-test('the column reports all three states, and sits beside the charge without replacing it', async () => {
+/* THE COLUMN IS GONE; THE ANSWER IS NOT (owner, 2026-09-09: "remove payment
+   status"). This test was written when Fee Status was a column between Charges
+   and Status. students.js records the removal and the reason: whether a month
+   is paid is a question about a PAYMENT, the payments register answers it with
+   the record attached, and as a pill here it went stale the moment money was
+   taken on another screen — in a table already short of width.
+
+   So the assertions moved to where the answer still lives. `_stuFee()`,
+   `stuFeeHue()` and `stuFeeTitle()` are untouched and still drive the Advanced
+   Filters filter and the sort, which the three tests below this one cover; what
+   this one now pins is that the arithmetic still reports all three states, that
+   the figure is still on the hover text, and that the column really is absent
+   rather than accidentally still rendering. */
+test('the three fee states are still computed, and the column really is gone', async () => {
   const pageErrors = [];
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
@@ -99,16 +112,23 @@ test('the column reports all three states, and sits beside the charge without re
     [...document.querySelectorAll('.stu-table thead th')]
       .map(t => t.innerText.replace(/[⇅▲▼]/g, '').trim().toUpperCase()));
 
-  // Every column the spec's §5-§14 require, still present, and Fee Status is an
-  // ADDITION between the charge and the student's own status — not a
-  // replacement for either.
+  // Every column the spec's §5-§14 require is still present…
   for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY', 'CNIC',
                      'COURSE', 'ADDRESS', 'NATIONALITY', 'CHARGES / MONTH',
-                     'FEE STATUS', 'STATUS']) {
+                     'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
-  expect(headers.indexOf('FEE STATUS')).toBeGreaterThan(headers.indexOf('CHARGES / MONTH'));
-  expect(headers.indexOf('FEE STATUS')).toBeLessThan(headers.indexOf('STATUS'));
+  // …and Fee Status is not one of them any more. Asserted, not merely dropped:
+  // a column removed by deleting one <th> and leaving its <td> behind is a
+  // table whose header and body disagree from that row on.
+  expect(headers, 'Fee Status was removed on 2026-09-09').not.toContain('FEE STATUS');
+  const cellCount = await win.evaluate(() => {
+    const r = document.querySelector('.stu-table tbody tr');
+    return { cells: r.querySelectorAll('td').length,
+             heads: document.querySelectorAll('.stu-table thead th').length };
+  });
+  expect(cellCount.cells, 'header and body must agree on the column count')
+    .toBe(cellCount.heads);
 
   const states = await win.evaluate(() =>
     DB.students.map(t => ({ id: t.id, fee: _stuFee(t.id).status, hue: stuFeeHue(_stuFee(t.id).status) })));

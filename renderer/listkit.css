@@ -335,15 +335,19 @@ body.light-theme .lk-sin:focus {
 
 /* The button that opens it. Square now that the word has gone (owner,
    2026-09-09) — the naming lives on the menu items and on aria-label/title. */
+/* Bordered at rest, the same as `.stu-kebab` — `students red.png`, and Payments
+   draws this one. Transparent chrome made it read as decoration until hover,
+   and a control nobody can see is a control nobody presses. */
 .lk-kebab {
     display: inline-flex; align-items: center; justify-content: center; gap: 5px;
     width: 28px; height: 28px; padding: 0; border-radius: 8px; cursor: pointer;
-    background: none; border: 1px solid transparent; color: var(--text3);
+    background: var(--card); border: 1px solid var(--border); color: var(--text3);
     font-family: inherit; font-size: 12px; font-weight: 600;
     transition: var(--transition);
 }
 .lk-kebab:hover, .lk-kebab.is-on {
-    background: var(--bg3); border-color: var(--border); color: var(--text);
+    background: var(--bg3); border-color: var(--accent); color: var(--accent);
 }
+
 .lk-kebab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lk-kebab svg { flex-shrink: 0; }
