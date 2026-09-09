@@ -442,3 +442,98 @@ body.has-titlebar .modal-overlay { top: var(--titlebar-h); }
    horizontal motion is honest. */
 .al-panel-wrap { animation: hz-scrim-in .16s ease-out both; }
 .al-panel      { animation: hz-slide-in .24s cubic-bezier(.2, .7, .3, 1) both; }
+
+
+/* ══ THE SECTION ICON TILE ═════════════════════════════════════════════════
+   `.hf-num` is the numbered badge a multi-step form uses. A form with ONE
+   section has nothing to number — "1" over a single panel is a list of one —
+   so it wears the tile with its own glyph instead. Same box, same token. */
+.hf-sec__ico {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.hf-sec__ico svg { width: 15px; height: 15px; }
+
+
+/* ══ MOVE STUDENT TO ANOTHER ROOM (owner ref: `moving form.png`) ═══════════
+   A rail of facts about the student and the room they are in, then the move
+   itself. The split is the point: a warden moving a student is holding two
+   rooms in their head, and the left column holds one of them for them.
+
+   The rail is FIXED at 268px and the form takes the rest. Sized as a fraction
+   it grew with the dialog and the rail — which holds nothing longer than a
+   phone number — ended up wider than the fields beside it. */
+.msf { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 14px; align-items: start; }
+
+.msf-rail {
+    min-width: 0; padding: 14px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+}
+.msf-rail__t {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 10px;
+}
+.msf-rail__t--2 { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); }
+
+.msf-who { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; min-width: 0; }
+.msf-who__n { font-size: 14.5px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.msf-who__s {
+    display: flex; align-items: center; gap: 5px; margin-top: 3px;
+    font-size: 11.5px; color: var(--text3);
+}
+.msf-who__s svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* Label left, value right — the shape a list of facts about one person wants,
+   and the same one the student panel's Overview uses. */
+.msf-row {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.msf-row:last-of-type { border-bottom: none; }
+.msf-row__i { flex-shrink: 0; color: var(--text3); line-height: 0; align-self: center; }
+.msf-row__i svg { width: 14px; height: 14px; }
+.msf-row__k { flex-shrink: 0; font-size: 11.5px; color: var(--text3); }
+.msf-row__v {
+    margin-left: auto; min-width: 0; text-align: right;
+    font-size: 12.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
+}
+.msf-row__dash { font-weight: 500; color: var(--text3); }
+
+.msf-cur {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 12px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border);
+}
+.msf-cur--none { color: var(--text3); }
+.msf-cur__i {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.msf-cur__n {
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    font-size: 14px; font-weight: 800; color: var(--text);
+}
+.msf-cur__s { margin-top: 3px; font-size: 11.5px; color: var(--text3); }
+.msf-cur__d { margin-top: 5px; font-size: 11px; color: var(--text3); }
+
+.msf-main { min-width: 0; }
+
+/* What the form is about to do, in the words of what changes and what does
+   not. It reads as a note rather than a warning: nothing here is dangerous,
+   and an amber box on a routine move teaches a warden to ignore amber. */
+.msf-next {
+    display: flex; align-items: flex-start; gap: 10px; margin-top: 10px;
+    padding: 11px 13px; border-radius: 10px;
+    background: var(--accent-soft); border: 1px solid var(--accent-dim);
+}
+.msf-next__i { flex-shrink: 0; line-height: 0; color: var(--accent-strong); margin-top: 1px; }
+.msf-next__t { font-size: 12.5px; font-weight: 700; color: var(--accent-strong); }
+.msf-next__s { margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--text2); }
+
+/* Under ~880px of dialog the rail stops being a column and becomes a header:
+   two 130px columns side by side would put "Not recorded" on three lines. */
+@media (max-width: 880px) {
+    .msf { grid-template-columns: minmax(0, 1fr); }
+}

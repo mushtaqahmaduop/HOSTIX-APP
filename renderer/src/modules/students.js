@@ -3226,6 +3226,38 @@ async function confirmDeleteStudent(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // FEATURE 3: ROOM SHIFTING
 // ════════════════════════════════════════════════════════════════════════════
+/* ============================================================================
+   MOVE STUDENT TO ANOTHER ROOM - rebuilt 2026-09-10 to `moving form.png`.
+
+   It was a modal-md of inline styles: an emoji banner, three fields in the
+   generic form-grid, and an amber warning box. The reference draws a two
+   column dialog - who is being moved and where they are now on the left, the
+   move itself on the right - and that split is the point of the screen: a
+   warden moving a student is holding two rooms in their head, and the form
+   should hold one of them for them.
+
+   THREE THINGS THE REFERENCE ASSERTS THAT THIS APP CANNOT, and each is drawn
+   as what is actually true instead of as what is drawn:
+
+     - "Only available (empty) rooms are shown in the list." They are not, and
+       they must not be - this app sells BEDS, not rooms. A 3-seater with one
+       bed free is exactly where a student gets moved to, and a hostel that
+       only ever moved people into wholly empty rooms could not run. The hint
+       says what the list really holds.
+
+     - "Block A" - there are no blocks in this app; a room has a FLOOR and a
+       type, and both are shown.
+
+     - "Assigned on" - no field records it, so it is DERIVED: the most recent
+       shift INTO the current room, and the admission date when there has never
+       been a shift. That is the day the student took this bed either way. When
+       neither exists the line is left out rather than guessed at.
+
+   Everything the old form did, it still does. The room list is the same
+   free-bed filter, the capacity is re-checked at submit, the rent follows the
+   destination room's rate, and submitRoomShift() is untouched - the three
+   field ids below are the ones it already reads.
+   ============================================================================ */
 function showRoomShiftModal(studentId) {
   const t = DB.students.find(x => x.id === studentId);
   if (!t) return;
@@ -3234,7 +3266,6 @@ function showRoomShiftModal(studentId) {
   // Available rooms: not the current room, and must have a free bed
   const available = DB.rooms.filter(r => {
     if (r.id === t.roomId) return false;
-    const type = getRoomType(r);
     return roomFreeBeds(r) > 0;
   });
 
@@ -3245,45 +3276,108 @@ function showRoomShiftModal(studentId) {
 
   const roomOpts = available.map(r => {
     const type = getRoomType(r);
-    const occ  = getRoomOccupancy(r);
-    return `<option value="${r.id}">#${escHtml(String(r.number))} — ${escHtml(type.name)} · ${escHtml(r.floor)} Floor (${escHtml(roomAvailLabel(r))})</option>`;
+    return '<option value="' + r.id + '">#' + escHtml(String(r.number)) + ' — ' +
+           escHtml(type.name) + ' · ' + escHtml(r.floor) + ' Floor (' +
+           escHtml(roomAvailLabel(r)) + ')</option>';
   }).join('');
 
-  showModal('modal-md', '🔀 Shift Student to Another Room', `
-    <!-- Current info banner -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:14px">
-      <div style="font-size:24px">🧑‍🎓</div>
-      <div>
-        <div style="font-size:14px;font-weight:800;color:var(--text)">${escHtml(t.name)}</div>
-        <div style="font-size:12px;color:var(--text3)">Currently in <strong style="color:var(--accent-strong)">Room #${escHtml(String(fromRoom ? fromRoom.number : '?'))}</strong></div>
-      </div>
-    </div>
+  /* The day this student took the bed they are in. DB.roomShifts is the record
+     of every move, so the latest one INTO the current room is the answer; a
+     student who has never been moved has been there since they were admitted. */
+  const _since = (() => {
+    const mine = (DB.roomShifts || [])
+      .filter(x => String(x.studentId) === String(t.id) && x.toRoomId === t.roomId && x.date)
+      .map(x => x.date).sort();
+    return mine.length ? mine[mine.length - 1] : (t.joinDate || '');
+  })();
 
-    <div class="form-grid">
-      <div class="field col-full">
-        <label>New Room *</label>
-        <select class="form-control" id="shift-new-room">
-          <option value="">— Select Room —</option>${roomOpts}
-        </select>
-      </div>
-      <div class="field">
-        <label>Shift Date</label>
-        <input class="form-control cdp-trigger" id="shift-date" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}">
-      </div>
-      <div class="field col-full">
-        <label>Reason / Notes</label>
-        <textarea class="form-control" id="shift-reason" rows="2" placeholder="e.g. Student requested single room, maintenance issue…"></textarea>
-      </div>
-    </div>
+  const fromType = fromRoom ? getRoomType(fromRoom) : null;
+  const fromFree = fromRoom ? roomFreeBeds(fromRoom) : 0;
 
-    <div style="background:var(--amber-dim);border:1px solid rgba(240,160,48,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px">
-      ${icon('warning','sm')} Shifting will update the student's room assignment and adjust all future payment records. Past payments stay unchanged.
-    </div>
-  `,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" onclick="submitRoomShift('${studentId}')">🔀 Confirm Shift</button>`
-  );
+  const row = (ico, label, value) =>
+    '<div class="msf-row"><span class="msf-row__i">' + icon(ico, 'sm') + '</span>' +
+    '<span class="msf-row__k">' + escHtml(label) + '</span>' +
+    '<span class="msf-row__v">' + value + '</span></div>';
+  const dash = txt => '<span class="msf-row__dash">' + escHtml(txt) + '</span>';
+
+  const head =
+    '<div class="hf-mh"><div class="hf-mh__ico">' + icon('transfer', 'sm') + '</div>' +
+    '<div><div class="hf-mh__t">Move Student to Another Room</div>' +
+    '<div class="hf-mh__s">Change the student&rsquo;s room assignment</div></div></div>';
+
+  const rail =
+    '<aside class="msf-rail">' +
+      '<div class="msf-rail__t">Student information</div>' +
+      '<div class="msf-who">' + studentAvatar(t, 54, stuAvatarHue(String(t.name || '?'))) +
+        '<div style="min-width:0">' +
+          '<div class="msf-who__n">' + escHtml(t.name || '—') + '</div>' +
+          '<div class="msf-who__s">' + icon('graduation', 'xs') +
+            escHtml(t.occupation || 'Student') + '</div>' +
+        '</div>' +
+      '</div>' +
+      row('card', 'Student ID', '<b>#' + escHtml(String(t.id)) + '</b>') +
+      row('phone', 'Contact', t.phone ? escHtml(t.phone) : dash('Not recorded')) +
+      row('bookmark', 'Program', t.occupation ? escHtml(t.occupation) : dash('Not recorded')) +
+      '<div class="msf-rail__t msf-rail__t--2">Current room</div>' +
+      (fromRoom
+        ? '<div class="msf-cur"><span class="msf-cur__i">' + icon('bed', 'sm') + '</span>' +
+          '<div style="min-width:0;flex:1">' +
+            '<div class="msf-cur__n">Room #' + escHtml(String(fromRoom.number)) +
+              '<span class="lk-chip ' + (fromFree > 0 ? 'dh-green' : 'dh-slate') + '">' +
+              (fromFree > 0 ? escHtml(fromFree + ' bed' + (fromFree === 1 ? '' : 's') + ' free') : 'Full') +
+              '</span></div>' +
+            '<div class="msf-cur__s">' + escHtml(fromType ? fromType.name : '—') +
+              (fromRoom.floor ? ' · ' + escHtml(fromRoom.floor) + ' Floor' : '') + '</div>' +
+            (_since ? '<div class="msf-cur__d">In this room since ' + escHtml(fmtDate(_since)) + '</div>' : '') +
+          '</div></div>'
+        : '<div class="msf-cur msf-cur--none"><span class="msf-cur__i">' + icon('bed', 'sm') + '</span>' +
+          '<div><div class="msf-cur__n">No room assigned</div>' +
+          '<div class="msf-cur__s">This move is their first allotment.</div></div></div>') +
+    '</aside>';
+
+  const main =
+    '<div class="msf-main">' +
+      '<div class="hf-sec">' +
+        '<div class="hf-sec__h"><span class="hf-sec__ico">' + icon('bed', 'sm') + '</span>' +
+          '<span class="hf-sec__t">Move to new room</span>' +
+          '<span class="hf-sec__s">Pick the room and the day the move takes effect</span></div>' +
+        '<div class="field"><label for="shift-new-room">New room<span class="req">*</span></label>' +
+          '<div class="hf-in"><span class="hf-in__i">' + icon('bed', 'sm') + '</span>' +
+          '<select class="form-control" id="shift-new-room">' +
+            '<option value="">— Select a room —</option>' + roomOpts +
+          '</select></div>' +
+          /* THE HONEST VERSION OF THE REFERENCE'S HINT, which says "only
+             available (empty) rooms". That would be the wrong rule for a hostel
+             that sells beds: a 3-seater with one bed free is exactly where a
+             student gets moved to. */
+          '<div class="hi-note">Every room with a free bed is listed — a shared room with space ' +
+            'still counts. The room they are in now is not.</div>' +
+        '</div>' +
+        '<div class="hf-g2">' +
+          '<div class="field"><label for="shift-date">Shift date<span class="req">*</span></label>' +
+            '<div class="hf-in"><span class="hf-in__i">' + icon('calendar', 'sm') + '</span>' +
+            '<input class="form-control cdp-trigger" id="shift-date" type="text" readonly ' +
+              'onclick="showCustomDatePicker(this,event)" value="' + escHtml(today()) + '"></div></div>' +
+          '<div class="field"><label for="shift-reason">Reason / notes</label>' +
+            '<div class="hf-in hf-in--top"><span class="hf-in__i">' + icon('fileText', 'sm') + '</span>' +
+            '<textarea class="form-control" id="shift-reason" rows="3" ' +
+              'placeholder="e.g. Student requested a single room, maintenance issue…"></textarea></div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="msf-next"><span class="msf-next__i">' + icon('info', 'sm') + '</span>' +
+        '<div><div class="msf-next__t">What happens next</div>' +
+        '<div class="msf-next__s">The room assignment changes on the shift date and the new ' +
+          'room&rsquo;s rent applies from the next bill. Payments already recorded are left exactly ' +
+          'as they are, and the move is written to this student&rsquo;s room history.</div></div></div>' +
+    '</div>';
+
+  showModal('modal-form', head,
+    '<div class="msf">' + rail + main + '</div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="submitRoomShift(\'' + studentId + '\')">' +
+      icon('transfer', 'sm') + 'Move student</button>');
 }
+
 
 async function submitRoomShift(studentId) {
   const t = DB.students.find(x => x.id === studentId);
