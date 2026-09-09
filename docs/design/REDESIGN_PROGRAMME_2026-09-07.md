@@ -1502,3 +1502,125 @@ the **Expenses page** (`expense.png`) with its add/edit forms, are still to do.
 The cancellation *edit* form, the register's settlement column and the
 Type/Room swap landed earlier today; the add form and the two Expenses surfaces
 have not been touched.
+
+
+## 2026-09-09, third batch — the last two items on the order of work
+
+`Cancellations` (the add form) and `Expenses` (the page and both forms) were
+the only things left in the programme. Both are built.
+
+### Two owner decisions, taken before anything was written
+
+**Q5 is answered: the two fields are CAPTURED.** The Expenses reference draws a
+Payment Method column and an Added By column; the record was `{id, category,
+amount, date, description}` and had neither, and this file recorded it on 7 Sep
+as the owner's call. The owner chose capture — including the reference's
+**Attach Receipt** — so an expense now carries `method`, `handedTo` and
+`receipt`. Nothing is back-filled: a record written before today prints §21's
+dash, and the method filter carries a **Not recorded** option so those records
+are reachable and can be completed rather than merely noticed.
+
+**The cancellation dues rule warns, it does not block.** The reference disables
+"Add to Cancellation List" until dues are zero, with "you can still save this
+request as draft". Owner's call: the button stays live. A warden must be able to
+put a leaver on notice while they still owe — the bed is held and billed until
+the vacate date, and the money is settled at Confirm, which is where this app
+already collects it. Blocking would make a student who owes PKR 500 impossible
+to check out, and this app has no draft status to fall back on.
+
+### The dues panel is the settlement authority, not a second sum
+
+The reference's four boxes are Pending Fees / Fine / Other Dues / Total Due.
+**Three of those four are not fields this app has.** A payment carries
+`extraCharges` as free text ("Laundry, cooler, fines — anything billed on top"),
+and a part payment is applied to the RECORD, not to a component of it — so
+splitting an outstanding balance into rent-versus-fine would be an invention
+dressed as arithmetic.
+
+The four figures shown are **Billed · Collected · Advance credit · Total due**,
+straight from `calculateSettlement()`, with the signed net stated in words
+underneath rather than printed as a fifth number. Using the same function the
+CONFIRM step uses is the whole point: the figure a warden reads when filing the
+request cannot disagree with the one they are asked to settle when they confirm
+it. Nothing owed is stated outright — a blank where the panel would be reads as
+"not loaded yet", and a warden then opens the ledger to check what the form
+already knew.
+
+### One reason list, not two
+
+`CANC_REASONS` was a `const` inside `showEditCancellationModal()`. The Add form
+therefore offered a free-text box and the Edit form a picker, and the same
+departure could be filed as "shifting to own house" and edited into "Shifting to
+own house". It is module-level now, and both forms read it. As in the edit form,
+the picker FILLS the notes box rather than replacing it, so a reason chosen
+after something was typed does not throw the typing away.
+
+### The receipt, and the bridge it needed
+
+Images are re-encoded at 1400px as JPEG before they are stored: a 12MP phone
+photo of an electricity bill is four megabytes of JSON in a database that is
+read whole on every boot, and the same bill at 1400px is legible at about 150KB.
+PDFs are stored as they came — re-encoding one would mean rendering it, and a
+bill is a document, not a picture of one.
+
+**A stored receipt needed a way back out.** The window's CSP declares no
+`frame-src`, so `default-src 'self'` applies and a `data:` URL cannot be framed
+— an attached PDF would have been write-only. `file:saveDataUrl` (main) and
+`saveDataUrl` (preload) decode it and write it wherever the warden says. Images
+open in a viewer; PDFs go straight to the save dialog.
+
+### Three defects found on the way
+
+- **Delete-from-the-form ate the form.** Putting the reference's Delete button
+  in the edit footer meant raising `showConfirm()` from an open modal — and
+  `showConfirm` calls `showModal`, which replaces `#modal-container` wholesale.
+  Answering **Cancel** left the warden looking at the register with their
+  half-finished correction gone and nothing said about it. The cancel path
+  reopens the form and puts back the receipt they had staged but not saved.
+- **And then asked twice.** The first fix routed Delete through
+  `deleteExpense()`, which raises its own confirmation — two identical questions
+  in a row. The deletion is `_expDoDelete()` now, with no confirmation of its
+  own, and both callers raise exactly one.
+- **`tests/report-totals.test.js` aside, two specs were stale rather than
+  broken** — see below.
+
+### Two stale specs, both from earlier owner decisions
+
+Neither was caused by this batch; both asserted a control that had been
+deliberately removed and never re-run.
+
+- `exports-pdf.spec.js` looked for a **"Print / Save as PDF"** button. That
+  single control was split on 9 Sep into "Download PDF" (main-process
+  `printToPDF`, the only path that can put "Page X of Y" on every sheet) and
+  "Print" (Chromium's dialog, kept as the second button).
+- `toolbar-shared.spec.js` asserted **"Clear all"**, which the owner retired on
+  9 Sep when the × moved into the search box. `tbClear()` now has no call sites
+  at all. The test follows the behaviour instead: the × clears the SEARCH ALONE
+  (the status filter is deliberately untouched), and leaving the page and coming
+  back is what puts the rest down.
+
+### Verified
+
+- `typecheck` 0 · `test:export` 50 · `test:finance` 70 · `test:theme` 4 ·
+  `test:reporttotals` 14 · `test:outstanding` 21 · `test:cashevents` 12.
+- Playwright, in batches: **`expense-form.spec.js` (6, new)**,
+  **`cancellation-add.spec.js` (5, new)**, toolbar-shared (6), regression (17),
+  students-export (5), annual-archive, counter-flow-decisions, issues-register,
+  demo-sweep, responsive-floor, theme-parity, smoke, month-scope,
+  fund-transfer-and-category-register, refund-policy, exports-pdf, seat-on-notice.
+- **Two failures in the big batch were the known worker-load flake, not
+  regressions** — `seat-on-notice` and one `exports-pdf` case each pass alone in
+  under 25s and time out at 180s when six spec files share the worker. The
+  standing rule holds: 5–7 spec files at a time, with
+  `NODE_OPTIONS=--max-old-space-size=512 --max-semi-space-size=2`.
+
+### Not built, deliberately
+
+- **No back-fill of `handedTo` from the signed-in user.** It would be a guess
+  about who was on shift in July, and §21 names that as the thing not to do.
+- **No fifth payment method.** `EXP_METHODS` is §20's list and is closed: a
+  free-text method column stops being filterable and becomes four spellings of
+  "cash".
+- The **Type/Room column swap** on the cancellations register (this file, 8 Sep)
+  is still open. It is a Q8 question about colour on a category, not part of the
+  add form.

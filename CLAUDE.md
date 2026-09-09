@@ -95,9 +95,16 @@ records what each module carries.
   SheetJS is the community build: it cannot write cell styles, frozen panes or
   page setup, which is four of the specification's non-negotiables. SheetJS is
   still loaded and still used — Settings READS uploaded workbooks with it.
-- **Do not invent a column for a field this app does not record.** An expense
-  is `{date, category, description, amount}`; there is no vendor and no payment
-  method. A page of em dashes is worse than an honest set of fields.
+- **Do not invent a column for a field this app does not record — CAPTURE the
+  field instead, or print a dash.** An expense was `{date, category,
+  description, amount}`. On 2026-09-09 it gained `method`, `handedTo` and
+  `receipt`, because the reference's Payment Method and Added By columns had to
+  come from somewhere and a form is where a field belongs before an export is.
+  Records written before that carry none of the three, and print `—`. There is
+  still no vendor. Two rules survive the change and are the point of it: a
+  blank is stored as an ABSENT key, never `''` (the "Not recorded" filter and
+  the export's dash both read absence), and a page of em dashes is still worse
+  than an honest set of fields.
 - The **room visit sheet** and the **student card** deliberately stay outside
   the engine. They are physical objects with a signed-off design, not exports.
 - `npm run test:export` holds the engine to the specification without Electron.

@@ -278,7 +278,13 @@ test('every Print opens its window through the main process, never window.open',
   await pdfWin.waitForLoadState('domcontentloaded');
   const html = await pdfWin.content();
   // The real document, not the "Generating report…" shell the popup path painted.
-  expect(html).toContain('Print / Save as PDF');
+  /* The bar carries TWO controls now, and this used to name a third that no
+     longer exists: the single "Print / Save as PDF" button was split on
+     2026-09-09 into "Download PDF" (main-process printToPDF, which is the only
+     path that can put "Page X of Y" on every sheet) and "Print" (Chromium's own
+     dialog, kept as the second button). The assertion is on the save control
+     being present, so it follows the control that does the saving. */
+  expect(html).toContain('Download PDF');
   expect(html).not.toContain('Generating report');
   expect(html).toContain('Electricity');
 

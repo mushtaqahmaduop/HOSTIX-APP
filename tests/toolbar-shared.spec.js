@@ -229,30 +229,65 @@ test('one Export control per screen, with both formats inside it', async () => {
   await app.close();
 });
 
-test('Clear all appears only when something is set, and clears everything', async () => {
+/* ════════════════════════════════════════════════════════════════════════════
+   This test used to assert the "Clear all" button. That button is GONE, on the
+   owner's call of 2026-09-09: it sat at the far end of the bar when what you
+   wanted was to stop searching, and it reset every filter on the page to do it.
+   The × moved INTO the search box on all six screens, and the whole-bar reset
+   is now the filter lifecycle — a fresh visit starts fresh, which is where the
+   owner reported wanting it ("when the page is closed and reopened the search
+   bar is still with the data you entered").
+
+   So the assertions follow the behaviour, not the control: the button is not
+   there, the × clears the SEARCH ALONE, and leaving the page and coming back
+   is what puts everything else down.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('the search × clears the search alone, and a fresh visit clears the rest', async () => {
   test.setTimeout(300000);
   const { app, win } = await launch();
 
   await win.evaluate(() => navigate('students'));
   await win.waitForTimeout(400);
+
   expect(await win.evaluate(() => document.querySelectorAll('#content .tb-clear').length),
-    'a Clear button on an untouched bar means nothing').toBe(0);
+    'Clear all was retired on 2026-09-09').toBe(0);
 
-  await win.evaluate(() => { studentFilter.status = 'Left'; renderPage('students'); });
+  // Two things set: a search and a status filter.
+  await win.evaluate(() => {
+    studentFilter.search = 'azat';
+    studentFilter.status = 'Left';
+    renderPage('students');
+  });
   await win.waitForTimeout(400);
-  expect(await win.evaluate(() => document.querySelectorAll('#content .tb-clear').length)).toBe(1);
 
-  await win.click('#content .tb-clear');
+  const hasX = await win.evaluate(() => !!document.querySelector('#content .lk-sx'));
+  expect(hasX, 'every list screen carries the × in its search box').toBe(true);
+
+  await win.click('#content .lk-sx');
   await win.waitForTimeout(450);
-  const cleared = await win.evaluate(() => ({
-    status: studentFilter.status, month: studentFilter.month, now: thisMonth(),
-    button: document.querySelectorAll('#content .tb-clear').length,
+
+  const afterX = await win.evaluate(() => ({
+    search: studentFilter.search,
+    status: studentFilter.status,
+    box: (document.getElementById('search-students') || {}).value,
   }));
-  // Cleared means "back to a fresh visit", which still scopes to this month —
-  // not "everything emptied".
-  expect(cleared.status).toBe('All');
-  expect(cleared.month).toBe(cleared.now);
-  expect(cleared.button).toBe(0);
+  expect(afterX.search).toBe('');
+  expect(afterX.box).toBe('');
+  // The × is not the old Clear all: the status filter is deliberately untouched.
+  expect(afterX.status, 'the × clears the search, not the bar').toBe('Left');
+
+  // Leaving and coming back IS the reset, defaults included.
+  await win.evaluate(() => navigate('dashboard'));
+  await win.waitForTimeout(300);
+  await win.evaluate(() => navigate('students'));
+  await win.waitForTimeout(400);
+
+  const fresh = await win.evaluate(() => ({
+    status: studentFilter.status, month: studentFilter.month, now: thisMonth(),
+  }));
+  // "Fresh" still scopes to this month — it is not "everything emptied".
+  expect(fresh.status).toBe('All');
+  expect(fresh.month).toBe(fresh.now);
 
   await app.close();
 });
