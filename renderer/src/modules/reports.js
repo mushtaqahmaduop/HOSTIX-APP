@@ -741,20 +741,17 @@ function renderReports() {
       Back to Reports</button>`:''}
 
     <div class="rpt-bar__end">
-      ${''/* ONE EXPORT CONTROL, as every other register on this rail has. Two
-             loose buttons — "Print / PDF" and "All Students PDF" — put a
-             report of THIS PAGE and a report of a different page side by side
-             as if they were the same kind of thing. */}
-      <div class="tb-wrap">
-        <button class="rpt-card__a" id="rpt-export" aria-haspopup="menu" aria-controls="rpt-export-menu"
-                onclick="tbToggleMenu('rpt-export-menu',event)" title="Export or print this report">
-          ${icon('download','xs')} Export reports ${icon('chevronDown','xs')}
-        </button>
-        <div class="tb-menu" id="rpt-export-menu" role="menu">
-          <button role="menuitem" onclick="tbCloseMenus();printReport()">${icon('print','xs')} Print this report</button>
-          <button role="menuitem" onclick="tbCloseMenus();downloadAllStudentsPDF()">${icon('fileText','xs')} Student roster (PDF)</button>
-        </div>
-      </div>
+      ${''/* THREE BUTTONS, ON THE BAR (owner, 2026-09-10). An earlier pass
+             folded Print and All Students PDF into one dropdown; the owner's
+             design has them out where they can be seen, and it was not mine to
+             replace. All Payments joins them — the same register, the other
+             half of the money. */}
+      <button class="rpt-card__a" onclick="printReport()" title="Print this report in full — every section, every row">
+        ${icon('print','xs')} Print / PDF</button>
+      <button class="rpt-card__a" onclick="exportAllStudentsPDF()" title="The whole student register as a PDF">
+        ${icon('users','xs')} All Students PDF</button>
+      <button class="rpt-card__a" onclick="exportAllPaymentsPDF()" title="The whole payment register as a PDF">
+        ${icon('card','xs')} All Payments PDF</button>
     </div>
   </div>
 
@@ -1534,10 +1531,18 @@ function _rptOverviewDef() {
     ],
 
     sections: [
+      /* FULL DETAIL, AND THAT MEANS THE REGISTERS' OWN COLUMNS (owner,
+         2026-09-10: "all the print button in the reports should print full
+         detail"). These sections used to carry cut-down column sets written
+         here — six columns for students, a short set for payments — so the
+         report printed a summary of a register rather than the register.
+         Reading `.columns` off each register's own definition means this
+         document and that register's own export cannot differ by a column, a
+         format or a derived field. */
       {
         title: 'Payments',
         meta: T.pays.length + ' record' + (T.pays.length === 1 ? '' : 's'),
-        columns: _rptPayColumns(),
+        columns: _payExportDef(T.pays).columns,
         rows: T.pays.slice().sort((a, b) => new Date(b.date) - new Date(a.date)),
         grand: { label: 'Collected in this period', value: fmtPKR(T.rev) },
         empty: 'No payment records in this period.',
@@ -1555,20 +1560,29 @@ function _rptOverviewDef() {
       {
         title: 'Students',
         meta: roster.length + ' on the roster',
-        columns: [
-          { label: 'Room', type: 'id', width: 9,
-            value: t => { const r = idx.roomById.get(t.roomId); return r ? String(r.number) : ''; },
-            get:   t => { const r = idx.roomById.get(t.roomId);
-                          return r ? '<b>#' + escHtml(String(r.number)) + '</b>' : '—'; } },
-          { label: 'Student', type: 'text', width: 24, value: t => t.name || '' },
-          { label: 'Phone',   type: 'text', width: 16, value: t => String(t.phone || '') },
-          { label: 'Joined',  type: 'date', width: 13, value: t => t.joinDate || '' },
-          { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
-            value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; } },
-          { label: 'Status',  type: 'status', width: 12, value: t => t.status || 'Active' },
-        ],
+        columns: _stuExportDef(roster).columns,
         rows: roster,
         empty: 'Nobody was on the roster in this period.',
+      },
+      /* CANCELLATIONS AND COMPLAINTS. Neither has a report SCREEN in this app,
+         which is why neither is a tab on the page — but both have a full
+         export, and "full detail" is not full without the departures and the
+         open issues. Scoped to the same period as everything above them. */
+      {
+        title: 'Cancellations',
+        meta: (() => { const n = _rptCancels().length;
+          return n + ' departure' + (n === 1 ? '' : 's'); })(),
+        columns: _cancExportDef(_rptCancels()).columns,
+        rows: _rptCancels(),
+        empty: 'No departures were filed in this period.',
+      },
+      {
+        title: 'Complaints & maintenance',
+        meta: (() => { const n = _rptIssues().length;
+          return n + ' issue' + (n === 1 ? '' : 's'); })(),
+        columns: _issExportDef(_rptIssues()).columns,
+        rows: _rptIssues(),
+        empty: 'No issues were raised in this period.',
       },
       {
         title: 'Room occupancy',
@@ -1592,6 +1606,22 @@ function _rptOverviewDef() {
 
     empty: 'No records in this period.',
   };
+}
+
+/* The two registers the overview report adds, scoped to the report's own
+   period. A cancellation belongs to the month it was FILED, which is the same
+   rule the cancellations register scopes by; an issue to the day it was
+   raised. */
+function _rptCancels() {
+  const keys = _rptKeys();
+  return (DB.cancellations || []).filter(c =>
+    keys.some(k => String(c.requestDate || '').indexOf(k) === 0));
+}
+function _rptIssues() {
+  const keys = _rptKeys();
+  const all = (DB.maintenance || []).concat(DB.complaints || []);
+  return all.filter(i =>
+    keys.some(k => String((i && (i.date || i.createdAt)) || '').indexOf(k) === 0));
 }
 
 function printReport()       { EXPORT.pdf(_rptOverviewDef()); }

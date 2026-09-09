@@ -106,7 +106,9 @@ async function exportAndCapture(win) {
     const headers = (sheet.rows[headerRow - 1].cells || []).map(c => c.v);
     const colOf = label => headers.indexOf(label) + 1;
     const rowOf = name => {
-      const nameCol = colOf('Student');
+      // 'Student' became 'Student Name' with the owner's sheet, 2026-09-10.
+      // Missing it returned -1 for every row and nulled every cell below.
+      const nameCol = colOf('Student Name');
       for (let r = headerRow + 1; r <= sheet.rows.length; r++) {
         const c = cellAt(r, nameCol);
         if (c && c.v === name) return r;
@@ -144,12 +146,16 @@ async function exportAndCapture(win) {
       rowCount: sheet.rows.length,
       headStyles: (sheet.rows[headerRow - 1].cells || []).map(c => c.s),
       styleNames: { HEAD: S.HEAD, TEXT: S.TEXT, DATE: S.DATE, MONEY: S.MONEY, WRAP: S.WRAP },
-      phone: cell(rHikmat, 'Phone'),
-      emerg: cell(rHikmat, 'Emergency Phone'),
+      /* THE HEADINGS ARE THE OWNER'S SHEET NOW (`student excel sheet.png`,
+         2026-09-10): Phone is Contact, Emergency Phone is Emergency Contact,
+         Room is Room No. Date of Birth and Join are not on the sheet at all —
+         a roster is read for who is here and when they LEFT — so the two date
+         assertions below move to the column that survives. */
+      phone: cell(rHikmat, 'Contact'),
+      emerg: cell(rHikmat, 'Emergency Contact'),
       cnic:  cell(rSalman, 'CNIC'),
-      dob:   cell(rSalman, 'Date of Birth'),
-      join:  cell(rHikmat, 'Join'),
-      room:  cell(rHikmat, 'Room'),
+      charge: cell(rHikmat, 'Charges (PKR)'),
+      room:  cell(rHikmat, 'Room No.'),
       address: cell(rHikmat, 'Address'),
     };
   });
@@ -205,7 +211,7 @@ test('the print setup the specification calls non-negotiable is actually written
   await app.close();
 });
 
-test('phones and CNICs stay text, and dates stay on their own day', async () => {
+test('phones and CNICs stay text, and a long address wraps', async () => {
   const { app, win } = await openApp();
   const out = await exportAndCapture(win);
 
@@ -215,12 +221,16 @@ test('phones and CNICs stay text, and dates stay on their own day', async () => 
   expect(out.emerg.v).toBe('03310045835');
   expect(out.cnic.v).toBe('11102-0386165-3');
 
-  // A real date cell, carrying the app's own date format — and 01-Mar, not the
-  // 28-Feb a UTC-parsed date lands on east of Greenwich.
-  expect(out.dob.t).toBe('date');
-  expect(out.dob.s).toBe(out.styleNames.DATE);
-  expect(String(out.dob.v)).toContain('2007-03-01');
-  expect(out.join.t).toBe('date');
+  /* THE DATE HALF OF THIS TEST IS GONE, and the test is renamed with it. It
+     asserted Date of Birth and Join — the UTC-parse bug that lands 01-Mar on
+     28-Feb east of Greenwich — and neither column is on the owner's sheet
+     (`student excel sheet.png`, 2026-09-10). The sheet's one date column is
+     about DEPARTURE and is empty for a student who is still here, which is the
+     wrong cell to assert a date format on.
+
+     THE BUG ITSELF IS STILL COVERED: exFmtDate() is one function and
+     export-engine.test.js asserts it directly, on a date, without needing a
+     student who has left. */
 
   // The room reads as it does on screen.
   expect(out.room.v).toBe('9');
@@ -240,10 +250,17 @@ test('every column declared is a column given a width', async () => {
   expect(out.cols.every(c => c.width > 0)).toBe(true);
   expect(new Set(out.cols.map(c => c.width)).size).toBeGreaterThan(3);
 
-  // The workbook carries the fields the printed roster deliberately leaves out.
-  for (const label of ['CNIC', 'Address', 'Date of Birth', 'Emergency Phone', 'Nationality']) {
+  /* THE WORKBOOK AND THE PRINTED ROSTER ARE THE SAME FIFTEEN COLUMNS NOW
+     (`student excel sheet.png`, 2026-09-10). They were not: nine fields were
+     `pdf:false`, so the printed roster was missing exactly the identity fields
+     a hostel gets asked for. This list is the sheet's, in the sheet's words. */
+  for (const label of ['#', 'Room No.', 'Student Name', 'Father Name', 'Contact',
+                       'Emergency Contact', 'CNIC', 'Course / Study / Profession',
+                       'Gender', 'Address', 'Nationality', 'Charges (PKR)',
+                       'Status', 'Date (Left / Cancelling / Expelled)', 'Remarks']) {
     expect(out.headers, label + ' is missing from the workbook').toContain(label);
   }
+  expect(out.headers.length, 'the sheet is fifteen columns, no more').toBe(15);
 
   await app.close();
 });

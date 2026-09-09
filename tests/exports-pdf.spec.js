@@ -131,6 +131,8 @@ async function capture(win, fn) {
       headers: [...doc.querySelectorAll('thead th')].map(t => t.textContent.trim()),
       firstCells: [...doc.querySelectorAll('tbody tr')].map(
         r => (r.children[0] ? r.children[0].textContent.trim() : '')),
+      secondCells: [...doc.querySelectorAll('tbody tr')].map(
+        r => (r.children[1] ? r.children[1].textContent.trim() : '')),
       groups: [...doc.querySelectorAll('.group__t')].map(g => g.textContent.trim()),
       subtotals: [...doc.querySelectorAll('tr.subtotal')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
       grand: (doc.querySelector('.grand__v') || {}).textContent || '',
@@ -158,7 +160,8 @@ test('the student roster prints in room order, lettered rooms included', async (
   expect(doc.landscape, 'eighteen columns need the long edge').toBe(true);
   expect(doc.title).toBe('Student Roster');
   expect(doc.subtitle).toContain('Test Hostel');
-  expect(doc.headers).toContain('Charge / mo');
+  // 'Charge / mo' became 'Charges (PKR)' with the owner's sheet, 2026-09-10.
+  expect(doc.headers).toContain('Charges (PKR)');
   // Section 16: an export must state the scope it was taken under.
   expect(doc.text).toContain('Scope');
   expect(doc.text).toContain('Generated');
@@ -177,18 +180,23 @@ test('every printed monthly charge carries the mess, not just the rent', async (
 
   // 8,000 rent + 6,500 mess = 14,500 — the figure that was missing everywhere.
   expect(doc.text, 'the sheet quotes the rent half alone').toContain('14,500');
-  /* WHAT IT COVERS IS NAMED, NOT ADDED UP AGAIN (owner, 2026-09-10). This used
-     to assert the sub-line "PKR 8,000 rent + PKR 6,500 mess", which restated
-     two numbers whose total is printed in bold directly above them and was the
-     widest thing in the column. The bug this test exists for is unchanged and
-     still asserted on the line above: the printed charge must be the ALL-IN
-     figure, never the rent half alone. The workbook still carries Rent / mo and
-     Mess / mo as their own columns for anyone reconciling a price rise. */
-  expect(doc.text, 'the sheet does not say what the charge covers').toContain('Rent + Mess');
+  /* THE TWO HALVES ARE COLUMNS NOW (`payments excel redesign.png`,
+     2026-09-10), which is a stronger form of the same fact than the coverage
+     label that briefly replaced the sub-line: the printed register reconciles
+     cell by cell, and 8,000 + 6,500 has to come to the 14,500 asserted above.
+
+     The bug this test exists for is unchanged and still asserted on the line
+     above: the printed charge is the ALL-IN figure, never the rent alone. */
+  expect(doc.headers).toContain('Charges (PKR)');
+  expect(doc.headers).toContain('Rent (PKR)');
+  expect(doc.headers).toContain('Mess (PKR)');
+  expect(doc.text, 'the rent half is missing from the printed register').toContain('8,000');
+  expect(doc.text, 'the mess half is missing from the printed register').toContain('6,500');
   expect(doc.text, 'the old two-number sub-line is back').not.toContain('rent + PKR');
-  expect(doc.headers).toContain('Charge / mo');
-  // …and it comes out in room order too.
-  expect(doc.firstCells).toEqual(['#1', '#2', '#10', '#A 01']);
+  /* …and it comes out in room order too. The FIRST cell is the row's number
+     since the owner's sheet added a `#` column, so room order is read from the
+     second — which is the column the ordering is actually about. */
+  expect(doc.secondCells).toEqual(['1', '2', '10', 'A 01']);
 
   await app.close();
 });

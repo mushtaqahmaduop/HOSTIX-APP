@@ -237,8 +237,13 @@ function exXlColumns(cols)  { return cols.filter(function (c) { return c.excel !
 
 /* A cell's raw value, then its printed form. `value` is the contract; `get`
    only decorates. A column that has neither is a column nobody filled in. */
-function exValue(c, row) {
-  if (typeof c.value === 'function') return c.value(row);
+/* THE ROW'S NUMBER IS THE SECOND ARGUMENT (2026-09-10). Both of the owner's
+   reference sheets open with a `#` column, and a definition had no way to ask
+   for one — it could only count rows itself, which is wrong the moment a
+   document has sections or groups. Passing the index is additive: every
+   existing `value: row => ...` ignores a second argument. */
+function exValue(c, row, i) {
+  if (typeof c.value === 'function') return c.value(row, i);
   if (c.key) return row ? row[c.key] : '';
   return '';
 }
@@ -351,9 +356,9 @@ function exFacts(facts) {
   }).join('') + '</section>';
 }
 
-function exCellHtml(c, row) {
-  if (typeof c.get === 'function') return c.get(row);
-  const v    = exValue(c, row);
+function exCellHtml(c, row, i) {
+  if (typeof c.get === 'function') return c.get(row, i);
+  const v    = exValue(c, row, i);
   const text = exFormat(c, v);
   if (c.type === 'status') {
     const t = EX_TONE_COLOR[exStatusTone(v)];
@@ -374,11 +379,15 @@ function exTable(columns, group) {
     return '<th class="a-' + exAlign(c) + '">' + _exEsc(c.label) + '</th>';
   }).join('') + '</tr>';
 
-  const body = (group.rows || []).map(function (r) {
+  /* `i` is the row's number WITHIN ITS GROUP, and `group.from` offsets it when
+     a document is grouped or sectioned: the sheet's `#` column counts the
+     register, not the block it happens to be printed in. */
+  const _base = Number(group.from || 0);
+  const body = (group.rows || []).map(function (r, i) {
     return '<tr>' + columns.map(function (c) {
       return '<td class="a-' + exAlign(c) + (c.type === 'wrap' ? ' c-wrap' : '') +
              (c.type === 'money' || c.type === 'number' ? ' c-num' : '') + '">' +
-             exCellHtml(c, r) + '</td>';
+             exCellHtml(c, r, _base + i) + '</td>';
     }).join('') + '</tr>';
   }).join('');
 
@@ -477,15 +486,21 @@ function exStyles(landscape) {
   '.ex-meta__i{display:flex;gap:6px;align-items:baseline;font-size:7.5pt}' +
   '.ex-meta__l{color:' + c.faint + ';text-transform:uppercase;letter-spacing:.6px;font-weight:700}' +
   '.ex-meta__v{color:' + c.ink + ';font-weight:600}' +
-  /* KPIs */
-  '.ex-kpis{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}' +
-  '.ex-kpi{flex:1 1 0;min-width:96px;border:1px solid ' + c.border + ';border-radius:7px;' +
-         'padding:7px 10px;background:#fff}' +
-  '.ex-kpi__l{display:block;font-size:6.8pt;text-transform:uppercase;letter-spacing:.7px;' +
+  /* KPIs — SMALLER (owner, 2026-09-10: "the kpis should have be removed or
+     resized"). On both of the owner's reference sheets the summary band is a
+     thin strip above the register; here it was a row of 12.5pt figures in 7pt
+     boxes that took most of the first page's head, on a document whose point
+     is the TABLE. The figures stay — a register with no totals is a register
+     somebody has to add up — at two thirds the size: 8.5pt figures in a 5pt
+     box, one line each. Nothing is dropped, and the table starts higher up. */
+  '.ex-kpis{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}' +
+  '.ex-kpi{flex:1 1 0;min-width:78px;border:1px solid ' + c.border + ';border-radius:5px;' +
+         'padding:4px 7px;background:#fff}' +
+  '.ex-kpi__l{display:block;font-size:5.8pt;text-transform:uppercase;letter-spacing:.5px;' +
              'color:' + c.faint + ';font-weight:700}' +
-  '.ex-kpi__v{display:block;font-size:12.5pt;font-weight:800;margin-top:2px;' +
+  '.ex-kpi__v{display:block;font-size:8.5pt;font-weight:800;margin-top:1px;' +
              'font-variant-numeric:tabular-nums}' +
-  '.ex-kpi__s{display:block;font-size:6.8pt;color:' + c.muted + ';margin-top:1px}' +
+  '.ex-kpi__s{display:block;font-size:5.8pt;color:' + c.muted + ';margin-top:0}' +
   /* record facts */
   '.ex-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:10px;' +
            'border:1px solid ' + c.border + ';border-radius:7px;overflow:hidden}' +
@@ -612,8 +627,8 @@ const EX_XL_TYPE = {
    number loses its leading zero and comes back as 3,310,045,835, and the
    warden's contact list has quietly become arithmetic. A column says so by
    declaring type 'text' — which is why `id` and `text` never coerce. */
-function exXlCell(c, row) {
-  const raw = exValue(c, row);
+function exXlCell(c, row, i) {
+  const raw = exValue(c, row, i);
   const t   = c.type || 'text';
   const style = (EX_XL_STYLE[t] || EX_XL_STYLE.text)(raw);
 
@@ -703,8 +718,8 @@ function exSheet(def, sec, hostel, name) {
     return { v: c.label, s: a === 'right' ? S.HEAD_R : a === 'center' ? S.HEAD_C : S.HEAD };
   }) });
 
-  allRows.forEach(function (entry) {
-    const cells = columns.map(function (c) { return exXlCell(c, entry.row); });
+  allRows.forEach(function (entry, i) {
+    const cells = columns.map(function (c) { return exXlCell(c, entry.row, i); });
     rows.push({ cells: hasGroups ? [{ v: entry.group || EX_DASH, s: S.TEXT }].concat(cells) : cells });
   });
 

@@ -63,7 +63,7 @@ function loadEngine(stubs) {
   vm.createContext(ctx);
   const src = ['xlsx-writer.js', 'engine.js']
     .map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join(';\n')
-    + ';\nglobalThis.EXPORT = EXPORT; globalThis.HXW = HXW;';
+    + ';\nglobalThis.EXPORT = EXPORT; globalThis.HXW = HXW; globalThis._xwSerial = _xwSerial;';
   vm.runInContext(src, ctx, { filename: 'export-bundle.js' });
   return ctx;
 }
@@ -271,6 +271,28 @@ const wideDef = {
   // is an XML apostrophe entity by the time it reaches the file.
   ok(namedParts['xl/workbook.xml'].indexOf('&apos;' + sheetName + '&apos;!$') !== -1,
      '…and the defined names quote the CORRECTED name, or the headings quietly stop repeating');
+
+  /* ── A DATE LANDS ON ITS OWN DAY ────────────────────────────────────────
+     Excel stores a date as a serial counted from 1899-12-30, and a UTC-based
+     conversion puts 2007-03-01 on 28-Feb for every reader east of Greenwich —
+     which is where this app is used. _xwSerial() computes from the LOCAL
+     calendar parts for exactly that reason, and it had no test of its own:
+     students-export.spec.js asserted it through a Date of Birth column, and
+     that column left the roster when the owner's sheet arrived on 2026-09-10.
+     It is asserted here now, on the function, where it does not depend on any
+     register happening to have a date column. */
+  console.log('\n── a date keeps its own day ──────────────────────────────');
+  {
+    const serial = ctx._xwSerial('2007-03-01');
+    // 1899-12-30 + 39142 days = 2007-03-01. A UTC-shifted answer is 39141.
+    ok(serial === 39142, 'a YYYY-MM-DD date converts to its own local day: ' + serial);
+    const back = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+    ok(back.getUTCMonth() === 2 && back.getUTCDate() === 1,
+       '…and reads back as 01-Mar, not the 28-Feb a UTC parse lands on');
+    // A Date object takes the same path, from its local parts.
+    ok(ctx._xwSerial(new Date(2007, 2, 1)) === 39142,
+       '…and a Date object converts to the same day as its string');
+  }
 
   console.log('\n' + passed + ' checks passed'
     + (process.exitCode ? ' — WITH FAILURES' : ''));

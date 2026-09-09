@@ -1607,6 +1607,20 @@ function _stuExportMeta(list) {
   return Object.keys(byStatus).sort().map(s => byStatus[s] + ' ' + s.toLowerCase()).join(', ');
 }
 
+/* WHAT THE SHEET'S "Remarks" COLUMN HOLDS. Its own examples — "Requested early
+   leave", "Left on his request", "Disciplinary issue", "Semester end" — are
+   cancellation reasons, and a cancellation reason is not on the student record:
+   it is on the cancellation. Looked up by studentId, newest request first, and
+   falling back to whatever was typed into the student's own notes. */
+function _stuRemark(t) {
+  if (!t) return '';
+  const mine = (DB.cancellations || [])
+    .filter(c => c && String(c.studentId) === String(t.id) && c.reason)
+    .sort((a, b) => String(b.requestDate || '').localeCompare(String(a.requestDate || '')));
+  if (mine.length) return String(mine[0].reason);
+  return String(t.notes || t.remarks || '');
+}
+
 function _stuExportDef(list, opts) {
   opts = opts || {};
   const byId    = _stuRoomMap();
@@ -1662,72 +1676,86 @@ function _stuExportDef(list, opts) {
       { label: 'Outstanding',     value: EXPORT.fmt.money(owed), tone: owed > 0 ? 'neg' : '' },
     ],
 
+    /* ========================================================================
+       THE COLUMNS ARE THE OWNER'S SHEET, EXACTLY (`student excel sheet.png`,
+       2026-09-10), and the same fifteen in the PDF as in the workbook.
+
+       They were not the same before. Nine columns carried `pdf:false` — CNIC,
+       gender, nationality, address, emergency contact, date of birth, session,
+       blood group, floor — so the printed roster and the exported one were two
+       different documents built from one definition, and the printed one was
+       missing exactly the identity fields a hostel is asked for.
+
+       WHAT CAME OUT, and why each is not a loss:
+         · Date of birth, session, blood group — not on the sheet. They are on
+           the student's own record and on their profile print.
+         · Join date — the sheet's date column is about DEPARTURE, which is the
+           date a roster is read for.
+         · Outstanding — this is a REGISTER, not a ledger; the payment register
+           is the document that answers what is owed, and it answers it per
+           month rather than as one running figure.
+         · Father / Guardian as a second column — it is column 4 now, which is
+           where the sheet puts it, instead of being both a sub-line and a
+           hidden Excel column.
+
+       REMARKS is the one field the app had nowhere to read: the sheet's
+       examples ("Requested early leave", "Left on his request", "Disciplinary
+       issue") are cancellation reasons, and a cancellation reason lives on the
+       cancellation record. So it is looked up by studentId, and falls back to
+       the student's own notes when there is no cancellation.
+       ======================================================================== */
     columns: [
-      { label: 'ID', type: 'id', width: 7, value: t => String(t.id == null ? '' : t.id) },
+      { label: '#', type: 'number', width: 5, align: 'center',
+        value: (t, i) => (i == null ? '' : i + 1) },
 
-      { label: 'Student', type: 'text', width: 22,
-        value: t => t.name || '',
-        get:   t => '<b>' + escHtml(t.name || '') + '</b>',
-        sub:   t => t.fatherName || '' },
-
-      { label: 'Father / Guardian', type: 'text', width: 22, pdf: false,
-        value: t => t.fatherName || '' },
-
-      { label: 'Room', type: 'id', width: 9,
+      { label: 'Room No.', type: 'id', width: 10,
         value: t => roomOf(t),
         get:   t => { const r = roomOf(t);
-          return (r ? '<b>#' + escHtml(r) + '</b>' : '—') +
-                 (floorOf(t) ? '<span class="sub">' + escHtml(floorOf(t)) + ' floor</span>' : ''); } },
+          return r ? '<b>' + escHtml(r) + '</b>' : '—'; } },
 
-      { label: 'Floor', type: 'text', width: 11, pdf: false, value: t => floorOf(t) },
+      { label: 'Student Name', type: 'text', width: 22,
+        value: t => t.name || '',
+        get:   t => '<b>' + escHtml(t.name || '') + '</b>' },
 
-      { label: 'Phone', type: 'text', width: 16,
-        value: t => String(t.phone || ''),
-        get:   t => escHtml(t.phone || '—') +
-                    (t.emergencyPhone ? '<span class="sub">' + escHtml(t.emergencyPhone) + '</span>' : '') },
+      { label: 'Father Name', type: 'text', width: 22, value: t => t.fatherName || '' },
 
-      { label: 'Emergency Contact', type: 'text', width: 20, pdf: false,
-        value: t => t.emergencyContact || '' },
-      { label: 'Emergency Phone', type: 'text', width: 16, pdf: false,
+      { label: 'Contact', type: 'text', width: 16, value: t => String(t.phone || '') },
+
+      { label: 'Emergency Contact', type: 'text', width: 17,
         value: t => String(t.emergencyPhone || '') },
-      { label: 'CNIC', type: 'text', width: 18, pdf: false,
-        value: t => String(t.cnic || '') },
-      { label: 'Date of Birth', type: 'date', width: 14, pdf: false, value: t => t.dob || '' },
-      { label: 'Gender', type: 'text', width: 9, pdf: false, value: t => t.gender || '' },
-      { label: 'Nationality', type: 'text', width: 13, pdf: false, value: t => t.nationality || '' },
-      { label: 'Address', type: 'wrap', width: 30, pdf: false, value: t => t.address || '' },
 
-      { label: 'Course', type: 'text', width: 22, value: t => t.occupation || t.course || '' },
-      { label: 'Session', type: 'text', width: 12, pdf: false, value: t => t.session || '' },
-      { label: 'Blood Group', type: 'text', width: 12, pdf: false, value: t => t.bloodGroup || '' },
+      { label: 'CNIC', type: 'text', width: 18, value: t => String(t.cnic || '') },
 
-      { label: 'Join', type: 'date', width: 13, value: t => t.joinDate || '' },
+      { label: 'Course / Study / Profession', type: 'text', width: 24,
+        value: t => t.occupation || t.course || '' },
 
-      { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
+      { label: 'Gender', type: 'text', width: 9, value: t => t.gender || '' },
+
+      { label: 'Address', type: 'wrap', width: 26, value: t => t.address || '' },
+
+      { label: 'Nationality', type: 'text', width: 13, value: t => t.nationality || '' },
+
+      { label: 'Charges (PKR)', type: 'money', width: 14, total: 'sum',
         value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
         get:   t => { const c = resolveCharges(t);
           if (!c.configured) return '<span style="color:#94A3B8">not set</span>';
+          /* The label, not the sum restated (owner, 2026-09-10). */
           return '<b>' + fmtPKR(c.total) + '</b><span class="sub">' +
-                 (c.messOptIn && c.mess > 0 ? fmtPKR(c.rent) + ' rent + ' + fmtPKR(c.mess) + ' mess'
-                  : c.mess > 0 ? 'rent only · mess off' : 'rent only') + '</span>'; } },
+                 escHtml(chargeCoverage({ rent: c.rent, mess: c.mess,
+                   messIncluded: c.messOptIn && c.mess > 0, hasMess: c.mess > 0 }).label) +
+                 '</span>'; } },
 
-      { label: 'Outstanding', type: 'money', width: 14, total: 'sum',
-        value: t => owedBy(t) || null,
-        get:   t => owedBy(t) > 0 ? '<span class="neg">' + fmtPKR(owedBy(t)) + '</span>' : '—' },
+      { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
 
-      /* THE STATUS NAMES A DATE, AND SO DOES THE PRINTED ONE (owner,
-         2026-09-10). "Left" on a printed roster of two hundred names answers
-         nothing the person holding it asks next, and "On Notice" is worse — the
-         bed is still occupied and the only useful fact is the day it frees.
-         statusDateText() is the same lookup the register draws, so the sheet
-         and the screen cannot say different things. */
-      { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active',
-        sub: t => statusDateText(t) },
-
-      /* As its own column for the workbook: a spreadsheet cannot read a
-         sub-line, and "who left when" is exactly what somebody sorts by. */
-      { label: 'Left / vacates', type: 'date', width: 14, pdf: false,
+      /* The sheet heads this "Date (Left / Cancelling / Expelled)" — one column
+         for whichever of the three a row is. statusDate() is that lookup, and
+         it is the same one the register draws, so the sheet and the screen
+         cannot say different things. A student on notice has no date on their
+         own record at all: it is on their pending cancellation. */
+      { label: 'Date (Left / Cancelling / Expelled)', type: 'date', width: 16,
         value: t => statusDate(t) },
+
+      { label: 'Remarks', type: 'wrap', width: 24, value: t => _stuRemark(t) },
     ],
 
     rows: list,
@@ -1743,6 +1771,20 @@ function stuBulkExport() {
   if (!list.length) { toast('Nothing selected to export', 'error'); return; }
   EXPORT.excel(_stuExportDef(list, {
     selection: list.length + ' selected student' + (list.length === 1 ? '' : 's'),
+  }));
+}
+
+/* THE WHOLE REGISTER, FROM THE REPORTS BAR (owner, 2026-09-10). Not the
+   filtered view: this is the button a hostel presses to hand somebody the
+   roster, so it is every student the app holds, in room order, headed the way
+   the owner's sheet heads it. The register page's own Export is the filtered
+   one, and says so on the file. */
+function exportAllStudentsPDF() {
+  const list = studentsByRoom((DB.students || []).slice());
+  if (!list.length) { toast('No students to export', 'error'); return; }
+  EXPORT.pdf(_stuExportDef(list, {
+    title: 'Student Record Register',
+    scope: 'Complete record — all students',
   }));
 }
 

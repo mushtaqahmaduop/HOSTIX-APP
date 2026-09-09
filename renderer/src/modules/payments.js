@@ -943,6 +943,48 @@ async function payBulkMarkPaid() {
    are carried by the workbook, where somebody may need to reconcile them, and
    folded into the printed page's Paid column, where twelve money columns would
    force the type down to something nobody can read (§14).                    */
+/* THE MONTH BEFORE THIS ROW'S MONTH, for the same student, as the sheet reads
+   it: "paid / unpaid". Looked up rather than carried on the record, so it
+   cannot go stale when an old month is settled later — which is exactly what
+   the payments page's arrears carry-forward exists to let a warden do.
+
+   A student with no record for that month prints "0 / 0", not a dash: nothing
+   billed IS nothing owed, and a dash here would read as "not known". */
+function _payPrevPair(p) {
+  const k = _payMonthKey(p);
+  if (!k || !/^\d{4}-\d{2}$/.test(k)) return '0 / 0';
+  let [y, m] = k.split('-').map(Number);
+  m -= 1; if (m < 1) { m = 12; y -= 1; }
+  const prev = y + '-' + String(m).padStart(2, '0');
+  const mine = (DB.payments || []).filter(x =>
+    String(x.studentId) === String(p.studentId) && _payMatchesMonth(x, prev));
+  const paid   = mine.reduce((n, x) => n + Number(x.amount || 0), 0);
+  const unpaid = mine.reduce((n, x) => n + outstandingOf(x), 0);
+  return fmtNum(paid) + ' / ' + fmtNum(unpaid);
+}
+
+/* WHAT THE SHEET'S "Remarks" COLUMN SAYS. Its own examples are "Concession 500"
+   and "Extra Charge 200" — the two adjustment columns, in words, for the rows
+   where they are not zero. Built from the record, never typed, so it cannot
+   disagree with the figures three columns to its left. */
+function _payRemark(p) {
+  const out = [];
+  const conc = Number(p.concession || p.discount || 0);
+  if (conc > 0) out.push('Concession ' + fmtNum(conc));
+  /* extrasOf/extrasSum are locals inside _payExportDef; this runs from a column
+     callback, so it does its own filtering rather than reaching for them. */
+  const ex = (p.extraCharges || []).filter(c => Number(c.amount) > 0);
+  if (ex.length === 1) {
+    out.push((ex[0].description || ex[0].desc || ex[0].label || 'Extra charge') +
+             ' ' + fmtNum(Number(ex[0].amount || 0)));
+  } else if (ex.length > 1) {
+    out.push(ex.length + ' extra charges ' +
+             fmtNum(ex.reduce((n, c) => n + Number(c.amount || 0), 0)));
+  }
+  if (p.notes && !out.length) out.push(String(p.notes));
+  return out.join(' · ');
+}
+
 function _payExportDef(list, opts) {
   opts = opts || {};
   const stuById   = new Map((DB.students || []).map(s => [s.id, s]));
@@ -992,102 +1034,79 @@ function _payExportDef(list, opts) {
       { label: 'Collection rate', value: billed > 0 ? Math.round(collected / billed * 100) + '%' : '—' },
     ],
 
-    columns: [
-      { label: 'Room', type: 'id', width: 9,
-        value: p => String(p.roomNumber || ''),
-        get:   p => '<b>#' + escHtml(String(p.roomNumber || '')) + '</b>' },
+    /* ========================================================================
+       THE COLUMNS ARE THE OWNER'S SHEET, EXACTLY (`payments excel redesign.png`,
+       2026-09-10), and the same sixteen in the PDF as in the workbook.
 
-      { label: 'Student', type: 'text', width: 24,
+       Six of them used to be `pdf:false` — Rent, Mess, Concession, Admission
+       fee, Extras, Receipt — so the printed register and the exported one were
+       two different documents from one definition, and the printed one could
+       not be reconciled: it showed a charge and an amount paid with nothing
+       between them to explain the difference.
+
+       TWO COLUMNS ARE NEW AND BOTH ARE DERIVED, not stored:
+
+         · PREVIOUS MONTH (Paid/Unpaid) — the same student's record for the
+           month before this row's month. The sheet prints it as one cell
+           because that is how it is read: "0 / 17,000" is a student who owes
+           last month too, and the row above it that says "17,000 / 0" is one
+           who does not. It is looked up, not carried, so it cannot go stale.
+
+         · REMARKS — the sheet's own examples are "Concession 500" and "Extra
+           Charge 200", which is what the two adjustment columns say in words.
+           Built from the record rather than typed, so a row with neither
+           prints a dash rather than an empty cell somebody has to interpret.
+
+       ADMISSION FEE came out. It is not on the sheet, it is a one-off charge
+       at intake rather than part of a monthly bill, and it is still on the
+       payment's own record and on its receipt.
+       ======================================================================== */
+    columns: [
+      { label: '#', type: 'number', width: 5, align: 'center',
+        value: (p, i) => (i == null ? '' : i + 1) },
+
+      { label: 'Room', type: 'id', width: 8,
+        value: p => String(p.roomNumber || ''),
+        get:   p => p.roomNumber ? '<b>' + escHtml(String(p.roomNumber)) + '</b>' : '—' },
+
+      { label: 'Student Name', type: 'text', width: 22,
         value: p => p.studentName || '',
-        get:   p => '<b>' + escHtml(p.studentName || '') + '</b>',
-        sub:   p => { const st = stuById.get(p.studentId); return st && st.fatherName ? st.fatherName : ''; } },
+        get:   p => '<b>' + escHtml(p.studentName || '') + '</b>' },
 
       { label: 'Month', type: 'text', width: 16, value: p => monthLabel(p.month) },
 
-      /* WHAT THE CHARGE COVERS, NAMED — NOT ADDED UP AGAIN (owner, 2026-09-10:
-         "remove this line PKR 10,000 rent + PKR 7,000 mess from all pdfs and
-         excel ... simply use rent+mess or Rent only or Mess only label").
-
-         The sub-line restated two numbers whose total is printed in bold
-         directly above them, and it was the widest thing in the column. The
-         workbook already carries Rent / mo and Mess / mo as their own columns
-         for anyone reconciling a price rise, so nothing here is the only copy
-         of a figure.
-
-         chargeCoverage() is the app's own four-state answer and the same one
-         the screen draws — the page wears it as a coloured badge, the export
-         prints it as plain text. Colour is a page's job; a printed register
-         that reaches a landlord in black and white cannot carry meaning in a
-         hue. */
-      { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
-        value: p => charges(p).monthly,
-        get:   p => { const c = charges(p);
-          const cov = chargeCoverage(c);
-          return '<b>' + (c.monthly > 0 ? fmtPKR(c.monthly) : '—') + '</b>' +
-            (c.monthly > 0 ? '<span class="sub">' + escHtml(cov.label) + '</span>' : ''); } },
-
-      /* The two halves of the charge, in the workbook only. The printed page
-         carries them as a sub-line under the charge; a spreadsheet needs them
-         as columns, because reconciling a payment against a rent rise means
-         subtracting the mess from it. */
-      /* Both are written even when they are zero, and that is deliberate: a
-         mess that is switched off billed ZERO, which is a fact, where a blank
-         cell means "not recorded". The two columns must always add up to the
-         charge beside them or the sheet cannot be reconciled. */
-      { label: 'Rent / mo', type: 'money', width: 13, total: 'sum', pdf: false,
+      { label: 'Charges (PKR)', type: 'money', width: 13, total: 'sum',
+        value: p => charges(p).monthly },
+      { label: 'Rent (PKR)', type: 'money', width: 12, total: 'sum',
         value: p => Number(charges(p).rent || 0) },
-      { label: 'Mess / mo', type: 'money', width: 13, total: 'sum', pdf: false,
+      { label: 'Mess (PKR)', type: 'money', width: 12, total: 'sum',
         value: p => charges(p).messIncluded ? Number(charges(p).mess || 0) : 0 },
 
-      { label: 'Concession', type: 'money', width: 13, total: 'sum', pdf: false,
+      { label: 'Concession (PKR)', type: 'money', width: 14, total: 'sum',
         value: p => Number(p.concession || p.discount || 0) },
-
-      { label: 'Admission fee', type: 'money', width: 14, total: 'sum', pdf: false,
-        value: p => Number(p.admissionFee || p.fee || 0) },
-
-      { label: 'Extras', type: 'money', width: 12, total: 'sum', pdf: false,
+      { label: 'Extra Charges (PKR)', type: 'money', width: 15, total: 'sum',
         value: p => extrasSum(p) },
 
-      { label: 'Extra charges', type: 'wrap', width: 28, pdf: false,
-        value: p => extrasOf(p).map(c =>
-          (c.description || c.desc || c.label || 'extra') + ' ' + Number(c.amount || 0)).join('; ') },
-
-      { label: 'Paid', type: 'money', width: 14, total: 'sum',
+      { label: 'Amount Paid (PKR)', type: 'money', width: 15, total: 'sum',
         value: p => Number(p.amount || 0),
-        get:   p => { const adm = Number(p.admissionFee || p.fee || 0);
-          return '<span class="pos">' + fmtPKR(p.amount) + '</span>' +
-            (adm > 0 ? '<span class="sub">+ ' + fmtPKR(adm) + ' admission</span>' : '') +
-            extrasOf(p).map(c => '<span class="sub">+ ' + fmtPKR(c.amount) + ' ' +
-              escHtml(c.description || c.desc || c.label || 'extra') + '</span>').join(''); } },
+        get:   p => Number(p.amount || 0) > 0
+                 ? '<span class="pos">' + fmtPKR(p.amount) + '</span>' : '—' },
 
-      /* AN ARREAR SAYS SO, AND SAYS WHICH MONTH (owner, 2026-09-10: "mention
-         arrears in unpaid columns in pdfs and records").
+      { label: 'Previous Month (Paid/Unpaid)', type: 'text', width: 20,
+        value: p => _payPrevPair(p) },
 
-         The register carries rows from earlier months whenever "Carry forward
-         unpaid earlier months" is on, which is the default. On screen those
-         rows wear an Arrears tag in the Month cell; printed, they were an
-         ordinary red figure among this month's, and the totals at the foot then
-         looked wrong to anyone adding up the month they thought they had asked
-         for. The month it belongs to is named, because "arrears" without a date
-         is the same problem one level down. */
-      { label: 'Unpaid', type: 'money', width: 14, total: 'sum',
-        value: p => outstandingOf(p),
-        get:   p => outstandingOf(p) > 0
-                 ? '<span class="neg">' + fmtPKR(outstandingOf(p)) + '</span>'
-                   + (_exArrear(p) ? '<span class="sub">Arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
-                 : '—' },
+      { label: 'Payment Mode', type: 'text', width: 14, value: p => p.method || '' },
+      { label: 'Status',       type: 'status', width: 11, value: p => payStatusOf(p) },
+      { label: 'Date',         type: 'date',   width: 13, value: p => p.date || '' },
+      /* THE RECEIPT NUMBER, NOT THE ROW'S INTERNAL ID. `p.receiptNo` is assigned
+         by receipt.js the first time a receipt is printed and stored on the
+         record, so a reprint keeps the same number. A payment nobody has
+         issued a receipt for has no receipt number, and prints a dash — the id
+         ("p2") is a database key and means nothing to the person holding the
+         sheet. */
+      { label: 'Receipt #',    type: 'id',     width: 14, value: p => String(p.receiptNo || '') },
 
-      /* The same fact as a column, for the workbook — a spreadsheet cannot read
-         a sub-line, and "which of these balances are old" is exactly the thing
-         somebody sorts a sheet by. */
-      { label: 'Arrears from', type: 'text', width: 16, pdf: false,
-        value: p => _exArrear(p) ? (monthLabel(p.month) || '') : '' },
-
-      { label: 'Method', type: 'text',   width: 13, value: p => p.method || '' },
-      { label: 'Status', type: 'status', width: 11, value: p => payStatusOf(p) },
-      { label: 'Date',   type: 'date',   width: 13, value: p => p.date || '' },
-
-      { label: 'Receipt', type: 'id', width: 14, pdf: false, value: p => String(p.id || '') },
+      { label: 'Remarks', type: 'wrap', width: 22, value: p => _payRemark(p) },
     ],
 
     rows: list,
@@ -1104,6 +1123,19 @@ function payBulkExport() {
   if (!list.length) { toast('Nothing selected to export', 'error'); return; }
   EXPORT.excel(_payExportDef(list, {
     selection: list.length + ' selected record' + (list.length === 1 ? '' : 's'),
+  }));
+}
+
+/* THE WHOLE REGISTER, FROM THE REPORTS BAR (owner, 2026-09-10) — every payment
+   the app holds, newest first, not the month the payments page happens to be
+   showing. The page's own Export is the scoped one. */
+function exportAllPaymentsPDF() {
+  const list = (DB.payments || []).slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  if (!list.length) { toast('No payment records to export', 'error'); return; }
+  EXPORT.pdf(_payExportDef(list, {
+    title: 'Hostel Payment Register',
+    scope: 'Complete record — all payments',
   }));
 }
 
