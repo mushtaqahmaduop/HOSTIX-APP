@@ -1715,7 +1715,19 @@ function _stuExportDef(list, opts) {
         value: t => owedBy(t) || null,
         get:   t => owedBy(t) > 0 ? '<span class="neg">' + fmtPKR(owedBy(t)) + '</span>' : '—' },
 
-      { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
+      /* THE STATUS NAMES A DATE, AND SO DOES THE PRINTED ONE (owner,
+         2026-09-10). "Left" on a printed roster of two hundred names answers
+         nothing the person holding it asks next, and "On Notice" is worse — the
+         bed is still occupied and the only useful fact is the day it frees.
+         statusDateText() is the same lookup the register draws, so the sheet
+         and the screen cannot say different things. */
+      { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active',
+        sub: t => statusDateText(t) },
+
+      /* As its own column for the workbook: a spreadsheet cannot read a
+         sub-line, and "who left when" is exactly what somebody sorts by. */
+      { label: 'Left / vacates', type: 'date', width: 14, pdf: false,
+        value: t => statusDate(t) },
     ],
 
     rows: list,
