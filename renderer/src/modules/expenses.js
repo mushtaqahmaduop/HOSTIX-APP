@@ -925,6 +925,7 @@ function showExpenseModal(id) {
    cancel path reopens the form, and puts back the receipt they had staged but
    not yet saved, which reopening from the record alone would drop. */
 function expDeleteFromForm(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const staged = _expReceipt;
   showConfirm('Delete expense?', 'This cannot be undone.',
     () => _expDoDelete(id),
@@ -1002,6 +1003,11 @@ async function submitEditExpense(id)   { return submitExpense(id); }
 /* The deletion itself, with no confirmation of its own — both callers raise
    their own, and nesting them asked the warden the same question twice. */
 async function _expDoDelete(id) {
+  /* GUARDED HERE TOO, not only at the two entry points that call it. Both of
+     them return before reaching this line, so the warden never sees two
+     refusals — this is the line that keeps a future caller from becoming the
+     next unguarded delete. */
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _del_e=DB.expenses.find(x=>x.id===id);
   DB.expenses=DB.expenses.filter(x=>x.id!==id);
   if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
@@ -1009,6 +1015,7 @@ async function _expDoDelete(id) {
 }
 
 async function deleteExpense(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete expense?','This cannot be undone.', () => _expDoDelete(id));
 }
 

@@ -580,6 +580,11 @@ async function submitEditCancellation(cancId) {
 }
 
 async function deleteCancellationRecord(cancId) {
+  /* THE DELETE PERMISSION IS ENFORCED HERE, not only on students (owner,
+     2026-09-10). `requirePerm('delete')` had exactly ONE call site in the
+     whole renderer — confirmDeleteStudent — so an account created with the
+     box unticked was stopped at the student register and nowhere else. */
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
   showConfirm('Delete Record','Are you sure you want to permanently delete this cancellation record? The student status will not be changed.',(async ()=>{

@@ -1066,6 +1066,7 @@ async function submitEditTransfer(id) {
 }
 
 async function deleteTransfer(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete transfer record?','This cannot be undone.',(async ()=>{
     DB.transfers = (DB.transfers||[]).filter(x=>x.id!==id);
     // Refresh whichever page the row was deleted from — Expenses and the

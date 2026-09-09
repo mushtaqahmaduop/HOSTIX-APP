@@ -906,7 +906,13 @@ async function saveIssue(id) {
 
 async function resolveMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='Resolved';m.resolvedDate=today();await saveDB();renderPage('issues');toast('Resolved','success');}}
 async function progressMaint(id){var m=DB.maintenance.find(function(x){return x.id===id;});if(m){m.status='InProgress';await saveDB();renderPage('issues');toast('In Progress','info');}}
-async function delMaint(id){showConfirm('Delete?','',async function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+/* THE DELETE PERMISSION REACHES MAINTENANCE AND COMPLAINTS TOO (owner,
+   2026-09-10). Both of these destroyed a record with no permission check of any
+   kind, which is why an account created with the delete box unticked could
+   still empty the issues register. */
+async function delMaint(id){
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  showConfirm('Delete?','',async function(){DB.maintenance=DB.maintenance.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 async function resolveComp(id) {
   // FIX #7: Replace blocking native prompt() with an in-app modal dialog
   var cc = DB.complaints.find(function(x){return x.id===id;}); if(!cc) return;
@@ -921,7 +927,9 @@ async function resolveComp(id) {
     '})()">Mark Resolved</button>'
   );
 }
-async function delComp(id){showConfirm('Delete?','',async function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
+async function delComp(id){
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  showConfirm('Delete?','',async function(){DB.complaints=DB.complaints.filter(function(x){return x.id!==id;});await saveDB();renderPage('issues');toast('Deleted','info');});}
 
 /* The pre-v5 names. Nothing in the app calls them today — verified 2026-09-08
    across the whole renderer — but they are the names every older call site and

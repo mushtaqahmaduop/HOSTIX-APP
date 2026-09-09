@@ -1151,6 +1151,7 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
   if (!refreshStudentView(studentId)) showStudentPanel(studentId);
 }
 async function deletePayment(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dp = DB.payments.find(x => x.id === id);
   showConfirm('Delete payment record?','This cannot be undone.',async ()=>{
     // Logged before the record goes. Every other money action writes to the
@@ -1164,6 +1165,7 @@ async function deletePayment(id) {
   });
 }
 async function deletePaymentFromStudentView(payId, studentId) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dpv = DB.payments.find(x => x.id === payId);
   showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',async ()=>{
     if (_dpv) logActivity('Payment Deleted',

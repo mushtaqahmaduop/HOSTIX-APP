@@ -209,6 +209,146 @@ test('the header stops offering buttons the warden may not use', async () => {
   await app.close();
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// 'delete' — DECLARED, TICKED, AND CHECKED IN EXACTLY ONE PLACE
+//
+// The owner found this on 2026-09-10: an account created with "Delete records"
+// unticked could still delete payments, cancellations, expenses, maintenance
+// jobs and complaints. Only the student register refused.
+//
+// It is the same class of bug this file was written for, and it slipped past
+// the coverage test below because that test asks whether a permission is
+// enforced SOMEWHERE. 'delete' was — `confirmDeleteStudent` was its one and
+// only call site in the entire renderer. So this file now asks the sharper
+// question of the one permission that destroys data: is it enforced on EVERY
+// path that destroys data.
+//
+// The refusal is asserted on the record still being there AND on the
+// confirmation never opening. A warden who may not delete should not be asked
+// to confirm a deletion — being asked and then refused is how a person learns
+// to distrust the dialog.
+// ════════════════════════════════════════════════════════════════════════════
+test("'delete' is enforced on every register, not only on students", async () => {
+  const { app, win } = await openApp();
+
+  await win.evaluate(async () => {
+    const t = today();
+    DB.rooms = [{ id: 'rEmpty', number: '901', floor: 'Ground',
+                  typeId: (DB.settings.roomTypes[0] || {}).id, amenities: [] }];
+    DB.students = [];
+    DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'Seed', roomNumber: '901',
+                     month: thisMonth(), monthlyRent: 1000, amount: 1000, unpaid: 0,
+                     status: 'Paid', method: 'Cash', date: t }];
+    DB.cancellations = [{ id: 'c1', studentId: 's1', studentName: 'Seed', roomNumber: '901',
+                          status: 'Pending', requestDate: t, vacateDate: t, reason: 'Seed' }];
+    DB.expenses    = [{ id: 'e1', category: 'Utilities', amount: 500, date: t, description: 'Seed' }];
+    DB.maintenance = [{ id: 'm1', title: 'Seed', status: 'Open', date: t }];
+    DB.complaints  = [{ id: 'k1', title: 'Seed', status: 'Open', date: t }];
+    DB.transfers   = [{ id: 'x1', amount: 100, date: t, note: 'Seed' }];
+    await saveDB();
+  });
+
+  const CALLS = `
+    const calls = [
+      ['payment',      () => deletePayment('p1')],
+      ['cancellation', () => deleteCancellationRecord('c1')],
+      ['expense',      () => deleteExpense('e1')],
+      ['maintenance',  () => delMaint('m1')],
+      ['complaint',    () => delComp('k1')],
+      ['room',         () => confirmDeleteRoom('rEmpty')],
+      ['transfer',     () => deleteTransfer('x1')],
+    ];
+    const asked = [];
+    for (const [name, fn] of calls) {
+      closeModal();
+      await new Promise(r => setTimeout(r, 120));
+      await fn();
+      await new Promise(r => setTimeout(r, 250));
+      if (document.querySelector('.modal-overlay')) asked.push(name);
+      closeModal();
+    }
+    const left = {
+      payment:      DB.payments.length,
+      cancellation: (DB.cancellations || []).length,
+      expense:      DB.expenses.length,
+      maintenance:  DB.maintenance.length,
+      complaint:    DB.complaints.length,
+      room:         DB.rooms.length,
+      transfer:     (DB.transfers || []).length,
+    };
+    return { asked, left };
+  `;
+
+  const denied = await withPerm(win, 'delete', false, CALLS);
+  expect(denied.asked,
+    'these registers asked a warden with no delete permission to confirm a deletion')
+    .toEqual([]);
+  // Nothing may go. The confirm never opened, so nothing should have run — but
+  // it is the record count that matters, not the dialog.
+  expect(denied.left).toEqual({
+    payment: 1, cancellation: 1, expense: 1, maintenance: 1,
+    complaint: 1, room: 1, transfer: 1,
+  });
+
+  // ── With the permission, every one of them must still work ───────────────
+  // A gate that refuses everybody would pass the half above on its own.
+  const allowed = await withPerm(win, 'delete', true, CALLS);
+  expect(allowed.asked.sort(), 'the gate blocks a warden who DOES have the permission')
+    .toEqual(['cancellation', 'complaint', 'expense', 'maintenance', 'payment',
+              'room', 'transfer'].sort());
+
+  await app.close();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE STATIC HALF. The test above names seven registers; the next register
+// added will not be in it. This one reads the source instead: every function
+// that removes rows from a DB collection must ask for a permission first.
+//
+// It is deliberately crude — nearest enclosing `function` above the removal —
+// because the precise thing it guards is crude too: somebody writes a new
+// `DB.things = DB.things.filter(...)` and does not think about who is allowed
+// to run it. That is exactly how five of these came to exist.
+// ════════════════════════════════════════════════════════════════════════════
+test('every path that destroys records asks for a permission first', async () => {
+  const fs = require('fs');
+  const dir = path.join(REPO_ROOT, 'renderer/src/modules');
+  const misses = [];
+  /* THE ONE EXEMPTION, AND IT IS NOT A USER ACTION. enforceDataRetention() runs
+     on save and moves settled records past the retention window out of the live
+     tables; nobody is pressing anything, so there is no permission to ask for.
+     Adding a name here needs that same sentence: who is not pressing it. */
+  const EXEMPT = ['enforceDataRetention'];
+
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(dir, file), 'utf8');
+    // Split on function starts so each chunk is one function body (near enough).
+    const parts = src.split(/(?=(?:^|\n)\s*(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\()/);
+    for (const part of parts) {
+      const name = (part.match(/(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/) || [])[1];
+      if (!name || EXEMPT.includes(name)) continue;
+      if (/requirePerm\('\w+'\)/.test(part)) continue;
+
+      /* A removal: a collection reassigned to a filtered copy of itself, or
+         emptied outright — and the collection's NAME is captured, because half
+         the hits are not deletions at all. Every upsert in this app filters the
+         old row out and pushes the new one straight back, so a function that
+         puts rows into the same collection it filtered is editing it. */
+      const gone = new Set();
+      for (const m of part.matchAll(/DB\.(\w+)\s*=\s*\(?\s*(?:DB\.\1|\(DB\.\1\s*\|\|\s*\[\]\))\s*\)?\s*\.filter\(/g)) gone.add(m[1]);
+      for (const m of part.matchAll(/DB\.(\w+)\s*=\s*\[\s*\]\s*;/g)) gone.add(m[1]);
+      for (const coll of gone) {
+        if (part.includes('DB.' + coll + '.push(') ||
+            part.includes('DB.' + coll + '.unshift(')) continue;
+        misses.push(file + ' → ' + name + '() removes DB.' + coll);
+      }
+    }
+  }
+
+  expect(misses,
+    'these functions destroy records with no permission check at all').toEqual([]);
+});
+
 test('every declared permission is actually checked somewhere', async () => {
   // The bug this whole file exists for was a permission that was declared,
   // saved, shown with a tick, and enforced nowhere. This is the guard that

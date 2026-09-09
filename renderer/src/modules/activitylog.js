@@ -401,6 +401,7 @@ function alOpen(id) { alSelected = id; renderPage('activitylog'); }
 function alClose() { alSelected = null; renderPage('activitylog'); }
 
 function alClear() {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Clear the activity log?',
     'Every entry is deleted permanently. Export it first if you need the record — this is the only copy.',
     async () => {

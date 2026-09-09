@@ -56,6 +56,7 @@ async function saveCheckin() {
   await saveDB(); closeModal(); renderPage('checkinlog'); toast('Entry added','success');
 }
 async function deleteCheckin(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   DB.checkinlog=DB.checkinlog.filter(x=>x.id!==id); await saveDB(); renderPage('checkinlog'); toast('Deleted','info');
 }function showAddNoticeModal() {
   showModal('modal-sm','Post New Notice',`
@@ -80,6 +81,7 @@ async function saveNotice() {
   await saveDB(); closeModal(); renderPage('notices'); toast('Notice posted','success');
 }
 async function deleteNotice(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete Notice?','',async ()=>{DB.notices=DB.notices.filter(x=>x.id!==id);await saveDB();renderPage('notices');toast('Deleted','info');});
 }function showAddFineModal() {
   const students = studentsByRoom(DB.students.filter(s=>s.status==='Active')).map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
@@ -113,6 +115,7 @@ async function payFine(id) {
   if(f){f.paid=true;f.paidDate=today();await saveDB();renderPage('fines');toast('Fine marked as paid','success');}
 }
 async function deleteFine(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete Fine?','',async ()=>{DB.fines=DB.fines.filter(x=>x.id!==id);await saveDB();renderPage('fines');toast('Deleted','info');});
 }
 
@@ -243,6 +246,7 @@ async function saveInspection() {
   await saveDB(); closeModal(); renderPage('inspections'); toast('Inspection saved','success');
 }
 async function deleteInspection(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete Inspection?','',async ()=>{DB.inspections=DB.inspections.filter(x=>x.id!==id);await saveDB();renderPage('inspections');toast('Deleted','info');});
 }
 
@@ -3544,6 +3548,7 @@ function _showExcelImportResult(rows, errors) {
 }
 // ════════════════════════════════════════════════════════════════════════════
 async function resetAllData() {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections and bill splits. Rooms will be reset. This CANNOT be undone.',async ()=>{
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,

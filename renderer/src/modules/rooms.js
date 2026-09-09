@@ -1006,6 +1006,7 @@ async function submitEditRoom(id) {
   await saveDB(); closeModal(); renderPage('rooms'); toast('Room updated','success');
 }
 async function confirmDeleteRoom(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   // Occupancy counts Active only. A student on the cancellation list is still
   // sleeping in the room until their vacate date, so the room they are in must
