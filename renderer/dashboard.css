@@ -2899,7 +2899,12 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
    Each card gets `min-height:0` and its own overflow, so the three take the
    squeeze in their scroll containers rather than spilling — the seat grid and
    the room list already scroll, and the glance is six one-line rows. */
-.dash-row-b            { height: 237px; }
+/* 254, up from 237 — every pixel row C gave back (owner: "our main goal is
+   that the row B should have more height"). Measured: row A 160, row C 202 at
+   its natural height, 108 of chrome above and two 7px margins between, in a
+   738px viewport. That is the whole of the slack; row B cannot grow again
+   without row A or row C giving up something else. */
+.dash-row-b            { height: 254px; }
 .dash-row-b > .dash-sec { min-height: 0; overflow: hidden; }
 
 /* ROW C IS NOT LOCKED, AND THAT IS THE MEASUREMENT TALKING. Cut to the drawn
@@ -2911,7 +2916,7 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
    asked for and what keeps row C starting at the same y. */
 
 /* The chart is the one thing in row B that is pure area, so it takes the cut. */
-#trend-chart-wrap { height: 160px !important; }
+#trend-chart-wrap { height: 177px !important; }   /* row B is 254 now */
 
 /* Six rows and a closing line in 237px: the rows go back to 3px of padding.
    They are still one line each, which is what the fold test asserts. */
@@ -2982,3 +2987,38 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
 #trend-chart-wrap { height: 244px !important; }
 @media (max-height: 720px) { #trend-chart-wrap { height: 200px !important; } }
 @media (max-height: 665px) { #trend-chart-wrap { height: 168px !important; } }
+
+/* ── ROW C GIVES ITS HEIGHT TO ROW B (owner, 2026-09-09) ──────────────────
+   Removing the taglines from Needs Action and Quick Actions and the closing
+   notes from the KPI tiles bought FOUR pixels, because neither row is sized by
+   what was removed: row A is as tall as Advance / Arrears, which never carried
+   a note, and row C is as tall as Occupancy by Room Type, whose height is the
+   donut.
+
+   So the donut is where the height actually is. 150px -> 118, which is the size
+   this file already steps it to on a short window, and the room list beside it
+   keeps every row. Row C falls to about 185 and row B takes what it leaves.
+
+   `.dash-row-c .rt-donut` at :1524 caps `max-width` at 168 and sits later in
+   the file, so both properties are restated here rather than one. */
+.dash-row-c .rt-body  { grid-template-columns: 118px minmax(0, 1fr); gap: 14px; }
+.dash-row-c .rt-donut { width: 118px; height: 118px; max-width: 118px; }
+
+/* ── ROW C GIVES ITS HEIGHT TO ROW B, AND THIS IS THE RULE THAT DOES IT ────
+   Measured with the row set to `align-items:start`, the three cards come to
+   215, 210 and 205 — within eleven pixels, so trimming any one moves nothing,
+   and that is also why removing the two panel taglines and the four KPI notes
+   bought four pixels: neither row was sized by what came out.
+
+   The tallest is Occupancy by Room Type, and its 215 is a head of 33 over a
+   body of 154 — where the body IS `.rt-right`, the room list, capped at 148px
+   by `.dash-row-c .dash-sec .rt-right` at :2524. A first attempt trimmed row
+   padding on all three cards at (0,2,0) and changed nothing, because that cap
+   is (0,3,0) and later.
+
+   120px still shows four room types before it scrolls, which is the whole of a
+   typical hostel's list; the list has always scrolled past that. Row C falls to
+   about 187 and row B takes what it leaves. Chrome, not type. */
+.dash-row-c .dash-sec .rt-right { max-height: 120px; }
+.dash-row-c .dl-needs { gap: 2px; padding: 3px 8px 4px; }
+.dash-row-c .dl-acts  { gap: 6px; padding: 6px 10px 8px; }

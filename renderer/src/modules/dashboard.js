@@ -991,9 +991,6 @@ function renderDashboard() {
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">PKR</span>${fmtCompact(totalExpected)} expected</div>
       ${_dashBar(collected, totalExpected, 'kbar--blue')}
-      <div class="dash-kpi__note">${icon('info','xs')}<span>${totalExpected > 0 && collected < totalExpected
-          ? 'Still ' + Math.max(0, 100 - Math.round(collected / totalExpected * 100)) + '% to reach target'
-          : totalExpected > 0 ? 'The month is fully collected' : 'Nothing billed this month yet'}</span></div>
     </div>
 
     ${''/* PENDING AND EXPENSES SWAPPED (owner, 7 Sep). Worth recording what
@@ -1014,7 +1011,6 @@ function renderDashboard() {
       </div>
       <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
       ${_dashBar(pending, totalExpected, 'kbar--amber')}
-      <div class="dash-kpi__note">${icon('info','xs')}<span>${pending > 0 ? 'Collect pending payments' : 'Nothing pending'}</span></div>
     </div>
 
     <!-- Available Fund — green when in profit, red when the fund is negative
@@ -1039,7 +1035,6 @@ function renderDashboard() {
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
       ${_dashBar(netProfit, collected, 'kbar--green')}
-      <div class="dash-kpi__note">${icon('info','xs')}<span>${netProfit >= 0 ? 'Healthy cash position' : 'Spending is ahead of collection'}</span></div>
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -1056,7 +1051,6 @@ function renderDashboard() {
       <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub">this month</div>
       ${_dashBar(moExp, collected, 'kbar--orange')}
-      <div class="dash-kpi__note">${icon('info','xs')}<span>${moExp > 0 ? 'Keep an eye on expenses' : 'Nothing spent this month'}</span></div>
     </div>
 
     <!-- ADVANCE / ARREARS RECEIVED — the sixth tile (owner ref: nev.png,
@@ -1890,7 +1884,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +   '<div class="dash-sec__head dl-head3">'
       +     '<span class="dl-head3__ico dh-amber">' + _dlIco('alert') + '</span>'
       +     '<span class="dl-head3__b"><span class="dash-sec__title">Needs Action</span>'
-      +       '<span class="dl-head3__tag">Items that want a decision</span></span>'
+      +       '</span>'
       +     (needsOpen ? '<span class="dash-pill dh-red">' + needsOpen + '</span>' : '')
       +   '</div>'
       +   '<div class="dl-needs">' + needsRows + '</div>'
@@ -1905,7 +1899,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +   '<div class="dash-sec__head dl-head3">'
       +     '<span class="dl-head3__ico dh-violet">' + _dlIco('bolt') + '</span>'
       +     '<span class="dl-head3__b"><span class="dash-sec__title">Quick Actions</span>'
-      +       '<span class="dl-head3__tag">Common tasks, one click away</span></span>'
+      +       '</span>'
       +   '</div>'
       +   '<div class="dl-acts dl-acts--4">' + actions + '</div>'
       + '</div>',
