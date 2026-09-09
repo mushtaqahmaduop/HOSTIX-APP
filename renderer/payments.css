@@ -1490,3 +1490,24 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
     text-transform: none;
     letter-spacing: 0;
 }
+
+
+/* ══ THE STAT STRIP MATCHES STUDENTS (owner, 2026-09-10) ═══════════════════
+   "Reduce the size of all KPIs in cancellations, reports, expenses, payments,
+   complaints, rooms to the size of the students KPIs."
+
+   The students card measures 94px at 1366x768 — 11px of padding, a 10px
+   uppercase label, a 28px figure and a footnote — and every other register on
+   this app was between 102 and 109. Six strips, six heights, for the same row
+   of the same kind of card.
+
+   94 IS THE NUMBER, AND IT COMES OUT OF CHROME. Nothing here shrinks a figure
+   or a label: it is the icon chip, the gaps around it and the card's own
+   padding. Each page keeps its own content — its chips, its hues, its
+   sparkline — at the students card's height.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pay-stats .pay-stat       { padding: 8px 14px; }
+.pay-stats .pay-stat__top  { margin-bottom: 3px; }
+.pay-stats .pay-stat__chip { width: 24px; height: 24px; border-radius: 8px; }
+.pay-stats .pay-stat__chip svg { width: 14px; height: 14px; }
+.pay-stats .pay-stat__foot { margin-top: 3px; }
