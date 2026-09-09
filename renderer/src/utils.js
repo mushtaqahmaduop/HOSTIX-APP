@@ -1293,3 +1293,27 @@ function validateBackup(data) {
 
   return { ok: true };
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE WHATSAPP MARK, IN ONE PLACE (owner, 2026-09-10: "use official whatsapp
+   logo").
+
+   There were three marks in this app: the brand's own outline on the students
+   register, a filled variant on the dashboard's reminder button, and — on the
+   Payments toolbar, the one button whose whole job is to say which channel the
+   reminder goes out on — a bare speech bubble with no handset in it, which
+   reads as "a chat app" rather than as WhatsApp.
+
+   This is the brand outline: the bubble with the tail bottom-left and the
+   handset inside it. It takes `currentColor` rather than the brand green, so a
+   register with forty of them in it does not become forty saturated green marks
+   competing with the column beside them; a caller that wants the green sets the
+   colour on the button.
+   ════════════════════════════════════════════════════════════════════════════ */
+function waMark(size) {
+  const s = size || 15;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    + '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2Zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.25 8.24a8.24 8.24 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.26-8.24Z"/>'
+    + '<path d="M9.36 7.2c-.19-.42-.38-.43-.56-.44h-.47c-.16 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.89 2.38 1.01 2.54c.12.17 1.71 2.74 4.22 3.73 2.09.82 2.51.66 2.97.62.46-.04 1.48-.6 1.69-1.19.21-.58.21-1.08.15-1.19-.06-.1-.23-.16-.47-.29-.25-.12-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.34-.75-1.83Z"/></svg>';
+}

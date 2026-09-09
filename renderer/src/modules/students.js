@@ -3357,7 +3357,14 @@ async function submitRoomShift(studentId) {
 // `arrears` keeps still-unpaid records from EARLIER months visible while the
 // current month is on screen, so last month's balance can be collected from
 // this month instead of forcing the warden to switch back to find it.
-let payFilter = {status:'All', method:'All', room:'All', month:'All', search:'',
+/* THE MONTH OPENS ON THIS MONTH (owner, 2026-09-10: "all pages month
+   dropdowns be defaulted to the current month"). It was 'All', which did
+   NOT mean the page showed every month — payFiltered() fell back to a
+   this-month scope anyway — so the picker read "All Months" over a table
+   that was showing one. The scope is unchanged; the control now says what
+   the table is doing. Unpaid earlier months still ride along, and "All
+   Months" is still the last option in the picker. */
+let payFilter = {status:'All', method:'All', room:'All', month:thisMonth(), search:'',
                  showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
                  page:1, sortKey:'room', sortDir:'asc'};
 let paySelected = new Set();
@@ -3365,7 +3372,9 @@ let paySelected = new Set();
    unless a reader turns them off, and a fresh visit restores that. Same
    selection reasoning as Students. */
 registerFilter('payments', payFilter, () => ({
-  status:'All', method:'All', room:'All', month:'All', search:'',
+  /* thisMonth() is called on every reset rather than captured at load, so a
+     session left open past the turn of a month opens on the month it now is. */
+  status:'All', method:'All', room:'All', month:thisMonth(), search:'',
   showAll:false, unpaidOnly:false, arrears:true, page:1,
   sortKey:'room', sortDir:'asc',
 }), () => paySelected.clear());

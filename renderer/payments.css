@@ -192,6 +192,13 @@
    reached by panning to it, like every other column past the fold. */
 .pay-table thead th.pay-col-act,
 .pay-table tbody td.pay-col-act { white-space:nowrap; }
+/* AS WIDE AS ITS BUTTON, AND NO WIDER (owner, 2026-09-10: put it "on the same
+   layer as other headings just like in students page"). `width:1%` is what the
+   students table uses: it shrinks the column to the control instead of letting
+   it take a share of the free space, which is what left the kebab sitting
+   eleven pixels left of its own heading. */
+.pay-table thead th.pay-col-act,
+.pay-table tbody td.pay-col-act { width:1%; text-align:center; }
 
 /* Secondary money columns (Adm. Fee, Extra Chrgs, Concession) sit past the
    right edge rather than being display:none — a hidden column cannot be
@@ -206,24 +213,19 @@
 /* Kill the drag-image/selection flicker while panning. */
 .pay-table-wrap.is-dragging .pay-table { pointer-events:none; }
 
-/* --dash-sunk, --dh-bg and the row states are all translucent (ui-kit.css:38
-   is rgba(255,255,255,.055)). Painting a pinned cell with one directly lets the
-   columns scrolling underneath show straight through it — the ACTIONS header
-   printed on top of EXTRA CHRGS. Layering the tint over an opaque --card via a
-   flat gradient keeps the exact same colour while making the cell opaque. */
-.pay-table thead th.pay-col-act {
-    z-index:3;
-    background:linear-gradient(var(--dash-sunk), var(--dash-sunk)) , var(--card);
-}
-.pay-table tbody td.pay-col-act { z-index:1; }
-/* Row states must still win over the pinned cell's own background, or the
-   pinned column stays flat while the rest of the row highlights. */
-.pay-table tbody tr:hover td.pay-col-act {
-    background:linear-gradient(var(--dash-sunk), var(--dash-sunk)) , var(--card);
-}
-.pay-table tbody tr.is-picked td.pay-col-act {
-    background:linear-gradient(var(--dh-bg), var(--dh-bg)) , var(--card);
-}
+/* THE OPAQUE-CELL RULES ARE GONE, AND THAT IS THE WHOLE OF THE FIX (owner,
+   2026-09-10). Six rules painted this one cell's background for every row state
+   — rest, hover, picked, and three more for arrears further down — and they
+   existed for one reason: the column used to be `position:sticky; right:0`, so
+   it had to be OPAQUE or the columns scrolling under it showed through. It
+   stopped being pinned on 2026-09-09 and the paint stayed.
+
+   An ordinary cell that repaints its own background is a cell that cannot match
+   the row it is in. Each of those rules layered a translucent tint over
+   `var(--card)`, not over whatever the row itself was wearing, so the ACTIONS
+   column sat at a slightly different tone from the rest of every row — the
+   seam that reads as a second layer laid over the table. It inherits the row
+   now, like the twelve columns to its left. */
 
 .pay-acts     { display:flex; align-items:center; gap:5px; }
 .pay-act {
@@ -1053,20 +1055,12 @@ input.ws__amt {
    pre-existing :hover and .is-picked rules above — silently beat both. The one
    cell in the row that is always visible was then the one cell that never
    answered the pointer, and a selected arrears row showed amber there while the
-   rest of the row showed the selection blue. This is the "later block wins"
-   failure this file already documents twice; the fix is to be explicit rather
-   than to reorder, because ordering is what broke it. */
-.pay-table tbody tr.is-arrear td.pay-col-act {
-    background:linear-gradient(color-mix(in srgb, var(--amber) 7%, transparent),
-                               color-mix(in srgb, var(--amber) 7%, transparent)), var(--card);
-}
-.pay-table tbody tr.is-arrear:hover td.pay-col-act {
-    background:linear-gradient(color-mix(in srgb, var(--amber) 12%, transparent),
-                               color-mix(in srgb, var(--amber) 12%, transparent)), var(--card);
-}
-.pay-table tbody tr.is-arrear.is-picked td.pay-col-act {
-    background:linear-gradient(var(--dh-bg), var(--dh-bg)), var(--card);
-}
+   rest of the row showed the selection blue.
+
+   ALL THREE ARE GONE with the pinned-cell paint they were correcting (see the
+   note above, 2026-09-10). The cell has no background of its own any more, so
+   an arrears row is amber across all thirteen columns for the same reason every
+   other row state now works: nothing is repainting the last one. */
 
 /* ══ ROW ACTION HIT AREA ════════════════════════════════════════════════════
    Payments spec §25 asks for a minimum 40x40 click target. Growing the buttons
@@ -1104,8 +1098,10 @@ input.ws__amt {
 .pay-table tbody td            { padding-left:8px; padding-right:8px; }
 .pay-table thead th:first-child,
 .pay-table tbody td:first-child { padding-left:10px; padding-right:4px; }
+/* Even padding, so the button is centred under its own heading rather than
+   pulled 2px left by the tighter treatment the pinned column used to get. */
 .pay-table thead th.pay-col-act,
-.pay-table tbody td.pay-col-act { padding-left:6px; padding-right:8px; }
+.pay-table tbody td.pay-col-act { padding-left:8px; padding-right:8px; }
 .pay-acts                      { gap:4px; }
 
 
@@ -1228,7 +1224,7 @@ input.ws__amt {
     .pay-table thead th:first-child,
     .pay-table tbody td:first-child { padding-left: 8px; padding-right: 3px; }
     .pay-table thead th.pay-col-act,
-    .pay-table tbody td.pay-col-act { padding-left: 5px; padding-right: 6px; }
+    .pay-table tbody td.pay-col-act { padding-left: 6px; padding-right: 6px; }
     /* The method chip is a 15px glyph and a word in a pill; 8px of side padding
        is enough for it to still read as a chip. */
     .pay-method { padding-left: 8px; padding-right: 8px; }
@@ -1511,3 +1507,38 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 .pay-stats .pay-stat__chip { width: 24px; height: 24px; border-radius: 8px; }
 .pay-stats .pay-stat__chip svg { width: 14px; height: 14px; }
 .pay-stats .pay-stat__foot { margin-top: 3px; }
+
+
+/* ══ THE THREE ACTIONS JOIN THE FILTER ROW (owner, 2026-09-10) ═════════════
+   "Adjust the 3 options in payments page: export, auto generate and whatsapp
+   reminders to the above free space."
+
+   They were already in the same flex strip and already pushed right — the strip
+   simply could not hold them at the 1366 floor and wrapped, leaving 305px of
+   empty bar on line one and a 402px block alone on line two. Measured:
+
+     search 210 + rooms 132 + month 152 + status 132 + Filters 91 + 5 gaps of 10
+     = 767 used of 1072, and the block needs 402.
+
+   97px short, and every one of them comes out of chrome — no control is
+   dropped, no label is shortened, no button moves out of reach:
+
+     search   210 -> 170   (the placeholder truncates; it never held a value)
+     rooms    132 -> 112   ("All Rooms" is 70px of text)
+     status   132 -> 112   ("All Status" the same)
+     month    152 -> 140   ("September 2026" is the longest label it can hold)
+     gap       10 -> 8     across five gaps
+
+   = 102 saved against 97 needed. Below ~1240px the strip wraps again, which is
+   the right behaviour: it degrades by itself rather than by a second markup
+   structure. */
+.pay-tools  { gap: 8px; }
+.pay-search { flex: 0 1 158px; min-width: 140px; max-width: 200px; }
+/* WIDTH, NOT MIN-WIDTH. `min-width` is a floor: the month select's own content
+   — "September 2026" plus the chevron well — measures 152 and simply ignored a
+   140px minimum. Fixed widths are what actually hand the row back its 97px. */
+.pay-select     { min-width: 112px; width: 112px; }
+/* 150, not 140: "September 2026" is 100px of 13px type over a 13px left pad
+   and a 32px chevron well, and at 140 the longest month label ellipsised on a
+   control that has room for it. The row still closes with 7px to spare. */
+.pay-select--mo { min-width: 150px; width: 150px; }

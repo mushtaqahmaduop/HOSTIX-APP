@@ -291,14 +291,31 @@ function payMaskCnic(c) {
 
 // Every month present in the data, newest first — the month select is built
 // from real records, so it can never offer a month with nothing behind it.
+/* THE PICKER LISTS MONTH KEYS, NOT WHATEVER STRING IS IN THE RECORD (owner,
+   2026-09-10: every month picker opens on the current month).
+
+   `p.month` is written as 'YYYY-MM' by every path in the app today, but records
+   from older builds carry a display label — 'September 2026' — and this list
+   used the raw values. Two spellings of one month made two options, and picking
+   either hid the rows written under the other, because the filter was an exact
+   string compare. _payMonthKey() normalises both, so a month is a month.
+
+   THE CURRENT MONTH IS ALWAYS IN THE LIST, with or without records in it. It is
+   what the page opens on, and a picker that cannot show its own selection is
+   the sort of thing that reads as a blank screen: on the 1st of a month, before
+   Generate Month has run, there are no records to build an option from. */
 function payMonthOptions() {
-  const seen = new Map();
-  DB.payments.forEach(p => { if (p.month) seen.set(String(p.month), true); });
-  return [...seen.keys()].sort((a,b) => {
-    const da = new Date(a + ' 1'), db2 = new Date(b + ' 1');
-    if (!isNaN(da) && !isNaN(db2)) return db2 - da;
-    return String(b).localeCompare(String(a));
-  });
+  const seen = new Set([thisMonth()]);
+  DB.payments.forEach(p => { const k = _payMonthKey(p); if (k) seen.add(k); });
+  return [...seen].sort((a, b) => String(b).localeCompare(String(a)));
+}
+
+/* WHICH MONTH THE TABLE IS SHOWING, as one answer for the row filter, the stat
+   strip and the arrears count. `'All'` and the popover's "Include every month"
+   both mean no month scope at all; anything else is a month key. */
+function payScopeKey() {
+  if (payFilter.month === 'All' || payFilter.showAll) return null;
+  return payFilter.month || thisMonth();
 }
 
 // Single source of truth for the filtered+sorted list. Used by the table, the
@@ -367,10 +384,15 @@ function payFiltered() {
     // all-months scope toggle in the Filters popover. In the this-month scope
     // an older record that is still unpaid rides along as an arrear, so it can
     // be collected here instead of only in the month it was raised.
-    if (payFilter.month !== 'All') { if (String(p.month || '') !== payFilter.month) return false; }
-    else if (!payFilter.showAll) {
-      if (!_payMatchesMonth(p, mo) && !(payFilter.arrears && payIsArrear(p, mo))) return false;
-    }
+    /* ONE RULE FOR EVERY MONTH, INCLUDING THE ONE PICKED BY HAND. This used to
+       be two: an explicit pick was an exact string compare with no arrears, and
+       only the implicit this-month scope carried unpaid earlier months forward.
+       So "Carry forward unpaid earlier months" — which is on by default and
+       says nothing about which month you are looking at — quietly stopped
+       applying the moment a warden used the picker. Now the checkbox means what
+       it says against whichever month is selected. */
+    const _mk = payScopeKey();
+    if (_mk && !_payMatchesMonth(p, _mk) && !(payFilter.arrears && payIsArrear(p, _mk))) return false;
 
     if (payFilter.room !== 'All' && String(p.roomNumber || '') !== payFilter.room) return false;
     if (payFilter.method !== 'All' && p.method !== payFilter.method) return false;
@@ -417,8 +439,9 @@ function renderPayments() {
   // Which of the visible rows are carried-over debt rather than this month's
   // billing. Only meaningful in the default this-month scope; an explicit month
   // pick or "all months" has no separate arrears notion.
-  const _arrearScope = payFilter.month === 'All' && !payFilter.showAll && payFilter.arrears;
-  const isArrear = p => _arrearScope && payIsArrear(p, mo);
+  const _scopeKey    = payScopeKey();
+  const _arrearScope = !!_scopeKey && payFilter.arrears;
+  const isArrear = p => _arrearScope && payIsArrear(p, _scopeKey);
   const nArrears = pays.filter(isArrear).length;
   const arrearsAmt = pays.filter(isArrear).reduce((s,p)=>s+outstandingOf(p),0);
 
@@ -485,7 +508,7 @@ function renderPayments() {
       </div>
       <div class="pay-stat__val" title="PKR ${fmtNum(total)}"><span class="cur">PKR</span>${fmtCompactK(total)}</div>
       <div class="pay-stat__foot">
-        <span class="pay-stat__sub">${payFilter.month!=='All'?escHtml(payFilter.month):(payFilter.showAll?'All months':escHtml(moLabel))}</span>
+        <span class="pay-stat__sub">${_scopeKey ? escHtml(monthLabel(_scopeKey)) : 'All months'}</span>
         ${/* A PERCENTAGE AGAINST A NEAR-EMPTY MONTH IS NOISE, NOT A READING.
              _mDelta only refuses to divide by an exactly-zero previous month, so
              a month that took PKR 8,000 against this month's 76,000 printed
@@ -569,9 +592,9 @@ function renderPayments() {
         ${roomNums.map(r=>`<option value="${escHtml(r)}" ${payFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
       </select>
 
-      <select class="pay-select${payFilter.month!=='All'?' is-set':''}" onchange="payFilter.month=this.value;payFilter.page=1;renderPage('payments')" title="Filter by month">
-        <option value="All">All Months</option>
-        ${monthOpts.map(m=>`<option value="${escHtml(m)}" ${payFilter.month===m?'selected':''}>${escHtml(m)}</option>`).join('')}
+      <select class="pay-select pay-select--mo${payFilter.month!==thisMonth()?' is-set':''}" onchange="payFilter.month=this.value;payFilter.showAll=false;payFilter.page=1;renderPage('payments')" title="Filter by month">
+        ${monthOpts.map(m=>`<option value="${escHtml(m)}" ${_scopeKey===m?'selected':''}>${escHtml(monthLabel(m))}</option>`).join('')}
+        <option value="All" ${!_scopeKey?'selected':''}>All Months</option>
       </select>
 
       ${''/* THE METHOD DROPDOWN IS GONE (owner, 2026-09-09). It was the fifth
@@ -623,7 +646,7 @@ function renderPayments() {
           Generate Month
         </button>
         <button class="pay-btn pay-btn--hue dh-green" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+          ${waMark(15)}
           Reminders
         </button>
       </div>
@@ -832,7 +855,9 @@ function paySetStatus(s) {
 }
 
 function payResetFilters() {
-  payFilter.status='All'; payFilter.method='All'; payFilter.room='All'; payFilter.month='All';
+  /* Back to the DEFAULT, not to nothing — and the default month is this month,
+     the same as the students, cancellations and complaints registers. */
+  payFilter.status='All'; payFilter.method='All'; payFilter.room='All'; payFilter.month=thisMonth();
   payFilter.search=''; payFilter.showAll=false; payFilter.unpaidOnly=false; payFilter.page=1;
   payFilter.arrears=true;   // carrying unpaid balances forward is the default, not a filter to clear
   paySelected.clear();
@@ -919,8 +944,8 @@ function _payExportDef(list, opts) {
   const settled   = list.filter(p => payStatusOf(p) === 'Paid').length;
   const billed    = collected + owing;
 
-  const scope = payFilter.month !== 'All' ? monthLabel(payFilter.month)
-              : payFilter.showAll ? 'All months' : thisMonthLabel();
+  const _sk = payScopeKey();
+  const scope = _sk ? monthLabel(_sk) : 'All months';
 
   return {
     module: 'Payments',
