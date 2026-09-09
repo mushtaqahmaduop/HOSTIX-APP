@@ -338,3 +338,93 @@
 .rpt-stats .rpt-stat__chip { width: 24px; height: 24px; border-radius: 8px; }
 .rpt-stats .rpt-stat__chip svg { width: 14px; height: 14px; }
 .rpt-stats .rpt-stat__sub  { margin-top: 5px; }
+
+
+/* ══ THE REPORT BAR AND ITS TAB STRIP (owner ref: reports2.png) ════════════ */
+
+/* WHICH month, beside the segment that says how WIDE the window is. */
+.rpt-mo {
+    height: 34px; padding: 0 30px 0 12px; border-radius: 10px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border2); color: var(--text);
+    font-family: var(--font); font-size: 12.5px; font-weight: 600;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+}
+.rpt-mo.is-set { border-color: var(--accent); color: var(--accent-strong); }
+
+/* THE SEVEN DETAIL VIEWS, NAMED. They have existed since long before this
+   redesign and the only way into one was to click the right KPI card, which is
+   not a thing anybody discovers. The strip scrolls sideways rather than
+   wrapping: eight tabs on two lines stop reading as one control. */
+.rpt-tabs {
+    display: flex; align-items: center; gap: 4px; margin-bottom: 14px;
+    padding: 4px; border-radius: 12px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+}
+.rpt-tabs::-webkit-scrollbar { display: none; }
+.rpt-tab {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    height: 32px; padding: 0 13px; border-radius: 9px; cursor: pointer;
+    background: none; border: 1px solid transparent; color: var(--text3);
+    font-family: var(--font); font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    transition: var(--transition);
+}
+.rpt-tab svg { width: 14px; height: 14px; flex-shrink: 0; }
+.rpt-tab:hover  { color: var(--text); background: var(--card); }
+.rpt-tab.is-on  { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+
+/* THE SPARKLINE IS BEHIND THE CARD, NOT UNDER IT, and that is a height
+   decision as much as a visual one. Laid out in flow it added 30px to a card
+   the owner fixed at the students strip's 94 on 2026-09-10 — and a KPI row
+   that grows every time a graphic is added is how that budget was lost the
+   last time. Absolutely placed on the card's floor it costs nothing, and it is
+   where the reference draws it: bottom-right, behind the figure, faint.
+
+   It occupies the right half only. Across the whole card it ran under "vs last
+   month", and a line through a sentence is noise in both directions. */
+.rpt-stat { display: flex; flex-direction: column; }
+.rpt-stat__spark {
+    position: absolute; left: 42%; right: 0; bottom: 0; height: 30px;
+    opacity: .5; line-height: 0; pointer-events: none;
+}
+.rpt-stat__spark svg { width: 100%; height: 100%; display: block; color: var(--dh); }
+.rpt-stat__spark .dash-spark-empty { display: none; }
+/* The card's own content stays above it. */
+.rpt-stat__top, .rpt-stat__val, .rpt-stat__sub { position: relative; z-index: 1; }
+
+
+/* ══ QUICK REPORTS ═════════════════════════════════════════════════════════
+   Seven documents in one row of tiles. Each is a BUTTON, not a link: it
+   produces a file or opens a filtered register, and neither is navigation. */
+.rpt-quick { margin-top: 14px; }
+.rpt-quick__note {
+    margin-left: auto; font-size: 11px; font-weight: 500; color: var(--text3);
+    text-transform: none; letter-spacing: 0;
+}
+.rpt-quick__g {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+    gap: 10px; margin-top: 4px;
+}
+.rpt-quick__b {
+    display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+    padding: 11px 13px; border-radius: 11px; min-width: 0;
+    background: var(--card); border: 1px solid var(--border);
+    font-family: var(--font); transition: var(--transition);
+}
+.rpt-quick__b:hover { border-color: var(--accent); background: var(--dash-sunk); }
+.rpt-quick__i {
+    width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.rpt-quick__x { min-width: 0; }
+.rpt-quick__t {
+    display: block; font-size: 12.5px; font-weight: 700; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rpt-quick__s {
+    display: block; margin-top: 2px; font-size: 11px; color: var(--text3);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

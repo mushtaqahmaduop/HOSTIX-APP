@@ -1034,6 +1034,13 @@ async function deleteExpense(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
 let reportPeriod='month';
+/* WHICH month "This Month" means (owner ref: `reports2.png`, which draws a
+   month dropdown in the report bar). It was hard-wired to thisMonth(), so the
+   only way to see August from September was Custom Range with the same month
+   at both ends — three controls for the commonest question this page is asked.
+   Evaluated at load and reset by rptSetPeriod(), so a session left open past
+   the turn of a month still opens on the month it now is. */
+let reportMonth = thisMonth();
 let reportDetail=null;
 let studentReportFilter='All';
 // PERF: pagination state for Reports KPI-card detail tables. Rendering EVERY row

@@ -29,7 +29,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // branch, so a Custom Range detail headed itself with the current YEAR while
   // listing the range's rows.
   const _plKeys = _rptKeys();
-  const periodLabel = reportPeriod==='month' ? thisMonth()
+  const periodLabel = reportPeriod==='month' ? (reportMonth || thisMonth())
     : reportPeriod==='year' ? thisYear()
     : (_plKeys.length ? _rptMonthName(_plKeys[0]) + ' – ' + _rptMonthName(_plKeys[_plKeys.length-1])
                       : 'Custom Range');
@@ -354,7 +354,41 @@ function _rptMonthName(key) {
 function _rptKeys() {
   if (reportPeriod === 'year')   return [thisYear()];
   if (reportPeriod === 'custom') return _rptMonthsBetween(reportRange.from, reportRange.to);
-  return [thisMonth()];
+  return [reportMonth || thisMonth()];
+}
+
+/* Every month the data knows about, newest first, with the current one always
+   present. A picker that cannot show its own selection reads as a blank
+   screen on the 1st of a month, before anything has been recorded. */
+function _rptMonthOptions() {
+  const seen = new Set([thisMonth()]);
+  (DB.payments || []).forEach(p => { const k = _payMonthKey(p); if (k) seen.add(k); });
+  (DB.expenses || []).forEach(e => { const k = String(e.date || '').slice(0, 7); if (k) seen.add(k); });
+  return [...seen].sort((a, b) => String(b).localeCompare(String(a)));
+}
+
+function rptSetMonth(v) {
+  reportMonth = v || thisMonth();
+  reportDetailFilter.page = 1;
+  renderPage('reports');
+}
+
+/* THE SERIES BEHIND A KPI's SPARKLINE. Only three of the six figures on that
+   row have a month-by-month history this app can honestly draw: money in,
+   money out, and what is left. Occupancy and the student count are STANDING
+   figures — nothing stores what occupancy was in June — and inventing a line
+   for them would be drawing data the database does not have, which is the one
+   thing this codebase does not do. Those two keep their sentence instead. */
+function _rptSeries(what) {
+  const keys = (_rptTrendData || []).map(m => m.key);
+  if (!keys.length) return [];
+  if (what === 'rev')  return (_rptTrendData || []).map(m => m.rev);
+  if (what === 'exp')  return (_rptTrendData || []).map(m => m.exp);
+  if (what === 'net')  return (_rptTrendData || []).map(m => m.rev - m.exp);
+  if (what === 'pend') return keys.map(k =>
+    (DB.payments || []).filter(p => _payMatchesMonth(p, k))
+      .reduce((n, p) => n + outstandingOf(p), 0));
+  return [];
 }
 
 // The equivalent window immediately before it — what "vs last month" compares to.
@@ -369,7 +403,7 @@ function _rptPrevKeys() {
     const ks = _rptKeys(); if (!ks.length) return [];
     return ks.map(k => shift(k, ks.length));
   }
-  return [shift(thisMonth(), 1)];
+  return [shift(reportMonth || thisMonth(), 1)];
 }
 function _rptPeriodWord() {
   return reportPeriod === 'year' ? 'last year'
@@ -518,7 +552,10 @@ function renderReports() {
 
   // Human label for the window the page is showing, used by the Monthly
   // Overview header and its margin tile.
-  const periodLabel = reportPeriod === 'month' ? 'This Month'
+  /* "This Month" was right while the month was always the current one. With a
+     picker on the bar it is a label that can be wrong — set to March, the chart
+     header said "This Month" over March's figures — so it names the month. */
+  const periodLabel = reportPeriod === 'month' ? monthLabel(reportMonth || thisMonth())
     : reportPeriod === 'year' ? 'This Year'
     : (reportRange.from && reportRange.to)
       ? _rptMonthName(reportRange.from) + ' – ' + _rptMonthName(reportRange.to)
@@ -626,7 +663,13 @@ function renderReports() {
     });
   } else {
     for(let i=mCount-1;i>=0;i--){
-      const _now=new Date(); const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
+      /* Anchored on the month being REPORTED, not on today. With the picker
+         set to March the chart used to draw the six months ending now, so the
+         line beside the figures described a different window from the figures. */
+      const _anch = reportPeriod === 'month' && reportMonth
+        ? new Date(Number(reportMonth.slice(0,4)), Number(reportMonth.slice(5,7)) - 1, 1)
+        : new Date();
+      const d=new Date(_anch.getFullYear(),_anch.getMonth()-i,1);
       const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
       trendData.push({ key:k, lbl:d.toLocaleString('default',{month:'short'}),
                        rev:calcRevenue(k), exp:calcExpenses(k) });
@@ -640,7 +683,14 @@ function renderReports() {
   const nBlackS  = DB.students.filter(t=>t.status==='Blacklisted').length;
   const sDelta   = _rptStudentDelta(keys);
 
-  const stat = (id, hue, label, value, sub, svg, clickable) => `
+  /* THE SPARKLINE IS OPTIONAL AND THAT IS THE POINT (owner ref:
+     `reports2.png`, which draws one behind all six figures). Three of these
+     six have a month-by-month history this app can honestly draw — money in,
+     money out, and what is left of it. Occupancy and the roster are STANDING
+     figures: nothing in this database records what occupancy was in June, and
+     a line drawn for them would be invented. They keep their sentence, which
+     is what the card beside them was already doing. */
+  const stat = (id, hue, label, value, sub, svg, clickable, series) => `
     <div class="rpt-stat ${hue}${clickable===false?' rpt-stat--flat':''}${reportDetail===id?' is-on':''}"
          ${clickable===false?'':`onclick="reportDetail='${id}';renderPage('reports')"`}
          ${clickable===false?'':`title="Open the ${label.toLowerCase()} detail"`}>
@@ -650,6 +700,8 @@ function renderReports() {
       </div>
       <div class="rpt-stat__val">${value}</div>
       <div class="rpt-stat__sub">${sub}</div>
+      ${series && series.filter(v => typeof v === 'number' && isFinite(v)).length > 1
+        ? `<div class="rpt-stat__spark">${_dashSpark(series)}</div>` : ''}
     </div>`;
 
   const tile = (label, value, sub, hue, det) => `
@@ -662,10 +714,19 @@ function renderReports() {
   return `
   <div class="rpt-bar">
     <div class="rpt-seg">
-      <button class="${reportPeriod==='month'?'is-on':''}"  onclick="rptSetPeriod('month')">This Month</button>
+      <button class="${reportPeriod==='month'?'is-on':''}"  onclick="rptSetPeriod('month')">Month</button>
       <button class="${reportPeriod==='year'?'is-on':''}"   onclick="rptSetPeriod('year')">This Year</button>
       <button class="${reportPeriod==='custom'?'is-on':''}" onclick="rptSetPeriod('custom')">Custom Range</button>
     </div>
+
+    ${''/* WHICH MONTH, not just "this" one. The segment says how wide the
+           window is; this says where it sits. Together they are the reference's
+           month dropdown plus the two windows this app also reports on. */}
+    ${reportPeriod==='month'?`
+    <select class="rpt-mo${reportMonth!==thisMonth()?' is-set':''}" onchange="rptSetMonth(this.value)"
+            title="Which month this report covers">
+      ${_rptMonthOptions().map(m=>`<option value="${escHtml(m)}" ${(reportMonth||thisMonth())===m?'selected':''}>${escHtml(monthLabel(m))}</option>`).join('')}
+    </select>`:''}
 
     ${reportPeriod==='custom'?`
     <div class="rpt-range" title="Pick the first and last month to include">
@@ -680,13 +741,50 @@ function renderReports() {
       Back to Reports</button>`:''}
 
     <div class="rpt-bar__end">
-      <button class="rpt-card__a" onclick="printReport()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3h12v6"/><rect width="12" height="8" x="6" y="14"/></svg>
-        Print / PDF</button>
-      <button class="rpt-card__a" onclick="downloadAllStudentsPDF()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        All Students PDF</button>
+      ${''/* ONE EXPORT CONTROL, as every other register on this rail has. Two
+             loose buttons — "Print / PDF" and "All Students PDF" — put a
+             report of THIS PAGE and a report of a different page side by side
+             as if they were the same kind of thing. */}
+      <div class="tb-wrap">
+        <button class="rpt-card__a" id="rpt-export" aria-haspopup="menu" aria-controls="rpt-export-menu"
+                onclick="tbToggleMenu('rpt-export-menu',event)" title="Export or print this report">
+          ${icon('download','xs')} Export reports ${icon('chevronDown','xs')}
+        </button>
+        <div class="tb-menu" id="rpt-export-menu" role="menu">
+          <button role="menuitem" onclick="tbCloseMenus();printReport()">${icon('print','xs')} Print this report</button>
+          <button role="menuitem" onclick="tbCloseMenus();downloadAllStudentsPDF()">${icon('fileText','xs')} Student roster (PDF)</button>
+        </div>
+      </div>
     </div>
+  </div>
+
+  ${''/* THE TAB STRIP IS THE DETAIL VIEWS THIS PAGE ALREADY HAS (owner ref:
+         `reports2.png`). Seven of them exist — renderReportDetail() has been
+         building them since long before this redesign — and the only way in
+         was to click the right KPI card, which is not a thing anybody
+         discovers. They are named now.
+
+         THE REFERENCE'S EIGHT TABS ARE NOT THESE EIGHT, and the difference is
+         deliberate: it draws Cancellations and Complaints tabs, and this app
+         has no report screen behind either. Inventing two empty ones to match
+         a picture is how a warden ends up trusting a tab that shows nothing.
+         Both are in Quick Reports at the foot instead, which runs the export
+         their own registers already produce. */}
+  <div class="rpt-tabs" role="tablist">
+    ${[['','Overview','home'],
+       ['financial','Revenue','money'],
+       ['payments','Payments','card'],
+       ['pending','Pending','clock'],
+       ['expenses','Expenses','expense'],
+       ['netprofit','Available fund','wallet'],
+       ['students','Students','users'],
+       ['rooms','Rooms','bed']]
+      .map(([k,label,ico])=>`
+        <button role="tab" class="rpt-tab${(reportDetail||'')===k?' is-on':''}"
+                aria-selected="${(reportDetail||'')===k}"
+                onclick="reportDetail=${k?`'${k}'`:'null'};renderPage('reports')">
+          ${icon(ico,'xs')}${escHtml(label)}
+        </button>`).join('')}
   </div>
 
   ${reportPeriod==='custom'&&!keys.length?`
@@ -704,17 +802,21 @@ function renderReports() {
          the reconcilable figure is there. */''}
     ${stat('financial','dh-green','Revenue',moneyValue(rev,{compact:true}),
       `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
-      '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
+      '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+      true, _rptSeries('rev'))}
     ${stat('pending','dh-amber','Pending',moneyValue(pending,{compact:true}),
       `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
-      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
+      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+      true, _rptSeries('pend'))}
     ${stat('expenses','dh-red','Expenses',moneyValue(totalExp,{compact:true}),
       `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
-      '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>')}
+      '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+      true, _rptSeries('exp'))}
     ${stat('netprofit','dh-violet','Available Fund',
       moneyValue(net,{compact:true,color:net>=0?'var(--green)':'var(--red)'}),
       `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
-      '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>')}
+      '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+      true, _rptSeries('net'))}
     ${stat('rooms','dh-blue','Occupancy',`${occRate}%`,
       // No historical occupancy is stored, so this reports the standing figure
       // rather than a change against a period the data cannot describe.
@@ -872,6 +974,47 @@ function renderReports() {
       ${tile('Total Registered',DB.students.length, 'All time', 'dh-violet', 'students')}
       ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied`, 'dh-blue', 'rooms')}
       ${tile('Total Payments',  DB.payments.length, 'All time', 'dh-amber', 'financial')}
+    </div>
+  </div>
+
+  ${''/* ══ QUICK REPORTS (owner ref: reports2.png) ═══════════════════════════
+         Seven documents this app can already produce, in one place. Every one
+         of them runs the export its own register runs — the same definition,
+         the same engine, the same filters — so a report pulled from here and
+         the same report pulled from its page cannot differ.
+
+         THE TWO THE TAB STRIP COULD NOT HAVE ARE HERE. Cancellations and
+         Complaints have no report SCREEN in this app, but both have a full
+         export, and a document is what somebody asking for a "cancellations
+         report" wanted anyway.
+
+         Pending Payments is the one that is not a plain export: it opens the
+         payments register filtered to unpaid balances, because a warden asking
+         for that list is going to ACT on it — mark paid, send a reminder — and
+         a PDF cannot be acted on. The Export control there produces the file
+         if a file is what they were after. */}
+  <div class="rpt-card rpt-quick">
+    <div class="rpt-card__h">
+      ${icon('fileSpreadsheet','sm')}
+      Quick reports
+      <span class="rpt-quick__note">Each one is that register's own export, for the period above</span>
+    </div>
+    <div class="rpt-quick__g">
+      ${[['Monthly financial report','Collection, expenses and profit','chart','printReport()'],
+         ['Student list report','Everyone on the roster now','users','exportStudentsPDF()'],
+         ['Room occupancy report','Room by room, and who is in them','bed','exportRoomsPDF()'],
+         ['Pending payments','Opens the register, ready to collect','clock','openPaymentsPending()'],
+         ['Expense report','By category, with a subtotal each','expense','exportExpensesPDF()'],
+         ['Cancellations report','Departures and their settlements','transfer','exportCancellationsPDF()'],
+         ['Complaints report','Every issue raised, and its state','tool','exportIssuesPDF()']]
+        .map(q=>`
+          <button class="rpt-quick__b" onclick="${q[3]}" title="${escHtml(q[0])}">
+            <span class="rpt-quick__i">${icon(q[2],'sm')}</span>
+            <span class="rpt-quick__x">
+              <span class="rpt-quick__t">${escHtml(q[0])}</span>
+              <span class="rpt-quick__s">${escHtml(q[1])}</span>
+            </span>
+          </button>`).join('')}
     </div>
   </div>
   `}
