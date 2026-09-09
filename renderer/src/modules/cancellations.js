@@ -18,6 +18,16 @@
 /* `room`, `from` and `to` were removed on 2026-09-08 with the controls that
    set them — see the toolbar. A filter with no control is one a warden cannot
    see and cannot clear. */
+/* THE REASONS THE HOSTEL ACTUALLY USES — one list, both forms. It lived
+   inside showEditCancellationModal(), so the Add form offered a free-text box
+   and the Edit form a picker, and the same departure could be filed as
+   "shifting to own house" and edited into "Shifting to own house". A record's
+   own stored reason is always offered on top of this list, so a value typed
+   before the list existed cannot vanish on save. */
+const CANC_REASONS = ['Course completed', 'Shifting to own house', 'Going back to hometown',
+                      'Transferred to another city', 'Financial reasons', 'Family reasons',
+                      'Discipline', 'Other'];
+
 let cancelFilter = { status:'All', search:'', type:'All',
                      month:thisMonth(), page:1, pageSize:30, sortKey:'room', sortDir:'asc' };
 /* A fresh visit starts here. `month` is evaluated on every reset, not captured
@@ -384,11 +394,7 @@ function showEditCancellationModal(cancId) {
     { k: 'Restored',  ico: 'refreshCw', note: 'The student goes back to Active and keeps the seat.' },
   ];
 
-  /* The reasons the hostel actually uses, plus whatever this record already
-     holds — a stored reason that is not in the list must not vanish on save. */
-  const REASONS = ['Course completed', 'Shifting to own house', 'Going back to hometown',
-                   'Transferred to another city', 'Financial reasons', 'Family reasons',
-                   'Discipline', 'Other'];
+  const REASONS = CANC_REASONS;
   const known = REASONS.indexOf(c.reason) !== -1;
 
   showModal('modal-md',
@@ -630,50 +636,90 @@ function showAddCancellationModal(studentId) {
 
   const endOfMonth = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); d.setDate(0); return ymd(d); })();
 
-  showModal('modal-md','🚫 Add Cancellation Request',`
-    <div style="background:var(--red-dim);border:1px solid rgba(224,82,82,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:12.5px;color:var(--text2)">
-      ${icon('warning','sm')} <strong>Note:</strong> The student stays on the roster and <strong>keeps their bed until the vacate date</strong> — they are still billed for it, and the Rooms page marks the seat <strong style="color:var(--amber)">vacating</strong> so nobody books it twice. The bed frees when the cancellation is confirmed.
+  /* WHAT THIS STUDENT OWES, FROM THE SETTLEMENT AUTHORITY.
+     The reference draws four boxes — Pending Fees / Fine / Other Dues / Total
+     Due. Three of those four are not fields this app has: a payment carries
+     `extraCharges` as free text ("Laundry, cooler, fines"), and a part payment
+     is applied to the RECORD, not to a component of it, so splitting an
+     outstanding balance into rent-versus-fine would be an invention dressed as
+     arithmetic. These four are the decomposition calculateSettlement() can
+     actually stand behind, and they reconcile: due is what the records still
+     owe, credit is what was over-collected, and the closing line nets them.
+     Using the same function the CONFIRM step uses is the point — the figure a
+     warden reads when filing the request cannot disagree with the one they are
+     asked to settle when they confirm it. */
+  showModal('modal-md',
+    `<div class="hf-mh">
+       <div class="hf-mh__ico">${icon('doorOpen', 'sm')}</div>
+       <div><div class="hf-mh__t">Add Cancellation Request</div>
+       <div class="hf-mh__s">Mark a student&rsquo;s seat for cancellation.</div></div>
+     </div>`,
+    `<div class="caf-note">
+      ${icon('info','sm')}
+      <div>The student stays on the roster and <b>keeps their bed until the vacate date</b> &mdash; they are still billed for it, and the Rooms page marks the seat <b class="caf-note__v">vacating</b> so nobody books it twice. The bed frees when the cancellation is confirmed.</div>
     </div>
-    <div class="form-grid">
-      <div class="field col-full">
-        <label>Search Student</label>
-        <div style="position:relative">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none">
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          </span>
-          <input class="form-control" id="canc-search" placeholder="Search by name, room #, student ID…"
-            style="padding-left:32px;padding-right:32px"
+
+    <div id="canc-who"></div>
+    <div id="canc-dues"></div>
+
+    <div class="hf-sec">
+      <div class="hf-sec__h">
+        <span class="hf-num">1</span>
+        <span class="hf-sec__t">Student &amp; room</span>
+        <span class="hf-sec__s">Search and select the student, then confirm the room</span>
+      </div>
+      <div class="field"><label for="canc-search">Search student<span class="req">*</span></label>
+        <div class="hf-in"><span class="hf-in__i">${icon('search','sm')}</span>
+          <input class="form-control" id="canc-search" placeholder="Search by name, room #, student ID&hellip;"
             oninput="cancStudentSearch(this.value)"
             onfocus="cancStudentSearch(this.value)"
             onblur="setTimeout(()=>{const d=document.getElementById('canc-search-drop');if(d)d.style.display='none';},200)"
             autocomplete="off">
-          <button onclick="document.getElementById('canc-search').value='';cancStudentSearch('');document.getElementById('canc-selected-info').style.display='none';document.getElementById('canc-student').value=''"
-            style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px"
-            title="Clear">✕</button>
-          <div id="canc-search-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;z-index:9999;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
+          <button type="button" class="caf-clear" title="Clear" aria-label="Clear the search"
+            onclick="cafClearStudent()">${icon('close','xs')}</button>
         </div>
+        <div id="canc-search-drop" class="caf-drop" style="display:none"></div>
         <input type="hidden" id="canc-student" value="">
-        <!-- Selected student info card -->
-        <div id="canc-selected-info" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;display:none">
-          <div id="canc-selected-name" style="font-weight:700;font-size:14px;color:var(--text)"></div>
-          <div id="canc-selected-meta" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <div class="field"><label for="canc-room-display">Room (auto-filled)</label>
+        <div class="hf-in is-readonly"><span class="hf-in__i">${icon('bed','sm')}</span>
+          <input id="canc-room-display" class="form-control" readonly placeholder="Select a student first"></div>
+      </div>
+    </div>
+
+    <div class="hf-sec">
+      <div class="hf-sec__h">
+        <span class="hf-num">2</span>
+        <span class="hf-sec__t">Cancellation details</span>
+        <span class="hf-sec__s">The day the seat is given up, and why</span>
+      </div>
+      <div class="hf-g2">
+        <div class="field"><label for="canc-vacate">Vacate by date<span class="req">*</span></label>
+          <div class="hf-in"><span class="hf-in__i">${icon('calendar','sm')}</span>
+            <input class="form-control cdp-trigger" id="canc-vacate" type="text" readonly
+                   onclick="showCustomDatePicker(this,event)" value="${escHtml(endOfMonth)}"></div>
+          <div class="hi-note">The day the seat is actually given up. Until then it is held and billed.</div>
+        </div>
+        <div class="field"><label for="canc-reason-pick">Reason for cancellation</label>
+          <div class="hf-in"><span class="hf-in__i">${icon('fileText','sm')}</span>
+            <select class="form-control" id="canc-reason-pick" onchange="cafPickReason(this.value)">
+              <option value="">Select a reason&hellip;</option>
+              ${CANC_REASONS.map(r => `<option>${escHtml(r)}</option>`).join('')}
+            </select></div>
         </div>
       </div>
-      <div class="field">
-        <label>Room (auto-filled)</label>
-        <input id="canc-room-display" class="form-control" readonly placeholder="Select student first" style="opacity:0.7">
-      </div>
-      <div class="field">
-        <label>Vacate By Date</label>
-        <input class="form-control cdp-trigger" id="canc-vacate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${endOfMonth}">
-      </div>
-      <div class="field col-full">
-        <label>Reason for Cancellation</label>
-        <textarea id="canc-reason" class="form-control" placeholder="e.g. Shifting to own house, going back to hometown..."></textarea>
+      <div class="field"><label for="canc-reason">Additional details</label>
+        <div class="hf-in hf-in--top"><span class="hf-in__i">${icon('fileText','sm')}</span>
+          <textarea class="form-control" id="canc-reason" rows="3" maxlength="500"
+                    placeholder="e.g. Shifting to own house, going back to hometown&hellip;"
+                    oninput="cafCount()"></textarea></div>
+        <div class="hi-note" id="caf-count">0/500</div>
       </div>
     </div>`,
-    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-danger" onclick="saveCancellation()">🚫 Add to Cancellation List</button>`
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       <button class="btn btn-primary" onclick="saveCancellation()">${icon('save','xs')} Add to Cancellation List</button>
+     </div>`
   );
   // pass available list to search fn
   window._cancAvailable = available;
@@ -699,22 +745,20 @@ function cancStudentSearch(query) {
       })
     : available;
   if (!matches.length) {
-    drop.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text3);font-size:12px">No students found</div>';
+    drop.innerHTML = '<div class="caf-opt__empty">No students found</div>';
     drop.style.display = 'block';
     return;
   }
   drop.innerHTML = matches.slice(0,12).map(s => {
     const room = DB.rooms.find(r=>r.id===s.roomId);
     const roomLabel = room ? `Rm #${room.number}` : 'No room';
-    return `<div onclick="selectCancStudent('${s.id}')"
-      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px"
-      onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);color:var(--text2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0">${escHtml((s.name||'?')[0].toUpperCase())}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;color:var(--text);font-size:13px">${escHtml(s.name)}</div>
-        <div style="font-size:11px;color:var(--text3)">${roomLabel} · ${escHtml(s.phone||'—')}</div>
+    return `<div class="caf-opt" onclick="selectCancStudent('${escHtml(s.id)}')">
+      <div class="caf-opt__av">${escHtml((s.name||'?')[0].toUpperCase())}</div>
+      <div class="caf-opt__b">
+        <div class="caf-opt__n">${escHtml(s.name)}</div>
+        <div class="caf-opt__s">${escHtml(roomLabel)} &middot; ${escHtml(s.phone||'—')}</div>
       </div>
-      <div style="font-size:10px;font-weight:700;color:var(--accent-strong);background:var(--accent-dim);border-radius:6px;padding:2px 7px">${roomLabel}</div>
+      <span class="lk-chip">${escHtml(roomLabel)}</span>
     </div>`;
   }).join('');
   drop.style.display = 'block';
@@ -724,27 +768,101 @@ function selectCancStudent(studentId) {
   const s = DB.students.find(x=>x.id===studentId); if(!s) return;
   const room = DB.rooms.find(r=>r.id===s.roomId);
   const type = room ? getRoomType(room) : null;
-  // Set hidden input
-  const hiddenInp = document.getElementById('canc-student');
-  if(hiddenInp) hiddenInp.value = studentId;
-  // Fill search bar with name
-  const searchInp = document.getElementById('canc-search');
-  if(searchInp) searchInp.value = s.name;
-  // Hide dropdown
-  const drop = document.getElementById('canc-search-drop');
-  if(drop) drop.style.display = 'none';
-  // Show selected info card
-  const infoCard = document.getElementById('canc-selected-info');
-  const nameEl = document.getElementById('canc-selected-name');
-  const metaEl = document.getElementById('canc-selected-meta');
-  if(infoCard && nameEl && metaEl) {
-    nameEl.textContent = s.name;
-    metaEl.textContent = (room ? `Room #${room.number} · ${type?type.name:'—'} · Floor ${room.floor}` : 'No room') + (s.phone ? ' · '+s.phone : '');
-    infoCard.style.display = 'block';
+
+  const set = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
+  set('canc-student', el => { el.value = studentId; });
+  set('canc-search',  el => { el.value = s.name; });
+  set('canc-search-drop', el => { el.style.display = 'none'; });
+  set('canc-room-display', el => {
+    el.value = room ? `Room #${room.number} · ${type?type.name:'—'} · ${room.floor||'—'}` : 'No room assigned';
+  });
+
+  const st  = calculateSettlement(studentId);
+  const due = Number(st.outstanding || 0);
+
+  set('canc-who', el => { el.innerHTML = `
+    <div class="cef-who">
+      <div class="cef-who__av">${escHtml((s.name||'?')[0].toUpperCase())}</div>
+      <div style="min-width:0">
+        <div class="cef-who__n">${escHtml(s.name)}
+          ${due > 0 ? `<span class="lk-chip dh-red">${icon('warning','xs')}Dues pending</span>` : ''}</div>
+        <div class="cef-who__s">ID: ${escHtml(String(s.id))}${s.cnic ? ' · CNIC: ' + escHtml(s.cnic) : ''}${s.phone ? ' · ' + escHtml(s.phone) : ''}</div>
+      </div>
+      <div class="cef-who__room">
+        <div class="cef-who__rn">Room #${escHtml(String(room ? room.number : '?'))}</div>
+        <div class="cef-who__rt">${escHtml(type ? type.name : '—')}${room && room.floor ? ' · ' + escHtml(room.floor) : ''}</div>
+      </div>
+    </div>`; });
+
+  set('canc-dues', el => { el.innerHTML = _cancDuesHTML(studentId, st); });
+}
+
+/** The dues position, from the settlement authority. @see calculateSettlement */
+function _cancDuesHTML(studentId, st) {
+  const s      = st || calculateSettlement(studentId);
+  const due    = Number(s.outstanding || 0);
+  const credit = Number(s.credit || 0);
+
+  if (due <= 0 && credit <= 0) {
+    return `<div class="caf-clear-note">${icon('check','sm')}
+      <div><b>Nothing outstanding.</b> ${s.records
+        ? 'All ' + s.records + ' payment record' + (s.records === 1 ? '' : 's') + ' for this student are square.'
+        : 'This student has no payment records yet.'}</div></div>`;
   }
-  // Fill room display
-  const roomEl = document.getElementById('canc-room-display');
-  if(roomEl) roomEl.value = room ? `Room #${room.number} · ${type?type.name:''} · Floor ${room.floor}` : 'No room assigned';
+
+  const box = (k, v, mod) =>
+    `<div class="cef-dues__b${mod ? ' ' + mod : ''}"><span>${escHtml(k)}</span><b>${escHtml(fmtPKR(v))}</b></div>`;
+
+  /* `net` is signed and easy to read backwards at a counter, so it is stated in
+     words rather than printed as a fifth figure. */
+  const net  = Number(s.net || 0);
+  const line = net > 0 ? `On balance the student owes <b>${escHtml(fmtPKR(net))}</b> at departure.`
+             : net < 0 ? `On balance the hostel owes the student <b>${escHtml(fmtPKR(Math.abs(net)))}</b> back.`
+             : 'Dues and credit cancel out exactly — nothing changes hands.';
+
+  return `
+    <div class="cef-due">
+      ${icon('warning', 'sm')}
+      <div style="flex:1;min-width:0">
+        <div class="cef-due__t">Outstanding dues: ${escHtml(fmtPKR(due))}</div>
+        <div class="cef-due__s">The request can still be filed — the bed is held and billed until the vacate date, and the money is settled when the cancellation is confirmed.</div>
+      </div>
+      <button class="set-btn" onclick="closeModal();showStudentPanel('${escHtml(String(studentId))}')">View dues</button>
+    </div>
+    <div class="cef-dues">
+      ${box('Billed', s.billed)}
+      ${box('Collected', s.collected)}
+      ${box('Advance credit', credit)}
+      ${box('Total due', due, 'cef-dues__b--tot')}
+    </div>
+    <div class="cef-dues__net">${line}</div>`;
+}
+
+/** Put the search back to nothing, and take the cards down with it. */
+function cafClearStudent() {
+  ['canc-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const hid = document.getElementById('canc-student'); if (hid) hid.value = '';
+  const room = document.getElementById('canc-room-display'); if (room) room.value = '';
+  ['canc-who','canc-dues'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+  cancStudentSearch('');
+}
+
+/* The picker FILLS the notes box rather than replacing it, so a reason chosen
+   after something was typed does not throw the typing away. Same rule as the
+   edit form's cefPickReason(). */
+function cafPickReason(v) {
+  if (!v) return;
+  const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('canc-reason'));
+  if (!box) return;
+  const cur = box.value.trim();
+  box.value = cur ? (cur.indexOf(v) === 0 ? cur : v + ' — ' + cur) : v;
+  cafCount();
+}
+
+function cafCount() {
+  const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('canc-reason'));
+  const out = document.getElementById('caf-count');
+  if (box && out) out.textContent = box.value.length + '/500';
 }
 
 function prefillCancStudentInfo(studentId) {

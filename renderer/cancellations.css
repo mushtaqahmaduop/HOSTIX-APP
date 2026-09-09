@@ -128,3 +128,98 @@
 .rf-cut { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .rf-cut > label { font-size: 12.5px; font-weight: 600; color: var(--text2); }
 .rf-cut__s { font-size: 11.5px; color: var(--text3); flex: 1; min-width: 180px; }
+
+
+/* ══ ADD A CANCELLATION REQUEST (add and edit cancellation.png) ═══════════
+   The add form and the edit form are one design. Everything shared lives on
+   the .cef-* classes above; only what the ADD form needs on top is here. */
+
+.caf-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 14px; border-radius: 11px; margin-bottom: 14px;
+    background: var(--accent-soft); border: 1px solid var(--border);
+    font-size: 12px; line-height: 1.6; color: var(--text2);
+}
+.caf-note svg { flex-shrink: 0; margin-top: 2px; color: var(--accent-strong); }
+.caf-note b { color: var(--text); }
+.caf-note__v { color: var(--ant-warning-fg); }
+
+/* Nothing owed is worth stating outright. A blank where the dues panel would
+   be reads as "not loaded yet", and a warden then opens the ledger to check. */
+.caf-clear-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 14px; border-radius: 11px; margin-bottom: 14px;
+    background: var(--ant-success-bg, var(--bg3)); border: 1px solid var(--border);
+    font-size: 12px; line-height: 1.6; color: var(--text2);
+}
+.caf-clear-note svg { flex-shrink: 0; margin-top: 2px; color: var(--green); }
+.caf-clear-note b { color: var(--text); }
+
+/* The four figures. THREE SMALL AND ONE EMPHASISED, as the reference draws it —
+   the total is the one a warden is looking for and the other three are how it
+   was reached. */
+.cef-dues {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px; margin-bottom: 10px;
+}
+.cef-dues__b {
+    padding: 10px 12px; border-radius: 10px; min-width: 0;
+    background: var(--bg3); border: 1px solid var(--border);
+}
+.cef-dues__b span { display: block; font-size: 10.5px; color: var(--text3); white-space: nowrap;
+                    overflow: hidden; text-overflow: ellipsis; }
+.cef-dues__b b {
+    display: block; margin-top: 3px; font-size: 14px; font-weight: 800; color: var(--text);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.cef-dues__b--tot { background: var(--ant-warning-bg); border-color: var(--ant-warning-fg); }
+.cef-dues__b--tot b { color: var(--ant-warning-fg); }
+.cef-dues__net {
+    font-size: 11.5px; line-height: 1.55; color: var(--text3); margin-bottom: 14px;
+}
+.cef-dues__net b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* 380px of modal is where four money boxes stop being readable and start being
+   four ellipses. */
+@media (max-width: 560px) {
+    .cef-dues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── the student search ──────────────────────────────────────────────────── */
+/* The dropdown is positioned against the FIELD, not the input, because it hangs
+   below the whole control including its icon tile. */
+.modal .field { position: relative; }
+
+.caf-clear {
+    flex-shrink: 0; border: none; background: none; cursor: pointer;
+    color: var(--text3); padding: 0 9px; align-self: stretch;
+    display: flex; align-items: center;
+}
+.caf-clear:hover { color: var(--text); }
+
+.caf-drop {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 40;
+    margin-top: 3px; max-height: 232px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border2); border-radius: 10px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, .14);
+}
+.caf-opt {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; cursor: pointer;
+    border-bottom: 1px solid var(--border);
+}
+.caf-opt:last-child { border-bottom: none; }
+.caf-opt:hover { background: var(--bg3); }
+.caf-opt__av {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+    font-weight: 800; font-size: 12px;
+}
+.caf-opt__b { flex: 1; min-width: 0; }
+.caf-opt__n { font-size: 12.5px; font-weight: 700; color: var(--text);
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.caf-opt__s { font-size: 11px; color: var(--text3); margin-top: 1px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.caf-opt__empty { padding: 13px; text-align: center; font-size: 12px; color: var(--text3); }
