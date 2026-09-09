@@ -115,6 +115,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('open-pdf-window', htmlContent, typeof title === 'string' ? title.slice(0, 200) : 'Report');
   },
 
+  /* SAVE A STORED FILE BACK OUT. An expense receipt is kept in the database as
+     a data: URL, and the viewer cannot open a data: URL in a frame — the CSP's
+     default-src is 'self'. Without this a PDF bill could be attached and never
+     read again. Capped at 12MB, which is above the 8MB the attach path allows,
+     so the limit that matters is the one at capture. */
+  saveDataUrl: (dataUrl, suggestedName) => {
+    if (typeof dataUrl !== 'string' || dataUrl.slice(0, 5) !== 'data:') {
+      return Promise.resolve({ success: false, reason: 'Not a stored file.' });
+    }
+    if (dataUrl.length > 12 * 1024 * 1024) {
+      return Promise.resolve({ success: false, reason: 'That file is too large to save.' });
+    }
+    const safeName = (typeof suggestedName === 'string')
+      ? suggestedName.replace(/[^a-zA-Z0-9._\- ]/g, '').slice(0, 120)
+      : 'attachment';
+    return ipcRenderer.invoke('file:saveDataUrl', dataUrl, safeName);
+  },
+
   // [FIX-P2] Receipt PDF — validate htmlContent and suggestedName; supports opts {landscape}
   receiptSavePDF: (htmlContent, suggestedName, opts) => {
     if (typeof htmlContent !== 'string') {

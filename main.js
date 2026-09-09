@@ -1564,6 +1564,34 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
   }
 });
 
+/* ── SAVE A STORED ATTACHMENT BACK OUT ───────────────────────────────────────
+   The renderer keeps an expense receipt as a data: URL inside the database.
+   The window's CSP has no frame-src, so default-src 'self' applies and a data:
+   URL cannot be opened in a frame — an attached PDF would be write-only. This
+   decodes it and writes it wherever the warden says.                          */
+ipcMain.handle('file:saveDataUrl', async (event, dataUrl, suggestedName) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (typeof dataUrl !== 'string' || !/^data:[^;,]*;base64,/.test(dataUrl)) {
+    return { success: false, reason: 'Not a stored file.' };
+  }
+  const name = (typeof suggestedName === 'string' && suggestedName.trim())
+    ? suggestedName.replace(/[^a-zA-Z0-9._\- ]/g, '').slice(0, 120)
+    : 'attachment';
+  const { filePath, canceled } = await dialog.showSaveDialog(win || null, {
+    title: 'Save a copy',
+    defaultPath: name,
+  });
+  if (canceled || !filePath) return { success: false, reason: 'cancelled' };
+  try {
+    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    fs.writeFileSync(filePath, Buffer.from(b64, 'base64'));
+    shell.showItemInFolder(filePath);
+    return { success: true, filePath };
+  } catch (err) {
+    return { success: false, reason: String((err && err.message) || err) };
+  }
+});
+
 /* ── SAVE THE REPORT WINDOW AS A REAL PDF ────────────────────────────────────
    The window asks the main process to print ITSELF. That is the difference
    between this and `window.print()`: no renderer blocks, the page size is A4

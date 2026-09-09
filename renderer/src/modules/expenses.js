@@ -28,6 +28,58 @@ const _EXP_CATS = [
 ];
 const _EXP_ICON_FALLBACK = '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>';
 
+/* ══ TWO FIELDS THIS PAGE USED TO DRAW AS DASHES ═══════════════════════════
+   The reference draws a Payment Method column and an Added By column. An
+   expense record here was `{id, category, amount, date, description}` and had
+   neither, and spec §21 is explicit that a missing creator prints "—" and is
+   never fabricated. So they are CAPTURED, in the Add and Edit forms, rather
+   than derived: from today an expense records how it was paid and who it was
+   handed to, and a record written before today prints a dash and says so. That
+   is the order the specification itself asks for — "these belong to the expense
+   FORM before they belong to its export".
+
+   The four methods are §20's list verbatim. A hostel cannot add a fifth from
+   the UI, deliberately: a free-text method column stops being filterable and
+   turns into four spellings of "cash". */
+const EXP_METHODS = ['Cash', 'Bank Transfer', 'EasyPaisa', 'JazzCash'];
+
+/** Initials for the Added By avatar. Two words at most, so "Muhammad Asif Raza" is MA. */
+function expInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+/* NEUTRAL, per spec §20 — and this is the one place the badge sheet is
+   overruled. `status-badges.png` colours the method chips; the Expenses spec
+   and CLAUDE.md both say a category must not wear a hue, and how a bill was
+   paid is a category, not a state. Two documents to one. */
+function expMethodChip(m) {
+  const v = String(m || '').trim();
+  if (!v) return '<span class="exp-dash">—</span>';
+  return `<span class="exp-meth">${escHtml(v)}</span>`;
+}
+
+/** Initials avatar + name, or an honest dash. @see spec §21 */
+function expWhoChip(who) {
+  const v = String(who || '').trim();
+  if (!v) return '<span class="exp-dash">—</span>';
+  return `<span class="exp-who"><i>${escHtml(expInitials(v))}</i>${escHtml(v)}</span>`;
+}
+
+/* Everyone this hostel has ever handed money to, offered as suggestions. Built
+   from the records themselves plus the staff list, so the second electricity
+   bill of the month does not get a differently-spelled payee. */
+function expPeople() {
+  const seen = new Map();
+  const add = n => { const v = String(n || '').trim(); if (v) seen.set(v.toLowerCase(), v); };
+  (DB.expenses || []).forEach(e => add(e.handedTo));
+  Object.values(typeof WARDENS === 'object' && WARDENS ? WARDENS : {})
+    .filter(u => u && u.active !== false)
+    .forEach(u => add(u.name || u.username));
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
 function _expCatMatch(cat) {
   return _EXP_CATS.find(row => row[0].test(String(cat || '')));
 }
@@ -100,10 +152,19 @@ function expensesScoped() {
 
   let exps = scoped.filter(e => {
     if (expFilter.cat !== 'All' && e.category !== expFilter.cat) return false;
+    /* 'None' is a real answer, not a missing one: it is how a warden finds the
+       records written before the method was captured, which is exactly the set
+       they would want to go back and complete. */
+    if (expFilter.method && expFilter.method !== 'All') {
+      const m = String(e.method || '').trim();
+      if (expFilter.method === 'None' ? m !== '' : m !== expFilter.method) return false;
+    }
     if (expFilter.search) {
       const q = expFilter.search.toLowerCase();
       if (!String(e.description || '').toLowerCase().includes(q) &&
-          !String(e.category || '').toLowerCase().includes(q)) return false;
+          !String(e.category || '').toLowerCase().includes(q) &&
+          !String(e.handedTo || '').toLowerCase().includes(q) &&
+          !String(e.method || '').toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -113,6 +174,8 @@ function expensesScoped() {
     category:    e => String(e.category || '').toLowerCase(),
     description: e => String(e.description || '').toLowerCase(),
     amount:      e => Number(e.amount) || 0,
+    method:      e => String(e.method || '').toLowerCase(),
+    handedTo:    e => String(e.handedTo || '').toLowerCase(),
   });
   if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
   return { scope, scoped, legacyTransfers: _legacyTransfers, rows: exps };
@@ -163,19 +226,30 @@ function _expExportDef(rows) {
   const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
   const largest  = rows.reduce((m, e) => Math.max(m, Number(e.amount || 0)), 0);
 
+  /* Description gave up 12 of its 40 so Method and Added By could be on the
+     printed page as well as in the workbook. They are blank on a funds
+     transfer, which is not an expense record and has no form behind it, and
+     blank on any record written before the two fields were captured — §21's
+     dash, not a guess at who was on shift. */
   const columns = [
-    { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
-    { label: 'Category', type: 'text', width: 18, excel: false,
+    { label: 'Date', type: 'date', width: 12, value: e => e.date || '' },
+    { label: 'Category', type: 'text', width: 16, excel: false,
       value: e => e.category || 'Uncategorised' },
-    { label: 'Description', type: 'wrap', width: 40,
+    { label: 'Description', type: 'wrap', width: 28,
       value: e => e.description || '',
       get:   e => escHtml(e.description || '—') +
                   (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Method', type: 'text', width: 12,
+      value: e => e._transfer ? '' : (e.method || '') },
+    { label: 'Added By', type: 'text', width: 16,
+      value: e => e._transfer ? '' : (e.handedTo || '') },
     { label: 'Type', type: 'text', width: 14, pdf: false,
       value: e => e._transfer ? 'Funds transfer' : 'Expense' },
-    { label: 'Amount', type: 'money', width: 15, total: 'sum',
+    { label: 'Amount', type: 'money', width: 16, total: 'sum',
       value: e => Number(e.amount || 0),
       get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+    { label: 'Receipt', type: 'text', width: 10, pdf: false,
+      value: e => e.receipt ? 'Attached' : '' },
     { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
   ];
 
@@ -202,6 +276,8 @@ function _expExportDef(rows) {
     filters: [
       ['Month',    scope],
       ['Category', one ? expFilter.cat : 'All categories'],
+      ['Method',   expFilter.method && expFilter.method !== 'All'
+                     ? (expFilter.method === 'None' ? 'Not recorded' : expFilter.method) : null],
       ['Search',   expFilter.search || null],
     ],
 
@@ -395,6 +471,13 @@ function renderExpenses() {
     ${/* Adding a category used to mean leaving the page, finding it in Settings,
          adding it, and coming back — in the middle of entering an expense that
          needed it. */''}
+    <select class="exp-select${expFilter.method!=='All'?' is-set':''}" onchange="expFilter.method=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by payment method">
+      <option value="All">All Payment Methods</option>
+      ${EXP_METHODS.map(m => `<option value="${escHtml(m)}" ${expFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('')}
+      ${/* The records written before the method was captured. Reachable, so
+            they can be completed rather than merely noticed. */''}
+      <option value="None" ${expFilter.method==='None'?'selected':''}>Not recorded</option>
+    </select>
     <button class="exp-catadd" onclick="showAddExpenseCategoryModal()" title="Add a new expense category">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
       Category
@@ -424,6 +507,10 @@ function renderExpenses() {
       </td>
       <td class="exp-desc">${e.description ? escHtml(e.description) : '<span class="exp-dash">—</span>'}</td>
       <td class="exp-amt">${expMoney(e.amount)}</td>
+      ${/* A funds transfer is not an expense record and has no form behind it,
+            so it carries neither field and says so rather than borrowing one. */''}
+      <td>${e._transfer ? '<span class="exp-dash">—</span>' : expMethodChip(e.method)}</td>
+      <td>${e._transfer ? '<span class="exp-dash">—</span>' : expWhoChip(e.handedTo)}</td>
       <td>
         <div class="exp-acts">
           <button class="exp-act dh-blue" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -442,11 +529,13 @@ function renderExpenses() {
           ${th('category','Category')}
           ${th('description','Description')}
           ${th('amount','Amount')}
+          ${th('method','Payment Method')}
+          ${th('handedTo','Added By')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="5"><div class="exp-empty">
+            ? `<tr><td colspan="7"><div class="exp-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
                  <div>No expenses match these filters.</div></div></td></tr>`
             : rows}
@@ -593,74 +682,334 @@ function _expReturnPage() {
   return currentPage === 'reports' ? 'reports' : 'expenses';
 }
 
-function showAddExpenseModal() {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
-  const catOpts=DB.settings.expenseCategories.map(c=>`<option>${escHtml(c)}</option>`).join('');
-  showModal('modal-md','Add Expense',`
-    <div class="form-grid">
-      <div class="field"><label>Category *</label><select class="form-control" id="f-ecat">${catOpts}</select></div>
-      <div class="field"><label>Amount (PKR) *</label><input class="form-control" id="f-eamt" type="number" placeholder="Enter amount"></div>
-      <div class="field col-full"><label>Date</label><input class="form-control cdp-trigger" id="f-edate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
-      <div class="field col-full"><label>Description</label><textarea class="form-control" id="f-edesc" placeholder="Expense details…"></textarea></div>
-    </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitAddExpense()">Add Expense</button>`);
+/* ══ THE EXPENSE FORM (add and edit expense.png) ═══════════════════════════
+   One form, two headings. Everything the reference draws is here except what
+   this app cannot stand behind — see EXP_METHODS above for why the method list
+   is closed, and §21 for why a missing person prints a dash rather than the
+   name of whoever happens to be signed in.
+
+   REQUIRED-NESS IS NOT THE SAME ON BOTH SIDES. The reference marks Description
+   and "Expense By / Handed To" required, and on a new record they are. On an
+   EDIT they are required only if the record already carries them: a warden
+   correcting the amount on an expense written in July must not be made to
+   invent a payee for it before the correction will save. */
+
+/** The file staged by the attach control, held until the form is saved. */
+let _expReceipt = null;
+
+const EXP_RECEIPT_MAX  = 4 * 1024 * 1024;   // what is STORED, after downscaling
+const EXP_RECEIPT_PICK = 12 * 1024 * 1024;  // what may be picked, before it
+const EXP_IMG_MAX_PX   = 1400;
+
+function _expField(label, ico, ctrl, o) {
+  o = o || {};
+  return `<div class="field${o.full ? ' col-full' : ''}">
+    <label${o.for ? ` for="${o.for}"` : ''}>${escHtml(label)}${o.req ? '<span class="req"> *</span>' : ''}</label>
+    <div class="hf-in${o.top ? ' hf-in--top' : ''}${o.readonly ? ' is-readonly' : ''}">
+      <span class="hf-in__i">${icon(ico, 'xs')}</span>${ctrl}
+    </div>${o.note ? `<div class="hi-note">${o.note}</div>` : ''}
+  </div>`;
 }
-async function submitAddExpense() {
+
+/** The attach / attached panel. `rec` is the stored receipt, or null. */
+function _expReceiptPanel(rec) {
+  if (!rec) {
+    return `<div class="exf-rcpt">
+      <span class="exf-rcpt__i">${icon('clipboard','sm')}</span>
+      <div class="exf-rcpt__b">
+        <div class="exf-rcpt__t">Attach receipt <span>(optional)</span></div>
+        <div class="exf-rcpt__s">A photo or PDF of the bill. Images are scaled down before they are stored.</div>
+      </div>
+      <button type="button" class="set-btn" onclick="document.getElementById('f-ercpt-file').click()">
+        ${icon('upload','xs')} Choose file</button>
+    </div>`;
+  }
+  const kb = Math.max(1, Math.round(Number(rec.size || 0) / 1024));
+  const isImg = String(rec.type || '').indexOf('image/') === 0;
+  return `<div class="exf-rcpt is-set">
+    <span class="exf-rcpt__i">${icon('clipboard','sm')}</span>
+    <div class="exf-rcpt__b">
+      <div class="exf-rcpt__t">Attached receipt</div>
+      <div class="exf-rcpt__n">${escHtml(rec.name || 'receipt')}</div>
+      <div class="exf-rcpt__s">${kb} KB &middot; ${isImg ? 'Image' : 'PDF'}</div>
+    </div>
+    <button type="button" class="set-btn" onclick="expReceiptView()">${icon('eye','xs')} View</button>
+    <button type="button" class="set-btn set-btn--danger" onclick="expReceiptRemove()">${icon('trash','xs')} Remove</button>
+  </div>`;
+}
+
+function _expRepaintReceipt() {
+  const host = document.getElementById('f-ercpt');
+  if (host) host.innerHTML = _expReceiptPanel(_expReceipt);
+}
+
+/* Images are re-encoded at EXP_IMG_MAX_PX before they are kept. A 12MP phone
+   photo of an electricity bill is four megabytes of JSON in a database that is
+   read whole on every boot; the same bill at 1400px is readable and about
+   150KB. PDFs are stored as they came — re-encoding one would mean rendering
+   it, and a bill is a document, not a picture of one. */
+function expReceiptLoad(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  input.value = '';
+  const type = String(file.type || '');
+  const isImg = type.indexOf('image/') === 0;
+  const isPdf = type === 'application/pdf';
+  if (!isImg && !isPdf) { toast('Attach an image or a PDF of the bill', 'error'); return; }
+  if (file.size > EXP_RECEIPT_PICK) { toast('That file is over 12MB — pick a smaller one', 'error'); return; }
+
+  const keep = (dataUrl, size) => {
+    if (String(dataUrl).length > EXP_RECEIPT_MAX * 1.4) {
+      toast('That file is too large to store — try a photo instead of a scan', 'error');
+      return;
+    }
+    _expReceipt = { name: file.name || 'receipt', type: isImg ? 'image/jpeg' : type, size, data: dataUrl };
+    _expRepaintReceipt();
+  };
+
+  const reader = new FileReader();
+  reader.onerror = () => toast('That file could not be read', 'error');
+  reader.onload = ev => {
+    const raw = String(ev.target.result || '');
+    if (!isImg) { keep(raw, file.size); return; }
+    const img = new Image();
+    img.onerror = () => toast('That file is not an image the app can read', 'error');
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, EXP_IMG_MAX_PX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        /* JPEG, not PNG: a photographed bill is a photograph. PNG would store
+           it losslessly at several times the size for no legibility gained. */
+        const out = cv.toDataURL('image/jpeg', 0.82);
+        keep(out, Math.round(out.length * 0.75));
+      } catch (err) { toast('That image could not be read', 'error'); }
+    };
+    img.src = raw;
+  };
+  reader.readAsDataURL(file);
+}
+
+function expReceiptRemove() { _expReceipt = null; _expRepaintReceipt(); }
+
+/* Images open in a viewer; a PDF is written back to disk, because the window's
+   CSP has no frame-src and a data: URL cannot be framed. Both are the stored
+   bytes — nothing is re-fetched. */
+function expReceiptView() {
+  const r = _expReceipt;
+  if (!r) return;
+  if (String(r.type || '').indexOf('image/') === 0) {
+    showModal('modal-md',
+      `<div class="hf-mh"><div class="hf-mh__ico">${icon('clipboard','sm')}</div>
+        <div><div class="hf-mh__t">Receipt</div>
+        <div class="hf-mh__s">${escHtml(r.name || '')}</div></div></div>`,
+      `<div class="exf-rcpt__view"><img src="${escHtml(r.data)}" alt="${escHtml(r.name || 'Receipt')}"></div>`,
+      `<div class="hf-actions">
+         <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+         <button class="btn btn-primary" onclick="expReceiptSaveCopy()">${icon('download','xs')} Save a copy</button>
+       </div>`);
+    return;
+  }
+  expReceiptSaveCopy();
+}
+
+async function expReceiptSaveCopy() {
+  const r = _expReceipt;
+  if (!r) return;
+  if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') {
+    toast('This build cannot save files', 'error'); return;
+  }
+  const res = await window.electronAPI.saveDataUrl(r.data, r.name || 'receipt');
+  if (res && res.success) toast('Receipt saved', 'success');
+  else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
+}
+
+/**
+ * The expense form.
+ * @param {string} [id] existing expense id; omit to add a new one.
+ */
+function showExpenseModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
-  const cat=document.getElementById('f-ecat').value;
-  const amount=parseFloat(document.getElementById('f-eamt').value);
-  if(!cat){toast('Pick a category','error');return;}
-  // > 0, not merely truthy. A minus sign in front of the figure passed the old
-  // check and wrote a negative expense, which does not reduce what was spent —
-  // it quietly adds to the month's profit.
-  if(!isFinite(amount)||amount<=0){
-    toast('Enter an amount greater than zero','error');
+  const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
+  if (id && !e) return;
+
+  _expReceipt = e && e.receipt ? e.receipt : null;
+
+  /* An edit offers whatever the record already holds even if the hostel has
+     since deleted that category, so re-saving an old expense cannot silently
+     re-file it under something else. */
+  const cats = (DB.settings.expenseCategories || []).slice();
+  if (e && e.category && cats.indexOf(e.category) === -1) cats.unshift(e.category);
+  const catOpts = cats.map(c =>
+    `<option ${e && e.category === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
+
+  const methods = EXP_METHODS.slice();
+  if (e && e.method && methods.indexOf(e.method) === -1) methods.unshift(e.method);
+  const methodOpts = methods.map(m =>
+    `<option value="${escHtml(m)}" ${e && e.method === m ? 'selected' : ''}>${escHtml(m)}</option>`).join('');
+
+  const people = expPeople();
+  const desc   = e ? String(e.description || '') : '';
+
+  const reqDesc = !e || !!desc;
+  const reqWho  = !e || !!(e.handedTo);
+
+  const head = e
+    ? `<div class="exf-rec">
+         <span class="exf-rec__i">${icon('receipt','sm')}</span>
+         <div class="exf-rec__b">
+           <div class="exf-rec__t">Expense record</div>
+           <div class="exf-rec__s">Update the details below and save your changes.</div>
+         </div>
+         <div class="exf-rec__amt"><b>${escHtml(fmtPKR(e.amount))}</b><span>Total amount</span></div>
+       </div>`
+    : `<div class="exf-note">${icon('info','sm')}
+         <div>Keep track of your operational expenses to maintain accurate financial records.</div>
+       </div>`;
+
+  showModal('modal-form',
+    `<div class="hf-mh">
+       <div class="hf-mh__ico">${icon(e ? 'edit' : 'expense', 'sm')}</div>
+       <div><div class="hf-mh__t">${e ? 'Edit Expense' : 'Add Expense'}</div>
+       <div class="hf-mh__s">${e ? 'Update expense details and save your changes.' : 'Record a new expense for your hostel.'}</div></div>
+     </div>`,
+    head + `
+    <datalist id="exp-people">${people.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>
+    <div class="hf-g2">
+      ${_expField('Expense category', 'tag',
+        `<select class="form-control" id="f-ecat">${catOpts}</select>`, { req: true, for: 'f-ecat' })}
+      ${_expField('Amount (PKR)', 'money',
+        `<input class="form-control" id="f-eamt" type="number" min="1" step="1" placeholder="Enter amount"
+                value="${e ? escHtml(String(e.amount)) : ''}">`, { req: true, for: 'f-eamt' })}
+      ${_expField('Expense date', 'calendar',
+        `<input class="form-control cdp-trigger" id="f-edate" type="text" readonly
+                onclick="showCustomDatePicker(this,event)" value="${escHtml(e ? (e.date || '') : today())}">`,
+        { req: true, for: 'f-edate' })}
+      ${_expField('Payment method', 'card',
+        `<select class="form-control" id="f-emethod">
+           <option value="">Not recorded</option>${methodOpts}</select>`,
+        { for: 'f-emethod',
+          note: 'How the money left the hostel. Blank is allowed and prints as a dash.' })}
+      ${_expField('Expense by / handed to', 'person',
+        `<input class="form-control" id="f-ewho" list="exp-people" autocomplete="off"
+                placeholder="Select or enter name" value="${e ? escHtml(e.handedTo || '') : ''}">`,
+        { req: reqWho, full: true, for: 'f-ewho',
+          note: 'Who spent it, or who the cash was handed to. Names already used are suggested.' })}
+      ${_expField('Description', 'fileText',
+        `<textarea class="form-control" id="f-edesc" rows="3" maxlength="250"
+                   placeholder="e.g. Electricity bill for September 2026…"
+                   oninput="expDescCount()">${escHtml(desc)}</textarea>`,
+        { req: reqDesc, full: true, top: true, for: 'f-edesc' })}
+    </div>
+    <div class="hi-note exf-count" id="f-edesc-count">${desc.length}/250</div>
+    <div id="f-ercpt">${_expReceiptPanel(_expReceipt)}</div>
+    <input type="file" id="f-ercpt-file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden
+           onchange="expReceiptLoad(this)">`,
+    `<div class="hf-actions">
+       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+       ${e ? `<span class="hf-actions__spacer"></span>
+              <button class="btn btn-danger" onclick="expDeleteFromForm('${escHtml(String(id))}')">${icon('trash','xs')} Delete</button>` : ''}
+       <button class="btn btn-primary" onclick="submitExpense(${e ? `'${escHtml(String(id))}'` : ''})">
+         ${icon('save','xs')} ${e ? 'Update expense' : 'Save expense'}</button>
+     </div>`);
+}
+
+/* DELETE, FROM INSIDE THE OPEN FORM.
+   showConfirm() calls showModal(), and showModal() replaces #modal-container
+   wholesale — so raising the confirmation from the edit form DESTROYS the edit
+   form, and answering Cancel used to leave the warden looking at the register
+   with their half-finished correction gone and nothing said about it. The
+   cancel path reopens the form, and puts back the receipt they had staged but
+   not yet saved, which reopening from the record alone would drop. */
+function expDeleteFromForm(id) {
+  const staged = _expReceipt;
+  showConfirm('Delete expense?', 'This cannot be undone.',
+    () => _expDoDelete(id),
+    () => { showExpenseModal(id); _expReceipt = staged; _expRepaintReceipt(); });
+}
+
+function expDescCount() {
+  const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('f-edesc'));
+  const out = document.getElementById('f-edesc-count');
+  if (box && out) out.textContent = box.value.length + '/250';
+}
+
+/* The two entry points the rest of the app already calls. */
+function showAddExpenseModal()     { showExpenseModal(); }
+function showEditExpenseModal(id)  { showExpenseModal(id); }
+
+/**
+ * Write the form. One path for add and edit, because two paths is how the
+ * add form gained a payment method and the edit form quietly dropped it.
+ * @param {string} [id]
+ */
+async function submitExpense(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
+  if (id && !e) return;
+
+  const cat    = document.getElementById('f-ecat').value;
+  const amount = parseFloat(document.getElementById('f-eamt').value);
+  const date   = document.getElementById('f-edate').value;
+  const method = document.getElementById('f-emethod').value;
+  const who    = document.getElementById('f-ewho').value.trim();
+  const desc   = document.getElementById('f-edesc').value.trim();
+
+  if (!cat) { toast('Pick a category', 'error'); return; }
+  /* > 0, not merely truthy. A minus sign in front of the figure passed the old
+     check and wrote a negative expense, which does not reduce what was spent —
+     it quietly adds to the month's profit. */
+  if (!isFinite(amount) || amount <= 0) {
+    toast('Enter an amount greater than zero', 'error');
     document.getElementById('f-eamt')?.focus();
     return;
   }
-  DB.expenses.push({id:'e_'+uid(),category:cat,amount,date:document.getElementById('f-edate').value,description:document.getElementById('f-edesc').value.trim()});
-  logActivity('Expense Added', cat+' — PKR '+amount, 'Finance');
-  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense recorded','success');
+  if (!date) { toast('Pick a date', 'error'); return; }
+  if (!e && !who)  { toast('Say who spent it or who it was handed to', 'error');
+                     document.getElementById('f-ewho')?.focus(); return; }
+  if (!e && !desc) { toast('Describe what the money was for', 'error');
+                     document.getElementById('f-edesc')?.focus(); return; }
+
+  const rec = e || { id: 'e_' + uid() };
+  rec.category    = cat;
+  rec.amount      = amount;
+  rec.date        = date;
+  rec.description = desc;
+  /* Deleted rather than written empty: an absent key is what every reader
+     already treats as "not recorded", and a stored '' would make the "Not
+     recorded" filter and the export's dash disagree about the same row. */
+  if (method) rec.method = method; else delete rec.method;
+  if (who)    rec.handedTo = who;  else delete rec.handedTo;
+  if (_expReceipt) rec.receipt = _expReceipt; else delete rec.receipt;
+
+  if (!e) { if (!DB.expenses) DB.expenses = []; DB.expenses.push(rec); }
+
+  logActivity(e ? 'Expense Updated' : 'Expense Added', cat + ' — PKR ' + amount, 'Finance');
+  _expReceipt = null;
+  await saveDB();
+  closeModal();
+  renderPage(_expReturnPage());
+  toast(e ? 'Expense updated' : 'Expense recorded', 'success');
 }
-function showEditExpenseModal(id) {
-  const e=DB.expenses.find(x=>x.id===id); if(!e) return;
-  const _catList = DB.settings.expenseCategories.slice();
-  if (e.category && _catList.indexOf(e.category) === -1) _catList.unshift(e.category);
-  const catOpts=_catList.map(c=>`<option ${e.category===c?'selected':''}>${escHtml(c)}</option>`).join('');
-  showModal('modal-sm',`Edit Expense`,`
-    <div class="form-grid">
-      <div class="field"><label>Category</label><select class="form-control" id="f-ecat">${catOpts}</select></div>
-      <div class="field"><label>Amount (PKR)</label><input class="form-control" id="f-eamt" type="number" value="${e.amount}"></div>
-      <div class="field col-full"><label>Date</label><input class="form-control cdp-trigger" id="f-edate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${e.date||''}"></div>
-      <div class="field col-full"><label>Description</label><textarea class="form-control" id="f-edesc">${escHtml(e.description||'')}</textarea></div>
-    </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitEditExpense('${id}')">Save</button>`);
+
+/* The names the rest of the app calls. */
+async function submitAddExpense()      { return submitExpense(); }
+async function submitEditExpense(id)   { return submitExpense(id); }
+
+/* The deletion itself, with no confirmation of its own — both callers raise
+   their own, and nesting them asked the warden the same question twice. */
+async function _expDoDelete(id) {
+  const _del_e=DB.expenses.find(x=>x.id===id);
+  DB.expenses=DB.expenses.filter(x=>x.id!==id);
+  if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
+  await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
 }
-async function submitEditExpense(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
-  const e=DB.expenses.find(x=>x.id===id); if(!e) return;
-  const _newAmt=parseFloat(document.getElementById('f-eamt').value);
-  // `|| e.amount` kept the old figure whenever the new one was 0 or negative,
-  // so a correction to zero looked accepted and changed nothing.
-  if(!isFinite(_newAmt)||_newAmt<=0){
-    toast('Enter an amount greater than zero','error');
-    document.getElementById('f-eamt')?.focus();
-    return;
-  }
-  e.category=document.getElementById('f-ecat').value;
-  e.amount=_newAmt;
-  e.date=document.getElementById('f-edate').value;
-  e.description=document.getElementById('f-edesc').value.trim();
-  logActivity('Expense Updated', e.category+' — PKR '+e.amount, 'Finance');
-  await saveDB(); closeModal(); renderPage(_expReturnPage()); toast('Expense updated','success');
-}
+
 async function deleteExpense(id) {
-  showConfirm('Delete expense?','This cannot be undone.',(async ()=>{
-    const _del_e=DB.expenses.find(x=>x.id===id);
-    DB.expenses=DB.expenses.filter(x=>x.id!==id);
-    if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
-    await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
-  }));
+  showConfirm('Delete expense?','This cannot be undone.', () => _expDoDelete(id));
 }
 
 // The CLEAR DATA block that stood here is gone. Owner's call, 2026-08-31:

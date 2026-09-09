@@ -3407,11 +3407,11 @@ async function submitReversePayment(id) {
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSES
 // ════════════════════════════════════════════════════════════════════════════
-let expFilter = {cat:'All', search:'', showAll: false, month:'', page:1, pageSize:30, sortKey:'date', sortDir:'desc'};
+let expFilter = {cat:'All', method:'All', search:'', showAll: false, month:'', page:1, pageSize:30, sortKey:'date', sortDir:'desc'};
 /* `month:''` means "all months" here, and that IS the default — Expenses
    opens on the whole register rather than on this month. */
 registerFilter('expenses', expFilter, () => ({
-  cat:'All', search:'', showAll:false, month:'', page:1,
+  cat:'All', method:'All', search:'', showAll:false, month:'', page:1,
   sortKey:'date', sortDir:'desc',
 }));
 

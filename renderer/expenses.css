@@ -199,3 +199,89 @@
 /* The figure and its movement sit on one baseline, but in two elements — see
    the comment on stat() in expenses.js for why they must not be nested. */
 .exp-stat__vrow { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; }
+
+
+/* ══ PAYMENT METHOD + ADDED BY (expense.png) ══════════════════════════════
+   NEUTRAL, and this is the one place `status-badges.png` is overruled: it
+   colours these chips, while the Expenses spec §20 and CLAUDE.md both hold
+   that a category must not wear a hue. How a bill was paid is a category, not
+   a state — and three coloured chips in one row, two columns from a category
+   badge drawn from the same palette, is the row reading as an alarm. */
+.exp-meth {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    background: var(--bg3); border: 1px solid var(--border);
+    font-size: 11.5px; font-weight: 600; color: var(--text2);
+}
+
+.exp-who {
+    display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+    font-size: 12.5px; color: var(--text2); white-space: nowrap;
+}
+.exp-who i {
+    width: 25px; height: 25px; border-radius: 999px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+    font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .02em;
+}
+
+/* ══ THE EXPENSE FORM (add and edit expense.png) ══════════════════════════ */
+
+.exf-note, .exf-rec {
+    display: flex; align-items: center; gap: 11px;
+    padding: 12px 14px; border-radius: 11px; margin-bottom: 15px;
+    border: 1px solid var(--border);
+}
+.exf-note {
+    background: var(--accent-soft);
+    font-size: 12px; line-height: 1.6; color: var(--text2);
+}
+.exf-note svg { flex-shrink: 0; color: var(--accent-strong); }
+
+.exf-rec { background: var(--bg3); }
+.exf-rec__i {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.exf-rec__b { flex: 1; min-width: 0; }
+.exf-rec__t { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.exf-rec__s { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+/* The figure is the reason the panel is there, so it is the largest thing in
+   it — and it is the STORED amount, not the value in the box above, which
+   would disagree with it the moment a correction is half-typed. */
+.exf-rec__amt { text-align: right; flex-shrink: 0; }
+.exf-rec__amt b {
+    display: block; font-size: 16px; font-weight: 800; color: var(--green);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.exf-rec__amt span { display: block; font-size: 10.5px; color: var(--text3); margin-top: 1px; }
+
+.exf-count { text-align: right; margin: -6px 0 13px; }
+
+/* ── the receipt ─────────────────────────────────────────────────────────── */
+.exf-rcpt {
+    display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+    padding: 12px 14px; border-radius: 11px;
+    background: var(--accent-soft); border: 1px solid var(--border);
+}
+.exf-rcpt.is-set { background: var(--bg3); }
+.exf-rcpt__i { flex-shrink: 0; color: var(--accent-strong); display: flex; }
+.exf-rcpt__b { flex: 1; min-width: 140px; }
+.exf-rcpt__t { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.exf-rcpt__t span { font-weight: 500; color: var(--text3); }
+.exf-rcpt__n { font-size: 12.5px; font-weight: 700; color: var(--text); margin-top: 2px;
+               overflow-wrap: anywhere; }
+.exf-rcpt__s { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.exf-rcpt .set-btn { flex-shrink: 0; }
+
+/* Contained, not full-bleed: a photographed bill is usually portrait, and left
+   to itself it pushes the Close button off a 768px-tall screen. */
+.exf-rcpt__view {
+    display: flex; align-items: center; justify-content: center;
+    max-height: 62vh; overflow: auto;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
+    padding: 10px;
+}
+.exf-rcpt__view img { max-width: 100%; border-radius: 7px; }
