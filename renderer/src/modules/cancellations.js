@@ -24,7 +24,16 @@
    "shifting to own house" and edited into "Shifting to own house". A record's
    own stored reason is always offered on top of this list, so a value typed
    before the list existed cannot vanish on save. */
-const CANC_REASONS = ['Course completed', 'Shifting to own house', 'Going back to hometown',
+/* CANC_DEFAULT_REASON is what a blank Add Cancellation form already says
+   (owner, 2026-09-10: "add default cancellation reason: Student requested
+   cancellation"). It is first in the list because it is the commonest exit a
+   hostel files, and it is prefilled into the details box as well as selected
+   in the picker — a warden who fills in nothing else still leaves a record
+   that says why the seat was given up, which is the whole point of the field.
+   Anything they type over it wins. */
+const CANC_DEFAULT_REASON = 'Student requested cancellation';
+const CANC_REASONS = [CANC_DEFAULT_REASON,
+                      'Course completed', 'Shifting to own house', 'Going back to hometown',
                       'Transferred to another city', 'Financial reasons', 'Family reasons',
                       'Discipline', 'Other'];
 
@@ -727,16 +736,20 @@ function showAddCancellationModal(studentId) {
           <div class="hf-in"><span class="hf-in__i">${icon('fileText','sm')}</span>
             <select class="form-control" id="canc-reason-pick" onchange="cafPickReason(this.value)">
               <option value="">Select a reason&hellip;</option>
-              ${CANC_REASONS.map(r => `<option>${escHtml(r)}</option>`).join('')}
+              ${CANC_REASONS.map(r => `<option ${r === CANC_DEFAULT_REASON ? 'selected' : ''}>${escHtml(r)}</option>`).join('')}
             </select></div>
         </div>
       </div>
       <div class="field"><label for="canc-reason">Additional details</label>
         <div class="hf-in hf-in--top"><span class="hf-in__i">${icon('fileText','sm')}</span>
+          ${''/* Prefilled, not just placeheld: the picker above is only a
+                 shortcut, and it is THIS box that is saved. A default that
+                 lived in the placeholder would look like an answer and save as
+                 an empty reason. */}
           <textarea class="form-control" id="canc-reason" rows="3" maxlength="500"
                     placeholder="e.g. Shifting to own house, going back to hometown&hellip;"
-                    oninput="cafCount()"></textarea></div>
-        <div class="hi-note" id="caf-count">0/500</div>
+                    oninput="cafCount()">${escHtml(CANC_DEFAULT_REASON)}</textarea></div>
+        <div class="hi-note" id="caf-count">${CANC_DEFAULT_REASON.length}/500</div>
       </div>
     </div>`,
     `<div class="hf-actions">
@@ -872,13 +885,20 @@ function cafClearStudent() {
 
 /* The picker FILLS the notes box rather than replacing it, so a reason chosen
    after something was typed does not throw the typing away. Same rule as the
-   edit form's cefPickReason(). */
+   edit form's cefPickReason().
+
+   THE UNTOUCHED DEFAULT IS THE ONE THING IT DOES REPLACE. The box now opens
+   holding CANC_DEFAULT_REASON, and treating that as the warden's own typing
+   would turn one picked reason into "Course completed — Student requested
+   cancellation" on every form nobody edited. Once they have typed over it, it
+   is theirs and the append rule applies again. */
 function cafPickReason(v) {
   if (!v) return;
   const box = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('canc-reason'));
   if (!box) return;
   const cur = box.value.trim();
-  box.value = cur ? (cur.indexOf(v) === 0 ? cur : v + ' — ' + cur) : v;
+  const untouched = cur === CANC_DEFAULT_REASON;
+  box.value = (!cur || untouched) ? v : (cur.indexOf(v) === 0 ? cur : v + ' — ' + cur);
   cafCount();
 }
 

@@ -848,8 +848,14 @@ function showExpenseModal(id) {
 
   const methods = EXP_METHODS.slice();
   if (e && e.method && methods.indexOf(e.method) === -1) methods.unshift(e.method);
+  /* A NEW expense lands on Cash (owner, 2026-09-10: "payemt method is cash by
+     default globally"), matching pmOptions() on the money side. An expense
+     being EDITED keeps whatever it holds — including nothing, which is a real
+     answer here: records written before this field existed say "Not recorded"
+     and must not be given a method they never had. */
+  const mPick = e ? String(e.method || '') : 'Cash';
   const methodOpts = methods.map(m =>
-    `<option value="${escHtml(m)}" ${e && e.method === m ? 'selected' : ''}>${escHtml(m)}</option>`).join('');
+    `<option value="${escHtml(m)}" ${m === mPick ? 'selected' : ''}>${escHtml(m)}</option>`).join('');
 
   const people = expPeople();
   const desc   = e ? String(e.description || '') : '';

@@ -571,13 +571,19 @@ function renderStudents() {
             <td>${t.cnic?`<span class="stu-cnic">${cnicHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
             <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
-            ${''/* PAKISTAN UNLESS THE RECORD SAYS OTHERWISE (owner,
+            ${''/* PAKISTANI UNLESS THE RECORD SAYS OTHERWISE (owner,
                    2026-09-10). Every hostel this app ships to is in Pakistan
                    and all but a handful of students are Pakistani; a column of
                    dashes over a fact that is true 199 times in 200 is a column
                    nobody reads. The stored record is untouched — this is what
-                   a blank field MEANS, not a value written into it. */}
-            <td><span class="stu-nat">${escHtml(t.nationality || 'Pakistan')}</span></td>
+                   a blank field MEANS, not a value written into it.
+
+                   "Pakistani", not "Pakistan": the admission form's own
+                   nationality list offers Pakistani / Afghan / Other, so that
+                   is the word every record with a value in it already holds,
+                   and a fallback that read differently from the real data
+                   would look like two different columns. */}
+            <td><span class="stu-nat">${escHtml(t.nationality || 'Pakistani')}</span></td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
                 ${''/* THE SUB-LINE IS GONE (owner, 2026-09-06). It read
@@ -1842,12 +1848,13 @@ function _stuExportDef(list, opts) {
 
       { label: 'Address', type: 'wrap', width: 24, value: t => t.address || '' },
 
-      /* Pakistan unless the record says otherwise (owner, 2026-09-10). Every
+      /* Pakistani unless the record says otherwise (owner, 2026-09-10). Every
          hostel this app ships to is in Pakistan and all but a handful of
          students are Pakistani; a column of dashes over a fact that is true
-         199 times in 200 is a column nobody reads. */
+         199 times in 200 is a column nobody reads. The word matches the
+         admission form's own list — see the register cell for why. */
       { label: 'Nationality', type: 'text', width: 12,
-        value: t => t.nationality || 'Pakistan' },
+        value: t => t.nationality || 'Pakistani' },
 
       { label: 'Charges (Rs.)', type: 'money', width: 14, total: 'sum',
         value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
@@ -2169,7 +2176,14 @@ function renderAddStudent() {
           </div>
 
           <div class="asf-fg asf-fg--4">
-            ${sel('f-tgender','Gender',['','Male','Female','Other'],'')}
+            ${''/* GENDER IS PRESELECTED FROM WHAT THE HOSTEL SAID IT IS
+                   (owner, 2026-09-10: "deaults, gender, nationality to
+                   pakistan"). A boys' hostel admits boys; asking its warden to
+                   pick "Male" on every one of 200 admissions is asking them to
+                   restate a fact the app already holds. A mixed hostel has no
+                   answer and so gets none — _stuDefaultGender() returns '' and
+                   the field stays on its blank option. */}
+            ${sel('f-tgender','Gender',['','Male','Female','Other'],_stuDefaultGender())}
             ${sel('f-tmarital','Marital status',['','Single','Married'],'Single')}
             ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
             ${sel('f-tblood','Blood group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}

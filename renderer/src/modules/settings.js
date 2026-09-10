@@ -1016,14 +1016,25 @@ async function cfgToggleMethod(name) {
  *    DELETED from Settings; retiring one is the same hazard by another route,
  *    so the guard lives here now and every form gets it.
  *
+ * A NEW record with no method yet lands on CASH (owner, 2026-09-10: "payemt
+ * method is cash by default globally"). Without this the browser selects
+ * whichever method happens to be first in the hostel's own list, so adding
+ * "JazzCash" at the top of Settings silently changed what every blank form
+ * meant. Nearly every rupee these hostels take is cash across a desk; the
+ * default should say so, and say the same thing in all seven forms.
+ *
+ * If a hostel has retired Cash outright, there is nothing to fall back to and
+ * the first active method stands — the same behaviour as before.
+ *
  * @param {string} [selected] the value the record currently holds
  */
 function pmOptions(selected) {
   const all = (DB.settings.paymentMethods || ['Cash']);
   const list = all.filter(cfgMethodActive);
   if (selected && list.indexOf(selected) === -1) list.unshift(selected);
+  const pick = selected || (list.indexOf('Cash') !== -1 ? 'Cash' : '');
   return list.map(m =>
-    `<option value="${escHtml(m)}"${m === selected ? ' selected' : ''}>${escHtml(m)}</option>`
+    `<option value="${escHtml(m)}"${m === pick ? ' selected' : ''}>${escHtml(m)}</option>`
   ).join('');
 }
 
