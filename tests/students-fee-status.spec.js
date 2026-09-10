@@ -146,11 +146,17 @@ test('the three fee states are still computed, and the column really is gone', a
   expect(titles[2]).toMatch(/10,500 outstanding/);
   expect(titles[2]).toMatch(/past the due date/);
 
-  // The charge cell still says what it always said, on the same row.
+  /* The charge cell still says what it always said, on the same row.
+     `Rs.`, not `PKR` — the currency word changed on 2026-09-10 ("remove PKR
+     from everywhere and use Rs."), and this assertion was only ever a way of
+     saying "the charge is still printed here". It says that against the word
+     the app now uses, and against the figure too, so it cannot pass on a
+     currency symbol over an empty cell. */
   const row0 = await win.evaluate(() =>
     [...document.querySelectorAll('.stu-table tbody tr')[0].querySelectorAll('td')]
       .map(td => td.innerText.replace(/\s+/g, ' ').trim()));
-  expect(row0.join(' | ')).toMatch(/PKR/);
+  expect(row0.join(' | ')).toMatch(/Rs\.\s*14,500/);
+  expect(row0.join(' | '), 'PKR is back on the students register').not.toMatch(/PKR/);
 
   expect(pageErrors).toEqual([]);
   await app.close();

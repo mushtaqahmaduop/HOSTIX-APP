@@ -119,10 +119,23 @@ test('a mis-keyed collection can be reversed from the row, and the record says s
     await saveDB();
   });
   await win.evaluate(() => navigate('payments'));
-  await win.waitForSelector('.pay-act', { timeout: 8000 });
+  /* THE ROW'S FOUR GLYPHS BECAME ONE NAMED MENU on 2026-09-09, at the owner's
+     request — Delete sat one pixel from Reverse, which are the two actions on
+     this page you least want confused. `.pay-act` stopped being rendered then,
+     so this wait had been timing out and reading as a missing button. It is
+     the kebab and the menu behind it now. */
+  await win.waitForSelector('.pay-col-act button', { timeout: 8000 });
+  await win.evaluate(() => document.querySelector('.pay-col-act button').click());
+  await win.waitForSelector('.lk-rmenu', { timeout: 8000 });
 
   // The action is offered because there is something to reverse.
-  await win.click('.pay-act.dh-amber');
+  const reverse = await win.evaluate(() => {
+    const b = [...document.querySelectorAll('.lk-rmenu button')]
+      .find(x => /Reverse/i.test(x.textContent));
+    if (b) b.click();
+    return !!b;
+  });
+  expect(reverse, 'Reverse is not offered on a record that collected money').toBe(true);
   await win.waitForSelector('#f-prev-amt', { timeout: 8000 });
 
   // It opens defaulted to the whole collection, and says what the record holds.
@@ -179,13 +192,28 @@ test('the reverse action is not offered on a record that collected nothing', asy
   await win.waitForTimeout(400);
 
   await seed(win, [rec({ amount: 0, unpaid: FULL })]);
+  /* Dated into the current month for the same reason the test above is: the
+     table's scope is this month plus unpaid arrears carried in, and a fixture
+     pinned to August tested the month filter rather than the menu. */
+  await win.evaluate(async () => {
+    DB.payments[0].month = thisMonth();
+    DB.payments[0].date  = today();
+    await saveDB();
+  });
   await win.evaluate(() => navigate('payments'));
-  await win.waitForSelector('.pay-act', { timeout: 8000 });
+  await win.waitForSelector('.pay-col-act button', { timeout: 8000 });
+  await win.evaluate(() => document.querySelector('.pay-col-act button').click());
+  await win.waitForSelector('.lk-rmenu', { timeout: 8000 });
 
-  // A freshly generated month is a table full of these on the 1st; a dead
-  // control on every row of it is worse than no control.
-  const n = await win.evaluate(() => document.querySelectorAll('.pay-act.dh-amber').length);
-  expect(n).toBe(0);
+  /* A freshly generated month is a table full of these on the 1st, and a dead
+     item on every row of it is worse than no item. The other three verbs are
+     still there — this is about Reverse alone. */
+  const menu = await win.evaluate(() =>
+    [...document.querySelectorAll('.lk-rmenu button')].map(b => b.textContent.trim()));
+  expect(menu.some(l => /Reverse/i.test(l)),
+    'Reverse was offered on a record that collected nothing').toBe(false);
+  expect(menu.some(l => /Edit payment/i.test(l)), 'the menu lost its other verbs').toBe(true);
+  expect(menu.some(l => /Delete payment/i.test(l))).toBe(true);
 
   await app.close();
 });
