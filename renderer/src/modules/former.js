@@ -380,7 +380,8 @@ function _formerExportDef() {
         sub:   s => s.fatherName ? s.fatherName : '' },
       { label: 'ID',        type: 'id',   width: 9,  value: s => '#' + String(s.id) },
       { label: 'Phone',     type: 'text', width: 14, value: s => s.phone || '' },
-      { label: 'CNIC',      type: 'text', width: 16, pdf: false, value: s => s.cnic || '' },
+      // Masked, like every other exported CNIC (owner, 2026-09-10).
+      { label: 'CNIC',      type: 'text', width: 16, pdf: false, value: s => maskCnic(s.cnic) },
       { label: 'Email',     type: 'text', width: 20, pdf: false, value: s => s.email || '' },
       { label: 'Occupation',type: 'text', width: 16, value: s => s.occupation || '' },
       { label: 'Former room', type: 'id', width: 11, value: s => _formerRoom(s) ? '#' + _formerRoom(s) : '' },

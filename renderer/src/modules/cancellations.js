@@ -426,7 +426,8 @@ function showEditCancellationModal(cancId) {
         <div style="min-width:0">
           <div class="cef-who__n">${escHtml(c.studentName || '—')}
             ${due > 0 ? `<span class="lk-chip dh-red">${icon('warning','xs')}Dues pending</span>` : ''}</div>
-          <div class="cef-who__s">ID: ${escHtml(String(c.studentId || '—'))}${student && student.cnic ? ' · CNIC: ' + escHtml(student.cnic) : ''}${student && student.phone ? ' · ' + escHtml(student.phone) : ''}</div>
+          ${/* Masked, revealed on hover — cnicHtml() (owner, 2026-09-10). */''}
+          <div class="cef-who__s">ID: ${escHtml(String(c.studentId || '—'))}${student && student.cnic ? ' · CNIC: ' + cnicHtml(student.cnic) : ''}${student && student.phone ? ' · ' + escHtml(student.phone) : ''}</div>
         </div>
         <div class="cef-who__room">
           <div class="cef-who__rn">Room #${escHtml(String(c.roomNumber || '?'))}</div>
@@ -808,7 +809,7 @@ function selectCancStudent(studentId) {
       <div style="min-width:0">
         <div class="cef-who__n">${escHtml(s.name)}
           ${due > 0 ? `<span class="lk-chip dh-red">${icon('warning','xs')}Dues pending</span>` : ''}</div>
-        <div class="cef-who__s">ID: ${escHtml(String(s.id))}${s.cnic ? ' · CNIC: ' + escHtml(s.cnic) : ''}${s.phone ? ' · ' + escHtml(s.phone) : ''}</div>
+        <div class="cef-who__s">ID: ${escHtml(String(s.id))}${s.cnic ? ' · CNIC: ' + cnicHtml(s.cnic) : ''}${s.phone ? ' · ' + escHtml(s.phone) : ''}</div>
       </div>
       <div class="cef-who__room">
         <div class="cef-who__rn">Room #${escHtml(String(room ? room.number : '?'))}</div>

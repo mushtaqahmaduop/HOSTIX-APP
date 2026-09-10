@@ -443,18 +443,46 @@ function renderStudents() {
                  the student name no longer needs 169px now that the identity
                  gutter is tight, and an address is a wrapping cell that can take
                  a narrower measure. Still sums to exactly 100. */}
+          ${''/* CNIC 7% → 11.4% (owner, 2026-09-10). It now shows the masked
+                 form with the full number revealed on hover, and a value that
+                 WRAPS cannot be swapped for a longer one without the row
+                 changing height under the cursor — so the column has to hold
+                 15 characters on ONE line.
+
+                 MEASURED IN THE RUNNING APP AT THE 1366 FLOOR, not reasoned
+                 about: both the mask and the number render at exactly 107px
+                 (`font-variant-numeric: tabular-nums` gives the asterisks the
+                 same advance as the digits they hide), and 7px of cell padding
+                 each side makes that a 121px column. 11.4% is 123px.
+
+                 THE 4.4% CAME MOSTLY FROM ACTIONS, 9% → 5.2%. That column holds
+                 one 30px kebab. It was widened to 9% when a colgroup replaced
+                 the per-cell widths, because before that it had collapsed to
+                 10px and clipped the button away — but 9% is 98px for a 30px
+                 control, and it was the largest reserve in the table.
+
+                 Status took 0.8% of it rather than giving any up: "Cancelling"
+                 is the longest badge here and it was being clipped at 8%.
+
+                 Course and the charge gave the rest. Contact, the student name
+                 and the nationality chip were all tried as donors first and
+                 all three clipped — a phone number missing its last digit is a
+                 wrong answer, not just an ugly one.
+
+                 Sums to 99.5, which is what this colgroup has always summed to;
+                 the browser gives the remainder to the last column. */}
           <col style="width:2.6%">   <!-- select      -->
           <col style="width:3.6%">   <!-- ID          -->
           <col style="width:15.3%">  <!-- student     -->
           <col style="width:9%">     <!-- room        -->
           <col style="width:11.5%">  <!-- contact     -->
-          <col style="width:7%">     <!-- CNIC        -->
-          <col style="width:8%">     <!-- course      -->
+          <col style="width:11.4%">  <!-- CNIC        -->
+          <col style="width:7.6%">   <!-- course      -->
           <col style="width:7.5%">   <!-- address     -->
           <col style="width:7%">     <!-- nationality -->
-          <col style="width:11%">    <!-- charges     -->
-          <col style="width:8%">     <!-- status      -->
-          <col style="width:9%">     <!-- actions     -->
+          <col style="width:10%">    <!-- charges     -->
+          <col style="width:8.8%">   <!-- status      -->
+          <col style="width:5.2%">   <!-- actions     -->
         </colgroup>
         <thead><tr>
           <th><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
@@ -527,14 +555,20 @@ function renderStudents() {
               <div class="stu-contact"><i class="stu-wa" title="Student's WhatsApp">${waIcon}</i>${escHtml(t.phone||'—')}</div>
               ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i class="stu-ph" title="Guardian">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
-            ${''/* A CNIC BREAKS ON ITS OWN HYPHENS, over two lines (owner).
-                   It is 15 characters and the column cannot hold them on one
-                   line at any width this table can spare — so it wrapped
-                   invisibly under Course, which is what "hidden by the course
-                   column" was. `.stu-cnic` rather than `.stu-contact`: the phone
-                   beside it is a single unbreakable token and must keep its
-                   nowrap, so the two cannot share a class. */}
-            <td>${t.cnic?`<span class="stu-cnic">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${''/* MASKED, AND ON ONE LINE (owner, 2026-09-10: "make the cnic
+                   detail in pages as it is in the pdf and only should be shovn
+                   vhen cursor is placed upon it").
+
+                   It used to break across its own hyphens over two or three
+                   lines, because 15 characters would not fit the width this
+                   table could spare. The mask is the same 15 characters, so
+                   that constraint has not changed — but a value that wraps
+                   cannot be swapped for the full number on hover without the
+                   row changing height under the cursor, so the column was
+                   widened to hold one line instead (see the colgroup) and both
+                   halves are nowrap. `.stu-cnic` still carries the type
+                   styling; cnicHtml() carries the mask and the reveal. */}
+            <td>${t.cnic?`<span class="stu-cnic">${cnicHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
             <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
             ${''/* PAKISTAN UNLESS THE RECORD SAYS OTHERWISE (owner,
@@ -1030,7 +1064,10 @@ function _stuPanelOverview(t) {
         _pf('Full name',      t.name)
       + _pf("Father's name",  t.fatherName)
       + _pf('Student ID',     '#' + t.id, { mono: true })
-      + _pf('CNIC / ID',      t.cnic, { mono: true })
+      /* Masked, revealed on hover (owner, 2026-09-10). A drawer is opened
+         deliberately for one student, but it is opened on the same shared desk
+         screen the register sits on, so the rule is the same one. */
+      + _pf('CNIC / ID',      cnicHtml(t.cnic), { mono: true, html: true })
       + _pf('Date of birth',  t.dob ? fmtDate(t.dob) : '')
       + _pf('Gender',         t.gender)
       + _pf('Marital status', t.maritalStatus)
@@ -1643,16 +1680,16 @@ function _stuRemark(t) {
    anyone else who asks, and a printed roster is a document that gets left on a
    desk and photographed.
 
-   The stored record is untouched — this is a presentation rule, on the export
-   only. Anything that is not a CNIC-shaped string is passed through: a hostel
-   that records a B-form or a passport number should still see what it typed. */
-function _stuMaskCnic(v) {
-  const s = String(v == null ? '' : v).trim();
-  if (!s) return '';
-  const digits = s.replace(/\D/g, '');
-  if (digits.length < 13) return s;
-  return digits.slice(0, 5) + '-' + digits.slice(5, 7) + '*'.repeat(7);
-}
+   The stored record is untouched — this is a presentation rule. Anything that
+   is not a CNIC-shaped string is passed through: a hostel that records a
+   B-form or a passport number should still see what it typed.
+
+   THE RULE MOVED TO utils.js AS maskCnic() (owner, 2026-09-10: "make the cnic
+   detail in pages as it is in the pdf"). It was the export's rule only, and
+   the payments register had a second, different one; the pages now use this
+   same one, so it belongs where every module can reach it. The name stays
+   because the export definition below reads well with it. */
+function _stuMaskCnic(v) { return maskCnic(v); }
 
 /* The gender a blank field means, taken from what the hostel said it was when
    it was set up (owner, 2026-09-10). A boys' hostel that has never filled the
@@ -2448,9 +2485,13 @@ function showViewStudentModal(id) {
   // One row of the Personal Information / Room & Accommodation lists. `act`
   // is an optional trailing affordance (call / mail) shown only when there is
   // a value to act on.
-  const infoRow=(k,v,act)=>`<div class="svw-row">
+  /* `raw` renders the value as markup instead of escaping it. Exactly one row
+     needs it — the CNIC, which is masked with a hover reveal (owner,
+     2026-09-10) and so is two spans rather than a string. Everything else
+     stays escaped, which is the default. */
+  const infoRow=(k,v,act,raw)=>`<div class="svw-row">
       <span class="svw-row__k">${escHtml(k)}</span>
-      <span class="svw-row__v${(v===null||v===undefined||v==='')?' is-empty':''}">${(v===null||v===undefined||v==='')?'—':escHtml(String(v))}</span>
+      <span class="svw-row__v${(v===null||v===undefined||v==='')?' is-empty':''}">${(v===null||v===undefined||v==='')?'—':(raw?String(v):escHtml(String(v)))}</span>
       ${act&&v?`<span class="svw-row__act">${act}</span>`:''}
     </div>`;
 
@@ -2503,7 +2544,7 @@ function showViewStudentModal(id) {
           <div class="svw-card__head dh-violet"><span class="svw-card__ico">${icon('student','sm')}</span> Personal Information</div>
           ${infoRow('Father / Guardian',t.fatherName)}
           ${infoRow('Occupation / Course',t.occupation)}
-          ${infoRow('CNIC / ID',t.cnic)}
+          ${infoRow('CNIC / ID',cnicHtml(t.cnic),null,true)}
           ${infoRow('Nationality',t.nationality)}
           ${infoRow('Phone Number',t.phone,icon('phone','xs'))}
           ${infoRow('Email Address',t.email,icon('mail','xs'))}
@@ -2950,7 +2991,9 @@ function printStudentCard(id) {
       <div class="panel__t">Personal Information</div>
       ${fact('Father / Guardian', t.fatherName)}
       ${fact('Occupation / Course', t.occupation || t.course)}
-      ${fact('CNIC / ID', t.cnic)}
+      ${''/* Masked, and NOT with the hover reveal: this is a printed card, and
+              a sheet of paper has no cursor. Same rule the exports follow. */}
+      ${fact('CNIC / ID', maskCnic(t.cnic))}
       ${fact('Nationality', t.nationality)}
       ${fact('Phone Number', t.phone)}
       ${fact('Email Address', t.email)}
@@ -3674,7 +3717,7 @@ function formerStudentSearch(query) {
           <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">${escHtml(s.name||'—')}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;margin-bottom:8px">
             ${s.phone?`<div style="font-size:11px;color:var(--text3)">📞 ${escHtml(s.phone)}</div>`:''}
-            ${s.cnic?`<div style="font-size:11px;color:var(--text3)">🪪 ${escHtml(s.cnic)}</div>`:''}
+            ${s.cnic?`<div style="font-size:11px;color:var(--text3)">🪪 ${cnicHtml(s.cnic)}</div>`:''}
             ${s.fatherName?`<div style="font-size:11px;color:var(--text3)">👨 ${escHtml(s.fatherName)}</div>`:''}
             ${s.email?`<div style="font-size:11px;color:var(--text3)">✉️ ${escHtml(s.email)}</div>`:''}
             ${s.occupation?`<div style="font-size:11px;color:var(--text3)">💼 ${escHtml(s.occupation)}</div>`:''}
@@ -3799,7 +3842,7 @@ function openRestoreStudentForm(studentId) {
         '<div class="rsf-band__n">' + escHtml(t.name || '—') +
           '<span class="lk-chip dh-slate">Former student</span></div>' +
         '<div class="rsf-band__m">ID: #' + escHtml(String(t.id)) +
-          (t.cnic ? '  ·  CNIC: ' + escHtml(t.cnic) : '') + '</div>' +
+          (t.cnic ? '  ·  CNIC: ' + cnicHtml(t.cnic) : '') + '</div>' +
         '<div class="rsf-band__m">' +
           (t.phone ? icon('phone', 'xs') + escHtml(t.phone) : '') +
           (t.email ? icon('mail', 'xs') + escHtml(t.email) : '') +
@@ -4257,7 +4300,8 @@ function doGenerateStudentsPDF(monthKey) {
     rows += '<td class="nm">'+escHtml(s.name||'—')+'</td>';
     rows += '<td class="fa">'+escHtml(s.fatherName||'—')+'</td>';
     rows += '<td class="rm">'+(room?'#'+room.number:'—')+'</td>';
-    rows += '<td class="mono">'+escHtml(s.cnic||'—')+'</td>';
+    // Masked, like every other printed CNIC (owner, 2026-09-10).
+    rows += '<td class="mono">'+escHtml(maskCnic(s.cnic)||'—')+'</td>';
     rows += '<td class="ph">'+escHtml(s.phone||'—')+'</td>';
     rows += '<td class="money rent">'+fmtPKR(s.rent||0)+'</td>';
     rows += '<td class="money '+(admFee>0?'adm':'nil')+'">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';

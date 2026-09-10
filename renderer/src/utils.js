@@ -1339,6 +1339,54 @@ function waMark(size) {
 
 
 /* ════════════════════════════════════════════════════════════════════════════
+   THE CNIC, MASKED ON SCREEN AND REVEALED ON HOVER
+   Owner, 2026-09-10: "make the cnic detail in pages as it is in the pdf and
+   only should be shovn vhen cursor is placed upon it."
+
+   WHY THE PDF'S MASK AND NOT THE PAYMENTS PAGE'S
+   There were two masks in the codebase and they disagreed: the exports showed
+   `17300-30*******` and the payments register showed `17300-*******-6`. The
+   owner's instruction names the PDF as the one to match, so this is that one,
+   and payMaskCnic() now delegates here. A CNIC is a national identity number
+   on a screen a warden shares with whoever walks up to the desk; two different
+   partial views of it are also two different leaks.
+
+   IT IS THE SAME WIDTH AS THE FULL NUMBER — five digits, a hyphen, two digits,
+   seven asterisks — which is 15 characters, exactly what `17300-3012345-6` is.
+   That is deliberate: the hover reveal swaps the text in place and the row
+   must not reflow under the cursor, or the thing being read moves while it is
+   being read.
+
+   ANYTHING THAT IS NOT CNIC-SHAPED IS PASSED THROUGH. A hostel that types a
+   passport number or a B-Form into this field gets its value back untouched
+   rather than a mask that hides a shape this function guessed wrong.
+   ════════════════════════════════════════════════════════════════════════════ */
+function maskCnic(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 13) return s;
+  return digits.slice(0, 5) + '-' + digits.slice(5, 7) + '*'.repeat(7);
+}
+
+/** The masked CNIC as a cell, with the full number underneath it revealed on
+ *  hover. Two spans rather than a `title` tooltip: a tooltip needs a second of
+ *  dwell, sits away from the value and cannot be read from a screenshot, and
+ *  "shown when the cursor is placed upon it" is what the owner asked for.
+ *  Returns '' for an empty value so the caller can fall back to its own dash.
+ *  Both halves are escaped — this is rendered into innerHTML. */
+function cnicHtml(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const m = maskCnic(s);
+  if (m === s) return '<span class="cnic-r">' + escHtml(s) + '</span>';  // not CNIC-shaped
+  return '<span class="cnic-r" aria-label="' + escHtml(s) + '">'
+       +   '<span class="cnic-r__m">' + escHtml(m) + '</span>'
+       +   '<span class="cnic-r__f">' + escHtml(s) + '</span>'
+       + '</span>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    THE ROOM CELL, IN ONE PLACE (owner, 2026-09-10: "label room number and floor
    just like the students page room number globally").
 

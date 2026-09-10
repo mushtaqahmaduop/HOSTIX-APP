@@ -1451,7 +1451,8 @@ function _rptDetailDef(type) {
           get: t => '<b>' + escHtml(t.name || '—') + '</b>' },
         { label: 'Father / Guardian', type: 'text', width: 22, value: t => t.fatherName || '' },
         { label: 'Phone', type: 'text', width: 16, value: t => String(t.phone || '') },
-        { label: 'CNIC',  type: 'text', width: 18, pdf: false, value: t => String(t.cnic || '') },
+        // Masked, like every other exported CNIC (owner, 2026-09-10).
+        { label: 'CNIC',  type: 'text', width: 18, pdf: false, value: t => maskCnic(t.cnic) },
         { label: 'Joined', type: 'date', width: 13, value: t => t.joinDate || '' },
         /* resolveCharges, not `t.rent`: the whole monthly charge is rent AND
            mess, and every one of these reports quoted the rent half alone. */

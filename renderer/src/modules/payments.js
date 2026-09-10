@@ -281,12 +281,20 @@ function payAvatarHue(name) {
   return hues[h % hues.length];
 }
 
-// Mask all but the first five and last digit of a CNIC — the list is visible
-// on a shared warden screen and the full number is never needed at a glance.
+/* Mask a CNIC — the list is visible on a shared warden screen and the full
+   number is never needed at a glance.
+
+   THIS USED TO BE ITS OWN MASK, and it disagreed with the one the exports use:
+   here `17300-*******-6`, there `17300-30*******`. Owner, 2026-09-10: "make
+   the cnic detail in pages as it is in the pdf and only should be shovn vhen
+   cursor is placed upon it" — so there is now one rule, in utils.js, and it
+   is the PDF's. Two different partial views of a national identity number are
+   also two different leaks: between them they gave away the last digit as
+   well as the first seven.
+
+   cnicHtml() returns escaped markup and adds the hover reveal. */
 function payMaskCnic(c) {
-  const d = String(c || '').replace(/\D/g, '');
-  if (d.length < 7) return c ? escHtml(String(c)) : '';
-  return escHtml(d.slice(0,5)) + '-' + '*'.repeat(Math.max(1, d.length - 6)) + '-' + escHtml(d.slice(-1));
+  return cnicHtml(c);
 }
 
 // Every month present in the data, newest first — the month select is built

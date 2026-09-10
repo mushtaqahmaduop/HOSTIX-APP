@@ -310,3 +310,34 @@ body.light-theme .pill--outline {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+
+/* ── CNIC, masked until the cursor is on it ──────────────────────────────────
+   Owner, 2026-09-10: "make the cnic detail in pages as it is in the pdf and
+   only should be shovn vhen cursor is placed upon it."
+
+   The two spans are swapped in place, and BOTH ARE `nowrap` AND THE SAME
+   WIDTH — cnicHtml() in utils.js builds a mask of exactly 15 characters, the
+   length of `17300-3012345-6` — so revealing the number moves nothing. That
+   width is why the students register's CNIC column was widened at the same
+   time: the cells clip their overflow, and a value that has to wrap cannot be
+   swapped without the row changing height under the cursor.
+
+   Not a floating panel: every register cell clips its overflow and every table
+   scrolls inside its own wrapper, so a panel would be cut off in exactly the
+   narrow columns that need it. Not a `title` tooltip either — that needs a
+   second of dwell, lands away from the value, and cannot be read from a
+   screenshot a hostel sends in support of a bug report.
+
+   The dotted underline is the whole affordance. A warden who does not know
+   the value can be revealed will never move the mouse there.
+   ──────────────────────────────────────────────────────────────────────────── */
+.cnic-r {
+  cursor: help;
+  border-bottom: 1px dotted var(--border2, #cfcfcf);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cnic-r__m, .cnic-r__f { white-space: nowrap; }
+.cnic-r__f { display: none; }
+.cnic-r:hover .cnic-r__m { display: none; }
+.cnic-r:hover .cnic-r__f { display: inline; }

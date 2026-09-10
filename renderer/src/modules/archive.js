@@ -716,7 +716,7 @@ function showArchiveStudent(studentId) {
     <div class="arc-sd-sec">On file</div>
     <div class="arc-wrap"><table class="arc-table"><tbody>
       <tr><td class="nm">Phone</td><td>${escHtml(s.phone || '—')}</td></tr>
-      <tr><td class="nm">CNIC</td><td>${escHtml(s.cnic || '—')}</td></tr>
+      <tr><td class="nm">CNIC</td><td>${s.cnic ? cnicHtml(s.cnic) : '—'}</td></tr>
       <tr><td class="nm">Joined</td><td>${escHtml(fmtDate(s.joinDate) || '—')}</td></tr>
       ${(s.leftDate || s.leaveDate) ? `<tr><td class="nm">Left</td><td>${escHtml(fmtDate(s.leftDate || s.leaveDate))}</td></tr>` : ''}
     </tbody></table></div>`;
@@ -936,7 +936,8 @@ function printArchiveStudent(studentId) {
       ['Father / Guardian', s ? s.fatherName : ''],
       ['Room', room ? '#' + room.number : ''],
       ['Phone', s ? s.phone : ''],
-      ['CNIC', s ? s.cnic : ''],
+      // Masked in the export, like every other printed CNIC (owner, 2026-09-10).
+      ['CNIC', s ? maskCnic(s.cnic) : ''],
       ['Joined', s && s.joinDate ? EXPORT.fmt.date(s.joinDate) : ''],
       ['Status', s ? s.status : ''],
       ['Course', s ? (s.occupation || s.course) : ''],

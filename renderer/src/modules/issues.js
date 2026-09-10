@@ -371,7 +371,10 @@ function renderIssues() {
             <div class="lk-who__av dh-violet">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</div>
             <div style="min-width:0">
               <div class="lk-who__n">${escHtml(i.by)}</div>
-              <div class="lk-who__s">${escHtml(i.student.cnic || i.student.phone || '')}</div>
+              ${/* A CNIC is masked and revealed on hover (owner, 2026-09-10);
+                    a phone is not — the whole point of the sub-line is that a
+                    warden can dial it. */''}
+              <div class="lk-who__s">${i.student.cnic ? cnicHtml(i.student.cnic) : escHtml(i.student.phone || '')}</div>
             </div>
           </div>`
         : `<span class="lk-dash" title="Maintenance is logged against a room, not a student">—</span>`}
