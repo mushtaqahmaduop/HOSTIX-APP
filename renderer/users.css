@@ -110,7 +110,7 @@
 
 .usf-basic { display: flex; gap: 16px; align-items: flex-start; }
 @media (max-width: 620px) { .usf-basic { flex-direction: column; } }
-.usf-photo { flex: 0 0 auto; }
+.usf-photo { flex: 0 0 auto; text-align: center; }
 .usf-photo__box {
     width: 96px; height: 96px; border-radius: 50%;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
@@ -118,6 +118,23 @@
     text-align: center;
 }
 .usf-photo__box span { font-size: 9.5px; line-height: 1.3; max-width: 74px; }
+
+/* CLICKABLE, AND IT SAYS SO (2026-09-10). The box used to be inert on the Add
+   form and threw on a null on the Edit form; now it opens the file picker, so
+   it needs the affordance of one. */
+.usf-photo__box { cursor: pointer; transition: var(--transition); }
+.usf-photo__box:hover { border-color: var(--accent); color: var(--accent-strong); }
+.usf-photo__box.has-img {
+    border-style: solid; border-color: var(--accent); padding: 0; overflow: hidden;
+}
+.usf-photo__box.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.usf-photo__x {
+    margin-top: 7px; padding: 3px 10px; border-radius: 8px; cursor: pointer;
+    background: none; border: 1px solid var(--border2); color: var(--text3);
+    font-family: var(--font); font-size: 11px; font-weight: 600;
+}
+.usf-photo__x:hover { border-color: var(--red); color: var(--red); }
 
 /* The active switch, as a row rather than a bare checkbox — it is the one
    control on this form that stops somebody signing in. */

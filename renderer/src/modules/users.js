@@ -443,8 +443,42 @@ const PERM_GROUPS = {
               lines: ['Add and edit users', 'Set permissions', 'Reset passwords and deactivate accounts'] },
 };
 
+/* ── THE PHOTO CONTROL ───────────────────────────────────────────────────────
+   Owner, 2026-09-10: "the add user profile picture could not uploads at the
+   time of ading user."
+
+   TWO THINGS WERE WRONG, AND THE SECOND WAS WORSE.
+
+   1. The Add form did not offer the control at all. It drew a dead box reading
+      "Add after saving", because handleWardenPhoto() writes straight into
+      WARDENS[key] and a user being created has no key yet. That is now held in
+      _uPendingPhoto until saveUser() has an account to put it on.
+
+   2. The control that WAS offered, on the Edit form, was also broken. Both
+      states of it call `document.getElementById('u-photo-input').click()`, and
+      nothing in this app has ever rendered an element with that id — so
+      clicking the avatar threw on a null and did nothing at all, silently.
+      The input is below, next to the control that opens it.
+
+   The node is built here rather than in modals.js so it matches the 96px round
+   frame this form's CSS draws; modals.js swaps it through _userAvatarNode(),
+   which now delegates to this. */
+function usfPhotoNode(photo) {
+  const open = "document.getElementById('u-photo-input').click()";
+  if (photo) {
+    return '<div class="usf-photo__box has-img" id="u-avatar" onclick="' + open + '"'
+         + ' title="Click to choose a different photo">'
+         + '<img src="' + escHtml(photo) + '" alt=""></div>';
+  }
+  return '<div class="usf-photo__box is-empty" id="u-avatar" onclick="' + open + '"'
+       + ' title="Click to upload a photo">'
+       + icon('person', 'md') + '<span>Add photo</span></div>';
+}
+
 function showUserEditor(id) {
   if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  // A photo chosen in one editor session must not leak into the next one.
+  if (typeof _uPendingPhoto !== 'undefined') _uPendingPhoto = null;
   const isNew = !id;
   const u = isNew ? { username: '', name: '', phone: '', perms: {}, active: true } : (WARDENS[id] || {});
   const perms = u.perms || {};
@@ -487,10 +521,19 @@ function showUserEditor(id) {
           </div>
           <div class="usf-basic">
             <div class="usf-photo">
-              ${isNew
-                ? `<div class="usf-photo__box is-empty" title="A photo can be added once the account exists">
-                     ${icon('person', 'md')}<span>Add after saving</span></div>`
-                : _userAvatarNode(id, u.photo || '')}
+              ${usfPhotoNode(u.photo || '')}
+              ${''/* The input the avatar's onclick has always tried to open.
+                     It did not exist until 2026-09-10, so every click on the
+                     avatar threw on a null and the upload appeared to do
+                     nothing. `key` is '' while the account is being created;
+                     handleWardenPhoto() holds the image until there is one. */}
+              <input type="file" id="u-photo-input" accept="image/*" style="display:none"
+                     onchange="handleWardenPhoto(event, '${escHtml(String(id || ''))}')">
+              ${(u.photo || isNew)
+                ? `<button type="button" class="usf-photo__x" id="u-photo-x"
+                           style="${u.photo ? '' : 'display:none'}"
+                           onclick="removeWardenPhoto('${escHtml(String(id || ''))}')">Remove</button>`
+                : ''}
             </div>
             <div class="hf-g2" style="flex:1;min-width:0">
               <div class="field col-full"><label for="u-name">Full name<span class="req">*</span></label>

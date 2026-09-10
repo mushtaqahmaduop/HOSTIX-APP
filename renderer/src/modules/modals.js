@@ -1053,7 +1053,9 @@ async function saveUser(id) {
     WARDENS[newId] = {
       username: username, name: name, phone: phone,
       email: email.trim(), department: department, role: roleLabel,
-      perms: perms, active: active, pw: newHash, photo: '',
+      /* The photo chosen on the Add form, which had nowhere to go until now
+         (owner, 2026-09-10). */
+      perms: perms, active: active, pw: newHash, photo: _uPendingPhoto || '',
       /* Stamped so "Recently joined" and the account's own Joined row have
          something to read. Accounts made before today have no stamp and the
          page says so rather than guessing one. */
@@ -1080,6 +1082,9 @@ async function saveUser(id) {
       if (_g && typeof _dashGreeting === 'function') _g.innerHTML = _dashGreeting();
     }
   }
+
+  // Spent — a photo chosen for one account must not land on the next.
+  _uPendingPhoto = null;
 
   saveWardenConfig();
   if (typeof USERS !== 'undefined') USERS = WARDENS;
@@ -1113,6 +1118,15 @@ function deleteUser(id) {
     });
 }
 
+/* The photo chosen for an account that does not exist yet (owner, 2026-09-10:
+   "the add user profile picture could not uploads at the time of ading user").
+   handleWardenPhoto() used to write straight into WARDENS[key] and save, which
+   a user being CREATED has no key for — so the Add form offered a dead box
+   reading "Add after saving" instead of a control. The image waits here until
+   saveUser() has an account to put it on, and is cleared whenever the editor
+   opens so it cannot leak into the next account. */
+var _uPendingPhoto = null;
+
 function handleWardenPhoto(event, key) {
   var file = event.target.files[0];
   if(!file) return;
@@ -1129,16 +1143,26 @@ function handleWardenPhoto(event, key) {
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      if(!WARDENS[key]) return;
-      WARDENS[key].photo = dataUrl;
-      saveWardenConfig();
-      if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
-      toast('Profile photo updated','success');
-      // The editor is rebuilt rather than patched in place: it now carries
-      // unsaved field values, so re-rendering would discard them — instead only
-      // the avatar node is swapped.
+      /* A NEW ACCOUNT HAS NO KEY YET. Returning here — which is what this did
+         — is why the Add form could not take a photo at all. Hold it; saveUser
+         writes it the moment the account exists. */
+      if(!key || !WARDENS[key]) {
+        _uPendingPhoto = dataUrl;
+        toast('Photo will be saved with the account','info');
+      } else {
+        WARDENS[key].photo = dataUrl;
+        saveWardenConfig();
+        if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
+        toast('Profile photo updated','success');
+      }
+      // The editor is NOT rebuilt: it carries unsaved field values that a
+      // re-render would discard, so only the avatar node is swapped.
       var imgEl = document.getElementById('u-avatar');
       if(imgEl) imgEl.outerHTML = _userAvatarNode(key, dataUrl);
+      var xEl = document.getElementById('u-photo-x');
+      if(xEl) xEl.style.display = '';
+      // Let the same file be chosen again after a Remove.
+      if(event.target) event.target.value = '';
     };
     img.src = e.target.result;
   };
@@ -1146,29 +1170,39 @@ function handleWardenPhoto(event, key) {
 }
 
 function removeWardenPhoto(key) {
-  if(!WARDENS[key]) return;
-  WARDENS[key].photo = '';
-  saveWardenConfig();
-  if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
+  // Same split as handleWardenPhoto: an account being created has no key, and
+  // what is being removed is the image waiting for it.
+  if(!key || !WARDENS[key]) {
+    _uPendingPhoto = null;
+  } else {
+    WARDENS[key].photo = '';
+    saveWardenConfig();
+    if(key === CUR_ROLE) { CUR_USER = WARDENS[key]; updateRoleBadge(); }
+  }
   toast('Photo removed','info');
   var imgEl = document.getElementById('u-avatar');
   if(imgEl) imgEl.outerHTML = _userAvatarNode(key, '');
+  var xEl = document.getElementById('u-photo-x');
+  if(xEl) xEl.style.display = 'none';
+  var inEl = document.getElementById('u-photo-input');
+  if(inEl) inEl.value = '';
 }
 
 /**
  * The avatar control inside the user editor. Clicking it opens the file picker.
  * Kept as one function so handleWardenPhoto/removeWardenPhoto can swap the node
  * without re-rendering the whole editor and losing unsaved input.
+ *
+ * THE MARKUP LIVES IN users.js NOW, as usfPhotoNode(). This drew a 56px
+ * rounded square with a "+" in it while the form's own CSS drew a 96px round
+ * dashed frame around the empty state — two designs for one control, and the
+ * one the user saw depended on whether a photo had ever been set. `key` is no
+ * longer read; the signature stays so the two callers above read the same.
  */
 function _userAvatarNode(key, photo) {
-  var open = 'document.getElementById(\'u-photo-input\').click()';
-  if (photo) {
-    return '<img id="u-avatar" src="' + photo + '" onclick="' + open + '" title="Click to change photo"'
-      + ' style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent);cursor:pointer">';
-  }
-  return '<div id="u-avatar" onclick="' + open + '" title="Click to upload a photo"'
-    + ' style="width:56px;height:56px;border-radius:14px;background:var(--bg4);color:var(--text3);display:flex;'
-    + 'align-items:center;justify-content:center;cursor:pointer;border:2px dashed var(--border2);font-size:22px">+</div>';
+  if (typeof usfPhotoNode === 'function') return usfPhotoNode(photo || '');
+  // users.js not loaded (no user editor on screen) — nothing to swap into.
+  return '';
 }
 
 

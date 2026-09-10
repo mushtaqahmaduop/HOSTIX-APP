@@ -209,3 +209,98 @@ test('added users can sign in, and inactive ones cannot', async () => {
 
   await app.close();
 });
+
+/* ── THE PROFILE PHOTO, AT ADD TIME ──────────────────────────────────────────
+   Owner, 2026-09-10: "the add user profile picture could not uploads at the
+   time of ading user."
+
+   Two faults, and the second was the quiet one:
+     · the Add form drew a dead box reading "Add after saving", because the
+       handler wrote into WARDENS[key] and a user being created has no key;
+     · the control the Edit form DID draw called .click() on an element id that
+       nothing in this app ever rendered, so it threw on a null and did nothing
+       at all — no picker, no error the warden could see.
+
+   This test drives the real handler with a real file, on both forms. */
+test('a profile photo can be chosen while the account is still being created', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await waitForLogin(win);
+  expect(await tryLogin(win, 'warden1', 'admin123')).toBe(true);
+
+  const pageErrors = [];
+  win.on('pageerror', e => pageErrors.push(String(e)));
+
+  // A 2x2 PNG, small enough to inline and real enough for Image() to decode.
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF'
+            + 'ElEQVR4nGP8z8Dwn4GBgYERRIAAIvsD/1lCQZ4AAAAASUVORK5CYII=';
+
+  const opened = await win.evaluate(() => {
+    showUserEditor(null);
+    return {
+      input:  !!document.getElementById('u-photo-input'),
+      avatar: !!document.getElementById('u-avatar'),
+      // The dead box said this. It must not be on the form any more.
+      deadBox: document.querySelector('.usf-photo').textContent.indexOf('Add after saving') !== -1,
+    };
+  });
+  expect(opened.input,  'the file input the avatar opens does not exist').toBe(true);
+  expect(opened.avatar, 'the Add form still offers no photo control').toBe(true);
+  expect(opened.deadBox, 'the Add form still says the photo comes later').toBe(false);
+
+  // Clicking the avatar must reach the picker rather than throw on a null.
+  await win.evaluate(() => {
+    let opened = false;
+    const inp = document.getElementById('u-photo-input');
+    inp.click = () => { opened = true; };
+    document.getElementById('u-avatar').click();
+    window.__pickerOpened = opened;
+  });
+  expect(await win.evaluate(() => window.__pickerOpened),
+    'clicking the avatar did not open the file picker').toBe(true);
+
+  // Drive the real handler, then save. The photo must land on the new account.
+  await win.evaluate(async (png) => {
+    const bin = atob(png.split(',')[1]);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const file = new File([buf], 'face.png', { type: 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const inp = document.getElementById('u-photo-input');
+    inp.files = dt.files;
+    inp.dispatchEvent(new Event('change'));
+  }, PNG);
+  await win.waitForTimeout(500);
+
+  const held = await win.evaluate(() => ({
+    pending: !!_uPendingPhoto,
+    shown: (document.getElementById('u-avatar') || {}).outerHTML || '',
+  }));
+  expect(held.pending, 'the chosen photo was dropped instead of held for the new account').toBe(true);
+  expect(held.shown, 'the form does not show the photo that was chosen').toContain('<img');
+
+  await win.evaluate(async () => {
+    document.getElementById('u-name').value = 'Photo Warden';
+    document.getElementById('u-username').value = 'photow';
+    document.getElementById('u-pw').value = 'photo-pass';
+    await saveUser(null);
+  });
+
+  const saved = await win.evaluate(() =>
+    Object.values(WARDENS).find(u => u.username === 'photow'));
+  expect(saved, 'the new user was not stored').toBeTruthy();
+  expect(String(saved.photo || ''), 'the photo chosen at add time was not saved')
+    .toMatch(/^data:image\//);
+
+  // And it must not follow the next account that gets created.
+  const leaked = await win.evaluate(() => {
+    showUserEditor(null);
+    return _uPendingPhoto;
+  });
+  expect(leaked, 'the photo leaked into the next new account').toBeNull();
+
+  await app.close();
+  expect(pageErrors, 'uncaught JS error').toEqual([]);
+});
