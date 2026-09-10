@@ -208,7 +208,10 @@ function renderCancellations(filterStatus='All') {
         <span class="lk-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span>
         <div class="lk-sub">${st.sub}</div>
       </td>
-      <td style="max-width:170px;white-space:normal">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
+      ${/* `lk-prose` keeps this one column flush left while every other value
+            in the register centres (registers-center.css) — a reason is a
+            sentence, and a centred sentence that wraps reads badly. */''}
+      <td class="lk-prose" style="max-width:170px;white-space:normal">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
       <td>
         <div class="lk-acts lk-acts--widget">
           ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>')}

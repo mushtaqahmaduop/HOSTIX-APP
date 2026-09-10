@@ -215,15 +215,17 @@ const XW_PALETTE = {
    the currency, so repeating it 200 times down the column is 200 copies of a
    fact stated once — and it is the widest thing in a sixteen-column sheet.
 
-   NO THOUSANDS SEPARATOR, because the owner wrote the format out twice and
-   both times without one. Say the word and it is `#,##0.00`.
+   WITH A THOUSANDS SEPARATOR (owner, 2026-09-10: "use thousand separator").
+   It was `0.00` for a day because the brief wrote the format out twice without
+   one; asked directly, the grouping is wanted. Excel groups by the FORMAT, so
+   the cell still holds a plain 17000 and still sums, sorts and filters.
 
    AN EMPTY MONEY CELL IS 0.00, not blank (owner: "put 0.00 in the cells for
    numbers if empty"). It costs the SUM nothing — a blank and a zero add the
    same — and it removes the reading where a gap might mean "not recorded". */
 const XW_NUMFMT = {
-  164: '0.00',
-  165: '0.00;[Red]-0.00',
+  164: '#,##0.00',
+  165: '#,##0.00;[Red]-#,##0.00',
   166: 'dd\\-mmm\\-yyyy',
   167: '#,##0',
   168: '0.0%',

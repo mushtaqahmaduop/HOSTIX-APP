@@ -1,0 +1,81 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   REGISTER CELL ALIGNMENT — every value centred
+   Added 2026-09-10.
+
+   Owner: "use thousand separator and all the values should be centered vether
+   in pages or exports."
+
+   WHAT THIS COVERS, AND WHAT IT DELIBERATELY DOES NOT
+   ---------------------------------------------------
+   It covers the REGISTERS — the row-and-column tables on Students, Payments,
+   Expenses, Complaints/Maintenance, Cancellations, Former Students and the
+   Archive — because those are the screens whose columns the exports mirror,
+   and a figure must not sit left on the screen and centred in the workbook.
+
+   It does NOT touch the dashboard cards, the slide-over panels or the forms.
+   Their right-aligned figures are part of layouts the owner drew and approved
+   (arrears.png, the visit sheet, the payment forms); a blanket centre would
+   quietly undo those designs, and the owner's standing instruction is that
+   their design is never thrown away without being told. If they want those
+   centred too, it is one more block in this file.
+
+   THE ONE CARVE-OUT: PROSE
+   ------------------------
+   Address, remarks, complaint titles, cancellation reasons and expense
+   descriptions are sentences, not values. A centred sentence that wraps to
+   two lines produces a ragged both-edges block that is markedly harder to
+   read than a flush-left one, so they stay left — exactly as `wrap` columns
+   stay left in the export engine (see EX_TYPE in src/export/engine.js).
+
+   To opt a new sentence column out, give the cell `class="lk-prose"`.
+
+   WHY A SEPARATE FILE, LOADED LAST
+   --------------------------------
+   The six register stylesheets each define their own `thead th { text-align:
+   left }`, several of them more than once (see the CSS traps note in
+   dashboard.css). Editing six files in six places and hoping no later block
+   wins is how this becomes a bug report. One file, loaded after all of them,
+   wins by source order, and reverting the whole decision is deleting it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The cells ───────────────────────────────────────────────────────────── */
+.lk-table  thead th, .lk-table  tbody td,
+.stu-table thead th, .stu-table tbody td,
+.pay-table thead th, .pay-table tbody td,
+.exp-table thead th, .exp-table tbody td,
+.arc-table thead th, .arc-table tbody td,
+.arc-table th,       .arc-table td {
+    text-align: center;
+}
+
+/* `.arc-table .num` is (0,2,0) and would otherwise out-specify the rule above
+   at (0,1,2). It keeps its tabular figures; it loses its right edge. */
+.arc-table .num { text-align: center; }
+
+/* ── The furniture inside the cells ──────────────────────────────────────────
+   These are flex rows, so `text-align` does nothing to them — the main axis
+   has to be centred as well. Their block children (name over sub-line) do
+   inherit the centring from the cell. */
+.lk-table  .lk-who,  .lk-table  .lk-when,  .lk-table  .lk-acts,
+.stu-table .stu-who, .stu-table .lk-when,  .stu-table .lk-acts,
+.pay-table .pay-who, .pay-table .lk-when,  .pay-table .lk-acts,
+.exp-table .lk-who,  .exp-table .lk-when,  .exp-table .lk-acts {
+    justify-content: center;
+}
+
+/* A `.lk-who` with `min-width:0` and a centred main axis still needs its text
+   block to centre when the name is ellipsised. */
+.lk-table  .lk-who  > div, .stu-table .stu-who > div,
+.pay-table .pay-who > div, .exp-table .lk-who  > div { text-align: center; }
+
+/* ── Prose columns stay flush left ───────────────────────────────────────── */
+.lk-prose,
+.lk-table  td.lk-prose,
+.lk-table  th.fm-reason,  .lk-table  td.fm-reason,
+.lk-table  th.iss-c-title, .lk-table td.iss-c-title,
+.exp-table th.exp-desc,   .exp-table td.exp-desc,
+.exp-table thead th:nth-child(3),
+.stu-table td .stu-addr,
+.stu-table td .stu-addr__t {
+    text-align: left;
+}

@@ -124,10 +124,19 @@ const EXF = {
     const v = Number(n || 0);
     return 'Rs. ' + (v < 0 ? '-' : '') + EXF.cash(Math.abs(v));
   },
-  /* TWO DECIMALS, NO SEPARATOR — "17000.00", the owner's own example, written
-     out twice. An empty money cell is 0.00 rather than a dash: a blank in a
-     money column reads as "not recorded" when what it means is nothing. */
-  cash(n) { return Number(n || 0).toFixed(2); },
+  /* TWO DECIMALS, GROUPED — "17,000.00". The two decimals are the owner's own
+     example ("1400.0 or 1400.00"); the separator is the owner's later word
+     ("use thousand separator"), which is why the format carried none for a
+     day. `en-PK` groups in plain thousands — not lakhs — so this matches both
+     fmtPKR() on the screen and `#,##0.00` in the workbook, and a figure reads
+     identically in all three places.
+
+     An empty money cell is 0.00 rather than a dash: a blank in a money column
+     reads as "not recorded" when what it means is nothing. */
+  cash(n) {
+    const v = Number(n || 0);
+    return v.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
   number(n) { return Number(n || 0).toLocaleString('en-PK'); },
   percent(n) { return (Math.round(Number(n || 0) * 1000) / 10) + '%'; },
   /* A value the module did not supply. Not "N/A", not blank, not "null". */
@@ -159,16 +168,30 @@ const EX_TONE_COLOR = {
    wastes a third of the page, and an address given a status's width wraps into
    a column of single letters. These are the defaults a column inherits from
    what it holds; any column may override.                                    */
+/* EVERY VALUE IS CENTRED (owner, 2026-09-10: "all the values should be centred
+   whether in pages or exports").
+
+   THE COST, STATED, because it is a real one: money read down a column is
+   easiest to compare when the digits line up on the right, and centring throws
+   that away — 1,400.00 and 140,000.00 no longer share a decimal point. Two
+   things make it survivable here. Both registers are tabular-figure faces, so
+   every digit is the same width and the ragged edge is regular rather than
+   random; and the two decimals the owner asked for on the same day mean every
+   money cell now ends in the same two characters, which is most of what the
+   right edge was doing for the eye.
+
+   `wrap` stays LEFT. It holds addresses and remarks — sentences, not values —
+   and a centred paragraph is unreadable in a way a centred figure is not. */
 const EX_TYPE = {
-  id:       { align: 'left',   width: 8,  pdfWeight: 0.6 },
-  text:     { align: 'left',   width: 18, pdfWeight: 1.4 },
+  id:       { align: 'center', width: 8,  pdfWeight: 0.6 },
+  text:     { align: 'center', width: 18, pdfWeight: 1.4 },
   wrap:     { align: 'left',   width: 34, pdfWeight: 2.4 },
-  number:   { align: 'right',  width: 11, pdfWeight: 0.8 },
-  money:    { align: 'right',  width: 15, pdfWeight: 1.1 },
-  date:     { align: 'left',   width: 13, pdfWeight: 0.9 },
-  datetime: { align: 'left',   width: 20, pdfWeight: 1.3 },
+  number:   { align: 'center', width: 11, pdfWeight: 0.8 },
+  money:    { align: 'center', width: 15, pdfWeight: 1.1 },
+  date:     { align: 'center', width: 13, pdfWeight: 0.9 },
+  datetime: { align: 'center', width: 20, pdfWeight: 1.3 },
   status:   { align: 'center', width: 12, pdfWeight: 0.9 },
-  percent:  { align: 'right',  width: 10, pdfWeight: 0.7 },
+  percent:  { align: 'center', width: 10, pdfWeight: 0.7 },
 };
 function exType(c) { return EX_TYPE[c && c.type] || EX_TYPE.text; }
 function exAlign(c) { return c.align || exType(c).align; }

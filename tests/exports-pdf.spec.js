@@ -180,10 +180,10 @@ test('every printed monthly charge carries the mess, not just the rent', async (
   expect(doc).not.toBeNull();
 
   // 8,000 rent + 6,500 mess = 14,500 — the figure that was missing everywhere.
-  /* 14500.00, not "14,500": the owner's edits of 2026-09-10 set the money
-     shape to two decimals with no separator, and the currency to the heading
+  /* "14,500.00": the owner's edits of 2026-09-10 set the money shape to two
+     decimals with a thousands separator, and moved the currency to the heading
      rather than the cell. */
-  expect(doc.text, 'the sheet quotes the rent half alone').toContain('14500.00');
+  expect(doc.text, 'the sheet quotes the rent half alone').toContain('14,500.00');
   /* THE TWO HALVES ARE COLUMNS NOW (`payments excel redesign.png`,
      2026-09-10), which is a stronger form of the same fact than the coverage
      label that briefly replaced the sub-line: the printed register reconciles
@@ -194,8 +194,8 @@ test('every printed monthly charge carries the mess, not just the rent', async (
   expect(doc.headers).toContain('Charges (Rs.)');
   expect(doc.headers).toContain('Rent (Rs.)');
   expect(doc.headers).toContain('Mess (Rs.)');
-  expect(doc.text, 'the rent half is missing from the printed register').toContain('8000.00');
-  expect(doc.text, 'the mess half is missing from the printed register').toContain('6500.00');
+  expect(doc.text, 'the rent half is missing from the printed register').toContain('8,000.00');
+  expect(doc.text, 'the mess half is missing from the printed register').toContain('6,500.00');
   expect(doc.text, 'the old two-number sub-line is back').not.toContain('rent + PKR');
   /* …and it comes out in room order too. The FIRST cell is the row's number
      since the owner's sheet added a `#` column, so room order is read from the
