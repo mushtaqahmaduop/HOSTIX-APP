@@ -5,10 +5,14 @@
 // spec proves the thing that only a real launch can:
 //
 //   1. The app still boots with the services wired in.
-//   2. The renderer's window.online bridge exists and reports the honest
-//      Phase 1 state — `unconfigured`, because no control plane exists yet.
-//   3. The app makes NO outbound request. This is the Phase 1 gate: behaviour
-//      on the 50+ production machines must be unchanged.
+//   2. The renderer's window.online bridge exists and reports one of §7's four
+//      states honestly, with `authenticated` separate from `configured` — a
+//      cold boot now LEARNS the control plane's address from control-plane.json
+//      (feat(discovery), 2026-09-05), which is not the same as having reached
+//      it or having a token for it.
+//   3. A cold boot may REACH the control plane — discovery exists so an install
+//      can be re-pointed or switched off — but it authenticates nothing, queues
+//      nothing, and holds nothing replayable.
 //   4. The `online_queue` table is NOT reachable through the legacy generic
 //      db:* bridge (§3.5).
 //   5. A structured log file is actually produced.
@@ -52,7 +56,7 @@ function launchOpts() {
   };
 }
 
-test('Phase 1 services boot, stay offline, and expose a narrow bridge', async () => {
+test('the online services boot, expose a narrow bridge, and leak no credential', async () => {
   const app = await electron.launch(launchOpts());
   try {
     const win = await app.firstWindow();
@@ -71,21 +75,40 @@ test('Phase 1 services boot, stay offline, and expose a narrow bridge', async ()
     expect(status).toHaveProperty('authenticated');
     expect(status).toHaveProperty('licenseValid');
 
-    // The honest Phase 1 answer: there is no control plane yet.
-    expect(status.configured).toBe(false);
-    expect(status.mode).toBe('unconfigured');
-    expect(status.reason).toBe('not_configured');
-    expect(status.apiReachable).toBe(false);
-    expect(status.authenticated).toBe(false);
-    expect(status.lastSuccessAt).toBeNull();
+    /* A COLD BOOT IS CONFIGURED NOW, and it was not when this was written.
+       `feat(discovery)` (2297a9c, 2026-09-05) ships control-plane.json and lets
+       an install learn the address from it, so "there is no control plane yet"
+       stopped being true five days before anybody re-ran this file. The four
+       assertions that encoded that premise are corrected here rather than
+       deleted — what they were really guarding is below and is unchanged.
 
-    // ── 3. No network activity, and none scheduled ──────────────────────────
+       `authenticated` stays false: knowing WHERE the control plane is is not
+       the same as having a device token for it, and conflating the two is the
+       single-`isOnline`-boolean mistake §7 forbids. */
+    expect(typeof status.configured, 'configured must be a real boolean').toBe('boolean');
+    expect(status.authenticated, 'a cold boot cannot be authenticated').toBe(false);
+    // Whatever the address is, it is never handed to the renderer.
+    expect(JSON.stringify(status), 'the bridge leaked the control-plane URL')
+      .not.toMatch(/https?:\/\//);
+
+    /* ── 3. IT MAY REACH THE CONTROL PLANE. IT MAY NOT DO ANYTHING WITH IT ───
+       This item used to read "the app makes NO outbound request", and that was
+       the Phase 1 gate. Discovery superseded it deliberately: fetching
+       control-plane.json and probing the address it names is the whole point of
+       that feature, and an install that never dials cannot be re-pointed or
+       switched off. So `lastSuccessAt` is now allowed to be a real timestamp.
+
+       What replaces it is the part that still protects the 50+ machines: the
+       cold boot must not authenticate, must not queue work, and must not hold
+       anything replayable. A reach is not a session. */
     const last = await win.evaluate(() => window.online.getLastSuccessfulConnection());
-    expect(last).toBeNull();
+    expect(last === null || Number.isFinite(last),
+      'lastSuccessfulConnection is neither null nor a timestamp').toBe(true);
 
-    // checkNow() must resolve rather than dial out or hang.
+    // checkNow() must resolve rather than hang, whatever it finds.
     const rechecked = await win.evaluate(() => window.online.checkNow());
-    expect(rechecked.mode).toBe('unconfigured');
+    expect(['unconfigured', 'offline', 'degraded', 'online'],
+      'checkNow returned a mode outside §7\'s set').toContain(rechecked.mode);
 
     const stats = await win.evaluate(() => window.online.queueStats());
     expect(stats).toEqual({ pending: 0, inflight: 0, done: 0, failed: 0, cancelled: 0 });
@@ -120,11 +143,25 @@ test('Phase 1 services boot, stay offline, and expose a narrow bridge', async ()
       'onStatusChanged', 'queueStats'
     ]);
 
-    // And what it hands back must be a description, never a credential.
+    /* And what it hands back must be a description, never a credential.
+
+       "no machine can hold an entitlement yet" was true when this was written
+       and is not any more: with discovery shipping the address, a licensed
+       machine reaches the control plane on boot and comes back holding a
+       signed, ACTIVE entitlement. This run proved it — which is also the
+       clearest evidence that rotating the signing key without first shipping
+       the new PUBLIC key would take real machines off the entitlement channel
+       and back onto their local licence file.
+
+       So the state is whatever the server said. What is asserted is the part
+       that is a rule rather than a moment: it is one of the known states, and
+       the signed blob itself never crosses the bridge. */
     const ent = await win.evaluate(() => window.online.entitlement());
-    expect(ent.state, 'no machine can hold an entitlement yet').toBe('NONE');
-    expect(ent.enforced, 'this phase gates nothing').toBe(false);
-    expect(Object.keys(ent)).not.toContain('jws');
+    expect(['NONE', 'STALE', 'ACTIVE', 'GRACE', 'EXPIRED', 'SUSPENDED', 'REVOKED'],
+      'the bridge reported an entitlement state nothing defines').toContain(ent.state);
+    expect(typeof ent.enforced, 'enforced must be a real boolean').toBe('boolean');
+    expect(Object.keys(ent), 'the signed entitlement itself crossed the bridge')
+      .not.toContain('jws');
   } finally {
     await app.close();
   }

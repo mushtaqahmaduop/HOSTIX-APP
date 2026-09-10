@@ -23,9 +23,14 @@ const KEYS = {
   "ent-20260819":
     "-----BEGIN PUBLIC KEY-----\n" +
     "MCowBQYDK2VwAyEAL7bcRL+Y/nTvmaCem/kd+sA0HTwkP+SYY2Pi1IzyFKk=\n" +
+    "-----END PUBLIC KEY-----\n",
+
+  "ent-20260910":
+    "-----BEGIN PUBLIC KEY-----\n" +
+    "MCowBQYDK2VwAyEAhxyqxOUpwFcPZ4fBAMPfqI8UDxXiXPRquH/jr6XAfOY=\n" +
     "-----END PUBLIC KEY-----\n"
 };
 
-const ACTIVE_KID = "ent-20260819";
+const ACTIVE_KID = "ent-20260910";
 
 module.exports = { KEYS, ACTIVE_KID };

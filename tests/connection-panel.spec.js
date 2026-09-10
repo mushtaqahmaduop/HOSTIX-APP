@@ -6,9 +6,23 @@
 // same situation as a hostel with no internet, and one light cannot say which
 // one you are looking at.
 //
-// On this build there is no control plane, so the panel must say "not
-// configured" in plain words rather than showing four red crosses — and the app
-// must still be making no network calls at all.
+// THERE IS A CONTROL PLANE NOW. This file was written for the build that had
+// none, and asserted that nothing was configured, nothing had ever been reached,
+// and re-checking was a no-op. `feat(discovery)` (2297a9c, 2026-09-05) ended all
+// three deliberately: an install learns the address from control-plane.json, so
+// the estate can be re-pointed or switched off without cutting a release, and an
+// install that never dials cannot be either.
+//
+// The rules that survive that, and are what this file now holds:
+//   · four states, answered separately, never collapsed into one boolean;
+//   · `authenticated` is never inferred from the other three;
+//   · the control-plane URL never crosses the bridge;
+//   · each row carries a word a person can read, never a raw reason code;
+//   · re-checking resolves rather than hanging, and authenticates nothing.
+//
+// Its `.dash-pill` selector had also been counting NOTHING since the panel was
+// rebuilt on `.conn-row`, so "four states, shown as four" was passing on a zero
+// it never compared. It counts four now.
 // ════════════════════════════════════════════════════════════════════════════
 'use strict';
 
@@ -37,7 +51,7 @@ test.beforeAll(() => {
   fs.rmSync(path.join(PROFILE, 'Local Storage'), { recursive: true, force: true });
 });
 
-test('the connection panel reports four separate states and makes no requests', async () => {
+test('the connection panel reports four separate states, and never collapses them', async () => {
   const pageErrors = [];
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
@@ -63,13 +77,27 @@ test('the connection panel reports four separate states and makes no requests', 
   expect(bridge).toEqual(['checkNow', 'entitlement', 'getLastSuccessfulConnection',
                           'onStatusChanged', 'getStatus', 'queueStats'].sort());
 
-  // The offline gate: nothing configured, nothing ever reached.
+  /* THE OFFLINE GATE IS GONE, ON PURPOSE. This asserted that nothing was
+     configured and nothing had ever been reached — the Phase 1 world.
+     `feat(discovery)` (2297a9c, 2026-09-05) ships control-plane.json, so a
+     licensed machine now learns the address on boot, reaches it, and this panel
+     reports `online`. An install that never dials cannot be re-pointed or
+     switched off, which is the whole reason discovery exists.
+
+     What survives is the guarantee the panel is FOR: four states, each answered
+     separately, and `authenticated` never inferred from the other three. That
+     was §7's rule and it is the one a single `isOnline` boolean breaks. */
   const st = await win.evaluate(() => window.online.getStatus());
   console.log('[status] ' + JSON.stringify(st));
-  expect(st.configured, 'no control plane is configured on this build').toBe(false);
-  expect(st.mode).toBe('unconfigured');
-  expect(st.lastSuccessAt, 'nothing has ever been reached').toBeNull();
-  expect(st.apiReachable).toBe(false);
+  for (const k of ['networkAvailable', 'apiReachable', 'authenticated', 'licenseValid']) {
+    expect(typeof st[k], k + ' is not a real boolean').toBe('boolean');
+  }
+  expect(['unconfigured', 'offline', 'degraded', 'online'],
+    'the panel reported a mode outside §7\'s set').toContain(st.mode);
+  expect(st.authenticated,
+    'reaching the control plane is not the same as holding a token for it').toBe(false);
+  expect(JSON.stringify(st), 'the status object carries the control-plane URL')
+    .not.toMatch(/https?:\/\//);
 
   // The panel itself.
   await win.evaluate(() => { settingsTab = 'connection'; navigate('settings'); });
@@ -80,30 +108,37 @@ test('the connection panel reports four separate states and makes no requests', 
 
   const panel = await win.evaluate(() => ({
     text: document.getElementById('conn-body').innerText.replace(/\s+/g, ' '),
-    rows: document.querySelectorAll('#conn-body .dash-pill').length,
+    rows: document.querySelectorAll('#conn-body .conn-row').length,
     hasCheckBtn: !!document.querySelector('#conn-body button'),
     renderError: document.body.innerText.includes('Render Error'),
   }));
   console.log('[panel] ' + JSON.stringify(panel));
 
   expect(panel.renderError).toBe(false);
+  /* `.conn-row`, not `.dash-pill` — the panel was rebuilt into its own row
+     component and this selector had been counting nothing, so "four states,
+     shown as four" was passing on a zero it never compared. */
   expect(panel.rows, 'four states, shown as four').toBe(4);
   expect(panel.text).toContain('Internet');
   expect(panel.text).toContain('Hostyllo API');
   expect(panel.text).toContain('License');
   expect(panel.text).toContain('Application');
-  // Plain words, not four red crosses.
-  expect(panel.text).toContain('Not configured');
-  expect(panel.text).toContain('Offline edition');
-  expect(panel.text).toContain('makes no internet requests');
+  /* Plain words, not four red crosses. The exact wording depends on what the
+     panel FOUND — "Not configured" belonged to a build that could not be
+     configured — so what is asserted is that each row carries a word at all,
+     and that the panel never prints the raw reason codes underneath. */
+  expect(panel.text).not.toMatch(/\bundefined\b|\bnull\b|\[object/);
+  expect(panel.text, 'the panel does not say when it last looked').toContain('Last checked');
   expect(panel.hasCheckBtn, 'and a way to re-check').toBe(true);
 
-  // Re-checking an unconfigured control plane must stay a no-op, not a request.
+  /* Re-checking must resolve rather than hang or throw, whatever it finds. It
+     used to be asserted as a no-op, which was only true while there was
+     nothing to call. */
   await win.evaluate(() => connCheckNow(null));
-  await win.waitForTimeout(600);
+  await win.waitForTimeout(900);
   const after = await win.evaluate(() => window.online.getStatus());
-  expect(after.lastSuccessAt, 'checking again still reaches nothing').toBeNull();
-  expect(after.mode).toBe('unconfigured');
+  expect(['unconfigured', 'offline', 'degraded', 'online']).toContain(after.mode);
+  expect(after.authenticated, 'a re-check must never authenticate anything').toBe(false);
 
   expect(pageErrors, 'no uncaught errors').toEqual([]);
   await app.close();
