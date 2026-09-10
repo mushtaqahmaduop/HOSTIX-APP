@@ -169,15 +169,38 @@
        --card / --text / --accent / --green names, which are still declared in
        this file. Only the ownership moved. */
 
-    /* ── TYPOGRAPHY SCALE ── */
+    /* ── TYPOGRAPHY SCALE ─────────────────────────────────────────────────────
+       THE APP HAS A VOCABULARY AND DOES NOT SPEAK IT. These tokens have been
+       here for months and `.money-value--*` is the only thing in 980KB of CSS
+       that consumes any of them. Meanwhile the 2026-09-10 audit counted ~130
+       separate section-heading selectors improvising their own size between
+       8.5px and 22px, and 1143 raw font-size declarations in 31 values.
+
+       That is §53 of the owner's enterprise direction — "the design system
+       defines the vocabulary" — failing in the specific way it fails: not a
+       missing system, an unused one.
+
+       TWO RUNGS WERE GENUINELY MISSING, and their absence is why every module
+       improvised. Between --fs-section (22px, a page-level section header) and
+       --fs-body (14px) there was nothing for a CARD OR PANEL TITLE, which is
+       the most common heading in this app — hence the scatter across 12.5, 13,
+       13.5, 14, 14.5, 15 and 16px. And there was no QUIET register at all,
+       which is why 87% of the app's type is weight 600 or heavier.
+
+       Adopted incrementally, family by family, each verified against the fold
+       and the responsive floor. §61: do not blindly normalise everything. */
     --fs-display:   clamp(32px, 2.6vw, 38px); /* KPI / hero numbers */
-    --fs-section:   22px;                      /* section titles */
+    --fs-section:   22px;                      /* page-level section headers */
+    --fs-card:      15px;                      /* card and panel titles */
     --fs-body:      14px;
     --fs-label:     12px;
+    --fs-meta:      11.5px;                    /* the quiet register */
     --fw-display:   800;
     --fw-section:   700;
+    --fw-card:      650;
     --fw-body:       400;
     --fw-label:      600;
+    --fw-meta:       400;
 
     /* ── CARD SHAPE (premium SaaS radius) ── */
     --radius-card:  22px;
