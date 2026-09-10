@@ -3113,3 +3113,123 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
 .dash-row-c .dash-sec .rt-list__hd { padding-bottom: 4px; }
 .dash-row-c .dl-needs { gap: 2px; padding: 3px 8px 4px; }
 .dash-row-c .dl-acts  { gap: 6px; padding: 6px 10px 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE SEAT-AVAILABILITY EXPAND MODAL (`sxp-`)
+   Built 2026-09-10 to the owner's reference, `seat availability expand
+   button.png`. The markup is in showSeatDetailModal() / _seatCard().
+
+   THE CARD IS A BUTTON, because it opens the room. It was a `div` with an
+   onclick and a hover transform written inline, which is a control that no
+   keyboard can reach.
+
+   COLOUR IS STATE HERE AND NOTHING ELSE. Three of them, and the third is the
+   one this modal exists to surface: a room the hostel has deliberately
+   over-filled. CLAUDE.md's rule is that hue carries state, and "how many beds
+   are left" is the only state on this screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sxp-sum {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+    margin: -6px 0 14px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text3);
+}
+.sxp-sum__c b {
+    color: var(--text); font-weight: 800;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.sxp-sum__c.is-free b { color: var(--green); }
+.sxp-sum__c.is-full b { color: var(--red); }
+.sxp-sum__c.is-over b { color: var(--ant-warning-fg); }
+
+.sxp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+    gap: 11px;
+    /* Its own scroll. Forty-two rooms is nine rows, and the modal shell must
+       keep its head and its footer in place. */
+    max-height: min(56vh, 520px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.sxp-empty { padding: 44px 20px; text-align: center; color: var(--text3); font-size: 13px; }
+
+.sxp-card {
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 12px 13px 11px; min-width: 0;
+    text-align: left; cursor: pointer; font-family: var(--font);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    transition: var(--transition);
+}
+.sxp-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.sxp-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sxp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sxp-n {
+    font-size: 15.5px; font-weight: 800; color: var(--text); white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.sxp-chip {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    font-size: 10.5px; font-weight: 700;
+    background: var(--ant-success-bg); color: var(--ant-success-fg);
+}
+.sxp-chip svg { width: 11px; height: 11px; }
+
+.sxp-meta {
+    font-size: 11px; color: var(--text3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.sxp-mid { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sxp-count {
+    font-size: 14px; font-weight: 800; color: var(--accent-strong); white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.sxp-figs { display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* Hollow is the DEFAULT, so a free bed is the quiet one and a taken bed is the
+   one that reads. */
+.sxp-fig { width: 14px; height: 14px; flex-shrink: 0; color: var(--border2); }
+.sxp-fig.is-on { color: var(--accent); }
+.sxp-more { font-size: 10px; font-weight: 700; color: var(--text3); margin-left: 2px; }
+
+.sxp-bar { display: block; height: 6px; border-radius: 3px; background: var(--dash-sunk); overflow: hidden; }
+.sxp-bar__f { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+
+.sxp-foot { font-size: 11px; color: var(--text3); }
+
+/* ── Full ───────────────────────────────────────────────────────────────── */
+.sxp-card.is-full            { background: var(--ant-danger-bg); border-color: var(--red); }
+.sxp-card.is-full .sxp-n,
+.sxp-card.is-full .sxp-count { color: var(--red); }
+.sxp-card.is-full .sxp-chip  { background: var(--card); color: var(--red); }
+.sxp-card.is-full .sxp-fig.is-on { color: var(--red); }
+.sxp-card.is-full .sxp-bar__f    { background: var(--red); }
+.sxp-card.is-full:hover      { border-color: var(--red); }
+
+/* ── Over capacity ──────────────────────────────────────────────────────────
+   Not an error state — this app lets a warden force-add past a room's
+   capacity on purpose, after asking. It is the one thing on this screen worth
+   interrupting for, and it gets the colour that means "look at this", not the
+   one that means "this is wrong". */
+.sxp-card.is-over            { background: var(--ant-warning-bg); border-color: var(--ant-warning-fg); }
+.sxp-card.is-over .sxp-n,
+.sxp-card.is-over .sxp-count,
+.sxp-card.is-over .sxp-foot  { color: var(--ant-warning-fg); }
+.sxp-card.is-over .sxp-foot  { font-weight: 700; }
+.sxp-card.is-over .sxp-chip  { background: var(--card); color: var(--ant-warning-fg); }
+.sxp-card.is-over .sxp-fig.is-on { color: var(--ant-warning-fg); }
+.sxp-card.is-over .sxp-bar__f    { background: var(--ant-warning-fg); }
+.sxp-card.is-over:hover      { border-color: var(--ant-warning-fg); }
+
+/* At the QA floor the modal is narrower and the fold is 768px tall; three
+   across still holds a whole card, and the grid keeps its own scroll. */
+@media (max-width: 1100px) {
+    .sxp-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+    .sxp-fig  { width: 12px; height: 12px; }
+}
+

@@ -413,6 +413,96 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
   await app.close();
 });
 
+/* ── WHAT THE EXPANDED GRID SAYS ─────────────────────────────────────────────
+   Rebuilt 2026-09-10 to `seat availability expand button.png`. The old tiles
+   painted two states in this app's ACCENT colour, which carries no state at
+   all, and answered "Occ: 2/4" without saying which of those a warden should
+   act on.
+
+   THE THIRD STATE IS WHY THIS TEST EXISTS. A room can be over-filled on
+   purpose — submitAddStudent asks and then force-adds — and the old tile drew
+   that as an ordinary full room with a bar running past 100%. It is the single
+   most useful thing this modal can tell anyone. */
+test('the expanded seat grid separates rooms with space, full rooms and over-filled ones', async () => {
+  const pageErrors = [];
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  win.on('pageerror', e => pageErrors.push(e.message));
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  await seed(win, async () => {
+    const t1 = DB.settings.roomTypes.find(t => t.capacity >= 2) || DB.settings.roomTypes[0];
+    DB.rooms = [
+      { id: 'sr1', number: '1', floor: 'Ground', typeId: t1.id, amenities: [] },
+      { id: 'sr2', number: '2', floor: 'Ground', typeId: t1.id, amenities: [] },
+      { id: 'sr3', number: '3', floor: '1st',    typeId: t1.id, amenities: [] },
+    ];
+    const cap = t1.capacity;
+    DB.students = [];
+    const mk = (room, n, tag) => { for (let i = 0; i < n; i++)
+      DB.students.push({ id: tag + i, name: tag + i, roomId: room, status: 'Active', joinDate: today() }); };
+    mk('sr1', 1, 'a');          // space left
+    mk('sr2', cap, 'b');        // exactly full
+    mk('sr3', cap + 2, 'c');    // deliberately over-filled
+    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = [];
+    await saveDB();
+  });
+
+  await win.evaluate(() => showSeatDetailModal('rooms'));
+  await win.waitForSelector('.sxp-card', { timeout: 8000 });
+
+  const cards = await win.evaluate(() =>
+    [...document.querySelectorAll('.sxp-card')].map(c => ({
+      state: c.className.replace(/.*\bis-(\w+)\b.*/, '$1'),
+      name:  c.querySelector('.sxp-n').textContent.trim(),
+      chip:  c.querySelector('.sxp-chip').textContent.trim(),
+      foot:  c.querySelector('.sxp-foot').textContent.trim(),
+      figsOn: c.querySelectorAll('.sxp-fig.is-on').length,
+      barPct: c.querySelector('.sxp-bar__f').style.width,
+      // The card must be reachable by keyboard, which the old div was not.
+      tag: c.tagName,
+    })));
+
+  expect(cards.length).toBe(3);
+  expect(cards.map(c => c.state)).toEqual(['free', 'full', 'over']);
+  expect(cards.map(c => c.tag)).toEqual(['BUTTON', 'BUTTON', 'BUTTON']);
+
+  expect(cards[0].chip).toMatch(/Free$/);
+  expect(cards[0].foot).toMatch(/seats? available$/);
+
+  expect(cards[1].chip).toBe('Full');
+  expect(cards[1].foot).toBe('No seats available');
+
+  expect(cards[2].chip).toMatch(/Over Capacity/);
+  expect(cards[2].foot, 'an over-filled room does not say by how much').toBe('+2 over capacity');
+  // The bar cannot show more than the room has, whatever is in it.
+  expect(cards[2].barPct).toBe('100%');
+
+  // One figure per bed taken — the half of the reference that is read at a
+  // glance in a way a fraction is not.
+  expect(cards[0].figsOn).toBe(1);
+
+  /* THREE COLOURS, NOT ONE. Whatever the tokens resolve to, the three states
+     must not paint the same — that was the whole fault of the tiles this
+     replaced. */
+  const hues = await win.evaluate(() =>
+    [...document.querySelectorAll('.sxp-card')].map(c => getComputedStyle(c).borderColor));
+  expect(new Set(hues).size, 'the three states paint the same border').toBe(3);
+
+  // And the strip above the grid counts them.
+  const sum = await win.evaluate(() =>
+    (document.querySelector('.sxp-sum') || {}).innerText || '');
+  expect(sum).toMatch(/3\s+rooms/);
+  expect(sum).toMatch(/1\s+full/);
+  expect(sum).toMatch(/1\s+over capacity/);
+
+  await win.evaluate(() => closeModal());
+  expect(pageErrors).toEqual([]);
+  await app.close();
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE FOLD, WITH 40 ROOMS
 // ─────────────────────────────────────────────────────────────────────────────

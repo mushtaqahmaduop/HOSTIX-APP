@@ -2547,25 +2547,112 @@ function printSeatAvailability() {
   _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+today()+'.pdf', {pageSize:'A4'});
 }
 // ─────────────────────────────────────────────────────────────────────────────
+/* ── THE SEAT-AVAILABILITY EXPAND MODAL ──────────────────────────────────────
+   Rebuilt 2026-09-10 to the owner's reference (`seat availability expand
+   button.png`). It was a grid of tiles built out of inline `style="…"`
+   attributes that painted two states — some free, or none — in a blue that is
+   this app's ACCENT rather than a state colour, and answered "Occ: 2/4" with
+   no sense of which of those a warden should act on.
+
+   THREE STATES, EACH WITH ITS OWN COLOUR AND ITS OWN SENTENCE
+     · seats free      — neutral card, green chip, "N seats available"
+     · full            — red card, red chip, "No seats available"
+     · over capacity   — amber card, amber chip, "+N over capacity"
+
+   The third one is not a rendering curiosity: this app deliberately allows a
+   room to be over-filled (submitAddStudent asks and then force-adds), so a
+   room holding 3 in 2 beds is a real record that the old tile drew as an
+   ordinary full room with a bar past 100%. It is the single most useful thing
+   this modal can tell anyone, and it now has a colour of its own.
+
+   THE SEAT GLYPHS ARE THE POINT OF THE REFERENCE. One figure per bed, filled
+   for taken and hollow for free, is read at a glance in a way "2/4" is not.
+   They are capped at eight per card and the remainder printed as "+N", because
+   a hostel with a 20-bed dormitory would otherwise wrap the card.
+
+   Everything drawn here comes from getRoomOccupancy() and the room's type —
+   the same two calls the dashboard card behind it uses, so the modal and the
+   card it expands cannot disagree. */
+function _seatFigure(filled) {
+  return '<svg class="sxp-fig' + (filled ? ' is-on' : '') + '" viewBox="0 0 24 24" '
+       + 'fill="currentColor" aria-hidden="true">'
+       + '<circle cx="12" cy="7.5" r="3.6"/>'
+       + '<path d="M12 12.6c-4 0-6.6 2.1-6.6 4.6V20h13.2v-2.8c0-2.5-2.6-4.6-6.6-4.6z"/>'
+       + '</svg>';
+}
+
+function _seatCard(r) {
+  const rt   = getRoomType(r);
+  const cap  = (rt && rt.capacity) || 1;
+  const occ  = getRoomOccupancy(r);
+  const free = cap - occ;
+  const state = free > 0 ? 'free' : free === 0 ? 'full' : 'over';
+
+  const chip = state === 'free' ? free + ' Free'
+             : state === 'full' ? 'Full'
+             : icon('warning', 'xs') + 'Over Capacity';
+  const foot = state === 'free' ? free + ' seat' + (free === 1 ? '' : 's') + ' available'
+             : state === 'full' ? 'No seats available'
+             : '+' + (-free) + ' over capacity';
+
+  /* Eight figures at most. A 20-bed dormitory is rare but real, and twenty
+     glyphs would wrap the card into three rows of them. */
+  const SHOWN = 8;
+  const total = Math.max(cap, occ);
+  const draw  = Math.min(total, SHOWN);
+  let figs = '';
+  for (let i = 0; i < draw; i++) figs += _seatFigure(i < occ);
+  if (total > SHOWN) figs += '<span class="sxp-more">+' + (total - SHOWN) + '</span>';
+
+  // Past 100% the bar is full — it cannot show more than the room has.
+  const pct = Math.min(100, Math.round(occ / cap * 100));
+
+  return `<button type="button" class="sxp-card is-${state}"
+            onclick="closeModal();showRoomSeatDetailModal('${escHtml(String(r.id))}')"
+            title="Open this room">
+      <span class="sxp-head">
+        <span class="sxp-n">Rm #${escHtml(String(r.number))}</span>
+        <span class="sxp-chip">${chip}</span>
+      </span>
+      <span class="sxp-meta">${escHtml((rt && rt.name) || '—')} · ${escHtml(floorShort(r.floor) || 'Floor not set')}</span>
+      <span class="sxp-mid">
+        <span class="sxp-count">${occ} / ${cap}</span>
+        <span class="sxp-figs">${figs}</span>
+      </span>
+      <span class="sxp-bar"><span class="sxp-bar__f" style="width:${pct}%"></span></span>
+      <span class="sxp-foot">${escHtml(foot)}</span>
+    </button>`;
+}
+
 function showSeatDetailModal(type) {
   if(type==='rooms') {
-    // Show full room grid modal
-    const allRooms = DB.rooms;
-    let content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
-    allRooms.forEach(r=>{
-      const rt=getRoomType(r); const cap=rt?.capacity||1; const occ2=getRoomOccupancy(r); const free=cap-occ2;
-      content+=`<div onclick="closeModal();showRoomSeatDetailModal('${r.id}')" style="background:${free===0?'var(--bg4)':'rgba(37,99,235,0.1)'};border:1px solid ${free===0?'var(--border)':'rgba(37,99,235,0.3)'};border-radius:10px;padding:12px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:18px;font-weight:900;color:var(--text)">Rm #${escHtml(String(r.number))}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${escHtml(rt?.name||'—')} · Floor ${escHtml(r.floor||'?')}</div>
-        <div style="margin-top:8px;display:flex;justify-content:space-between">
-          <span style="font-size:12px;font-weight:700;color:${free===0?'var(--text2)':'var(--accent-strong)'}">Occ: ${occ2}/${cap}</span>
-          <span style="font-size:12px;font-weight:700;color:${free>0?'var(--text2)':'var(--text3)'}">${free} free</span>
-        </div>
-        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(occ2/cap*100)}%;background:${free===0?'var(--text3)':'var(--accent)'};border-radius:2px"></div></div>
-      </div>`;
+    const rooms = roomsByNumber(DB.rooms || []);
+    if (!rooms.length) {
+      showModal('modal-xl', ICONS.bed + ' All Rooms — Seat Availability',
+        '<div class="sxp-empty">No rooms have been created yet. Add them from the Rooms page, '
+        + 'or a floor at a time from Settings.</div>');
+      return;
+    }
+
+    /* The three counts the grid is about, stated once above it. A warden opens
+       this to find a bed; "11 rooms have space" answers that before they read
+       a single card. */
+    let free = 0, full = 0, over = 0, seatsFree = 0;
+    rooms.forEach(r => {
+      const cap = (getRoomType(r) || {}).capacity || 1;
+      const n = cap - getRoomOccupancy(r);
+      if (n > 0) { free++; seatsFree += n; } else if (n === 0) full++; else over++;
     });
-    content += '</div>';
-    showModal('modal-xl',ICONS.bed+' All Rooms — Seat Availability',`<div style="max-height:500px;overflow-y:auto">${content}</div>`);
+
+    const bar = `<div class="sxp-sum">
+        <span class="sxp-sum__c"><b>${rooms.length}</b> room${rooms.length === 1 ? '' : 's'}</span>
+        <span class="sxp-sum__c is-free"><b>${free}</b> with space · <b>${seatsFree}</b> seat${seatsFree === 1 ? '' : 's'}</span>
+        <span class="sxp-sum__c is-full"><b>${full}</b> full</span>
+        ${over ? `<span class="sxp-sum__c is-over"><b>${over}</b> over capacity</span>` : ''}
+      </div>`;
+
+    showModal('modal-xl', ICONS.bed + ' All Rooms — Seat Availability',
+      bar + '<div class="sxp-grid">' + rooms.map(_seatCard).join('') + '</div>');
     return;
   }
   let title, color, rows='';
