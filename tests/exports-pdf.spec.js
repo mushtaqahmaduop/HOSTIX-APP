@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // HOSTYLLO — the three PDF exports, and the order everything comes out in
 //
 // Students, Payments and Expenses each grew an Export PDF on 2026-08-31. They
@@ -160,8 +160,9 @@ test('the student roster prints in room order, lettered rooms included', async (
   expect(doc.landscape, 'eighteen columns need the long edge').toBe(true);
   expect(doc.title).toBe('Student Roster');
   expect(doc.subtitle).toContain('Test Hostel');
-  // 'Charge / mo' became 'Charges (PKR)' with the owner's sheet, 2026-09-10.
-  expect(doc.headers).toContain('Charges (PKR)');
+  /* 'Charge / mo' became 'Charges (Rs.)' — the owner's sheet, then the brief of
+     2026-09-10, which asks for Rs. rather than PKR in a currency heading. */
+  expect(doc.headers).toContain('Charges (Rs.)');
   // Section 16: an export must state the scope it was taken under.
   expect(doc.text).toContain('Scope');
   expect(doc.text).toContain('Generated');
@@ -187,9 +188,9 @@ test('every printed monthly charge carries the mess, not just the rent', async (
 
      The bug this test exists for is unchanged and still asserted on the line
      above: the printed charge is the ALL-IN figure, never the rent alone. */
-  expect(doc.headers).toContain('Charges (PKR)');
-  expect(doc.headers).toContain('Rent (PKR)');
-  expect(doc.headers).toContain('Mess (PKR)');
+  expect(doc.headers).toContain('Charges (Rs.)');
+  expect(doc.headers).toContain('Rent (Rs.)');
+  expect(doc.headers).toContain('Mess (Rs.)');
   expect(doc.text, 'the rent half is missing from the printed register').toContain('8,000');
   expect(doc.text, 'the mess half is missing from the printed register').toContain('6,500');
   expect(doc.text, 'the old two-number sub-line is back').not.toContain('rent + PKR');

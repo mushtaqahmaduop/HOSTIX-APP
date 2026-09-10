@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // HOSTYLLO — the Students export is a workbook, not a CSV
 //
 // The owner's reference (`rrr.pdf`) is a sheet with a title band, a line
@@ -154,7 +154,7 @@ async function exportAndCapture(win) {
       phone: cell(rHikmat, 'Contact'),
       emerg: cell(rHikmat, 'Emergency Contact'),
       cnic:  cell(rSalman, 'CNIC'),
-      charge: cell(rHikmat, 'Charges (PKR)'),
+      charge: cell(rHikmat, 'Charges (Rs.)'),
       room:  cell(rHikmat, 'Room No.'),
       address: cell(rHikmat, 'Address'),
     };
@@ -170,17 +170,25 @@ test('the sheet opens with a title band that says what it holds', async () => {
   expect(out.name).toMatch(/^Hostyllo_Students_.*\d{4}-\d{2}-\d{2}\.xlsx$/);
   expect(out.sheets).toEqual(['Students']);
 
-  // §22 — the product, the hostel, the document and when it was made.
-  expect(out.band[0]).toBe('HOSTYLLO');
-  expect(out.band[1]).toBe('Hostel Management System');
-  expect(out.band).toContain('Continental Boys Hostel - 2');
-  expect(out.band.some(l => /Student Roster/.test(l))).toBe(true);
-  expect(out.band.some(l => /^Generated: \d{2}-[A-Z][a-z]{2}-\d{4}/.test(l))).toBe(true);
+  /* §22 — the product, the hostel, the document and when it was made, all
+     still stated. THREE LINES, NOT SIX (owner brief, 2026-09-10): "do NOT
+     create a large vertical report header … the table must appear near the top
+     of the worksheet so the user gets maximum usable viewport". The band was
+     six lines plus a stacked label/value pair per summary figure; every fact
+     it carried is still here, on rows 1-3. */
+  expect(out.band[0]).toBe('HOSTYLLO  |  Hostel Management System');
+  expect(out.band[1]).toContain('Continental Boys Hostel - 2');
+  expect(out.band[1]).toContain('Student Roster');
+  expect(out.band.some(l => /Generated: \d{2}-[A-Z][a-z]{2}-\d{4}/.test(l))).toBe(true);
   // Counted from the rows written, never from DB totals the file does not hold.
   expect(out.band.some(l => /1 active, 1 left/.test(l))).toBe(true);
 
-  // Every band line spans the whole table, so none sits in column A alone.
-  expect(out.merges.length).toBeGreaterThanOrEqual(6);
+  /* THE TABLE STARTS ON ROW 5, which is the whole point of the brief: three
+     band rows, one spacer, then the headings. */
+  expect(out.headerRow, 'the table must be near the top of the sheet').toBe(5);
+
+  // Every band line spans the table's left-hand columns, so none sits alone.
+  expect(out.merges.length).toBeGreaterThanOrEqual(3);
 
   await app.close();
 });
@@ -256,7 +264,7 @@ test('every column declared is a column given a width', async () => {
      a hostel gets asked for. This list is the sheet's, in the sheet's words. */
   for (const label of ['#', 'Room No.', 'Student Name', 'Father Name', 'Contact',
                        'Emergency Contact', 'CNIC', 'Course / Study / Profession',
-                       'Gender', 'Address', 'Nationality', 'Charges (PKR)',
+                       'Gender', 'Address', 'Nationality', 'Charges (Rs.)',
                        'Status', 'Date (Left / Cancelling / Expelled)', 'Remarks']) {
     expect(out.headers, label + ' is missing from the workbook').toContain(label);
   }

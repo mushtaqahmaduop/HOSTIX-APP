@@ -950,6 +950,18 @@ async function payBulkMarkPaid() {
 
    A student with no record for that month prints "0 / 0", not a dash: nothing
    billed IS nothing owed, and a dash here would read as "not known". */
+/* The heading for the previous-month column: the month before the one being
+   reported, by name. `payScopeKey()` is null for an all-months export, and
+   then there is nothing to name. */
+function _payPrevLabel() {
+  const k = (typeof payScopeKey === 'function') ? payScopeKey() : null;
+  if (!k || !/^\d{4}-\d{2}$/.test(k)) return 'Earlier Months (Paid/Unpaid)';
+  let [y, m] = k.split('-').map(Number);
+  m -= 1; if (m < 1) { m = 12; y -= 1; }
+  const label = monthLabel(y + '-' + String(m).padStart(2, '0'));
+  return (label.split(' ')[0] || 'Previous') + ' (Paid/Unpaid)';
+}
+
 function _payPrevPair(p) {
   const k = _payMonthKey(p);
   if (!k || !/^\d{4}-\d{2}$/.test(k)) return '0 / 0';
@@ -1075,27 +1087,53 @@ function _payExportDef(list, opts) {
 
       { label: 'Month', type: 'text', width: 16, value: p => monthLabel(p.month) },
 
-      { label: 'Charges (PKR)', type: 'money', width: 13, total: 'sum',
+      /* Rs., NOT PKR, IN THE HEADINGS (owner brief, 2026-09-10). The value is
+         still a number — the currency lives in the workbook's number format,
+         which is what keeps the column summable — and the printed sheet drops
+         the prefix from the cell because the heading has already said it. */
+      { label: 'Charges (Rs.)', type: 'money', width: 13, total: 'sum',
         value: p => charges(p).monthly },
-      { label: 'Rent (PKR)', type: 'money', width: 12, total: 'sum',
+      { label: 'Rent (Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => Number(charges(p).rent || 0) },
-      { label: 'Mess (PKR)', type: 'money', width: 12, total: 'sum',
+      { label: 'Mess (Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => charges(p).messIncluded ? Number(charges(p).mess || 0) : 0 },
 
-      { label: 'Concession (PKR)', type: 'money', width: 14, total: 'sum',
+      { label: 'Concession (Rs.)', type: 'money', width: 14, total: 'sum',
         value: p => Number(p.concession || p.discount || 0) },
-      { label: 'Extra Charges (PKR)', type: 'money', width: 15, total: 'sum',
+      { label: 'Extra Charges (Rs.)', type: 'money', width: 15, total: 'sum',
         value: p => extrasSum(p) },
 
-      { label: 'Amount Paid (PKR)', type: 'money', width: 15, total: 'sum',
+      { label: 'Amount Paid (Rs.)', type: 'money', width: 15, total: 'sum',
         value: p => Number(p.amount || 0),
         get:   p => Number(p.amount || 0) > 0
-                 ? '<span class="pos">' + fmtPKR(p.amount) + '</span>' : '—' },
+                 ? '<span class="pos">' + escHtml(fmtNum(p.amount)) + '</span>' : '—' },
 
-      { label: 'Previous Month (Paid/Unpaid)', type: 'text', width: 20,
+      /* UNPAID AND ADMISSION FEE ARE BACK (owner brief, 2026-09-10, §5: "Do
+         NOT … remove columns"). An earlier pass took both out because the
+         owner's reference sheet does not draw them — the sheet answers what is
+         still owed through Status and its own summary. The brief is the later
+         word and it is explicit, and both are real figures a register is read
+         for: what THIS record still owes, and the one-off charge at intake
+         that is not part of a monthly bill. They keep the sheet's Rs. naming
+         and sit where they read: what was paid, then what was not. */
+      { label: 'Unpaid (Rs.)', type: 'money', width: 13, total: 'sum',
+        value: p => outstandingOf(p),
+        get:   p => outstandingOf(p) > 0
+                 ? '<span class="neg">' + escHtml(fmtNum(outstandingOf(p))) + '</span>'
+                   + (_exArrear(p) ? '<span class="sub">Arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
+                 : '—' },
+
+      { label: 'Admission Fee (Rs.)', type: 'money', width: 15, total: 'sum',
+        value: p => Number(p.admissionFee || p.fee || 0) },
+
+      /* THE COLUMN NAMES THE MONTH (owner brief: "August (Paid/Unpaid)", not
+         "Previous Month"). It can only name one when the export covers one —
+         with several months on the sheet there is no single month before them,
+         and the honest heading says so rather than naming the wrong August. */
+      { label: _payPrevLabel(), type: 'text', width: 20,
         value: p => _payPrevPair(p) },
 
-      { label: 'Payment Mode', type: 'text', width: 14, value: p => p.method || '' },
+      { label: 'Pay Mode', type: 'text', width: 14, value: p => p.method || '' },
       { label: 'Status',       type: 'status', width: 11, value: p => payStatusOf(p) },
       { label: 'Date',         type: 'date',   width: 13, value: p => p.date || '' },
       /* THE RECEIPT NUMBER, NOT THE ROW'S INTERNAL ID. `p.receiptNo` is assigned
@@ -1107,6 +1145,20 @@ function _payExportDef(list, opts) {
       { label: 'Receipt #',    type: 'id',     width: 14, value: p => String(p.receiptNo || '') },
 
       { label: 'Remarks', type: 'wrap', width: 22, value: p => _payRemark(p) },
+
+      /* TWO MORE THE BRIEF SAYS NOT TO REMOVE, kept out of the PRINTED sheet
+         because the owner's reference does not draw them and a sixteen-column
+         page has no room for a seventeenth. A spreadsheet has all the room it
+         needs, and both are things somebody sorts or filters a sheet by:
+
+           · the extra charges spelled out, where Remarks only names them;
+           · which of these balances is an old month rather than this one. */
+      { label: 'Extra charges (detail)', type: 'wrap', width: 28, pdf: false,
+        value: p => extrasOf(p).map(c =>
+          (c.description || c.desc || c.label || 'extra') + ' ' + Number(c.amount || 0)).join('; ') },
+
+      { label: 'Arrears from', type: 'text', width: 16, pdf: false,
+        value: p => _exArrear(p) ? (monthLabel(p.month) || '') : '' },
     ],
 
     rows: list,

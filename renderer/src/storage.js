@@ -374,6 +374,18 @@ if (window.electronAPI) {
     });
   }
 
+  /* A REPORT THAT COULD NOT BE OPENED SAYS SO (owner brief, 2026-09-10). The
+     main process used to return in silence when it refused a document, so the
+     button did nothing at all and there was nowhere to look — which is the
+     "no response" the brief describes. */
+  if (window.electronAPI.onPdfFailed) {
+    window.electronAPI.onPdfFailed(function (reason) {
+      if (typeof toast === 'function') {
+        toast(reason || 'That report could not be opened.', 'error', 'Report');
+      }
+    });
+  }
+
   window.electronAPI.onImportBackup(async function (jsonString) {
     try {
       if (typeof jsonString !== 'string' || jsonString.length > 50 * 1024 * 1024) {

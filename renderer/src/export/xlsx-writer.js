@@ -204,9 +204,14 @@ const XW_PALETTE = {
    start at 164. The money format carries the currency inside the FORMAT, not
    inside the value — §62's whole point is that the cell holds 17000 and can be
    summed, while the sheet still reads "PKR 17,000". */
+/* Rs., NOT PKR, IN THE WORKBOOK (owner brief, 2026-09-10: "Rs. is preferred
+   for this operational Pakistani hostel spreadsheet"). It is the number FORMAT
+   that changes, not the value: the cell still holds 17000 and still sums,
+   sorts and filters as a number. A currency written into the string — "Rs.
+   17,000" — is the thing this format exists to prevent. */
 const XW_NUMFMT = {
-  164: '"PKR"\\ #,##0',
-  165: '"PKR"\\ #,##0;[Red]-"PKR"\\ #,##0',
+  164: '"Rs."\\ #,##0',
+  165: '"Rs."\\ #,##0;[Red]-"Rs."\\ #,##0',
   166: 'dd\\-mmm\\-yyyy',
   167: '#,##0',
   168: '0.0%',
@@ -391,7 +396,14 @@ function _xwSheetXml(sheet) {
      explicit that this must be the ACTUAL table header, not an arbitrary row,
      which is why the caller passes the row it wrote the header on rather than
      a constant. */
-  let view = '<sheetView workbookViewId="0" showGridLines="0"';
+  /* GRIDLINES ON (owner brief, 2026-09-10). They were off, which left the
+     sheet reading as a printed report that happened to be in Excel. The data
+     cells carry their own thin borders as well — the brief asks for explicit
+     table borders, and a sheet whose only separation is the application's own
+     gridlines loses it the moment somebody turns them off or copies a block
+     into another workbook. Both, therefore: the grid for the whole sheet, and
+     real borders on the table. */
+  let view = '<sheetView workbookViewId="0" showGridLines="1"';
   if (sheet.tabSelected) view += ' tabSelected="1"';
   view += '>';
   if (sheet.freeze && (sheet.freeze.row || sheet.freeze.col)) {

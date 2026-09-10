@@ -1735,7 +1735,7 @@ function _stuExportDef(list, opts) {
 
       { label: 'Nationality', type: 'text', width: 13, value: t => t.nationality || '' },
 
-      { label: 'Charges (PKR)', type: 'money', width: 14, total: 'sum',
+      { label: 'Charges (Rs.)', type: 'money', width: 14, total: 'sum',
         value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
         get:   t => { const c = resolveCharges(t);
           if (!c.configured) return '<span style="color:#94A3B8">not set</span>';

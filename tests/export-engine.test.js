@@ -192,9 +192,40 @@ const wideDef = {
   })();
   ok(ySplit === headerRow, '§24 the frozen row IS the table header (' + ySplit + ')');
 
+  /* ── THE OPERATIONAL SHEET (owner brief, 2026-09-10) ─────────────────────
+     "Do NOT create a large vertical report header or stacked KPI cards … the
+     table must appear near the top of the worksheet so the user gets maximum
+     usable viewport", and the summary as "ordinary cells in the upper-right".
+
+     It was six band lines plus a stacked label/value row for EVERY summary
+     figure — seventeen rows of chrome on the student sheet before the first
+     heading, on a document somebody opens to scroll a register. Each of these
+     is one line of that brief, and each was a real property of the file. */
+  console.log('\n── the operational spreadsheet ───────────────────────────────');
+  ok(headerRow === 5,
+     'the table header is row 5: three band rows, one spacer, then the columns ('
+     + headerRow + ')');
+  ok(ySplit === 5, '…and only the header is frozen, not the branding above it');
+  ok(/showGridLines="1"/.test(sheet), 'gridlines are visible');
+  ok(/borderId="1"/.test(parts['xl/styles.xml']),
+     '…and the table carries its own borders as well, so a copied block keeps them');
+  /* The summary is on rows 1 and 2, out to the right of the identity band —
+     labels above figures, in cells a formula can reference. */
+  const row1 = /<row r="1"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
+  const row2 = /<row r="2"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
+  ok(/<c r="I1"[\s\S]*?Payments<\/t>/.test(row1),
+     'the summary LABEL sits in the upper right, not in a stack down column A');
+  ok(/<c r="I2"[\s\S]*?>42</.test(row2), '…with its figure directly under it');
+  ok(!/<row r="[6-9]"[^>]*>[\s\S]*?Payments<\/t>[\s\S]*?<\/row>/.test(sheet),
+     '…and nothing restates it below the table header');
+
   ok(/<c r="D\d+" s="12"><v>14500<\/v><\/c>/.test(sheet),
      '§62 an amount is a NUMBER, not the string "PKR 14,500"');
-  ok(/&quot;PKR&quot;/.test(parts['xl/styles.xml']),
+  /* Rs., not PKR, since the owner's brief of 2026-09-10 — "Rs. is preferred for
+     this operational Pakistani hostel spreadsheet". What this check is really
+     about is unchanged and is the line above it: the currency lives in the
+     number FORMAT, so the cell still holds 17000 and still sums. */
+  ok(/&quot;Rs\.&quot;/.test(parts['xl/styles.xml']),
      '§18 …and the currency lives in the number format, where it can still be summed');
   ok(/<c r="I\d+" s="15"><v>462\d\d<\/v>/.test(sheet),
      '§62 a date is a real Excel date, not the string it was typed as');

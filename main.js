@@ -1532,7 +1532,21 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
 
 // Open PDF report in a separate BrowserWindow
 ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
-  if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) return;
+  /* 32MB, AND IT NO LONGER RETURNS IN SILENCE (owner brief, 2026-09-10). At
+     2MB a complete register was refused here with no window and no message,
+     which is the "no response" the brief describes: the click did nothing at
+     all, and the bigger the report the more certain it was. See preload.js for
+     the whole chain — all three layers had the same ceiling and all three
+     dropped it quietly. */
+  if (typeof htmlContent !== 'string' || htmlContent.length > 32 * 1024 * 1024) {
+    console.error('[HOSTYLLO] open-pdf-window refused: ' +
+      (typeof htmlContent === 'string' ? htmlContent.length + ' bytes' : typeof htmlContent));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pdf-window:failed',
+        'That report could not be opened. Narrow the filters and try again.');
+    }
+    return;
+  }
   const safeTitle = (typeof title === 'string' ? title : 'Report').slice(0, 200);
 
   const pdfWin = new BrowserWindow({
@@ -1645,8 +1659,23 @@ ipcMain.handle('pdf-window:save', async (event, opts) => {
         : { top: 12 / MM, bottom: 16 / MM, left: 12 / MM, right: 12 / MM },
     });
     fs.writeFileSync(filePath, pdf);
-    shell.showItemInFolder(filePath);
-    return { success: true, filePath, title };
+    /* IT OPENS THE PDF, NOT THE FOLDER (owner brief, 2026-09-10: "clicking
+       View/Open PDF consistently opens the generated PDF"). This showed the
+       file highlighted in Explorer and left the opening to the user — which is
+       not what the button says it does.
+
+       shell.openPath hands it to whatever Windows has registered for .pdf,
+       which is the flow the brief prescribes and the one that cannot half-load
+       a viewer of our own. It resolves to an error STRING rather than
+       throwing, and the only realistic cause is a machine with no PDF handler
+       at all; then, and only then, the folder is the next best thing. */
+    let opened = true;
+    try {
+      const err = await shell.openPath(filePath);
+      if (err) { opened = false; console.warn('[HOSTYLLO] openPath: ' + err); }
+    } catch (e) { opened = false; console.warn('[HOSTYLLO] openPath threw: ' + e.message); }
+    if (!opened) shell.showItemInFolder(filePath);
+    return { success: true, filePath, title, opened };
   } catch (e) {
     console.error('[HOSTYLLO] pdf-window:save failed:', e.message, e.code);
     let reason = 'PDF could not be generated. Please try again.';

@@ -247,9 +247,22 @@ function exValue(c, row, i) {
   if (c.key) return row ? row[c.key] : '';
   return '';
 }
+/* A HEADING THAT NAMES THE CURRENCY DOES NOT NEED IT IN EVERY CELL. The
+   owner's two reference sheets both do this — "Charges (Rs.)" over a column of
+   bare 17,000s — and it is the widest saving available on a fifteen-column
+   register: four characters off every money cell on every row.
+
+   Detected from the label rather than declared per column, so a column cannot
+   say "(Rs.)" in its heading and "PKR 17,000" in its cells; the two are one
+   decision and this keeps them one. */
+function exBareMoney(c) {
+  return /\((?:Rs\.?|PKR)\)\s*$/i.test(String(c && c.label || ''));
+}
+
 function exFormat(c, v) {
   const t = c.type || 'text';
   if (v === null || v === undefined || v === '') return EX_DASH;
+  if (t === 'money' && exBareMoney(c)) return EXF.number(v);
   if (t === 'money')    return EXF.money(v);
   if (t === 'number')   return EXF.number(v);
   if (t === 'percent')  return EXF.percent(v);
@@ -527,10 +540,29 @@ function exStyles(landscape) {
   'thead{display:table-header-group}' +          /* §9 — headings on every page */
   'tfoot{display:table-row-group}' +
   'tr{break-inside:avoid;page-break-inside:avoid}' +   /* §10 — whole records */
+  /* A GRID, NOT A LIST OF FLOATING ROWS (owner brief, 2026-09-10: "the PDF
+     reports must also have clear table grid lines … do not make the PDF table
+     appear as a collection of floating rows").
+
+     There were horizontal rules only, so a fifteen-column register printed as
+     bands of text with nothing separating one column from the next — the exact
+     failure the brief names. Every cell carries a vertical rule now as well.
+
+     SUBTLE, NOT HEAVY. The brief asks for the same thing twice — grid lines,
+     and "the grid should remain subtle and professional rather than becoming
+     heavy black borders" — so the verticals are the palette's own faint border
+     at hairline weight, and the outer frame and the header's underline stay
+     the only strong lines on the page. Printed at A4 landscape that is still
+     visible on a laser printer, which is the other half of the brief. */
+  'table{border:1px solid ' + c.border + '}' +
   'th{background:' + c.blueSoft + ';color:' + c.blueDark + ';font-size:7.5pt;font-weight:800;' +
      'text-transform:uppercase;letter-spacing:.5px;padding:5px 7px;' +
-     'border-bottom:1.4px solid ' + c.blue + ';white-space:nowrap}' +
-  'td{padding:4.5px 7px;border-bottom:1px solid #EEF2F8;vertical-align:top;font-size:8.5pt}' +
+     'border-bottom:1.4px solid ' + c.blue + ';border-right:1px solid ' + c.blue + ';' +
+     'white-space:nowrap}' +
+  'th:last-child{border-right:none}' +
+  'td{padding:4.5px 7px;border-bottom:1px solid ' + c.border + ';' +
+     'border-right:1px solid ' + c.border + ';vertical-align:top;font-size:8.5pt}' +
+  'td:last-child{border-right:none}' +
   'tbody tr:nth-child(even) td{background:#FBFCFE}' +
   '.a-left{text-align:left}.a-right{text-align:right}.a-center{text-align:center}' +
   '.c-num{font-variant-numeric:tabular-nums;white-space:nowrap}' +
@@ -658,22 +690,59 @@ function exSheet(def, sec, hostel, name) {
   const last = Math.max(1, columns.length);
   const span = function (r) { merges.push('A' + r + ':' + HXW.colLetter(last) + r); };
 
-  const line = function (text, style, height) {
-    rows.push({ h: height, cells: [{ v: text, s: style }] });
-    span(rows.length);
+  /* ══ THE COMPACT HEAD (owner brief, 2026-09-10) ═════════════════════════
+     "Do NOT create a large vertical report header or stacked KPI cards … the
+     table must appear near the top of the worksheet so the user gets maximum
+     usable viewport."
+
+     It was six banner lines, then a stacked label/value pair PER summary
+     figure — seven of them on the student sheet — then a spacer: seventeen
+     rows of chrome before the first heading, on a document somebody opens to
+     scroll a register. Three lines now, a spacer, and the header on row 5.
+
+     THE SUMMARY MOVES TO THE UPPER RIGHT, as ordinary cells: labels on row 1,
+     figures under them on row 2, in the last N columns. Not cards, not a
+     stack — cells a reader can reference in a formula, which is what a
+     spreadsheet's summary is for. */
+  const summaryList = ((sec.summary || def.summary) || []).filter(function (k) { return k && k.label; });
+
+  /* Where the summary block starts, and where the identity band has to stop.
+     One empty column between them, and the band keeps at least column A. */
+  const sumStart = summaryList.length
+    ? Math.max(2, last - summaryList.length + 1) : 0;
+  const bandEnd = sumStart ? Math.max(1, sumStart - 2) : last;
+  const bandSpan = function (r) {
+    if (bandEnd >= 1) merges.push('A' + r + ':' + HXW.colLetter(bandEnd) + r);
   };
 
-  line('HOSTYLLO', S.WORDMARK, 20);
-  line('Hostel Management System', S.META, 14);
-  line(hostel, S.SUBTITLE, 17);
-  line((sec.title ? sec.title + ' — ' : '') + (def.title || 'Report') +
-       (def.scope ? '  ·  ' + def.scope : ''), S.TITLE, 23);
+  const headLine = function (text, style, height, summaryCell) {
+    const cells = [{ v: text, s: style }];
+    if (sumStart) {
+      for (let i = 2; i <= last; i++) cells.push({ v: '', t: 'blank', s: S.GENERAL });
+      summaryList.forEach(function (k, i) {
+        const at = sumStart + i;
+        if (at <= last) cells[at - 1] = summaryCell(k);
+      });
+    }
+    rows.push({ h: height, cells: cells });
+    bandSpan(rows.length);
+  };
+
+  headLine('HOSTYLLO  |  Hostel Management System', S.WORDMARK, 18,
+    function (k) { return { v: k.label, s: S.KPI_LABEL }; });
+
+  headLine(hostel + '  |  ' + (sec.title ? sec.title + ' — ' : '') + (def.title || 'Report'),
+    S.SUBTITLE, 20,
+    function (k) { return { v: k.value, s: S.KPI_VALUE }; });
 
   const filters = (def.filters || []).filter(function (f) { return f && f[1]; });
-  line('Scope: ' + (filters.length
-        ? filters.map(function (f) { return f[0] + ': ' + f[1]; }).join('   ·   ')
-        : 'All records'), S.META, 14);
-  line('Generated: ' + EXF.stamp(), S.META, 14);
+  rows.push({ h: 14, cells: [{ v:
+    'Scope: ' + (filters.length
+      ? filters.map(function (f) { return f[0] + ': ' + f[1]; }).join('   ·   ')
+      : 'All records') +
+    '   ·   Generated: ' + EXF.stamp(), s: S.META }] });
+  bandSpan(rows.length);
+
   rows.push({ cells: [] });
 
   /* A record document's identifying fields, as label/value rows. */
@@ -687,18 +756,9 @@ function exSheet(def, sec, hostel, name) {
     rows.push({ cells: [] });
   }
 
-  /* §15 — the summary, as label/value pairs rather than a picture of cards.
-     A spreadsheet reader wants to reference the figure, not admire it. */
-  const summary = sec.summary || def.summary;
-  if (summary && summary.length) {
-    summary.forEach(function (k) {
-      rows.push({ cells: [
-        { v: k.label, s: S.KPI_LABEL },
-        { v: k.value, s: S.KPI_VALUE },
-      ] });
-    });
-    rows.push({ cells: [] });
-  }
+  /* §15 — the summary is on rows 1-2 in the upper right now; see the head
+     above. It was a stacked pair of rows per figure here, which is what pushed
+     the table down the sheet. */
 
   const allRows = sec.groups.reduce(function (acc, g) {
     /* A grouped export (expenses by category) keeps its grouping as a real

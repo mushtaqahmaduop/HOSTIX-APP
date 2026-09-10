@@ -30,7 +30,14 @@
 // Unified PDF function: uses Electron native printToPDF when available (saves
 // to a file the user picks), falls back to popup + browser print dialog.
 // opts: { landscape: bool, pageSize: 'A4'|'Letter' }
-function _electronPDF(html, suggestedName, opts) {
+/* THE DOCUMENT AND THE WINDOW IT OPENS IN ARE TWO THINGS (2026-09-10).
+   Building the print bar into a report and choosing where to show it were one
+   function, so the only way to test the bar was to force the transport down its
+   popup fallback with a two-megabyte filler string — which stopped working the
+   moment that fallback stopped being reachable in Electron, and was never what
+   the test was about anyway. `_pdfInject` is the document; `_electronPDF` is
+   the window. */
+function _pdfInject(html, opts) {
   // Open a print-ready popup window — works in both Electron and browser.
   // User presses Ctrl+P (or the Print button) and selects "Save as PDF".
   // This avoids the native OS Save dialog that blocks the Electron renderer.
@@ -134,6 +141,12 @@ function _electronPDF(html, suggestedName, opts) {
   } else {
     injected = btnHtml + injected;
   }
+  return injected;
+}
+
+function _electronPDF(html, suggestedName, opts) {
+  opts = opts || {};
+  var injected = _pdfInject(html, opts);
 
   /* ── THE WINDOW IS OPENED BY THE MAIN PROCESS, NOT BY THIS ONE ────────────
      window.open() from the renderer is the one strategy this codebase has
@@ -156,9 +169,22 @@ function _electronPDF(html, suggestedName, opts) {
      merely large would be worse than a slow window. */
   var _title = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1]
             || String(suggestedName || 'Report').replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ');
-  if (window.electronAPI && typeof window.electronAPI.openPdfWindow === 'function'
-      && injected.length <= 2 * 1024 * 1024) {
-    window.electronAPI.openPdfWindow(injected, _title);
+  /* IN ELECTRON THIS IS THE ONLY PATH, WHATEVER THE SIZE (owner brief,
+     2026-09-10). The `&& injected.length <= 2MB` that used to be on this
+     condition is the bug the brief describes: a complete register is bigger
+     than 2MB of HTML, so the biggest and most-wanted reports — All Students,
+     All Payments — skipped the bridge and fell through to the window.open()
+     below, which the comment above says in as many words hangs the Electron
+     renderer on Windows. "Blank page, half-loaded viewer, or no response" is
+     that hang.
+
+     The popup is the BROWSER fallback now, and only that: if the bridge is
+     there we use it, and if it refuses we say why rather than reaching for the
+     thing that freezes the app. */
+  if (window.electronAPI && typeof window.electronAPI.openPdfWindow === 'function') {
+    var _r = window.electronAPI.openPdfWindow(injected, _title);
+    if (!_r || _r.ok !== false) return;
+    if (typeof toast === 'function') toast(_r.reason, 'error');
     return;
   }
 

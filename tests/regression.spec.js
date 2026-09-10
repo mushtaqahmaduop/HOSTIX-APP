@@ -390,27 +390,33 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   expect(book, 'the payments export produced nothing').toBeTruthy();
   expect(book.name).toMatch(/^Hostyllo_Payments_.*\.xlsx$/);
 
+  /* THE HEADINGS ARE THE OWNER'S SHEET AND HIS BRIEF (2026-09-10): the
+     register's columns are `payments excel redesign.png`, and currency
+     headings say Rs. rather than PKR. Every figure this test was written for
+     is still a column — the brief's §5 forbids removing one — under the name
+     the sheet gives it. */
   const at = name => book.headers.indexOf(name);
-  for (const col of ['Room', 'Student', 'Month', 'Charge / mo', 'Rent / mo', 'Mess / mo',
-                     'Paid', 'Unpaid', 'Method', 'Status', 'Date',
-                     'Admission fee', 'Extra charges', 'Concession']) {
+  for (const col of ['Room', 'Student Name', 'Month', 'Charges (Rs.)', 'Rent (Rs.)',
+                     'Mess (Rs.)', 'Amount Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
+                     'Status', 'Date', 'Admission Fee (Rs.)', 'Extra charges (detail)',
+                     'Concession (Rs.)']) {
     expect(book.headers, col + ' is missing from the workbook').toContain(col);
   }
 
   // Rent and mess joined the export on 2026-08-31: a sheet that quoted the rent
   // half alone could not be reconciled against what the student actually paid,
   // because the mess is a separate field on the record.
-  expect(book.row[at('Rent / mo')] + book.row[at('Mess / mo')],
-    'the two halves must make the charge').toBe(book.row[at('Charge / mo')]);
+  expect(book.row[at('Rent (Rs.)')] + book.row[at('Mess (Rs.)')],
+    'the two halves must make the charge').toBe(book.row[at('Charges (Rs.)')]);
 
-  // §62 — amounts are NUMBERS, not "PKR 12,000" strings nobody can sum.
-  expect(book.row[at('Paid')], 'Paid column').toBe(12000);
-  expect(book.numeric[at('Paid')], 'Paid must be a number cell').toBe('money');
-  expect(book.row[at('Unpaid')], 'Unpaid column').toBe(4000);
-  expect(book.row[at('Method')], 'Method column').toBe('Cash');
-  expect(book.row[at('Admission fee')], 'Admission fee column').toBe(5000);
-  expect(String(book.row[at('Extra charges')]), 'Extra charges column').toContain('Laundry');
-  expect(book.row[at('Concession')], 'Concession column').toBe(1000);
+  // §62 — amounts are NUMBERS, not "Rs. 12,000" strings nobody can sum.
+  expect(book.row[at('Amount Paid (Rs.)')], 'Amount Paid column').toBe(12000);
+  expect(book.numeric[at('Amount Paid (Rs.)')], 'Amount Paid must be a number cell').toBe('money');
+  expect(book.row[at('Unpaid (Rs.)')], 'Unpaid column').toBe(4000);
+  expect(book.row[at('Pay Mode')], 'Pay Mode column').toBe('Cash');
+  expect(book.row[at('Admission Fee (Rs.)')], 'Admission fee column').toBe(5000);
+  expect(String(book.row[at('Extra charges (detail)')]), 'Extra charges column').toContain('Laundry');
+  expect(book.row[at('Concession (Rs.)')], 'Concession column').toBe(1000);
 
   await app.close();
 });

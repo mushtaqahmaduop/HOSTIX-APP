@@ -269,28 +269,22 @@ test('Today at a Glance counts today, not the month', async () => {
 test('a generated document carries Download and Print, top right', async () => {
   const { app, win } = await launch(true);
 
-  const doc = await win.evaluate(async () => {
-    const writes = [];
-    /* `window.electronAPI` is a contextBridge object and cannot be stubbed —
-       assigning to its properties silently does nothing. So this goes down the
-       route _electronPDF() documents for a document over the bridge's 2MB
-       guard: the popup, whose `window.open` IS ours to replace. The string it
-       writes is the same `injected` the bridge would have been handed. */
-    const realOpen = window.open;
-    window.open = () => ({
-      document: { open() {}, write(s) { writes.push(s); }, close() {} },
-      focus() {}, onload: null,
-    });
-    const filler = '<p>' + 'x'.repeat(2 * 1024 * 1024) + '</p>';
-    try { _electronPDF('<html><head></head><body>' + filler + '</body></html>', 'test.pdf', {}); }
-    catch (e) { writes.push('THREW: ' + e.message); }
-    /* The popup paints a "Generating…" shell first and writes the real document
-       on the next tick, so the document is the LAST and longest write. */
-    await new Promise(r => setTimeout(r, 400));
-    window.open = realOpen;
-    const doc = writes.sort((a, b) => b.length - a.length)[0] || '';
-    return doc.slice(0, 4000);
-  });
+  /* THE DOCUMENT, ASKED FOR DIRECTLY (2026-09-10). This used to build a
+     two-megabyte filler string to push _electronPDF() past its bridge guard
+     and down the popup fallback, then stub `window.open` and read what was
+     written to it — because `window.electronAPI` is a contextBridge object and
+     cannot be stubbed.
+
+     None of that was what the test is about, and all of it stopped working
+     when the popup stopped being reachable in Electron: the 2MB ceiling was
+     the bug behind "the PDF button does nothing", so the bridge now takes a
+     document of any size and the fallback is for browsers only.
+
+     `_pdfInject` is the document-building half of _electronPDF, split out for
+     exactly this. The assertions below are unchanged — they are about the bar
+     and where it sits in the markup. */
+  const doc = await win.evaluate(() =>
+    _pdfInject('<html><head></head><body><p>report</p></body></html>', {}).slice(0, 4000));
 
   /* The MARKUP, not the rule — `.pdf-bar { … }` is in the injected <style> in
      the head, which is before <body> and would pass a naive search. */

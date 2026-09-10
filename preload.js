@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onPdfSaved:   (cb) => ipcRenderer.on('pdf-saved', (_e, result)   => cb(result)),
+  /* A report the main process could not open says so in the app. It used to
+     return in silence, which is the "no response" the owner reported. */
+  onPdfFailed:  (cb) => ipcRenderer.on('pdf-window:failed', (_e, reason) => cb(reason)),
 
   // [FIX-P3] Validate URL is a string before sending
   openExternal: (url) => {
@@ -106,13 +109,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recoveryRestart: ()      => ipcRenderer.invoke('recovery:restart'),
   dbExportFull:  ()                  => ipcRenderer.invoke('db:exportFull'),
   dbImportFull:  (data)              => ipcRenderer.invoke('db:importFull',  data),
-  // Open PDF report in a separate window
+  /* Open a report in its own window.
+
+     THE 2MB CEILING WAS THE BUG (owner brief, 2026-09-10: "clicking View/Open
+     PDF consistently opens the generated PDF instead of producing a blank
+     page, half-loaded viewer, or no response").
+
+     A complete register is bigger than 2MB of HTML — 155 students across
+     fifteen columns, or a year of payments across sixteen — and all three
+     layers refused it silently: this one warned to a console nobody has open,
+     main.js returned without opening a window, and the renderer fell through
+     to window.open(), which is the one thing this codebase already knows hangs
+     Electron on Windows. Exactly "no response", and it got worse the larger
+     the report, which is why it hit All Students and All Payments first.
+
+     32MB is the ceiling now. It is a sanity limit, not a design one: the
+     string crosses a structured-clone IPC boundary, which has no practical
+     limit of its own, and the cost of a big one is a slow window rather than a
+     failure. Anything past it is a runaway, and it says so instead of
+     returning nothing. */
   openPdfWindow: (htmlContent, title) => {
-    if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) {
-      console.warn('[Preload] openPdfWindow: invalid content');
-      return;
+    if (typeof htmlContent !== 'string') {
+      return { ok: false, reason: 'That report could not be prepared.' };
+    }
+    if (htmlContent.length > 32 * 1024 * 1024) {
+      return { ok: false, reason: 'That report is too large to open — narrow the filters and try again.' };
     }
     ipcRenderer.send('open-pdf-window', htmlContent, typeof title === 'string' ? title.slice(0, 200) : 'Report');
+    return { ok: true };
   },
 
   /* SAVE A STORED FILE BACK OUT. An expense receipt is kept in the database as
