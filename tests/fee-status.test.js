@@ -40,6 +40,16 @@ const sandbox = {
   requestAnimationFrame: () => 0,
   Intl, Date, Math, JSON,
   Chart: function () {},
+  /* nav.js's filter registry, stubbed. payments.js and expenses.js each call
+     registerFilter() at module scope so a fresh visit to their page resets its
+     own filters; loading nav.js to satisfy that would drag the whole chrome —
+     timers, listeners, the rail — into a harness that exists to exercise
+     calculateFeeStatus(). Recording the registration is not what this file is
+     about, so it is swallowed.
+
+     Without it every one of these tests died at load with "registerFilter is
+     not defined", which reads as a broken module rather than a missing stub. */
+  registerFilter() {},
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;

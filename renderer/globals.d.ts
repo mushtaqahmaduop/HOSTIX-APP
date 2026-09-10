@@ -53,6 +53,15 @@ declare function isResident(t: any): boolean;
 declare function exportData(): void;
 declare function moneyValue(amount: any, opts?: any): string;
 declare function openExternalLink(url: string): void;
+// The room, named. roomLabel() is the boxed two-line CELL; roomText() is the
+// same fact as one line of plain text for a sentence, a badge or a modal title.
+declare function floorShort(floor: any): string;
+declare function roomLabel(number: any, floor?: any): string;
+declare function roomText(number: any, floor?: any): string;
+// A CNIC on screen: masked to the PDF's shape, revealed on hover. maskCnic()
+// is the plain string for print and exports; cnicHtml() is the two-span cell.
+declare function maskCnic(v: any): string;
+declare function cnicHtml(v: any): string;
 
 // ── config.js ────────────────────────────────────────────────────────────────
 declare var _ACTIVE_HOSTEL: string;
