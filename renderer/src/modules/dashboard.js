@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — DASHBOARD MODULE ────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — DASHBOARD MODULE ────────────────────────────────────────────
    Contains: calcRevenue, _payMatchesMonth, generateRooms, renderDashboard,
              all room detail modals, month detail modals, trend chart,
              global search, navigation helpers
@@ -989,7 +989,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">PKR</span>${fmtCompact(totalExpected)} expected</div>
+      <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">Rs.</span>${fmtCompact(totalExpected)} expected</div>
       ${_dashBar(collected, totalExpected, 'kbar--blue')}
     </div>
 
@@ -1133,12 +1133,12 @@ function renderDashboard() {
       <div class="dash-kpi__split">
         <span class="dash-kpi__srow" title="Cash taken this month against a LATER month">
           <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-green"></i>Upcoming</span>
-          <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.advance))}</b>
+          <b title="${escHtml(fmtPKR(cashIn.advance))}"><span class="pkr">Rs.</span>${escHtml(fmtCompact(cashIn.advance))}</b>
         </span>
         <i class="dash-kpi__srule"></i>
         <span class="dash-kpi__srow" title="Cash taken this month against an EARLIER month — arrears collected">
           <span class="dash-kpi__slabel"><i class="dash-kpi__sdot dh-violet"></i>Previous</span>
-          <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">PKR</span>${escHtml(fmtCompact(cashIn.arrears))}</b>
+          <b title="${escHtml(fmtPKR(cashIn.arrears))}"><span class="pkr">Rs.</span>${escHtml(fmtCompact(cashIn.arrears))}</b>
         </span>
       </div>
       ${''/* Still opens showCashReceivedModal(), NOT the payments page — that
@@ -1439,7 +1439,7 @@ function renderDashboard() {
              the real figure, because a warden reconciles it, switching to
              compact only past a crore where the digits stop being readable.
              fmtCompact() is exactly that rule and already existed. */
-          +'<div class="dash-pay__amt" title="'+escHtml(fmtPKR(unpaidShow))+'">PKR '+escHtml(fmtCompact(unpaidShow))+'</div>'
+          +'<div class="dash-pay__amt" title="'+escHtml(fmtPKR(unpaidShow))+'">Rs. '+escHtml(fmtCompact(unpaidShow))+'</div>'
           +'<div class="dash-pay__due">'+(p.dueDate?'Due: '+fmtDate(p.dueDate):'unpaid')+'</div>'
           +'</div>'
           +'<span class="dash-status '+due.hue+'">'+due.label+'</span>'
@@ -1700,7 +1700,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
                month's takings spelled out in full wrapped it onto three lines
                and pushed the six rows out of the card. The exact figure is on
                the Payments screen this row links to. */
-            ? '<span class="dl-glance__sub dl-money" title="' + fmtPKR(g.money) + '">PKR '
+            ? '<span class="dl-glance__sub dl-money" title="' + fmtPKR(g.money) + '">Rs. '
               + fmtCompact(g.money) + '</span>' : '')
       + '</span>'
       + '<span class="dl-glance__n">' + fmtNum(g.n) + '</span>';
@@ -1746,7 +1746,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         /* PKR ON ITS OWN LINE, above the figure - `exact .png`. Inline it
            competes with the number for the widest line in a 76px hole, and the
            number is the thing being read. */
-        '<span class="dnut__cur">PKR</span><span class="dnut__fig">'
+        '<span class="dnut__cur">Rs.</span><span class="dnut__fig">'
           + escHtml(fmtCompactK(methods.total)) + '</span>',
         'Total Collected',
         { aria: 'Collection by payment method for ' + thisMonthLabel() })
@@ -2514,7 +2514,15 @@ function printSeatAvailability() {
                font-size:13px;font-weight:700;cursor:pointer}
     .print-bar{display:flex;justify-content:center}
   </style></head><body>
-  <div class="print-bar no-print"><button class="print-btn" onclick="window.print()">${icon('print','sm')} Print Visit Sheet</button></div>
+  ${''/* THE SHEET'S OWN PRINT BUTTON IS GONE (owner, 2026-09-10: "remove the
+         inside old print button from room visit sheet").
+
+         The window this document opens in already carries Download PDF and
+         Print, injected by _pdfInject() and fixed to the top centre — so the
+         sheet was drawing a SECOND print button, in its own style, a few
+         pixels under the first. Two buttons for one action, and the older of
+         them calls window.print() directly, which is the path that cannot
+         produce the export specification's own footer. */}
   <div class="header">
     <div>
       <h1>${escHtml(hostel)}</h1>

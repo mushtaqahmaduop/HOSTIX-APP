@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // §14 — every screen that PRINTS a balance asks calculateOutstanding(p).
 //
 // This is the §14 recurring bug in its read-path disguise. The write side has
@@ -113,15 +113,15 @@ test('a record with no stored balance is priced, not written off', async () => {
   await win.waitForTimeout(200);
   const modal = await readLedger(win);
 
-  expect(panel.unpaid).toEqual(['PKR 13,000']);
-  expect(panel.bar).toContain('Due PKR 13,000');
+  expect(panel.unpaid).toEqual(['Rs. 13,000']);
+  expect(panel.bar).toContain('Due Rs. 13,000');
 
   /* AND THE SAME FIGURE FROM THE OTHER VIEW. showViewStudentModal is still the
      student view for the dashboard, reports, rooms, the command palette and
      WhatsApp, so a disagreement here is not cosmetic — it is two screens giving
      a warden two different answers to "what does this student owe". */
   expect(modal.unpaid, 'the modal ledger disagrees with the panel').toEqual(panel.unpaid);
-  expect(modal.bar).toContain('Due PKR 13,000');
+  expect(modal.bar).toContain('Due Rs. 13,000');
 
   await app.close();
 });
@@ -147,9 +147,9 @@ test('a balance saved on a record marked Paid is still owed', async () => {
   await win.waitForTimeout(200);
   const led = await readLedger(win);
 
-  expect(led.unpaid).toEqual(['PKR 2,500']);
+  expect(led.unpaid).toEqual(['Rs. 2,500']);
   expect(led.bar, 'a Paid row carrying a balance was dropped from the total')
-    .toContain('Due PKR 2,500');
+    .toContain('Due Rs. 2,500');
 
   await app.close();
 });

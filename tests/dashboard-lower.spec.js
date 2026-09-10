@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // The lower dashboard — Collection by Method, Pending Payments, Recent
 // Payments — against `Hostyllo_Dashboard_Lower_Section_Design_Implementation_
 // Spec.md` (owner, 7 Sep 2026), plus the chrome fixes from the same message.
@@ -9,7 +9,7 @@
 //     "one method took everything" when the truth is "nothing came in", and it
 //     is the single most plausible-looking lie this screen could tell.
 //   · §14 — amounts are compact. The owner's own reference image prints
-//     "PKR 100,000,007,000" and the spec explicitly calls that out as the
+//     "Rs. 100,000,007,000" and the spec explicitly calls that out as the
 //     thing not to do.
 //   · A stored month key is never printed. "Room 22 · 2026-09" is a database
 //     value on a warden's screen.
@@ -105,7 +105,7 @@ test('the donut reports the month, and its slices are the real split', async () 
   /* FOUR ARCS FOR FIVE ROWS: the zero row draws no arc, because it has no
      value to draw. That is the whole reason a zero row is safe to show. */
   expect(d.segments).toBe(4);
-  expect(d.centre.replace(/\s/g, '')).toBe('PKR100K');
+  expect(d.centre.replace(/\s/g, '')).toBe('Rs.100K');
   expect(d.sub).toBe('Total Collected');
   expect(d.chip).toBe(thisMonthLabelIn(d.chip));    // whatever the picker says
 
@@ -118,10 +118,10 @@ test('the donut reports the month, and its slices are the real split', async () 
   /* §8 — the parts sum to the whole. A donut whose slices do not add up to its
      own centre figure is worse than no donut. */
   expect(d.rows.reduce((s, r) => s + r.pct, 0)).toBeCloseTo(100, 1);
-  /* The METHOD list stays compact — `exact .png` shows "PKR 1.02M / PKR 156K"
+  /* The METHOD list stays compact — `exact .png` shows "Rs. 1.02M / Rs. 156K"
      there while showing the pending rows in full, and the two are read
      differently: this column is a proportion, that one is a debt. */
-  expect(d.rows.map(r => r.amt)).toEqual(['PKR 40K', 'PKR 30K', 'PKR 20K', 'PKR 10K', 'PKR 0']);
+  expect(d.rows.map(r => r.amt)).toEqual(['Rs. 40K', 'Rs. 30K', 'Rs. 20K', 'Rs. 10K', 'Rs. 0']);
 
   await app.close();
 });
@@ -187,10 +187,10 @@ test('a pending row carries the three verbs, and never a stored month key', asyn
      before they press it. */
   expect(d.reminder).toContain('(3 pending)');
   /* THE AMOUNT IS THE REAL FIGURE up to a crore, compact past it (owner, 7 Sep,
-     settling `exact .png` against spec §14). A warden reconciles PKR 10,000
-     against a cash drawer; nobody reconciles PKR 100,000,007,000, and that one
+     settling `exact .png` against spec §14). A warden reconciles Rs. 10,000
+     against a cash drawer; nobody reconciles Rs. 100,000,007,000, and that one
      compacts instead. */
-  expect(d.amts).toEqual(['PKR 10,000', 'PKR 10,000', 'PKR 10,000']);
+  expect(d.amts).toEqual(['Rs. 10,000', 'Rs. 10,000', 'Rs. 10,000']);
   /* NEVER the raw key. 'Room 4 · September 2026', not 'Room 4 · 2026-09'. */
   d.rooms.forEach(r => {
     expect(r).not.toMatch(/\d{4}-\d{2}/);

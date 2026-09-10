@@ -65,7 +65,7 @@ let DB = {
     phone:           '',
     email:           '',
     version:         'v3.0',
-    currency:        'PKR',
+    currency:        'Rs.',   // owner, 2026-09-10 — see fmtPKR() in utils.js
     // Which of SERVICE_MODELS this hostel runs. Read it through
     // serviceModel() -- never DB.settings.serviceModel directly.
     serviceModel:    SERVICE_MODEL_DEFAULT,

@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // Where the dashboard's controls actually GO — the owner's report of 7 Sep.
 //
 // Six faults, and five of them were the same shape: a control that looked
@@ -100,8 +100,8 @@ test('one wallet is one slice, however it was spelled', async () => {
      this case is the first row: three spellings, ONE wallet, all the money. */
   expect(rows.map(r => r.name)).toEqual(
     ['Cash', 'EasyPaisa', 'JazzCash', 'Bank Transfer', 'Cheque', 'Other']);
-  expect(rows[0].amt).toBe('PKR 80K');
-  expect(rows.filter(r => r.amt === 'PKR 0').map(r => r.name))
+  expect(rows[0].amt).toBe('Rs. 80K');
+  expect(rows.filter(r => r.amt === 'Rs. 0').map(r => r.name))
     .toEqual(['JazzCash', 'Bank Transfer', 'Cheque']);
 
   /* AND THE STRANGER IS NOT DISCARDED. 'Barter' is not a configured method,
@@ -109,7 +109,7 @@ test('one wallet is one slice, however it was spelled', async () => {
      a total the slices no longer add up to. It is folded into one 'Other'
      rather than given a name of its own. */
   expect(rows[rows.length - 1].name).toBe('Other');
-  expect(rows[rows.length - 1].amt).toBe('PKR 5K');
+  expect(rows[rows.length - 1].amt).toBe('Rs. 5K');
 
   const centre = await win.evaluate(() => document.querySelector('.dl-coll .dnut__fig').textContent);
   expect(centre).toBe('100K');           // 80 + 15 + 5, nothing lost or doubled

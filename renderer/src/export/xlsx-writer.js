@@ -209,9 +209,21 @@ const XW_PALETTE = {
    that changes, not the value: the cell still holds 17000 and still sums,
    sorts and filters as a number. A currency written into the string — "Rs.
    17,000" — is the thing this format exists to prevent. */
+/* TWO DECIMALS, AND NO CURRENCY IN THE CELL (owner, 2026-09-10: "format the
+   money as 17000.00" and "if heading uses Rs or PKR then do not again mention
+   it with the money in that column"). Every money column's heading now names
+   the currency, so repeating it 200 times down the column is 200 copies of a
+   fact stated once — and it is the widest thing in a sixteen-column sheet.
+
+   NO THOUSANDS SEPARATOR, because the owner wrote the format out twice and
+   both times without one. Say the word and it is `#,##0.00`.
+
+   AN EMPTY MONEY CELL IS 0.00, not blank (owner: "put 0.00 in the cells for
+   numbers if empty"). It costs the SUM nothing — a blank and a zero add the
+   same — and it removes the reading where a gap might mean "not recorded". */
 const XW_NUMFMT = {
-  164: '"Rs."\\ #,##0',
-  165: '"Rs."\\ #,##0;[Red]-"Rs."\\ #,##0',
+  164: '0.00',
+  165: '0.00;[Red]-0.00',
   166: 'dd\\-mmm\\-yyyy',
   167: '#,##0',
   168: '0.0%',

@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // HOSTIX — Fund Transfer hiding + the category register + month scoping
 //
 // Covers the four things the owner asked for:
@@ -146,7 +146,7 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   await win.waitForTimeout(900);
   const expPage = await win.evaluate(() => {
     const rows = Array.from(document.querySelectorAll('.exp-table tbody tr'));
-    /* The headline figure is COMPACT on screen now ("PKR 16.7K", expenses spec
+    /* The headline figure is COMPACT on screen now ("Rs. 16.7K", expenses spec
        §8), so its text is no longer the exact number this assertion is about.
        The exact value is carried in data-exact for precisely this — the check
        here is arithmetic (headline == sum of rows, transfer counted once), not
@@ -173,7 +173,7 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   // Headline total must equal the rows, transfer included, and not double it.
   expect(expPage.total).toBe('16700');
   // ...and the compact rendering of that same figure is what the warden sees.
-  expect(expPage.totalShown).toBe('PKR 16.7K');
+  expect(expPage.totalShown).toBe('Rs. 16.7K');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
   await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });

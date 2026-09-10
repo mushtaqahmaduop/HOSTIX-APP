@@ -199,6 +199,21 @@ function _onbHostel() {
         <label for="onb-email">Email</label>
         <input class="form-control" id="onb-email" maxlength="60" value="${v(s.email)}" placeholder="Optional">
       </div>
+      ${''/* WHO THE HOSTEL IS FOR (owner, 2026-09-10). It decides what a blank
+             gender field MEANS: in a boys' hostel it means a boy, and asking a
+             warden to tick "Male" two hundred times to say something the
+             building already says is data entry with no information in it.
+             A mixed hostel has no default and gets none — the field stays
+             empty and the register prints a dash rather than guessing at a
+             person. Changeable later in Settings, like everything on this
+             step. */}
+      <div class="onb-f">
+        <label for="onb-gender">Who it is for</label>
+        <select class="form-control" id="onb-gender">
+          ${[['boys', 'Boys hostel'], ['girls', 'Girls hostel'], ['mixed', 'Both — mixed hostel']]
+            .map(o => `<option value="${o[0]}" ${(s.hostelGender || 'boys') === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}
+        </select>
+      </div>
     </div>`;
 }
 
@@ -210,6 +225,7 @@ async function _onbSaveHostel() {
   DB.settings.location   = g('onb-loc').trim();
   DB.settings.phone      = g('onb-phone').trim();
   DB.settings.email      = g('onb-email').trim();
+  DB.settings.hostelGender = g('onb-gender') || 'boys';
   return true;
 }
 

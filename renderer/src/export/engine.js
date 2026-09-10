@@ -116,11 +116,18 @@ const EXF = {
      same figure in the export must be the same string, and two formatters is
      how they stop being. en-PK groups in thousands, which is the shape the
      specification's own examples use. */
+  /* Rs., NEVER PKR (owner, 2026-09-10: "remove PKR from everywhere and use
+     Rs."). This is the fallback shape for a money column whose heading does
+     NOT already name the currency; where the heading does — which is now every
+     money column on both registers — `cash()` below prints the bare figure. */
   money(n) {
-    if (typeof fmtPKR === 'function') return fmtPKR(Math.round(Number(n || 0)));
-    const v = Math.round(Number(n || 0));
-    return 'PKR ' + (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-PK');
+    const v = Number(n || 0);
+    return 'Rs. ' + (v < 0 ? '-' : '') + EXF.cash(Math.abs(v));
   },
+  /* TWO DECIMALS, NO SEPARATOR — "17000.00", the owner's own example, written
+     out twice. An empty money cell is 0.00 rather than a dash: a blank in a
+     money column reads as "not recorded" when what it means is nothing. */
+  cash(n) { return Number(n || 0).toFixed(2); },
   number(n) { return Number(n || 0).toLocaleString('en-PK'); },
   percent(n) { return (Math.round(Number(n || 0) * 1000) / 10) + '%'; },
   /* A value the module did not supply. Not "N/A", not blank, not "null". */
@@ -261,8 +268,15 @@ function exBareMoney(c) {
 
 function exFormat(c, v) {
   const t = c.type || 'text';
-  if (v === null || v === undefined || v === '') return EX_DASH;
-  if (t === 'money' && exBareMoney(c)) return EXF.number(v);
+  /* AN EMPTY MONEY OR NUMBER CELL IS A ZERO, NOT A DASH (owner, 2026-09-10:
+     "put 0.00 in the cells for numbers if empty and centred large dash for
+     letters"). A dash in a money column reads as "not recorded"; what it
+     actually means is that nothing was charged, and nothing is 0.00. */
+  if (v === null || v === undefined || v === '') {
+    if (t === 'money') return exBareMoney(c) ? EXF.cash(0) : EXF.money(0);
+    return EX_DASH;
+  }
+  if (t === 'money' && exBareMoney(c)) return EXF.cash(v);
   if (t === 'money')    return EXF.money(v);
   if (t === 'number')   return EXF.number(v);
   if (t === 'percent')  return EXF.percent(v);
@@ -378,7 +392,7 @@ function exCellHtml(c, row, i) {
     return '<span class="ex-st" style="color:' + t.fg + ';background:' + t.bg + '">' +
            '<span class="ex-st__d" style="background:' + t.fg + '"></span>' + _exEsc(text) + '</span>';
   }
-  let html = _exEsc(text);
+  let html = text === EX_DASH ? '<span class="ex-none">' + EX_DASH + '</span>' : _exEsc(text);
   if (c.type === 'money' && Number(v) < 0) html = '<span class="neg">' + html + '</span>';
   if (typeof c.sub === 'function') {
     const s = c.sub(row);
@@ -565,8 +579,16 @@ function exStyles(landscape) {
   'td:last-child{border-right:none}' +
   'tbody tr:nth-child(even) td{background:#FBFCFE}' +
   '.a-left{text-align:left}.a-right{text-align:right}.a-center{text-align:center}' +
+  /* A CENTRED, LARGER DASH FOR A MISSING WORD (owner, 2026-09-10). At body size
+     an em dash sitting hard left in a cell reads as a hyphen somebody typed;
+     centred and a size up it reads as "nothing here", which is what it is. */
+  '.ex-none{display:block;text-align:center;font-size:11pt;line-height:1;color:#94A3B8}' +
+  /* An address of one word wrapped mid-word because the column was told to
+     break anywhere. It wraps between words now, and only breaks a word that
+     genuinely cannot fit. §13's rule — wrap, never clip — is unchanged. */
+  '.c-wrap{overflow-wrap:break-word;word-break:normal;hyphens:auto}' +
   '.c-num{font-variant-numeric:tabular-nums;white-space:nowrap}' +
-  '.c-wrap{white-space:normal;word-break:break-word}' +   /* §13 — wrap, never clip */
+  '.c-wrap{white-space:normal}' +   /* §13 — wrap, never clip; see .c-wrap above */
   '.sub{display:block;font-size:7pt;color:' + c.muted + ';font-weight:600;margin-top:1px}' +
   '.neg{color:' + c.danger + ';font-weight:700}' +
   '.pos{color:' + c.positive + ';font-weight:700}' +
@@ -665,12 +687,22 @@ function exXlCell(c, row, i) {
   const style = (EX_XL_STYLE[t] || EX_XL_STYLE.text)(raw);
 
   if (raw === null || raw === undefined || raw === '') {
-    /* §48 — blank only where blank means something. A missing amount is blank
-       (so it does not join a SUM as a zero that was never owed); missing text
-       is the em dash, so a printed sheet has no silent gaps. */
-    return (t === 'money' || t === 'number' || t === 'percent' || t === 'date' || t === 'datetime')
-      ? { v: '', t: 'blank', s: style }
-      : { v: EX_DASH, s: style };
+    /* §48 revised (owner, 2026-09-10: "put 0.00 in the cells for numbers if
+       empty and centred large dash for letters").
+
+       A MISSING AMOUNT IS A REAL ZERO NOW, not a blank. The old rule kept it
+       blank so it could not join a SUM as "a zero that was never owed" — but
+       every money column on these registers is a charge, a payment or an
+       adjustment, and a hostel that did not charge a concession charged zero.
+       A blank cell in a money column reads as "not recorded", which is a
+       different claim and the wrong one. The SUM is unchanged either way.
+
+       A DATE has no zero, so it stays blank; text and ids keep the dash. */
+    if (t === 'money' || t === 'number' || t === 'percent') {
+      return { v: 0, t: EX_XL_TYPE[t] || 'number', s: style };
+    }
+    if (t === 'date' || t === 'datetime') return { v: '', t: 'blank', s: style };
+    return { v: EX_DASH, s: HXW.S.CENTER };
   }
   const xt = EX_XL_TYPE[t];
   if (xt === 'money' || xt === 'number' || xt === 'percent') {

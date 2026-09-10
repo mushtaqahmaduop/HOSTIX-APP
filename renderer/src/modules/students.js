@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — STUDENTS MODULE ─────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — STUDENTS MODULE ─────────────────────────────────────────────
    Contains: renderStudents, showAddStudentModal, submitAddStudent,
              showViewStudentModal, showEditStudentModal, submitEditStudent,
              confirmDeleteStudent, showRoomShiftModal, submitRoomShift,
@@ -537,7 +537,13 @@ function renderStudents() {
             <td>${t.cnic?`<span class="stu-cnic">${escHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
             <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
             <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
-            <td>${t.nationality?`<span class="stu-nat">${escHtml(t.nationality)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${''/* PAKISTAN UNLESS THE RECORD SAYS OTHERWISE (owner,
+                   2026-09-10). Every hostel this app ships to is in Pakistan
+                   and all but a handful of students are Pakistani; a column of
+                   dashes over a fact that is true 199 times in 200 is a column
+                   nobody reads. The stored record is untouched — this is what
+                   a blank field MEANS, not a value written into it. */}
+            <td><span class="stu-nat">${escHtml(t.nationality || 'Pakistan')}</span></td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
                 ${''/* THE SUB-LINE IS GONE (owner, 2026-09-06). It read
@@ -1614,11 +1620,53 @@ function _stuExportMeta(list) {
    falling back to whatever was typed into the student's own notes. */
 function _stuRemark(t) {
   if (!t) return '';
+  const out = [];
+  /* The departure, in words, since its own column came off on 2026-09-10:
+     what happened and when, on the rows where anything happened at all. */
+  const when = (typeof statusDate === 'function') ? statusDate(t) : '';
+  const st = String(t.status || '');
+  if (when && (st === 'Left' || st === 'Cancelling' || st === 'On Notice')) {
+    out.push((st === 'Left' ? 'Left ' : 'Vacates ') + fmtDate(when));
+  }
   const mine = (DB.cancellations || [])
     .filter(c => c && String(c.studentId) === String(t.id) && c.reason)
     .sort((a, b) => String(b.requestDate || '').localeCompare(String(a.requestDate || '')));
-  if (mine.length) return String(mine[0].reason);
-  return String(t.notes || t.remarks || '');
+  if (mine.length) out.push(String(mine[0].reason));
+  else if (t.notes || t.remarks) out.push(String(t.notes || t.remarks));
+  return out.join(' · ');
+}
+
+/* ── CNIC, PARTLY MASKED ─────────────────────────────────────────────────────
+   17102-1178441-2 leaves as "17102-11*******". The issuing district and the
+   first two digits are enough to match a person against the card in their
+   hand; the rest is the part that identifies them to a bank, a SIM vendor or
+   anyone else who asks, and a printed roster is a document that gets left on a
+   desk and photographed.
+
+   The stored record is untouched — this is a presentation rule, on the export
+   only. Anything that is not a CNIC-shaped string is passed through: a hostel
+   that records a B-form or a passport number should still see what it typed. */
+function _stuMaskCnic(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 13) return s;
+  return digits.slice(0, 5) + '-' + digits.slice(5, 7) + '*'.repeat(7);
+}
+
+/* The gender a blank field means, taken from what the hostel said it was when
+   it was set up (owner, 2026-09-10). A boys' hostel that has never filled the
+   field in is a roster of boys; a mixed hostel has no default and says so with
+   a dash rather than guessing at a person. */
+function _stuDefaultGender() {
+  /* `hostelGender` is asked on the onboarding's first step and is editable in
+     Settings. Older installs have never been asked, so an unset value means
+     "we do not know" and gets no default — the alternative is printing "Male"
+     against a girls' hostel that upgraded. */
+  const t = String((DB.settings && DB.settings.hostelGender) || '').toLowerCase();
+  if (t === 'girls')  return 'Female';
+  if (t === 'boys')   return 'Male';
+  return '';
 }
 
 function _stuExportDef(list, opts) {
@@ -1721,19 +1769,48 @@ function _stuExportDef(list, opts) {
 
       { label: 'Contact', type: 'text', width: 16, value: t => String(t.phone || '') },
 
-      { label: 'Emergency Contact', type: 'text', width: 17,
+      /* "Emergency Contact" is 17 characters over a column of phone numbers,
+         and it was the widest heading on the sheet (owner, 2026-09-10: "the
+         emergency contact heading is taking very much space"). "Emergency" is
+         the whole word and the column beside it is already headed Contact. */
+      { label: 'Emergency', type: 'text', width: 15,
         value: t => String(t.emergencyPhone || '') },
 
-      { label: 'CNIC', type: 'text', width: 18, value: t => String(t.cnic || '') },
+      /* CNIC IS PARTLY MASKED, ON PURPOSE (owner, 2026-09-10: "hide other with
+         **** so that the legal data of anyone cannot be used or seen").
 
-      { label: 'Course / Study / Profession', type: 'text', width: 24,
+         A national identity number is the single most sensitive field this app
+         holds, and a printed roster is a document that gets left on a desk,
+         photographed and forwarded. Enough is shown to MATCH a person against
+         a record they are holding — the issuing district and the first digits
+         — and the rest is stars. The full number is on the student's own
+         record for anyone who needs it, one click away, and is untouched in
+         the database. */
+      { label: 'CNIC', type: 'text', width: 16, value: t => _stuMaskCnic(t.cnic) },
+
+      /* OCCUPATION, one word (owner, 2026-09-10). "Course / Study /
+         Profession" is three words for one field, and it is the one field it
+         has always read: `t.occupation`. */
+      { label: 'Occupation', type: 'text', width: 22,
         value: t => t.occupation || t.course || '' },
 
-      { label: 'Gender', type: 'text', width: 9, value: t => t.gender || '' },
+      /* THE DATE A ROSTER IS ACTUALLY READ FOR (owner, 2026-09-10: "one
+         important thing is missing: date of admit or admission"). It was
+         dropped when the columns were cut to the reference sheet, which draws
+         a departure date instead — but a roster of who is HERE is read for
+         when each of them arrived. */
+      { label: 'Admitted', type: 'date', width: 13, value: t => t.joinDate || '' },
 
-      { label: 'Address', type: 'wrap', width: 26, value: t => t.address || '' },
+      { label: 'Gender', type: 'text', width: 9, value: t => t.gender || _stuDefaultGender() },
 
-      { label: 'Nationality', type: 'text', width: 13, value: t => t.nationality || '' },
+      { label: 'Address', type: 'wrap', width: 24, value: t => t.address || '' },
+
+      /* Pakistan unless the record says otherwise (owner, 2026-09-10). Every
+         hostel this app ships to is in Pakistan and all but a handful of
+         students are Pakistani; a column of dashes over a fact that is true
+         199 times in 200 is a column nobody reads. */
+      { label: 'Nationality', type: 'text', width: 12,
+        value: t => t.nationality || 'Pakistan' },
 
       { label: 'Charges (Rs.)', type: 'money', width: 14, total: 'sum',
         value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
@@ -1747,15 +1824,14 @@ function _stuExportDef(list, opts) {
 
       { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
 
-      /* The sheet heads this "Date (Left / Cancelling / Expelled)" — one column
-         for whichever of the three a row is. statusDate() is that lookup, and
-         it is the same one the register draws, so the sheet and the screen
-         cannot say different things. A student on notice has no date on their
-         own record at all: it is on their pending cancellation. */
-      { label: 'Date (Left / Cancelling / Expelled)', type: 'date', width: 16,
-        value: t => statusDate(t) },
-
-      { label: 'Remarks', type: 'wrap', width: 24, value: t => _stuRemark(t) },
+      /* THE DEPARTURE DATE FOLDS INTO REMARKS (owner, 2026-09-10: "Date (Left
+         / Cancelling / Expelled) — remove these lines and make remarks
+         column"). It was a 33-character heading over a column that is empty
+         for every student who is still here — which on a live roster is nearly
+         all of them — and the fact it carried is one clause: left on this day,
+         for this reason. Remarks says both, and only on the rows that have
+         either. */
+      { label: 'Remarks', type: 'wrap', width: 26, value: t => _stuRemark(t) },
     ],
 
     rows: list,
@@ -4486,7 +4562,7 @@ function recalcStudentUnpaid() {
   const fb = document.getElementById('f-tadmfee-badge');
   if(fb) fb.textContent = admFee>0 ? fmtPKR(admFee) : 'No Fee';
   const etEl = document.getElementById('student-extra-charges-total');
-  if(etEl) etEl.textContent = 'PKR ' + Number(extra).toLocaleString('en-PK');
+  if(etEl) etEl.textContent = 'Rs. ' + Number(extra).toLocaleString('en-PK');
 }
 function getStudentExtraChargesTotal() {
   let t=0; document.querySelectorAll('.student-extra-charge-amt').forEach(i=>{ t+=parseFloat(i.value)||0; }); return t;

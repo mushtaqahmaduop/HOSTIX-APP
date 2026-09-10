@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — PAYMENTS MODULE ─────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — PAYMENTS MODULE ─────────────────────────────────────────────
    Contains: renderPayments, generateMonthlyRents, markPaymentPaid,
              deletePayment, filterStudentDropdown, selectStudentForPayment,
              recalcUnpaid, renderAddPayment, openAddPayment, submitAddPayment,
@@ -506,7 +506,7 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></div>
         <div class="pay-stat__label">Total Collected</div>
       </div>
-      <div class="pay-stat__val" title="PKR ${fmtNum(total)}"><span class="cur">PKR</span>${fmtCompactK(total)}</div>
+      <div class="pay-stat__val" title="PKR ${fmtNum(total)}"><span class="cur">Rs.</span>${fmtCompactK(total)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">${_scopeKey ? escHtml(monthLabel(_scopeKey)) : 'All months'}</span>
         ${/* A PERCENTAGE AGAINST A NEAR-EMPTY MONTH IS NOISE, NOT A READING.
@@ -569,7 +569,7 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/></svg></div>
         <div class="pay-stat__label">Unpaid Amount</div>
       </div>
-      <div class="pay-stat__val" title="PKR ${fmtNum(outstanding)}"><span class="cur">PKR</span>${fmtCompactK(outstanding)}</div>
+      <div class="pay-stat__val" title="PKR ${fmtNum(outstanding)}"><span class="cur">Rs.</span>${fmtCompactK(outstanding)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">Total outstanding</span>
         ${nArrears>0?`<span class="pay-stat__delta dh-red" title="${nArrears} unpaid record${nArrears>1?'s':''} carried over from earlier months">incl. ${fmtPKR(arrearsAmt)} arrears</span>`:''}
@@ -962,9 +962,38 @@ function _payPrevLabel() {
   return (label.split(' ')[0] || 'Previous') + ' (Paid/Unpaid)';
 }
 
+/* WHAT WENT BACK OUT ON THIS RECORD. Two things in this app move money the
+   other way and finance.js owns both: `p.reversals`, written by the reverse-a-
+   collection flow, and `p.refund`, written when a cancellation is settled with
+   money returned. Summed, never derived — a refund the layer has not recorded
+   is not a refund. */
+function _payRefund(p) {
+  if (!p) return 0;
+  const rev = Array.isArray(p.reversals)
+    ? p.reversals.reduce((n, r) => n + Math.abs(Number((r && r.amount) || 0)), 0) : 0;
+  return rev + Math.abs(Number(p.refund || 0));
+}
+
+/* Rent and mess as their own columns, but only where the hostel sells both.
+   serviceModel() is the app's own answer, set at onboarding. */
+function _paySplitColumns() {
+  /* `hostelServesMess()` is the app's own answer and reads serviceModel() —
+     which is 'rent' for a hostel that sells a room and nothing else. Asking it
+     rather than testing the id keeps this in step if a fourth model is ever
+     added. */
+  if (typeof hostelServesMess === 'function' && !hostelServesMess()) return [];
+  return [
+    { label: 'Rent (Rs.)', type: 'money', width: 11, total: 'sum',
+      value: p => Number(paymentCharges(p, DB.students.find(s => s.id === p.studentId)).rent || 0) },
+    { label: 'Mess (Rs.)', type: 'money', width: 11, total: 'sum',
+      value: p => { const c = paymentCharges(p, DB.students.find(s => s.id === p.studentId));
+        return c.messIncluded ? Number(c.mess || 0) : 0; } },
+  ];
+}
+
 function _payPrevPair(p) {
   const k = _payMonthKey(p);
-  if (!k || !/^\d{4}-\d{2}$/.test(k)) return '0 / 0';
+  if (!k || !/^\d{4}-\d{2}$/.test(k)) return EXPORT.fmt.cash(0) + ' / ' + EXPORT.fmt.cash(0);
   let [y, m] = k.split('-').map(Number);
   m -= 1; if (m < 1) { m = 12; y -= 1; }
   const prev = y + '-' + String(m).padStart(2, '0');
@@ -972,7 +1001,27 @@ function _payPrevPair(p) {
     String(x.studentId) === String(p.studentId) && _payMatchesMonth(x, prev));
   const paid   = mine.reduce((n, x) => n + Number(x.amount || 0), 0);
   const unpaid = mine.reduce((n, x) => n + outstandingOf(x), 0);
-  return fmtNum(paid) + ' / ' + fmtNum(unpaid);
+
+  /* AND WHETHER IT WAS SETTLED LATE (owner, 2026-09-10: "plan for what if the
+     previous [month] also paid in the current month").
+
+     "8,000.00 / 0.00" is true of two different students: one who paid August in
+     August, and one who was in arrears until the counter caught them in
+     September. Those are opposite facts about the same person to anybody
+     chasing money, and the pair alone cannot tell them apart.
+
+     The DATE the cash actually arrived is what separates them, and this app
+     already records it per instalment — `partialPayments[].date`, and `date` on
+     a record settled in one go. Where any of that money landed in a LATER month
+     than the one it settles, the cell says so. */
+  const late = mine.some(x => {
+    const parts = Array.isArray(x.partialPayments) && x.partialPayments.length
+      ? x.partialPayments.map(q => q && q.date)
+      : [x.date];
+    return parts.some(d => d && String(d).slice(0, 7) > prev);
+  });
+
+  return EXPORT.fmt.cash(paid) + ' / ' + EXPORT.fmt.cash(unpaid) + (late ? ' (late)' : '');
 }
 
 /* WHAT THE SHEET'S "Remarks" COLUMN SAYS. Its own examples are "Concession 500"
@@ -981,19 +1030,41 @@ function _payPrevPair(p) {
    disagree with the figures three columns to its left. */
 function _payRemark(p) {
   const out = [];
+
+  /* WHAT THE ADJUSTMENT WAS FOR, in the space the figures do not use (owner,
+     2026-09-10: "in remarks there should be fetched data for concession and
+     extra charges descriptions"). The AMOUNTS are two columns of their own; the
+     WORDS are what those columns cannot hold, so this carries the reason and
+     not the arithmetic. Lower case, because it is a note beside a figure and
+     not a heading. */
   const conc = Number(p.concession || p.discount || 0);
-  if (conc > 0) out.push('Concession ' + fmtNum(conc));
+  if (conc > 0) {
+    const why = String(p.concessionDesc || p.concessionReason || '').trim();
+    out.push(why ? 'concession — ' + why : 'concession');
+  }
   /* extrasOf/extrasSum are locals inside _payExportDef; this runs from a column
      callback, so it does its own filtering rather than reaching for them. */
   const ex = (p.extraCharges || []).filter(c => Number(c.amount) > 0);
-  if (ex.length === 1) {
-    out.push((ex[0].description || ex[0].desc || ex[0].label || 'Extra charge') +
-             ' ' + fmtNum(Number(ex[0].amount || 0)));
-  } else if (ex.length > 1) {
-    out.push(ex.length + ' extra charges ' +
-             fmtNum(ex.reduce((n, c) => n + Number(c.amount || 0), 0)));
+  if (ex.length) {
+    out.push(ex.map(c => String(c.description || c.desc || c.label || 'extra').toLowerCase())
+               .join(', '));
   }
-  if (p.notes && !out.length) out.push(String(p.notes));
+
+  /* THE AUTO-GENERATED NOTE, CUT DOWN (owner, 2026-09-10: "the auto generate
+     fills it by auto which takes very much space: 'Auto-generated | Remaining
+     PKR 8,000 collected on 2026-09-04'").
+
+     Every one of those facts is already a column on this sheet — what was
+     billed, what was paid, what is left — so the note was the row restated in
+     a sentence, in the widest column, on every auto-generated record in the
+     register. "Auto-generated" alone says the one thing the columns do not:
+     that nobody typed this row. A note a warden actually WROTE is kept whole;
+     it is only the app's own boilerplate that is trimmed. */
+  const note = String(p.notes || '').trim();
+  if (note) {
+    if (/^auto[- ]?generated/i.test(note)) out.push('auto');
+    else out.push(note);
+  }
   return out.join(' · ');
 }
 
@@ -1093,20 +1164,35 @@ function _payExportDef(list, opts) {
          the prefix from the cell because the heading has already said it. */
       { label: 'Charges (Rs.)', type: 'money', width: 13, total: 'sum',
         value: p => charges(p).monthly },
-      { label: 'Rent (Rs.)', type: 'money', width: 12, total: 'sum',
-        value: p => Number(charges(p).rent || 0) },
-      { label: 'Mess (Rs.)', type: 'money', width: 12, total: 'sum',
-        value: p => charges(p).messIncluded ? Number(charges(p).mess || 0) : 0 },
 
-      { label: 'Concession (Rs.)', type: 'money', width: 14, total: 'sum',
+      /* RENT AND MESS SPLIT ONLY WHERE THERE IS A SPLIT (owner, 2026-09-10:
+         "use separate columns for rent and mess only when the hostel allows
+         both … for a hostel which allows only full suite or only rent, use a
+         combined charges/month").
+
+         serviceModel() is the app's own answer to what this hostel sells, set
+         at onboarding: a rent-only hostel has no mess figure to print, and two
+         columns of zeros beside a Charges column that already holds the whole
+         number is 24 characters of sheet saying nothing. Where both are sold
+         the split is exactly what the sheet is reconciled with, so it stays. */
+      ..._paySplitColumns(),
+
+      /* THE THREE LONGEST HEADINGS ON THE SHEET, SHORTENED (owner,
+         2026-09-10: "extra charges and concession and admission fee column
+         headings are taking very much space and also have usually no high
+         amount of data"). Each is one word plus the currency now, and the
+         figures under them are usually 0.00 — the column is sized by its
+         heading, not by what it holds. */
+      { label: 'Discount (Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => Number(p.concession || p.discount || 0) },
-      { label: 'Extra Charges (Rs.)', type: 'money', width: 15, total: 'sum',
+      { label: 'Extras (Rs.)', type: 'money', width: 11, total: 'sum',
         value: p => extrasSum(p) },
 
-      { label: 'Amount Paid (Rs.)', type: 'money', width: 15, total: 'sum',
+      { label: 'Paid (Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => Number(p.amount || 0),
         get:   p => Number(p.amount || 0) > 0
-                 ? '<span class="pos">' + escHtml(fmtNum(p.amount)) + '</span>' : '—' },
+                 ? '<span class="pos">' + escHtml(EXPORT.fmt.cash(p.amount)) + '</span>'
+                 : EXPORT.fmt.cash(0) },
 
       /* UNPAID AND ADMISSION FEE ARE BACK (owner brief, 2026-09-10, §5: "Do
          NOT … remove columns"). An earlier pass took both out because the
@@ -1116,15 +1202,24 @@ function _payExportDef(list, opts) {
          for: what THIS record still owes, and the one-off charge at intake
          that is not part of a monthly bill. They keep the sheet's Rs. naming
          and sit where they read: what was paid, then what was not. */
-      { label: 'Unpaid (Rs.)', type: 'money', width: 13, total: 'sum',
+      { label: 'Unpaid (Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => outstandingOf(p),
         get:   p => outstandingOf(p) > 0
-                 ? '<span class="neg">' + escHtml(fmtNum(outstandingOf(p))) + '</span>'
-                   + (_exArrear(p) ? '<span class="sub">Arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
-                 : '—' },
+                 ? '<span class="neg">' + escHtml(EXPORT.fmt.cash(outstandingOf(p))) + '</span>'
+                   + (_exArrear(p) ? '<span class="sub">arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
+                 : EXPORT.fmt.cash(0) },
 
-      { label: 'Admission Fee (Rs.)', type: 'money', width: 15, total: 'sum',
+      { label: 'Admission (Rs.)', type: 'money', width: 13, total: 'sum',
         value: p => Number(p.admissionFee || p.fee || 0) },
+
+      /* REFUND, FOR WHAT THE APP ALREADY RECORDS (owner, 2026-09-10: "add
+         refund column for future use"). It is not empty scaffolding: a
+         cancellation settled with money going back writes `p.refund`, and
+         reversals live in `p.reversals` — finance.js is the authority for
+         both. Anything not refunded is 0.00, which is the truth for almost
+         every row and the reason the column costs nothing to carry. */
+      { label: 'Refund (Rs.)', type: 'money', width: 12, total: 'sum',
+        value: p => _payRefund(p) },
 
       /* THE COLUMN NAMES THE MONTH (owner brief: "August (Paid/Unpaid)", not
          "Previous Month"). It can only name one when the export covers one —
@@ -1520,7 +1615,7 @@ function pfRenderLedger(t) {
 
   const cell = (label, id, hue, hint) =>
     `<div class="pf-ledger__c ${hue}"><div class="pf-ledger__l"${hint?` title="${hint}"`:''}>${label}</div>
-       <div class="pf-ledger__v" id="${id}">PKR 0</div></div>`;
+       <div class="pf-ledger__v" id="${id}">Rs. 0</div></div>`;
 
   box.style.display = '';
   box.innerHTML =
@@ -1666,7 +1761,7 @@ function pfReloadOutstandings() {
          <button type="button" class="pf-out__btn" title="Collect the whole ${escHtml(p.month || 'month')} balance"
                  onclick="pfFillOutstandingRow('${p.id}')">${many ? 'Collect' : 'Collect All'}</button>
        </div>`).join('')}
-     <div class="pf-out__sum" id="pf-out-sumline" style="display:none">Collecting now: <b id="pf-out-sum">PKR 0</b></div>`;
+     <div class="pf-out__sum" id="pf-out-sumline" style="display:none">Collecting now: <b id="pf-out-sum">Rs. 0</b></div>`;
 }
 
 /* ── THE MONTH ALREADY ON FILE ───────────────────────────────────────
@@ -1966,7 +2061,7 @@ function recalcUnpaid() {
   const st = document.getElementById('f-pstat');
   if(st) st.value = (pa >= total && total > 0) ? 'Paid' : 'Pending';
   const etEl = document.getElementById('extra-charges-total');
-  if(etEl) etEl.textContent = 'PKR ' + Number(extra).toLocaleString('en-PK');
+  if(etEl) etEl.textContent = 'Rs. ' + Number(extra).toLocaleString('en-PK');
 
   // v5 modal: keep the running-totals strip above the footer in sync. Guarded
   // so the older forms that also call recalcUnpaid() are unaffected.
@@ -2156,7 +2251,7 @@ function showAddPaymentForStudent(studentId) {
           <div id="extra-charges-list"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:12px">
             <span style="color:var(--text3)">Total Extra:</span>
-            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">PKR 0</span>
+            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">Rs. 0</span>
           </div>
         </div>
       </div>
@@ -2245,7 +2340,7 @@ function recalcUnpaidPS() {
   var extra = 0;
   document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
   var etEl = document.getElementById('extra-charges-total');
-  if(etEl) etEl.textContent = 'PKR ' + extra.toLocaleString('en-PK');
+  if(etEl) etEl.textContent = 'Rs. ' + extra.toLocaleString('en-PK');
   const unpaid = Math.max(0, calculateBill({
     rent, messCharge: mess, messIncluded: true,   // psMessAmount() returns 0 when off
     extraTotal: extra, admissionFee: admFee, concession: conc,
@@ -2585,7 +2680,7 @@ function renderAddPayment() {
               <button type="button" class="ws__add" onclick="addExtraChargeRow()">+ Add charge</button>
               <!-- recalcUnpaid() writes the total here for the modals; on this
                    page the amount column is the one that shows it. -->
-              <span class="ws__hid" id="extra-charges-total">PKR 0</span>
+              <span class="ws__hid" id="extra-charges-total">Rs. 0</span>
             </div>
             <div class="ws__a">
               <span class="ws__sign" id="ws-s-03"></span>
@@ -2602,7 +2697,7 @@ function renderAddPayment() {
               <i>The month's running total, not today's instalment alone</i>
             </div>
             <div class="ws__d">
-              <label class="ws__mini ws__mini--wide"><span>PKR</span>
+              <label class="ws__mini ws__mini--wide"><span>Rs.</span>
                 <input class="pf-in" id="f-ppaid" type="number" placeholder="Amount collected" value="" oninput="recalcUnpaid()"></label>
               <div class="ws__chips">
                 <button type="button" class="ws__chip" onclick="pfPayQuick('full')">Full <b id="ws-q-full">0</b></button>
@@ -3324,7 +3419,7 @@ function showEditPaymentModal(id) {
           <div id="extra-charges-list"></div>
           <div class="pef-extra__tot">
             <span>Total extra</span>
-            <span id="extra-charges-total">PKR ${Number(p.extraTotal||0).toLocaleString('en-PK')}</span>
+            <span id="extra-charges-total">Rs. ${Number(p.extraTotal||0).toLocaleString('en-PK')}</span>
           </div>
         </div>
       </div>

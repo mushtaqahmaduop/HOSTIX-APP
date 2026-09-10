@@ -746,8 +746,16 @@ function renderReports() {
              design has them out where they can be seen, and it was not mine to
              replace. All Payments joins them — the same register, the other
              half of the money. */}
-      <button class="rpt-card__a" onclick="printReport()" title="Print this report in full — every section, every row">
-        ${icon('print','xs')} Print / PDF</button>
+      ${''/* PRINT / PDF IS GONE FROM THIS BAR (owner, 2026-09-10: "remove …
+             the print/pdf button in reports alongside all students and
+             payments pdfs buttons").
+
+             It printed the whole report — every section, every row — which is
+             the same document the two buttons beside it produce a half of
+             each, and a warden pressing a button called Print expects the page
+             they are looking at. printReport() is not deleted: Quick Reports
+             at the foot runs it as "Monthly financial report", which is what
+             it actually is and where the other six documents live. */}
       <button class="rpt-card__a" onclick="exportAllStudentsPDF()" title="The whole student register as a PDF">
         ${icon('users','xs')} All Students PDF</button>
       <button class="rpt-card__a" onclick="exportAllPaymentsPDF()" title="The whole payment register as a PDF">

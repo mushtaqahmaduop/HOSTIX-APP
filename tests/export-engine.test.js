@@ -225,8 +225,14 @@ const wideDef = {
      this operational Pakistani hostel spreadsheet". What this check is really
      about is unchanged and is the line above it: the currency lives in the
      number FORMAT, so the cell still holds 17000 and still sums. */
-  ok(/&quot;Rs\.&quot;/.test(parts['xl/styles.xml']),
-     '§18 …and the currency lives in the number format, where it can still be summed');
+  /* THE CURRENCY LEFT THE NUMBER FORMAT TOO (owner, 2026-09-10: "if heading
+     uses Rs or PKR then do not again mention it with the money in that
+     column"). Every money column's heading names it, so the format is the
+     figure alone — and the thing this check has always been about is
+     unchanged and is the line above it: the cell holds 14500, not a string. */
+  ok(/formatCode="0\.00"/.test(parts['xl/styles.xml']),
+     '§18 …and the money format is two decimals, with the currency in the heading');
+  ok(!/&quot;PKR&quot;/.test(parts['xl/styles.xml']), 'PKR is gone from the workbook');
   ok(/<c r="I\d+" s="15"><v>462\d\d<\/v>/.test(sheet),
      '§62 a date is a real Excel date, not the string it was typed as');
   ok(/<c r="F\d+" s="8" t="inlineStr"><is><t xml:space="preserve">03310045835<\/t>/.test(sheet),
@@ -285,7 +291,15 @@ const wideDef = {
   ok(ctx.EXPORT.fmt.date('') === '—', '§48 a missing value is one em dash');
   ok(/^07-Sep-2026, \d{2}:\d{2} [AP]M$/.test(ctx.EXPORT.fmt.stamp(new Date(2026, 8, 7, 1, 25))),
      '§17 the generated stamp: ' + ctx.EXPORT.fmt.stamp(new Date(2026, 8, 7, 1, 25)));
-  ok(ctx.EXPORT.fmt.money(1250000) === 'PKR 1,250,000', '§18 one currency shape');
+  /* Rs. and two decimals since the owner's edits of 2026-09-10 — "remove PKR
+     from everywhere and use Rs.", "format the money as 17000.00". `money()` is
+     the shape for a column whose heading does NOT name the currency; `cash()`
+     is the bare figure for the columns that do, which is now all of them on
+     both registers. */
+  ok(ctx.EXPORT.fmt.money(1250000) === 'Rs. 1250000.00', '§18 one currency shape: '
+     + ctx.EXPORT.fmt.money(1250000));
+  ok(ctx.EXPORT.fmt.cash(17000) === '17000.00', '§18 …and the bare figure under a Rs. heading');
+  ok(ctx.EXPORT.fmt.cash(0) === '0.00', '§48 an empty money cell is a zero, not a dash');
   ok(ctx.EXPORT.fileName({ module: 'Annual Archive', scope: '2026' }, 'xlsx')
        === 'Hostyllo_Annual-Archive_2026_2026-09-07.xlsx', '§32 the workbook filename');
 

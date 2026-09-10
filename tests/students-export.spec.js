@@ -152,7 +152,7 @@ async function exportAndCapture(win) {
          a roster is read for who is here and when they LEFT — so the two date
          assertions below move to the column that survives. */
       phone: cell(rHikmat, 'Contact'),
-      emerg: cell(rHikmat, 'Emergency Contact'),
+      emerg: cell(rHikmat, 'Emergency'),
       cnic:  cell(rSalman, 'CNIC'),
       charge: cell(rHikmat, 'Charges (Rs.)'),
       room:  cell(rHikmat, 'Room No.'),
@@ -227,7 +227,8 @@ test('phones and CNICs stay text, and a long address wraps', async () => {
   expect(out.phone.t).toBe('text');
   expect(out.phone.v).toBe('0326-2060904');
   expect(out.emerg.v).toBe('03310045835');
-  expect(out.cnic.v).toBe('11102-0386165-3');
+  /* Masked since 2026-09-10 — see the assertion in the columns test below. */
+  expect(out.cnic.v).toBe('11102-03*******');
 
   /* THE DATE HALF OF THIS TEST IS GONE, and the test is renamed with it. It
      asserted Date of Birth and Join — the UTC-parse bug that lands 01-Mar on
@@ -258,17 +259,27 @@ test('every column declared is a column given a width', async () => {
   expect(out.cols.every(c => c.width > 0)).toBe(true);
   expect(new Set(out.cols.map(c => c.width)).size).toBeGreaterThan(3);
 
-  /* THE WORKBOOK AND THE PRINTED ROSTER ARE THE SAME FIFTEEN COLUMNS NOW
-     (`student excel sheet.png`, 2026-09-10). They were not: nine fields were
-     `pdf:false`, so the printed roster was missing exactly the identity fields
-     a hostel gets asked for. This list is the sheet's, in the sheet's words. */
+  /* THE WORKBOOK AND THE PRINTED ROSTER ARE THE SAME COLUMNS (`student excel
+     sheet.png`, then the owner's edits of 2026-09-10). They were not: nine
+     fields were `pdf:false`, so the printed roster was missing exactly the
+     identity fields a hostel gets asked for.
+
+     Three headings changed on 2026-09-10 and one column came and one went:
+     "Course / Study / Profession" is Occupation, "Emergency Contact" is
+     Emergency, the departure date folded into Remarks, and "Admitted" arrived
+     — a roster of who is HERE is read for when each of them came. */
   for (const label of ['#', 'Room No.', 'Student Name', 'Father Name', 'Contact',
-                       'Emergency Contact', 'CNIC', 'Course / Study / Profession',
+                       'Emergency', 'CNIC', 'Occupation', 'Admitted',
                        'Gender', 'Address', 'Nationality', 'Charges (Rs.)',
-                       'Status', 'Date (Left / Cancelling / Expelled)', 'Remarks']) {
+                       'Status', 'Remarks']) {
     expect(out.headers, label + ' is missing from the workbook').toContain(label);
   }
   expect(out.headers.length, 'the sheet is fifteen columns, no more').toBe(15);
+
+  /* A CNIC LEAVES PARTLY MASKED (owner, 2026-09-10: "hide other with **** so
+     that the legal data of anyone cannot be used or seen"). Enough to match a
+     person against the card in their hand; not enough to use. */
+  expect(out.cnic.v, 'the CNIC left the building whole').toBe('11102-03*******');
 
   await app.close();
 });

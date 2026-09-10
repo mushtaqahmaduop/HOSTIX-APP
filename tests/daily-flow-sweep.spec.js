@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // Daily-flow sweep — the screens a warden opens every shift, checked for the
 // failures that reach a customer's eyes rather than a stack trace.
 //
@@ -28,7 +28,7 @@ const SCREENS = ['dashboard','students','rooms','payments','expenses','cancellat
 // What must never be rendered as text.
 //
 // Bare "null"/"undefined" are matched with word boundaries so ordinary prose
-// and class names cannot trip them. "PKR NaN" is listed separately from "NaN"
+// and class names cannot trip them. "Rs. NaN" is listed separately from "NaN"
 // because a money field is the one place it is unambiguous.
 const POISON = [
   { re: /\bNaN\b/,            name: 'NaN' },

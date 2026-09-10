@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // HOSTIX — Phase 2 §6.2 regression suite
 //
 // Expands coverage beyond the Phase 0 smoke test (smoke.spec.js) to the flows
@@ -137,12 +137,17 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
   expect(over.amount, 'overpayment amount wrong').toBe(20000);
   expect(over.unpaid, 'overpayment unpaid must clamp to 0').toBe(0);
 
-  // ── Receipt renders with correct data and NO double "PKR PKR" prefix (CLAUDE.md rule #4).
+  /* ── Receipt renders with correct data and NO doubled currency prefix
+     (CLAUDE.md rule #4). The currency word became "Rs." on 2026-09-10 — the
+     owner's "remove PKR from everywhere" — and fmtPKR() is the one place that
+     produces it, so this follows it rather than pinning the old string. The
+     bug being guarded is unchanged: one prefix, never two. */
   const receipt = await win.evaluate((pid) => buildReceiptHTML(pid), over.id);
   expect(receipt, 'buildReceiptHTML returned nothing').toBeTruthy();
   expect(receipt).toContain('Reg Test Student');
-  expect(receipt).toContain('PKR 20,000');
-  expect(receipt, 'receipt has a double PKR prefix').not.toContain('PKR PKR');
+  expect(receipt).toContain('Rs. 20,000');
+  expect(receipt, 'receipt has a doubled currency prefix').not.toContain('Rs. Rs.');
+  expect(receipt, 'PKR is back on a receipt').not.toContain('PKR');
 
   await app.close();
 });
@@ -397,9 +402,9 @@ test('payments: table pans by dragging, and CSV column order matches the table',
      the sheet gives it. */
   const at = name => book.headers.indexOf(name);
   for (const col of ['Room', 'Student Name', 'Month', 'Charges (Rs.)', 'Rent (Rs.)',
-                     'Mess (Rs.)', 'Amount Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
-                     'Status', 'Date', 'Admission Fee (Rs.)', 'Extra charges (detail)',
-                     'Concession (Rs.)']) {
+                     'Mess (Rs.)', 'Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
+                     'Status', 'Date', 'Admission (Rs.)', 'Extra charges (detail)',
+                     'Discount (Rs.)', 'Refund (Rs.)']) {
     expect(book.headers, col + ' is missing from the workbook').toContain(col);
   }
 
@@ -410,13 +415,13 @@ test('payments: table pans by dragging, and CSV column order matches the table',
     'the two halves must make the charge').toBe(book.row[at('Charges (Rs.)')]);
 
   // §62 — amounts are NUMBERS, not "Rs. 12,000" strings nobody can sum.
-  expect(book.row[at('Amount Paid (Rs.)')], 'Amount Paid column').toBe(12000);
-  expect(book.numeric[at('Amount Paid (Rs.)')], 'Amount Paid must be a number cell').toBe('money');
+  expect(book.row[at('Paid (Rs.)')], 'Paid column').toBe(12000);
+  expect(book.numeric[at('Paid (Rs.)')], 'Paid must be a number cell').toBe('money');
   expect(book.row[at('Unpaid (Rs.)')], 'Unpaid column').toBe(4000);
   expect(book.row[at('Pay Mode')], 'Pay Mode column').toBe('Cash');
-  expect(book.row[at('Admission Fee (Rs.)')], 'Admission fee column').toBe(5000);
+  expect(book.row[at('Admission (Rs.)')], 'Admission fee column').toBe(5000);
   expect(String(book.row[at('Extra charges (detail)')]), 'Extra charges column').toContain('Laundry');
-  expect(book.row[at('Concession (Rs.)')], 'Concession column').toBe(1000);
+  expect(book.row[at('Discount (Rs.)')], 'Concession column').toBe(1000);
 
   await app.close();
 });

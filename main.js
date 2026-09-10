@@ -1648,6 +1648,65 @@ const MM = 25.4;
    cannot be created at all, and the folder is the third. The saved file is
    where the warden chose either way — none of this moves it.
    ════════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   WRITE IT COMPLETELY, THEN CHECK IT, THEN OPEN IT (owner, 2026-09-10:
+   "ensure the generated PDF is not being opened while it is still being
+   written", and a validation list).
+
+   `fs.writeFileSync` returns when the bytes are handed to the OS, not when
+   they are on the disk — on Windows, with a virus scanner or a network path in
+   the way, a reader opening the file microseconds later can see a truncated
+   one. That is a blank page or a half-loaded viewer, from a PDF that is
+   perfectly good a second later. fsync forces the flush and closes that window
+   for good.
+   ════════════════════════════════════════════════════════════════════════════ */
+function _hxWritePdf(filePath, buf) {
+  const fd = fs.openSync(filePath, 'w');
+  try {
+    fs.writeFileSync(fd, buf);
+    try { fs.fsyncSync(fd); } catch (_) { /* some filesystems refuse; the write still stands */ }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/* The owner's validation list, in order: it exists, it is not empty, it starts
+   %PDF-, it ends %%EOF, it can be read back, and it has the pages it should.
+
+   THE PAGE COUNT IS READ FROM THE FILE, not from what we hoped to write:
+   `/Type /Page` occurrences in the object stream. It is a floor rather than an
+   exact number — a linearised or object-streamed PDF can hide some — so the
+   check is "at least one page", which is the failure that actually happens:
+   a document that rendered nothing. */
+function _hxVerifyPdf(filePath, expectBuf) {
+  let st;
+  try { st = fs.statSync(filePath); }
+  catch (e) { return { ok: false, reason: 'the file was not created' }; }
+  if (!st.size) return { ok: false, reason: 'the file is empty' };
+  if (expectBuf && expectBuf.length && st.size !== expectBuf.length) {
+    return { ok: false, reason: 'only ' + st.size + ' of ' + expectBuf.length + ' bytes were written' };
+  }
+
+  let back;
+  try { back = fs.readFileSync(filePath); }
+  catch (e) { return { ok: false, reason: 'it could not be read back' }; }
+
+  if (back.slice(0, 5).toString('latin1') !== '%PDF-') {
+    return { ok: false, reason: 'it is not a PDF' };
+  }
+  /* %%EOF is the last thing a PDF writer emits, and a trailing newline or two
+     is normal — so the tail is where it must be, not the very last byte. */
+  const tail = back.slice(Math.max(0, back.length - 1024)).toString('latin1');
+  if (tail.indexOf('%%EOF') === -1) {
+    return { ok: false, reason: 'it has no end-of-file marker, so it is truncated' };
+  }
+
+  const pages = (back.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+  if (!pages) return { ok: false, reason: 'it has no pages' };
+
+  return { ok: true, pages };
+}
+
 function _hxOpenPdf(filePath, title) {
   try {
     const view = new BrowserWindow({
@@ -1662,6 +1721,26 @@ function _hxOpenPdf(filePath, title) {
         // file as a download rather than rendering it.
         plugins: true,
       },
+    });
+    /* `loadFile` TAKES A PATH AND ENCODES IT ITSELF (owner, 2026-09-10: "if
+       using file:// — verify the path is correctly encoded, handle spaces and
+       special characters safely").
+
+       That is exactly why it is used here rather than
+       `loadURL('file://' + filePath)`, which is the line that breaks: a warden
+       saving to "C:\Users\Ali Khan\My Reports\Ahmad's roster #2.pdf" produces a
+       URL with raw spaces, an apostrophe and a `#` — and `#` starts a fragment,
+       so Chromium looks for "2.pdf" and finds nothing. A blank viewer, from a
+       perfectly good file. loadFile percent-encodes the whole path and treats
+       no character as syntax.
+
+       The `error` handler is the last honest word: if Chromium cannot render
+       it after all that, the shell gets a turn rather than a window sitting
+       blank with nothing said. */
+    view.webContents.once('did-fail-load', (_e, code, desc) => {
+      console.warn('[HOSTYLLO] PDF window did-fail-load ' + code + ' ' + desc);
+      try { view.destroy(); } catch (_) {}
+      try { shell.openPath(filePath); } catch (_) { try { shell.showItemInFolder(filePath); } catch (__) {} }
     });
     view.loadFile(filePath);
     view.once('ready-to-show', () => { try { view.show(); view.focus(); } catch (_) {} });
@@ -1722,9 +1801,15 @@ ipcMain.handle('pdf-window:save', async (event, opts) => {
         ? { top: 9 / MM, bottom: 14 / MM, left: 9 / MM, right: 9 / MM }
         : { top: 12 / MM, bottom: 16 / MM, left: 12 / MM, right: 12 / MM },
     });
-    fs.writeFileSync(filePath, pdf);
+    _hxWritePdf(filePath, pdf);
+    const check = _hxVerifyPdf(filePath, pdf);
+    if (!check.ok) {
+      console.error('[HOSTYLLO] PDF failed validation: ' + check.reason);
+      return { success: false, reason: 'The PDF did not finish writing correctly (' +
+        check.reason + '). Nothing was opened; please try again.' };
+    }
     const opened = _hxOpenPdf(filePath, title);
-    return { success: true, filePath, title, opened };
+    return { success: true, filePath, title, opened, pages: check.pages };
   } catch (e) {
     console.error('[HOSTYLLO] pdf-window:save failed:', e.message, e.code);
     let reason = 'PDF could not be generated. Please try again.';

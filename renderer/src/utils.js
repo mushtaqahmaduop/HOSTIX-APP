@@ -164,8 +164,13 @@ function today() { return ymd(new Date()); }
    here.                                                                      */
 const RESIDENT_STATUSES = ['Active', 'Cancelling'];
 function isResident(t) { return !!t && RESIDENT_STATUSES.indexOf(t.status) !== -1; }
-function fmtPKR(n) { return 'PKR ' + Number(n || 0).toLocaleString('en-PK'); }
-function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">PKR</span>
+/* Rs., NOT PKR, EVERYWHERE (owner, 2026-09-10: "remove PKR from everywhere and
+   use Rs."). The name stays — it is called from several hundred places and a
+   rename would be a diff nobody could read — but the string it produces is the
+   one the hostels themselves write. `PKR` is the ISO code a bank uses; `Rs.` is
+   what goes on a receipt in Peshawar. */
+function fmtPKR(n) { return 'Rs. ' + Number(n || 0).toLocaleString('en-PK'); }
+function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number only — pair with <span class="pkr">Rs.</span>
 
 /* ── BIG NUMBERS, SHORT ENOUGH TO FIT ────────────────────────────────────────
    A KPI tile is about 190px wide with six across, which holds roughly
@@ -230,7 +235,7 @@ function fmtCompactK(n) {
   return sign + num + suffix;
 }
 /** The same, with the currency word — the lower widgets print it everywhere. */
-function fmtPKRk(n) { return 'PKR ' + fmtCompactK(n); }
+function fmtPKRk(n) { return 'Rs. ' + fmtCompactK(n); }
 
 /* ── PAYMENT-METHOD COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS CASH" ─
    Lifted out of renderDashboard(), where it lived as a local, because Reports
@@ -653,7 +658,7 @@ function chargesBreakdown(c) {
 function moneyValue(amount, opts) {
   opts = opts || {};
   const size = opts.size || 'body';
-  const currency = opts.currency || 'PKR';
+  const currency = opts.currency || 'Rs.';   // owner, 2026-09-10 — see fmtPKR
   const color = opts.color ? `style="color:${opts.color}"` : '';
   const cls = opts.className ? ' ' + opts.className : '';
   /* `compact` shortens the digits and keeps the exact figure in the title, so

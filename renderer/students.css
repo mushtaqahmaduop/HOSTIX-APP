@@ -902,9 +902,21 @@
     display: flex; align-items: flex-start; gap: 4px; min-width: 0;
     font-size: 10.5px; line-height: 1.3; color: var(--text2);
 }
+/* TWO LINES, BROKEN BETWEEN WORDS (owner, 2026-09-10: "the address … truncates
+   a single word address like charsadd a, truncate or use in two lines when the
+   address is long").
+
+   A one-word address was being cut mid-word — "Charsadda" arriving as
+   "Charsadd a" — because nothing told the clamp where it was allowed to break,
+   and a -webkit-box clamp will split a word to fill its line. `word-break:
+   normal` keeps whole words together and `overflow-wrap: break-word` still
+   rescues a word genuinely wider than the column, which is the only case where
+   breaking one is better than overflowing. Two lines stays: it is the row
+   height the register is built on. */
 .stu-addr__t {
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; min-width: 0;
+    word-break: normal; overflow-wrap: break-word; hyphens: auto;
 }
 .stu-pin {
     flex: 0 0 12px; width: 12px; height: 12px; margin-top: 1px;

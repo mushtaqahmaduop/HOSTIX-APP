@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // The Student Details slide-over (Students spec §22-§30).
 //
 // The two assertions that matter most are the ones about data the app does NOT
@@ -164,9 +164,9 @@ test('Financial reads the real payments, through the §14 layer', async () => {
   await win.waitForTimeout(300);
 
   const body = await win.evaluate(() => document.getElementById('stu-panel-body').innerText.replace(/\s+/g, ' '));
-  expect(body).toContain('PKR 10,000');       // rent
-  expect(body).toContain('PKR 7,000');        // mess
-  expect(body).toContain('PKR 17,000');       // total, and the payment row
+  expect(body).toContain('Rs. 10,000');       // rent
+  expect(body).toContain('Rs. 7,000');        // mess
+  expect(body).toContain('Rs. 17,000');       // total, and the payment row
   expect(body).toContain('Rent + Mess');
   expect(body).toMatch(/Payment history/i);   // the heading is uppercased in CSS
 
@@ -451,19 +451,19 @@ test('Financial carries the old profile ledger, whole', async () => {
     .toEqual(['month', 'monthly rent', 'concession', 'paid (+extras)',
               'unpaid', 'method', 'status', 'date', 'actions']);
   expect(led.bar).toContain('Full Payment History (3 records)');
-  expect(led.bar).toContain('Total paid: PKR 28,500');
-  expect(led.bar).toContain('Due PKR 14,500');
+  expect(led.bar).toContain('Total paid: Rs. 28,500');
+  expect(led.bar).toContain('Due Rs. 14,500');
   /* The footer states the count AND carries the way out to the full Payments
      list, which is filtered to this student on the way — getting there used to
      mean closing the drawer and typing the name back in. */
   expect(led.foot.replace(/\s+/g, ' ')).toBe('Showing 3 of 3 records View all payments');
 
   // The concession is broken out under the paid figure, which is the point.
-  expect(led.rows[2][2]).toBe('−PKR 500');
-  expect(led.rows[2][3]).toContain('PKR 14,000');
+  expect(led.rows[2][2]).toBe('−Rs. 500');
+  expect(led.rows[2][3]).toContain('Rs. 14,000');
   expect(led.rows[2][3]).toContain('concession');
   // Unpaid comes from calculateOutstanding, not the stored field.
-  expect(led.rows[0][4]).toBe('PKR 14,500');
+  expect(led.rows[0][4]).toBe('Rs. 14,500');
   expect(led.rows[1][4]).toBe('—');
 
   /* THE FOUR ROW ACTIONS ARE BEHIND A KEBAB in the drawer — one per row, the
