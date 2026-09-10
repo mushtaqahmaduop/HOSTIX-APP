@@ -130,6 +130,9 @@ test('an existing two-warden install migrates without losing access', async () =
   // 3. Permissions derived from the old flags. Nothing that was allowed before
   //    may come out denied — every old flag here was true except canSettings.
   expect(migrated.warden1.perms.edit).toBe(true);
+  /* `add` split off `edit` on 2026-09-10 and takes its value from the same old
+     canEdit flag — one flag covered both halves, so both come out of it. */
+  expect(migrated.warden1.perms.add).toBe(true);
   expect(migrated.warden1.perms.delete).toBe(true);
   expect(migrated.warden1.perms.settings).toBe(true);
   expect(migrated.warden1.perms.payments).toBe(true);
@@ -145,6 +148,51 @@ test('an existing two-warden install migrates without losing access', async () =
   // 5. THE ONE THAT MATTERS: the existing password still signs in.
   expect(await tryLogin(win, 'warden1', 'warden1'),
     'a migrated account could not sign in with its existing password').toBe(true);
+
+  await app.close();
+});
+
+/* THE ADD/EDIT SPLIT MUST NOT WIDEN ANYBODY'S ACCESS (owner, 2026-09-10).
+
+   _migrateUsers has a blanket rule that grants any NEW permission key to every
+   stored account, so that a version bump can never silently lock a hostel out.
+   That rule is right for a genuinely new capability and WRONG here: adding
+   records is not new, it is half of a permission that already existed. A
+   warden the hostel had explicitly denied `edit` would have been handed the
+   ability to admit students by a version upgrade. */
+test('the add/edit split inherits from edit rather than granting itself', async () => {
+  let app = await electron.launch(launchOpts());
+  let win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await waitForLogin(win);
+
+  await win.evaluate(async () => {
+    const hash = await hashPassword('keep-me');
+    const key = Object.keys(localStorage).find(k => k.endsWith('_wardens'));
+    // The current shape, minus the key that did not exist yesterday.
+    localStorage.setItem(key, JSON.stringify({
+      boss:  { username: 'boss',  name: 'Boss',  pw: hash, active: true,
+               perms: { edit: true,  delete: true,  payments: true, reports: true,
+                        backup: true, settings: true, users: true } },
+      clerk: { username: 'clerk', name: 'Clerk', pw: hash, active: true,
+               perms: { edit: false, delete: false, payments: true, reports: true,
+                        backup: false, settings: false, users: false } },
+    }));
+  });
+  await app.close();
+
+  app = await electron.launch(launchOpts());
+  win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await waitForLogin(win);
+
+  const after = await win.evaluate(() => JSON.parse(JSON.stringify(WARDENS)));
+  expect(after.boss.perms.add, 'an account that could edit lost the ability to add').toBe(true);
+  expect(after.clerk.perms.add,
+    'a warden denied edit was handed adding by the upgrade').toBe(false);
+  // …and nothing else moved.
+  expect(after.clerk.perms.payments).toBe(true);
+  expect(after.clerk.perms.settings).toBe(false);
 
   await app.close();
 });

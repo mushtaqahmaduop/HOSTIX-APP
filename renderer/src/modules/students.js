@@ -1942,8 +1942,9 @@ function exportStudentsExcel() {
 let _addStudentPresetRoom = '';
 
 function showAddStudentModal(presetRoomId='') {
-  // Admitting a student is the archetypal 'add a record' action.
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  // Admitting a student is the archetypal 'add a record' action — and since
+  // 2026-09-10 that is its own permission, separate from changing one.
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   _addStudentPresetRoom = presetRoomId || '';
   closeModal();              // harmless when nothing is open; clears a caller's modal
   navigate('addstudent');
@@ -2366,7 +2367,7 @@ function sfDropPhoto(ev) {
 
 async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
   // Gated at the form AND at the submit: the page can be reached without the button.
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const name=document.getElementById('f-tname').value.trim();
   const roomId=document.getElementById('f-troom').value;
   // Rent is a property of the room, not of the student form — the form no
@@ -3451,6 +3452,11 @@ async function confirmDeleteStudent(id) {
    field ids below are the ones it already reads.
    ============================================================================ */
 function showRoomShiftModal(studentId) {
+  /* GATED (2026-09-10). "Move or shift a student" is one of the lines the
+     Edit-records permission card promises, and this path asked for nothing —
+     the same shape of gap as the delete bug the owner reported on 2026-09-09,
+     where the card said one thing and the code checked another. */
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t = DB.students.find(x => x.id === studentId);
   if (!t) return;
   const fromRoom = DB.rooms.find(r => r.id === t.roomId);
@@ -3572,6 +3578,8 @@ function showRoomShiftModal(studentId) {
 
 
 async function submitRoomShift(studentId) {
+  // Gated at the form AND here — the submit is reachable without the form.
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t = DB.students.find(x => x.id === studentId);
   if (!t) return;
 
@@ -3812,6 +3820,10 @@ function _getAvailableRooms() {
    decides what to do about it.
    ============================================================================ */
 function openRestoreStudentForm(studentId) {
+  /* GATED (2026-09-10). Re-admitting a former student puts a person back on
+     the roster and into a bed — an add in every sense that matters, and it was
+     asking for nothing at all. */
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const t = DB.students.find(x => x.id === studentId); if (!t) return;
   const availRooms = roomsByNumber(_getAvailableRooms());
   const roomOpts = availRooms.map(r => {
@@ -4124,6 +4136,7 @@ function rsRecalc() {
 }
 
 async function submitRestoreStudent(studentId) {
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const t=DB.students.find(x=>x.id===studentId); if(!t) return;
   const roomId=document.getElementById('rs-room').value;
   if(!roomId){toast('Please select a room','error');return;}

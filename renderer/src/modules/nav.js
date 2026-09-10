@@ -305,7 +305,9 @@ function applyHeaderChrome(page) {
      the chrome honest; the gate at the entry point is still the boundary,
      because the command palette and a direct navigate() reach those functions
      without passing through here. */
-  const mayAdd = typeof canDo !== 'function' || canDo('edit');
+  // 'add', not 'edit', since the two split on 2026-09-10 — this button only
+  // ever opens an Add form.
+  const mayAdd = typeof canDo !== 'function' || canDo('add');
   const btn = document.getElementById('hdr-action');
   if (btn) {
     if (cfg.action && mayAdd) {
@@ -441,7 +443,7 @@ function renderPage(p, resetScroll=false) {
       _s.textContent = [_hostel, cfg?.sub].filter(Boolean).join(' · ');
     }
     const actionBtn=document.getElementById('hdr-action');
-    const _mayAdd2 = typeof canDo !== 'function' || canDo('edit');
+    const _mayAdd2 = typeof canDo !== 'function' || canDo('add');
     if(cfg&&cfg.action&&_mayAdd2){actionBtn.style.display='flex';document.getElementById('hdr-action-text').textContent=cfg.action;}
     else{actionBtn.style.display='none';}
   }

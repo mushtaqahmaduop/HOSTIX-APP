@@ -74,7 +74,15 @@ function withPerm(win, perm, value, fnBody) {
   }, { perm, value, fnBody });
 }
 
-test("'edit' is enforced: a warden without it cannot add or change a record", async () => {
+/* ADD AND EDIT ARE TWO PERMISSIONS SINCE 2026-09-10 (owner: "add edit records
+   option to the permissions vith user add nev user and make it end to end").
+
+   This test used to hold both halves under the single `edit` key. It is now
+   two tests, and the pair proves the thing the split exists for: a front-desk
+   account can admit a student it cannot afterwards change, and a records clerk
+   can correct a record it cannot create. If either gate ever reads the other
+   key, one of these fails. */
+test("'add' is enforced: a warden without it cannot create a record", async () => {
   const { app, win } = await openApp();
 
   await win.evaluate(async () => {
@@ -83,31 +91,24 @@ test("'edit' is enforced: a warden without it cannot add or change a record", as
     await saveDB();
   });
 
-  // ── Without the permission ────────────────────────────────────────────────
   // Add Student is a PAGE, not a modal, and it does not paint synchronously.
   // Without this wait the "denied" case would pass for the wrong reason — the
   // form is absent a millisecond after the call whether it was blocked or not.
   const settle = 'await new Promise(r => setTimeout(r, 700));';
 
-  const denied = await withPerm(win, 'edit', false, `
+  const denied = await withPerm(win, 'add', false, `
     closeModal();
     showAddStudentModal();
     ${settle}
     const addFormOpened = !!document.getElementById('f-tname');
-    showEditRoomModal('r1');
-    ${settle}
-    const editRoomOpened = !!document.getElementById('f-rnumber');
     const roomsBefore = DB.rooms.length;
     await submitAddRoom();
-    return { addFormOpened, editRoomOpened,
-             roomsUnchanged: DB.rooms.length === roomsBefore };
+    return { addFormOpened, roomsUnchanged: DB.rooms.length === roomsBefore };
   `);
   expect(denied.addFormOpened, 'the Add Student form opened without permission').toBe(false);
-  expect(denied.editRoomOpened, 'the Edit Room form opened without permission').toBe(false);
   expect(denied.roomsUnchanged, 'a room was created without permission').toBe(true);
 
-  // ── With it: the same calls must go through ──────────────────────────────
-  const allowed = await withPerm(win, 'edit', true, `
+  const allowed = await withPerm(win, 'add', true, `
     closeModal();
     showAddStudentModal();
     ${settle}
@@ -117,6 +118,75 @@ test("'edit' is enforced: a warden without it cannot add or change a record", as
   `);
   expect(allowed.addFormOpened,
     'the gate blocks a warden who DOES have the permission').toBe(true);
+
+  // The header's one primary button is an Add button, so it follows 'add'.
+  const chrome = await win.evaluate(async () => {
+    const before = CUR_USER.perms.add;
+    CUR_USER.perms.add = false;
+    navigate('students');
+    await new Promise(r => setTimeout(r, 500));
+    const hidden = (document.getElementById('hdr-action') || {}).style.display;
+    CUR_USER.perms.add = before;
+    navigate('students');
+    await new Promise(r => setTimeout(r, 500));
+    const shown = (document.getElementById('hdr-action') || {}).style.display;
+    return { hidden, shown };
+  });
+  expect(chrome.hidden, 'the Add button is offered to a warden who cannot add').toBe('none');
+  expect(chrome.shown, 'the Add button is hidden from a warden who can add').not.toBe('none');
+
+  await app.close();
+});
+
+test("'edit' is enforced: a warden without it cannot change a record that exists", async () => {
+  const { app, win } = await openApp();
+
+  await win.evaluate(async () => {
+    DB.rooms = [{ id: 'r1', number: '101', floor: 'Ground',
+      typeId: (DB.settings.roomTypes[0] || {}).id, amenities: [] }];
+    DB.students = [{ id: 's1', name: 'Shift Me', roomId: 'r1', status: 'Active',
+                     joinDate: today() }];
+    await saveDB();
+  });
+
+  const settle = 'await new Promise(r => setTimeout(r, 700));';
+
+  const denied = await withPerm(win, 'edit', false, `
+    closeModal();
+    showEditRoomModal('r1');
+    ${settle}
+    const editRoomOpened = !!document.getElementById('f-rnumber');
+    ${/* "Move or shift a student" is a line the Edit-records card prints, and
+          this path asked for nothing at all until 2026-09-10 — the same shape
+          of gap as the delete bug the owner reported the day before. */''}
+    closeModal();
+    showRoomShiftModal('s1');
+    ${settle}
+    const shiftOpened = !!document.querySelector('.msf-cur__n, #msf-room, #shift-room');
+    closeModal();
+    return { editRoomOpened, shiftOpened };
+  `);
+  expect(denied.editRoomOpened, 'the Edit Room form opened without permission').toBe(false);
+  expect(denied.shiftOpened, 'the room-shift form opened without permission').toBe(false);
+
+  // A warden who may ADD but not EDIT keeps the add half — that is the split.
+  const split = await win.evaluate(async () => {
+    const b = { add: CUR_USER.perms.add, edit: CUR_USER.perms.edit };
+    CUR_USER.perms.add = true; CUR_USER.perms.edit = false;
+    closeModal();
+    showAddStudentModal();
+    await new Promise(r => setTimeout(r, 700));
+    const addFormOpened = !!document.getElementById('f-tname');
+    closeModal();
+    showEditRoomModal('r1');
+    await new Promise(r => setTimeout(r, 700));
+    const editRoomOpened = !!document.getElementById('f-rnumber');
+    closeModal();
+    CUR_USER.perms.add = b.add; CUR_USER.perms.edit = b.edit;
+    return { addFormOpened, editRoomOpened };
+  });
+  expect(split.addFormOpened, 'add was refused to an account that holds it').toBe(true);
+  expect(split.editRoomOpened, 'edit was granted by holding add').toBe(false);
 
   await app.close();
 });
@@ -188,12 +258,15 @@ test('the header stops offering buttons the warden may not use', async () => {
     };
     const before = { ...CUR_USER.perms };
 
-    CUR_USER.perms.edit = true; CUR_USER.perms.payments = true;
+    /* 'add', not 'edit': the two split on 2026-09-10 and this button only ever
+       opens an Add form, so it follows the half that names what it does. Both
+       are set here so the test cannot pass on the wrong one. */
+    CUR_USER.perms.add = true; CUR_USER.perms.edit = true; CUR_USER.perms.payments = true;
     navigate('students');
     await new Promise(r => setTimeout(r, 700));
     const full = read();
 
-    CUR_USER.perms.edit = false; CUR_USER.perms.payments = false;
+    CUR_USER.perms.add = false; CUR_USER.perms.edit = false; CUR_USER.perms.payments = false;
     navigate('students');
     await new Promise(r => setTimeout(r, 700));
     const none = read();

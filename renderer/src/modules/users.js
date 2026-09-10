@@ -8,7 +8,7 @@
 
    WHAT AN ACCOUNT ACTUALLY IS. `auth-nev.js` stores
    `{ username, name, phone, perms, active, pw, photo, builtin }` per user, and
-   enforces SEVEN permissions: edit, delete, payments, reports, backup,
+   enforces EIGHT permissions: add, edit, delete, payments, reports, backup,
    settings, users. Everything on this page is that, plus four fields added
    today because the reference asks for them and they cost one line each to
    store: `email`, `department`, `role` and `createdAt`. `lastLogin` is stamped
@@ -24,11 +24,15 @@
      · Login as user    — impersonation with no server to authorise it.
      · Import           — no importer for accounts.
      · The sub-permissions in the form's group cards. The reference draws about
-       thirty; this app enforces seven. Each card's master checkbox IS its real
+       thirty; this app enforces eight. Each card's master checkbox IS its real
        permission, and the lines under it are what that permission grants —
-       drawn as text, not as checkboxes that would do nothing. Inventing 23
+       drawn as text, not as checkboxes that would do nothing. Inventing 22
        controls to match a picture is how a warden ends up believing they
        revoked something they did not.
+
+       The eighth arrived on 2026-09-10 the right way round: the owner asked
+       for it, and the code that enforces it landed with the checkbox that
+       offers it. Every line printed on those two cards is a call site.
 
    ROLE IS A PRESET, NOT A SECOND SOURCE OF TRUTH. Picking one ticks a set of
    permissions and is stored as a label; the permissions remain the thing the
@@ -37,15 +41,23 @@
 
 let usersFilter = { search: '', role: 'All', status: 'All', dept: 'All', page: 1, sel: null };
 
-/* The presets. Each names a set of the seven real permissions — nothing here
-   grants anything the app does not enforce. */
+/* The presets. Each names a set of the eight real permissions — nothing here
+   grants anything the app does not enforce.
+
+   ADD AND EDIT ARE SEPARATE KEYS SINCE 2026-09-10, so every preset that used
+   to say `edit` now says both. One preset does NOT: Receptionist takes `add`
+   alone. That is the front desk — the person who admits a student who has
+   walked in, and who has no business going back through records that are
+   already on file. It is the reason the owner asked for the split, and a set
+   of presets where no preset uses it would be a split nobody could reach
+   without ticking boxes by hand. */
 const USER_ROLES = [
-  { key: 'Super Admin',  perms: ['edit','delete','payments','reports','backup','settings','users'] },
-  { key: 'Admin',        perms: ['edit','delete','payments','reports','backup','settings'] },
-  { key: 'Manager',      perms: ['edit','payments','reports','settings'] },
+  { key: 'Super Admin',  perms: ['add','edit','delete','payments','reports','backup','settings','users'] },
+  { key: 'Admin',        perms: ['add','edit','delete','payments','reports','backup','settings'] },
+  { key: 'Manager',      perms: ['add','edit','payments','reports','settings'] },
   { key: 'Accountant',   perms: ['payments','reports'] },
-  { key: 'Receptionist', perms: ['edit','payments'] },
-  { key: 'Warden',       perms: ['edit','payments','reports'] },
+  { key: 'Receptionist', perms: ['add','payments'] },
+  { key: 'Warden',       perms: ['add','edit','payments','reports'] },
   { key: 'Staff',        perms: ['reports'] },
 ];
 
@@ -424,11 +436,15 @@ async function usrDoResetPassword(id) {
    `u-username`, `u-pw`, `u-phone`, `u-active`, `up-<perm>`), plus the three
    fields added today.                                                        */
 
-/* What each of the seven permissions actually reaches, in the reference's
+/* What each of the eight permissions actually reaches, in the reference's
    grouped shape. Every line here is a real consequence of the tick above it. */
 const PERM_GROUPS = {
-  edit:     { ico: 'users',    hue: 'dh-violet', title: 'Records',
-              lines: ['Add and edit students', 'Add and edit rooms', 'Add and edit expenses', 'Move or shift a student'] },
+  add:      { ico: 'plus',     hue: 'dh-green',  title: 'Add records',
+              lines: ['Admit a student', 'Create rooms, singly or in bulk',
+                      'Record an expense', 'Add an expense category'] },
+  edit:     { ico: 'edit',     hue: 'dh-violet', title: 'Edit records',
+              lines: ['Change a student already on file', 'Change a room',
+                      'Change an expense', 'Move or shift a student'] },
   delete:   { ico: 'trash',    hue: 'dh-red',    title: 'Deletion',
               lines: ['Delete students', 'Delete payments', 'Delete rooms and expenses'] },
   payments: { ico: 'card',     hue: 'dh-green',  title: 'Finance',
@@ -485,7 +501,7 @@ function showUserEditor(id) {
   /* A new account starts with the everyday permissions ticked and the
      dangerous ones clear, so a mis-click cannot hand out delete or user
      management by default. */
-  const defaultOn = { edit: true, payments: true, reports: true };
+  const defaultOn = { add: true, edit: true, payments: true, reports: true };
   const on = k => (isNew ? defaultOn[k] === true : perms[k] === true);
   const role = isNew ? '' : usrRole(Object.assign({ id }, u));
 
@@ -603,7 +619,10 @@ function showUserEditor(id) {
           </span>
         </div>
         <div class="usf-grps">${groups}</div>
-        <div class="cfg-note">${icon('info', 'xs')}<span>This app enforces <b>these seven</b>. The lines inside each card are what its tick grants — they are not separate switches, so nothing here can be half-granted. Permissions can be changed later from this page.</span></div>
+        ${''/* The count is read off PERMS rather than written out, so the
+               eighth permission cannot arrive with the sentence still saying
+               seven — which is exactly what happened on 2026-09-10. */}
+        <div class="cfg-note">${icon('info', 'xs')}<span>This app enforces <b>these ${PERMS.length}</b>. The lines inside each card are what its tick grants — they are not separate switches, so nothing here can be half-granted. Permissions can be changed later from this page.</span></div>
       </div>
     </div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>

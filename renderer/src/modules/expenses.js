@@ -613,8 +613,9 @@ function showAddExpenseCategoryModal() {
   // full-access one, and the toast read 'does not have permission to: expenses'
   // because requirePerm found no label to print either. Adding a category is an
   // ordinary record edit, which is the permission the Add Expense form itself
-  // sits behind.
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  // sits behind. Since 2026-09-10 that is 'add' — creating a category is
+  // creating a record, not changing one.
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   showModal('modal-sm', 'Add Expense Category', `
     <div class="field">
       <label for="new-exp-cat">Category name</label>
@@ -832,7 +833,10 @@ async function expReceiptSaveCopy() {
  * @param {string} [id] existing expense id; omit to add a new one.
  */
 function showExpenseModal(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  /* One form for both, so it asks for the permission that matches which of the
+     two it is about to be (2026-09-10): `id` present means an existing record
+     is being changed. */
+  if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
   const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
   if (id && !e) return;
 
@@ -954,7 +958,9 @@ function showEditExpenseModal(id)  { showExpenseModal(id); }
  * @param {string} [id]
  */
 async function submitExpense(id) {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  // Same split as the form above — gated again here, because the submit can be
+  // reached without it.
+  if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
   const e = id ? (DB.expenses || []).find(x => x.id === id) : null;
   if (id && !e) return;
 

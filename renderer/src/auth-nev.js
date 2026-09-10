@@ -133,9 +133,24 @@ async function _sha256v1(plain) {
 // key is unchanged so existing installs upgrade in place — see _migrateUsers().
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Every permission the app enforces. Order is the order shown in the UI. */
+/** Every permission the app enforces. Order is the order shown in the UI.
+ *
+ *  ADD AND EDIT ARE TWO PERMISSIONS SINCE 2026-09-10 (owner: "add edit records
+ *  option to the permissions vith user add nev user and make it end to end").
+ *  They were one, labelled "Add & edit records", which meant a hostel could not
+ *  say the thing it most often wants to say: that a junior warden may admit a
+ *  student at the desk but may not go back and change a record that already
+ *  exists. `delete` was already its own key for exactly that reason; this is
+ *  the same distinction one step earlier.
+ *
+ *  `edit` KEEPS ITS KEY, so no stored account loses anything: an install where
+ *  a warden could edit still has `edit:true` on that account, and _migrateUsers
+ *  grants the new `add` from it rather than from the blanket "grant new keys to
+ *  everyone" rule, which would have handed adding to a warden explicitly
+ *  denied it. */
 const PERMS = [
-  { key: 'edit',     label: 'Add & edit records',   hint: 'Students, rooms and expenses' },
+  { key: 'add',      label: 'Add records',          hint: 'Admit students, create rooms and expenses' },
+  { key: 'edit',     label: 'Edit records',         hint: 'Change students, rooms and expenses already on file' },
   { key: 'delete',   label: 'Delete records',       hint: 'Remove students, payments and rooms' },
   { key: 'payments', label: 'Collect payments',     hint: 'Record and edit payments' },
   { key: 'reports',  label: 'View reports',         hint: 'Reports page and PDF exports' },
@@ -186,6 +201,8 @@ function _migrateUsers(cfg) {
 
     if (!u.perms) {
       u.perms = {
+        // One old flag, two keys — canEdit covered both halves.
+        add:      u.canEdit     !== false,
         edit:     u.canEdit     !== false,
         delete:   u.canDelete   !== false,
         settings: u.canSettings !== false,
@@ -195,6 +212,16 @@ function _migrateUsers(cfg) {
         // management — otherwise every warden could grant themselves anything.
         users:    u.canSettings !== false,
       };
+      changed = true;
+    }
+    /* `add` SPLIT OFF `edit` on 2026-09-10 and inherits from it, NOT from the
+       blanket rule below. The blanket rule exists so a new permission never
+       silently locks someone out, and it is right for a genuinely new
+       capability — but adding records is not new here, it is half of one that
+       already existed. Granting it to everyone would hand admitting students
+       to a warden the hostel had explicitly denied editing. */
+    if (u.perms.add === undefined && u.perms.edit !== undefined) {
+      u.perms.add = u.perms.edit === true;
       changed = true;
     }
     // A later version may add a permission; grant it rather than silently deny.

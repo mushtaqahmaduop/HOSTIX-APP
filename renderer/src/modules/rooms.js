@@ -613,7 +613,8 @@ function syncRoomPreview() {
 }
 
 function showAddRoomModal(presetId='') {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  // 'add', not 'edit', since the two split on 2026-09-10.
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const typeOpts = DB.settings.roomTypes.map(t=>`<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
   const floorOpts = DB.settings.floors.map(f=>`<option value="${escHtml(f)}">${escHtml(f)} Floor</option>`).join('');
   showModal('modal-lg', roomModalTitle('doorOpen','Add New Room','Register a new room or unit in your hostel'), `
@@ -683,7 +684,7 @@ function roomModalTitle(ico, title, sub) {
   </span>`;
 }
 async function submitAddRoom() {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
   const typeId=document.getElementById('f-rtype').value;
@@ -773,7 +774,7 @@ function bulkRoomPlan(o) {
 }
 
 function showBulkRoomModal() {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const typeOpts  = DB.settings.roomTypes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
   const floorOpts = DB.settings.floors.map(f => `<option value="${escHtml(f)}">${escHtml(f)} Floor</option>`).join('');
 
@@ -883,7 +884,7 @@ function syncBulkRoomPreview() {
 }
 
 async function submitBulkRooms() {
-  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const floor  = (document.getElementById('f-brk-floor') || {}).value || '';
   const typeId = (document.getElementById('f-brk-type')  || {}).value || '';
   const type   = DB.settings.roomTypes.find(t => t.id === typeId);
