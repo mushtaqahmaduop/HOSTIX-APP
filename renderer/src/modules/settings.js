@@ -1,7 +1,7 @@
 ﻿/* ─── HOSTYLLO — SETTINGS MODULE ─────────────────────────────────────────────
    Contains: renderSettings, bindSettingsEvents, renderLicenseSettingsPanel,
-             openLicenseSettingsWindow, liveUpdateSetting, applyHostelFont,
-             saveSettings, bulk rent update helpers, room type/payment method
+             openLicenseSettingsWindow, liveUpdateSetting, hiSaveIdentity,
+             bulk rent update helpers, room type/payment method
              helpers, exportData, importData, importFromExcel,
              _showExcelImportPreview, confirmExcelImport, resetAllData,
              saveIssue/maintenance/complaints/notices/fines/inspections/billsplits,
@@ -1278,64 +1278,18 @@ async function cfgAdd(kind) {
   toast('Added', 'success');
 }
 
-/* ── WHICH FACES THIS COMPUTER CAN ACTUALLY DRAW ─────────────────────────────
-   The picker used to offer twenty faces, thirteen of which were Google
-   families — DM Serif Display, Playfair, Cinzel, Cormorant, Baskerville, Fell
-   English, Philosopher, Yeseva One, Bebas Neue, Rajdhani, Teko, Josefin Sans
-   and Righteous. Not one of them ships with this app: `vendor/fonts.css`
-   declares Inter, Outfit, Barlow, Barlow Condensed and JetBrains Mono and
-   nothing else, and `font-src 'self' data:` in main.js's CSP means a webfont
-   can never be fetched from anywhere. So all thirteen fell back to the default
-   serif and every one of those tiles drew the SAME face under a different
-   name — including `DM Serif Display`, which was the shipped default.
+/* ── THE FACE THE TITLE BAR SETS THE HOSTEL NAME IN ──────────────────────────
+   Owner, 2026-09-10: "remove the hostel name fonts."
 
-   The list below is the two kinds of face that do resolve: the five the
-   installer carries, and the Windows faces present on any machine this runs
-   on. The system ones are still measured before being offered, because
-   "present on any Windows" is an assumption and an N/LTSC image can prove it
-   wrong — better to show fifteen tiles that work than eighteen where three
-   lie.                                                                       */
+   What is left is the DEFAULT and the sanitiser. The picker that stood here —
+   twenty tiles, a canvas-measurement pass to hide the Windows faces a given
+   image might not have, and a warning for when the stored face turned out not
+   to resolve — went with the card that drew it. All of that machinery existed
+   to let a hostel choose the typeface of ONE string in ONE place, and the two
+   lists, the measurer and the chooser were dead the moment the card left.
+
+   `hostelNameFont` is still read: an install that picked a face keeps it. */
 const HI_FONT_DEFAULT = 'Georgia';
-const HI_FONTS_BUNDLED = [
-  ['Outfit', 'Outfit'], ['Barlow', 'Barlow'], ['Barlow Condensed', 'Barlow Condensed'],
-  ['Inter', 'Inter'], ['JetBrains Mono', 'JetBrains Mono'],
-];
-const HI_FONTS_SYSTEM = [
-  ['Georgia', 'Georgia'], ['Cambria', 'Cambria'], ['Constantia', 'Constantia'],
-  ['Book Antiqua', 'Book Antiqua'], ['Palatino Linotype', 'Palatino'],
-  ['Times New Roman', 'Times New Roman'], ['Segoe UI', 'Segoe UI'],
-  ['Tahoma', 'Tahoma'], ['Verdana', 'Verdana'], ['Trebuchet MS', 'Trebuchet'],
-  ['Candara', 'Candara'], ['Corbel', 'Corbel'],
-  ['Century Gothic', 'Century Gothic'], ['Franklin Gothic Medium', 'Franklin Gothic'],
-  ['Bahnschrift', 'Bahnschrift'], ['Arial Black', 'Arial Black'],
-  ['Impact', 'Impact'], ['Gabriola', 'Gabriola'],
-];
-
-/* Canvas measurement, not `document.fonts.check()`: check() answers for faces
-   the page has REGISTERED, and no @font-face declares a Windows system font,
-   so it reports every one of them missing. Measuring one string in the
-   candidate and again in the generic it would fall back to catches the case
-   that matters — a name that resolves to nothing. Memoised: this runs once per
-   face per session, not once per render. */
-const _hiFontSeen = {};
-function hiFontAvailable(name) {
-  if (name in _hiFontSeen) return _hiFontSeen[name];
-  let ok = false;
-  try {
-    const c = document.createElement('canvas').getContext('2d');
-    const S = 'Hostel Name mmmmwwwWM';
-    for (const generic of ['serif', 'sans-serif', 'monospace']) {
-      /* 700, because that is the weight the tile draws. A family whose bundled
-         faces do not include the weight asked for measures as missing. */
-      c.font = '700 48px ' + generic;
-      const base = c.measureText(S).width;
-      c.font = '700 48px "' + name + '", ' + generic;
-      if (Math.abs(c.measureText(S).width - base) > 0.5) { ok = true; break; }
-    }
-  } catch (e) { ok = true; }   // no canvas: offer it rather than hide everything
-  _hiFontSeen[name] = ok;
-  return ok;
-}
 
 /* A family name on its way into markup. `hostelNameFont` is a stored value and
    a restored backup is a file the customer chose, so it is not trusted input:
@@ -1346,14 +1300,6 @@ function hiFontAvailable(name) {
    way, by assigning the DOM property rather than building markup. */
 function hiSafeFace(name) {
   return String(name || '').replace(/[^A-Za-z0-9 ._-]/g, '').slice(0, 48);
-}
-
-/** The two groups the picker draws, system faces filtered to what resolves. */
-function hiFontChoices() {
-  return [
-    { label: 'Shipped with the app — the same on every computer', fonts: HI_FONTS_BUNDLED },
-    { label: 'Installed on this computer', fonts: HI_FONTS_SYSTEM.filter(f => hiFontAvailable(f[0])) },
-  ];
 }
 
 /* ── WHAT A CONTROL DOES WHEN THE FEATURE BEHIND IT IS NOT BUILT ─────────────
@@ -1463,8 +1409,10 @@ function _setStoreParts() {
      the hostel's own logo.                                                   */
 function renderHostelInfoPanel() {
   const s = DB.settings;
+  /* Still read, no longer chosen here — the font card left on 2026-09-10 and
+     the profile card below still draws the name in whatever face was picked
+     before it did. */
   const font = s.hostelNameFont || HI_FONT_DEFAULT;
-  const pickerOpen = s.showFontPicker !== false;
   const lic = window._hostyllo_license_cache || {};
 
   /* Same field shape as the two page forms: label above, and the control in a
@@ -1480,6 +1428,13 @@ function renderHostelInfoPanel() {
   const IN = (id, key, val, extra) =>
     `<input class="form-control" id="${id}" value="${escHtml(val || '')}" `
     + `oninput="liveUpdateSetting('${key}',this.value)" ${extra || ''}>`;
+  /* The five identity fields, which PREVIEW on input and are written by the
+     Save button (owner, 2026-09-10). Everything else on this panel still uses
+     IN() above and writes through on the keystroke — none of those is a form
+     with a Save beside it. */
+  const ID_IN = (id, key, val, extra) =>
+    `<input class="form-control" id="${id}" value="${escHtml(val || '')}" `
+    + `oninput="hiIdentityTouched('${key}',this.value)" ${extra || ''}>`;
 
   /* A row of the profile card. An empty field says so rather than leaving a
      blank line: "no phone recorded" is information, an empty row is a bug. */
@@ -1488,9 +1443,6 @@ function renderHostelInfoPanel() {
       <span class="hi-id__i">${icon(ico, 'xs')}</span>
       <span class="hi-id__v${val ? '' : ' is-empty'}" id="${id}">${escHtml(val || empty)}</span>
     </div>`;
-
-  const FONTS_GROUPS = hiFontChoices();
-  const missing = !HI_FONTS_BUNDLED.some(f => f[0] === font) && !hiFontAvailable(font);
 
   // ── The two preference cards the reference draws ──────────────────────────
   const general = [
@@ -1582,17 +1534,22 @@ function renderHostelInfoPanel() {
             <div class="set-head__t">Hostel Identity</div>
             <div class="set-head__s">What this hostel is called and how it is reached. The title bar, the login screen and every printed header read from here.</div>
           </div>
+          ${''/* The pill says which of two states the card is in, and the
+                 button is the thing that commits (owner, 2026-09-10: "add save
+                 button to hostel identity in hostel ifo"). See hiSaveIdentity()
+                 for why this replaced "Saved as you type". */}
           <div class="set-head__end">
-            <span class="hi-live" title="Each field is written to the database as you type it.">${icon('check', 'xs')}Saved as you type</span>
+            <span class="hi-live" id="hi-savestate" title="Changes are written when you press Save.">${icon('check', 'xs')}Saved</span>
+            <button class="set-btn set-btn--go" id="hi-save" onclick="hiSaveIdentity()" disabled>${icon('check', 'xs')}Save</button>
           </div>
         </div>
 
         <div class="hf-g2">
-          ${F('Hostel name', 'building', IN('hi-name', 'hostelName', s.hostelName, 'maxlength="60"'), { full: true, for: 'hi-name' })}
-          ${F('Tagline', 'tag', IN('hi-tag', 'tagline', s.tagline, 'maxlength="60" placeholder="Safe &amp; comfortable living"'), { full: true, for: 'hi-tag', opt: true })}
-          ${F('Location / city', 'pin', IN('hi-loc', 'location', s.location, 'maxlength="80" placeholder="Street, city"'), { for: 'hi-loc' })}
-          ${F('Contact phone', 'phone', IN('hi-phone', 'phone', s.phone, 'maxlength="20" placeholder="03XX-XXXXXXX"'), { for: 'hi-phone' })}
-          ${F('Email address', 'mail', IN('hi-email', 'email', s.email, 'type="email" maxlength="60" placeholder="hostel@email.com"'), { full: true, for: 'hi-email', opt: true })}
+          ${F('Hostel name', 'building', ID_IN('hi-name', 'hostelName', s.hostelName, 'maxlength="60"'), { full: true, for: 'hi-name' })}
+          ${F('Tagline', 'tag', ID_IN('hi-tag', 'tagline', s.tagline, 'maxlength="60" placeholder="Safe &amp; comfortable living"'), { full: true, for: 'hi-tag', opt: true })}
+          ${F('Location / city', 'pin', ID_IN('hi-loc', 'location', s.location, 'maxlength="80" placeholder="Street, city"'), { for: 'hi-loc' })}
+          ${F('Contact phone', 'phone', ID_IN('hi-phone', 'phone', s.phone, 'maxlength="20" placeholder="03XX-XXXXXXX"'), { for: 'hi-phone' })}
+          ${F('Email address', 'mail', ID_IN('hi-email', 'email', s.email, 'type="email" maxlength="60" placeholder="hostel@email.com"'), { full: true, for: 'hi-email', opt: true })}
         </div>
       </div>
 
@@ -1622,33 +1579,22 @@ function renderHostelInfoPanel() {
         <div class="cfg-note">${icon('info', 'xs')}<span>Every switch on this card is locked because the behaviour it names is already fixed in this build. The line under each one says what the app does instead — press the ⓘ to read it.</span></div>
       </div>
 
-      <div class="set-card">
-        <div class="set-head">
-          <div class="set-head__ico dh-violet">${setIco(SET_ICO.type, 17)}</div>
-          <div class="set-head__mid">
-            <div class="set-head__t">Hostel Name Font</div>
-            <div class="set-head__s">The face the title bar sets the name in. Nothing else in the app changes.</div>
-          </div>
-          <div class="set-head__end">
-            <button class="set-btn" id="hi-font-toggle" onclick="hiTogglePicker()">
-              ${icon('eye', 'xs')}${pickerOpen ? 'Hide the faces' : 'Show the faces'}
-            </button>
-          </div>
-        </div>
-        ${missing ? `<div class="hi-warn">${icon('warning', 'xs')}<span><b>${escHtml(font)}</b> is not installed on this computer, so the title bar is drawing the interface font instead. Pick one of the faces below.</span></div>` : ''}
-        <div id="hi-font-grid" ${pickerOpen ? '' : 'hidden'}>
-          ${FONTS_GROUPS.map(g => `
-            <div class="hi-fgroup">${escHtml(g.label)}</div>
-            <div class="hi-fonts">
-              ${g.fonts.map(([ff, label]) => `
-                <button type="button" class="hi-font${font === ff ? ' is-on' : ''}" onclick="applyHostelFont('${ff}')"
-                        aria-pressed="${font === ff}" title="${escHtml(label)}">
-                  <span class="font-card-label" style="font-family:'${ff}',var(--font)">${escHtml(s.hostelName || 'Hostel Name')}</span>
-                  <span class="hi-font__n">${escHtml(label)}</span>
-                </button>`).join('')}
-            </div>`).join('')}
-        </div>
-      </div>
+      ${''/* THE HOSTEL NAME FONT CARD IS GONE (owner, 2026-09-10: "remove the
+             hostel name fonts").
+
+             It offered twenty typefaces for ONE string in ONE place — the name
+             in the title bar — and half of them were system faces that a given
+             Windows install may not have, which is why the card also needed a
+             warning explaining that the chosen face was not being used. A
+             setting that can silently not apply, on a decision worth one line
+             of a hostel's attention, is a card that earns its own screen space
+             back by leaving.
+
+             The stored `hostelNameFont` is NOT deleted and hiSafeFace() still
+             reads it, so an install that picked a face keeps the name drawn in
+             it; there is simply no longer a picker for it. applyHostelFont()
+             stays with it — nothing calls it now, but a value nothing can
+             change and nothing can restore is worse than an unused setter. */}
 
     </div>
 
@@ -1865,19 +1811,12 @@ async function hiDbHealth(btn) {
   if (btn) btn.disabled = false;
 }
 
-/* The picker's open state is a stored preference, so the button writes it — but
-   it must not re-render the page to show the change: a full render from inside
-   a click handler would rebuild every tile for what is one attribute. */
-async function hiTogglePicker() {
-  const grid = document.getElementById('hi-font-grid');
-  const btn = document.getElementById('hi-font-toggle');
-  if (!grid) return;
-  const open = grid.hidden;                       // about to become visible
-  grid.hidden = !open;
-  if (btn) btn.innerHTML = icon('eye', 'xs') + (open ? 'Hide the faces' : 'Show the faces');
-  DB.settings.showFontPicker = open;
-  await saveDB();
-}
+/* hiTogglePicker() stood here until 2026-09-10 and went with the font card
+   (owner: "remove the hostel name fonts"). It showed and hid a grid that no
+   longer exists, and `showFontPicker` is the preference for a control nobody
+   can reach — the stored value is left alone rather than migrated away, since
+   nothing reads it and deleting a key from fifty live databases to tidy up an
+   unused setting is not a change worth making. */
 
 /* Each field on the left has a node on the right showing what it will look
    like, and `liveUpdateSetting` calls this on every keystroke. An empty value
@@ -2649,6 +2588,18 @@ function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
+  hiReflectSetting(key, val);
+}
+
+/* Everything liveUpdateSetting() does APART from writing the database: the
+   profile card, the title bar, the login screen and the font preview all carry
+   copies of these values and all of them have to follow the keystroke.
+
+   It was split out on 2026-09-10, when the identity card got a Save button back
+   (owner: "add save button to hostel identity in hostel ifo"). Those five
+   fields now preview live and commit on Save, so the preview and the write are
+   two different moments and could no longer be one function. */
+function hiReflectSetting(key, val) {
   // The profile card on the Hostel Info panel shows six of these fields as
   // the login screen will print them; it follows the keystroke.
   hiMirror(key, val);
@@ -2669,10 +2620,8 @@ async function liveUpdateSetting(key, val) {
       const ff = DB.settings.hostelNameFont || HI_FONT_DEFAULT;
       prev.style.fontFamily = `'${ff}', serif`;
     }
-    // Also update each individual font card label so every card shows new name
-    document.querySelectorAll('.font-card-label').forEach(el => {
-      el.textContent = val || 'Hostel Name';
-    });
+    /* The `.font-card-label` sweep that stood here went with the font picker
+       on 2026-09-10 — there are no tiles left to relabel. */
   }
   if(key==='location') {
     const loginAddr = document.getElementById('login-address');
@@ -2685,23 +2634,60 @@ async function liveUpdateSetting(key, val) {
     if(ver) ver.textContent = 'v' + val;
   }
 }
-async function applyHostelFont(fontFamily) {
-  DB.settings.hostelNameFont = fontFamily;
-  await saveDB();
-  // Sidebar hostel name is a subtitle now — no custom font needed there
-  // Update the live preview span immediately without full page re-render
-  const prev = document.getElementById('font-preview-name');
-  if(prev) {
-    prev.style.fontFamily = `'${fontFamily}', serif`;
-    prev.textContent = DB.settings.hostelName || 'Hostel Name';
-  }
-  toast('Font updated — ' + fontFamily, 'success');
-  renderPage('settings');
+/* applyHostelFont() went with the picker that was its only caller (owner,
+   2026-09-10: "remove the hostel name fonts"). Dead code is worse than a note
+   saying where it went, and a setter with no control attached is exactly the
+   thing a future author wires a button back to by accident. `hostelNameFont`
+   is still READ — by hiSafeFace() on the profile card and by titlebar.js — so
+   an install that already picked a face keeps it. */
+/* ── HOSTEL IDENTITY: PREVIEW LIVE, COMMIT ON SAVE ───────────────────────────
+   Owner, 2026-09-10: "add save button to hostel identity in hostel ifo."
+
+   The button was removed on 2026-09-08 on the reasoning that it saved nothing
+   the keystroke had not already saved, and a button that looks like the thing
+   that commits your edit and is not teaches a warden that leaving the tab loses
+   work. That reasoning was mine, and removing the owner's control on the back
+   of it was the mistake — they asked for it back.
+
+   So it is a REAL Save now rather than a button that only reassures. The five
+   identity fields no longer write on each keystroke; they update the preview,
+   the title bar and the login screen as you type, and Save is what reaches the
+   database. The card's status pill says which of the two states it is in, so
+   the honest version of the old worry — "did that take?" — is answered on the
+   card instead of by a button that lies.
+
+   Nothing else on the panel changed: every other control here still writes
+   through liveUpdateSetting() on input, because none of them is a form. */
+let _hiDirty = false;
+
+function hiIdentityTouched(key, val) {
+  _hiDirty = true;
+  hiReflectSetting(key, val);   // preview only — the database is untouched
+  const st = document.getElementById('hi-savestate');
+  if (st) { st.className = 'hi-live is-dirty'; st.textContent = 'Unsaved changes'; }
+  const b = document.getElementById('hi-save');
+  if (b) b.disabled = false;
 }
-/* saveSettings() lived here until 2026-09-08. Its only caller was Hostel Info's
-   "Save Hostel Info" button, and that button saved nothing that was not already
-   saved — every field on that panel writes through on input. Removed with it,
-   rather than left as a function a future author could wire a button back to. */
+
+async function hiSaveIdentity() {
+  if (typeof requirePerm === 'function' && !requirePerm('settings')) return;
+  const MAP = { 'hi-name': 'hostelName', 'hi-tag': 'tagline', 'hi-loc': 'location',
+                'hi-phone': 'phone', 'hi-email': 'email' };
+  Object.keys(MAP).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) DB.settings[MAP[id]] = String(el.value || '').trim();
+  });
+  await saveDB();
+  // Re-run the mirrors against the TRIMMED values that were actually stored.
+  Object.keys(MAP).forEach(id => hiReflectSetting(MAP[id], DB.settings[MAP[id]]));
+  _hiDirty = false;
+  const st = document.getElementById('hi-savestate');
+  if (st) { st.className = 'hi-live'; st.textContent = 'Saved'; }
+  const b = document.getElementById('hi-save');
+  if (b) b.disabled = true;
+  if (typeof logActivity === 'function') logActivity('Hostel Info Updated', DB.settings.hostelName || '', 'Settings');
+  toast('Hostel identity saved', 'success');
+}
 // ── BULK RENT + MESS UPDATE ──────────────────────────────────────────────────
 /* Writes the two charges onto the student and re-bases every payment record
    that still has money owing on it.

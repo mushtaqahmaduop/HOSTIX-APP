@@ -57,112 +57,67 @@ async function launch() {
   return { app, win };
 }
 
-test('every face the picker offers actually draws, and no two draw the same', async () => {
-  const { app, win } = await launch();
+/* THE FONT PICKER IS GONE, and its two tests with it (owner, 2026-09-10:
+   "remove the hostel name fonts").
 
-  const result = await win.evaluate(async () => {
-    const tiles = [...document.querySelectorAll('.hi-font')];
-    /* The five bundled faces are @font-face rules with `font-display: swap`,
-       and a canvas measurement does not itself trigger a download — so ask for
-       them first. Without this, a bundled face measures as missing purely
-       because the file has not arrived yet. The system faces need nothing. */
-    for (const t of tiles) {
-      const lbl = t.querySelector('.font-card-label');
-      const f = getComputedStyle(lbl).fontFamily.split(',')[0].replace(/["']/g, '').trim();
-      try { await document.fonts.load('700 48px "' + f + '"'); } catch (e) {}
-    }
-    await document.fonts.ready;
-    const c = document.createElement('canvas').getContext('2d');
-    const S = 'Hostel Name mmmmwwwWM';
-    const widths = {};
-    const dead = [];
-    for (const t of tiles) {
-      const label = t.querySelector('.font-card-label');
-      const ff = getComputedStyle(label).fontFamily.split(',')[0].replace(/["']/g, '').trim();
-      let resolves = false;
-      for (const generic of ['serif', 'sans-serif', 'monospace']) {
-        c.font = '700 48px ' + generic;
-        const base = c.measureText(S).width;
-        c.font = '700 48px "' + ff + '", ' + generic;
-        if (Math.abs(c.measureText(S).width - base) > 0.5) { resolves = true; break; }
-      }
-      if (!resolves) dead.push(ff);
-      c.font = '700 48px "' + ff + '", serif';
-      widths[ff] = Math.round(c.measureText(S).width);
-    }
-    return { count: tiles.length, dead, widths };
-  });
+   They checked that every offered face really drew and that no two tiles drew
+   the same — the failure mode of the twenty-Google-family list that preceded
+   it — and that picking one reached the title bar. All three facts are about a
+   card that no longer exists, so there is nothing left for them to protect.
+   The stored `hostelNameFont` is still READ, and the profile-card assertion
+   below covers the surface that reads it.
 
-  // Enough faces to be a picker, and every one of them real.
-  expect(result.count).toBeGreaterThan(9);
-  expect(result.dead).toEqual([]);
-
-  // The old list's failure mode: many names, one face. No more than two tiles
-  // may measure identically (metric-compatible pairs are legitimate).
-  const byWidth = {};
-  for (const [ff, w] of Object.entries(result.widths)) (byWidth[w] = byWidth[w] || []).push(ff);
-  const collisions = Object.values(byWidth).filter(g => g.length > 2);
-  expect(collisions).toEqual([]);
-
-  await app.close();
-});
-
-test('picking a face sets the title bar, which is the surface the setting names', async () => {
-  const { app, win } = await launch();
-
-  const before = await win.evaluate(() =>
-    getComputedStyle(document.getElementById('hz-tb-title')).fontFamily);
-
-  await win.evaluate(async () => { await applyHostelFont('Impact'); });
-  await win.waitForTimeout(400);
-
-  const after = await win.evaluate(() => ({
-    face: getComputedStyle(document.getElementById('hz-tb-title')).fontFamily,
-    stored: DB.settings.hostelNameFont,
-  }));
-
-  expect(after.stored).toBe('Impact');
-  expect(after.face).toContain('Impact');
-  expect(after.face).not.toBe(before);
-
-  // And it survives a re-render of the chrome rather than being a one-off
-  // assignment that the next paint of the title bar undoes.
-  await win.evaluate(() => window.setTitlebarHostel());
-  expect(await win.evaluate(() =>
-    getComputedStyle(document.getElementById('hz-tb-title')).fontFamily)).toContain('Impact');
-
-  await app.close();
-});
-
-test('the fields write through on input, and the profile card follows', async () => {
+   THE IDENTITY CARD COMMITS ON SAVE NOW, so the test that asserted the exact
+   opposite — that the panel must offer no Save button, because every field
+   wrote through on the keystroke — is replaced by one for the contract the
+   owner asked for. What both versions guarantee is the same and is the part
+   that matters: what the warden types is what ends up in the database, and the
+   profile card beside the form shows it as the login screen will print it. */
+test('the identity card previews as you type and commits when you press Save', async () => {
   const { app, win } = await launch();
 
   await win.fill('#hi-name', 'Continental Boys Hostel-2');
   await win.fill('#hi-loc', 'Cannal Road, Peshawar');
   await win.fill('#hi-phone', '033X-XXXXXXX');
-  await win.waitForTimeout(500);
+  await win.waitForTimeout(400);
 
-  const state = await win.evaluate(() => ({
-    stored: {
-      name: DB.settings.hostelName, loc: DB.settings.location, phone: DB.settings.phone,
-    },
+  // Typed, not yet saved: the card follows, the database does not, and the
+  // pill says which of those two states the panel is in.
+  const typed = await win.evaluate(() => ({
+    stored: { name: DB.settings.hostelName, loc: DB.settings.location },
     card: {
       name: document.getElementById('font-preview-name').textContent.trim(),
       loc: document.getElementById('hi-prev-loc').textContent.trim(),
       phone: document.getElementById('hi-prev-phone').textContent.trim(),
     },
-    // No Save button: the panel must not offer one, because pressing it would
-    // be the moment a warden believes their edit was committed.
-    saveButtons: [...document.querySelectorAll('.settings-panel.active button')]
-      .map(b => b.textContent.trim()).filter(t => /save/i.test(t)),
+    state: document.getElementById('hi-savestate').textContent.trim(),
+    saveEnabled: !document.getElementById('hi-save').disabled,
   }));
 
-  expect(state.stored.name).toBe('Continental Boys Hostel-2');
-  expect(state.stored.loc).toBe('Cannal Road, Peshawar');
-  expect(state.card.name).toBe('Continental Boys Hostel-2');
-  expect(state.card.loc).toBe('Cannal Road, Peshawar');
-  expect(state.card.phone).toBe('033X-XXXXXXX');
-  expect(state.saveButtons).toEqual([]);
+  expect(typed.card.name).toBe('Continental Boys Hostel-2');
+  expect(typed.card.loc).toBe('Cannal Road, Peshawar');
+  expect(typed.card.phone).toBe('033X-XXXXXXX');
+  expect(typed.stored.name, 'the keystroke reached the database before Save')
+    .not.toBe('Continental Boys Hostel-2');
+  expect(typed.state).toBe('Unsaved changes');
+  expect(typed.saveEnabled, 'Save is not offered for an edited form').toBe(true);
+
+  // …and Save is what writes it.
+  await win.click('#hi-save');
+  await win.waitForTimeout(400);
+
+  const saved = await win.evaluate(() => ({
+    stored: {
+      name: DB.settings.hostelName, loc: DB.settings.location, phone: DB.settings.phone,
+    },
+    state: document.getElementById('hi-savestate').textContent.trim(),
+    saveEnabled: !document.getElementById('hi-save').disabled,
+  }));
+  expect(saved.stored.name).toBe('Continental Boys Hostel-2');
+  expect(saved.stored.loc).toBe('Cannal Road, Peshawar');
+  expect(saved.stored.phone).toBe('033X-XXXXXXX');
+  expect(saved.state).toBe('Saved');
+  expect(saved.saveEnabled, 'Save stays live on a form with nothing to save').toBe(false);
 
   // Clearing a field returns the card to words, not to an empty row.
   await win.fill('#hi-phone', '');
@@ -173,6 +128,11 @@ test('the fields write through on input, and the profile card follows', async ()
   });
   expect(cleared.text).toBe('No phone recorded');
   expect(cleared.empty).toBe(true);
+
+  // The card that offered twenty typefaces is not on the panel any more.
+  const fontCard = await win.evaluate(() =>
+    document.getElementById('content').textContent.indexOf('Hostel Name Font') !== -1);
+  expect(fontCard, 'the font picker card is back').toBe(false);
 
   await app.close();
 });

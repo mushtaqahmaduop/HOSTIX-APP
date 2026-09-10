@@ -816,37 +816,24 @@
 }
 .hi-live svg { width: 13px; height: 13px; }
 
-/* ── The twenty faces ─────────────────────────────────────────────────────
-   Auto-fill rather than a fixed four, because this grid is in the narrower
-   column of a split and had to reflow to three at the 1366 floor. Its own
-   scroll: twenty tiles is four rows, and the panel below it is the page. */
-.hi-fonts {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
-    gap: 8px;
-    max-height: 292px;
-    overflow-y: auto;
-    padding-right: 2px;
+/* The twenty face tiles, their groups, their scroll caps and the "that face is
+   not on this machine" warning were all deleted on 2026-09-10 with the card
+   that drew them (owner: "remove the hostel name fonts"). `.hi-live` above is
+   the only survivor of that block, and it is the identity card's save-state
+   pill. */
+
+/* THE SAVE STATE, in its two readings (owner, 2026-09-10: "add save button to
+   hostel identity in hostel ifo"). Green while the card matches the database;
+   amber the moment a keystroke makes it not. */
+.hi-live.is-dirty {
+    background: var(--ant-warning-bg);
+    color: var(--ant-warning-fg);
 }
-.hi-font {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 10px 8px;
-    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
-    cursor: pointer; text-align: center; min-width: 0;
-    transition: var(--transition);
-}
-.hi-font:hover { border-color: var(--accent); }
-.hi-font:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.hi-font.is-on { border-color: var(--accent); background: var(--accent-soft); }
-.font-card-label {
-    font-size: 14px; font-weight: 700; color: var(--accent-strong);
-    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.hi-font__n { font-size: 9.5px; color: var(--text3); }
+.set-head__end { display: flex; align-items: center; gap: 9px; }
 
 /* ── The profile card ─────────────────────────────────────────────────────
    The same block the login screen prints, drawn from the same six fields, with
-   the name in the face the picker is choosing. */
+   the name in whatever face was chosen before the picker was removed. */
 .hi-id__top {
     display: flex; align-items: center; gap: 13px;
     padding-bottom: 14px; border-bottom: 1px solid var(--border);
@@ -871,35 +858,6 @@
 .hi-id__v { font-size: 12.5px; color: var(--text2); min-width: 0; overflow-wrap: anywhere; }
 /* A field nobody has filled in yet reads as absent, not as a value. */
 .hi-id .is-empty { color: var(--text3); font-style: italic; }
-
-/* At the QA floor the split stacks (set-split, 1000px) and the rail lands
-   under a page that is already two cards tall. Cap the faces harder so the
-   profile card is reachable without a long scroll. */
-@media (max-height: 760px) {
-    .hi-fonts { max-height: 214px; }
-}
-
-/* A group label inside the picker: which faces ship with the app, and which
-   are the ones this Windows happens to have. */
-.hi-fgroup {
-    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
-    text-transform: uppercase; color: var(--text3);
-    margin: 4px 0 8px;
-}
-.hi-fgroup + .hi-fonts { margin-bottom: 14px; }
-#hi-font-grid { max-height: 320px; overflow-y: auto; padding-right: 4px; }
-.hi-fonts { max-height: none; overflow: visible; }
-
-/* The stored face is not on this machine. It is not an error — the title bar
-   keeps the interface font — but it is the one thing to say out loud. */
-.hi-warn {
-    display: flex; align-items: flex-start; gap: 8px;
-    margin-bottom: 14px; padding: 10px 12px; border-radius: 10px;
-    background: var(--ant-warning-bg); border: 1px solid var(--border);
-    font-size: 11.5px; line-height: 1.5; color: var(--text2);
-}
-.hi-warn svg { flex-shrink: 0; margin-top: 1px; color: var(--ant-warning-fg); }
-.hi-warn b { color: var(--text); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    LICENSE — the fact table, the three actions, the enforcement readout
