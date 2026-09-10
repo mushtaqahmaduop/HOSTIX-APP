@@ -83,8 +83,19 @@ test('every tab on the strip opens the view it names', async () => {
 
   const tabs = await win.evaluate(() =>
     [...document.querySelectorAll('.rpt-tab')].map(b => b.textContent.trim()));
-  expect(tabs[0]).toBe('Overview');
-  expect(tabs.length, 'the strip is Overview plus the seven detail views').toBe(8);
+  /* Named, not counted. This asserted `length === 8` and so failed the moment
+     Cancellations and Complaints were built (owner ref: reports2.png, which
+     draws both) — a count tells you the strip changed but not into what, and
+     the next person has to go and look. The list below is the contract: ten
+     tabs, this order, these words. Overview leads and the two newest close it.
+
+     The loop under this then opens every one of them, so a tab added to the
+     strip without a view behind it fails here rather than in front of a
+     warden. */
+  expect(tabs, 'the strip is Overview plus the nine detail views').toEqual([
+    'Overview', 'Revenue', 'Payments', 'Pending', 'Expenses',
+    'Available fund', 'Students', 'Rooms', 'Cancellations', 'Complaints',
+  ]);
 
   // Clicking each one must light that tab AND replace the page body. The
   // overview's own Quick Reports block is the marker: it is on the overview

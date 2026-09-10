@@ -53,8 +53,20 @@
     display:flex; align-items:center; justify-content:center;
     background:var(--dh-bg); color:var(--dh);
 }
-.rpt-stat__label { min-width:0; font-size:9.5px; font-weight:700; text-transform:uppercase;
-                   letter-spacing:.55px; line-height:1.25; color:var(--dh); overflow-wrap:anywhere; }
+/* THE LABEL IS THE CARD'S NAME, NOT A TAG ON IT (owner ref: reports2.png,
+   which sets "Total Revenue" in dark slate beside a coloured chip). It was
+   9.5px uppercase in the card's own hue — six coloured micro-captions across a
+   row, which is a lot of shouting for six nouns, and at 9.5px "AVAILABLE FUND"
+   wrapped to two lines while "REVENUE" did not.
+
+   The hue has not gone anywhere: it is on the chip, where one saturated mark
+   per card does the work six words were doing. NO CARD GETS TALLER — the top
+   row's height is set by the 24px chip beside it (see .rpt-stats overrides
+   below), and 12.5px at 1.25 is 15.6px, still inside it. The 94px the students
+   card is matched against is unchanged. */
+.rpt-stat__label { min-width:0; font-size:12.5px; font-weight:600;
+                   letter-spacing:0; line-height:1.25; color:var(--text2);
+                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* Figure sizing. The previous clamp() was viewport-based (vw), which knows
    nothing about the 244px sidebar or how many cards share the row — on a 1366
    laptop it still resolved near its 21px maximum inside a ~140px card, so long
@@ -88,8 +100,37 @@
 /* Monthly Overview beside Payment Methods on one row. The trend chart takes the
    wider column, the donut the narrower; minmax(0,…) lets both shrink instead of
    forcing a horizontal overflow. Stacks below 1000px so neither gets crushed. */
-.rpt-toprow { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:14px; margin-bottom:14px; align-items:start; }
+/* 1.65 IS THE REFERENCE'S OWN RATIO and both rows that use this class keep it,
+   so the cards line up down the page. It was briefly 1.45 to buy the payment
+   legend room for "Bank Transfer" — which worked, and cost Key Highlights the
+   36px that kept it four cells across. The legend is paid for out of the
+   donut's diameter instead (see .rpt-donut__c below); the grid is not the
+   place to fix a problem inside one card.
+
+   STRETCH, NOT START. Monthly Overview is 470px tall (header, a 288px chart
+   and a footnote); Payment Methods is 235. Aligned to the start, that left a
+   card-shaped hole 235px deep in the middle of the page. Stretched, the
+   shorter card fills the row and centres what is in it. */
+.rpt-toprow { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:14px; margin-bottom:14px; align-items:stretch; }
 .rpt-toprow > .mov { margin-bottom:0; }
+.rpt-toprow > .rpt-card { display:flex; flex-direction:column; }
+/* The header keeps its place at the top; the body takes the slack — but takes
+   it as SPREAD, not as a centred block. Monthly Overview is 478px tall and the
+   donut plus five legend rows is about 190, so simply centring that block left
+   250px of empty card above and below it and read as a rendering failure. The
+   ring centres itself against the column; the legend rows spread down the full
+   height, which is what the reference's own legend does with the room it has.
+
+   The bars grow instead of spreading — that puts .rpt-btot on the card's
+   bottom edge, where a total belongs. */
+.rpt-toprow > .rpt-card > .rpt-donut,
+.rpt-toprow > .rpt-card > .rpt-bars { flex:1 1 auto; }
+.rpt-toprow > .rpt-card > .rpt-donut { align-items:stretch; }
+.rpt-toprow > .rpt-card > .rpt-donut > .rpt-donut__c { align-self:center; }
+.rpt-toprow > .rpt-card > .rpt-donut > .rpt-legend { justify-content:space-evenly; }
+.rpt-toprow > .rpt-card > .rpt-none {
+    flex:1 1 auto; display:flex; align-items:center; justify-content:center;
+}
 @media (max-width:1000px) { .rpt-toprow { grid-template-columns:1fr; } }
 .rpt-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 18px; min-width:0; }
 .rpt-card__h {
@@ -111,19 +152,53 @@
 .rpt-none { padding:34px 8px; text-align:center; font-size:12.5px; color:var(--text3); }
 
 /* ── Donut + legend ──────────────────────────────────────────────────────── */
-.rpt-donut { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
-.rpt-donut__c { position:relative; width:190px; height:190px; flex-shrink:0; }
+/* MEASURED, BECAUSE IT WAS WRAPPING AND THEN CLIPPING. The card is the 1fr
+   column of .rpt-toprow — 438px on a 1440 window, so 402px of content.
+
+   At 190px the donut plus a 22px gap plus a legend that would not go below
+   200px came to 412: twelve pixels over, so the legend dropped underneath and
+   the card grew 200px taller than the reference draws it. At 158 it fitted but
+   the name column was down to about 71px and "Bank Transfer" — a method this
+   app ships with — ellipsised to "Bank Trans…".
+
+   140 is the arithmetic. 402 = 140 donut + 18 gap + 244 legend, and the legend
+   spends that as 9 dot + 8 + name + 8 + 38 share + 8 + 72 amount, leaving 101px
+   for the name against the 88px "Bank Transfer" actually measures. The ring
+   loses 18px of diameter, which nothing depends on: the figure in its middle is
+   capped and wraps, and the slice colours are the same colours.
+
+   The donut is a fixed square because the canvas inside it is: Chart.js reads
+   the element's box once at draw time, and a percentage width would have it
+   measuring a parent that has not finished laying out. */
+.rpt-donut { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.rpt-donut__c { position:relative; width:140px; height:140px; flex-shrink:0; }
 .rpt-donut__mid {
     position:absolute; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; pointer-events:none; text-align:center;
 }
-.rpt-donut__mid span { font-size:11px; color:var(--text3); }
-.rpt-donut__mid b    { font-size:15px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; margin-top:2px; }
-.rpt-legend   { flex:1; min-width:170px; display:flex; flex-direction:column; gap:13px; }
-.rpt-legend__r{ display:flex; align-items:flex-start; gap:10px; }
-.rpt-legend__d{ width:9px; height:9px; border-radius:50%; flex-shrink:0; margin-top:5px; }
-.rpt-legend__n{ font-size:12.5px; font-weight:600; color:var(--text); }
-.rpt-legend__v{ font-size:12px; color:var(--text3); margin-top:2px; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+/* The caption is UNDER the figure now, so the 2px of air moves with it. The
+   hole of a 158px donut is about 95px across and a long total has to live in
+   it, so the figure wraps rather than overflowing the ring. */
+.rpt-donut__mid span { font-size:10.5px; color:var(--text3); margin-top:3px; }
+.rpt-donut__mid b    { font-size:13.5px; font-weight:800; color:var(--text); font-family:var(--ant-num-font);
+                       letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+                       line-height:1.2; max-width:92px; overflow-wrap:anywhere; }
+/* NAME, SHARE, AMOUNT — three columns that line up down the list (owner ref:
+   reports2.png). A grid rather than a flex row so the share and the amount hold
+   one x whatever the method is called; `minmax(0,1fr)` on the name is what lets
+   a long one ellipsis instead of shoving the numbers out of the card. */
+.rpt-legend   { flex:1 1 170px; min-width:0; display:flex; flex-direction:column; gap:13px; }
+.rpt-legend__r{
+    display:grid; grid-template-columns:9px minmax(0,1fr) auto auto;
+    align-items:center; gap:0 8px;
+}
+.rpt-legend__d{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.rpt-legend__n{ font-size:12.5px; font-weight:600; color:var(--text);
+                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rpt-legend__p{ font-size:12px; font-weight:600; color:var(--text2); text-align:right;
+                font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
+.rpt-legend__v{ font-size:12px; color:var(--text3); text-align:right; white-space:nowrap;
+                font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
 
 /* ── Breakdown bars ──────────────────────────────────────────────────────── */
 .rpt-bars { display:flex; flex-direction:column; gap:11px; }
@@ -256,13 +331,16 @@
     gap:1px; background:var(--border);
     margin-top:14px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
 }
-/* Four across only when the CARD is wide enough for it, which on a 1400px
-   window it is not: .mov is the 1.65fr column of a two-column row, so it holds
-   about 640px and four cells would be 160px each — the width that was cutting
-   "Highest Collection" in half. auto-fit was tried first and gave 3 + 1
-   orphan, which is worse than an even 2x2. */
-@container mov (min-width: 760px) { .mov__strip { grid-template-columns:repeat(4, 1fr); } }
-@container mov (max-width: 330px) { .mov__strip { grid-template-columns:1fr; } }
+/* THE COLUMN COUNT MOVED WITH THE STRIP. It used to be set by two
+   `@container mov` rules here, because the strip lived inside .mov. It is Key
+   Highlights' own card now (owner ref: reports2.png) and asks THAT card how
+   wide it is — see `@container hi` at the foot of this file. The rules are not
+   left behind as dead `mov` queries: a container query that can never match is
+   invisible, and the next person to widen .mov would have found the strip
+   silently reflowing somewhere it no longer is.
+
+   The base above stays two-up: everything below it is an override, and a card
+   too narrow for four cells must not inherit four. */
 /* stretch, not flex-start: the cell fills the grid row, so the text block can
    push its figure to the bottom. "Highest Collection" wraps to two lines and
    "Highest Profit" does not, which left the four money figures sitting at four
@@ -403,6 +481,11 @@
     margin-left: auto; font-size: 11px; font-weight: 500; color: var(--text3);
     text-transform: none; letter-spacing: 0;
 }
+/* The note already carries `margin-left:auto`, so it and the button both sit at
+   the right end of the header. Without this the button's own auto margin from
+   `.rpt-card__h .rpt-card__a` splits the free space between them and leaves the
+   note stranded in the middle of the row. */
+.rpt-quick__all { margin-left: 0 !important; }
 .rpt-quick__g {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
     gap: 10px; margin-top: 4px;
@@ -428,3 +511,123 @@
     display: block; margin-top: 2px; font-size: 11px; color: var(--text3);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+
+/* ══ THE EXPORT CLUSTER (owner ref: reports2.png, right of the bar) ═════════
+   `reports2.png` draws Print / PDF as the one filled button on the page, and
+   that is the right weight for it: it is the only control here that produces
+   the WHOLE report — every section, one document — where each button beside it
+   produces one register. The owner asked for it back by describing exactly
+   that ("the print/pdf option ... vhich total summary at once"), so it leads.
+
+   The bar mixes control heights — .rpt-seg stands 40px with its inner padding,
+   .rpt-mo 34px — and .rpt-card__a is drawn 32px for card headers, where it sits
+   beside a 14.5px title rather than a segmented control. On the BAR it takes
+   .rpt-mo's 34px, so the four exports and the month select share one baseline.
+   Card headers are untouched. */
+.rpt-bar .rpt-card__a { height: 34px; }
+
+.rpt-card__a--excel svg { color: var(--green); }
+
+.rpt-print {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 34px; padding: 0 14px; border-radius: 9px; cursor: pointer;
+    background: var(--accent); border: 1px solid var(--accent); color: var(--text-on-accent);
+    font-family: var(--font); font-size: 12px; font-weight: 650;
+    transition: var(--transition); white-space: nowrap;
+}
+.rpt-print svg   { flex-shrink: 0; }
+.rpt-print:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.rpt-print:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* ══ KEY HIGHLIGHTS AS ITS OWN CARD (owner ref: reports2.png) ══════════════
+   The cells are unchanged — same .mov__strip, same .mov__cell — because the
+   strip's layout problem is the same one wherever it sits: it must ask its
+   CARD how wide it is, not the window.
+
+   Its own container name, though, NOT `mov`. The breakpoint is genuinely
+   different here: inside .mov the strip sat under 20px of card padding in a
+   card that also had to hold a 288px chart, and 760px was where four cells
+   stopped cutting "Highest Collection" in half. This card holds nothing but
+   the strip, so the same four cells fit from 660px.
+
+   660 AND NOT 700, MEASURED: a container query on an inline-size container asks
+   the CONTENT box, not the border box. On a 1440 window the card is 723px wide
+   and its content box is 685 — 723 less 36px of padding and 2px of border — so
+   a 700px threshold sat two-up on the exact window the reference was drawn at.
+   At 685 the four cells are 171px each, against the 161px the labels need.
+
+   At the 1366 QA floor the same column is about 639px and it drops to 2x2,
+   which is the right answer there: 160px cells are the width that was cutting
+   "Highest Collection" in half. Four across is what the reference's own window
+   shows, not a promise made to every laptop. */
+
+/* Card padding already frames the strip, so its own outer margin and border go:
+   inside a .rpt-card those drew a second frame 16px inside the first. */
+.rpt-hi { container-type: inline-size; container-name: hi; }
+.rpt-hi .mov__strip { margin-top: 0; grid-template-columns: repeat(2, 1fr); }
+
+/* THIS ROW DOES NOT STRETCH, AND THE ROW ABOVE IT DOES.
+   Both were tried both ways. Payment Methods is a donut and five legend rows
+   that can spread down whatever height they are given, so stretching it to
+   Monthly Overview's 478px fills honestly. Key Highlights is four fixed cells:
+   stretched against an Expense Breakdown showing eleven categories it became a
+   430px card holding 160px of content, and growing the cells only moved the
+   void inside them — a figure at the top, its date 230px below, and nothing in
+   between.
+
+   So the highlights row aligns to the top and the expense card simply runs
+   longer than its neighbour. A two-card row with a ragged bottom edge is
+   ordinary; a card with a hole in the middle of it is not. */
+.rpt-toprow--top { align-items: start; }
+@container hi (min-width: 660px) { .rpt-hi .mov__strip { grid-template-columns: repeat(4, 1fr); } }
+@container hi (max-width: 330px) { .rpt-hi .mov__strip { grid-template-columns: 1fr; } }
+
+/* The period the highlights describe, beside the title. It is a caption, not a
+   heading — .rpt-card__h is 700 weight and this must not compete with it. */
+.rpt-card__hs {
+    font-size: 12.5px; font-weight: 500; color: var(--text3); white-space: nowrap;
+}
+
+/* THE FIGURE SITS ABOVE ITS DATE NOW, not below it (reference order: label,
+   amount, when). That inverts which line takes the leftover height: the DATE
+   is what lands on the cell's bottom edge, so the four dates align across the
+   strip the way the four figures used to. */
+.rpt-hi .mov__cv { margin-top: 2px; padding-top: 0; }
+.rpt-hi .mov__cs { margin-top: auto; padding-top: 4px; }
+
+
+/* ══ STUDENT SUMMARY TILES — icon chip left (owner ref: reports2.png) ══════ */
+.rpt-tile--ico  { display: flex; align-items: flex-start; gap: 11px; }
+.rpt-tile__x    { min-width: 0; flex: 1; }
+.rpt-tile__i    {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+/* Six tiles in a card about half the page wide, three across: the 148px
+   minimum was set when this block ran the FULL width, and at half width it
+   wrapped to two columns of very wide tiles. 27px was also a figure size for a
+   230px tile; at 190px a five-digit count set that large clips. */
+.rpt-card .rpt-sum { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+.rpt-tile--ico .rpt-tile__v { font-size: 22px; margin-top: 3px; }
+.rpt-tile--ico .rpt-tile__s { margin-top: 3px; }
+/* Sentence case, like the reference and like the KPI cards above — 10px
+   uppercase with .85px of tracking wrapped "ACTIVE STUDENTS" onto two lines in
+   a 190px tile and shouted six labels at a reader who wanted six numbers. */
+.rpt-tile--ico .rpt-tile__l {
+    font-size: 12px; font-weight: 600; letter-spacing: 0;
+    text-transform: none; color: var(--text3); line-height: 1.3;
+}
+
+
+/* ══ THE ROOM TABLE'S TOTAL ROW ════════════════════════════════════════════
+   A foot, not another row: it is the sum of everything above it, so it takes
+   the sunk ground and the weight that says "stop reading, this is the answer".
+   No hover — there is nothing to open. */
+.rpt-tbl__tot td {
+    background: var(--dash-sunk); font-weight: 750; color: var(--text);
+    border-top: 1px solid var(--border2); border-bottom: none;
+}
+.rpt-tbl tbody tr.rpt-tbl__tot:hover td { background: var(--dash-sunk); }

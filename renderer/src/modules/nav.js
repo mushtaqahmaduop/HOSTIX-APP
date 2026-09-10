@@ -115,7 +115,16 @@ const pageConfig = {
      there is no such thing as adding a former student — somebody becomes one
      by leaving. */
   former:        { title:'Former Students', sub:'', action:null },
-  reports:       { title:'Reports', sub:'', action:null },
+  /* `reports2.png` draws three lines here: "Reports", the hostel's name in
+     caps, and a sentence. Two of the three are built.
+
+     THE HOSTEL NAME IS DELIBERATELY NOT ONE OF THEM. The owner had it removed
+     from below the header title on 7 Sep ("remove hostel name from below
+     dashboard at the header") and it moved to the centre of the title bar the
+     same day, where it still is. Putting it back on this one page would print
+     it twice, 40px apart — the exact thing that was removed. Flagged to the
+     owner rather than silently done either way. */
+  reports:       { title:'Reports', sub:'Analytics, insights and detailed reports for better hostel management', action:null },
   issues:        { title:'Complaints', sub:'', action:'Add Issue' },
   activitylog:   { title:'Activity Log', sub:'', action:null },
   // Backup & Restore was the one item in the rail's SYSTEM group that opened a
@@ -281,7 +290,8 @@ function applyHeaderChrome(page) {
      twice, 40px apart, on every page.
 
      The subtitle element stays and still shows a PAGE's own subtitle when one
-     is configured — that is a different sentence, and no page sets one today. */
+     is configured — that is a different sentence. Two pages set one: Help &
+     Support and Reports, both from their owner reference designs. */
   const _s = document.getElementById('hdr-sub');
   if (_s) {
     const txt = cfg.sub || '';

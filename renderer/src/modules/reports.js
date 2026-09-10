@@ -99,7 +99,13 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _pg = paginate(pendingPays, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">⏳ Pending Payments — ${escHtml(periodLabel)}</div>
+        ${''/* Icons, not emoji, across every detail heading. Two of these ten
+               views were written this week and use icon(); the other eight
+               opened with 👥 🏠 📉 💳 ⏳, which render in the OS emoji font at a
+               size and colour nothing else on the page uses — and the owner has
+               been pulling emoji out of the printed documents all week for the
+               same reason. Same glyphs as the tab that opens each view. */}
+        <div class="card-title">${icon('clock')} Pending Payments — ${escHtml(periodLabel)}</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('pending','var(--amber)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
@@ -179,7 +185,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _pg = paginate(filtered, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">👥 Student Report</div>
+        <div class="card-title">${icon('users')} Student Report</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('students','var(--blue)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
@@ -212,7 +218,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   if (id === 'rooms') {
     const _pg = paginate(DB.rooms, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">🏠 Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
+      <div class="card-header"><div class="card-title">${icon('bed')} Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
         <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--accent-strong)">${DB.rooms.length-occ}</div></div>
@@ -273,7 +279,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">📉 Expenses by Category — ${periodLabel}</div>
+        <div class="card-title">${icon('expense')} Expenses by Category — ${escHtml(periodLabel)}</div>
         <div style="display:flex;align-items:center;gap:10px"><div style="font-size:18px;font-weight:900;color:var(--red)">${fmtPKR(totalExp)}</div>${csvBtn('expenses','var(--red)')}${pdfBtn}</div>
       </div>
       ${groups.length
@@ -291,7 +297,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
     const _paySorted = pays.filter(p=>p.status==='Paid').sort((a,b)=>new Date(b.date)-new Date(a.date));
     const _pg = paginate(_paySorted, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">💳 Payment Methods — ${periodLabel}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','var(--accent)')}${pdfBtn}</div></div>
+      <div class="card-header"><div class="card-title">${icon('card')} Payment Methods — ${escHtml(periodLabel)}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('payments','var(--accent)')}${pdfBtn}</div></div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
       ${_pg.slice.map(p=>`<tr>
         <td class="fw-700">${escHtml(p.studentName||'—')}</td>
@@ -303,6 +309,118 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <td class="text-muted" style="font-size:12px">${fmtDate(p.date)}</td>
       </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No paid transactions</td></tr>'}
       </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
+    </div>`;
+  }
+
+  /* ── CANCELLATIONS ─────────────────────────────────────────────────────────
+     `reports2.png` draws a Cancellations tab and this page did not have one. I
+     said so in the strip's comment and left it out on the grounds that there
+     was no report screen behind it — which was true of the SCREEN and not of
+     the DATA. DB.cancellations is a complete register with settlements on it,
+     so the tab is built rather than left as a note explaining its absence.
+
+     Scoped to the reported period through the same _rptKeys() every other
+     block on this page uses, on `vacateDate` — when the bed actually came free,
+     not when notice was given. A departure noticed in August for a September
+     vacate is a September departure, and the money settles with it. */
+  if (id === 'cancellations') {
+    const _keys = new Set(_rptKeys());
+    const _mk = d => String(d || '').slice(0, 7);
+    const list = (DB.cancellations || [])
+      .filter(c => _keys.has(_mk(c.vacateDate || c.requestDate)))
+      .sort((a, b) => new Date(b.vacateDate || b.requestDate) - new Date(a.vacateDate || a.requestDate));
+    const _set = c => c.settlement || {};
+    const collected = list.reduce((s, c) => s + Number(_set(c).collected || 0), 0);
+    const owed      = list.reduce((s, c) => s + Number(_set(c).outstanding || 0), 0);
+    const refunded  = list.reduce((s, c) => s + Number(_set(c).credit || 0), 0);
+    const _pg = paginate(list, reportDetailFilter);
+    const box = (label, value, tone) => `
+      <div style="background:var(--${tone}-dim);border:1px solid var(--border2);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--${tone});font-weight:700">${escHtml(label)}</div>
+        <div style="font-size:24px;font-weight:900;color:var(--${tone});margin-top:4px">${value}</div>
+      </div>`;
+    return `<div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">${icon('transfer')} Cancellations — ${escHtml(periodLabel)}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('cancellations','var(--amber)')}${pdfBtn}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+        ${box('Departures', String(list.length), 'blue')}
+        ${box('Settled', fmtPKR(collected), 'green')}
+        ${box('Left owing', fmtPKR(owed), 'red')}
+        ${box('Refunded', fmtPKR(refunded), 'accent')}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Ref</th><th>Student</th><th>Room</th><th>Notice</th><th>Vacates</th><th>Reason</th><th>Settled</th><th>Owing</th><th>Status</th></tr></thead>
+        <tbody>
+        ${_pg.slice.map(c => `<tr>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap">${escHtml(c.seq ? 'CAN-' + String(c.seq).padStart(4,'0') : '—')}</td>
+          <td class="fw-700">${escHtml(c.studentName || '—')}</td>
+          <td class="text-gold fw-700">#${escHtml(String(c.roomNumber || '—'))}</td>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap">${c.requestDate ? fmtDate(c.requestDate) : '—'}</td>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap">${c.vacateDate ? fmtDate(c.vacateDate) : 'end of month'}</td>
+          <td style="font-size:12px">${escHtml(c.reason || '—')}</td>
+          <td class="text-green fw-700">${fmtPKR(Number(_set(c).collected || 0))}</td>
+          <td class="${Number(_set(c).outstanding || 0) > 0 ? 'text-red fw-700' : 'text-muted'}">${fmtPKR(Number(_set(c).outstanding || 0))}</td>
+          <td>${statusBadge(c.status || '—')}</td>
+        </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Nobody left in this period</td></tr>'}
+        </tbody></table></div>
+      ${renderPager(_pg,'reportDetailFilter','reports')}
+    </div>`;
+  }
+
+  /* ── COMPLAINTS ────────────────────────────────────────────────────────────
+     The other tab `reports2.png` draws that this page did not have. _issAll()
+     already normalises maintenance tickets and student complaints into one
+     shape for the Complaints register — reused rather than re-derived, so this
+     view and that register can never disagree about what an issue is.
+
+     Scoped on the date raised. An issue opened in August and still open in
+     September belongs to August's report: that is the month somebody had the
+     problem, and a report that quietly moves old open tickets forward hides
+     exactly the ones worth seeing. The Open count below says how many of this
+     period's issues are still outstanding. */
+  if (id === 'complaints') {
+    const _keys = new Set(_rptKeys());
+    const all = (typeof _issAll === 'function' ? _issAll() : [])
+      .filter(i => _keys.has(String(i.date || '').slice(0, 7)))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    const nOpen  = all.filter(i => i.status === 'Open').length;
+    const nProg  = all.filter(i => i.status === 'In Progress').length;
+    const nDone  = all.filter(i => i.status === 'Resolved' || i.status === 'Closed').length;
+    const cost   = all.reduce((s, i) => s + Number(i.cost || 0), 0);
+    const _pg = paginate(all, reportDetailFilter);
+    const box = (label, value, tone) => `
+      <div style="background:var(--${tone}-dim);border:1px solid var(--border2);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--${tone});font-weight:700">${escHtml(label)}</div>
+        <div style="font-size:24px;font-weight:900;color:var(--${tone});margin-top:4px">${value}</div>
+      </div>`;
+    return `<div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">${icon('tool')} Complaints — ${escHtml(periodLabel)}</div>
+        <div style="display:flex;gap:8px;align-items:center">${csvBtn('complaints','var(--amber)')}${pdfBtn}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+        ${box('Raised', String(all.length), 'blue')}
+        ${box('Still open', String(nOpen + nProg), 'red')}
+        ${box('Resolved', String(nDone), 'green')}
+        ${box('Repair cost', fmtPKR(cost), 'accent')}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Raised</th><th>Issue</th><th>Category</th><th>Room</th><th>Reported by</th><th>Priority</th><th>Status</th><th>Cost</th></tr></thead>
+        <tbody>
+        ${_pg.slice.map(i => `<tr>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap">${i.date ? fmtDate(i.date) : '—'}</td>
+          <td class="fw-700">${escHtml(i.title || '—')}</td>
+          <td style="font-size:12px">${escHtml(i.category || '—')}</td>
+          <td class="text-gold fw-700">${i.roomNo ? '#' + escHtml(i.roomNo) : '—'}</td>
+          <td style="font-size:12px">${escHtml(i.by || '—')}</td>
+          <td style="font-size:12px">${escHtml(i.priority || '—')}</td>
+          <td>${statusBadge(i.status || '—')}</td>
+          <td class="${i.cost ? 'text-red fw-700' : 'text-muted'}">${i.cost ? fmtPKR(i.cost) : '—'}</td>
+        </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px">Nothing raised in this period</td></tr>'}
+        </tbody></table></div>
       ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
   }
@@ -628,30 +746,55 @@ function renderReports() {
   // Percentages are of the collected total the donut draws, not of `rev` —
   // `rev` also carries partial payments this donut deliberately excludes, so
   // dividing by it made the slices add up to less than 100%.
+  /* THE SHARE AND THE AMOUNT ARE TWO COLUMNS, NOT ONE PARENTHESIS (owner ref:
+     `reports2.png`). They were "PKR 62,500,000 (62.5%)" on one line, which
+     reads fine for one row and stops reading at four: the eye cannot compare
+     shares down a column when each one sits at a different x. Aligned, the
+     ranking is legible without reading a single digit. One decimal on the
+     share for the same reason — whole percents tie constantly at four or five
+     methods and a tie tells you nothing. */
   const methodLegend = methods.map(x => `
     <div class="rpt-legend__r">
       <span class="rpt-legend__d" style="background:${x.color}"></span>
-      <div>
-        <div class="rpt-legend__n">${escHtml(x.m)}</div>
-        <div class="rpt-legend__v">${fmtPKR(x.amt)} (${methodTotal?Math.round(x.amt/methodTotal*100):0}%)</div>
-      </div>
+      <span class="rpt-legend__n" title="${escHtml(x.m)}">${escHtml(x.m)}</span>
+      <span class="rpt-legend__p">${methodTotal?(x.amt/methodTotal*100).toFixed(1):'0.0'}%</span>
+      <span class="rpt-legend__v">${fmtPKR(x.amt)}</span>
     </div>`).join('');
   _rptDonutData = methods.map(x=>({label:x.m, value:x.amt, color:x.color}));
 
   // ── Room type table ───────────────────────────────────────────────────────
+  /* OCCUPANCY AND A TOTAL ROW (owner ref: `reports2.png`, which draws six
+     columns and foots them). Both are read out of the per-type figures already
+     computed here — the total is the SUM OF THE ROWS, not a second query, so
+     the foot cannot disagree with the body above it. The occupancy percentage
+     is rooms-with-somebody-in-them over rooms of that type, the same ratio the
+     Occupancy KPI quotes for the whole hostel; a type with no rooms configured
+     shows an em dash rather than a 0% that reads like a failure. */
+  const _rtTot = { rooms: 0, occ: 0, vac: 0, rev: 0 };
+  const _rtPct = (o, n) => n > 0 ? Math.round(o / n * 100) : null;
   const rtRows=DB.settings.roomTypes.map(type=>{
     const tRooms=DB.rooms.filter(r=>r.typeId===type.id);
     const tOcc=tRooms.filter(r=>_roomOcc(r)>0).length;
     const tIds=_activeIdsByType.get(type.id)||new Set();   // O(1) membership instead of per-student rooms.find
     const tRev=pays.filter(p=>p.status==='Paid'&&tIds.has(p.studentId)).reduce((s,p)=>s+Number(p.amount),0);
     const vac=tRooms.length-tOcc;
+    const pct=_rtPct(tOcc, tRooms.length);
+    _rtTot.rooms += tRooms.length; _rtTot.occ += tOcc; _rtTot.vac += vac; _rtTot.rev += tRev;
     return `<tr>
       <td><span class="rpt-tbl__chip" style="background:${type.color}22;color:${type.color}">${escHtml(type.name)}</span></td>
       <td>${tRooms.length}</td>
       <td class="${tOcc?'':'rpt-tbl__z'}">${tOcc}</td>
       <td class="${vac?'':'rpt-tbl__z'}">${vac}</td>
+      <td class="${pct===null?'rpt-tbl__z':''}">${pct===null?'—':pct+'%'}</td>
       <td class="${tRev?'':'rpt-tbl__z'}">${fmtPKR(tRev)}</td></tr>`;
   }).join('');
+  const rtFoot = rtRows ? `<tr class="rpt-tbl__tot">
+      <td>Total</td>
+      <td>${_rtTot.rooms}</td>
+      <td>${_rtTot.occ}</td>
+      <td>${_rtTot.vac}</td>
+      <td>${_rtPct(_rtTot.occ,_rtTot.rooms)===null?'—':_rtPct(_rtTot.occ,_rtTot.rooms)+'%'}</td>
+      <td>${fmtPKR(_rtTot.rev)}</td></tr>` : '';
 
   // ── Revenue vs expenses trend (drawn by drawReportTrend after paint) ──────
   const mCount=reportPeriod==='month'?6:12;
@@ -677,6 +820,68 @@ function renderReports() {
     }
   }
   _rptTrendData = trendData;
+
+  // ── Key Highlights ────────────────────────────────────────────────────────
+  /* ITS OWN CARD NOW, NOT A STRIP INSIDE THE CHART (owner ref: `reports2.png`,
+     which draws it on the row below beside Expense Breakdown). It was welded to
+     the bottom of Monthly Overview, which made that card 640px tall and pushed
+     everything under it below the fold on a 768px laptop — and read as a
+     footnote to the chart when it is a summary of the whole period.
+     Nothing about WHAT it says changes; only where it sits.
+
+     Peaks and margin are all derived from the same trendData the chart draws —
+     no separate query, so the card can never disagree with the line above it.
+     m.exp counts funds transfers, so profit here is the same Available Fund the
+     dashboard and the PDFs quote.
+
+     Only months that actually recorded something can win a peak. A hostel six
+     weeks old has four empty months in this window, and "Highest Expense: Mar,
+     PKR 0" is not a fact about March — it is the reduce() seed showing
+     through. */
+  const _hiCells = (() => {
+    const live = trendData.filter(m => m.rev || m.exp)
+                          .map(m => ({...m, profit: m.rev - m.exp}));
+    if (!live.length) return null;
+    const peak = (k) => live.reduce((b,m) => m[k] > b[k] ? m : b, live[0]);
+    const topRev = peak('rev'), topProfit = peak('profit'), topExp = peak('exp');
+    const sumRev = live.reduce((s,m)=>s+m.rev,0);
+    const sumProfit = live.reduce((s,m)=>s+m.profit,0);
+    // Margin is only meaningful once something was actually collected.
+    const margin = sumRev > 0 ? (sumProfit / sumRev * 100) : null;
+    // …and it is an average across every month with data, NOT the period the
+    // page header names. Labelling it "This Month" while summing six of them
+    // was the card's own caption contradicting its figure.
+    const span = live.length === 1
+      ? _rptMonthName(live[0].key)
+      : _rptMonthName(live[0].key) + ' – ' + _rptMonthName(live[live.length-1].key);
+    // Each peak names its month in full, so a window that crosses New Year
+    // cannot show two different "Jan"s with no way to tell them apart.
+    const at = m => _rptMonthName(m.key);
+    const cell = (hue,ico,label,sub,val) => `
+      <div class="mov__cell ${hue}">
+        <span class="mov__cico">${icon(ico,'sm')}</span>
+        <div>
+          <div class="mov__cl">${label}</div>
+          <div class="mov__cv">${val}</div>
+          <div class="mov__cs">${escHtml(sub)}</div>
+        </div>
+      </div>`;
+    /* COMPACT, THROUGH THE SAME HELPER THE KPI ROW USES. Four cells across a
+       685px card is 170px each, and after the 38px icon chip and the padding
+       that leaves 89px of text — where fmtPKR's "Rs. 189,000" wants 95 at 17px
+       and was ellipsising to "Rs. 189,…". moneyValue(compact) keeps the exact
+       figure in the title attribute, so hovering still gives the reconcilable
+       number; nothing is lost but the digits that would not fit anyway. */
+    const fig = v => moneyValue(v, { compact: true });
+    return {
+      span,
+      html: cell('dh-violet','trendUp','Highest Collection',at(topRev),fig(topRev.rev))
+          + cell('dh-green','chart','Highest Profit',at(topProfit),fig(topProfit.profit))
+          + cell('dh-red','arrowDownCircle','Highest Expense',at(topExp),fig(topExp.exp))
+          + cell('dh-blue','pieChart','Average Profit Margin',span,
+              margin===null ? '<span class="is-na">—</span>' : margin.toFixed(1)+'%'),
+    };
+  })();
 
   // ── Student summary ───────────────────────────────────────────────────────
   const nActiveS = DB.students.filter(t=>t.status==='Active').length;
@@ -705,11 +910,20 @@ function renderReports() {
         ? `<div class="rpt-stat__spark">${_dashSpark(series)}</div>` : ''}
     </div>`;
 
-  const tile = (label, value, sub, hue, det) => `
-    <div class="rpt-tile ${hue}" onclick="reportDetail='${det}';renderPage('reports')" title="Open detail">
-      <div class="rpt-tile__l">${label}</div>
-      <div class="rpt-tile__v">${value}</div>
-      <div class="rpt-tile__s">${sub}</div>
+  /* AN ICON CHIP, LEFT (owner ref: `reports2.png`). The six tiles were a label,
+     a figure and a caption in a stack — identical shapes distinguished only by
+     reading them, which is what makes a six-up grid slow. The chip carries the
+     tile's hue, so Active/Left/Blacklisted are told apart before the text is
+     read. `ico` is optional: a caller that passes none gets the old stack, and
+     no existing call site breaks. */
+  const tile = (label, value, sub, hue, det, ico) => `
+    <div class="rpt-tile ${hue}${ico?' rpt-tile--ico':''}" onclick="reportDetail='${det}';renderPage('reports')" title="Open detail">
+      ${ico ? `<span class="rpt-tile__i">${icon(ico,'sm')}</span>` : ''}
+      <div class="rpt-tile__x">
+        <div class="rpt-tile__l">${label}</div>
+        <div class="rpt-tile__v">${value}</div>
+        <div class="rpt-tile__s">${sub}</div>
+      </div>
     </div>`;
 
   return `
@@ -742,40 +956,71 @@ function renderReports() {
       Back to Reports</button>`:''}
 
     <div class="rpt-bar__end">
-      ${''/* THREE BUTTONS, ON THE BAR (owner, 2026-09-10). An earlier pass
-             folded Print and All Students PDF into one dropdown; the owner's
-             design has them out where they can be seen, and it was not mine to
-             replace. All Payments joins them — the same register, the other
-             half of the money. */}
-      ${''/* PRINT / PDF IS GONE FROM THIS BAR (owner, 2026-09-10: "remove …
-             the print/pdf button in reports alongside all students and
-             payments pdfs buttons").
+      ${''/* EVERY EXPORT ON THE BAR, NONE OF THEM IN A DROPDOWN (owner,
+             2026-09-10). An earlier pass folded Print and All Students PDF into
+             one menu; the owner's design has them out where they can be seen,
+             and it was not mine to replace. `reports2.png` draws the top-right
+             cluster as "Export Reports" beside a blue "Print / PDF" — the two
+             register PDFs are this app's Export Reports, already named by the
+             owner, so they stay spelled out rather than collapsing into a menu
+             whose label says less than its contents.
 
-             It printed the whole report — every section, every row — which is
-             the same document the two buttons beside it produce a half of
-             each, and a warden pressing a button called Print expects the page
-             they are looking at. printReport() is not deleted: Quick Reports
-             at the foot runs it as "Monthly financial report", which is what
-             it actually is and where the other six documents live. */}
+             Export Excel joins them. EXPORT.excel(_rptOverviewDef()) has been
+             defined at the foot of this file the whole time with nothing
+             calling it — the same whole-report document as Print, in the format
+             a warden can total in a spreadsheet.
+
+             Four buttons is wide. The bar wraps (`flex-wrap:wrap`, line 10 of
+             reports.css), so at the 1366 floor it takes a second line rather
+             than pushing anything off the edge. */}
+      ${''/* PRINT / PDF IS BACK, AND IT IS THE PRIMARY BUTTON.
+
+             I removed it on 2026-09-10 reading "remove the print/pdf button in
+             reports" as a request to drop it, and reasoned that Quick Reports
+             already ran the same document. The owner has now said what it was
+             for: "from reports print/pdf option is hidden vhich total summary
+             at once" — the whole report, every section, in one press. That is
+             a different thing from the two register PDFs beside it, each of
+             which is one register, and burying it seven tiles down in Quick
+             Reports made the page's most useful control the hardest to find.
+
+             It leads, in the accent, exactly as `reports2.png` draws it. The
+             two register buttons stay where they are — they were asked for by
+             name and it is not this change's business to move them. */}
       <button class="rpt-card__a" onclick="exportAllStudentsPDF()" title="The whole student register as a PDF">
         ${icon('users','xs')} All Students PDF</button>
       <button class="rpt-card__a" onclick="exportAllPaymentsPDF()" title="The whole payment register as a PDF">
         ${icon('card','xs')} All Payments PDF</button>
+      <button class="rpt-card__a rpt-card__a--excel" onclick="exportReportExcel()"
+              title="Every section of this report as a spreadsheet">
+        ${icon('fileSpreadsheet','xs')} Export Excel</button>
+      <button class="rpt-print" onclick="printReport()"
+              title="The whole report — every section, in one document">
+        ${icon('print','xs')} Print / PDF</button>
     </div>
   </div>
 
-  ${''/* THE TAB STRIP IS THE DETAIL VIEWS THIS PAGE ALREADY HAS (owner ref:
-         `reports2.png`). Seven of them exist — renderReportDetail() has been
-         building them since long before this redesign — and the only way in
-         was to click the right KPI card, which is not a thing anybody
-         discovers. They are named now.
+  ${''/* THE TAB STRIP (owner ref: `reports2.png`). Seven of these views existed
+         long before this redesign and the only way into one was to click the
+         right KPI card, which is not a thing anybody discovers. They are named
+         now.
 
-         THE REFERENCE'S EIGHT TABS ARE NOT THESE EIGHT, and the difference is
-         deliberate: it draws Cancellations and Complaints tabs, and this app
-         has no report screen behind either. Inventing two empty ones to match
-         a picture is how a warden ends up trusting a tab that shows nothing.
-         Both are in Quick Reports at the foot instead, which runs the export
-         their own registers already produce. */}
+         CANCELLATIONS AND COMPLAINTS ARE BUILT, NOT SKIPPED. I left them out
+         on the last pass and wrote a comment here explaining that this app had
+         no report screen behind either. That was true of the SCREEN and not of
+         the DATA — DB.cancellations carries settlements and _issAll() already
+         normalises maintenance and complaints into one shape for the register.
+         Both views are in renderReportDetail() now, both export through
+         _rptDetailDef() like every other tab, and the reference's eight are all
+         real. See those two blocks for how each one is scoped to the period.
+
+         TEN TABS, NOT EIGHT. Revenue, Pending and Available fund are this app's
+         own and are not being dropped to make a picture match — the strip is a
+         superset of the reference, and it scrolls sideways if a window is too
+         narrow for the row. Occupancy is the reference's eighth: this app calls
+         the same view Rooms and its own heading reads "Room Occupancy", so it
+         is one tab under the name this app already uses rather than two tabs
+         showing one table. */}
   <div class="rpt-tabs" role="tablist">
     ${[['','Overview','home'],
        ['financial','Revenue','money'],
@@ -784,7 +1029,9 @@ function renderReports() {
        ['expenses','Expenses','expense'],
        ['netprofit','Available fund','wallet'],
        ['students','Students','users'],
-       ['rooms','Rooms','bed']]
+       ['rooms','Rooms','bed'],
+       ['cancellations','Cancellations','transfer'],
+       ['complaints','Complaints','tool']]
       .map(([k,label,ico])=>`
         <button role="tab" class="rpt-tab${(reportDetail||'')===k?' is-on':''}"
                 aria-selected="${(reportDetail||'')===k}"
@@ -806,15 +1053,26 @@ function renderReports() {
          full figure simply ran out of card. moneyValue(compact) keeps the
          exact number in the title attribute, so nothing is lost: hover, and
          the reconcilable figure is there. */''}
-    ${stat('financial','dh-green','Revenue',moneyValue(rev,{compact:true}),
+    ${''/* THE REFERENCE'S ORDER AND THE REFERENCE'S NAMES (owner ref:
+           `reports2.png`): Total Revenue, Total Expenses, Available Fund,
+           Pending Payments, Occupancy Rate, Active Students.
+
+           The order is not cosmetic — it is the arithmetic, left to right.
+           Revenue minus Expenses IS Available Fund, so the three sit together
+           and the third reads as the answer to the two before it. This page
+           had Pending wedged between Revenue and Expenses, which broke that
+           sentence in half; Pending is a different question (money not in yet)
+           and belongs after the sum, not inside it. Same rule the dashboard KPI
+           row already follows.
+
+           Full names for the same reason the labels stopped shouting: "Revenue"
+           and "Pending" are what a developer calls the variables. "Total
+           Revenue" and "Pending Payments" are what the figures are. */}
+    ${stat('financial','dh-green','Total Revenue',moneyValue(rev,{compact:true}),
       `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
       '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
       true, _rptSeries('rev'))}
-    ${stat('pending','dh-amber','Pending',moneyValue(pending,{compact:true}),
-      `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
-      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-      true, _rptSeries('pend'))}
-    ${stat('expenses','dh-red','Expenses',moneyValue(totalExp,{compact:true}),
+    ${stat('expenses','dh-red','Total Expenses',moneyValue(totalExp,{compact:true}),
       `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
       '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
       true, _rptSeries('exp'))}
@@ -823,12 +1081,16 @@ function renderReports() {
       `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
       '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
       true, _rptSeries('net'))}
-    ${stat('rooms','dh-blue','Occupancy',`${occRate}%`,
+    ${stat('pending','dh-amber','Pending Payments',moneyValue(pending,{compact:true}),
+      `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
+      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+      true, _rptSeries('pend'))}
+    ${stat('rooms','dh-blue','Occupancy Rate',`${occRate}%`,
       // No historical occupancy is stored, so this reports the standing figure
       // rather than a change against a period the data cannot describe.
       `${occ} of ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
       '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>')}
-    ${stat('students','dh-blue','Students',nActiveS,
+    ${stat('students','dh-blue','Active Students',nActiveS,
       `${_rptDelta(sDelta,0,'abs')} joined vs left`,
       '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
   </div>
@@ -860,52 +1122,6 @@ function renderReports() {
         : `<div class="rpt-none">Nothing recorded in this period yet.</div>`}
     </div>
 
-    ${(()=>{
-      // Peaks and margin, all derived from the same trendData the chart draws —
-      // no separate query, so the strip can never disagree with the line above
-      // it. m.exp counts funds transfers, so profit here is the same Available
-      // Fund the dashboard and the PDFs quote.
-      //
-      // Only months that actually recorded something can win a peak. A hostel
-      // six weeks old has four empty months in this window, and "Highest
-      // Expense: Mar, PKR 0" is not a fact about March — it is the reduce()
-      // seed showing through.
-      const live = trendData.filter(m => m.rev || m.exp)
-                            .map(m => ({...m, profit: m.rev - m.exp}));
-      if (!live.length) return '';
-      const peak = (k) => live.reduce((b,m) => m[k] > b[k] ? m : b, live[0]);
-      const topRev = peak('rev'), topProfit = peak('profit'), topExp = peak('exp');
-      const sumRev = live.reduce((s,m)=>s+m.rev,0);
-      const sumProfit = live.reduce((s,m)=>s+m.profit,0);
-      // Margin is only meaningful once something was actually collected.
-      const margin = sumRev > 0 ? (sumProfit / sumRev * 100) : null;
-      // …and it is an average across every month with data, NOT the period the
-      // page header names. Labelling it "This Month" while summing six of them
-      // was the strip's own caption contradicting its figure.
-      const span = live.length === 1
-        ? _rptMonthName(live[0].key)
-        : _rptMonthName(live[0].key) + ' – ' + _rptMonthName(live[live.length-1].key);
-      // Each peak names its month in full, so a window that crosses New Year
-      // cannot show two different "Jan"s with no way to tell them apart.
-      const at = m => _rptMonthName(m.key);
-      const cell = (hue,ico,label,sub,val) => `
-        <div class="mov__cell ${hue}">
-          <span class="mov__cico">${icon(ico,'sm')}</span>
-          <div>
-            <div class="mov__cl">${label}</div>
-            <div class="mov__cs">${escHtml(sub)}</div>
-            <div class="mov__cv">${val}</div>
-          </div>
-        </div>`;
-      return `<div class="mov__strip">
-        ${cell('dh-violet','trendUp','Highest Collection',at(topRev),fmtPKR(topRev.rev))}
-        ${cell('dh-green','chart','Highest Profit',at(topProfit),fmtPKR(topProfit.profit))}
-        ${cell('dh-red','arrowDownCircle','Highest Expense',at(topExp),fmtPKR(topExp.exp))}
-        ${cell('dh-blue','pieChart','Average Profit Margin',span,
-          margin===null ? '<span class="is-na">—</span>' : margin.toFixed(1)+'%')}
-      </div>`;
-    })()}
-
     <div class="mov__foot">
       <span>${icon('info','xs')} All amounts are in PKR</span>
       <span>${icon('clock','xs')} ${withDataNote}</span>
@@ -932,25 +1148,73 @@ function renderReports() {
       <div class="rpt-donut">
         <div class="rpt-donut__c">
           <canvas id="rpt-methods"></canvas>
-          <div class="rpt-donut__mid"><span>Collected</span><b>${fmtPKR(methodTotal)}</b></div>
+          ${''/* Figure first, caption under it (owner ref: reports2.png). The
+                 number is what the hole is for; "Collected" above it made the
+                 caption the headline of its own centre. */}
+          <div class="rpt-donut__mid"><b>${fmtPKR(methodTotal)}</b><span>Total Collected</span></div>
         </div>
         <div class="rpt-legend">${methodLegend}</div>
       </div>`:`<div class="rpt-none">No payments collected in this period.</div>`}
     </div>
   </div>
 
-  <div class="rpt-grid">
+  ${''/* ══ KEY HIGHLIGHTS + EXPENSE BREAKDOWN — one row (owner ref: reports2.png)
+         Highlights was welded to the foot of Monthly Overview and Expense
+         Breakdown sat beside Room Type Performance. The reference pairs them,
+         and it is right to: both answer "what stands out in this period", one
+         in peaks and one in categories, and neither needs a card 640px tall to
+         say it. See the _hiCells comment above for why it moved. */}
+  ${_hiCells ? `
+  <div class="rpt-toprow rpt-toprow--top">
+    <div class="rpt-card rpt-hi">
+      <div class="rpt-card__h">
+        ${icon('award','sm')}
+        Key Highlights <span class="rpt-card__hs">${escHtml(_hiCells.span)}</span>
+      </div>
+      <div class="mov__strip">${_hiCells.html}</div>
+    </div>
+
     <div class="rpt-card">
       <div class="rpt-card__h">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
         Expense Breakdown
+        ${''/* The reference's "View Details →". It opens the expenses detail
+               view this page already builds — the same one the Expenses KPI
+               card opens — rather than a second screen saying the same thing. */}
+        <button class="rpt-card__a" onclick="reportDetail='expenses';renderPage('reports')"
+                title="Every expense in this period, by category">
+          View Details
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
       </div>
       ${cats.length?`
         <div class="rpt-bars">${catBars}</div>
         <div class="rpt-btot"><span>Total Expenses</span><b>${fmtPKR(totalExp)}</b></div>`
       :`<div class="rpt-none">No expenses recorded in this period.</div>`}
     </div>
+  </div>` : `
+  ${''/* No month in the window recorded anything, so there are no peaks to
+         name. Expense Breakdown still stands on its own — it has its own empty
+         state and a warden looking for it should not have to wonder whether
+         the page failed to load. */}
+  <div class="rpt-card" style="margin-bottom:14px">
+    <div class="rpt-card__h">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
+      Expense Breakdown
+    </div>
+    ${cats.length?`
+      <div class="rpt-bars">${catBars}</div>
+      <div class="rpt-btot"><span>Total Expenses</span><b>${fmtPKR(totalExp)}</b></div>`
+    :`<div class="rpt-none">No expenses recorded in this period.</div>`}
+  </div>`}
 
+  ${''/* ══ ROOM TYPE PERFORMANCE + STUDENT SUMMARY — one row (owner ref:
+         reports2.png). Student Summary ran the full width of the page for six
+         tiles, which made each one 230px wide holding a two-digit number. The
+         reference sets it beside the room table at roughly equal width, three
+         tiles across and two down, and the two read as one answer: how the
+         rooms are doing, and who is in them. */}
+  <div class="rpt-grid">
     <div class="rpt-card">
       <div class="rpt-card__h">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/></svg>
@@ -958,28 +1222,24 @@ function renderReports() {
       </div>
       ${rtRows?`<div class="rpt-tbl-wrap">
         <table class="rpt-tbl">
-          <thead><tr><th>Type</th><th>Total</th><th>Occupied</th><th>Vacant</th><th>Revenue</th></tr></thead>
-          <tbody>${rtRows}</tbody>
+          <thead><tr><th>Type</th><th>Total Rooms</th><th>Occupied</th><th>Vacant</th><th>Occupancy</th><th>Revenue</th></tr></thead>
+          <tbody>${rtRows}${rtFoot}</tbody>
         </table></div>`:`<div class="rpt-none">No room types configured.</div>`}
     </div>
-  </div>
 
-  <div class="rpt-card">
-    <div class="rpt-card__h">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Student Summary
-      <button class="rpt-card__a" onclick="reportDetail='students';renderPage('reports')">
-        View All Reports
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </button>
-    </div>
-    <div class="rpt-sum">
-      ${tile('Active Students', nActiveS, 'On the roster now', 'dh-green', 'students')}
-      ${tile('Left',            nLeftS,   'Checked out',       'dh-slate', 'students')}
-      ${tile('Blacklisted',     nBlackS,  nBlackS?'Barred from return':'None on record', 'dh-red', 'students')}
-      ${tile('Total Registered',DB.students.length, 'All time', 'dh-violet', 'students')}
-      ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied`, 'dh-blue', 'rooms')}
-      ${tile('Total Payments',  DB.payments.length, 'All time', 'dh-amber', 'financial')}
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Student Summary
+      </div>
+      <div class="rpt-sum">
+        ${tile('Active Students', nActiveS, 'On the roster now', 'dh-green', 'students', 'userCheck')}
+        ${tile('Left / Departed', nLeftS,   'Checked out',       'dh-slate', 'students', 'logout')}
+        ${tile('Blacklisted',     nBlackS,  nBlackS?'Barred from return':'None on record', 'dh-red', 'students', 'lock')}
+        ${tile('Total Registered',DB.students.length, 'All time', 'dh-violet', 'students', 'clipboard')}
+        ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied`, 'dh-blue', 'rooms', 'bed')}
+        ${tile('Total Payments',  DB.payments.length, 'All time', 'dh-amber', 'financial', 'card')}
+      </div>
     </div>
   </div>
 
@@ -989,10 +1249,10 @@ function renderReports() {
          the same engine, the same filters — so a report pulled from here and
          the same report pulled from its page cannot differ.
 
-         THE TWO THE TAB STRIP COULD NOT HAVE ARE HERE. Cancellations and
-         Complaints have no report SCREEN in this app, but both have a full
-         export, and a document is what somebody asking for a "cancellations
-         report" wanted anyway.
+         Cancellations and Complaints appear here AND as tabs now. That is not
+         a duplicate: the tab is the register on screen for the period, this is
+         the whole document as a file. Somebody asking their office for a
+         "cancellations report" wants the file.
 
          Pending Payments is the one that is not a plain export: it opens the
          payments register filtered to unpaid balances, because a warden asking
@@ -1002,17 +1262,31 @@ function renderReports() {
   <div class="rpt-card rpt-quick">
     <div class="rpt-card__h">
       ${icon('fileSpreadsheet','sm')}
-      Quick reports
+      Quick Reports
       <span class="rpt-quick__note">Each one is that register's own export, for the period above</span>
+      ${''/* "View All Reports →" sits HERE in the reference, not on Student
+             Summary where this app had put it. That is the right place for it:
+             this is the block about documents, and the thing it opens is the
+             full report — every section — rather than the student view a button
+             on the student card implied. */}
+      <button class="rpt-card__a rpt-quick__all" onclick="printReport()"
+              title="The whole report — every section, in one document">
+        View All Reports
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
     </div>
     <div class="rpt-quick__g">
-      ${[['Monthly financial report','Collection, expenses and profit','chart','printReport()'],
-         ['Student list report','Everyone on the roster now','users','exportStudentsPDF()'],
-         ['Room occupancy report','Room by room, and who is in them','bed','exportRoomsPDF()'],
-         ['Pending payments','Opens the register, ready to collect','clock','openPaymentsPending()'],
-         ['Expense report','By category, with a subtotal each','expense','exportExpensesPDF()'],
-         ['Cancellations report','Departures and their settlements','transfer','exportCancellationsPDF()'],
-         ['Complaints report','Every issue raised, and its state','tool','exportIssuesPDF()']]
+      ${''/* Titled as the reference titles them — these are DOCUMENT names, and
+             "Monthly Financial Report" is what a warden asks their office for.
+             The sentence under each is this app's own, saying what is actually
+             in the file. */}
+      ${[['Monthly Financial Report','Collection, expenses and profit','chart','printReport()'],
+         ['Student List Report','Everyone on the roster now','users','exportStudentsPDF()'],
+         ['Room Occupancy Report','Room by room, and who is in them','bed','exportRoomsPDF()'],
+         ['Pending Payments Report','Opens the register, ready to collect','clock','openPaymentsPending()'],
+         ['Expense Report','By category, with a subtotal each','expense','exportExpensesPDF()'],
+         ['Cancellations Report','Departures and their settlements','transfer','exportCancellationsPDF()'],
+         ['Complaints Report','Every issue raised, and its state','tool','exportIssuesPDF()']]
         .map(q=>`
           <button class="rpt-quick__b" onclick="${q[3]}" title="${escHtml(q[0])}">
             <span class="rpt-quick__i">${icon(q[2],'sm')}</span>
@@ -1495,6 +1769,79 @@ function _rptDetailDef(type) {
       ],
       rows: roomsByNumber(DB.rooms),
       empty: 'No rooms are recorded.',
+    });
+  }
+
+  /* THE TWO NEW TABS EXPORT LIKE EVERY OTHER ONE. A detail view whose Export
+     buttons produce "Nothing to export" is worse than one with no buttons —
+     the warden reads it as the period being empty, not as the case being
+     unhandled. Both fall through the same `def` the rest of this function
+     builds, so period, filters and the file's own heading are already right. */
+  if (type === 'cancellations') {
+    const _ck = new Set(_rptKeys());
+    const list = (DB.cancellations || [])
+      .filter(c => _ck.has(String(c.vacateDate || c.requestDate || '').slice(0, 7)))
+      .sort((a, b) => new Date(b.vacateDate || b.requestDate) - new Date(a.vacateDate || a.requestDate));
+    const _set = c => c.settlement || {};
+    const owed = list.reduce((s, c) => s + Number(_set(c).outstanding || 0), 0);
+    return Object.assign(def, {
+      sheet: 'Cancellations',
+      summary: [
+        { label: 'Departures', value: String(list.length) },
+        { label: 'Settled', tone: 'pos',
+          value: EXPORT.fmt.money(list.reduce((s, c) => s + Number(_set(c).collected || 0), 0)) },
+        { label: 'Left owing', value: EXPORT.fmt.money(owed), tone: owed > 0 ? 'neg' : '' },
+      ],
+      columns: [
+        { label: 'Ref', type: 'id', width: 12,
+          value: c => c.seq ? 'CAN-' + String(c.seq).padStart(4, '0') : '' },
+        { label: 'Student', type: 'text', width: 22, value: c => c.studentName || '',
+          get: c => '<b>' + escHtml(c.studentName || '—') + '</b>' },
+        { label: 'Room', type: 'id', width: 9, value: c => String(c.roomNumber || '') },
+        { label: 'Notice given', type: 'date', width: 13, value: c => c.requestDate || '' },
+        { label: 'Vacates', type: 'date', width: 13, value: c => c.vacateDate || '' },
+        { label: 'Reason', type: 'wrap', width: 26, value: c => c.reason || '' },
+        { label: 'Settled', type: 'money', width: 13, total: 'sum',
+          value: c => Number(_set(c).collected || 0) || null },
+        { label: 'Owing', type: 'money', width: 13, total: 'sum',
+          value: c => Number(_set(c).outstanding || 0) || null },
+        { label: 'Status', type: 'status', width: 12, value: c => c.status || '' },
+      ],
+      rows: list,
+      empty: 'Nobody left in this period.',
+    });
+  }
+
+  if (type === 'complaints') {
+    const _ck = new Set(_rptKeys());
+    const all = (typeof _issAll === 'function' ? _issAll() : [])
+      .filter(i => _ck.has(String(i.date || '').slice(0, 7)))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    const open = all.filter(i => i.status === 'Open' || i.status === 'In Progress').length;
+    return Object.assign(def, {
+      sheet: 'Complaints',
+      summary: [
+        { label: 'Raised', value: String(all.length) },
+        { label: 'Still open', value: String(open), tone: open > 0 ? 'neg' : 'pos' },
+        { label: 'Repair cost',
+          value: EXPORT.fmt.money(all.reduce((s, i) => s + Number(i.cost || 0), 0)) },
+      ],
+      columns: [
+        { label: 'Raised', type: 'date', width: 13, value: i => i.date || '' },
+        { label: 'Issue', type: 'text', width: 24, value: i => i.title || '',
+          get: i => '<b>' + escHtml(i.title || '—') + '</b>' },
+        { label: 'Category', type: 'text', width: 14, value: i => i.category || '' },
+        { label: 'Room', type: 'id', width: 9, value: i => String(i.roomNo || '') },
+        { label: 'Reported by', type: 'text', width: 18, value: i => i.by || '' },
+        { label: 'Priority', type: 'text', width: 11, value: i => i.priority || '' },
+        { label: 'Assigned to', type: 'text', width: 16, pdf: false, value: i => i.assigned || '' },
+        { label: 'Resolved', type: 'date', width: 13, pdf: false, value: i => i.resolved || '' },
+        { label: 'Cost', type: 'money', width: 12, total: 'sum',
+          value: i => Number(i.cost || 0) || null },
+        { label: 'Status', type: 'status', width: 12, value: i => i.status || '' },
+      ],
+      rows: all,
+      empty: 'Nothing was raised in this period.',
     });
   }
 
