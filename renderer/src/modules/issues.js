@@ -107,7 +107,11 @@ function _issAll() {
     status:x.status||'Open', priority:x.priority||'Medium',
     category:x.category||'', assigned:x.assignedTo||'',
     expected:x.expectedDate||'', location:x.location||'', cost:Number(x.cost)||0,
-    roomNo: roomNo(x.roomId), by:'', student:null, response:'',
+    /* `by` is who REPORTED it. It was hardcoded blank until 2026-09-10 because
+       the maintenance form never asked — so every maintenance row printed an
+       empty Student cell. Tickets written before the field existed still have
+       nothing to show, and show nothing rather than a guess. */
+    roomNo: roomNo(x.roomId), by:x.raisedBy||'', student:null, response:'',
   }));
 
   const c = (DB.complaints||[]).map(x => {
@@ -377,7 +381,17 @@ function renderIssues() {
               <div class="lk-who__s">${i.student.cnic ? cnicHtml(i.student.cnic) : escHtml(i.student.phone || '')}</div>
             </div>
           </div>`
-        : `<span class="lk-dash" title="Maintenance is logged against a room, not a student">—</span>`}
+        : i.by ? `${/* A maintenance ticket now records who reported it (owner,
+                       2026-09-10), and that is often not a resident at all —
+                       a warden, the cook, a contractor. So: the name, with no
+                       contact sub-line, because there is no record behind it
+                       to read one from. */''}
+            <div class="lk-who">
+              <div class="lk-who__av dh-slate">${escHtml(i.by.trim().charAt(0).toUpperCase()||'?')}</div>
+              <div style="min-width:0"><div class="lk-who__n">${escHtml(i.by)}</div>
+                <div class="lk-who__s">Reported by</div></div>
+            </div>`
+        : `<span class="lk-dash" title="Nobody was recorded as having reported this">—</span>`}
       </td>
       <td>
         ${i.roomNo ? roomLabel(i.roomNo, rm && rm.floor)
@@ -505,7 +519,11 @@ function renderIssues() {
     : `<div class="lk-table-wrap iss-wrap">
         <table class="lk-table iss-table">
           <thead><tr>
-            <th>#</th><th>Issue</th><th>Student</th><th>Room</th><th>Category</th>
+            ${''/* "Raised by", not "Student": the column has always held who
+                   reported the record, and since 2026-09-10 a maintenance
+                   ticket has one too — often a warden or a contractor rather
+                   than a resident. */}
+            <th>#</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
             <th>Priority</th><th>Status</th><th>Reported On</th><th>Assigned To</th><th>Actions</th>
           </tr></thead>
           <tbody>${_pg.slice.map(mkRow).join('')}</tbody>
@@ -645,7 +663,14 @@ function showIssueModal(id) {
     `<option value="${p}" ${p === sel ? 'selected' : ''}>${p}</option>`).join('');
 
   const staff = _issStaffList();
-  const dlist = `<datalist id="iss-staff">${staff.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>`;
+  /* "Raised by" offers staff AND residents — see the field for why it is a
+     datalist rather than a select. Names only; the ticket records who said it,
+     not a link to a record that may be deleted years later. */
+  const raisers = staff.concat(
+    (DB.students || []).filter(s => s.status === 'Active')
+      .map(s => String(s.name || '').trim()).filter(Boolean));
+  const dlist = `<datalist id="iss-staff">${staff.map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>`
+    + `<datalist id="iss-raisers">${[...new Set(raisers)].map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>`;
 
   const dateCtrl = (fid, val, ph) =>
     `<input id="${fid}" class="form-control cdp-trigger" type="text" readonly placeholder="${ph}"`
@@ -700,9 +725,23 @@ function showIssueModal(id) {
                 work is often the next day's question. A required field that
                 stands between a hostel and recording a burst pipe is a field
                 that gets filled with a full stop. */''}
+          ${''/* RAISED BY (owner, 2026-09-10: "add maintinance raised in the
+                 maintinaance form"). Every maintenance ticket printed a blank
+                 in the register's Student column, because nothing on the form
+                 ever asked who reported it — a complaint records the student
+                 who filed it, and maintenance recorded nobody.
+
+                 FREE TEXT WITH A DATALIST OF BOTH STAFF AND RESIDENTS, not a
+                 select: a burst pipe is reported by a student, a warden, the
+                 cook, or the man who came to read the meter, and a dropdown
+                 that only offers logins cannot hold three of those four. It
+                 defaults to whoever is signed in, since that is who is at the
+                 keyboard writing the ticket. */}
+          ${_issField('Raised by', 'person',
+            `<input id="mt-raised" class="form-control" list="iss-raisers" placeholder="Who reported it"
+                    value="${rec ? escHtml(rec.by) : escHtml((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '')}">`)}
           ${_issField('Assigned to', 'person',
-            `<input id="mt-assigned" class="form-control" list="iss-staff" placeholder="Staff member or contractor" value="${rec ? escHtml(rec.assigned) : ''}">`,
-            { full: true })}
+            `<input id="mt-assigned" class="form-control" list="iss-staff" placeholder="Staff member or contractor" value="${rec ? escHtml(rec.assigned) : ''}">`)}
         </div>
       </div>
     </div>`;
@@ -842,6 +881,8 @@ async function saveIssue(id) {
       date:         _issVal('mt-date') || today(),
       expectedDate: _issVal('mt-expected'),
       assignedTo:   _issVal('mt-assigned'),
+      // Who reported it (owner, 2026-09-10). Read back by _issAll() as `by`.
+      raisedBy:     _issVal('mt-raised'),
       status,
     };
 

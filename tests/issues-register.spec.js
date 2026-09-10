@@ -112,7 +112,12 @@ test('the register is a ten-column table, and a legacy record still renders in i
 
   const heads = await win.evaluate(() =>
     [...document.querySelectorAll('#content .iss-table thead th')].map(t => t.textContent.trim()));
-  expect(heads).toEqual(['#', 'Issue', 'Student', 'Room', 'Category', 'Priority',
+  /* "Raised by", not "Student" (owner, 2026-09-10: "add maintinance raised in
+     the maintinaance form"). The column has always held whoever reported the
+     record; now that a maintenance ticket records one too, and it is often a
+     warden or a contractor rather than a resident, the old heading was naming
+     the wrong half of what the column holds. */
+  expect(heads).toEqual(['#', 'Issue', 'Raised by', 'Room', 'Category', 'Priority',
                          'Status', 'Reported On', 'Assigned To', 'Actions']);
 
   const rows = await win.evaluate(() =>
@@ -127,7 +132,10 @@ test('the register is a ten-column table, and a legacy record still renders in i
       .filter(r => r.children[4].querySelector('.lk-dash')).length,
     assigned: [...document.querySelectorAll('#content .iss-table tbody tr')]
       .filter(r => r.children[8].querySelector('.lk-dash')).length,
-    // Maintenance has no complainant — that cell is a dash by design.
+    /* A record with nobody recorded as having reported it is a dash. These
+       seeded maintenance tickets predate the "Raised by" field, so they still
+       have nothing to show — and show nothing rather than a guess. A ticket
+       written through the form from now on carries a name here. */
     student: [...document.querySelectorAll('#content .iss-table tbody tr')]
       .filter(r => r.children[2].querySelector('.lk-dash')).length,
   }));
@@ -233,26 +241,69 @@ test('the form adds, edits in place, and fills a complaint room from its student
     loc: document.getElementById('mt-location').value,
     exp: document.getElementById('mt-expected').value,
     asg: document.getElementById('mt-assigned').value,
+    /* WHO REPORTED IT (owner, 2026-09-10: "add maintinance raised in the
+       maintinaance form"). This ticket was seeded before the field existed, so
+       it has nothing recorded and the box opens empty rather than inventing a
+       name for a record nobody signed. */
+    raised: document.getElementById('mt-raised').value,
     // A complaint cannot become a maintenance ticket, so the kind switch is
     // not offered on an edit.
     hasSwitch: !!document.querySelector('.hf-switch'),
   }));
   expect(prefill).toEqual({ title: 'Water leakage in bathroom', cat: 'Plumbing',
-    prio: 'High', loc: 'Bathroom', exp: '2026-09-05', asg: 'Azat Ullah', hasSwitch: false });
+    prio: 'High', loc: 'Bathroom', exp: '2026-09-05', asg: 'Azat Ullah',
+    raised: '', hasSwitch: false });
 
   await win.evaluate(async () => {
     document.getElementById('mt-title').value = 'Water leakage in bathroom (re-checked)';
+    document.getElementById('mt-raised').value = 'Gul Nawaz';
     await saveIssue('mt_1');
   });
   await win.waitForTimeout(450);
 
   const edited = await win.evaluate(() => {
     const m = DB.maintenance.find(x => x.id === 'mt_1');
-    return { title: m.title, seq: m.seq, cat: m.category, count: DB.maintenance.length };
+    return { title: m.title, seq: m.seq, cat: m.category, raisedBy: m.raisedBy,
+             count: DB.maintenance.length };
   });
   // Edited in place: same record, same reference number, no duplicate.
   expect(edited).toEqual({ title: 'Water leakage in bathroom (re-checked)',
-                           seq: 1, cat: 'Plumbing', count: 3 });
+                           seq: 1, cat: 'Plumbing', raisedBy: 'Gul Nawaz', count: 3 });
+
+  /* …and it reaches the register, the search and the export — the three
+     surfaces that were printing a blank for every maintenance ticket because
+     nothing ever recorded who raised one. */
+  await win.evaluate(() => {
+    closeModal();
+    issuesTab = 'maintenance'; issueFilter.search = ''; issueFilter.month = '';
+    renderPage('issues');
+  });
+  // renderPage() defers its work by 80ms, so the DOM has to be read after it.
+  await win.waitForTimeout(450);
+
+  const reaches = await win.evaluate(() => {
+    const cell = [...document.querySelectorAll('#content .iss-table tbody tr')]
+      .map(r => r.children[2].textContent).join(' | ');
+    issueFilter.search = 'Gul Nawaz';
+    const hits = issuesFiltered().length;
+    issueFilter.search = '';
+    const col = _issExportDef(issuesFiltered()).columns.find(c => c.label === 'Raised by');
+    const rec = _issAll().find(i => i.id === 'mt_1');
+    return { cell, hits, exported: col.value(rec) };
+  });
+  expect(reaches.cell, 'the register does not name who raised the ticket')
+    .toContain('Gul Nawaz');
+  expect(reaches.hits, 'searching for who raised it found nothing').toBe(1);
+  expect(reaches.exported, 'the export still has a blank Raised by for maintenance')
+    .toBe('Gul Nawaz');
+
+  /* A NEW ticket defaults to whoever is signed in — they are the one at the
+     keyboard writing it. */
+  await win.evaluate(() => { issuesTab = 'maintenance'; showIssueModal(); });
+  await win.waitForSelector('#mt-raised', { timeout: 15000 });
+  const dflt = await win.evaluate(() => document.getElementById('mt-raised').value);
+  expect(dflt, 'a new maintenance ticket does not default to the signed-in user')
+    .toBeTruthy();
 
   await app.close();
 });
