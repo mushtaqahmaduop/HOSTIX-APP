@@ -3833,9 +3833,7 @@ function dashGlobalSearch(query) {
   if (!results.length) {
     resultsBox.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">No results for <strong style="color:var(--text)">"' + escHtml(query) + '"</strong></div>';
     resultsBox.style.display = 'block';
-    // Position under the search input
-    var inp = document.getElementById('dash-global-search');
-    if (inp) { var r2 = inp.getBoundingClientRect(); resultsBox.style.left = r2.left + 'px'; }
+    _dashSearchAnchor();
     return;
   }
 
@@ -3872,9 +3870,38 @@ function dashGlobalSearch(query) {
 
   resultsBox.innerHTML = html;
   resultsBox.style.display = 'block';
-  // Align dropdown under the header search input
-  var inp2 = document.getElementById('dash-global-search');
-  if (inp2) { var r3 = inp2.getBoundingClientRect(); resultsBox.style.left = r3.left + 'px'; }
+  _dashSearchAnchor();
+}
+
+/* ── THE PANEL GOES UNDER THE FIELD, NOT OVER IT ─────────────────────────────
+   Owner, 2026-09-10: "vhen a user type some thing, the hover card blinds the
+   user and then cant see vhat he is tping."
+
+   The panel is `position: fixed` and its markup carried `top: 56px`, written
+   once against a header that was that tall at the time. The header is 56px and
+   the search PILL runs from 48px to 88px — so the panel opened 32px above the
+   bottom of the field it belongs to and covered the text as it was typed. Only
+   `left` was ever computed.
+
+   Both edges are measured now, off the PILL rather than the bare input: the
+   input is the 16px text box inside a 40px control, and anchoring to it would
+   still overlap the pill's lower padding. 6px of air below the pill, and the
+   panel is clamped to the viewport so a narrow window cannot push it off the
+   right-hand edge. */
+function _dashSearchAnchor() {
+  var box = document.getElementById('dash-search-results');
+  if (!box) return;
+  var pill = document.querySelector('.hdr-find')
+          || document.getElementById('dash-global-search');
+  if (!pill) return;
+  var r = pill.getBoundingClientRect();
+  box.style.top = Math.round(r.bottom + 6) + 'px';
+  var w = box.getBoundingClientRect().width || 460;
+  var left = Math.min(Math.round(r.left), Math.max(8, window.innerWidth - w - 16));
+  box.style.left = left + 'px';
+  /* Never taller than the room left below it — a long result list used to run
+     past the bottom of the window with no way to reach the last item. */
+  box.style.maxHeight = Math.max(160, Math.round(window.innerHeight - r.bottom - 24)) + 'px';
 }
 
 function dashGlobalSearchClear() {

@@ -690,8 +690,22 @@
           title="Clear search (Esc)"><span class="micon" style="font-size:16px">close</span></button>
         <kbd class="hdr-kbd" onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)">Ctrl K</kbd>
       </div>
-      <!-- Search results dropdown — anchored to hdr-search-wrap -->
-      <div id="dash-search-results" style="display:none;position:fixed;top:56px;width:min(460px,calc(100vw - 32px));background:var(--bg2);border:1px solid var(--border2);border-radius:12px;z-index:9999;max-height:420px;overflow-y:auto;box-shadow:0 16px 50px rgba(0,0,0,0.7)"></div>
+      <!-- Search results dropdown.
+
+           IT USED TO CARRY `top:56px` HARD-CODED, and the search pill's bottom
+           edge is at 88px — so the panel opened 32px ABOVE the field and
+           covered the text being typed. Owner, 2026-09-10: "vhen a user type
+           some thing, the hover card blinds the user and then cant see vhat he
+           is tping."
+
+           `top` is set from the input's own rect now, in dashGlobalSearch(),
+           the same way `left` already was. A fixed offset cannot survive a
+           header whose height changes with the window, and this one had not.
+
+           The surface follows the app's popover convention (--card over
+           --border, a real elevation) instead of --bg2 with a near-black
+           shadow that was drawn for the old dark-only theme. -->
+      <div id="dash-search-results" style="display:none;position:fixed;top:96px;width:min(460px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border2);border-radius:12px;z-index:9999;max-height:420px;overflow-y:auto;box-shadow:var(--shadow-lg)"></div>
     </div>
     <div class="hdr-right">
       <div id="role-badge" onclick="showUserMgmt()" style="display:none"></div>

@@ -434,13 +434,25 @@ body.light-theme #header {
     color: var(--text); font-family: var(--font); font-size: 13px; padding: 0;
 }
 .hdr-find input::placeholder { color: var(--text3); }
+/* ONE FIELD, ONE COLOUR (owner, 2026-09-10). The pill held two filled greys
+   inside it — this chip and the clear button, both on --bg3 — so even once the
+   field itself matched the other search boxes, the control still read as
+   two-tone. An outline carries the same affordance without putting a second
+   surface inside a surface, which is §12's "card on card" at control scale. */
 .hdr-kbd {
     flex-shrink: 0; cursor: pointer;
     font-size: 10px; font-weight: 700; color: var(--text3);
-    background: var(--bg3); border: 1px solid var(--border);
+    background: none; border: 1px solid var(--border2);
     border-radius: 6px; padding: 3px 7px; font-family: var(--font-mono, monospace);
 }
-.hdr-kbd:hover { color: var(--text2); }
+.hdr-kbd:hover { color: var(--text2); border-color: var(--text3); }
+/* The clear button carries its background inline in index.html; this outranks
+   it on specificity so the two chips inside the pill match. */
+.hdr-find #dash-search-clear {
+    background: none !important;
+    border-radius: 6px;
+}
+.hdr-find #dash-search-clear:hover { background: var(--dash-sunk) !important; color: var(--text); }
 
 /* Right-hand control cluster */
 .hdr-right { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }

@@ -434,6 +434,12 @@ function renderPage(p, resetScroll=false) {
   document.body.classList.toggle(
     'chrome-task', (pageConfig[p] || {}).chrome === 'task');
 
+  /* The global search panel does not survive a page change. Picking a result
+     already closed it, but arriving any other way — the rail, the palette, a
+     Back button — left it hanging open over the new page with results for the
+     old one. */
+  if (typeof dashGlobalSearchClear === 'function') dashGlobalSearchClear();
+
   if(p.startsWith('cancellations_')) {
     cancFilter = p.replace('cancellations_','');
     basePage = 'cancellations';

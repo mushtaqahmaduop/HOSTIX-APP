@@ -391,10 +391,20 @@ body.light-theme .btn-primary {
 }
 body.light-theme .btn-primary:hover { background: var(--accent-strong); }
 
-body.light-theme #hdr-search-wrap > div {
-    background: var(--bg2) !important;
-    border-color: var(--border) !important;
-}
+/* THE HEADER SEARCH WAS THE ONLY SEARCH BOX IN THE APP PAINTED GREY.
+   Owner, 2026-09-10: "the search bar uses tvo colour, it should a neutral
+   single colur like other search bars."
+
+   This rule filled it with --bg2 (#EEF1F6) and won on specificity — an id plus
+   a class beats chrome.css's plain `.hdr-find`, whatever the source order — so
+   the pill sat as a grey slab on a white header while every register's
+   `.lk-search` beside it was --card white with a --border2 hairline. Two
+   different treatments for the same control, and the grey one was the one on
+   every screen.
+
+   Removed rather than re-pointed: chrome.css already declares exactly the
+   right thing, and a second rule saying it again is how they drift apart. */
+
 body.light-theme .status-badge,
 body.light-theme .badge               { filter: none; }
 body.light-theme .arch-ov-bar         { background: rgba(26, 26, 64, 0.06); }
