@@ -273,7 +273,7 @@ function _initDBFields(d) {
   if (!d.settings.hostelNameFont) d.settings.hostelNameFont = 'Georgia';
   if (d.settings.showFontPicker === undefined) d.settings.showFontPicker = true;
   // Behaviour
-  if (!d.settings.currency) d.settings.currency = 'PKR';
+  if (!d.settings.currency) d.settings.currency = 'Rs.';   // owner, 2026-09-10
   // autoMonthGenerate is no longer read by anything: nothing generates payment
   // records on its own. Kept off, and kept at all, only so an older database
   // that has it stored is not silently rewritten. Rent rows come from the

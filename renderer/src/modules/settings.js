@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — SETTINGS MODULE ─────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — SETTINGS MODULE ─────────────────────────────────────────────
    Contains: renderSettings, bindSettingsEvents, renderLicenseSettingsPanel,
              openLicenseSettingsWindow, liveUpdateSetting, applyHostelFont,
              saveSettings, bulk rent update helpers, room type/payment method
@@ -357,7 +357,7 @@ function _rtTouch() { DB.settings.roomTypesUpdatedAt = new Date().toISOString();
      it is not worth a fifth panel on a page that has to fit.               */
 function renderRoomTypesPanel() {
   const types = (DB.settings.roomTypes) || [];
-  const cur = escHtml(DB.settings.currency || 'PKR');
+  const cur = escHtml(currencyWord());
 
   const rows = types.map((t, i) => {
     const inUse   = (DB.rooms || []).filter(r => r.typeId === t.id).length;
@@ -446,7 +446,7 @@ function _messTotal(s) {
 function renderRentMessPanel() {
   const types  = DB.settings.roomTypes || [];
   const active = DB.students.filter(s => s.status === 'Active');
-  const cur    = escHtml(DB.settings.currency || 'PKR');
+  const cur    = escHtml(currencyWord());
 
   const onMess  = active.filter(s => s.messOptIn !== false && Number(s.mess||0) > 0).length;
   const billed  = active.reduce((n, s) => n + _messTotal(s), 0);
@@ -550,7 +550,7 @@ function renderRentMessPanel() {
         </div>
       </div>
 
-      ${svcModelCard()}
+      ${svcModelCard()}
       ${refundPolicyCard()}
 
       <div class="set-strip" style="margin:0 0 18px">
@@ -666,7 +666,7 @@ function rtRefreshStrip() {
   set('rt-strip-beds',    String(_rtTotalBeds()));
   set('rt-strip-updated', _rtStampText());
   const avg = document.getElementById('rt-strip-avg');
-  if (avg) avg.innerHTML = `<small>${escHtml(DB.settings.currency || 'PKR')}</small>${fmtNum(_rtAvgRent())}`;
+  if (avg) avg.innerHTML = `<small>${escHtml(currencyWord())}</small>${fmtNum(_rtAvgRent())}`;
 }
 
 function rtColorLive(id, val) {
@@ -1157,7 +1157,7 @@ function _cfgActs(kind, name, extra) {
 
 function renderConfigurationPanel() {
   const s = DB.settings;
-  const cur = escHtml(s.currency || 'PKR');
+  const cur = escHtml(currencyWord());
 
   const methods = (s.paymentMethods || []).map((m, i) => {
     const live = cfgMethodActive(m);
@@ -1496,8 +1496,14 @@ function renderHostelInfoPanel() {
     // The one live row on this card.
     _setRow({ key: 'curr', ico: 'coins', hue: 'dh-green', title: 'Currency',
       sub: 'The currency every amount is printed in.',
+      /* Rs., NOT PKR, AT THE TOP OF THE LIST (owner, 2026-09-10). The stored
+         value on every existing install is the string 'PKR', so it is matched
+         to the Rs. option rather than left selecting nothing — currencyWord()
+         reads it the same way everywhere else. Nothing is written to the
+         database to make that true. */
       control: `<select class="set-sel" id="hi-curr" onchange="liveUpdateSetting('currency',this.value)">
-          ${['PKR', 'USD', 'EUR', 'GBP', 'AED', 'SAR'].map(c => `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
+          ${['Rs.', 'USD', 'EUR', 'GBP', 'AED', 'SAR'].map(c =>
+            `<option ${currencyWord() === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>` }),
     _setRow({ key: 'acad', ico: 'layers', hue: 'dh-amber', title: 'Academic year',
       sub: 'The year reports and records are filed under.',
@@ -3070,7 +3076,7 @@ async function updateRoomType(id, field, val) {
    copy of all of it. */
 function showRoomTypeModal(id) {
   const t = id ? (DB.settings.roomTypes || []).find(x => x.id === id) : null;
-  const cur = escHtml(DB.settings.currency || 'PKR');
+  const cur = escHtml(currencyWord());
   const inUse = t ? (DB.rooms || []).filter(r => r.typeId === t.id).length : 0;
 
   showModal('modal-form', `

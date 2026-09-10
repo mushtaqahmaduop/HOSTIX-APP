@@ -506,7 +506,7 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg></div>
         <div class="pay-stat__label">Total Collected</div>
       </div>
-      <div class="pay-stat__val" title="PKR ${fmtNum(total)}"><span class="cur">Rs.</span>${fmtCompactK(total)}</div>
+      <div class="pay-stat__val" title="${escHtml(fmtPKR(total))}"><span class="cur">Rs.</span>${fmtCompactK(total)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">${_scopeKey ? escHtml(monthLabel(_scopeKey)) : 'All months'}</span>
         ${/* A PERCENTAGE AGAINST A NEAR-EMPTY MONTH IS NOISE, NOT A READING.
@@ -569,7 +569,7 @@ function renderPayments() {
         <div class="pay-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/></svg></div>
         <div class="pay-stat__label">Unpaid Amount</div>
       </div>
-      <div class="pay-stat__val" title="PKR ${fmtNum(outstanding)}"><span class="cur">Rs.</span>${fmtCompactK(outstanding)}</div>
+      <div class="pay-stat__val" title="${escHtml(fmtPKR(outstanding))}"><span class="cur">Rs.</span>${fmtCompactK(outstanding)}</div>
       <div class="pay-stat__foot">
         <span class="pay-stat__sub">Total outstanding</span>
         ${nArrears>0?`<span class="pay-stat__delta dh-red" title="${nArrears} unpaid record${nArrears>1?'s':''} carried over from earlier months">incl. ${fmtPKR(arrearsAmt)} arrears</span>`:''}

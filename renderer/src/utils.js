@@ -237,6 +237,20 @@ function fmtCompactK(n) {
 /** The same, with the currency word — the lower widgets print it everywhere. */
 function fmtPKRk(n) { return 'Rs. ' + fmtCompactK(n); }
 
+/* THE CURRENCY WORD, FROM ONE PLACE (owner, 2026-09-10: "use Rs. instead of
+   PKR globally").
+
+   Nine screens read `DB.settings.currency` with their own `|| 'PKR'` fallback,
+   so changing the default in config.js moved none of them — and every install
+   that already exists has the string 'PKR' stored, which no default can reach.
+   This maps that stored value rather than migrating the database: 'PKR' and an
+   unset value both read as 'Rs.', and a hostel that has genuinely chosen USD
+   or AED keeps it. Nothing has to be written to fix an old install. */
+function currencyWord() {
+  const c = String((typeof DB !== 'undefined' && DB.settings && DB.settings.currency) || '').trim();
+  return (!c || c === 'PKR') ? 'Rs.' : c;
+}
+
 /* ── PAYMENT-METHOD COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS CASH" ─
    Lifted out of renderDashboard(), where it lived as a local, because Reports
    drew the same six wallets from a DIFFERENT ramp and picked BY INDEX rather

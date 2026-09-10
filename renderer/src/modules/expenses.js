@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
              showEditExpenseModal, submitEditExpense, deleteExpense
    ─────────────────────────────────────────────────────────────────────────── */
@@ -988,7 +988,7 @@ async function submitExpense(id) {
 
   if (!e) { if (!DB.expenses) DB.expenses = []; DB.expenses.push(rec); }
 
-  logActivity(e ? 'Expense Updated' : 'Expense Added', cat + ' — PKR ' + amount, 'Finance');
+  logActivity(e ? 'Expense Updated' : 'Expense Added', cat + ' — ' + fmtPKR(amount), 'Finance');
   _expReceipt = null;
   await saveDB();
   closeModal();
@@ -1010,7 +1010,7 @@ async function _expDoDelete(id) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _del_e=DB.expenses.find(x=>x.id===id);
   DB.expenses=DB.expenses.filter(x=>x.id!==id);
-  if(_del_e) logActivity('Expense Deleted', _del_e.category+' — PKR '+_del_e.amount, 'Finance');
+  if(_del_e) logActivity('Expense Deleted', _del_e.category+' — '+fmtPKR(_del_e.amount), 'Finance');
   await saveDB(); renderPage(_expReturnPage()); toast('Expense deleted','info');
 }
 

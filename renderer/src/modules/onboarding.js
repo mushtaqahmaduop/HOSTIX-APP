@@ -1,4 +1,4 @@
-/* ─── HOSTYLLO — FIRST-RUN SETUP ──────────────────────────────────────────────
+﻿/* ─── HOSTYLLO — FIRST-RUN SETUP ──────────────────────────────────────────────
    Loaded by index.html after settings.js (it calls bulkRoomPlan from rooms.js
    and the auth helpers from auth-nev.js).
 
@@ -255,7 +255,7 @@ function onbPickOffer(id) {
 /* ── 3. CHARGES BY ROOM TYPE ────────────────────────────────────────────── */
 function _onbCharges() {
   const mess = hostelServesMess();
-  const cur  = DB.settings.currency || 'PKR';
+  const cur  = currencyWord();
   return `
     <div class="onb-note">Set what you charge for each kind of room. Leave a row at 0 if you do not have that kind${mess ? '. Mess is the food charge, billed on top of the rent' : ''}.</div>
     <div class="onb-rates${mess ? '' : ' onb-rates--nomess'}">

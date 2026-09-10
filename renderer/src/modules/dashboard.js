@@ -989,7 +989,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
-      <div class="dash-kpi__sub" title="of PKR ${fmtNum(totalExpected)} expected">of <span class="pkr">Rs.</span>${fmtCompact(totalExpected)} expected</div>
+      <div class="dash-kpi__sub" title="of ${escHtml(fmtPKR(totalExpected))} expected">of <span class="pkr">Rs.</span>${fmtCompact(totalExpected)} expected</div>
       ${_dashBar(collected, totalExpected, 'kbar--blue')}
     </div>
 
