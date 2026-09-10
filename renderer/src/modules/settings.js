@@ -513,7 +513,9 @@ function renderRentMessPanel() {
           <div style="font-weight:700;color:var(--text)">${escHtml(s.name)}</div>
           <div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'—')}</div>
         </td>
-        <td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">#${room?escHtml(String(room.number)):'—'}</td>
+        ${''/* The floor rides with the number (owner, 2026-09-10) — this table
+               prices one student per row and a #3 on two floors is two rents. */}
+        <td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">${room?escHtml(roomText(room)):'—'}</td>
         <td style="padding:10px 12px"><span style="font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2)">${rtype?escHtml(rtype.name):'—'}</span></td>
         <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sr-${s.id}" value="${Number(s.rent)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')"></td>
         <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sm-${s.id}" value="${Number(s.mess)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')" ${on?'':'disabled'}></td>
@@ -3452,7 +3454,8 @@ function _showExcelImportPreview(rows, errors) {
     <tr>
       <td class="fw-700" style="color:var(--blue)">${escHtml(r.name)}</td>
       <td style="color:var(--text2)">${escHtml(r.fatherName||'—')}</td>
-      <td style="color:var(--accent-strong)">Rm #${escHtml(String(r.roomNumber))}</td>
+      <td style="color:var(--accent-strong)">Rm ${escHtml(roomText(r.roomNumber,
+            ((DB.rooms||[]).find(x=>String(x.number)===String(r.roomNumber))||{}).floor))}</td>
       <td style="color:var(--green)">${fmtPKR(r.rent)}</td>
       <td style="font-size:11px;color:var(--text3)">${r.joinDate}</td>
       <td>${r.paidAtAdmission>0?`<span style="color:var(--green)">${fmtPKR(r.paidAtAdmission)}</span>`:'<span style="color:var(--text3)">—</span>'}</td>

@@ -1484,7 +1484,9 @@ function filterStudentDropdown(query) {
       <div class="pf-hit__av ${payAvatarHue(nm)}">${escHtml(ini)}</div>
       <div style="flex:1;min-width:0">
         <div class="pf-hit__name">${escHtml(nm)}</div>
-        <div class="pf-hit__sub">Room #${escHtml(String(room?.number||'?'))} · ${escHtml(rtype?.name||'')} · ${escHtml(t.phone||'No phone')}</div>
+        ${''/* The floor rides with the number (owner, 2026-09-10) — this is the
+               line a warden checks before taking money for the right person. */}
+        <div class="pf-hit__sub">Room ${escHtml(room ? roomText(room) : '#?')} · ${escHtml(rtype?.name||'')} · ${escHtml(t.phone||'No phone')}</div>
       </div>
       <div class="pf-hit__rent">${(() => {
         // t.rent is the per-student override and is empty for everyone priced
@@ -1540,7 +1542,8 @@ function selectStudentForPayment(studentId) {
   const currentMess = c.mess;
   const messOn      = c.messOptIn;
   document.getElementById('f-pstudent').value = studentId;
-  document.getElementById('f-pstudent-search').value = t.name + ' — Room #' + (room?.number||'?');
+  document.getElementById('f-pstudent-search').value =
+    t.name + ' — Room ' + (room ? roomText(room) : '#?');
   document.getElementById('student-search-results').style.display = 'none';
   // f-prent is the redesigned modal's hidden half; f-pamt is the older visible
   // Room Rent box. Fill whichever this modal has.
@@ -2215,7 +2218,7 @@ function showAddPaymentForStudent(studentId) {
       <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">${icon('student','sm')}</div>
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--text)">${escHtml(t.name)}</div>
-        <div style="font-size:11px;color:var(--text3)">Room #${room ? room.number : '—'} · ${room ? getRoomType(room).name : '—'} · ${escHtml(t.phone || '—')}</div>
+        <div style="font-size:11px;color:var(--text3)">Room ${room ? escHtml(roomText(room)) : '—'} · ${room ? escHtml(getRoomType(room).name) : '—'} · ${escHtml(t.phone || '—')}</div>
       </div>
       <div style="margin-left:auto;text-align:right">
         <div style="font-size:13px;font-weight:800;color:${c.configured?'var(--green)':'var(--red)'}">${c.configured?fmtPKR(c.total):'Not configured'}</div>
@@ -3587,7 +3590,8 @@ function showReversePaymentModal(id) {
     `<div class="pay-rev">
        <div class="pay-rev__who">
          <b>${escHtml(p.studentName || '—')}</b>
-         <span>${escHtml(p.month || '—')}${p.roomNumber ? ' · Room #' + escHtml(String(p.roomNumber)) : ''}</span>
+         <span>${escHtml(p.month || '—')}${p.roomNumber ? ' · Room ' + escHtml(roomText(p.roomNumber,
+             ((DB.rooms||[]).find(r=>String(r.number)===String(p.roomNumber))||{}).floor)) : ''}</span>
        </div>
        <div class="pay-rev__box">
          ${line('Collected on this record', fmtPKR(collected))}

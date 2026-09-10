@@ -1435,6 +1435,28 @@ function roomLabel(number, floor) {
        + '</span>';
 }
 
+/**
+ * The same fact as ONE LINE OF PLAIN TEXT — "#12 · G-Floor" — for the places a
+ * room is named inside a sentence rather than given a cell of its own: a
+ * drawer field, a card fact, a search hit's sub-line, a modal title.
+ *
+ * The boxed roomLabel() above cannot go in any of those; it is a two-line
+ * block. Owner, 2026-09-10: "room number vith labelled floor name" — the floor
+ * is the half that tells someone where to WALK, and a hostel with a #3 on
+ * three floors has three of them.
+ *
+ * Returns the em dash when there is no room, so a caller can print it
+ * directly, and just the number when the room has no floor recorded.
+ * PLAIN TEXT, NOT MARKUP — escape it at the call site like any other value.
+ */
+function roomText(number, floor) {
+  const room = (number && typeof number === 'object') ? number : null;
+  const n = room ? room.number : number;
+  const f = floorShort(room ? room.floor : floor);
+  if (!((n === 0 || n) && String(n).trim() !== '')) return '—';
+  return '#' + String(n) + (f ? ' · ' + f : '');
+}
+
 
 /* ════════════════════════════════════════════════════════════════════════════
    "LEFT" AND "ON NOTICE" NAME A DATE — SO PRINT IT (owner, 2026-09-10:

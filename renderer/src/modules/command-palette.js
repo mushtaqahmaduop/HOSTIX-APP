@@ -47,7 +47,9 @@
       }).slice(0, 6).map(function (s) {
         const r = (DB.rooms || []).find(function (x) { return x.id === s.roomId; });
         return {
-          label: s.name || ('#' + s.id), sub: 'Student' + (r ? ' · Room #' + r.number : ''),
+          // The floor rides with the number (owner, 2026-09-10) — two students
+          // in a #3 are told apart by the floor, not by the number.
+          label: s.name || ('#' + s.id), sub: 'Student' + (r ? ' · Room ' + roomText(r) : ''),
           icon: '🎓', kind: 'Open', run: function () { showStudentPanel(s.id); }
         };
       });

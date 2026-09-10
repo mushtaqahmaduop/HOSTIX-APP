@@ -956,7 +956,11 @@ function _stuPanelHtml(t) {
         </div>
         <div class="stu-pan__idmeta">
           <span class="stu-pan__idno">#${id}</span>
-          ${room ? `<span class="stu-pan__roombadge">Room #${escHtml(String(room.number))}${
+          ${''/* The floor rides with the number everywhere a room is named
+                 (owner, 2026-09-10). A hostel with a #3 on three floors has
+                 three of them, and the floor is the half that tells someone
+                 where to walk. */}
+          ${room ? `<span class="stu-pan__roombadge">Room ${escHtml(roomText(room))}${
               rtype ? ' · ' + escHtml(rtype.name) : ''}${
               t.bed ? ' · Bed ' + escHtml(String(t.bed)) : ''}</span>`
                  : '<span class="stu-pan__roombadge is-none">No room assigned</span>'}
@@ -1548,7 +1552,14 @@ function _stuPanelHistory(t) {
   out += shifts.map((sh, i) => {
     const started = shifts[i + 1] ? shifts[i + 1].date : t.joinDate;
     const when = (started ? fmtDate(started) : '?') + ' → ' + (sh.date ? fmtDate(sh.date) : '?');
-    return node('Previous', '', 'Room #' + (sh.fromRoomNumber || '?'),
+    /* The floor rides with the number here too (owner, 2026-09-10). It is
+       looked up from the room list by number rather than stored on the shift —
+       a room does not change floors, and the shift record predates the floor
+       being shown anywhere. An unmatched number simply prints alone. */
+    const fromRoom = (DB.rooms || []).find(r => String(r.number) === String(sh.fromRoomNumber));
+    return node('Previous', '',
+                sh.fromRoomNumber ? 'Room ' + roomText(sh.fromRoomNumber, fromRoom && fromRoom.floor)
+                                  : 'Room #?',
                 sh.reason || '', when);
   }).join('');
 
@@ -2521,7 +2532,7 @@ function showViewStudentModal(id) {
           <div class="svw-hero__tags">
             ${statusBadge(t.status||'Active')}
             ${statusDateText(t)?`<span class="badge badge-gray">${escHtml(statusDateText(t))}</span>`:''}
-            ${room?`<span class="badge badge-blue">Room #${escHtml(String(room.number))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
+            ${room?`<span class="badge badge-blue">Room ${escHtml(roomText(room))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
             <span class="badge badge-gray">${escHtml(t.paymentMethod||'Cash')}</span>
           </div>
         </div>
@@ -2643,8 +2654,14 @@ function showViewStudentModal(id) {
           <thead><tr><th>Date</th><th>From Room</th><th>To Room</th><th>Old Rent</th><th>New Rent</th><th>Reason</th></tr></thead>
           <tbody>${shifts.map(s=>`<tr>
             <td class="svw-t__date">${fmtDate(s.date)}</td>
-            <td><span class="badge badge-gray">Rm #${escHtml(String(s.fromRoomNumber))}</span></td>
-            <td><span class="badge badge-blue">Rm #${escHtml(String(s.toRoomNumber))}</span></td>
+            ${''/* Both rooms carry their floor (owner, 2026-09-10) — a shift
+                   between two rooms numbered 3 is otherwise a row that says
+                   nothing moved. The floor is looked up by number; a room does
+                   not change floors. */}
+            <td><span class="badge badge-gray">Rm ${escHtml(roomText(s.fromRoomNumber,
+                  ((DB.rooms||[]).find(r=>String(r.number)===String(s.fromRoomNumber))||{}).floor))}</span></td>
+            <td><span class="badge badge-blue">Rm ${escHtml(roomText(s.toRoomNumber,
+                  ((DB.rooms||[]).find(r=>String(r.number)===String(s.toRoomNumber))||{}).floor))}</span></td>
             <td class="svw-t__num is-muted">${fmtPKR(s.oldRent)}</td>
             <td class="svw-t__num">${fmtPKR(s.newRent)}</td>
             <td class="svw-t__reason">${escHtml(s.reason||'—')}</td>
@@ -2982,7 +2999,7 @@ function printStudentCard(id) {
       <div class="hero__no">#${escHtml(String(t.id))}</div>
       <div class="chips">
         <span class="chip ${t.status === 'Active' ? 'chip--ok' : 'chip--plain'}">${escHtml(t.status || 'Active')}</span>
-        ${room ? `<span class="chip chip--room">Room #${escHtml(String(room.number))} · ${escHtml(rtype ? rtype.name : '')}</span>` : ''}
+        ${room ? `<span class="chip chip--room">Room ${escHtml(roomText(room))} · ${escHtml(rtype ? rtype.name : '')}</span>` : ''}
         ${t.paymentMethod ? `<span class="chip chip--plain">${escHtml(t.paymentMethod)}</span>` : ''}
       </div>
     </div>
@@ -3735,7 +3752,8 @@ function formerStudentSearch(query) {
             ${s.fatherName?`<div style="font-size:11px;color:var(--text3)">👨 ${escHtml(s.fatherName)}</div>`:''}
             ${s.email?`<div style="font-size:11px;color:var(--text3)">✉️ ${escHtml(s.email)}</div>`:''}
             ${s.occupation?`<div style="font-size:11px;color:var(--text3)">💼 ${escHtml(s.occupation)}</div>`:''}
-            ${(s.lastRoom||s.roomNumber)?`<div style="font-size:11px;color:var(--accent-strong);font-weight:600">🏠 Former Rm #${escHtml(String(s.lastRoom||s.roomNumber||'—'))}</div>`:''}
+            ${(s.lastRoom||s.roomNumber)?`<div style="font-size:11px;color:var(--accent-strong);font-weight:600">🏠 Former Rm ${escHtml(roomText(s.lastRoom||s.roomNumber,
+                  ((DB.rooms||[]).find(r=>String(r.number)===String(s.lastRoom||s.roomNumber))||{}).floor))}</div>`:''}
             ${s.leftDate?`<div style="font-size:11px;color:var(--red)">📅 Left: ${fmtDate(s.leftDate)}</div>`:''}
           </div>
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px">

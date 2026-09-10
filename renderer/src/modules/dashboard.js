@@ -3654,7 +3654,9 @@ function dashGlobalSearch(query) {
   // Search students: name, father name, CNIC, phone, address, city
   DB.students.forEach(function(s) {
     var room = DB.rooms.find(function(r){ return r.id === s.roomId; });
-    var roomLabel = room ? '#' + room.number : '—';
+    // The floor rides with the number (owner, 2026-09-10). It joins the
+    // haystack too, so "g-floor" is now a search a warden can actually run.
+    var roomLabel = room ? roomText(room) : '—';
     var haystack = [s.id, s.name, s.fatherName, s.cnic, s.phone, s.emergencyContact, s.email, s.occupation, s.address, s.city, s.permanentAddress, roomLabel].filter(Boolean).join(' ').toLowerCase();
     if (haystack.includes(q)) {
       results.push({
@@ -3675,7 +3677,7 @@ function dashGlobalSearch(query) {
     if (haystack.includes(q)) {
       results.push({
         type: 'room', icon: ICONS.bed,
-        title: 'Room #' + r.number,
+        title: 'Room ' + roomText(r),
         sub: (type ? type.name : '') + ' · ' + r.floor + ' Floor · ' + occ + '/' + (type ? type.capacity : 1) + ' filled',
         badge: '<span class="badge" style="' + (occ >= (type ? type.capacity : 1) ? 'background:var(--bg4);border:1px solid var(--border);color:var(--text3)' : 'background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);color:var(--accent-strong)') + '">' + (occ >= (type ? type.capacity : 1) ? 'Full' : 'Available') + '</span>',
         action: "showRoomDetail('" + r.id + "')"

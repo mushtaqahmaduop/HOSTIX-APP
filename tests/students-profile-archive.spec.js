@@ -103,12 +103,18 @@ test('the students table states the whole agreement, not the rent half', async (
      included" no longer print under the total, because the warden reading this
      table is the one who set those figures in Settings.
 
+     AND THE TITLE LOST THE SPLIT TOO (owner, 2026-09-10): "remove this line
+     PKR 10,000 rent + PKR 7,000 mess from all pdfs and excel vhere it is
+     mentioned and simply use rent+mess or Rent only or Mess only label
+     globally". The title now carries the plan name and nothing else, which is
+     what that instruction asked for; the two assertions that read the split
+     out of it were left behind by that change and are corrected below.
+
      THE GUARANTEE THIS TEST EXISTS FOR IS UNCHANGED, and that is why it was
      rewritten rather than deleted: the table must state the WHOLE agreement,
      never the rent half. The total is still both halves and the badge still
-     names the plan — the split simply moved to the cell's title, where it is
-     available without costing a line on every row. If a future change makes
-     this column print rent alone, these assertions still fail. */
+     names the plan. If a future change makes this column print rent alone,
+     line 122 still fails. */
   const rows = await win.$$eval('.stu-table tbody tr', trs => trs.map(tr => ({
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
@@ -121,9 +127,11 @@ test('the students table states the whole agreement, not the rent half', async (
   // Rent AND mess: the total is both halves, and the badge says so.
   expect(by('Both Charges').charge).toContain('14,500');       // 8,000 + 6,500
   expect(by('Both Charges').cover.trim()).toBe('Rent + Mess');
-  // The split is still reachable, on the title rather than on a second line.
-  expect(by('Both Charges').title).toContain('6,500 mess');
-  expect(by('Both Charges').title).toContain('8,000 rent');
+  // The title names the plan and does NOT restate the two figures — that
+  // string was removed everywhere it appeared, on the owner's instruction.
+  expect(by('Both Charges').title).toBe('Rent + Mess');
+  expect(by('Both Charges').title).not.toContain('6,500');
+  expect(by('Both Charges').title).not.toContain('8,000');
 
   // Mess configured but switched off: the rent alone, and the badge is the
   // thing that distinguishes this from a hostel that serves no food.

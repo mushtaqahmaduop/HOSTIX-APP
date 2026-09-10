@@ -229,7 +229,10 @@ function renderFormerStudents() {
       <select class="lk-select${formerFilter.room !== 'All' ? ' is-set' : ''}"
               onchange="formerFilter.room=this.value;formerFilter.page=1;renderPage('former')" title="Filter by the room they had">
         <option value="All">All rooms</option>
-        ${rooms.map(r => `<option value="${escHtml(r)}" ${formerFilter.room === r ? 'selected' : ''}>Room #${escHtml(r)}</option>`).join('')}
+        ${/* The floor rides with the number (owner, 2026-09-10) — the VALUE is
+              still the bare number the filter matches on; only the label
+              gains it, so an existing saved filter keeps working. */''}
+        ${rooms.map(r => `<option value="${escHtml(r)}" ${formerFilter.room === r ? 'selected' : ''}>Room ${escHtml(roomText(r, ((DB.rooms||[]).find(x => String(x.number) === String(r)) || {}).floor))}</option>`).join('')}
       </select>
 
       <select class="lk-select${formerFilter.dues !== 'All' ? ' is-set' : ''}"

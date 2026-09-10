@@ -684,7 +684,8 @@ function showArchiveStudent(studentId) {
       <div class="arc-sd-av">${escHtml(initials)}</div>
       <div>
         <div class="arc-sd-n">${escHtml(s.name || '—')}</div>
-        <div class="arc-sd-s">${escHtml(s.fatherName ? 'S/O ' + s.fatherName + ' · ' : '')}${room ? 'Room #' + escHtml(String(room.number)) : 'No room'} · ${escHtml(label)}</div>
+        ${''/* The floor rides with the number (owner, 2026-09-10). */}
+        <div class="arc-sd-s">${escHtml(s.fatherName ? 'S/O ' + s.fatherName + ' · ' : '')}${room ? 'Room ' + escHtml(roomText(room)) : 'No room'} · ${escHtml(label)}</div>
       </div>
       <div style="margin-left:auto">${statusBadge(s.status)}</div>
     </div>
@@ -934,7 +935,7 @@ function printArchiveStudent(studentId) {
     facts: [
       ['Student', s ? s.name : ''],
       ['Father / Guardian', s ? s.fatherName : ''],
-      ['Room', room ? '#' + room.number : ''],
+      ['Room', room ? roomText(room) : ''],
       ['Phone', s ? s.phone : ''],
       // Masked in the export, like every other printed CNIC (owner, 2026-09-10).
       ['CNIC', s ? maskCnic(s.cnic) : ''],

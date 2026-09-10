@@ -135,7 +135,8 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // ── AVAILABLE FUND ─────────────────────────────────────────────────────────
   if (id === 'netprofit') {
     const allItems = [
-      ...pays.filter(p=>p.status==='Paid').map(p=>({date:p.date,label:escHtml(p.studentName||'—'),desc:'Room #'+escHtml(p.roomNumber||'')+' · '+escHtml(p.month||''),amount:Number(p.amount),type:'income'})),
+      /* The floor rides with the number (owner, 2026-09-10). */
+      ...pays.filter(p=>p.status==='Paid').map(p=>({date:p.date,label:escHtml(p.studentName||'—'),desc:'Room '+escHtml(roomText(p.roomNumber,((DB.rooms||[]).find(r=>String(r.number)===String(p.roomNumber))||{}).floor))+' · '+escHtml(p.month||''),amount:Number(p.amount),type:'income'})),
       ...exps.map(e=>({date:e.date,label:escHtml(e.category||'Expense'),desc:escHtml(e.description||'—'),amount:Number(e.amount),type:'expense'}))
     ].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const _pg = paginate(allItems, reportDetailFilter);
