@@ -91,15 +91,29 @@
        --font-mono is unchanged and stays JetBrains Mono -- it is the CODE
        face (licence keys, machine ids), which is a different job from either
        body text or numerals. */
-    /* §2 — ONE FAMILY. Inter leads both stacks now; Barlow and Barlow
-       Condensed stay behind it because they are bundled, so a face that fails
-       to load still lands on a real bundled font rather than on whatever the
-       OS happens to have. --font-display is no longer a DIFFERENT family, only
-       the same one used at display sizes: the spec rules out mixing two
-       unrelated sans-serifs, and a condensed face beside a normal one is
-       exactly that. */
+    /* §2 said ONE FAMILY, and --font-display was set to the same stack as
+       --font so that "display" meant only "the UI face, larger".
+
+       THE OWNER'S ENTERPRISE DIRECTION OF 2026-09-10 SUPERSEDES THAT. §8 asks
+       for "1 primary UI family + 1 optional display family + deliberate numeral
+       styling", and §3 for typographic roles with "clearly different
+       personalities". One face at two sizes cannot give a page an identity —
+       which the audit measured: 84% of all visible text on the average page sat
+       inside a four-pixel band, and the largest text on Rooms was 1.9× the
+       smallest.
+
+       OUTFIT IS THE DISPLAY FACE. It is already bundled (vendor/fonts.css, a
+       variable font covering 400–900), so nothing is fetched and the CSP is
+       untouched. It is GEOMETRIC where Inter is neo-grotesque — a real pairing
+       rather than the "two unrelated sans-serifs" the old note warned about,
+       which was written when the alternative was Barlow Condensed sitting
+       beside Barlow.
+
+       It is used ONLY for page titles, KPI figures and document headings. Body,
+       tables, forms and controls stay on Inter: a display face in a data table
+       is how a product stops being readable. */
     --font:          'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
-    --font-display:  'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    --font-display:  'Outfit', 'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
 
     /* §3 — the weight set, named so screens stop reaching past it. 800 and 900
        are deliberately absent: the spec says hierarchy comes from size, weight,
@@ -1019,17 +1033,11 @@ input, select, textarea { font-family: var(--font); }
 /* ══════════════════════════════════════════════════════════════════════════
    HEADER
    ══════════════════════════════════════════════════════════════════════════ */
-.hdr-left .page-title {
-    font-family: var(--font-display);
-    font-size: 16px;
-    color: var(--text);
-}
-
-.hdr-left .page-sub {
-    font-size: 11.5px;
-    color: var(--text3);
-    margin-top: 1px;
-}
+/* The page title and subtitle are declared ONCE, in chrome.css, at
+   `#header .page-title`. The two `.hdr-left` copies that stood here and at the
+   foot of this file never applied — ID specificity beats a class whatever the
+   source order — and three rules for one element is how a size gets changed in
+   the wrong file and appears not to change at all. */
 
 .hdr-right {
     display: flex;
@@ -3638,6 +3646,22 @@ body.light-theme .stat-card.glass {
     display: inline-flex; flex-direction: column; align-items: flex-start;
     gap: 0; line-height: 1.02;
 }
+/* THE DISPLAY FIGURE IS SET IN THE DISPLAY FACE (owner's enterprise direction,
+   §20: "the number should dominate", §8's "deliberate numeral styling").
+
+   Only at display size. Outfit's geometric figures have more presence at 25px
+   than Inter's, which is what a KPI wants; at 12px in a table they would be
+   less legible than Inter's, which is what a register wants. So this override
+   is scoped to the --display modifier and nothing else — every other figure in
+   the app keeps --ant-num-font.
+
+   Tabular is inherited from .money-value and matters more here than anywhere:
+   six KPI tiles whose digits do not line up read as six different sizes. */
+.money-value--display .money-amt {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
 .money-value--display .money-cur { font-size: 0.34em; line-height: 1.35; }
 .money-value--section  { font-size: var(--fs-section); font-weight: var(--fw-section); }
 .money-value--body     { font-size: var(--fs-body); }
@@ -4647,23 +4671,15 @@ body.light-theme .settings-tab.active::after {
     background: var(--accent);
 }
 
-/* ── PAGE TITLE — display face, from --font-display ──────────────────────── */
-.hdr-left .page-title {
-    font-family: var(--font-display);
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.2px;
-    color: var(--text);
-}
+/* THE PAGE TITLE RULES THAT STOOD HERE ARE GONE (2026-09-10).
 
-.hdr-left .page-sub {
-    font-size: 11px;
-    color: var(--text3);
-    font-weight: 400;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-top: 1px;
-}
+   They set 16px/700 and an uppercase tracked subtitle, and they had never
+   applied: chrome.css declares `#header .page-title`, which is ID specificity
+   and beats `.hdr-left .page-title` whatever the source order. Two rules for
+   one element, one of them dead — the trap this file's own header warns about.
+
+   The live pair is in chrome.css and carries the enterprise scale: 26px in the
+   display face over a sentence-case 400-weight subtitle. */
 
 /* ── STITCH STATUS DOTS ──────────────────────────────────────────────────── */
 .status-dot {

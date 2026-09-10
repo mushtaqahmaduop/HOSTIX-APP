@@ -357,13 +357,35 @@ body.light-theme #header {
     backdrop-filter: none;
 }
 
+/* ── THE PAGE TITLE IS THE PAGE'S IDENTITY ───────────────────────────────────
+   Owner's enterprise direction, §10: "The title should immediately establish
+   page identity" — a confident enterprise scale, neither a marketing headline
+   nor something that reads as an ordinary table label.
+
+   It was 20px/800 in the UI face, which is only 1.5× the 13px body around it
+   and the same weight as half the labels on the screen. At 26px in the display
+   face against a 400-weight sentence-case subtitle it is unambiguously the
+   first thing read, which is what §47 asks of every screen.
+
+   TIGHT TRACKING, NOT MORE WEIGHT. §7 warns against solving hierarchy by making
+   everything heavier; 700 in Outfit at 26px already outweighs anything else in
+   the chrome, and -0.02em keeps a long title like "Backup & Restore" from
+   sprawling across the header. */
 .hdr-title-wrap { min-width: 0; }
 #header .page-title {
-    font-size: 20px; font-weight: 800; letter-spacing: -.02em;
-    color: var(--text); line-height: 1.2;
+    font-family: var(--font-display);
+    font-size: 26px; font-weight: 700; letter-spacing: -.022em;
+    color: var(--text); line-height: 1.15;
 }
+/* SENTENCE CASE, NOT UPPERCASE (§6). The subtitle is a human sentence — "Manage
+   hostel payments, dues and financial records" — and setting it in tracked
+   capitals is what makes an interface read as an admin template. Uppercase is
+   for very small utility labels; this is not one. Weight 400 is the quiet
+   register the audit found the app had almost none of: 9% of all type. */
 #header .page-sub {
-    font-size: 12px; font-weight: 400; color: var(--text3); margin-top: 2px;
+    font-size: 12.5px; font-weight: 400; letter-spacing: 0;
+    text-transform: none;
+    color: var(--text3); margin-top: 3px;
 }
 
 /* The hamburger (#sidebar-toggle) and the Back button (#hdr-back-btn) were

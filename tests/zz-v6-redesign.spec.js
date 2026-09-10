@@ -130,17 +130,30 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   }
   console.log('STUDENT ' + JSON.stringify(student));
 
-  // ── 4. Backup & Restore modal ──────────────────────────────────────────────
+  /* ── 4. Backup & Restore ────────────────────────────────────────────────────
+     IT IS A PAGE NOW, not a modal. It was the only item in the rail's SYSTEM
+     group that opened a dialog, and a dialog is the wrong container for a stat
+     strip, two histories and a settings surface. showBackupRestoreModal() is
+     kept — the command palette and two menu items still call it — and opens the
+     page instead.
+
+     So `.bkp*` never appears and this had been waiting 30 seconds for a class
+     the app stopped rendering. The page's own prefix is `bk-`, and the assertion
+     is stronger for being on a page: a modal could be measured while empty, a
+     page cannot. */
   await win.evaluate(() => showBackupRestoreModal());
-  await win.waitForSelector('.bkp');
+  await win.waitForSelector('.bk-body', { timeout: 15000 });
   const backup = await win.evaluate(() => ({
-    stats: document.querySelectorAll('.bkp-stat').length,
-    secs:  document.querySelectorAll('.bkp-sec').length,
-    last:  document.querySelector('.bkp-last')?.innerText.trim(),
-    warn:  !!document.querySelector('.bkp-warn'),
+    stats: document.querySelectorAll('.bk-stat').length,
+    head:  document.querySelector('.bk-head__t')?.innerText.trim(),
+    warn:  !!document.querySelector('.bk-warn'),
+    renderError: document.getElementById('content').innerText.includes('Render Error'),
   }));
   console.log('BACKUP ' + JSON.stringify(backup));
-  await win.evaluate(() => closeModal());
+  expect(backup.renderError, 'the backup page threw').toBe(false);
+  expect(backup.stats, 'the backup page lost its stat strip').toBeGreaterThan(0);
+  expect(backup.head).toMatch(/Backup/i);
+  expect(backup.warn, 'the restore-replaces-everything warning is gone').toBe(true);
 
   // ── 5. Reports → Monthly Overview ──────────────────────────────────────────
   // The throwaway profile has no ledger, so seed one paid month and one expense

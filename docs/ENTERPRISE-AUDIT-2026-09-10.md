@@ -26,8 +26,8 @@ measurable, not a matter of taste:
   Right-click → Properties on a paying customer's machine does not say Hostyllo.
 * **The 32-bit installer ships a database binding that cannot load** unless one
   undocumented-by-default step is run first.
-* **Dark mode's surface ladder is inverted** relative to light mode, and its two
-  muted text tiers are on opposite colour temperatures.
+* **The sunk surface tier is invisible in light mode** — two points off white —
+  so the layered surface model §14 asks for has one rung that does not render.
 
 Ranked findings follow. P1 is "a customer sees this"; P2 is "it undermines the
 premium claim"; P3 is worth doing.
@@ -205,33 +205,47 @@ dashboard alone, 27 on Students, 26 on Payments. §6: uppercase is for very smal
 utility labels, not for every section heading and every card title. Rooms,
 Settings and Support already use none, which shows the app does not need them.
 
-### P2-5 · Dark mode's surface ladder is inverted, and its greys disagree
+### P2-5 · Dark mode's three text tiers are not on one temperature axis
 
 Read live from both themes:
 
 | token | light | dark |
 |---|---|---|
 | `--bg` | `#F5F6F9` | `#181715` |
-| `--card` | `#FFFFFF` — brightest | `#1F1E1B` — nearly darkest |
-| `--bg3` | `#E7EBF2` | `#252320` — lighter than the card |
-| `--bg4` | `#DCE1EA` | `#2F2C28` — lighter still |
+| `--card` | `#FFFFFF` | `#1F1E1B` |
+| `--bg3` | `#E7EBF2` | `#252320` |
+| `--bg4` | `#DCE1EA` | `#2F2C28` |
 | `--dash-sunk` | `#FAFBFD` | `rgba(255,255,255,.055)` |
+| `--text` | `#17233A` cool | `#E7EAF0` cool |
 | `--text2` | `#52627A` cool | `#A8B0BE` cool |
 | `--text3` | `#677187` cool | `#A09D96` **warm** |
 
-Three separate problems:
+**A correction to my own first reading, recorded rather than quietly removed.**
+I initially wrote this up as an inverted surface ladder, on the grounds that
+`--bg3`/`--bg4` sit *above* `--card` in dark and *below* it in light. That is
+wrong. Those two are progress tracks and hover grounds, not content surfaces —
+and a track has to be visible against the card it sits on, which means darker
+than the card on white and lighter than the card on black. The ladder is
+consistent; I had mistaken utility fills for surface tiers.
 
-1. **The ladder inverts.** In light mode the primary content surface is the
-   brightest thing on screen; in dark mode it is darker than two utility
-   surfaces above it. §16 asks for deep background → elevated surface →
-   stronger surface for focused content. Dark mode currently runs that
-   backwards.
-2. **The two muted text tiers are on opposite temperature axes** — `--text2`
-   cool, `--text3` warm — against a warm neutral ladder and a cool blue accent.
-   That is what makes the dark theme read muddy rather than layered.
-3. **`--dash-sunk` is an opaque hex in one theme and a translucent white overlay
-   in the other**, so the same token composites differently depending on what is
-   behind it.
+What does stand: **the dark theme's three text tiers run cool, cool, warm**,
+over a deliberately warm neutral ladder and under a cool blue accent. `--text3`
+is warm for a documented reason — the cool value it replaced measured 4.18:1 on
+`--card`, below AA for the 9.5–12px metadata it carries, and it was lifted until
+it cleared 4.5:1. So this is a real coherence question with a real constraint
+behind it, not a slip.
+
+There is headroom to resolve it either way: the current `#A09D96` measures
+**6.16:1** on `#1F1E1B`, and a cool grey of the same lightness — `#98A0AE` —
+measures **6.33:1**. So the tier can be brought onto the same axis as its two
+siblings without touching contrast at all. **Whether it should is the owner's
+call**, because the alternative reading is equally defensible: warm text on a
+warm ground, with the cool primary and the cool accent as the deliberate
+contrast. Flagged, not unilaterally changed.
+
+Separately: **`--dash-sunk` is an opaque hex in one theme and a translucent
+white overlay in the other**, so the same token composites differently depending
+on what is behind it.
 
 ### P2-6 · `--dash-sunk` is invisible in light mode
 

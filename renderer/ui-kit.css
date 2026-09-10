@@ -54,11 +54,20 @@ body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#E
    separation). This comment named --card as "#151C2B"; that was the navy card
    and it is #1F1E1B now. The value is not repeated here again on purpose.
 
-   Light is the reference system's --surface-sunk (#FAFBFD) rather than the
-   #f6f7f9 that was here: a hair lighter and a hair cooler, so a sunk well
-   inside a white card no longer reads as grey against the #F5F6F9 page. */
+   Light was the reference system's --surface-sunk (#FAFBFD), chosen so a sunk
+   well inside a white card would not read as grey against the #F5F6F9 page.
+   Sound reasoning, wrong value: #FAFBFD is TWO POINTS off #FFFFFF, and the
+   2026-09-10 enterprise audit measured the consequence — the sunk tier of §14's
+   layered surface model does not render at all on a normal monitor. Every
+   register's odd-row tint, every inner track and every sunk well was being
+   drawn in a colour indistinguishable from the card it sits in.
+
+   #F7F8FB is four times the separation from the card and still sits ABOVE the
+   page ground on all three channels (247/248/251 against 245/246/249), so the
+   original property is kept: a well inside a white card is lighter than the
+   workspace behind the card, never darker. */
 :root            { --dash-sunk:rgba(255,255,255,.055); --dash-track:rgba(255,255,255,.10); }
-body.light-theme { --dash-sunk:#FAFBFD;                --dash-track:#E7EBF2;              }
+body.light-theme { --dash-sunk:#F7F8FB;                --dash-track:#E7EBF2;              }
 
 /* ── Numerals ────────────────────────────────────────────────────────────────
    style.css sets the shared money component in --font-mono, which rendered
