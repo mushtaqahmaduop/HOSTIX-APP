@@ -3708,9 +3708,16 @@ function dashGlobalSearch(query) {
     });
   });
 
-  // Payments by student name
+  /* Payments by student name — OR BY RECEIPT NUMBER (owner, 2026-09-10:
+     "receipt number vhich is on the receipt and also from recipt"). A student
+     comes back holding a slip with RCP-000123 printed on it, and that is often
+     the only thing they can tell you. A receipt hit is not deduplicated by
+     student the way a name hit is: the number identifies ONE record, and
+     opening the payments page filtered to it is the whole answer. */
   var payHits = [];
   DB.payments.forEach(function(p) {
+    var byReceipt = String(p.receiptNo || '').toLowerCase().includes(q);
+    if (byReceipt) { payHits.push(p); return; }
     if ((p.studentName || '').toLowerCase().includes(q)) {
       if (!payHits.find(function(x){ return x.studentId === p.studentId; })) {
         payHits.push(p);
@@ -3718,12 +3725,21 @@ function dashGlobalSearch(query) {
     }
   });
   payHits.slice(0, 3).forEach(function(p) {
+    var hitByReceipt = String(p.receiptNo || '').toLowerCase().includes(q);
+    var term = hitByReceipt ? String(p.receiptNo) : (p.studentName || '');
     results.push({
       type: 'payment', icon: ICONS.card,
       title: p.studentName || '—',
-      sub: p.month + ' · ' + (p.status === 'Paid' ? 'Paid' : 'Pending') + ' · ' + fmtPKR(p.amount),
+      sub: (hitByReceipt ? p.receiptNo + ' · ' : '')
+         + p.month + ' · ' + (p.status === 'Paid' ? 'Paid' : 'Pending') + ' · ' + fmtPKR(p.amount),
       badge: statusBadge(p.status),
-      action: "payFilter.search='" + (p.studentName||'').replace(/'/g, "\\'") + "';navigate('payments')"
+      /* A receipt jump also drops the month scope. The payments page opens on
+         the current month, and a slip from March would land the warden on an
+         empty table with their own search term in the box — which reads as
+         "no such receipt". */
+      action: "payFilter.search='" + term.replace(/'/g, "\\'") + "';"
+            + (hitByReceipt ? "payFilter.month='All';" : "")
+            + "navigate('payments')"
     });
   });
 

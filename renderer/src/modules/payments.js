@@ -415,7 +415,12 @@ function payFiltered() {
     if (payFilter.search) {
       const q = payFilter.search.toLowerCase();
       const st = DB.students.find(s => s.id === p.studentId);
+      /* RECEIPT NUMBER IS SEARCHABLE (owner, 2026-09-10: "receipt number vhich
+         is on the receipt and also from recipt"). A student comes back with a
+         paper slip and RCP-000123 on it; that number has to find the record
+         that produced it, or it is decoration. */
       const hay = [p.studentName, String(p.roomNumber), p.month, p.method, p.status,
+                   p.receiptNo,
                    st?.fatherName, st?.cnic, st?.phone, st?.email];
       if (!hay.some(f => f && String(f).toLowerCase().includes(q))) return false;
     }
@@ -590,7 +595,10 @@ function renderPayments() {
     <div class="pay-tools">
       <div class="pay-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-payments" class="lk-sin" placeholder="Search student name, room…" value="${escHtml(payFilter.search)}"
+        ${''/* The placeholder names the receipt number because that is the one
+               searchable field a warden would never guess is searchable — it
+               is printed on paper, not shown in this table. */}
+        <input id="search-payments" class="lk-sin" placeholder="Search student, room, receipt #…" value="${escHtml(payFilter.search)}"
           oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments()">
         ${lkSearchX('search-payments','payFilter','payments')}
       </div>

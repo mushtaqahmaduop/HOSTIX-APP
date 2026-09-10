@@ -231,7 +231,12 @@ test('monthly charge is derived from Settings and arrears post to their own mont
     return {
       recorded: aug.arrearsCollected,
       hasBlock: /Arrears Received/.test(text),
-      total: (text.match(/TOTAL RECEIVED[^P]*PKR [\d,]+/) || ['(missing)'])[0].replace(/\.+/, ' … '),
+      /* `Rs.`, not `PKR` — the currency word changed on 2026-09-10 ("remove
+         PKR from everywhere and use Rs.") and this regex was left pinning the
+         old one, so it matched nothing and reported "(missing)". The fact
+         being checked is unchanged: the line after TOTAL RECEIVED is the whole
+         visit, not just this month's half. */
+      total: (text.match(/TOTAL RECEIVED[^R]*Rs\. [\d,]+/) || ['(missing)'])[0].replace(/\.+/, ' … '),
     };
   });
   console.log('[receipt] ' + JSON.stringify(rcpt));

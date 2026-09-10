@@ -141,7 +141,15 @@ test('months do not mix, names stay in sync, arrears carry forward, mess bills s
     // Pretend "now" is August 2026 via the dashboard month selector, which is
     // what thisMonth() reads.
     _dashboardMonth = '2026-08';
-    payFilter.month = 'All'; payFilter.showAll = false; payFilter.search = '';
+    /* THE SCOPE IS AUGUST, NOT "All" — which is what the line above always
+       meant to say. The arrears toggle carries an unpaid EARLIER month forward
+       into the month being looked at, so with no month scope at all there is
+       nothing to carry it into and the toggle correctly does nothing; the
+       assertions below were passing against a rule that has since been made
+       consistent for every month, hand-picked ones included. Setting the month
+       the test is simulating puts the toggle back in charge of the outcome it
+       is here to check. */
+    payFilter.month = '2026-08'; payFilter.showAll = false; payFilter.search = '';
     payFilter.room = 'All'; payFilter.method = 'All'; payFilter.status = 'All';
     payFilter.unpaidOnly = false; payFilter.page = 1;
 

@@ -149,6 +149,68 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
   expect(receipt, 'receipt has a doubled currency prefix').not.toContain('Rs. Rs.');
   expect(receipt, 'PKR is back on a receipt').not.toContain('PKR');
 
+  /* ── WHAT THE OWNER TOOK OFF THE SLIP, 2026-09-10 ────────────────────────
+     "remove payment history and student signing area and success and pending
+     emojis, and laos use hostel logo on it above."
+
+     Each of these is a thing that was on the receipt and is not any more, so
+     each is asserted as an absence. A slip that starts re-growing them is the
+     regression this guards. */
+  expect(receipt, 'the payment history section is back on the receipt')
+    .not.toContain('Payment History');
+  expect(receipt, 'the instalment list is back under another name')
+    .not.toContain('Recorded Instalments');
+  expect(receipt, 'the student signature block is back').not.toContain('Student Signature');
+  expect(receipt, 'the success emoji is back on the status row').not.toContain('✅');
+  expect(receipt, 'the pending emoji is back on the status row').not.toContain('⏳');
+  // The hostel still signs it — that is the half that attests anything.
+  expect(receipt, 'the warden signature line was removed too').toContain('Authorized Warden');
+
+  /* THE LOGO COMES FROM DB.settings.logo. It was read from a localStorage key
+     that Hostel Info stopped writing, so the block was never entered and no
+     receipt had carried a logo since that move. */
+  const withLogo = await win.evaluate((pid) => {
+    DB.settings.logo = 'data:image/png;base64,iVBORw0KGgo=';
+    return buildReceiptHTML(pid);
+  }, over.id);
+  expect(withLogo, 'the hostel logo is not on the receipt')
+    .toContain('data:image/png;base64,iVBORw0KGgo=');
+
+  /* THE RECEIPT NUMBER IS ON THE RECEIPT, and it is spent when the receipt is
+     OPENED rather than when it is printed — a warden copying the number into a
+     register was copying the word PREVIEW. Opening it twice must not spend a
+     second number. */
+  const nums = await win.evaluate((pid) => {
+    printReceipt(pid);
+    const first = (DB.payments.find(p => p.id === pid) || {}).receiptNo;
+    const counterAfterFirst = DB.settings.receiptCounter;
+    closeModal();
+    printReceipt(pid);
+    const second = (DB.payments.find(p => p.id === pid) || {}).receiptNo;
+    const html = document.getElementById('rc-print')
+      ? document.getElementById('rc-print').outerHTML : '';
+    closeModal();
+    return { first, second, counterAfterFirst,
+             counterAfterSecond: DB.settings.receiptCounter,
+             onSlip: html.indexOf(first) !== -1, saysPreview: html.indexOf('PREVIEW') !== -1 };
+  }, over.id);
+  expect(nums.first, 'no receipt number was assigned when the receipt opened').toMatch(/^RCP-\d{6}$/);
+  expect(nums.second, 'reopening the receipt renumbered it').toBe(nums.first);
+  expect(nums.counterAfterSecond, 'reopening the receipt spent a second number')
+    .toBe(nums.counterAfterFirst);
+  expect(nums.onSlip, 'the receipt number is not printed on the receipt').toBe(true);
+  expect(nums.saysPreview, 'the receipt still says PREVIEW where its number goes').toBe(false);
+
+  /* …AND IT FINDS THE RECORD AGAIN. A student comes back holding the slip;
+     the number on it has to be a way into the payment. */
+  const found = await win.evaluate((rno) => {
+    payFilter.search = rno;
+    payFilter.month  = 'All';
+    return payFiltered().length;
+  }, nums.first);
+  expect(found, 'searching the payments register by receipt number found nothing')
+    .toBeGreaterThan(0);
+
   await app.close();
 });
 

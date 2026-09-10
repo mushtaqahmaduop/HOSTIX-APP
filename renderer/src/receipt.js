@@ -74,13 +74,29 @@ function buildReceiptHTML(payId) {
   var phone     = DB.settings.phone        || '';
   var email     = DB.settings.email        || '';
   var location  = DB.settings.location     || '';
-  var logoData  = localStorage.getItem('hostel_logo_' + (_ACTIVE_HOSTEL || 'hostel_1')) || '';
+  /* THE LOGO IS DB.settings.logo (owner, 2026-09-10: "laos use hostel logo on
+     it above"). It was already drawn above the hostel name — from a
+     localStorage key that stopped being written when Hostel Info moved the
+     upload into the database, so the block was simply never entered and no
+     receipt has carried a logo since. The old key is still read as a fallback
+     for an install that has one and has not re-uploaded. */
+  var logoData  = (DB.settings && DB.settings.logo)
+    || localStorage.getItem('hostel_logo_' + (typeof _ACTIVE_HOSTEL !== 'undefined' && _ACTIVE_HOSTEL ? _ACTIVE_HOSTEL : 'hostel_1'))
+    || '';
 
   var now2      = new Date().toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' });
   var nowTime   = new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit', hour12:true });
 
-  // [FIX-R1] Use EXISTING receiptNo if already assigned, otherwise show placeholder.
-  // Counter is only assigned on finalize — NOT here.
+  /* THE NUMBER IS ASSIGNED WHEN THE RECEIPT IS OPENED, not when it is printed
+     (owner, 2026-09-10: "receipt number vhich is on the receipt and also from
+     recipt"). It used to read "PREVIEW" until the warden pressed Print, which
+     is not a receipt number — and a warden reading a number off the screen to
+     write in a register was reading the word PREVIEW.
+
+     This does NOT reintroduce the counter gaps FIX-R1 was written for.
+     _assignReceiptNo() reuses p.receiptNo, so a payment is numbered ONCE, no
+     matter how many times its receipt is opened, printed or reprinted. What
+     changes is only WHEN that one number is spent. */
   var receiptNo = p.receiptNo || 'PREVIEW';
 
   var studentId  = (student && student.id) ? student.id.slice(-8).toUpperCase() : receiptNo;
@@ -142,8 +158,13 @@ function buildReceiptHTML(payId) {
   html += '<div style="padding:4px 22px 8px">';
   html += secLabel('Student Details');
   html += dotRow('Name',      escHtml(p.studentName || '—'));
-  html += dotRow('Room No',   '#' + (room ? room.number : '—'));
-  html += dotRow('Month',     escHtml(p.month || '—'));
+  html += dotRow('Room No',   escHtml(room ? roomText(room)
+                                            : roomText(p.roomNumber,
+                                                ((DB.rooms||[]).find(function(r){ return String(r.number)===String(p.roomNumber); })||{}).floor)));
+  /* "September 2026", not "2026-09". Newer records store the month as a key
+     and older ones as a label; monthLabel() reads both and prints the one a
+     student can read off a slip. */
+  html += dotRow('Month',     escHtml(p.month ? monthLabel(p.month) : '—'));
   html += dotRow('Phone',     escHtml((student && student.phone) || '—'));
   html += dotRow('Admission', fmtDate(student && student.joinDate) || '—');
   html += '</div>';
@@ -195,7 +216,12 @@ function buildReceiptHTML(payId) {
       + 'letter-spacing:1.5px;text-align:right;margin-top:2px">** PENDING BALANCE **</div>';
   }
   html += dotRow('Method', escHtml(p.method || 'Cash'));
-  html += dotRow('Status', p.status === 'Paid' ? '✅ PAID' : '⏳ PENDING');
+  /* NO EMOJI ON THE STATUS (owner, 2026-09-10: "remove … success and pending
+     emojis"). This slip prints on an 80mm thermal roll and gets photographed
+     and sent on WhatsApp; a colour emoji renders as a black blob on the first
+     and as a different picture on every phone doing the second. The word is
+     the status, and it survives both. */
+  html += dotRow('Status', p.status === 'Paid' ? 'PAID' : 'PENDING');
 
   // ── Arrears taken in the same visit ───────────────────────────────────────
   // This money belongs to earlier months and is posted to THEIR records, so it
@@ -218,53 +244,29 @@ function buildReceiptHTML(payId) {
   }
   html += '</div>';
 
-  var history   = (p.partialPayments && p.partialPayments.length) ? p.partialPayments : [];
-  var histSum   = history.reduce(function(s, x){ return s + Number(x.amount || 0); }, 0);
-  var initEntry = {
-    date: p.date || p.dueDate || '',
-    amount: Number(p.amount || 0) - histSum,
-    method: p.method || 'Cash',
-    collectedBy: p.collectedBy || 'Warden',
-    note: 'Initial payment'
-  };
-  /* The trail is meant to add up to the figure printed above it. Two old bugs
-     could leave it claiming more than was ever collected, and the section then
-     printed — on a slip in a student's hand — a list of instalments totalling
-     twice the receipt's own TOTAL RECEIVED. The boot repair removes what is
-     provably false; what survives cannot be reconstructed, so the receipt owns
-     up to it instead of quietly presenting it as the breakdown. */
-  var histReconciles = histSum <= Number(p.amount || 0) + 1;
-  var allHistory = (histReconciles && initEntry.amount > 0) ? [initEntry].concat(history) : history;
-  if (allHistory.length) {
-    html += sep();
-    html += '<div style="padding:4px 22px 10px">';
-    html += secLabel(histReconciles ? 'Payment History' : 'Recorded Instalments');
-    allHistory.forEach(function(h, idx) {
-      html += '<div style="font-family:monospace;font-size:11px;color:#000;margin:5px 0;border-left:3px solid #333;padding-left:8px">';
-      html += '<div style="display:flex;justify-content:space-between;font-weight:800">';
-      html += '<span>#' + (idx+1) + ' ' + escHtml(h.note || 'Payment') + '</span>';
-      html += '<span>' + fmtPKR(h.amount) + '</span>';
-      html += '</div>';
-      html += '<div style="font-size:9.5px;color:#444;margin-top:2px">';
-      html += (fmtDate(h.date) || '—') + ' · ' + escHtml(h.method || 'Cash') + ' · by ' + escHtml(h.collectedBy || 'Warden');
-      html += '</div></div>';
-    });
-    if (!histReconciles) {
-      html += '<div style="font-family:monospace;font-size:8.5px;color:#666;margin-top:6px;'
-        + 'border-top:1px dashed #999;padding-top:4px">'
-        + 'These entries total ' + fmtPKR(histSum) + ' and do not reconcile with the '
-        + fmtPKR(Number(p.amount || 0)) + ' recorded as collected for this month. '
-        + 'The collected figure above is the authoritative one.'
-        + '</div>';
-    }
-    html += '</div>';
-  }
+  /* THE PAYMENT HISTORY SECTION IS GONE (owner, 2026-09-10: "remove payment
+     history and student signing area and success and pending emojis").
 
+     It listed every instalment behind this month's figure — often five or six
+     entries — on a slip whose whole job is to say "you handed over X today".
+     The student already knows what they paid before; the warden has the full
+     trail on the payment record and in the student's ledger, where it can be
+     read on a screen instead of an 80mm roll.
+
+     The reconciliation warning it carried goes with it. That check still runs
+     where it matters: the boot repair removes instalment trails that are
+     provably false, and the ledger in the student panel is the surface that
+     shows what survives. The receipt was never the place to raise it — a
+     student holding a slip cannot act on "these entries do not reconcile".
+
+     THE STUDENT SIGNATURE BLOCK IS GONE TOO. The hostel signs the receipt
+     because the hostel is the one attesting that money was received; asking
+     the payer to sign the payer's own copy attests nothing, and it cost two
+     blank lines on every slip. The warden's line stays. */
   html += sep('dashed');
 
   html += '<div style="padding:8px 22px 6px">';
-  html += '<div style="display:flex;justify-content:space-between;font-family:monospace;font-size:10px;color:#333">';
-  html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:4px;margin-top:28px;min-width:110px">Student Signature</div></div>';
+  html += '<div style="display:flex;justify-content:flex-end;font-family:monospace;font-size:10px;color:#333">';
   html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:4px;margin-top:28px;min-width:110px">'
     + escHtml(wardenName) + '<br><span style="font-size:8px;color:#888">Authorized Warden</span></div></div>';
   html += '</div>';
@@ -283,7 +285,9 @@ function buildReceiptHTML(payId) {
   var phoneFtr  = (typeof DB !== 'undefined' && DB.settings && DB.settings.phone)      ? DB.settings.phone      : '';
   html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
   if (hostelFtr) html += '<div style="font-size:9px;color:#555;font-family:monospace;font-weight:700">' + escHtml(hostelFtr) + '</div>';
-  if (phoneFtr)  html += '<div style="font-size:8px;color:#888;font-family:monospace;margin-top:1px">📞 ' + escHtml(phoneFtr) + '</div>';
+  // "Tel:", not a telephone emoji — same reason the status row lost its two:
+  // a colour emoji prints as a black blob on an 80mm thermal roll.
+  if (phoneFtr)  html += '<div style="font-size:8px;color:#888;font-family:monospace;margin-top:1px">Tel: ' + escHtml(phoneFtr) + '</div>';
   html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace;margin-top:3px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
   html += '</div>';
 
@@ -299,6 +303,8 @@ function buildReceiptHTML(payId) {
 
 // ── MAIN RECEIPT ENTRY POINT ──────────────────────────────────────────────────
 function printReceipt(payId) {
+  // The number is spent here, once per payment — see buildReceiptHTML().
+  if (payId) _assignReceiptNo(payId);
   var html = buildReceiptHTML(payId);
   // Silence was the worst possible answer here: the warden pressed Print and
   // could not tell the difference between "nothing happened" and "it printed".
@@ -463,14 +469,16 @@ function sendWA(payId) {
       + 'Dear Student,\nIf you have already paid the hostel fee, please accept our thanks for your timely payment. '
       + 'We appreciate your cooperation.\nThank you.\n\n'
       + '✅ Amount Paid: *' + fmtPKR(alreadyPaidRecord ? alreadyPaidRecord.amount : p.amount) + '*\n'
-      + 'Month: ' + p.month + '\nRoom #' + (p.roomNumber || '—');
+      + 'Month: ' + p.month + '\nRoom ' + roomText(p.roomNumber,
+          ((DB.rooms||[]).find(function(r){ return String(r.number)===String(p.roomNumber); })||{}).floor);
   } else {
     msg = 'Assalamu Alaikum *' + name + '*,\n\n'
       + 'Reminder from *' + DB.settings.hostelName + '*\n\n'
       + 'Dear Student,\nThis is a reminder that your hostel fee is still pending. '
       + 'Please make the payment as soon as possible to avoid any inconvenience.\nThank you for your prompt attention.\n\n'
       + '💰 Pending: *' + fmtPKR(outstandingOf(p)) + '*\n'
-      + 'Month: ' + p.month + '\nRoom #' + (p.roomNumber || '—');
+      + 'Month: ' + p.month + '\nRoom ' + roomText(p.roomNumber,
+          ((DB.rooms||[]).find(function(r){ return String(r.number)===String(p.roomNumber); })||{}).floor);
   }
   openExternalLink('whatsapp://send?phone=' + phone + '&text=' + encodeURIComponent(msg));
 }
