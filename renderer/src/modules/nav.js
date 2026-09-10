@@ -124,6 +124,10 @@ const pageConfig = {
   // User Management was a modal off the account menu until 2026-09-09.
   users:         { title:'User Management', sub:'', action:null },
   settings:      { title:'Settings', sub:'', action:null },
+  /* `sub` carries a line here where most pages leave it blank: this is the one
+     screen a warden opens when they are already having a bad afternoon, and
+     the reference's "We're here to help you succeed" is the whole tone of it. */
+  support:       { title:'Help & Support', sub:'Everything support asks for, on one page', action:null },
   archive:       { title:'Annual Archive', sub:'', action:null },
   maintenance:   { title:'Complaints', sub:'', action:'Add Issue' },
   complaints:    { title:'Complaints', sub:'', action:'Add Issue' },
@@ -494,6 +498,7 @@ function renderPage(p, resetScroll=false) {
       else if(basePage==='users') el.innerHTML = renderUsers();
       else if(basePage==='settings') el.innerHTML = renderSettings();
       else if(basePage==='archive') el.innerHTML = renderArchive();
+      else if(basePage==='support') el.innerHTML = renderSupport();
     } catch(e) {
       el.innerHTML = '<div style="padding:40px;color:#e05252;font-family:monospace;background:#1a0a0a;border-radius:12px;margin:20px"><div style="font-size:18px;font-weight:900;margin-bottom:12px">'+icon('warning','sm')+' Render Error on: '+basePage+'</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+e.message+'</div><div style="margin-top:12px;font-size:11px;opacity:0.6">'+e.stack+'</div></div>';
       console.error('renderPage error:', e);

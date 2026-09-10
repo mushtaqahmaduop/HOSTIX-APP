@@ -1,0 +1,283 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HELP & SUPPORT (`sup-`)
+   Built 2026-09-10 to the owner's reference, `support.png`. The markup is in
+   src/modules/support.js, and the reasoning for what is on the page — and what
+   is drawn locked instead — is in that file's header.
+
+   IT BORROWS RATHER THAN REDECLARES. The cards, heads, buttons and rail come
+   from settings.css (`set-card`, `set-head`, `set-btn`, `hi-id__head`,
+   `hi-wide`), and the four status rows are the Connection panel's own
+   `conn-row`, painted by connRefresh(). What is declared here is only what this
+   page adds: the hero, the fact grid, the contact rows, the resource list and
+   the locked rows.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sup { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Hero ────────────────────────────────────────────────────────────────────
+   The reference puts a 3D illustration on the right. This carries a large
+   outline mark instead: the app ships no raster art, and a stock render of a
+   support agent in a headset is a promise about a call centre that does not
+   exist behind it. */
+.sup-hero {
+    display: flex; align-items: center; gap: 24px;
+    padding: 22px 24px;
+    background: var(--accent-dim); border: 1px solid var(--border); border-radius: 16px;
+}
+.sup-hero__b { flex: 1; min-width: 0; }
+.sup-hero__k {
+    display: inline-block; margin-bottom: 9px;
+    padding: 3px 11px; border-radius: 999px;
+    background: var(--card); color: var(--accent-strong);
+    font-size: 11px; font-weight: 700;
+}
+.sup-hero__t { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.sup-hero__s {
+    margin-top: 7px; max-width: 62ch;
+    font-size: 12.5px; line-height: 1.6; color: var(--text2);
+}
+.sup-hero__art { flex-shrink: 0; color: var(--accent); opacity: .28; }
+.sup-hero__art svg { width: 96px; height: 96px; }
+@media (max-width: 900px) { .sup-hero__art { display: none; } }
+
+/* The search box, over the shipped guides. */
+.sup-hero__find {
+    display: flex; align-items: center; gap: 9px;
+    max-width: 560px; margin-top: 16px; padding: 0 6px 0 13px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+}
+.sup-hero__find:focus-within { border-color: var(--accent); }
+.sup-hero__find > svg { color: var(--text3); flex-shrink: 0; }
+.sup-hero__in {
+    flex: 1; min-width: 0; height: 42px;
+    background: none; border: 0; outline: none;
+    font-family: var(--font); font-size: 13px; color: var(--text);
+}
+.sup-hero__go {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 9px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); border: 0; color: var(--text-on-accent);
+}
+.sup-hero__go:hover { background: var(--accent-strong); }
+
+.sup-pop { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+.sup-pop__l { font-size: 11.5px; font-weight: 700; color: var(--text2); margin-right: 2px; }
+
+.sup-chip {
+    padding: 5px 11px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+    background: var(--card); border: 1px solid var(--border); color: var(--text2);
+    font-family: var(--font); font-size: 11.5px; font-weight: 600;
+    transition: var(--transition);
+}
+.sup-chip:hover  { border-color: var(--accent); color: var(--accent-strong); }
+.sup-chip.is-on  { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+
+/* ── The three cards under the hero ──────────────────────────────────────── */
+.sup-bigs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1000px) { .sup-bigs { grid-template-columns: 1fr; } }
+.sup-big {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 16px 18px; text-align: left; cursor: pointer; font-family: var(--font);
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    transition: var(--transition);
+}
+.sup-big:hover { border-color: var(--accent); transform: translateY(-2px); }
+.sup-big:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sup-big__i {
+    width: 44px; height: 44px; border-radius: 13px; margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dh-bg); color: var(--dh);
+}
+.sup-big__t { font-size: 14px; font-weight: 700; color: var(--text); }
+.sup-big__s { font-size: 11.5px; line-height: 1.5; color: var(--text3); }
+.sup-big__a {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 9px;
+    font-size: 12px; font-weight: 700; color: var(--accent-strong);
+}
+.sup-big__a svg { transform: rotate(-90deg); }
+
+/* ── The two columns ─────────────────────────────────────────────────────────
+   Same split as Settings, and it stacks at the same width, so the two System
+   pages behave identically as the window narrows. */
+.sup-split { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: 16px; align-items: start; }
+.sup-main, .sup-rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1000px) { .sup-split { grid-template-columns: 1fr; } }
+
+/* ── The fact grid ───────────────────────────────────────────────────────── */
+.sup-grid { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.sup-row {
+    display: grid; grid-template-columns: minmax(120px, 190px) 1fr;
+    align-items: center; gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.sup-row:last-child { border-bottom: none; }
+.sup-row:nth-child(odd) { background: var(--dash-sunk); }
+.sup-row__l { font-size: 12px; color: var(--text3); }
+.sup-row__v { font-size: 12.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.sup-row__v.is-mono {
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Get in touch ────────────────────────────────────────────────────────── */
+.sup-touch {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    margin-top: 8px; padding: 11px 12px;
+    text-align: left; cursor: pointer; font-family: var(--font);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    transition: var(--transition);
+}
+.sup-touch:hover { border-color: var(--accent); background: var(--dash-sunk); }
+.sup-touch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sup-touch__i {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.sup-touch__b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sup-touch__t { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.sup-touch__v {
+    font-size: 12px; color: var(--accent-strong); overflow-wrap: anywhere;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+.sup-touch__s { font-size: 10.5px; color: var(--text3); }
+/* The chevron set has no right-facing member and one row is not a reason to
+   add one, so chevronDown is turned. */
+.sup-touch__go { flex-shrink: 0; color: var(--text3); transform: rotate(-90deg); }
+
+.sup-empty { padding: 6px 2px 2px; }
+.sup-empty__t { font-size: 12.5px; font-weight: 700; color: var(--text2); }
+.sup-empty__s { font-size: 11.5px; line-height: 1.55; color: var(--text3); margin: 4px 0 11px; }
+
+/* ── Quick resources ─────────────────────────────────────────────────────── */
+.sup-res-list { display: flex; flex-direction: column; gap: 2px; }
+.sup-res {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 9px 8px; border-radius: 10px;
+    text-align: left; cursor: pointer; font-family: var(--font);
+    background: none; border: 1px solid transparent;
+    transition: var(--transition);
+}
+.sup-res:hover { background: var(--dash-sunk); border-color: var(--border); }
+.sup-res:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sup-res__i {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dash-sunk); color: var(--text3);
+}
+.sup-res:hover .sup-res__i { color: var(--accent-strong); }
+.sup-res__b { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sup-res__t { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.sup-res__s { font-size: 11px; color: var(--text3); }
+
+/* ── The request form ────────────────────────────────────────────────────── */
+.sup-note {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-size: 11.5px; line-height: 1.55; color: var(--text3);
+}
+.sup-note svg { flex-shrink: 0; margin-top: 2px; }
+.sup-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.sup-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+
+/* ── The request list ────────────────────────────────────────────────────── */
+.sup-tix { display: flex; flex-direction: column; gap: 8px; }
+.sup-tix__r {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 11px 12px; text-align: left; cursor: pointer; font-family: var(--font);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    transition: var(--transition);
+}
+.sup-tix__r:hover { border-color: var(--accent); background: var(--dash-sunk); }
+.sup-tix__r:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sup-tix__i {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dash-sunk); color: var(--text3);
+}
+.sup-tix__b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sup-tix__h { display: flex; align-items: center; gap: 9px; font-size: 11.5px; color: var(--text3); }
+.sup-tix__h b {
+    color: var(--accent-strong); font-weight: 800;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+}
+.sup-tix__t {
+    font-size: 12.5px; font-weight: 700; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sup-tix__s { font-size: 11px; color: var(--text3); }
+
+/* One ticket, opened. */
+.sup-doc p { font-size: 12.5px; line-height: 1.7; color: var(--text2); margin: 0 0 12px; }
+.sup-doc p:last-child { margin-bottom: 0; }
+.sup-doc p.is-empty { color: var(--text3); font-style: italic; }
+.sup-tstate { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+.sup-tstate .form-control { max-width: 200px; }
+.sup-diag { margin-top: 12px; }
+.sup-diag summary { font-size: 11.5px; font-weight: 700; color: var(--text3); cursor: pointer; }
+.sup-diag pre {
+    margin: 8px 0 0; padding: 10px 12px; border-radius: 10px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-family: var(--ant-num-font); font-size: 11px; line-height: 1.6; color: var(--text2);
+    white-space: pre-wrap; word-break: break-word;
+}
+
+/* ── The knowledge base ──────────────────────────────────────────────────── */
+.sup-kb { display: flex; flex-direction: column; gap: 12px; }
+/* `.lk-search` carries `flex:1 1 170px` for a horizontal toolbar. Dropped into
+   this column that basis becomes a HEIGHT, and the box grows to 170px tall.
+   Reset both here rather than touching listkit, which every register uses. */
+.sup-kb__s { flex: 0 0 auto; width: 100%; max-width: none; }
+.sup-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sup-kb__list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.sup-art {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 10px 12px; text-align: left; cursor: pointer; font-family: var(--font);
+    background: var(--card); border: 1px solid var(--border); border-radius: 11px;
+    transition: var(--transition);
+}
+.sup-art:hover { border-color: var(--accent); background: var(--dash-sunk); }
+.sup-art__i {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent-strong);
+}
+.sup-art__b { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sup-art__t { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.sup-art__s { font-size: 11px; color: var(--text3); }
+
+/* ── Need urgent help ────────────────────────────────────────────────────── */
+.sup-urgent__n {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    margin-bottom: 4px; padding: 11px 12px; border-radius: 11px; cursor: pointer;
+    background: var(--accent-soft); border: 1px solid var(--accent);
+    font-family: var(--ant-num-font); font-size: 15px; font-weight: 800;
+    color: var(--accent-strong); letter-spacing: var(--ant-num-track);
+}
+.sup-urgent__n:hover { background: var(--accent-dim); }
+.sup-urgent__h { font-size: 11px; color: var(--text3); margin-bottom: 11px; }
+.sup-urgent__p { font-size: 11.5px; line-height: 1.65; color: var(--text2); margin: 0 0 10px; }
+.sup-urgent__p:last-child { margin-bottom: 0; }
+.sup-urgent__p b { color: var(--text); }
+
+/* ── The closing strip ───────────────────────────────────────────────────── */
+.sup-foot {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 18px; border-radius: 14px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+    font-size: 12px; line-height: 1.55; color: var(--text3);
+}
+.sup-foot svg { flex-shrink: 0; color: var(--accent-strong); }
+
+/* ── The shortcuts modal ─────────────────────────────────────────────────── */
+.sup-keys { display: flex; flex-direction: column; gap: 8px; }
+.sup-key { display: flex; align-items: center; gap: 12px; }
+.sup-key kbd {
+    flex-shrink: 0; min-width: 96px; text-align: center;
+    padding: 5px 10px; border-radius: 8px;
+    background: var(--dash-sunk); border: 1px solid var(--border2);
+    font-family: var(--ant-num-font); font-size: 11.5px; font-weight: 700; color: var(--text);
+}
+.sup-key span { font-size: 12.5px; color: var(--text2); }

@@ -63,19 +63,41 @@ test('the sidebar account menu opens on screen with all of its items', async () 
     null, { timeout: 30000 });
   await win.waitForTimeout(800);
 
-  // The header must no longer carry an account chip, a hamburger or a Back
-  // button — all three were removed on the owner's call.
-  // Help & Support is checked by walking real elements, not by searching
-  // innerHTML — innerHTML carries comments too, and index.html has one that
-  // explains the removal, so a substring match reports the item as still there.
-  const removed = await win.evaluate(() => ({
-    chip: !!document.getElementById('hdr-user'),
-    burger: !!document.getElementById('sidebar-toggle'),
-    back: !!document.getElementById('hdr-back-btn'),
-    help: Array.from(document.querySelectorAll('.nav-item, .hdr-menu__item, a'))
-      .some(el => el.textContent.replace(/\s+/g, ' ').trim() === 'Help & Support'),
+  /* The header must no longer carry an account chip, a hamburger or a Back
+     button — all three were removed on the owner's call.
+
+     HELP & SUPPORT IS BACK, AND IS NOW A PAGE. It was removed when it was a
+     dead menu item pointing at nothing; the owner asked for the screen on
+     2026-09-10 and it is the last item in the rail. So what is asserted here
+     flipped from "it is gone" to "it exists and it goes somewhere" — a nav
+     item that leads nowhere is the thing the original assertion was really
+     about, and that is still checked, one line down.
+
+     Walked as real elements rather than matched against innerHTML: innerHTML
+     carries comments too, and this file's own history is the reason to be
+     careful about that. */
+  const chrome = await win.evaluate(() => {
+    const help = Array.from(document.querySelectorAll('.nav-item'))
+      .find(el => el.textContent.replace(/\s+/g, ' ').trim() === 'Help & Support');
+    return {
+      chip: !!document.getElementById('hdr-user'),
+      burger: !!document.getElementById('sidebar-toggle'),
+      back: !!document.getElementById('hdr-back-btn'),
+      help: !!help,
+      helpGoes: !!(help && /navRail\(['"]support['"]\)/.test(help.getAttribute('onclick') || '')),
+    };
+  });
+  expect(chrome).toEqual({ chip: false, burger: false, back: false,
+                           help: true, helpGoes: true });
+
+  // …and pressing it really renders the page, rather than a Render Error.
+  await win.evaluate(() => navigate('support'));
+  await win.waitForTimeout(600);
+  const support = await win.evaluate(() => ({
+    drawn: !!document.querySelector('.sup-hero'),
+    err: document.getElementById('content').innerText.includes('Render Error'),
   }));
-  expect(removed).toEqual({ chip: false, burger: false, back: false, help: false });
+  expect(support).toEqual({ drawn: true, err: false });
 
   const info = await win.evaluate(() => {
     toggleUserMenu();

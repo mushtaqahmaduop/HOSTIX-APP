@@ -40,6 +40,9 @@ const PAGES = ['dashboard', 'students', 'payments', 'rooms', 'expenses',
   // Former Students became a page on 2026-09-10 — it was a modal off the
   // account menu, and a modal is not walked by this probe.
   'former',
+  // Help & Support became a page on 2026-09-10 — two columns and a card grid,
+  // which is exactly the shape that overflows first at 1024 and 900.
+  'support',
   'addstudent', 'addpayment'];
 
 function launchOpts() {
