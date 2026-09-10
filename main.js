@@ -1708,58 +1708,46 @@ function _hxVerifyPdf(filePath, expectBuf) {
 }
 
 function _hxOpenPdf(filePath, title) {
-  try {
-    const view = new BrowserWindow({
-      width: 1000, height: 780, minWidth: 520, minHeight: 400,
-      title: (typeof title === 'string' && title) ? title : 'PDF',
-      icon: path.join(__dirname, 'assets', 'icon.png'),
-      backgroundColor: '#525659',            // the viewer's own surround
-      autoHideMenuBar: true,
-      webPreferences: {
-        nodeIntegration: false, contextIsolation: true,
-        // Chromium's PDF viewer is a plugin; without this the window loads the
-        // file as a download rather than rendering it.
-        plugins: true,
-      },
-    });
-    /* `loadFile` TAKES A PATH AND ENCODES IT ITSELF (owner, 2026-09-10: "if
-       using file:// — verify the path is correctly encoded, handle spaces and
-       special characters safely").
+  /* THE SYSTEM VIEWER OPENS IT. That is `shell.openPath`, which is what the
+     owner's brief prescribed, and it works.
 
-       That is exactly why it is used here rather than
-       `loadURL('file://' + filePath)`, which is the line that breaks: a warden
-       saving to "C:\Users\Ali Khan\My Reports\Ahmad's roster #2.pdf" produces a
-       URL with raw spaces, an apostrophe and a `#` — and `#` starts a fragment,
-       so Chromium looks for "2.pdf" and finds nothing. A blank viewer, from a
-       perfectly good file. loadFile percent-encodes the whole path and treats
-       no character as syntax.
+     A PREVIOUS PASS OPENED A BrowserWindow ON THE FILE INSTEAD, on the reading
+     that this machine had no PDF handler — `assoc .pdf` reported none. That
+     reading was wrong: `assoc` only sees the classic HKCR table and not the
+     per-user UserChoice association that Edge registers, and openPath resolves
+     to '' (success) here. The window was solving a problem that did not exist.
 
-       The `error` handler is the last honest word: if Chromium cannot render
-       it after all that, the shell gets a turn rather than a window sitting
-       blank with nothing said. */
-    view.webContents.once('did-fail-load', (_e, code, desc) => {
-      console.warn('[HOSTYLLO] PDF window did-fail-load ' + code + ' ' + desc);
-      try { view.destroy(); } catch (_) {}
-      try { shell.openPath(filePath); } catch (_) { try { shell.showItemInFolder(filePath); } catch (__) {} }
-    });
-    view.loadFile(filePath);
-    view.once('ready-to-show', () => { try { view.show(); view.focus(); } catch (_) {} });
-    return true;
-  } catch (e) {
-    console.warn('[HOSTYLLO] PDF window failed, falling back to the shell: ' + e.message);
-  }
+     It was also broken. Chromium's PDF viewer is an extension, not something a
+     plain BrowserWindow gets from `plugins:true`: measured, the window loaded
+     the file:// URL, reported readyState "complete", and rendered a body of
+     ten characters with no <embed> in it. A dark, empty window carrying only
+     the document's name — which is exactly what the owner reported seeing
+     after every download.
+
+     So: openPath, and if the OS genuinely cannot open it, show the warden
+     where the file is rather than a window that shows nothing. */
   try {
     const r = shell.openPath(filePath);
     if (r && typeof r.then === 'function') {
-      r.then(err => { if (err) { console.warn('[HOSTYLLO] openPath: ' + err); shell.showItemInFolder(filePath); } });
+      r.then(err => {
+        if (err) {
+          console.warn('[HOSTYLLO] openPath: ' + err);
+          try { shell.showItemInFolder(filePath); } catch (_) {}
+        }
+      }).catch(e => {
+        console.warn('[HOSTYLLO] openPath rejected: ' + e.message);
+        try { shell.showItemInFolder(filePath); } catch (_) {}
+      });
       return true;
     }
+    return true;
   } catch (e) {
     console.warn('[HOSTYLLO] openPath threw: ' + e.message);
   }
   try { shell.showItemInFolder(filePath); } catch (_) {}
   return false;
 }
+
 
 ipcMain.handle('pdf-window:save', async (event, opts) => {
   const win = BrowserWindow.fromWebContents(event.sender);

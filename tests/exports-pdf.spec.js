@@ -351,22 +351,29 @@ test('the report window gets its save bridge', async () => {
 });
 
 /* ════════════════════════════════════════════════════════════════════════════
-   DOWNLOAD PDF SAVES A PDF, AND THEN OPENS IT (owner brief, 2026-09-10).
+   DOWNLOAD PDF WRITES A COMPLETE PDF, AND HANDS IT TO THE SYSTEM VIEWER.
 
    The owner reported the button "producing a blank page, half-loaded viewer,
    or no response". The document and the save were never the problem — this
-   test proves both — and the ending was: the handler wrote the file and called
-   `shell.showItemInFolder`, which pops Explorer with the file highlighted and
-   leaves the opening to the user. `shell.openPath` is the obvious replacement
-   and is only as reliable as the machine's file associations; on one with no
-   PDF handler it returns having done nothing, which is "no response" again.
+   test proves both — and the ending was the fault: the handler wrote the file
+   and called `shell.showItemInFolder`, which pops Explorer with the file
+   highlighted and leaves the opening to the user.
 
-   So the app opens the PDF in its own Chromium viewer window. This asserts the
-   whole chain in one go: a real %PDF on disk, and a visible window whose URL is
-   that file. The save dialog is stubbed in the MAIN process, which is the only
-   place it can be.
+   ONE WRONG TURN ON THE WAY, WORTH RECORDING. A pass in between opened the PDF
+   in an Electron BrowserWindow instead, on the reading that this machine had
+   no PDF handler at all — `assoc .pdf` reported none. That reading was wrong:
+   `assoc` only sees the classic HKCR table, not the per-user UserChoice
+   association Edge registers, and openPath resolves to '' here. And the window
+   did not work: Chromium's PDF viewer is an extension, not something a plain
+   BrowserWindow gets from `plugins:true`, so it rendered a body of ten
+   characters with no <embed> — a dark, empty window carrying only the
+   document's name, which is what the owner saw after every download.
+
+   So: `shell.openPath`. What this test can assert without the OS is everything
+   up to that point, which is where every real failure has been — a complete,
+   valid, reopenable file, and no window left showing nothing.
    ════════════════════════════════════════════════════════════════════════════ */
-test('Download PDF writes a real PDF and opens it in a viewer', async () => {
+test('Download PDF writes a complete, valid PDF and opens no empty window', async () => {
   const { app, win } = await openApp();
   await seed(win);
 
@@ -392,22 +399,30 @@ test('Download PDF writes a real PDF and opens it in a viewer', async () => {
 
   await report.waitForTimeout(1200);
 
-  const out = await app.evaluate(async ({ BrowserWindow, app: eapp }) => {
+  const out = await app.evaluate(async ({ BrowserWindow }) => {
     const fs = process.mainModule ? process.mainModule.require('fs') : null;
     const fp = globalThis.__hxTestPdf;
-    let head = '', size = -1;
-    try { const b = fs.readFileSync(fp); size = b.length; head = b.slice(0, 5).toString('latin1'); } catch (e) {}
-    return { size, head,
-      viewing: BrowserWindow.getAllWindows()
-        .filter(w => /\.pdf$/i.test(w.webContents.getURL() || ''))
-        .map(w => ({ url: w.webContents.getURL(), visible: w.isVisible() })) };
+    let head = '', tail = '', size = -1, pages = 0;
+    try {
+      const b = fs.readFileSync(fp);
+      size = b.length;
+      head = b.slice(0, 5).toString('latin1');
+      tail = b.slice(Math.max(0, b.length - 1024)).toString('latin1');
+      pages = (b.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    } catch (e) {}
+    return { size, head, hasEof: tail.indexOf('%%EOF') !== -1, pages,
+      /* Nothing may be left on screen pointing at a .pdf — the empty-window
+         failure the owner reported. */
+      pdfWindows: BrowserWindow.getAllWindows()
+        .filter(w => /\.pdf$/i.test(w.webContents.getURL() || '')).length };
   });
 
+  /* The owner's validation list, asserted on the file the app actually wrote. */
   expect(out.head, 'what was written is not a PDF').toBe('%PDF-');
   expect(out.size, 'the PDF is empty').toBeGreaterThan(1000);
-  expect(out.viewing.length, 'no window is showing the saved PDF').toBe(1);
-  expect(out.viewing[0].visible, 'the viewer opened but is not on screen').toBe(true);
-  expect(decodeURIComponent(out.viewing[0].url)).toContain(target.split('\\').pop());
+  expect(out.hasEof, 'the PDF is truncated — no %%EOF').toBe(true);
+  expect(out.pages, 'the PDF has no pages').toBeGreaterThan(0);
+  expect(out.pdfWindows, 'an empty Electron window was left showing the PDF').toBe(0);
 
   await app.close();
 });
