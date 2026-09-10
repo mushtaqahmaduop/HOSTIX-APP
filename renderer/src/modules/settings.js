@@ -1550,6 +1550,21 @@ function renderHostelInfoPanel() {
           ${F('Location / city', 'pin', ID_IN('hi-loc', 'location', s.location, 'maxlength="80" placeholder="Street, city"'), { for: 'hi-loc' })}
           ${F('Contact phone', 'phone', ID_IN('hi-phone', 'phone', s.phone, 'maxlength="20" placeholder="03XX-XXXXXXX"'), { for: 'hi-phone' })}
           ${F('Email address', 'mail', ID_IN('hi-email', 'email', s.email, 'type="email" maxlength="60" placeholder="hostel@email.com"'), { full: true, for: 'hi-email', opt: true })}
+          ${''/* BOTH ASKED FOR AT FIRST RUN, AND BOTH CHANGEABLE HERE (owner,
+                 2026-09-10). A setting collected once during setup and then
+                 unreachable is a setting a hostel cannot correct.
+
+                 The WhatsApp number is the FALLBACK reminders are sent from
+                 when a student's record carries no number of its own —
+                 sendWA() has always read it and there was no field that wrote
+                 it. The capacity is the hostel's own statement of how many
+                 students the building holds; nothing enforces it, and the note
+                 under it says so, because the bed count the rest of the app
+                 reads comes from the rooms that actually exist. */}
+          ${F('WhatsApp number', 'phone', ID_IN('hi-wa', 'defaultWANumber', s.defaultWANumber, 'maxlength="30" placeholder="03XX-XXXXXXX"'), { for: 'hi-wa', opt: true,
+              note: 'Used for reminders when a student’s own number is missing.' })}
+          ${F('Students it can hold', 'users', ID_IN('hi-cap', 'capacity', s.capacity ? String(Number(s.capacity)) : '', 'type="number" min="0" max="9999" placeholder="Optional"'), { for: 'hi-cap', opt: true,
+              note: 'A statement, not a limit — nothing is blocked by it. Beds come from the rooms you have created.' })}
         </div>
       </div>
 
@@ -1748,7 +1763,12 @@ function hiLogoPick() {
   if (el) el.click();
 }
 
-function hiLogoLoad(input) {
+/** @param {HTMLInputElement} input
+ *  @param {Function} [after] what to redraw once the logo is stored. Hostel
+ *  Info re-renders the settings page; the first-run wizard is an overlay on top
+ *  of whatever page is behind it and passes its own redraw instead (owner,
+ *  2026-09-10 — the logo is asked for during setup now). */
+function hiLogoLoad(input, after) {
   const file = input && input.files && input.files[0];
   if (!file) return;
   if (file.size > 8 * 1024 * 1024) { toast('That image is over 8MB — pick a smaller one', 'error'); return; }
@@ -1768,7 +1788,7 @@ function hiLogoLoad(input) {
         DB.settings.logo = cv.toDataURL('image/png');
         await saveDB();
         toast('Logo updated', 'success');
-        renderPage('settings');
+        if (typeof after === 'function') after(); else renderPage('settings');
       } catch (err) {
         toast('That image could not be read', 'error');
       }
@@ -2672,11 +2692,20 @@ function hiIdentityTouched(key, val) {
 async function hiSaveIdentity() {
   if (typeof requirePerm === 'function' && !requirePerm('settings')) return;
   const MAP = { 'hi-name': 'hostelName', 'hi-tag': 'tagline', 'hi-loc': 'location',
-                'hi-phone': 'phone', 'hi-email': 'email' };
+                'hi-phone': 'phone', 'hi-email': 'email', 'hi-wa': 'defaultWANumber' };
   Object.keys(MAP).forEach(id => {
     const el = document.getElementById(id);
     if (el) DB.settings[MAP[id]] = String(el.value || '').trim();
   });
+  /* Capacity is a NUMBER and its absence is meaningful — blank and 0 both mean
+     "no figure given", and the setup wizard's bed comparison makes no claim
+     when there is none. Storing "" here would put an empty string where every
+     reader expects a number. */
+  const capEl = document.getElementById('hi-cap');
+  if (capEl) {
+    const cap = Math.max(0, Math.min(9999, Number(capEl.value) || 0));
+    if (cap > 0) DB.settings.capacity = cap; else delete DB.settings.capacity;
+  }
   await saveDB();
   // Re-run the mirrors against the TRIMMED values that were actually stored.
   Object.keys(MAP).forEach(id => hiReflectSetting(MAP[id], DB.settings[MAP[id]]));

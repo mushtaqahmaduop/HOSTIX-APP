@@ -118,6 +118,28 @@ body.onb-open { overflow:hidden; }
                  font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
                  font-variant-numeric:tabular-nums; }
 .onb-made__l { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+/* The beds-built-against-stated-capacity line (owner, 2026-09-10). Neutral
+   while there is still work to do, green when it matches, amber when there are
+   more beds than the hostel said it holds — which is not an error, just worth
+   noticing before the rooms are all created. */
+.onb-made__vs { margin-top:5px; font-size:11.5px; color:var(--text3); }
+.onb-made__vs b { color:var(--text2); font-weight:800;
+                  font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+                  font-variant-numeric:tabular-nums; }
+.onb-made__vs.is-ok   { color:var(--ant-success-fg); }
+.onb-made__vs.is-ok b { color:var(--ant-success-fg); }
+.onb-made__vs.is-warn   { color:var(--ant-warning-fg); }
+.onb-made__vs.is-warn b { color:var(--ant-warning-fg); }
+
+/* ── The logo control on step one ────────────────────────────────────────────
+   The same frame Hostel Info draws (settings.css .hi-logo), sat in a row with a
+   line of explanation beside it — this is the one control on the step that is
+   not a text box, and it saves the moment it is used. Sized up a little here
+   because the wizard has the width and this is the first thing on the screen. */
+.onb-logo-row  { flex-direction:column; }
+.onb-logo-pick { display:flex; align-items:center; gap:14px; }
+.onb-logo-pick .hi-logo { width:76px; height:76px; border-radius:17px; }
+.onb-logo-hint { font-size:11.5px; line-height:1.5; color:var(--text3); min-width:0; }
 
 /* ── Done ────────────────────────────────────────────────────────────────── */
 .onb-done { display:flex; flex-direction:column; gap:18px; }

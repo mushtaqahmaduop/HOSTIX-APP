@@ -182,6 +182,31 @@ function _onbHostel() {
   return `
     <div class="onb-note">This is what prints on every receipt and report. You can change it later in Settings.</div>
     <div class="onb-grid">
+      ${''/* THE LOGO IS ASKED FOR HERE (owner, 2026-09-10: "add some defaults
+             and edits, hostel gender type in first run or onboarding, logo,
+             name, vhatsapp number, email, number of affordable student for a
+             hostel to accomodate").
+
+             It is the same uploader Hostel Info uses — same 256px downscale,
+             same PNG, same DB.settings.logo — rather than a second one, because
+             a logo that arrives two different ways ends up two different sizes.
+             It writes and saves immediately, which is why it sits outside the
+             step's Continue: closing the app after picking a logo must not lose
+             it, and the wizard's rule is that nothing entered is lost. */}
+      <div class="onb-f onb-f--wide onb-logo-row">
+        <label>Logo</label>
+        <div class="onb-logo-pick">
+          <button type="button" class="hi-logo${s.logo ? ' has-img' : ''}" id="onb-logo"
+                  title="${s.logo ? 'Change or remove the logo' : 'Upload a logo or photo'}"
+                  onclick="onbLogoPick()">
+            ${s.logo ? `<img src="${escHtml(s.logo)}" alt="">`
+                     : `${icon('building', 'md')}<span class="hi-logo__hint">${icon('upload', 'xs')}Add logo</span>`}
+          </button>
+          <input type="file" id="onb-logo-file" accept="image/png,image/jpeg,image/webp" hidden
+                 onchange="hiLogoLoad(this, onbRedrawHostel)">
+          <div class="onb-logo-hint">Printed on receipts and on the header of every document. Optional.</div>
+        </div>
+      </div>
       <div class="onb-f onb-f--wide">
         <label for="onb-name">Hostel name <i>*</i></label>
         <input class="form-control" id="onb-name" maxlength="60" value="${v(s.hostelName === 'Hostel Name' ? '' : s.hostelName)}"
@@ -195,9 +220,31 @@ function _onbHostel() {
         <label for="onb-phone">Phone</label>
         <input class="form-control" id="onb-phone" maxlength="30" value="${v(s.phone)}" placeholder="Contact number">
       </div>
+      ${''/* THE NUMBER REMINDERS ARE SENT FROM. A student's own number is on
+             their record; this is the fallback the app uses when a record has
+             none, and it is already read by sendWA() as `defaultWANumber` — it
+             simply had no way of being set except by typing it into Settings
+             after somebody noticed reminders were failing. */}
+      <div class="onb-f">
+        <label for="onb-wa">WhatsApp number</label>
+        <input class="form-control" id="onb-wa" maxlength="30" value="${v(s.defaultWANumber)}"
+               placeholder="The number reminders come from">
+      </div>
       <div class="onb-f">
         <label for="onb-email">Email</label>
         <input class="form-control" id="onb-email" maxlength="60" value="${v(s.email)}" placeholder="Optional">
+      </div>
+      ${''/* HOW MANY STUDENTS THE BUILDING HOLDS. Not a cap and not enforced —
+             the app counts beds from the rooms that exist, and that count is
+             the one every screen reads. This is the hostel's own statement of
+             what it is aiming at, and the rooms step three screens later
+             compares the beds created against it, so a warden who meant to
+             build 120 beds and stopped at 96 is told rather than left to
+             notice. Blank means "do not compare". */}
+      <div class="onb-f">
+        <label for="onb-cap">Students it can hold</label>
+        <input class="form-control" id="onb-cap" type="number" min="0" max="9999"
+               value="${s.capacity ? Number(s.capacity) : ''}" placeholder="Optional">
       </div>
       ${''/* WHO THE HOSTEL IS FOR (owner, 2026-09-10). It decides what a blank
              gender field MEANS: in a boys' hostel it means a boy, and asking a
@@ -217,6 +264,45 @@ function _onbHostel() {
     </div>`;
 }
 
+/* The logo saves itself the moment it is chosen, so this step redraws rather
+   than re-rendering the whole wizard — the other fields on it are unsaved text
+   the warden has typed, and a full re-render would throw them away. */
+function onbLogoPick() {
+  if (DB.settings.logo) {
+    showModal('modal-sm',
+      `<div class="hf-mh">
+         <div class="hf-mh__ico">${icon('building', 'sm')}</div>
+         <div><div class="hf-mh__t">Hostel logo</div>
+         <div class="hf-mh__s">It is printed on receipts and on the header of every document.</div></div>
+       </div>`,
+      `<div class="hi-logo-big"><img src="${escHtml(DB.settings.logo)}" alt=""></div>`,
+      `<button class="btn btn-secondary" onclick="closeModal();onbLogoClear()">Remove</button>
+       <button class="btn btn-primary" onclick="closeModal();document.getElementById('onb-logo-file').click()">Choose another</button>`);
+    return;
+  }
+  const el = document.getElementById('onb-logo-file');
+  if (el) el.click();
+}
+
+async function onbLogoClear() {
+  delete DB.settings.logo;
+  await saveDB();
+  toast('Logo removed', 'info');
+  onbRedrawHostel();
+}
+
+/** Repaint the logo control alone, keeping every unsaved field on the step. */
+function onbRedrawHostel() {
+  const btn = document.getElementById('onb-logo');
+  if (!btn) return;
+  const s = DB.settings;
+  btn.className = 'hi-logo' + (s.logo ? ' has-img' : '');
+  btn.title = s.logo ? 'Change or remove the logo' : 'Upload a logo or photo';
+  btn.innerHTML = s.logo
+    ? '<img src="' + escHtml(s.logo) + '" alt="">'
+    : icon('building', 'md') + '<span class="hi-logo__hint">' + icon('upload', 'xs') + 'Add logo</span>';
+}
+
 async function _onbSaveHostel() {
   const g = id => (document.getElementById(id) || {}).value || '';
   const name = g('onb-name').trim();
@@ -225,7 +311,14 @@ async function _onbSaveHostel() {
   DB.settings.location   = g('onb-loc').trim();
   DB.settings.phone      = g('onb-phone').trim();
   DB.settings.email      = g('onb-email').trim();
+  // The fallback number reminders are sent from — sendWA() already reads it.
+  DB.settings.defaultWANumber = g('onb-wa').trim();
   DB.settings.hostelGender = g('onb-gender') || 'boys';
+  /* A stated capacity, not an enforced one. Zero and blank both mean "no
+     figure given", and the rooms step then makes no comparison rather than
+     comparing against nothing. */
+  const cap = Math.max(0, Math.min(9999, Number(g('onb-cap')) || 0));
+  if (cap > 0) DB.settings.capacity = cap; else delete DB.settings.capacity;
   return true;
 }
 
@@ -314,7 +407,24 @@ function _onbMadeHtml() {
     const t = (DB.settings.roomTypes || []).find(x => x.id === r.typeId);
     return s + ((t && t.capacity) || 0);
   }, 0);
+  /* THE STATED CAPACITY EARNS ITS KEEP HERE (owner, 2026-09-10). It is not a
+     cap and nothing enforces it — the bed count above is the number every
+     screen in the app reads. What it is for is this line: a warden who told
+     the first step they hold 120 students and has built 96 beds is told so
+     while they are still on the rooms step, rather than finding out in
+     January. No figure given, no line. */
+  const cap = Number(DB.settings.capacity) || 0;
+  let vs = '';
+  if (cap > 0) {
+    const left = cap - beds;
+    vs = left > 0
+      ? `<div class="onb-made__vs">You said this hostel holds <b>${cap}</b> — that is <b>${left}</b> bed${left !== 1 ? 's' : ''} still to create.</div>`
+      : left === 0
+        ? `<div class="onb-made__vs is-ok">That matches the <b>${cap}</b> you said this hostel holds.</div>`
+        : `<div class="onb-made__vs is-warn"><b>${-left}</b> bed${-left !== 1 ? 's' : ''} more than the <b>${cap}</b> you said this hostel holds. Nothing is blocked — check the ranges if that was not intended.</div>`;
+  }
   return `<div class="onb-made__t"><b>${total}</b> room${total > 1 ? 's' : ''} · <b>${beds}</b> bed${beds !== 1 ? 's' : ''} so far</div>` +
+    vs +
     (_onbBatches.length ? `<div class="onb-made__l">${_onbBatches.map(b => `<span class="brk-chip">${escHtml(b)}</span>`).join('')}</div>` : '');
 }
 

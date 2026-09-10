@@ -16,9 +16,10 @@
 //  · THE LOGIN SCREEN'S ADDRESS LINE WAS AN HTML SINK. `liveUpdateSetting`
 //    wrote the location field into `innerHTML` on every keystroke.
 //
-// The panel also has no Save button, on purpose: every field writes through on
-// input and always did, so the button that used to sit at the bottom saved
-// nothing that was not already saved.
+// SINCE 2026-09-10 the identity card COMMITS ON SAVE. It previews as you type
+// and the button is what reaches the database — the owner asked for the button
+// back, and putting back one that only reassured would have been worse than
+// leaving it out. The font picker went at the same time, at their request.
 // ════════════════════════════════════════════════════════════════════════════
 'use strict';
 
