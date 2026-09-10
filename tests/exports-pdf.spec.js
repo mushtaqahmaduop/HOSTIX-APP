@@ -346,3 +346,65 @@ test('the report window gets its save bridge', async () => {
   await pdfWin.close();
   await app.close();
 });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DOWNLOAD PDF SAVES A PDF, AND THEN OPENS IT (owner brief, 2026-09-10).
+
+   The owner reported the button "producing a blank page, half-loaded viewer,
+   or no response". The document and the save were never the problem — this
+   test proves both — and the ending was: the handler wrote the file and called
+   `shell.showItemInFolder`, which pops Explorer with the file highlighted and
+   leaves the opening to the user. `shell.openPath` is the obvious replacement
+   and is only as reliable as the machine's file associations; on one with no
+   PDF handler it returns having done nothing, which is "no response" again.
+
+   So the app opens the PDF in its own Chromium viewer window. This asserts the
+   whole chain in one go: a real %PDF on disk, and a visible window whose URL is
+   that file. The save dialog is stubbed in the MAIN process, which is the only
+   place it can be.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('Download PDF writes a real PDF and opens it in a viewer', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+
+  const target = await app.evaluate(async ({ dialog, app: eapp }) => {
+    const out = eapp.getPath('temp').replace(/[\\/]+$/, '') + '\\hx_test_' + Date.now() + '.pdf';
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath: out });
+    globalThis.__hxTestPdf = out;
+    return out;
+  });
+
+  await win.evaluate(() => renderPage('students'));
+  await win.waitForTimeout(400);
+  const reportPromise = app.waitForEvent('window');
+  await win.evaluate(() => exportStudentsPDF());
+  const report = await reportPromise;
+  await report.waitForLoadState('domcontentloaded');
+  await report.waitForTimeout(400);
+
+  const saved = await report.evaluate(() => window.hostylloPdf.save());
+  expect(saved.success, 'the save failed: ' + (saved.reason || '')).toBe(true);
+  expect(saved.filePath).toBe(target);
+  expect(saved.opened, 'the PDF was saved but nothing opened it').toBe(true);
+
+  await report.waitForTimeout(1200);
+
+  const out = await app.evaluate(async ({ BrowserWindow, app: eapp }) => {
+    const fs = process.mainModule ? process.mainModule.require('fs') : null;
+    const fp = globalThis.__hxTestPdf;
+    let head = '', size = -1;
+    try { const b = fs.readFileSync(fp); size = b.length; head = b.slice(0, 5).toString('latin1'); } catch (e) {}
+    return { size, head,
+      viewing: BrowserWindow.getAllWindows()
+        .filter(w => /\.pdf$/i.test(w.webContents.getURL() || ''))
+        .map(w => ({ url: w.webContents.getURL(), visible: w.isVisible() })) };
+  });
+
+  expect(out.head, 'what was written is not a PDF').toBe('%PDF-');
+  expect(out.size, 'the PDF is empty').toBeGreaterThan(1000);
+  expect(out.viewing.length, 'no window is showing the saved PDF').toBe(1);
+  expect(out.viewing[0].visible, 'the viewer opened but is not on screen').toBe(true);
+  expect(decodeURIComponent(out.viewing[0].url)).toContain(target.split('\\').pop());
+
+  await app.close();
+});

@@ -1511,6 +1511,10 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
       margins: marginsMM
     });
     fs.writeFileSync(filePath, pdfData);
+    /* The receipt path opens what it just saved too (owner brief, 2026-09-10).
+       It is the same promise the button makes and the same viewer window; see
+       _hxOpenPdf below the report handler. */
+    _hxOpenPdf(filePath, suggestedName || 'Receipt');
     return { success: true, filePath };
   } catch (e) {
     console.error('[HOSTYLLO] PDF generation failed:', e.message, e.code);
@@ -1618,6 +1622,66 @@ ipcMain.handle('file:saveDataUrl', async (event, dataUrl, suggestedName) => {
    passing millimetre numbers asks for an eighteen-INCH margin on an A4 page,
    which is the whole sheet.                                                 */
 const MM = 25.4;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   OPEN A SAVED PDF — AND ACTUALLY OPEN IT (owner brief, 2026-09-10: "clicking
+   View/Open PDF consistently opens the generated PDF instead of producing a
+   blank page, half-loaded viewer, or no response").
+
+   This used to be `shell.showItemInFolder`, which pops Explorer with the file
+   highlighted and leaves the opening to the user — not what a button called
+   Download PDF does. The obvious replacement, `shell.openPath`, is one line
+   and is what the brief suggests, but it is only as reliable as the machine:
+   it hands the file to whatever Windows has registered for .pdf, and on a
+   machine with no PDF handler — or one whose association points at something
+   uninstalled — it can return an empty string having done nothing at all.
+   That is indistinguishable from "no response", which is the symptom being
+   fixed, so it cannot be the only strategy.
+
+   SO WE OPEN IT OURSELVES FIRST. Chromium has a PDF viewer built in and this
+   app already ships it; a BrowserWindow loading the file:// URL renders the
+   document with its own toolbar, zoom, print and save. It cannot depend on
+   file associations, it cannot half-load, and it is the "dedicated PDF-capable
+   window" the brief names as the desktop flow.
+
+   shell.openPath stays as the SECOND try, for the case where our own window
+   cannot be created at all, and the folder is the third. The saved file is
+   where the warden chose either way — none of this moves it.
+   ════════════════════════════════════════════════════════════════════════════ */
+function _hxOpenPdf(filePath, title) {
+  try {
+    const view = new BrowserWindow({
+      width: 1000, height: 780, minWidth: 520, minHeight: 400,
+      title: (typeof title === 'string' && title) ? title : 'PDF',
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+      backgroundColor: '#525659',            // the viewer's own surround
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false, contextIsolation: true,
+        // Chromium's PDF viewer is a plugin; without this the window loads the
+        // file as a download rather than rendering it.
+        plugins: true,
+      },
+    });
+    view.loadFile(filePath);
+    view.once('ready-to-show', () => { try { view.show(); view.focus(); } catch (_) {} });
+    return true;
+  } catch (e) {
+    console.warn('[HOSTYLLO] PDF window failed, falling back to the shell: ' + e.message);
+  }
+  try {
+    const r = shell.openPath(filePath);
+    if (r && typeof r.then === 'function') {
+      r.then(err => { if (err) { console.warn('[HOSTYLLO] openPath: ' + err); shell.showItemInFolder(filePath); } });
+      return true;
+    }
+  } catch (e) {
+    console.warn('[HOSTYLLO] openPath threw: ' + e.message);
+  }
+  try { shell.showItemInFolder(filePath); } catch (_) {}
+  return false;
+}
+
 ipcMain.handle('pdf-window:save', async (event, opts) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) return { success: false, reason: 'No window' };
@@ -1659,22 +1723,7 @@ ipcMain.handle('pdf-window:save', async (event, opts) => {
         : { top: 12 / MM, bottom: 16 / MM, left: 12 / MM, right: 12 / MM },
     });
     fs.writeFileSync(filePath, pdf);
-    /* IT OPENS THE PDF, NOT THE FOLDER (owner brief, 2026-09-10: "clicking
-       View/Open PDF consistently opens the generated PDF"). This showed the
-       file highlighted in Explorer and left the opening to the user — which is
-       not what the button says it does.
-
-       shell.openPath hands it to whatever Windows has registered for .pdf,
-       which is the flow the brief prescribes and the one that cannot half-load
-       a viewer of our own. It resolves to an error STRING rather than
-       throwing, and the only realistic cause is a machine with no PDF handler
-       at all; then, and only then, the folder is the next best thing. */
-    let opened = true;
-    try {
-      const err = await shell.openPath(filePath);
-      if (err) { opened = false; console.warn('[HOSTYLLO] openPath: ' + err); }
-    } catch (e) { opened = false; console.warn('[HOSTYLLO] openPath threw: ' + e.message); }
-    if (!opened) shell.showItemInFolder(filePath);
+    const opened = _hxOpenPdf(filePath, title);
     return { success: true, filePath, title, opened };
   } catch (e) {
     console.error('[HOSTYLLO] pdf-window:save failed:', e.message, e.code);
