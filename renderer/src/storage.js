@@ -32,7 +32,11 @@ const _TABLE_MAP = {
   inspections:   'inspections',
   billSplits:    'billsplits',
   transfers:     'transfers',
-  archive:       'archive'
+  archive:       'archive',
+  // Insert-only on the main side (see _insertOnly in main.js). Nothing in the
+  // renderer ever removes an entry from DB.ledger; saveDB's delete pass would
+  // be refused if it tried.
+  ledger:        'ledger'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────
@@ -100,7 +104,96 @@ async function loadDB() {
 
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
   _takeFullSnapshot();
+  await _ledgerBackfillOnLoad();
   _checkBackupReminder();
+}
+
+/* EXISTING HISTORY INTO THE LEDGER, ONCE PER RECORD — see ledgerBackfill().
+   Written with ONE bulk call rather than left for the next saveDB(): a hostel
+   with two years of instalments would otherwise make its first save after the
+   update thousands of separate round trips. main.js treats a bulk write to the
+   ledger as insert-only, so this cannot disturb a row already on disk.
+
+   Not written on a read-only licence. The write would be refused, and a
+   refused save at boot raises the red "not saved" bar over a hostel that did
+   nothing. The entries stay in memory and are recomputed identically on the
+   next boot, because their ids and timestamps are derived from the records. */
+async function _ledgerBackfillOnLoad() {
+  if (typeof ledgerBackfill !== 'function') return;
+  let r;
+  try { r = ledgerBackfill(); }
+  catch (e) { console.error('[HOSTYLLO] ledger backfill failed:', e); return; }
+  if (!r.added || !window.electronAPI || !window.electronAPI.dbBulkReplace) return;
+  try {
+    const d = window.electronAPI.licenseEnforcement
+      ? await window.electronAPI.licenseEnforcement() : null;
+    if (d && (d.readOnly || d.blocked)) return;
+    const res = await window.electronAPI.dbBulkReplace('ledger', DB.ledger);
+    if (res && res.ok === false) {
+      console.error('[HOSTYLLO] ledger backfill not written:', res.error);
+      return;
+    }
+    _dbSnapshot.ledger = _snapshotTable(DB.ledger);
+    console.info('[HOSTYLLO] Ledger: imported ' + r.added + ' existing entries.');
+  } catch (e) { console.error('[HOSTYLLO] ledger backfill write failed:', e); }
+}
+
+/* ── ONE WAY IN FOR A WHOLE-DATABASE REPLACEMENT ─────────────────────────────
+   Settings -> Import Data came through db:importFull, which validates on the
+   main side and snapshots the live database before it commits. Restore from
+   file and Restore from pasted text (modals.js) did not: they replaced DB in
+   memory and saveDB()'d it — no main-side check, no snapshot, and against the
+   insert-only ledger a delete pass that main.js refuses. Reset All Data had
+   the same shape and no snapshot either. All four come through here, so a
+   restore is checked on the side of the bridge that counts and Reset leaves a
+   copy on disk to recover from.
+
+   KEY NAMES. A backup file is JSON.stringify(DB), so it carries the in-memory
+   keys — activityLog, billSplits — while db:importFull reads TABLE names —
+   activitylog, billsplits. Sent through as they were, those two tables were
+   emptied by every Import Data. Mapped through _TABLE_MAP here, and a file
+   that already uses table names is accepted as it is.
+
+   Does not toast: the four callers say different things on success. Reloads
+   the database on success, so DB is what is on disk when it returns. */
+const _IMPORT_MAX_STUDENTS = 10000, _IMPORT_MAX_PAYMENTS = 100000;
+
+async function importBackupDocument(doc) {
+  if (!window.electronAPI || !window.electronAPI.dbImportFull) {
+    return { ok: false, error: 'Restoring needs the desktop app.' };
+  }
+  const src = doc && doc.db && doc.db.students ? doc.db : doc;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) {
+    return { ok: false, error: 'This file is not a Hostyllo backup.' };
+  }
+  if (!Array.isArray(src.rooms) || !Array.isArray(src.students)) {
+    return { ok: false, error: 'Invalid backup file — it has no rooms or students' };
+  }
+  if (typeof validateBackup === 'function') {
+    const check = validateBackup(src);
+    if (!check.ok) return { ok: false, error: check.reason, code: 'INVALID_BACKUP' };
+  }
+  if (src.students.length > _IMPORT_MAX_STUDENTS) {
+    return { ok: false, error: 'Backup contains too many student records' };
+  }
+  if (Array.isArray(src.payments) && src.payments.length > _IMPORT_MAX_PAYMENTS) {
+    return { ok: false, error: 'Backup contains too many payment records' };
+  }
+
+  const payload = {};
+  for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+    const rows = Array.isArray(src[dbKey]) ? src[dbKey]
+               : Array.isArray(src[table]) ? src[table] : undefined;
+    if (rows) payload[table] = rows;
+  }
+  if (src.settings) payload.settings = src.settings;
+
+  const result = await window.electronAPI.dbImportFull(payload);
+  if (!result || !result.ok) {
+    return { ok: false, error: (result && result.error) || 'Import failed', code: result && result.code };
+  }
+  await loadDB();
+  return result;
 }
 
 // ── Save snapshot (for surgical, change-only saves) ─────────────────────────────
@@ -220,6 +313,21 @@ function _showSaveFailure(detail) {
 // ── Save DB ───────────────────────────────────────────────────────────────────
 async function saveDB() {
   if (typeof enforceDataRetention === 'function') enforceDataRetention();
+
+  /* THE LEDGER IS RECONCILED BEFORE ANYTHING IS WRITTEN, and after retention,
+     so a record retention just moved into the archive is not read as deleted.
+     Every record whose collected amount no longer matches its ledger gets an
+     entry for the difference, from the account doing the saving — see
+     ledgerSync() in finance.js for why this lives at the save rather than at
+     each of the places that write money. A failure here is logged and the save
+     still goes ahead: refusing to save a warden's work because the audit
+     trail could not be extended would lose the work AND the trail. */
+  if (typeof ledgerSync === 'function') {
+    try {
+      const prev = _dbSnapshot.payments;
+      ledgerSync(prev ? Array.from(prev.keys()) : []);
+    } catch (e) { console.error('[HOSTYLLO] ledger reconciliation failed:', e); }
+  }
 
   if (window.electronAPI && window.electronAPI.dbUpsert) {
     try {
@@ -392,44 +500,20 @@ if (window.electronAPI) {
         if (typeof toast === 'function') toast('Backup file is too large or invalid', 'error');
         return;
       }
-      const data   = JSON.parse(jsonString);
-      const dbData = data.db || data;
-
-      /* One validator, shared with Settings -> Import Data. The checks that used
-         to live here — rooms/students are arrays, every record has an id — are
-         a subset of what validateBackup() does, and having two import paths
-         disagree about what a valid backup is meant a file could be refused in
-         one place and accepted in the other. It also adds the check neither
-         path had: reserved keys such as __proto__ anywhere in the document. */
-      if (!Array.isArray(dbData.rooms) || !Array.isArray(dbData.students)) {
-        if (typeof toast === 'function') toast('Invalid backup file — it has no rooms or students', 'error');
-        return;
-      }
-      if (typeof validateBackup === 'function') {
-        const check = validateBackup(dbData);
-        if (!check.ok) {
-          if (typeof toast === 'function') toast(check.reason, 'error', 'Backup rejected');
-          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', check.reason, 'Settings');
-          return;
-        }
-      }
-
-      const MAX_STUDENTS = 10000, MAX_PAYMENTS = 100000;
-      if (Array.isArray(dbData.students) && dbData.students.length > MAX_STUDENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many student records', 'error');
-        return;
-      }
-      if (Array.isArray(dbData.payments) && dbData.payments.length > MAX_PAYMENTS) {
-        if (typeof toast === 'function') toast('Backup contains too many payment records', 'error');
-        return;
-      }
-
-      const result = await window.electronAPI.dbImportFull(dbData);
+      /* One path for every whole-database replacement — importBackupDocument()
+         above holds the validation (validateBackup, shared with Settings, so
+         two import paths cannot disagree about what a valid backup is), the
+         size caps, the key mapping and the reload. */
+      const result = await importBackupDocument(JSON.parse(jsonString));
       if (!result.ok) {
-        if (typeof toast === 'function') toast('Import failed: ' + result.error, 'error');
+        if (result.code === 'INVALID_BACKUP') {
+          if (typeof toast === 'function') toast(result.error, 'error', 'Backup rejected');
+          if (typeof logActivity === 'function') logActivity('Backup Import Rejected', result.error, 'Settings');
+        } else if (typeof toast === 'function') {
+          toast(result.code ? 'Import failed: ' + result.error : result.error, 'error');
+        }
         return;
       }
-      await loadDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
       if (typeof toast         === 'function') toast('Backup imported successfully', 'success');

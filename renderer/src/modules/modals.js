@@ -342,23 +342,7 @@ async function restoreBackup() {
           const btn = document.querySelector('.btn-danger');
           if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
           try {
-            DB = _initDBFields(parsed);
-            /* THE RESTORE IS RECORDED IN THE DATA IT RESTORED. A restore
-               replaces everything, so the row belongs to the database that is
-               here afterwards — restoring an older backup brings that backup's
-               history with it, which is the truthful account. */
-            if (typeof bkRecord === 'function') {
-              await bkRecord('restoreHistory', {
-                at: new Date().toISOString(), file: file.name,
-                students: count, ok: true,
-              });
-            } else {
-              await saveDB();
-            }
-            updateSidebar();
-            navigate('dashboard');
-            toast('Data restored successfully from backup!', 'success');
-            closeModal();
+            await _restoreDocument(parsed, file.name, count, 'Data restored successfully from backup!');
           } finally {
             if (btn && !btn.closest('#modal-container')) { btn.disabled = false; btn.textContent = 'Restore Data from File'; }
           }
@@ -385,24 +369,41 @@ async function restoreFromPaste() {
     showConfirm('Restore from Pasted Data?',
       `This will replace ALL current data (${count} students found in backup). This cannot be undone!`,
       async ()=>{
-        DB = _initDBFields(parsed);
-        if (typeof bkRecord === 'function') {
-          await bkRecord('restoreHistory', {
-            at: new Date().toISOString(), file: 'Pasted text',
-            students: count, ok: true,
-          });
-        } else {
-          await saveDB();
-        }
-        updateSidebar();
-        navigate('dashboard');
-        toast('Data restored from pasted backup!', 'success');
-        closeModal();
+        await _restoreDocument(parsed, 'Pasted text', count, 'Data restored from pasted backup!');
       }
     );
   } catch(err) {
     toast('Invalid JSON — check for errors in pasted data', 'error');
   }
+}
+
+/* BOTH RESTORES GO THROUGH THE MAIN PROCESS (2026-09-14). They used to set
+   DB = _initDBFields(parsed) and saveDB() it, which skipped the main-side
+   validation and the pre-restore snapshot that Settings -> Import Data already
+   had, and which the insert-only collection ledger refuses. See
+   importBackupDocument() in storage.js.
+
+   THE RESTORE IS STILL RECORDED IN THE DATA IT RESTORED. A restore replaces
+   everything, so the row belongs to the database that is here afterwards —
+   restoring an older backup brings that backup's history with it, which is the
+   truthful account. It is written after the reload, onto what is now on disk. */
+async function _restoreDocument(parsed, source, count, successMessage) {
+  const r = await importBackupDocument(parsed);
+  if (!r.ok) {
+    toast(r.error || 'The backup could not be restored', 'error', 'Restore failed');
+    logActivity('Backup Restore Failed', source + ' — ' + (r.error || 'unknown reason'), 'Settings');
+    return false;
+  }
+  if (typeof bkRecord === 'function') {
+    await bkRecord('restoreHistory', {
+      at: new Date().toISOString(), file: source, students: count, ok: true,
+    });
+  }
+  updateSidebar();
+  navigate('dashboard');
+  toast(successMessage, 'success');
+  closeModal();
+  return true;
 }
 
 

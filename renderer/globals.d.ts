@@ -103,6 +103,16 @@ declare function calculateOutstanding(p: any): number;
 declare function calculateBill(rec: any): number;
 declare function applyPayment(p: any, opts?: any): any;
 declare function reversePayment(p: any, opts?: any): any;
+// The warden collection ledger (finance.js). ledgerNet(p.id) === money(p.amount)
+// for every live record; tests/ledger.test.js holds it. LEDGER_SIGN is not
+// declared here: it is a const in finance.js, which is itself type-checked, and
+// a const cannot be declared twice the way a function can.
+declare function ledgerAppend(fields: any): any;
+declare function ledgerIndex(): Map<string, any[]>;
+declare function ledgerNet(paymentId: any, idx?: Map<string, any[]>): number;
+declare function ledgerFor(filter?: { paymentId?: any; studentId?: any; byId?: any }): any[];
+declare function ledgerSync(prevPaymentIds?: Iterable<any>): { added: number };
+declare function ledgerBackfill(): { added: number };
 declare function calculateRefund(p: any): { refundable: number; recorded: number; derived: boolean; reason: string };
 declare function calculateSettlement(studentId: string, opts?: any): any;
 declare function calculateReportTotals(payments: any, opts?: any): any;

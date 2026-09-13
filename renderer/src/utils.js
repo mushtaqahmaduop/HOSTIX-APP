@@ -1242,11 +1242,13 @@ if (typeof module !== 'undefined' && module.exports) {
 const BACKUP_COLLECTIONS = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
   'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
-  'billSplits', 'transfers', 'roomShifts', 'archive',
+  'billSplits', 'transfers', 'roomShifts', 'archive', 'ledger',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
+// The ledger most of all: main.js keys its insert-only rule on the id.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
+  'ledger',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;
