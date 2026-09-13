@@ -282,29 +282,19 @@ test('Add Payment page: the Full chip offers what is still owed, not the whole b
   expect(full, 'Full would charge the 4,000 already collected a second time').toBe(FULL - SOFAR);
 });
 
-test('the per-student Add Payment modal takes the cash received now the same way', async () => {
+test('the retired per-student modal now opens the Add Payment page for that student', async () => {
   const sid = await seed('p_l6');
   await win.evaluate(s => showAddPaymentForStudent(s), sid);
-  await win.waitForSelector('#f-ps-paid', { timeout: 8000 });
-  const opened = await win.evaluate(() => ({
-    box: document.getElementById('f-ps-paid').value,
-    unpaid: Number(document.getElementById('f-ps-unpaid').value),
+  await win.waitForSelector('#f-pcharge', { timeout: 8000 });
+  await win.waitForFunction(s => document.getElementById('f-pstudent')?.value === s, sid, { timeout: 8000 });
+  const r = await win.evaluate(() => ({
+    page: currentPage,
+    modalForm: !!document.getElementById('f-ps-paid'),
+    box: document.getElementById('f-ppaid').value,
   }));
-  expect(opened.box, 'the modal seeds the running total again').toBe('');
-  expect(opened.unpaid).toBe(FULL - SOFAR);
-
-  await win.evaluate(() => {
-    document.getElementById('f-ps-paid').value = '1000';
-    recalcUnpaidPS();
-    submitPaymentForStudent();
-  });
-  await confirmDialog();
-
-  const r = await collected('p_l6');
-  expect(r.amount, 'the modal merge did not add to what was collected').toBe(SOFAR + 1000);
-  expect(r.net).toBe(SOFAR + 1000);
-  expect(r.reversals).toBe(0);
-  await win.evaluate(() => { if (typeof closeModal === 'function') closeModal(); });
+  expect(r.page, 'the old entry point did not reach the Add Payment page').toBe('addpayment');
+  expect(r.modalForm, 'the retired modal form is still being drawn').toBe(false);
+  expect(r.box).toBe('');
 });
 
 test('the dashboard month view no longer edits a collected amount in place', async () => {

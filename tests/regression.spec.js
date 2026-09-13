@@ -75,6 +75,31 @@ async function seedRoomAndStudent(win) {
     (DB.students.find(s => s.name === 'Reg Test Student') || {}).id);
 }
 
+/* Record one payment through the Add Payment PAGE — the only collection form
+   since 2026-09-14. These tests used the per-student modal, which no screen
+   opened any more and which the owner retired; the partial, overpayment and
+   receipt assertions they carry are about the money, not the form, and are
+   unchanged. DB.payments is cleared first for the same reason it always was:
+   admission creates a Pending record for this month, and collecting against
+   it would take the merge path instead of creating the record under test. */
+async function recordOnPage(win, sid, rent, paid) {
+  await win.evaluate(s => { DB.payments = []; openAddPayment(s); }, sid);
+  await win.waitForSelector('#f-pcharge', { timeout: 8000 });
+  await win.waitForFunction(s => document.getElementById('f-pstudent')?.value === s, sid, { timeout: 8000 });
+  await win.waitForTimeout(300);
+  return await win.evaluate(async ([rent, paid]) => {
+    const r = document.getElementById('f-prent') || document.getElementById('f-pamt');
+    if (r) r.value = String(rent);
+    const m = document.getElementById('f-pmess');
+    if (m) m.value = '0';
+    document.getElementById('f-ppaid').value = String(paid);
+    recalcUnpaid();
+    await submitAddPayment();
+    const p = DB.payments[DB.payments.length - 1];
+    return { amount: p.amount, unpaid: p.unpaid, monthlyRent: p.monthlyRent, id: p.id };
+  }, [rent, paid]);
+}
+
 test.beforeAll(() => {
   if (!PROFILE) throw new Error('HOSTIX_TEST_PROFILE env var is not set');
   if (!fs.existsSync(path.join(PROFILE, 'license.enc')))
@@ -104,16 +129,7 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
   expect(studentId, 'seeded student missing').toBeTruthy();
 
   // ── Partial payment: rent 16000, paid 10000 → unpaid 6000, status carries paid amount.
-  const partial = await win.evaluate((sid) => {
-    DB.payments = []; // avoid the admission auto-Pending duplicate guard
-    showAddPaymentForStudent(sid);
-    document.getElementById('f-ps-amt').value = '16000';
-    document.getElementById('f-ps-paid').value = '10000';
-    if (document.getElementById('f-ps-stat')) document.getElementById('f-ps-stat').value = 'Pending';
-    submitPaymentForStudent();
-    const p = DB.payments[DB.payments.length - 1];
-    return { amount: p.amount, unpaid: p.unpaid, monthlyRent: p.monthlyRent, id: p.id };
-  }, studentId);
+  const partial = await recordOnPage(win, studentId, 16000, 10000);
   expect(partial.amount, 'partial paid amount wrong').toBe(10000);
   expect(partial.unpaid, 'partial unpaid should be rent - paid').toBe(6000);
   expect(partial.monthlyRent).toBe(16000);
@@ -125,15 +141,7 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
     'partial payment not persisted to SQLite').toBeTruthy();
 
   // ── Overpayment: rent 16000, paid 20000 → unpaid clamps to 0, amount keeps 20000.
-  const over = await win.evaluate((sid) => {
-    DB.payments = [];
-    showAddPaymentForStudent(sid);
-    document.getElementById('f-ps-amt').value = '16000';
-    document.getElementById('f-ps-paid').value = '20000';
-    submitPaymentForStudent();
-    const p = DB.payments[DB.payments.length - 1];
-    return { amount: p.amount, unpaid: p.unpaid, id: p.id };
-  }, studentId);
+  const over = await recordOnPage(win, studentId, 16000, 20000);
   expect(over.amount, 'overpayment amount wrong').toBe(20000);
   expect(over.unpaid, 'overpayment unpaid must clamp to 0').toBe(0);
 
@@ -240,13 +248,7 @@ test('schema migration: indexed WHERE queries work end-to-end via dbAll', async 
   expect(studentId).toBeTruthy();
 
   // Add a payment for that student so payments.studentId is exercised.
-  await win.evaluate((sid) => {
-    DB.payments = [];
-    showAddPaymentForStudent(sid);
-    document.getElementById('f-ps-amt').value = '16000';
-    document.getElementById('f-ps-paid').value = '16000';
-    submitPaymentForStudent();
-  }, studentId);
+  await recordOnPage(win, studentId, 16000, 16000);
   await win.waitForTimeout(250);
 
   // Filtered reads go through db:all's WHERE path against the migrated,
