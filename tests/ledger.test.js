@@ -364,6 +364,72 @@ ok('a record with nothing collected and nothing reversed imports nothing', () =>
   assert.strictEqual(DB.ledger.length, 0);
 });
 
+console.log('\nadjustments — a bill corrected, never collected money');
+
+const L = vm.runInContext('({ ledgerChargeFacts, ledgerChargesDiffer, ledgerAdjust })', sandbox);
+
+ok('a record and the same fields read off a form describe the same bill', () => {
+  setup();
+  const p = record({ extraCharges: [{ label: 'Laundry', amount: 500 }], extraTotal: 500, concession: 300 });
+  const fromForm = L.ledgerChargeFacts({ monthlyRent: 8000, messCharge: 2000, messIncluded: true,
+                                         extraTotal: 500, admissionFee: 0, concession: 300 });
+  assert.deepStrictEqual(L.ledgerChargeFacts(p), fromForm);
+  assert.strictEqual(fromForm.bill, 10200);
+  assert.strictEqual(L.ledgerChargesDiffer(L.ledgerChargeFacts(p), fromForm), false);
+});
+
+ok('mess switched off bills no mess, whatever amount is typed beside it', () => {
+  const on  = L.ledgerChargeFacts({ monthlyRent: 8000, messCharge: 2000, messIncluded: true });
+  const off = L.ledgerChargeFacts({ monthlyRent: 8000, messCharge: 2000, messIncluded: false });
+  assert.strictEqual(off.mess, 0);
+  assert.strictEqual(L.ledgerChargesDiffer(on, off), true);
+});
+
+ok('an adjustment records before, after, the change and the reason, attributed to the session', () => {
+  setup();
+  as('uB', 'Warden B');
+  const p = record(); DB.payments.push(p);
+  const before = L.ledgerChargeFacts(p);
+  const after  = L.ledgerChargeFacts(Object.assign({}, p, { monthlyRent: 9000 }));
+  const e = L.ledgerAdjust(p, before, after, 'Rent corrected to the new rate', 'edit');
+  assert.ok(e, 'no adjustment was written');
+  assert.strictEqual(e.type, 'adjustment');
+  assert.strictEqual(e.amount, 1000);
+  assert.strictEqual(e.before.rent, 8000);
+  assert.strictEqual(e.after.rent, 9000);
+  assert.strictEqual(e.reason, 'Rent corrected to the new rate');
+  assert.strictEqual(e.byId, 'uB');
+  assert.strictEqual(e.paymentId, 'p1');
+});
+
+ok('a concession raised is a negative adjustment', () => {
+  setup();
+  const p = record(); DB.payments.push(p);
+  const e = L.ledgerAdjust(p, L.ledgerChargeFacts(p),
+    L.ledgerChargeFacts(Object.assign({}, p, { concession: 1500 })), 'hardship', 'edit');
+  assert.strictEqual(e.amount, -1500);
+});
+
+ok('an edit that changes nothing on the bill writes nothing', () => {
+  setup();
+  const p = record(); DB.payments.push(p);
+  const f = L.ledgerChargeFacts(p);
+  assert.strictEqual(L.ledgerAdjust(p, f, L.ledgerChargeFacts(Object.assign({}, p, { notes: 'x' })), '', 'edit'), null);
+  assert.strictEqual(DB.ledger.length, 0);
+});
+
+ok('an adjustment never moves what the ledger says was collected', () => {
+  setup();
+  const p = record(); DB.payments.push(p);
+  F.applyPayment(p, { amount: 6000 });
+  L.ledgerAdjust(p, L.ledgerChargeFacts(p),
+    L.ledgerChargeFacts(Object.assign({}, p, { monthlyRent: 1 })), 'typo', 'edit');
+  assert.strictEqual(F.ledgerNet('p1'), 6000);
+  F.ledgerSync(['p1']);
+  assert.strictEqual(DB.ledger.length, 2, 'sync mistook an adjustment for cash');
+  assertConserved();
+});
+
 console.log('\nthe sign table');
 
 ok('only money-moving types count toward a record\'s net', () => {

@@ -408,6 +408,47 @@ function ledgerFor(filter) {
     && (f.byId      == null || String(e.byId)      === String(f.byId)));
 }
 
+/* WHAT A RECORD BILLS, as the ledger describes it. Takes a stored record or the
+   same fields read off a form, so an edit can be compared before it is applied.
+   `mess` is the mess actually billed — 0 when the record or form has it off. */
+function ledgerChargeFacts(rec) {
+  const r = rec || {};
+  const facts = {
+    rent:         money(r.monthlyRent != null ? r.monthlyRent : r.rent),
+    mess:         r.messIncluded === false ? 0 : money(r.messCharge != null ? r.messCharge : r.mess),
+    extras:       r.extraTotal != null ? money(r.extraTotal) : moneySum(r.extraCharges, c => c && c.amount),
+    admissionFee: money(r.admissionFee != null ? r.admissionFee : r.fee),
+    concession:   money(r.concession   != null ? r.concession   : r.discount),
+  };
+  return Object.assign(facts, { bill: calculateBill(r) });
+}
+
+const _LEDGER_CHARGE_KEYS = ['rent', 'mess', 'extras', 'admissionFee', 'concession'];
+
+/** Does anything that makes up the bill differ between two ledgerChargeFacts()? */
+function ledgerChargesDiffer(a, b) {
+  return _LEDGER_CHARGE_KEYS.some(k => money(a && a[k]) !== money(b && b[k]));
+}
+
+/* A CHANGE TO WHAT A RECORD BILLS (warden ledger spec, Phase 2). Collected money
+   is never edited — that is a reversal — but a bill can still be corrected, and
+   the correction is recorded with what it was, what it became and why.
+   `amount` is the change to the bill (negative when it went down). The type is
+   absent from LEDGER_SIGN on purpose: a bill is not cash, and an adjustment
+   must never move what the ledger says was collected. Returns null when
+   nothing that makes up the bill changed. */
+function ledgerAdjust(p, before, after, reason, source) {
+  if (!p || !ledgerChargesDiffer(before, after)) return null;
+  return ledgerAppend(Object.assign(_ledgerFacts(p), {
+    type: 'adjustment',
+    amount: money(after && after.bill) - money(before && before.bill),
+    before, after,
+    reason: reason || undefined,
+    date: typeof today === 'function' ? today() : '',
+    source: source || 'edit',
+  }));
+}
+
 /* Reconcile the ledger with the records, before a save. `prevPaymentIds` is
    what the last successful save held, so a record that has since vanished can
    be told apart from one that never existed. A record that vanished into

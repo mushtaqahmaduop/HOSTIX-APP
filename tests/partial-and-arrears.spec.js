@@ -6,9 +6,11 @@
 //     The duplicate guard returned before the arrears were posted, so once
 //     August was paid, July's balance could not be taken until September.
 //  2. A part paid month must arrive on the form as a part paid month: what has
-//     already been collected shown, the box seeded with it, and saving ADDING
-//     to that figure rather than replacing it. It used to open blank, charge
-//     the whole month again, and overwrite the earlier collection on save.
+//     already been collected shown, and saving ADDING to that figure rather
+//     than replacing it. It used to open blank, charge the whole month again,
+//     and overwrite the earlier collection on save. Since 2026-09-14 the box is
+//     the cash received now (it opens empty; what is already in shows in the
+//     banner and the balance) rather than a running total seeded with it.
 // ════════════════════════════════════════════════════════════════════════════
 'use strict';
 
@@ -222,12 +224,16 @@ test('a part paid month arrives part paid, and the balance adds to it', async ()
 
   expect(shown.cls, 'part paid, not settled').toContain('is-partial');
   expect(shown.banner).toContain('part paid');
-  expect(Number(shown.paidBox), 'the box is seeded with what was already taken').toBe(PAID_SO_FAR);
+  /* The box is the cash being handed over NOW (owner, 2026-09-14), so it opens
+     empty — what was already collected is in the banner and the balance, not in
+     a field a warden might type over. It used to be seeded with the running
+     total, and typing the cash in hand replaced the collected amount. */
+  expect(shown.paidBox, 'the box takes today\'s cash, so it opens empty').toBe('');
   expect(Number(shown.unpaid), 'and the remaining balance is the real one').toBe(FULL - PAID_SO_FAR);
   expect(shown.summary, 'the summary agrees with the record').toContain('10,500');
 
-  // The student hands over the remaining 10,500 → running total 14,500.
-  await win.fill('#f-ppaid', String(FULL));
+  // The student hands over the remaining 10,500 — typed as it is, not as a total.
+  await win.fill('#f-ppaid', String(FULL - PAID_SO_FAR));
   await win.evaluate(() => recalcUnpaid());
   await win.evaluate(() => submitAddPayment());
   // The merge is behind a confirm; take it.
