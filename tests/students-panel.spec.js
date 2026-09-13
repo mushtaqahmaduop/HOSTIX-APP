@@ -195,18 +195,25 @@ test('Documents does not pretend files exist', async () => {
 
   const doc = await win.evaluate(() => ({
     text: document.getElementById('stu-panel-body').innerText.replace(/\s+/g, ' '),
+    kinds: STU_DOC_KINDS.map(k => k.label),
     rows: [...document.querySelectorAll('.stu-pan__doc__n')].map(n => n.innerText.trim()),
     states: [...document.querySelectorAll('.stu-pan__doc__s')].map(n => n.innerText.trim()),
-    disabled: [...document.querySelectorAll('.stu-pan__mini')].map(b => b.disabled),
+    buttons: [...document.querySelectorAll('.stu-pan__mini')]
+               .map(b => b.innerText.trim() + ':' + (b.disabled ? 'off' : 'on')),
   }));
 
-  expect(doc.rows).toEqual(['Student photo', 'CNIC / ID document', 'Admission form']);
-  /* Nothing is uploaded, because `docs` holds only `photo` and this student has
-     none. Every control is disabled and the note says why — §28: show it as a
-     planned feature rather than pretend. */
+  /* Document storage landed on 2026-09-10 (students.js, STU_DOC_KINDS), so the
+     rows are the kinds the intake form attaches, read from the app rather than
+     copied here — a renamed kind should not need this test edited to pass.
+     Still nothing uploaded for this student, and still nothing pretends: the
+     photo cannot be viewed or downloaded because there is no photo, and every
+     other row offers Attach, which genuinely works. The "not enabled yet" note
+     went with the placeholders and must not come back. */
+  expect(doc.rows).toEqual(['Student photo', ...doc.kinds]);
   expect(doc.states.every(s => s === 'Not uploaded')).toBe(true);
-  expect(doc.disabled.every(Boolean)).toBe(true);
-  expect(doc.text).toMatch(/Document storage is not enabled yet/i);
+  expect(doc.buttons).toEqual(['View:off', 'Download:off',
+    ...doc.kinds.map(() => 'Attach:on'), 'Attach another document:on']);
+  expect(doc.text).not.toMatch(/Document storage is not enabled yet/i);
 
   await app.close();
 });
@@ -696,18 +703,20 @@ test('Documents offers Download only where there is a file', async () => {
   await win.waitForTimeout(400);
   await seed(win, { withShift: false });
 
-  // No photo on the record yet: every control stays disabled (§28).
+  // No photo on the record yet: the photo's own View and Download stay disabled
+  // (§28), and every document kind offers Attach, which works since 2026-09-10.
   await openPanel(win);
   await win.evaluate(() => stuPanelTab('documents'));
   await win.waitForTimeout(300);
+  const attach = await win.evaluate(() => STU_DOC_KINDS.map(() => 'Attach:on'));
   expect(await win.evaluate(
     () => [...document.querySelectorAll('.stu-pan__doc__a button')]
             .map(b => b.innerText.trim() + ':' + (b.disabled ? 'off' : 'on'))))
-    .toEqual(['View:off', 'Download:off', 'View:off', 'Download:off', 'View:off', 'Download:off']);
+    .toEqual(['View:off', 'Download:off', ...attach]);
 
-  /* WITH a photo, the photo's two controls come alive and the other two rows do
-     not — there is still no CNIC scan and no admission form in the data model,
-     and a Download that produces no file is worse than one visibly not ready. */
+  /* WITH a photo, the photo's two controls come alive and nothing else changes —
+     the other kinds still hold no file, and a Download that produces no file is
+     worse than one visibly not ready. */
   await win.evaluate(async () => {
     DB.students[0].docs = { photo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
       + 'CAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
@@ -718,7 +727,7 @@ test('Documents offers Download only where there is a file', async () => {
   expect(await win.evaluate(
     () => [...document.querySelectorAll('.stu-pan__doc__a button')]
             .map(b => b.innerText.trim() + ':' + (b.disabled ? 'off' : 'on'))))
-    .toEqual(['View:on', 'Download:on', 'View:off', 'Download:off', 'View:off', 'Download:off']);
+    .toEqual(['View:on', 'Download:on', ...attach]);
 
   /* The file it would save: named for the student, and carrying the extension
      the data URI's own MIME type declares. Renaming a PNG to .jpg produces a
