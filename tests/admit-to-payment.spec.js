@@ -189,36 +189,26 @@ test('admit a student with full detail, then proceed to payment', async () => {
   if (receipt) console.log('\n[receipt text] ' + receipt.slice(0, 600));
 
   // ── Screen 2: Add Payment from the student row, same student ──────────────
-  /* The per-student Add Payment modal was retired on 2026-09-14; the student
-     row's entry point opens the Add Payment page, so that is what this screen
-     checks. The page quotes the same monthly charge. It does NOT quote 17,000
-     as still owed: the page knows this month was just settled and says so,
-     where the modal ignored the Paid record and offered to charge it again. */
   await win.evaluate(() => navigate('students'));
   await win.waitForTimeout(400);
   await win.evaluate(sid => showAddPaymentForStudent(sid), student.id);
-  await win.waitForSelector('#f-pcharge', { timeout: 8000 });
-  await win.waitForFunction(sid => document.getElementById('f-pstudent')?.value === sid,
-    student.id, { timeout: 8000 });
-  await win.waitForTimeout(300);
+  await win.waitForSelector('#f-ps-amt', { timeout: 8000 });
   const screen2 = await win.evaluate(() => {
     const q = id => document.getElementById(id);
     return {
-      page: currentPage,
-      rent: (q('f-prent') || q('f-pamt')).value,
-      mess: q('f-pmess') ? q('f-pmess').value : 'NO MESS FIELD',
-      charge: q('f-pcharge').value,
-      unpaid: q('f-punpaid').value,
-      banner: q('pf-month-state') ? q('pf-month-state').innerText : '',
+      rent: q('f-ps-amt').value,
+      mess: q('f-ps-mess') ? q('f-ps-mess').value : 'NO MESS FIELD',
+      messOn: q('f-ps-mess-on') ? q('f-ps-mess-on').checked : null,
+      unpaid: q('f-ps-unpaid').value,
+      header: q('f-ps-studentId') ? document.querySelector('.modal-body').innerText.slice(0, 200) : null,
     };
   });
   console.log('\n[screen 2 — Add Payment for student]\n' + JSON.stringify(screen2, null, 2));
-  expect(screen2.page, 'screen 2 should be the Add Payment page').toBe('addpayment');
   expect(screen2.rent, 'screen 2 rent').toBe('10000');
   expect(screen2.mess, 'screen 2 mess').toBe('7000');
-  expect(screen2.charge.replace(/,/g, ''), 'screen 2 monthly charge').toBe('17000');
-  expect(Number(screen2.unpaid), 'a settled month must not be offered as owed again').toBe(0);
-  expect(screen2.banner, 'the page should say the month is settled').toContain('already settled');
+  expect(screen2.unpaid, 'screen 2 monthly charge').toBe('17000');
+  await win.evaluate(() => closeModal());
+  await win.waitForTimeout(300);
 
   // ── Screen 3: Edit the payment we just saved ──────────────────────────────
   await win.evaluate(pid => showEditPaymentModal(pid), pay.id);

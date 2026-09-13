@@ -3291,22 +3291,15 @@ async function importData(input) {
     }
 
     showConfirm('Import Data?','This will replace all current data with the imported backup.',async ()=>{
-      /* THROUGH db:importFull SINCE 2026-09-14 — see importBackupDocument() in
-         storage.js. It set DB = _initDBFields(data) and saveDB()'d it, which
-         skipped the main-side validation and the pre-restore snapshot, and
-         cannot replace the insert-only collection ledger.
-
-         The in-memory DB is still only replaced once the write has SUCCEEDED:
-         importBackupDocument() reloads from disk after the import commits, and
-         a refused import leaves memory and disk exactly as they were. */
-      const r = await importBackupDocument(data);
-      if (!r.ok) {
-        if (r.code === 'INVALID_BACKUP') {
-          toast(r.error, 'error', 'Backup rejected');
-          logActivity('Backup Import Rejected', r.error, 'Settings');
-        } else {
-          toast(r.error || 'The backup could not be written — nothing was changed', 'error');
-        }
+      // The in-memory DB is only replaced once the write has SUCCEEDED. The old
+      // order set DB first and saved after, so a failed write left memory and
+      // disk disagreeing with no way back.
+      const prev = DB;
+      DB = _initDBFields(data);
+      const okSave = await saveDB();
+      if (okSave === false) {
+        DB = prev;
+        toast('The backup could not be written — nothing was changed', 'error');
         return;
       }
       logActivity('Backup Imported', file.name || 'backup.json', 'Settings');
@@ -3595,25 +3588,20 @@ async function resetAllData() {
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,
     // billSplits, cancellations, checkinlog as orphaned ghost records.
-    //
-    // THROUGH db:importFull SINCE 2026-09-14, like a restore. It used to empty
-    // DB in memory and saveDB() it, which left nothing on disk to recover from
-    // and cannot clear the insert-only collection ledger. importFull snapshots
-    // the live database first (the recovery screen lists it), and the ledger
-    // goes with the payments it describes. What Reset never cleared — the
-    // annual archive, legacy fund transfers, settings — it still does not.
-    const r = await importBackupDocument({
-      students: [], payments: [], expenses: [], cancellations: [],
-      maintenance: [], complaints: [], fines: [], notices: [],
-      activityLog: [], inspections: [], billSplits: [], checkinlog: [],
-      ledger: [],
-      rooms: generateRooms(),
-      transfers: DB.transfers || [],
-      archive: DB.archive || [],
-      settings: DB.settings,
-    });
-    if (!r.ok) { toast(r.error || 'The reset could not be completed', 'error', 'Reset failed'); return; }
-    navigate('dashboard'); toast('All data reset','info');
+    DB.students=[];
+    DB.payments=[];
+    DB.expenses=[];
+    DB.cancellations=[];
+    DB.maintenance=[];
+    DB.complaints=[];
+    DB.fines=[];
+    DB.notices=[];
+    DB.activityLog=[];
+    DB.inspections=[];
+    DB.billSplits=[];
+    DB.checkinlog=[];
+    DB.rooms=generateRooms();
+    await saveDB(); navigate('dashboard'); toast('All data reset','info');
   });
 }
 

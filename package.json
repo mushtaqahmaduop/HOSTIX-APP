@@ -27,7 +27,6 @@
     "test:servicemodel": "node tests/service-model.test.js",
     "test:outstanding": "node tests/outstanding.test.js",
     "test:finance": "node tests/finance.test.js",
-    "test:ledger": "node tests/ledger.test.js",
     "test:cashevents": "node tests/cash-events.test.js",
     "test:reporttotals": "node tests/report-totals.test.js",
     "test:feestatus": "node tests/fee-status.test.js",

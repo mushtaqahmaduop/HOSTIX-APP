@@ -44,23 +44,7 @@ let dbPath = null;
    notices until they need the data. */
 const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
   'maintenance','complaints','checkinlog','notices','fines',
-  'activitylog','inspections','billsplits','transfers','archive',
-  'ledger'];
-
-/* Tables a database written by an OLDER build legitimately lacks. The recovery
- * check below refuses a snapshot missing any BACKUP_TABLES entry — right for a
- * file of somebody else's schema, and wrong for every pre-restore snapshot and
- * pre-v1 backup this app wrote before the table existed. initDatabase() creates
- * these with CREATE TABLE IF NOT EXISTS on the next boot after a recovery. */
-const TABLES_ADDED_LATER = new Set(['ledger']);
-
-/* Append-only tables. A row may be inserted, and an IDENTICAL row may be sent
- * again (saveDB's full-rewrite fallback sends every row), but a row that
- * exists is never replaced or deleted through the renderer bridge. Owner's
- * requirement for the collection ledger: nobody — warden or admin — can
- * quietly alter a recorded amount. db:importFull is the one sanctioned
- * replacement, and it snapshots the database before it commits. */
-const INSERT_ONLY_TABLES = new Set(['ledger']);
+  'activitylog','inspections','billsplits','transfers','archive'];
 
 /* DATABASE HEALTH  —  spec §17.
  *
@@ -168,8 +152,7 @@ function _classifyWriteError(e) {
  * message, and re-describing "this licence is suspended" as "the change could
  * not be saved" would lose the only sentence that explains anything. So the
  * sentinels pass through untouched and everything else gets classified. */
-const _SENTINEL_CODES = ['LICENCE_READ_ONLY', 'DB_CORRUPT', 'DB_UNAVAILABLE', 'INVALID_BACKUP',
-  'LEDGER_IMMUTABLE'];
+const _SENTINEL_CODES = ['LICENCE_READ_ONLY', 'DB_CORRUPT', 'DB_UNAVAILABLE', 'INVALID_BACKUP'];
 
 function _writeFailure(e) {
   if (e && _SENTINEL_CODES.includes(e.code)) {
@@ -339,7 +322,6 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS billsplits    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS transfers     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS archive       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS ledger        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
 
   // ── Relational-schema migration (Phase 2 §6.3) ──────────────────────────────
@@ -418,8 +400,7 @@ function _verifySnapshot(file) {
     // passes integrity_check and would still leave the app broken.
     const have = new Set(h.prepare(
       "SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name));
-    const missing = ['settings', ...BACKUP_TABLES]
-      .filter(t => !have.has(t) && !TABLES_ADDED_LATER.has(t));
+    const missing = ['settings', ...BACKUP_TABLES].filter(t => !have.has(t));
     if (missing.length) {
       return { ok: false, reason: `This backup is missing ${missing.length} table(s): ${missing.slice(0, 4).join(', ')}.` };
     }
@@ -2213,47 +2194,12 @@ function _preRestoreSnapshot() {
   }
 }
 
-/* THE INSERT-ONLY RULE, for INSERT_ONLY_TABLES (top of file).
- *
- * Here, at the boundary, and not in the renderer, for the same reason as the
- * write gate below: the renderer is the side that can choose not to check.
- * The collection ledger is the owner's answer to "who took this money", and an
- * answer any screen could overwrite answers nothing.
- *
- * An IDENTICAL resend succeeds. saveDB()'s full-rewrite fallback sends every
- * row of every table, and refusing a row that is already exactly on disk would
- * turn a harmless retry into a failed save. Anything else that names an
- * existing id is refused — a different amount, a different warden, anything.
- *
- * This guards the three generic write channels. db:importFull still replaces
- * the table, because a restore legitimately replaces everything; it validates
- * and snapshots the database before it commits. */
-function _ledgerRefusal(message) {
-  const err = new Error(message);
-  err.code = 'LEDGER_IMMUTABLE';
-  return err;
-}
-
-function _insertOnly(table, id, record) {
-  if (id === undefined || id === null || String(id).trim() === '') {
-    throw _ledgerRefusal('A ledger entry must have an id.');
-  }
-  const json = JSON.stringify(record);
-  const row  = db.prepare(`SELECT data FROM ${table} WHERE id = ?`).get(id);
-  if (row) {
-    if (row.data === json) return;          // already on disk, exactly
-    throw _ledgerRefusal('A recorded collection cannot be changed. Record a reversal instead.');
-  }
-  db.prepare(`INSERT INTO ${table} (id, data) VALUES (?, ?)`).run(id, json);
-}
-
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
     _assertRendererTable(table);
     _assertDbWritable();
     _assertWritable(table);
-    if (INSERT_ONLY_TABLES.has(table)) _insertOnly(table, id, record);
-    else _dbInsert(table, id, record);
+    _dbInsert(table, id, record);
     return { ok: true };
   } catch (e) { return _writeFailure(e); }
 });
@@ -2263,9 +2209,6 @@ ipcMain.handle('db:delete', (_e, table, id) => {
     _assertRendererTable(table);
     _assertDbWritable();
     _assertWritable(table);
-    if (INSERT_ONLY_TABLES.has(table)) {
-      throw _ledgerRefusal('A recorded collection cannot be deleted.');
-    }
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
     return { ok: true };
   } catch (e) { return _writeFailure(e); }
@@ -2276,14 +2219,6 @@ ipcMain.handle('db:bulkReplace', (_e, table, records) => {
     _assertRendererTable(table);
     _assertDbWritable();
     _assertWritable(table);
-    if (INSERT_ONLY_TABLES.has(table)) {
-      // Never the DELETE below. New rows are inserted, identical rows pass, and
-      // one altered row rolls the whole call back.
-      db.transaction((rows) => {
-        for (const r of rows) _insertOnly(table, r && r.id, r);
-      })(Array.isArray(records) ? records : []);
-      return { ok: true };
-    }
     const transaction = db.transaction((rows) => {
       db.prepare(`DELETE FROM ${table}`).run();
       for (const r of rows) _dbInsert(table, r.id, r);

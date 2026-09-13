@@ -2977,9 +2977,7 @@ function renderMonthModal(monthKey, monthLabel) {
     <td style="color:var(--text2);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
     <td class="text-muted">${escHtml(p.month||'—')}</td>
     <td>
-      ${money(p.amount) > 0
-        ? `<span title="Collected — corrected with Reverse on the Payments page">${fmtPKR(p.amount)}</span>`
-        : `<span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>`}
+      <span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>
     </td>
     <td>${pmBadge(p.method)}</td>
     <td>
@@ -3101,15 +3099,6 @@ function switchMonthTab(tab) {
 async function editMonthFeeField(payId, field, cell) {
   const pay = DB.payments.find(p=>p.id===payId);
   if(!pay) return;
-  /* Collected money is not edited in place (warden ledger spec, Phase 2). This
-     cell used to accept any figure, including a lower one, with nothing saying
-     it had happened; a correction is a reversal on the Payments page, which
-     records the reason. The cell no longer offers the edit — this is the rule
-     for any other way of reaching it. */
-  if (field === 'amount' && money(pay.amount) > 0) {
-    toast('Collected amounts are corrected with Reverse on the Payments page, which records why.', 'info');
-    return;
-  }
   const old = field==='amount'?pay.amount:pay[field];
   const inp = document.createElement('input');
   inp.type = field==='date'?'date':'text';

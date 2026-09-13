@@ -1823,9 +1823,6 @@ function pfLoadMonthContext() {
   const concEl = document.getElementById('f-pconcession');
   const cdEl   = document.getElementById('f-pconcession-desc');
   const list   = document.getElementById('extra-charges-list');
-  // What the month already holds rides on the box as data (recalcUnpaid reads
-  // it); a month with no record holds nothing.
-  if (paidEl) paidEl.dataset.already = '0';
 
   if (!rec) {
     box.style.display = 'none'; box.innerHTML = '';
@@ -1856,13 +1853,10 @@ function pfLoadMonthContext() {
     list.innerHTML = '';
     (rec.extraCharges || []).forEach(c => addExtraChargeRow(c.description || c.label || '', c.amount || 0));
   }
-  /* THE BOX IS THE CASH RECEIVED NOW (owner, 2026-09-14), added on save to what
-     the month already holds. It was seeded with the running total, and a warden
-     who typed the cash in their hand replaced the collected amount with it —
-     4,000 taken, 1,000 typed, 1,000 saved. What is already in rides on the box
-     as data, so recalcUnpaid() shows the true balance, and is stated in the
-     banner, where it can be read but not typed over. */
-  if (paidEl) { paidEl.value = ''; paidEl.dataset.already = String(money(already)); }
+  // The box is the running total for the month, not today's instalment. Seeding
+  // it with what has already been taken means the warden edits a figure they
+  // can see instead of overwriting one they cannot.
+  if (paidEl) paidEl.value = already || '';
 
   box.style.display = '';
   box.className = 'pf-mstate ' + (settled ? 'is-paid' : 'is-partial');
@@ -1874,8 +1868,8 @@ function pfLoadMonthContext() {
         rec.paidDate ? ' on ' + escHtml(rec.paidDate) : ''}. Nothing more is owed for this month — use
        <b>Receive Outstanding</b> below to take money for an earlier month.</div>`
     : `<div><b>${escHtml(month)} is part paid.</b> ${fmtPKR(already)} collected so far,
-       <b>${fmtPKR(owing)}</b> still owing.<br>Enter only the cash being handed over <b>now</b> —
-       it is added to what was already collected.</div>`);
+       <b>${fmtPKR(owing)}</b> still owing.<br>Amount Paid below is the <b>total for this
+       month</b> and already holds what was taken — raise it by whatever is being handed over now.</div>`);
   recalcUnpaid();
 }
 
@@ -2056,16 +2050,7 @@ function recalcUnpaid() {
      still capped and still says so. */
   const paidEl  = document.getElementById('f-ppaid');
   let pa = money(parseFloat(paidEl?.value)||0);
-  /* WHAT THE MONTH ALREADY HOLDS (owner, 2026-09-14). On the Add Payment page
-     the box is the cash received NOW, and pfLoadMonthContext() puts what was
-     collected before on the box as data. Everything below reasons about the two
-     together — the balance, the credit, the status — so it tells the warden
-     what the month will hold after this receipt. The Edit form carries no such
-     data (its box is the whole collected figure, and is read-only once there is
-     one), so `already` is 0 there and nothing about it changes. */
-  const already = money(parseFloat(paidEl?.dataset?.already)||0);
-  const remaining = Math.max(0, total - already);
-  const implausible = total > 0 && already + pa > total * 2;
+  const implausible = total > 0 && pa > total * 2;
   const note = (text, tone) => {
     let w = document.getElementById('f-ppaid-cap-warn');
     if (!text) { if (w) w.remove(); return; }
@@ -2079,21 +2064,21 @@ function recalcUnpaid() {
     w.textContent = text;
   };
   if (implausible) {
-    pa = remaining;
-    if(paidEl) { paidEl.value = remaining; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to what is still owed: ' + remaining; }
-    note('⚠️ Amount capped to what is still owed (' + Number(remaining).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
-  } else if (already + pa > total && total > 0) {
+    pa = total;
+    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
+    note('⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
+  } else if (pa > total && total > 0) {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
-    note(fmtPKR(already + pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
+    note(fmtPKR(pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
   } else {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
     note('');
   }
-  const u = Math.max(0, total - already - pa);
+  const u = Math.max(0, total - pa);
   const el = document.getElementById('f-punpaid');
   if(el){ el.value=u; el.style.color=u>0?'var(--red)':u===0?'var(--green)':'var(--amber)'; }
   const st = document.getElementById('f-pstat');
-  if(st) st.value = (already + pa >= total && total > 0) ? 'Paid' : 'Pending';
+  if(st) st.value = (pa >= total && total > 0) ? 'Paid' : 'Pending';
   const etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'Rs. ' + Number(extra).toLocaleString('en-PK');
 
@@ -2103,7 +2088,7 @@ function recalcUnpaid() {
   setSum('pf-sum-rent',  mr);
   setSum('pf-sum-mess',  mess);
   setSum('pf-sum-extra', extra);
-  setSum('pf-sum-paid',  already + pa);
+  setSum('pf-sum-paid',  pa);
   setSum('pf-sum-due',   u);
 
   /* The Add Payment page's amount column — the same terms, one per line. A
@@ -2123,18 +2108,14 @@ function recalcUnpaid() {
   wsLine('02', Math.abs(net02), net02);
   wsLine('03', extra,  1);
   wsLine('04', pa,    -1);
-  // The Full chip is what is still owed: offering the whole bill on a part-paid
-  // month would charge the money already collected a second time.
   const qf = document.getElementById('ws-q-full');
-  if (qf) qf.textContent = fmtNum(remaining);
+  if (qf) qf.textContent = fmtNum(total);
   pfPostLine();
 
   // The Add Payment page's right-hand summary is the same arithmetic, itemised.
-  // "Paid this month" is everything the month will hold — what was already in
-  // plus this receipt — so Payable − Paid = Remaining still reads down the stub.
   pfRenderSummary({
     charge: mr + mess, admFee: admFee, extra: extra,
-    concession: conc, total: total, paid: already + pa, unpaid: u
+    concession: conc, total: total, paid: pa, unpaid: u
   });
   apUpdateSteps();
   pefPaintSummary(total, pa, u);
@@ -2232,23 +2213,309 @@ function addExtraChargeRow(descOrLabel='', amount='') {
   recalcUnpaid();
 }
 
-/* THE PER-STUDENT ADD PAYMENT MODAL IS RETIRED (owner, 2026-09-14).
-
-   No screen opened it any more — the student panel's Add Payment goes to the
-   page — but it was still a second copy of the collection form with a merge of
-   its own, and that merge was broken: it read its form inside a showConfirm()
-   callback, and showConfirm() opens its dialog with showModal(), which REPLACES
-   the open modal. Confirming "update the existing record" read empty fields and
-   set the month's collected amount to 0; its "Already Paid → add anyway" path
-   re-read the same empty form. One collection form now. The name is kept
-   because tests and older call sites use it, and it opens the page. */
 function showAddPaymentForStudent(studentId) {
   // Collecting money is its own permission, separate from 'edit'.
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
-  if (!DB.students.some(s => s.id === studentId)) return;
-  openAddPayment(studentId);
+  const t = DB.students.find(s => s.id === studentId);
+  if (!t) return;
+  const c = resolveCharges(t);
+  const room = c.room;
+  const pmOpts = pmOptions(t.paymentMethod);
+  showModal('modal-md', `💳 Add Payment — ${escHtml(t.name)}`, `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <div style="width:36px;height:36px;border-radius:9px;background:rgba(46,201,138,0.12);display:flex;align-items:center;justify-content:center;font-size:18px">${icon('student','sm')}</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${escHtml(t.name)}</div>
+        <div style="font-size:11px;color:var(--text3)">Room ${room ? escHtml(roomText(room)) : '—'} · ${room ? escHtml(getRoomType(room).name) : '—'} · ${escHtml(t.phone || '—')}</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:13px;font-weight:800;color:${c.configured?'var(--green)':'var(--red)'}">${c.configured?fmtPKR(c.total):'Not configured'}</div>
+        <div style="font-size:10px;color:var(--text3)">Monthly Charge</div>
+      </div>
+    </div>
+    <input type="hidden" id="f-ps-studentId" value="${t.id}">
+    <div class="form-grid">
+      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${c.rent||''}" placeholder="Set in Settings → Rent &amp; Mess" oninput="recalcUnpaidPS()"></div>
+      <!-- MESS — the food half of the monthly charge. This screen used to omit
+           it entirely, so the same student was billed a different amount here
+           than in the main Add Payment modal. -->
+      ${!c.hostelMess ? '' : `
+      <div class="field"><label>Mess Charges (PKR)</label>
+        <input class="form-control" id="f-ps-mess" type="number" min="0" value="${c.mess||''}" placeholder="0" ${c.messOptIn?'':'disabled'} oninput="recalcUnpaidPS()">
+        ${!c.messOptional ? `<div class="mess-fixed">Included for every student</div>` : `
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text2);font-weight:600;cursor:pointer" title="Untick for a student who takes the room but not the mess">
+          <input type="checkbox" id="f-ps-mess-on" ${c.messOptIn?'checked':''} onchange="psMessToggle()">
+          <span id="f-ps-mess-note">${c.messOptIn?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
+        </label>`}
+      </div>`}
+      <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
+      <!-- Concession + Extra Charges -->
+      <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession / Discount (PKR)</label>
+            <input class="form-control" id="f-ps-concession" type="number" placeholder="0" min="0" value="" oninput="recalcUnpaidPS()">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px">Concession Description <span style="font-size:10px;color:var(--text3);font-weight:400">(optional)</span></label>
+            <input class="form-control" id="f-ps-concession-desc" placeholder="e.g. Scholarship, Hardship…">
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+          <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">
+            <span>➕ Extra Charges</span>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 9px" onclick="addExtraChargeRow()">+ Add</button>
+          </label>
+          <div id="extra-charges-list"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <span style="color:var(--text3)">Total Extra:</span>
+            <span id="extra-charges-total" style="font-weight:800;color:var(--amber)">Rs. 0</span>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Unpaid / Remaining (PKR)</label><input class="form-control" id="f-ps-unpaid" type="number" value="${c.total}" readonly style="color:var(--red);font-weight:700;background:var(--bg3)" title="Auto-calculated: Room Rent + Mess + Admission Fee + Extra − Concession − Paid"></div>
+      <div class="field"><label>Payment Method</label><select class="form-control" id="f-ps-method">${pmOpts}</select></div>
+      <div class="field"><label>Month</label><select class="form-control" id="f-ps-month">${payMonthPickerOptions(thisMonthLabel(), t.id)}</select></div>
+      <div class="field"><label>Status</label>
+        <select class="form-control" id="f-ps-stat">
+          <option value="Paid">✓ Paid</option>
+          <option value="Pending" selected>⏳ Unpaid / Pending</option>
+        </select>
+      </div>
+      <div class="field"><label>Payment Date</label><input class="form-control cdp-trigger" id="f-ps-date" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${today()}"></div>
+      <div class="field"><label>Due Date</label><input class="form-control cdp-trigger" id="f-ps-due" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${(()=>{const d=new Date();d.setDate(6);return ymd(d);})()}"></div>
+      <div class="field col-full"><label>Notes</label><input class="form-control" id="f-ps-notes" placeholder="Optional notes…"></div>
+    </div>`,
+  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-warning" onclick="printAndSubmitPaymentForStudent()" style="background:var(--amber);color:#000;border:none;font-weight:700"><span class="micon" style="font-size:15px;vertical-align:middle">print</span> Print & Add Payment</button><button class="btn btn-primary" onclick="submitPaymentForStudent()"><span class=\"micon\" style=\"font-size:15px\">payments</span> Add Payment</button>`);
+  // Auto-fill from existing pending payment for current month; warn if already fully paid
+  const curMonthLabel = thisMonthLabel();
+  const existingPaid    = DB.payments.find(p=>p.studentId===t.id&&p.status==='Paid'&&p.month===curMonthLabel);
+  const existingPending = DB.payments.find(p=>p.studentId===t.id&&p.status==='Pending'&&p.month===curMonthLabel);
+  // Inject already-paid warning banner at the top of the modal body
+  if (existingPaid) {
+    const mb = document.querySelector('#modal-container .modal-body');
+    if (mb) {
+      const banner = document.createElement('div');
+      banner.id = 'already-paid-banner';
+      banner.style.cssText = 'background:rgba(224,82,82,0.12);border:1.5px solid rgba(224,82,82,0.5);border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px';
+      banner.innerHTML = icon('warning','sm')+'<div><div style="font-weight:800;color:var(--red);font-size:13px">Already Paid for '+escHtml(curMonthLabel)+'</div><div style="font-size:11px;color:var(--text2);margin-top:2px">'+escHtml(t.name)+' has already paid <strong>'+fmtPKR(existingPaid.amount)+'</strong> (Collected by: '+(existingPaid.collectedBy||'—')+'). Adding another payment will create a duplicate record.</div></div>';
+      mb.insertBefore(banner, mb.firstChild);
+      // U10 FIX: clear stale banner when user changes the month
+      const monthInput = document.getElementById('f-ps-month');
+      if (monthInput) monthInput.addEventListener('input', function() {
+        const b = document.getElementById('already-paid-banner');
+        if (b) b.remove();
+      }, { once: true });
+    }
+  }
+  if (existingPending) {
+    const rentEl  = document.getElementById('f-ps-amt');
+    const paidEl  = document.getElementById('f-ps-paid');
+    const unpaidEl= document.getElementById('f-ps-unpaid');
+    const statEl  = document.getElementById('f-ps-stat');
+    const notesEl = document.getElementById('f-ps-notes');
+    // Always use the CURRENT resolved charge, not the amount frozen into the
+    // pending record — that one may predate a fee change in Settings.
+    const currentRentPS = c.rent || existingPending.monthlyRent || 0;
+    const messEl  = document.getElementById('f-ps-mess');
+    const messOnEl= document.getElementById('f-ps-mess-on');
+    if (rentEl)   rentEl.value   = currentRentPS;
+    if (messEl)   messEl.value   = c.mess || 0;
+    if (messOnEl) messOnEl.checked = c.messOptIn;
+    if (paidEl)   paidEl.value   = existingPending.amount || 0;
+    if (unpaidEl) unpaidEl.value = outstandingOf(existingPending);
+    if (statEl)   statEl.value   = existingPending.status;
+    if (notesEl)  notesEl.value  = existingPending.notes || '';
+    psMessToggle();
+    toast('Loaded existing pending payment data', 'info');
+  }
+}
+// The mess charge currently on this form — 0 when the tick is off, so the total
+// follows the checkbox without the typed amount being lost. Mirrors pfMessAmount().
+function psMessAmount() {
+  const on = document.getElementById('f-ps-mess-on');
+  if (on && !on.checked) return 0;
+  return parseFloat(document.getElementById('f-ps-mess')?.value) || 0;
 }
 
+function psMessToggle() {
+  const on   = document.getElementById('f-ps-mess-on');
+  const amt  = document.getElementById('f-ps-mess');
+  const note = document.getElementById('f-ps-mess-note');
+  const isOn = !on || on.checked;
+  if (amt)  amt.disabled = !isOn;
+  if (note) note.textContent = isOn ? 'Rent + mess = total monthly charge'
+                                    : 'Room only — mess not charged';
+  recalcUnpaidPS();
+}
+
+function recalcUnpaidPS() {
+  const rent  = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const mess  = psMessAmount();
+  const admFee = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
+  const paid  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+  const conc  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+  var extra = 0;
+  document.querySelectorAll('#extra-charges-list .extra-charge-amt-input').forEach(function(el){ extra += parseFloat(el.value)||0; });
+  var etEl = document.getElementById('extra-charges-total');
+  if(etEl) etEl.textContent = 'Rs. ' + extra.toLocaleString('en-PK');
+  const unpaid = Math.max(0, calculateBill({
+    rent, messCharge: mess, messIncluded: true,   // psMessAmount() returns 0 when off
+    extraTotal: extra, admissionFee: admFee, concession: conc,
+  }) - money(paid));
+  const unpaidEl = document.getElementById('f-ps-unpaid');
+  if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
+}
+async function submitPaymentForStudent() {
+  if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  const studentId   = document.getElementById('f-ps-studentId')?.value || '';
+  const t           = DB.students.find(s => s.id === studentId);
+  if (!t) { toast('Student not found', 'error'); return; }
+  // Duplicate guard: block double-charging for the same month
+  const enteredMonth = document.getElementById('f-ps-month')?.value || '';
+
+  // Case 1 — already fully Paid (hard block, offer override)
+  const alreadyPaid = DB.payments.find(p => p.studentId === studentId && p.status === 'Paid' && p.month === enteredMonth);
+  if (alreadyPaid && !window._forcePayPS) {
+    window._forcePayPS = true;
+    showConfirm(
+      '⚠️ Already Paid',
+      `${escHtml(t.name)} already has a <strong>Paid</strong> record for <strong>${escHtml(enteredMonth)}</strong> (${fmtPKR(alreadyPaid.amount)}).<br><br>Adding another entry will charge this student twice. Are you absolutely sure?`,
+      function(){ submitPaymentForStudent(); window._forcePayPS = false; },
+      function(){ window._forcePayPS = false; }
+    );
+    return;
+  }
+
+  // Case 2 — a Pending record already exists for this month
+  // (common scenario: payment auto-created at admission is still Pending,
+  // then warden accidentally opens Add Payment again for the same month)
+  const alreadyPending = DB.payments.find(p => p.studentId === studentId && p.status === 'Pending' && p.month === enteredMonth);
+  if (alreadyPending && !window._updatePendingPS) {
+    window._updatePendingPS = true;
+    const existingPaidAmt = Number(alreadyPending.amount || 0);
+    const existingUnpaid  = outstandingOf(alreadyPending);
+    showConfirm(
+      '⚠️ Pending Record Already Exists',
+      `${escHtml(t.name)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth)}</strong>.<br>`
+      + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
+      + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
+      async function() {
+        // ── UPDATE existing pending record in-place ──────────────────
+        const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
+        const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+        /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
+           charge, the extras, the admission fee and the concession outright — so
+           at a bundled hostel, merging a payment into an existing pending record
+           understated the balance by the whole mess charge, while creating a
+           fresh record from the identical form got it right. The neighbouring
+           merge path in submitAddPayment() had had exactly this bug and carries
+           a comment about the fix; this copy was missed. One expression now:
+           calculateBill() in finance.js. */
+        const newMessOn      = document.getElementById('f-ps-mess-on')?.checked !== false;
+        const newMess        = psMessAmount();
+        const newAdmFee      = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
+        const newConcession  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+        const newConcDesc    = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
+        const newExtras      = getExtraChargesData();
+        const newExtraTotal  = newExtras.reduce((s, c) => s + c.amount, 0);
+        const newTotalDue    = calculateBill({
+          rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+          extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+        });
+        const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
+        const newStatus      = document.getElementById('f-ps-stat')?.value  || 'Pending';
+        const newMethod      = document.getElementById('f-ps-method')?.value || alreadyPending.method || 'Cash';
+        const newDate        = document.getElementById('f-ps-date')?.value   || today();
+        const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
+
+        alreadyPending.monthlyRent  = newMonthlyRent;
+        alreadyPending.totalRent    = newMonthlyRent;
+        alreadyPending.messCharge   = newMess;
+        alreadyPending.messIncluded = newMessOn;
+        alreadyPending.extraCharges = newExtras;
+        alreadyPending.extraTotal   = newExtraTotal;
+        alreadyPending.admissionFee = newAdmFee;
+        alreadyPending.concession   = newConcession;
+        alreadyPending.concessionDesc = newConcDesc;
+        alreadyPending.discount     = newConcession;
+        alreadyPending.amount       = money(newPaid);
+        alreadyPending.unpaid       = newUnpaid;
+        alreadyPending.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
+        alreadyPending.method       = newMethod;
+        alreadyPending.status       = newStatus;
+        alreadyPending.date         = newDate;
+        alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
+        alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
+        if (newNotes) alreadyPending.notes = newNotes;
+
+        logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
+        await saveDB(); closeModal(); renderPage(currentPage);
+        toast(`Payment updated for ${t.name} — no duplicate created`, 'success');
+        window._updatePendingPS = false;
+      },
+      function() { window._updatePendingPS = false; }
+    );
+    return;
+  }
+  window._forcePayPS  = false;
+  window._updatePendingPS = false;
+  const room        = DB.rooms.find(r => r.id === t.roomId);
+  const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
+  const messIncludedPS = document.getElementById('f-ps-mess-on')?.checked !== false;
+  const messChargePS   = psMessAmount();
+  const admissionFeePS = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
+  const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+  const concessionPS = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
+  const concessionDescPS = (document.getElementById('f-ps-concession-desc')?.value || '').trim();
+  const extraChargesPS = getExtraChargesData();
+  const extraTotalPS   = extraChargesPS.reduce((s,c)=>s+c.amount,0);
+  const totalDuePS  = calculateBill({
+    rent: monthlyRent, messCharge: messChargePS, messIncluded: true,
+    extraTotal: extraTotalPS, admissionFee: admissionFeePS, concession: concessionPS,
+  });
+  const unpaid      = Math.max(0, totalDuePS - money(paidAmount));
+  const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
+  // Collecting a payment does NOT change what the student is charged. Price is
+  // set in Settings → Rent & Mess; this form only records what was taken. It
+  // used to write the typed amount back into t.rent, which let a one-off
+  // adjustment here silently become the student's standing rent.
+  const _newPayIdPS = 'p_' + uid();
+  DB.payments.push({
+    id: _newPayIdPS,
+    collectedBy: CUR_USER?.name || '',
+    studentId,
+    studentName: t.name || '',
+    roomId: t.roomId || '',
+    roomNumber: room?.number || '',
+    amount: paidAmount,
+    monthlyRent, unpaid,
+    // §14 overpayment: money handed over above the bill is recorded, not
+    // swallowed by the Math.max that computes `unpaid`. Written even when 0, so
+    // calculateRefund() answers from the record instead of deriving.
+    overpaid: Math.max(0, money(paidAmount) - totalDuePS),
+    messCharge: messChargePS, messIncluded: messIncludedPS,
+    admissionFee: admissionFeePS,
+    extraCharges: extraChargesPS, extraTotal: extraTotalPS,
+    concession: concessionPS, concessionDesc: concessionDescPS,
+    discount: concessionPS,
+    totalRent: monthlyRent,
+    method: document.getElementById('f-ps-method')?.value || 'Cash',
+    month: document.getElementById('f-ps-month')?.value || '',
+    status,
+    date: document.getElementById('f-ps-date')?.value || today(),
+    dueDate: document.getElementById('f-ps-due')?.value || '',
+    paidDate: status === 'Paid' ? document.getElementById('f-ps-date')?.value || today() : '',
+    notes: document.getElementById('f-ps-notes')?.value || '',
+  });
+  await saveDB(); closeModal();
+  renderPage(currentPage);
+  toast(`Payment recorded for ${t.name}`, 'success');
+  logActivity('Payment Added', `${t.name} — ${document.getElementById('f-ps-month')?.value}`, 'Finance');
+  if (window._printAfterSave) { window._printAfterSave = false; setTimeout(()=>printReceipt(_newPayIdPS), 350); }
+}
 /* ═══ ADD / EDIT PAYMENT — PAGE ══════════════════════════════════════════════
    Was a modal. It is a page now because it carries three things a dialog has no
    room for: the form, a live Payment Summary, and the student's recent history.
@@ -2259,13 +2526,9 @@ function showAddPaymentForStudent(studentId) {
 
 // Preselects a student when the page opens (set by openAddPayment).
 let _apPreselect = '';
-// And, optionally, the month — the Edit form's "Receive payment" opens the
-// page on the record it came from, not on whichever month happens to be now.
-let _apPreselectMonth = '';
 
-function openAddPayment(studentId, month) {
+function openAddPayment(studentId) {
   _apPreselect = studentId || '';
-  _apPreselectMonth = month || '';
   navigate('addpayment');
 }
 
@@ -2299,20 +2562,9 @@ function renderAddPayment() {
   setTimeout(function () {
     recalcUnpaid();
     pfRenderMonthRail();
-    const mon = _apPreselectMonth; _apPreselectMonth = '';
     if (_apPreselect) {
       const sid = _apPreselect; _apPreselect = '';
-      if (DB.students.some(s => s.id === sid)) {
-        selectStudentForPayment(sid);
-        // After the student: their own months join the picker inside that call,
-        // and pfMonthChanged() reloads the banner and the already-collected
-        // figure for the month the warden came from.
-        const sel = document.getElementById('f-pmonth');
-        if (mon && sel && [...sel.options].some(o => o.value === mon)) {
-          sel.value = mon;
-          pfMonthChanged();
-        }
-      }
+      if (DB.students.some(s => s.id === sid)) selectStudentForPayment(sid);
     }
   }, 60);
 
@@ -2455,19 +2707,17 @@ function renderAddPayment() {
             </div>
           </div>
 
-          <!-- 04 — AMOUNT RECEIVED NOW (owner, 2026-09-14). The cash in the
-               warden's hand, added on save to whatever the month already holds;
-               pfLoadMonthContext() puts that figure on the box as data and in
-               the banner, never in the box itself. -->
+          <!-- 04 — AMOUNT PAID. The running total for the month, not today's
+               instalment; pfLoadMonthContext() seeds it with what is already in. -->
           <div class="ws__row">
             <div class="ws__n">04</div>
             <div class="ws__p">
-              <b>Amount received now<span class="req">*</span></b>
-              <i>Added to anything already collected for this month</i>
+              <b>Amount paid &mdash; this month<span class="req">*</span></b>
+              <i>The month's running total, not today's instalment alone</i>
             </div>
             <div class="ws__d">
               <label class="ws__mini ws__mini--wide"><span>Rs.</span>
-                <input class="pf-in" id="f-ppaid" type="number" placeholder="Cash received now" value="" oninput="recalcUnpaid()"></label>
+                <input class="pf-in" id="f-ppaid" type="number" placeholder="Amount collected" value="" oninput="recalcUnpaid()"></label>
               <div class="ws__chips">
                 <button type="button" class="ws__chip" onclick="pfPayQuick('full')">Full <b id="ws-q-full">0</b></button>
                 <button type="button" class="ws__chip" onclick="pfPayQuick('half')">Half</button>
@@ -2656,13 +2906,9 @@ function pfPayQuick(which) {
   const el = document.getElementById('f-ppaid');
   if (!el) return;
   const total = pfPayableTotal();
-  // The box is the cash received now, so the chips offer shares of what is
-  // still OWED — on a part-paid month, the whole bill would charge the money
-  // already collected a second time.
-  const remaining = Math.max(0, total - money(parseFloat(el.dataset.already) || 0));
-  el.value = which === 'rent' ? Math.min(pfRentAmount(), remaining || pfRentAmount())
-           : which === 'half' ? Math.round(remaining / 2)
-           : remaining;
+  el.value = which === 'rent' ? pfRentAmount()
+           : which === 'half' ? Math.round(total / 2)
+           : total;
   recalcUnpaid();
 }
 
@@ -2894,22 +3140,11 @@ async function submitAddPayment() {
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
+          const prevPaid       = Number(alreadyPending2.amount || 0);
           const newMonthlyRent = pfRentAmount() || alreadyPending2.monthlyRent || 0;
           const newMessOn      = document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
-          /* RECEIVED NOW (owner, 2026-09-14). The box is the cash in the warden's
-             hand, ADDED to what the month already holds. It used to be the
-             month's running total, seeded with what had been taken — so a warden
-             typing the 1,000 they were holding, against 4,000 already collected,
-             saved 1,000 and 3,000 vanished. Today's cash now goes through
-             applyPayment(), the one collection path, and becomes its own
-             instalment and its own ledger entry under the account that took it. */
-          const received       = money(parseFloat(document.getElementById('f-ppaid')?.value) || 0);
-          if (received < 0) {
-            toast('Enter the amount received — it cannot be negative', 'error');
-            window._updatePendingAP = false;
-            return;
-          }
+          const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
           const newExtraCharges= getExtraChargesData();
           const newExtraTotal  = newExtraCharges.reduce((s,c)=>s+c.amount,0);
           // Admission fee and concession were missing here too, so merging into
@@ -2917,39 +3152,46 @@ async function submitAddPayment() {
           // a fresh one from the identical form.
           const newAdmFee      = parseFloat(document.getElementById('f-padmfee')?.value)||0;
           const newConcession  = parseFloat(document.getElementById('f-pconcession')?.value)||0;
+          const newTotalDue    = calculateBill({
+            rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
+            extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
+          });
+          const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
+          const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
           const newDate        = document.getElementById('f-pdate')?.value  || today();
           const newNotes       = document.getElementById('f-pnotes-main')?.value || document.getElementById('f-pnotes')?.value || '';
 
-          // A bill changed on the way through is recorded, like one changed on the Edit form.
-          ledgerAdjust(alreadyPending2, ledgerChargeFacts(alreadyPending2),
-            ledgerChargeFacts({ monthlyRent: newMonthlyRent, messCharge: newMess, messIncluded: newMessOn,
-                                extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession }),
-            'Changed while adding a payment', 'merge');
-
-          // The bill first, and the balance it leaves on what was already collected…
+          // Merge into the existing record
           alreadyPending2.monthlyRent  = newMonthlyRent;
           alreadyPending2.totalRent    = newMonthlyRent;
           alreadyPending2.messCharge   = newMess;
           alreadyPending2.messIncluded = newMessOn;
+          alreadyPending2.amount       = newPaid;
+          alreadyPending2.unpaid       = newUnpaid;
+          alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
+          // Amount Paid is the running total for the month, so today's cash is
+          // the difference. Recording it leaves a per-instalment trail instead
+          // of one figure that quietly changes shape between visits.
+          const instalment = newPaid - prevPaid;
+          if (instalment > 0) {
+            if (!alreadyPending2.partialPayments) alreadyPending2.partialPayments = [];
+            alreadyPending2.partialPayments.push({
+              date: newDate, amount: instalment, method: newMethod,
+              collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
+              note: 'Instalment'
+            });
+          }
           alreadyPending2.extraCharges = newExtraCharges;
           alreadyPending2.extraTotal   = newExtraTotal;
           alreadyPending2.admissionFee = newAdmFee;
           alreadyPending2.concession   = newConcession;
           alreadyPending2.discount     = newConcession;
-          const billNow         = calculateBill(alreadyPending2);
-          const collectedBefore = money(alreadyPending2.amount);
-          alreadyPending2.unpaid   = Math.max(0, billNow - collectedBefore);
-          alreadyPending2.overpaid = Math.max(0, collectedBefore - billNow);   // §14
-          alreadyPending2.status   = alreadyPending2.unpaid > 0 ? 'Pending' : 'Paid';
-          alreadyPending2.date     = newDate;
-          // …then today's cash, through the one collection path.
-          if (received > 0) {
-            applyPayment(alreadyPending2, { amount: received, method: newMethod, date: newDate, note: 'Instalment' });
-            alreadyPending2.collectedBy = CUR_USER?.name || alreadyPending2.collectedBy || '';
-          }
-          alreadyPending2.method   = newMethod;
-          alreadyPending2.paidDate = alreadyPending2.status === 'Paid' ? (alreadyPending2.paidDate || newDate) : '';
+          alreadyPending2.method       = newMethod;
+          alreadyPending2.status       = newStatus;
+          alreadyPending2.date         = newDate;
+          alreadyPending2.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending2.paidDate || '');
+          alreadyPending2.collectedBy  = CUR_USER?.name || alreadyPending2.collectedBy || '';
           if (newNotes) alreadyPending2.notes = newNotes;
 
           // Arrears entered alongside this update still post to their own months.
@@ -3010,9 +3252,7 @@ async function submitAddPayment() {
     roomNumber: room?.number||'',
     amount: paidAmount,
     monthlyRent, unpaid,
-    // §14 overpayment: money handed over above the bill is recorded as a credit,
-    // not swallowed by the Math.max that computes `unpaid`. Written even when 0,
-    // so calculateRefund() answers from the record instead of deriving.
+    // §14 overpayment — see submitPaymentForStudent() for the reasoning.
     overpaid: Math.max(0, money(paidAmount) - totalDue),
     messCharge, messIncluded,
     extraCharges, extraTotal,
@@ -3051,6 +3291,10 @@ async function submitAddPayment() {
 function printAndSubmitAddPayment() {
   window._printAfterSave = true;
   submitAddPayment();
+}
+function printAndSubmitPaymentForStudent() {
+  window._printAfterSave = true;
+  submitPaymentForStudent();
 }
 /* ══ EDIT PAYMENT ══════════════════════════════════════════════════════════
    Relaid out 2026-09-07 to the owner's compact reference and the global
@@ -3149,32 +3393,10 @@ function showEditPaymentModal(id) {
                        <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
                        <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
                      </label>` })}
-          ${/* COLLECTED MONEY IS NOT EDITED (owner, 2026-09-14 — warden ledger
-                spec, Phase 2). Once anything has been collected the figure is
-                read-only, for every account including the owner's, and the way
-                to take money back is a reversal, which records why and who.
-                submitEditPayment() enforces the same rule on save, so a field
-                altered through the DOM changes nothing. */''}
-          ${money(p.amount) > 0
-            ? F('Amount paid (PKR)', 'wallet',
-                `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount}" readonly data-locked="1" oninput="recalcUnpaid()">`,
-                { for: 'f-ppaid', cls: 'is-readonly',
-                  note: `Collected money is not edited here.
-                         ${p.studentId ? `<button type="button" class="btn btn-primary btn-sm" onclick="closeModal();openAddPayment('${escHtml(String(p.studentId))}','${escHtml(String(p.month || ''))}')">Receive payment…</button>` : ''}
-                         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal();showReversePaymentModal('${escHtml(String(p.id))}')">Reverse a collection…</button>` })
-            : F('Amount paid (PKR)', 'wallet',
-                `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()">`,
-                { req: true, for: 'f-ppaid' })}
+          ${F('Amount paid (PKR)', 'wallet',
+             `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()">`,
+             { req: true, for: 'f-ppaid' })}
         </div>
-        ${/* The bill on a record that has taken money can still be corrected —
-              a rent typed wrong is a real case — but not silently. A change to
-              rent, mess, extras, admission fee or concession needs a reason,
-              and is written to the ledger with the before and after. */''}
-        ${money(p.amount) > 0 ? `<div class="field">
-          <label for="f-padjreason">Reason for changing the bill <span class="opt">(needed if rent, mess, extras, admission fee or concession change)</span></label>
-          <div class="hf-in"><span class="hf-in__i">${icon('info', 'sm')}</span>
-            <input class="form-control" id="f-padjreason" type="text" maxlength="120" placeholder="e.g. Rent corrected to the room's new rate"></div>
-        </div>` : ''}
       </div>
 
       ${/* THE SUM, WHERE THE TYPING IS. recalcUnpaid() has computed all three of
@@ -3276,12 +3498,7 @@ async function submitEditPayment(id) {
   const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
   const messCharge   = pfMessAmount();
-  const prevPaid     = money(p.amount);
-  /* COLLECTED MONEY IS NOT EDITED (warden ledger spec, Phase 2). The field is
-     read-only once anything is collected; this is the rule on the side that
-     saves, so a value altered in the DOM changes nothing. A record that has
-     collected nothing still takes its first figure here. */
-  const paidAmount   = prevPaid > 0 ? prevPaid : (parseFloat(document.getElementById('f-ppaid')?.value)||0);
+  const paidAmount   = parseFloat(document.getElementById('f-ppaid')?.value)||0;
   const admissionFee = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession   = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc = (document.getElementById('f-pconcession-desc')?.value||'').trim();
@@ -3292,23 +3509,7 @@ async function submitEditPayment(id) {
     extraTotal, admissionFee, concession,
   });
   const unpaid       = Math.max(0, totalDue - money(paidAmount));
-
-  /* A CHANGE TO THE BILL IS RECORDED, and on a record that has taken money it
-     needs a reason. Checked before a single field is written, so a refusal
-     leaves the record exactly as it was and the form open to fill in. */
-  const billBefore = ledgerChargeFacts(p);
-  const billAfter  = ledgerChargeFacts({ monthlyRent, messCharge, messIncluded: true,
-                                         extraTotal, admissionFee, concession });
-  const adjReason  = (document.getElementById('f-padjreason')?.value || '').trim();
-  if (prevPaid > 0 && ledgerChargesDiffer(billBefore, billAfter) && !adjReason) {
-    toast('Money has been collected on this record, so a change to the bill needs a reason.',
-          'error', 'Reason needed');
-    const why = document.getElementById('f-padjreason');
-    if (why) why.focus();
-    return;
-  }
-  ledgerAdjust(p, billBefore, billAfter, adjReason, 'edit');
-
+  const prevPaid     = money(p.amount);
   if (!p.partialPayments) p.partialPayments = [];
   if (paidAmount > prevPaid) {
     p.partialPayments.push({
@@ -3455,17 +3656,6 @@ async function submitReversePayment(id) {
   const amount = money(parseFloat(document.getElementById('f-prev-amt')?.value) || 0);
   const reason = (document.getElementById('f-prev-reason')?.value || '').trim();
   const date   = document.getElementById('f-prev-date')?.value || today();
-
-  /* A REASON IS REQUIRED (warden ledger spec, Phase 2). Since collected money
-     stopped being editable, Reverse is the only way to correct it — and a
-     correction nobody can explain is exactly the entry the ledger exists to
-     prevent. Refused with the modal still open, so the warden can type it. */
-  if (!reason) {
-    toast('Say why this is being reversed — the reason is recorded with it.', 'error', 'Reason needed');
-    const why = document.getElementById('f-prev-reason');
-    if (why) why.focus();
-    return;
-  }
 
   const r = reversePayment(p, { amount, reason, date });
   if (!r.ok) {
