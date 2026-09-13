@@ -1328,30 +1328,132 @@ function _stuPanelDocuments(t) {
      the record, so it is already a file in every sense except having been saved
      as one — a warden who needed it for a form had no way to get it out short
      of a screenshot. It is enabled on exactly the same condition as View: there
-     is something to download. The other two rows keep theirs disabled, because
-     there is still nothing behind them and a Download that produces no file is
-     worse than one that is visibly not available yet (§28). */
+     is something to download. */
+  const sid = escHtml(t.id);
+  const acts = (docId) =>
+      `<button class="stu-pan__mini" onclick="stuViewDoc('${sid}','${escHtml(docId)}')">View</button>`
+    + `<button class="stu-pan__mini is-go" onclick="stuDownloadDoc('${sid}','${escHtml(docId)}')">Download</button>`;
+  const addBtn = (kind, label) =>
+      `<button class="stu-pan__mini" onclick="stuDocAdd('${sid}','${escHtml(kind)}')"
+               title="Attach ${escHtml(label)}">Attach</button>`;
+
+  /* THESE ROWS ARE REAL NOW (owner, 2026-09-10). They were honest placeholders
+     with their controls disabled and a note saying document storage had not
+     landed — §28's "show it as planned rather than pretend". It has landed:
+     the Add Student form attaches them (see STU_DOC_KINDS) and they persist on
+     docs.files. The note goes with the placeholders; a caveat that is no longer
+     true is worse than no caveat.
+
+     Attach is offered HERE as well as on the intake form, and that is the
+     point of putting it here — every student admitted before today has no
+     documents at all, and a warden with a POR in their hand needs somewhere to
+     put it that is not "re-admit the student". */
+  const files = stuDocsOf(t);
+  const named = STU_DOC_KINDS.map(k => {
+    const d = files.find(f => f.kind === k.key);
+    return d
+      ? row(k.label + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
+            acts(d.id) + `<button class="stu-pan__mini" style="color:var(--red)"
+                onclick="stuDocRemove('${sid}','${escHtml(d.id)}')" title="Remove this document">Remove</button>`)
+      : row(k.label, false, addBtn(k.key, k.label));
+  }).join('');
+  const extra = files.filter(f => f.kind === 'other').map(d =>
+    row((d.label || d.name || 'Other document') + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
+        acts(d.id) + `<button class="stu-pan__mini" style="color:var(--red)"
+            onclick="stuDocRemove('${sid}','${escHtml(d.id)}')" title="Remove this document">Remove</button>`)).join('');
+
   return '<section class="stu-pan__sec"><h4>Documents</h4>'
     + row('Student photo', hasPhoto, hasPhoto
-        ? `<button class="stu-pan__mini" onclick="stuViewDoc('${escHtml(t.id)}')">View</button>`
-          + `<button class="stu-pan__mini is-go" onclick="stuDownloadDoc('${escHtml(t.id)}')">Download</button>`
+        ? `<button class="stu-pan__mini" onclick="stuViewDoc('${sid}')">View</button>`
+          + `<button class="stu-pan__mini is-go" onclick="stuDownloadDoc('${sid}')">Download</button>`
         : '<button class="stu-pan__mini" disabled>View</button>'
           + '<button class="stu-pan__mini" disabled>Download</button>')
-    /* NOT UPLOADED, AND NOT UPLOADABLE — yet. `docs` holds exactly one key,
-       `photo`. There is no CNIC scan and no admission form anywhere in this
-       data model, so these two rows are honest placeholders with their
-       controls disabled. §28: show the tab as planned rather than pretend
-       files exist. Wire them the day document storage lands. */
-    + row('CNIC / ID document', false,
-        '<button class="stu-pan__mini" disabled>View</button>'
-      + '<button class="stu-pan__mini" disabled>Download</button>')
-    + row('Admission form',     false,
-        '<button class="stu-pan__mini" disabled>View</button>'
-      + '<button class="stu-pan__mini" disabled>Download</button>')
-    + '<p class="stu-pan__note">Document storage is not enabled yet. The student '
-    + 'photo is the only file this record can hold today; CNIC and admission-form '
-    + 'uploads arrive with document storage.</p>'
+    + named + extra
+    + (files.length < STU_DOC_MAX_FILES
+        ? `<button class="stu-pan__mini" style="margin-top:9px"
+                   onclick="stuDocAdd('${sid}','other')">Attach another document</button>`
+        : `<p class="stu-pan__note">Five documents is the limit for one record. Remove one to attach another.</p>`)
     + '</section>';
+}
+
+/* ── DOCUMENTS ON AN EXISTING RECORD ──────────────────────────────────────── */
+/* One hidden input, created on demand and thrown away after. A permanent one in
+   the drawer's markup would be rebuilt on every re-render — including the one
+   this handler triggers — and the file it was holding would vanish mid-read. */
+function stuDocAdd(studentId, kind) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const t = DB.students.find(x => x.id === studentId);
+  if (!t) { toast('That student is no longer on the roster', 'error'); return; }
+  if (stuDocsOf(t).length >= STU_DOC_MAX_FILES) {
+    toast('Five documents is the limit for one student record', 'error'); return;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = STU_DOC_ACCEPT;
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = () => {
+    const file = input.files && input.files[0];
+    const done = () => { input.remove(); };
+    if (!file) { done(); return; }
+    if (file.size > STU_DOC_MAX_BYTES) {
+      toast(`"${file.name}" is ${stuDocSize(file.size)} — the limit is ${stuDocSize(STU_DOC_MAX_BYTES)} a file`, 'error');
+      done(); return;
+    }
+    const ty = String(file.type || '');
+    if (ty && !/^image\//.test(ty) && ty !== 'application/pdf') {
+      toast('Only images and PDFs can be attached', 'error'); done(); return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => { toast('Could not read "' + file.name + '"', 'error'); done(); };
+    reader.onload = async (e) => {
+      const doc = {
+        id: 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        kind: kind || 'other',
+        label: (kind && kind !== 'other') ? stuDocLabel(kind)
+                                          : String(file.name || 'Other document').slice(0, 60),
+        name: String(file.name || ''),
+        type: ty || 'application/octet-stream',
+        size: Number(file.size) || 0,
+        data: String(e.target.result || ''),
+        addedAt: today(),
+      };
+      // Re-read the student: the drawer may have been open across an edit.
+      const s = DB.students.find(x => x.id === studentId);
+      if (!s) { toast('That student is no longer on the roster', 'error'); done(); return; }
+      if (!s.docs) s.docs = {};
+      if (!Array.isArray(s.docs.files)) s.docs.files = [];
+      if (doc.kind !== 'other') s.docs.files = s.docs.files.filter(d => d.kind !== doc.kind);
+      s.docs.files.push(doc);
+      logActivity('Document Attached', doc.label + ' attached to ' + (s.name || s.id), 'Student');
+      await saveDB();
+      done();
+      if (typeof showStudentPanel === 'function') showStudentPanel(studentId);
+      toast(doc.label + ' attached', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function stuDocRemove(studentId, docId) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const t = DB.students.find(x => x.id === studentId);
+  const d = stuDocsOf(t).find(x => x.id === docId);
+  if (!t || !d) { toast('That document is already gone', 'info'); return; }
+  showConfirm('Remove this document?',
+    'Remove <b>' + escHtml(d.label || d.name || 'this document') + '</b> from '
+      + escHtml(t.name || 'this record') + '? The file is not stored anywhere else — '
+      + 'once it is removed it has to be scanned again.',
+    async () => {
+      t.docs.files = stuDocsOf(t).filter(x => x.id !== docId);
+      logActivity('Document Removed', (d.label || 'A document') + ' removed from ' + (t.name || t.id), 'Student');
+      await saveDB();
+      closeModal();
+      if (typeof showStudentPanel === 'function') showStudentPanel(studentId);
+      toast('Document removed', 'info');
+    });
 }
 
 /* THE LEDGER'S ROW MENU. The same four verbs the modal's ledger shows as
@@ -1412,13 +1514,20 @@ function stuAllPayments(id) {
    multi-megabyte URI off an <a href>, which is where a large photo silently
    fails. The extension comes from the URI's own MIME type: renaming a PNG to
    .jpg produces a file Windows Photos refuses to open. */
-function stuDownloadDoc(id) {
+/* `docId` is optional and it is what makes this work for both: with no second
+   argument this is the photo download it has always been, and with one it saves
+   that attachment. One decoder, because the bug it protects against — a data
+   URI hung off an <a href> failing silently above a few megabytes — is the same
+   bug whichever file it is. */
+function stuDownloadDoc(id, docId) {
   const t = DB.students.find(x => x.id === id);
-  const src = t && t.docs && t.docs.photo;
+  const doc = docId ? stuDocsOf(t).find(d => d.id === docId) : null;
+  if (docId && !doc) { toast('That document is no longer on the record', 'info'); return; }
+  const src = doc ? doc.data : (t && t.docs && t.docs.photo);
   if (!src) { toast('No document to download', 'info'); return; }
 
   const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(src));
-  if (!m) { toast('That photo is not in a format this can save', 'error'); return; }
+  if (!m) { toast('That file is not in a format this can save', 'error'); return; }
 
   try {
     const mime = m[1] || 'image/png';
@@ -1432,24 +1541,56 @@ function stuDownloadDoc(id) {
     } else {
       blob = new Blob([decodeURIComponent(body)], { type: mime });
     }
-    const ext = (mime.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '') || 'png';
+    const ext = mime === 'application/pdf' ? 'pdf'
+              : ((mime.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '') || 'png');
     const safe = (t.name || 'Student').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '');
+    /* Named for what it IS, not for the file it came from. A warden downloading
+       four documents for one student gets four files that sort together and say
+       whose they are — "img20260910_0003.jpg" out of a scanner does neither. */
+    const what = doc ? String(doc.label || doc.name || 'Document')
+                        .replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, '')
+                     : 'Photo';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'Photo-' + safe + '-' + t.id + '.' + ext;
+    a.download = what + '-' + safe + '-' + t.id + '.' + ext;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     toast('Downloaded ' + a.download, 'success');
   } catch (e) {
-    toast('Could not save the photo: ' + (e && e.message ? e.message : 'unknown error'), 'error');
+    toast('Could not save the file: ' + (e && e.message ? e.message : 'unknown error'), 'error');
   }
 }
 
-function stuViewDoc(id) {
+function stuViewDoc(id, docId) {
   const t = DB.students.find(x => x.id === id);
-  if (!t || !t.docs || !t.docs.photo) { toast('No document to open', 'info'); return; }
-  showModal('modal-md', 'Student photo — ' + escHtml(t.name || ''),
-    `<div style="text-align:center"><img src="${escHtml(t.docs.photo)}" alt="" style="max-width:100%;border-radius:12px"></div>`);
+  if (!t) { toast('No document to open', 'info'); return; }
+
+  if (!docId) {
+    if (!t.docs || !t.docs.photo) { toast('No document to open', 'info'); return; }
+    showModal('modal-md', 'Student photo — ' + escHtml(t.name || ''),
+      `<div style="text-align:center"><img src="${escHtml(t.docs.photo)}" alt="" style="max-width:100%;border-radius:12px"></div>`);
+    return;
+  }
+
+  const doc = stuDocsOf(t).find(d => d.id === docId);
+  if (!doc || !doc.data) { toast('That document is no longer on the record', 'info'); return; }
+
+  /* A PDF gets an <embed>, an image gets an <img>. An <img> pointed at a PDF
+     data URI renders as a broken-image icon, which reads as a corrupted upload
+     rather than as the viewer using the wrong tag. Download sits under it
+     either way: an embedded viewer can be blocked, and the file must still be
+     reachable when it is. */
+  const isPdf = doc.type === 'application/pdf';
+  showModal('modal-md', escHtml(doc.label || doc.name || 'Document') + ' — ' + escHtml(t.name || ''),
+    (isPdf
+      ? `<embed src="${escHtml(doc.data)}" type="application/pdf" style="width:100%;height:62vh;border-radius:12px;border:1px solid var(--border)">`
+      : `<div style="text-align:center"><img src="${escHtml(doc.data)}" alt="" style="max-width:100%;border-radius:12px"></div>`)
+    + `<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+         <span style="font-size:11.5px;color:var(--text3)">${escHtml(stuDocExt(doc.type))}
+           · ${escHtml(stuDocSize(doc.size))}${doc.addedAt ? ' · attached ' + escHtml(fmtDate(doc.addedAt)) : ''}</span>
+         <button class="btn btn-primary btn-sm" style="margin-left:auto"
+                 onclick="stuDownloadDoc('${escHtml(t.id)}','${escHtml(doc.id)}')">Download</button>
+       </div>`);
 }
 
 /* ── DRAG THE LEDGER SIDEWAYS ────────────────────────────────────────────────
@@ -2010,8 +2151,143 @@ function asfCompletion() {
 
 /** Post-render hook, called from renderPage the way bindSettingsEvents is. */
 function asfInit() {
+  /* CLEARED ON EVERY OPEN. _asfDocs is module state, so without this a warden
+     who starts an admission, attaches a CNIC scan and then cancels carries that
+     scan into the NEXT student's record — a document filed against the wrong
+     person, which is the worst kind of bug this form could have. */
+  _asfDocs = [];
   asfCountFields();
   asfCompletion();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ADD STUDENT — DOCUMENTS
+// ════════════════════════════════════════════════════════════════════════════
+/* The rail block's whole body, re-rendered in place after every add or remove.
+   Rebuilding the list rather than patching a row keeps one description of what
+   the block looks like — the alternative is markup here and slightly different
+   markup in three handlers.
+
+   The three named kinds always show, filled or not: "Not attached" against
+   Father's CNIC is the answer to a question a warden actually asks, and a row
+   that only appears once the file exists cannot answer it. Extras stack under
+   them. */
+function asfDocsList() {
+  const total = _asfDocs.reduce((s, d) => s + (Number(d.size) || 0), 0);
+  const row = (kind, doc) => {
+    const label = doc && doc.kind === 'other' ? (doc.label || 'Other document') : stuDocLabel(kind);
+    return `
+    <div class="asf-doc${doc ? ' is-on' : ''}">
+      <span class="asf-doc__i">${doc ? _ASF_DOC_OK : _ASF_DOC_ADD}</span>
+      <span class="asf-doc__x">
+        <span class="asf-doc__n" title="${escHtml(label)}">${escHtml(label)}</span>
+        <span class="asf-doc__s">${doc
+          ? escHtml(stuDocExt(doc.type) + ' · ' + stuDocSize(doc.size))
+          : 'Not attached'}</span>
+      </span>
+      ${doc
+        ? `<button type="button" class="asf-doc__b" title="Remove ${escHtml(label)}"
+                   onclick="asfDocRemove('${escHtml(doc.id)}')" aria-label="Remove ${escHtml(label)}">${_ASF_DOC_X}</button>`
+        : `<button type="button" class="asf-doc__b" title="Attach a file or photo"
+                   onclick="asfDocPick('${escHtml(kind)}')" aria-label="Attach ${escHtml(stuDocLabel(kind))}">${_ASF_DOC_UP}</button>`}
+    </div>`;
+  };
+
+  const named = STU_DOC_KINDS
+    .map(k => row(k.key, _asfDocs.find(d => d.kind === k.key))).join('');
+  const extra = _asfDocs.filter(d => d.kind === 'other').map(d => row('other', d)).join('');
+  const full  = _asfDocs.length >= STU_DOC_MAX_FILES;
+
+  return named + extra
+    + `<button type="button" class="asf-doc__add" onclick="asfDocPick('other')" ${full ? 'disabled' : ''}
+               title="${full ? 'Five files is the limit for one record' : 'Attach any other document'}">
+         ${_ASF_DOC_PLUS} ${full ? 'File limit reached' : 'Add another document'}
+       </button>`
+    + (_asfDocs.length
+        ? `<div class="asf-doc__tot">${_asfDocs.length} file${_asfDocs.length === 1 ? '' : 's'}
+             · ${escHtml(stuDocSize(total))}</div>`
+        : `<div class="asf-doc__tot">Images or PDF · up to ${stuDocSize(STU_DOC_MAX_BYTES)} each</div>`);
+}
+const _ASF_DOC_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const _ASF_DOC_ADD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+const _ASF_DOC_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>';
+const _ASF_DOC_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+const _ASF_DOC_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+
+function asfDocsRefresh() {
+  const el = document.getElementById('asf-docs');
+  if (el) el.innerHTML = asfDocsList();
+}
+
+/* Which slot the next file lands in is remembered on the input rather than in
+   another module variable: the input IS the pending operation, and a second
+   piece of state saying the same thing is a second thing to get out of sync. */
+function asfDocPick(kind) {
+  if (_asfDocs.length >= STU_DOC_MAX_FILES) {
+    toast('Five documents is the limit for one student record', 'error');
+    return;
+  }
+  const el = document.getElementById('asf-doc-file');
+  if (!el) return;
+  el.dataset.kind = kind || 'other';
+  el.value = '';          // so re-picking the SAME file still fires onchange
+  el.click();
+}
+
+function asfDocLoad(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const kind = input.dataset.kind || 'other';
+
+  /* Checked against the STORED list, not against the DOM: the row is redrawn
+     from _asfDocs, so _asfDocs is the thing that must never go over. */
+  if (_asfDocs.length >= STU_DOC_MAX_FILES) {
+    toast('Five documents is the limit for one student record', 'error'); return;
+  }
+  if (file.size > STU_DOC_MAX_BYTES) {
+    toast(`"${file.name}" is ${stuDocSize(file.size)} — the limit is ${stuDocSize(STU_DOC_MAX_BYTES)} a file`, 'error');
+    return;
+  }
+  /* An empty type is what Windows hands back for a file with no association.
+     Rejecting on type alone would refuse a perfectly good scan, so this only
+     refuses what it can positively identify as neither an image nor a PDF. */
+  const ty = String(file.type || '');
+  if (ty && !/^image\//.test(ty) && ty !== 'application/pdf') {
+    toast('Only images and PDFs can be attached', 'error'); return;
+  }
+
+  const reader = new FileReader();
+  reader.onerror = () => toast('Could not read "' + file.name + '"', 'error');
+  reader.onload = (e) => {
+    const doc = {
+      id: 'doc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      kind,
+      // The file's own name is the label for an extra; a named slot keeps its
+      // name, so renaming the scan cannot rename the row.
+      label: kind === 'other' ? String(file.name || 'Other document').slice(0, 60) : stuDocLabel(kind),
+      name: String(file.name || ''),
+      type: ty || 'application/octet-stream',
+      size: Number(file.size) || 0,
+      data: String(e.target.result || ''),
+      addedAt: today(),
+    };
+    // One file per named slot: attaching a second Father's CNIC replaces the
+    // first rather than stacking two rows both claiming to be it.
+    if (kind !== 'other') _asfDocs = _asfDocs.filter(d => d.kind !== kind);
+    _asfDocs.push(doc);
+    asfDocsRefresh();
+    if (typeof asfCompletion === 'function') asfCompletion();
+    toast(doc.label + ' attached', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function asfDocRemove(id) {
+  const d = _asfDocs.find(x => x.id === id);
+  _asfDocs = _asfDocs.filter(x => x.id !== id);
+  asfDocsRefresh();
+  if (typeof asfCompletion === 'function') asfCompletion();
+  if (d) toast(d.label + ' removed', 'info');
 }
 
 /* Fill in each section's "N fields · M required" from the fields it actually
@@ -2026,6 +2302,72 @@ function asfCountFields() {
     el.textContent = fields + (fields === 1 ? ' field' : ' fields')
                    + (req ? ' · ' + req + ' required' : '');
   });
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STUDENT DOCUMENTS  (owner, 2026-09-10: "add documents upload option so to
+   upload student id or any identity document, father cnic, POR etc etc to add
+   student form belov student photo and the free speace belov at the bottom
+   vhich looks avkvard.")
+
+   THE SPACE IS REAL AND IT IS 403 PIXELS. Measured on the running form at
+   1440x900: the left rail ends at y=716 with Record summary and the main
+   column runs to y=1119. Everything below the rail was blank. This block is
+   the third rail card, under the photo, exactly where the owner put it.
+
+   NAMED SLOTS, NOT A PILE. The owner named three documents — student ID,
+   father's CNIC, POR — and "etc etc" is the fourth. A generic "attach files"
+   list would have made a warden type what each one was, in a 220px rail, and
+   left the profile drawer with no way to ask "is the POR on file?". Named rows
+   answer that at a glance, and they are the same three rows the drawer has
+   been drawing as disabled placeholders since 2026-09-06 waiting for exactly
+   this — see _stuPanelDocuments().
+
+   STORED AS DATA URIs ON THE RECORD, like the photo, because that is what this
+   app already does and a second storage mechanism for the same kind of thing
+   is how the two drift. The cost is real, so the caps below are not decoration:
+   the DB is one JSON document and a hostel with 200 students could otherwise
+   write a 400MB one. */
+const STU_DOC_KINDS = [
+  { key: 'studentId',  label: 'Student ID / B-Form' },
+  { key: 'fatherCnic', label: "Father's CNIC" },
+  { key: 'por',        label: 'Proof of residence (POR)' },
+];
+/* 3MB a file and 5 files. The photo's own cap is 5MB and it is ONE image per
+   student; five scans at five megabytes is 25MB on a single record, which is
+   past what a JSON database rewritten on every save can carry. A phone photo
+   of a CNIC is 1-2MB, and a scan is smaller. */
+const STU_DOC_MAX_BYTES = 3 * 1024 * 1024;
+const STU_DOC_MAX_FILES = 5;
+const STU_DOC_ACCEPT = 'image/*,application/pdf';
+
+/* The documents staged on the Add Student form before there is a student to
+   attach them to. Cleared by asfInit() on every open of the form — without
+   that, cancelling an admission and starting another one carries the first
+   student's CNIC scan into the second one's record. */
+let _asfDocs = [];
+
+function stuDocLabel(kind) {
+  const k = STU_DOC_KINDS.find(x => x.key === kind);
+  return k ? k.label : 'Other document';
+}
+function stuDocSize(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return v + ' B';
+  if (v < 1024 * 1024) return Math.round(v / 1024) + ' KB';
+  return (v / 1024 / 1024).toFixed(1) + ' MB';
+}
+/* The type badge on a row. It comes off the STORED mime, not off the file
+   name: a warden who renames a PDF to .jpg still gets a row that says PDF, and
+   a viewer that opens it as one. */
+function stuDocExt(mime) {
+  const m = String(mime || '');
+  if (m === 'application/pdf') return 'PDF';
+  const sub = (m.split('/')[1] || '').toUpperCase();
+  return sub === 'JPEG' ? 'JPG' : (sub || 'FILE');
+}
+function stuDocsOf(t) {
+  return (t && t.docs && Array.isArray(t.docs.files)) ? t.docs.files : [];
 }
 
 /* The empty state of the photo well. It is a function because THREE places
@@ -2089,6 +2431,7 @@ function renderAddStudent() {
   const ico = {
     photo:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>',
     record:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
+    doc:     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>',
     person:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>',
     contact: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2z"/></svg>',
     room:    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M3 21h18"/><path d="M9 21v-6h6v6"/></svg>',
@@ -2129,7 +2472,7 @@ function renderAddStudent() {
 
       <!-- ══ LEFT RAIL ══ -->
       <div class="asf-rail">
-        ${sec('01', ico.photo, 'Student photo', '', `
+        ${sec('', ico.photo, 'Student photo', '', `
           <div class="asf-photo" id="add-student-photo-preview" title="Click to upload a photo"
                onclick="triggerStudentPhotoUpload()"
                ondragover="event.preventDefault();this.classList.add('is-over')"
@@ -2153,7 +2496,7 @@ function renderAddStudent() {
             </div>
           </div>`)}
 
-        ${sec('', ico.record, 'Record', '', `
+        ${sec('', ico.record, 'Record summary', '', `
           <div class="asf-rec">
             <div class="asf-rec__r"><span class="asf-rec__k">Student ID</span>
               <span class="asf-rec__v asf-num asf-num--id">#${escHtml(nextStudentId())}</span></div>
@@ -2166,12 +2509,22 @@ function renderAddStudent() {
             <div class="asf-rec__r"><span class="asf-rec__k">Status</span>
               <span class="badge badge-blue">New — unsaved</span></div>
           </div>`)}
+
+        ${''/* THE 403px (owner, 2026-09-10). Third rail card, under the photo,
+               where the rail used to simply stop while the main column ran on
+               for another four hundred pixels. See STU_DOC_KINDS above for why
+               the rows are named rather than a free-for-all attach list. */}
+        ${sec('', ico.doc, 'Documents', '', `
+          <div class="asf-docs" id="asf-docs">${asfDocsList()}</div>
+          <input type="file" id="asf-doc-file" accept="${STU_DOC_ACCEPT}" style="display:none"
+                 onchange="asfDocLoad(this)">
+        `)}
       </div>
 
       <!-- ══ MAIN ══ -->
       <div class="asf-main">
 
-        ${sec('02', ico.person, 'Student identity', 'auto', `
+        ${sec('01', ico.person, 'Student identity', 'auto', `
           <div class="asf-fg asf-fg--4">
             <div class="sf-f"><label for="f-tname">Full name<span class="req">*</span></label>
               <input class="sf-in" id="f-tname" placeholder="Full name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
@@ -2217,7 +2570,7 @@ function renderAddStudent() {
           </div>`)}
 
         <div class="asf-row">
-          ${sec('03', ico.contact, 'Contact', 'auto', `
+          ${sec('02', ico.contact, 'Contact information', 'auto', `
             <div class="asf-fg asf-fg--2">
               <div class="sf-f"><label for="f-tphone">Phone number<span class="req">*</span></label>
                 <div style="display:flex"><span class="sf-prefix">+92</span>
@@ -2230,9 +2583,21 @@ function renderAddStudent() {
                   <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
                 </div>
               </div>
-              <div class="sf-f"><label for="f-temerg">Emergency contact</label>
+              ${''/* GUARDIAN, NOT EMERGENCY (brief §7). For a hostel this is
+                     the parent or guardian who signed the student in — the
+                     person the warden rings about fees, leave and conduct, not
+                     only about an accident. "Emergency" framed a routine field
+                     as a crisis one, and the warden reading it every admission
+                     is the one who pays for that.
+
+                     THE IDS DO NOT MOVE. submitAddStudent() and every reader in
+                     the app find these by `f-temerg` / `f-temergphone`, and the
+                     stored record keys are unchanged — renaming an id here is a
+                     silent data loss there. The label is copy; the id is a
+                     contract. */}
+              <div class="sf-f"><label for="f-temerg">Guardian name</label>
                 <input class="sf-in" id="f-temerg" placeholder="Name and relation"></div>
-              <div class="sf-f"><label for="f-temergphone">Emergency phone</label>
+              <div class="sf-f"><label for="f-temergphone">Guardian contact</label>
                 <input class="sf-in" id="f-temergphone" placeholder="03xx xxxxxxx"></div>
               <div class="sf-f" style="grid-column:span 2"><label for="f-taddress">Home address</label>
                 <div class="sf-wrapin">
@@ -2244,7 +2609,7 @@ function renderAddStudent() {
               </div>
             </div>`)}
 
-          ${sec('04', ico.room, 'Hostel allotment', 'auto', `
+          ${sec('03', ico.room, 'Hostel allotment', 'auto', `
             <div class="asf-fg asf-fg--2">
               <div class="sf-f" style="grid-column:span 2"><label for="f-troom-search">Room<span class="req">*</span></label>
                 <div style="position:relative">
@@ -2295,7 +2660,7 @@ function renderAddStudent() {
             <input type="hidden" id="f-tpm" value="${escHtml((DB.settings.paymentMethods||[]).filter(cfgMethodActive)[0] || DB.settings.paymentMethods[0] || 'Cash')}">`)}
         </div>
 
-        ${sec('05', ico.health, 'Health & notes', 'Optional', `
+        ${sec('04', ico.health, 'Health & notes', 'Optional', `
           <div class="asf-fg asf-fg--notes">
             <div class="sf-f"><label for="f-tallergies">Allergies / medical condition</label>
               <input class="sf-in" id="f-tallergies" placeholder="None reported"></div>
@@ -2310,8 +2675,11 @@ function renderAddStudent() {
     </div>
 
     <!-- ══ ACTIONS ══ -->
+    ${''/* Cancel keeps the left; everything else is pushed right by the spacer
+           (brief §16). The bar is sticky — see .asf-foot in students.css. */}
     <footer class="asf-foot">
       <button class="sf-btn" onclick="navigate('students')">Cancel</button>
+      <span class="asf-foot__spacer"></span>
       ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
         Save &amp; add another</button>`:''}
@@ -2414,7 +2782,16 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
     bed:_v('f-tbed'), expectedStay:_v('f-texpstay'),
     bloodGroup:_v('f-tblood'), allergies:_v('f-tallergies'),
     status:'Active', createdAt:today(),
-    docs: { photo: document.getElementById('add-student-photo-data')?.value || '' }
+    /* `files` sits BESIDE `photo`, never instead of it. Everything that reads a
+       student photo reads docs.photo and none of it has to learn about the
+       array; everything that reads documents goes through stuDocsOf(), which
+       returns [] for every record written before today. A copy, not the live
+       array — _asfDocs is cleared by the next asfInit() and a record holding a
+       reference to it would be emptied along with the form. */
+    docs: {
+      photo: document.getElementById('add-student-photo-data')?.value || '',
+      files: _asfDocs.map(d => ({ ...d })),
+    }
   };
   // Fix #10: Capacity guard — warn warden but allow force-add with confirmation
   const selectedRoom = DB.rooms.find(r => r.id === roomId);

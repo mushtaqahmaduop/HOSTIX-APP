@@ -631,14 +631,36 @@
     font-weight:800; font-size:13px; min-width:34px; text-align:right; color:var(--text2);
 }
 
-/* — the two columns — */
-.asf-body { display:grid; grid-template-columns:288px minmax(0,1fr); gap:12px; align-items:start; }
+/* — the two columns —
+   THE RAIL IS SUPPORT, NOT A SECOND COLUMN OF CONTENT.
+
+   It was a hard 288px, which is ~25% of the content box at 1366 — a photo well
+   and five read-only facts taking a quarter of the screen from the form that is
+   the actual reason the page exists. The brief's correction is 18–20%, and the
+   fix is a ratio rather than another fixed number: a percentage keeps that
+   share at every width instead of drifting from 20% at 1440 to 28% on a smaller
+   laptop.
+
+   The clamp is what stops the ratio going silly at the ends — below ~160px the
+   photo well and "Rooms with space  67" stop being legible, and past ~220px the
+   rail starts competing again. Between those it is pure percentage. */
+/* 150px floor, not 160: at 1024 the body is ~755px, where 19% is 143 and a
+   160px floor pushed the rail back up to 21.2% — the clamp reintroducing the
+   very problem it was added to bound. 150 keeps it at 19.9% there and is still
+   wide enough for the well and "Rooms with space  67". */
+.asf-body { display:grid; grid-template-columns:clamp(150px, 19%, 220px) minmax(0,1fr); gap:12px; align-items:start; }
 .asf-rail { display:flex; flex-direction:column; gap:12px; min-width:0; }
 .asf-main { display:flex; flex-direction:column; gap:12px; min-width:0; }
-/* Contact and allotment sit side by side and BOTH hold two columns of fields.
-   1.3fr/1fr gave contact three columns at 1366, which put "Name and relation"
-   into a 140px box that truncated its own placeholder. */
-.asf-row  { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start; }
+/* Contact 5 / allotment 7 of a 12-column main form (brief §5). Allotment is the
+   operational half — a room search, a bed, a floor, a charge and two dates —
+   and it earns the extra column.
+
+   The earlier note here warned that 1.3fr/1fr collapsed contact into three
+   columns and truncated "Name and relation" in a 140px box. That is still the
+   hazard, and it is why contact's inner grid is pinned to two columns rather
+   than left to auto-fit: at 5/12 of the main area the auto-fit would try three
+   again on a wide screen. */
+.asf-row  { display:grid; grid-template-columns:5fr 7fr; gap:12px; align-items:start; }
 
 /* Sections ARE .sf-sec — the card the Edit Student form is built from. Only
    its stacking margin is dropped; the page owns the gaps between cards. */
@@ -667,8 +689,13 @@
      a separate "Upload photo / or drag and drop" box stacked beneath it, both
      opening the same file dialog and together eating ~290px of rail. The well
      is the frame, the button and the drop target. — */
+/* 4:3 rather than a fixed 188px. A fixed height is a second, invisible way for
+   the rail to be the wrong size: once the column became a percentage the well
+   would have gone from square-ish at 220px wide to a letterbox at 160px, and
+   the card's proportion is the thing the eye reads first. An aspect ratio keeps
+   it a photo frame at every rail width, and it is the brief's §3 target. */
 .asf-photo {
-    width:100%; height:188px; cursor:pointer; border-radius:12px; overflow:hidden;
+    width:100%; aspect-ratio:4 / 3; cursor:pointer; border-radius:12px; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     background:var(--dash-sunk); border:1.5px dashed var(--border2); color:var(--text2);
     transition:var(--transition);
@@ -688,16 +715,82 @@
 .asf-photo-acts  { display:flex; gap:8px; margin-top:9px; }
 .asf-photo-acts .sf-btn { flex:1; justify-content:center; padding:0 12px; }
 
+/* ── DOCUMENTS (owner, 2026-09-10) ─────────────────────────────────────────
+   The third rail card, filling the 403px the rail used to leave blank under
+   Record summary while the main column ran on. It is built to the rail's real
+   width — clamp(150px, 19%, 220px), so 150px at the narrow end — which is what
+   sets every decision below: the icon is 26px not 34, the name ellipsises
+   before the state line does, and the remove control is an icon rather than
+   the word it would like to be.
+
+   Rows are the same key/value rhythm as .asf-rec above them, so the rail reads
+   as one column of small facts rather than as three unrelated widgets. */
+.asf-docs { display:flex; flex-direction:column; }
+.asf-doc {
+    display:flex; align-items:center; gap:9px; min-width:0;
+    padding:8px 0; border-bottom:1px solid var(--border);
+}
+.asf-doc:last-of-type { border-bottom:none; }
+.asf-doc__i {
+    width:26px; height:26px; border-radius:8px; flex-shrink:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--dash-sunk); color:var(--text3);
+}
+.asf-doc__i svg { width:14px; height:14px; }
+/* Attached is a state worth seeing from across the rail — a warden scanning
+   for "is the POR on file" should not have to read three captions. */
+.asf-doc.is-on .asf-doc__i { background:var(--green-dim); color:var(--green); }
+.asf-doc__x { min-width:0; flex:1 1 auto; display:flex; flex-direction:column; }
+.asf-doc__n {
+    font-size:11.5px; font-weight:600; color:var(--text); line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.asf-doc__s { margin-top:1px; font-size:10.5px; color:var(--text3); }
+.asf-doc.is-on .asf-doc__s { color:var(--green); }
+.asf-doc__b {
+    width:26px; height:26px; border-radius:8px; flex-shrink:0; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:none; border:1px solid var(--border2); color:var(--text3);
+    transition:var(--transition);
+}
+.asf-doc__b svg { width:13px; height:13px; }
+.asf-doc__b:hover { border-color:var(--accent); color:var(--accent-strong); background:var(--accent-dim); }
+.asf-doc.is-on .asf-doc__b:hover { border-color:var(--red); color:var(--red); background:var(--red-dim); }
+
+.asf-doc__add {
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    width:100%; margin-top:10px; height:32px; border-radius:9px; cursor:pointer;
+    background:var(--card); border:1.5px dashed var(--border2); color:var(--text2);
+    font-family:var(--font); font-size:11.5px; font-weight:600;
+    transition:var(--transition);
+}
+.asf-doc__add svg { width:13px; height:13px; flex-shrink:0; }
+.asf-doc__add:hover:not(:disabled) { border-color:var(--accent); color:var(--accent-strong); background:var(--accent-dim); }
+.asf-doc__add:disabled { cursor:not-allowed; opacity:.55; }
+/* The running total, and before anything is attached the rules instead. Saying
+   "up to 3.0 MB each" only after a file has been refused is telling somebody a
+   limit at the one moment it is no longer useful. */
+.asf-doc__tot {
+    margin-top:8px; font-size:10.5px; color:var(--text3); line-height:1.4;
+}
+
 /* — record plate. Read-only facts, so they read as a key/value list rather
      than as fields; same shape as .svw-row on the student profile. — */
 .asf-rec    { display:flex; flex-direction:column; }
+/* 9px -> 7px. Five rows, so 20px of the rail back for nothing but air. Density
+   here is the point (brief §4): these are five facts to be scanned, not five
+   fields to be worked through, and the dividers already do the separating that
+   the padding was doubling. */
 .asf-rec__r {
-    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
-    padding:9px 0; border-bottom:1px solid var(--border);
+    display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+    padding:7px 0; border-bottom:1px solid var(--border);
 }
-.asf-rec__r:last-child { border-bottom:none; padding-bottom:2px; }
-.asf-rec__k { flex-shrink:0; font-size:12px; color:var(--text3); }
-.asf-rec__v { min-width:0; text-align:right; font-size:13px; font-weight:600; color:var(--text);
+.asf-rec__r:last-child { border-bottom:none; padding-bottom:0; }
+/* The label may shrink and ellipsize; the VALUE never does. "Rooms with space"
+   can lose a letter before "67" is allowed to. */
+.asf-rec__k { flex:1 1 auto; min-width:0; font-size:11.5px; color:var(--text3);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.asf-rec__v { flex:0 0 auto; text-align:right; font-size:12.5px; font-weight:600; color:var(--text);
               overflow-wrap:anywhere; }
 .asf-num {
     font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
@@ -710,22 +803,84 @@
 
 .asf-picked { font-size:11.5px; color:var(--green); font-weight:700; margin-top:5px; min-height:15px; }
 
-/* — footer — */
-.asf-foot {
-    display:flex; align-items:center; justify-content:flex-end; gap:9px; flex-wrap:wrap;
-    padding-top:12px; border-top:1px solid var(--border);
-}
+/* — the action bar. STICKY, because the primary action must never be a scroll
+     away (brief §14). This sheet is four sections tall; a warden who has filled
+     in the form should not have to hunt for the button that saves it.
 
-/* — narrower windows. 1366x768 is the QA floor: at that width the sidebar
-     takes 260 and identity still holds four columns. — */
-@media (max-width:1200px) {
-    .asf-fg--4 { grid-template-columns:repeat(2,1fr); }
-    .asf-row   { grid-template-columns:1fr; }
+     `bottom:0` inside #content, which is the app's scroll port (style.css:561,
+     overflow-y:auto). The bar therefore docks to the bottom of the viewport
+     while the sheet scrolls under it, and comes to rest naturally at the end of
+     the page — no fixed positioning, so it never has to know the sidebar's
+     width or follow it when the rail collapses.
+
+     Cancel sits left and the two saves right (brief §16): the destructive-ish
+     exit is separated from the pair you actually reach for, and the primary
+     stays the last thing in the reading order.
+
+     One shell detail worth stating: the bar is INSIDE .asf, so its left and
+     right edges line up with every card above it. That is brief §19 — the rule
+     that everything shares one grid — and it is why this is not bled to the
+     full window width. */
+.asf-foot {
+    position:sticky; bottom:0; z-index:20;
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    min-height:58px; padding:10px 14px; margin-top:2px;
+    border:1px solid var(--border); border-radius:12px;
+    background:var(--card);
+    box-shadow:0 -6px 18px rgba(15,23,42,.06);
 }
+body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
+/* Everything after this is pushed to the right, so Cancel keeps the left. */
+.asf-foot__spacer { margin-left:auto; }
+
+/* — the responsive ladder (brief §17). Widths are the WINDOW, and #content is
+     ~216px narrower than it once the rail is out, which is why the identity
+     grid gives up its fourth column earlier than the number suggests.
+
+     1366x768 is the QA floor and identity still holds four columns there. — */
+
+/* Laptop. Contact/allotment stay side by side; identity drops to three columns
+   rather than two, which keeps the sheet short without putting a 400px box
+   round "Gender". */
+@media (max-width:1320px) {
+    .asf-fg--4 { grid-template-columns:repeat(3,1fr); }
+}
+/* THE PAIR STACKS HERE, AND THE PHONE FIELD IS WHY.
+
+   Measured, not guessed. Contact is 5/12 of the main area and holds a
+   two-column grid, so its cells are ~153px at 1366 — and the phone cell shares
+   its width with the `+92` prefix, which takes 43 of them. The input itself
+   therefore runs ~110px at 1366, ~96px at 1280 and **73px at 1024**, where a
+   ten-digit number no longer fits the box it is typed into.
+
+   110px still shows "3xx xxxxxxx" in full, so the brief's two-column
+   composition survives on a real laptop. Below 1300 it does not, and the pair
+   stacks rather than shrinking further — full width for contact is worth more
+   than a side-by-side that cannot hold a phone number. */
+@media (max-width:1300px) {
+    .asf-row { grid-template-columns:1fr; }
+}
+/* Small laptop / tablet landscape. Identity gives up its third column. */
+@media (max-width:1150px) {
+    .asf-fg--4     { grid-template-columns:repeat(2,1fr); }
+    .asf-fg--notes { grid-template-columns:1fr 1.6fr; }
+}
+/* The rail stops being a column and becomes a band above the form. Photo and
+   record sit side by side there so the form still starts near the top of the
+   screen rather than below a stack of support cards. */
 @media (max-width:900px) {
     .asf-body  { grid-template-columns:1fr; }
+    .asf-rail  { flex-direction:row; align-items:stretch; }
+    .asf-rail > * { flex:1 1 0; min-width:0; }
     .asf-meter { margin-left:0; }
 }
+/* Single column, and the notes pair stops pretending to be two fields. */
+@media (max-width:700px) {
+    .asf-fg--4, .asf-fg--2, .asf-fg--notes { grid-template-columns:1fr; }
+    .asf-rail { flex-direction:column; }
+    .asf-foot { flex-direction:column; align-items:stretch; }
+    .asf-foot__spacer { margin-left:0; }
+    .asf-foot .sf-btn { width:100%; justify-content:center; }
 }
 
 /* Read-only cells — floor and the monthly charge are set BY the room, so they
