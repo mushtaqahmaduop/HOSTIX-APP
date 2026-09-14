@@ -341,6 +341,19 @@ by the missing-table check); collections posted before step 4 get their
 As built: the line rules are one function, `ledgerHistoryLine()` in `renderer/src/ledger.js`,
 read by both the receipt (`buildReceiptHTML`) and the Add Payment card (`pfRenderRecent`).
 
+## Step 6 decisions (owner, 2026-09-14, asked before design)
+
+| Case | Decided |
+|---|---|
+| Amount paid once money is collected | **Read-only for everyone**, warden and admin. More cash → Add Payment; money back → Reverse a collection (reason required). |
+| Who may edit / reverse / delete a record holding money | **Its collector or an admin** (a Manage-users account). Others see the action disabled, naming the collector. |
+| Deleting a record that holds money | **Blocked until reversed.** Delete is offered only when the record holds no money. |
+| Editing the bill after money is collected | **Allowed, reason required.** The ledger adjustment carries the typed reason. |
+| How much a warden may reverse | **Only what they collected** on that record; an admin any amount. |
+| Money already in a handover | **Admin only once handed over.** Waiting → the warden takes the handover back first; approved → only an admin reverses it. |
+| Viewing | **Everyone sees, owner changes.** All records, receipts and ledger lines stay visible; ownership governs edit, reverse and delete. |
+| Method / month / payment date once collected | **All three lock** (owner, 2026-09-14: "ok lock and proceed"). |
+
 ## What happens next
 
 Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**

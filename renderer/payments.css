@@ -751,6 +751,23 @@ input.ws__amt {
 }
 .ap-led__v > i.is-clear { color:var(--text3); }
 .ap-led__v > i.is-due   { color:var(--red); }
+/* ── THE EDIT FORM'S LOCK NOTICE (warden ledger step 6) ─────────────────────
+   Says, above the fields, what is locked and why — amber when the signed-in
+   account may still change the bill, neutral when the whole form is view-only. */
+.pef-lock {
+    display:flex; gap:10px; align-items:flex-start;
+    margin:0 0 12px; padding:10px 12px; border-radius:10px;
+    background:var(--ant-warning-bg); color:var(--ant-warning-fg);
+    border:1px solid var(--border);
+    font-size:12px; line-height:1.45; font-weight:600;
+}
+.pef-lock svg { flex-shrink:0; margin-top:1px; }
+.pef-lock.is-view { background:var(--ant-neutral-bg); color:var(--ant-neutral-fg); }
+.pef-lock b { font-weight:800; }
+/* The view-only form's extra-charge controls read as off, not as live buttons. */
+.pef-extra__add:disabled,
+#extra-charges-list .rm-btn:disabled { opacity:.45; cursor:not-allowed; }
+
 /* A long history must not push the rail past the window — the list scrolls
    inside its own card instead. */
 #ap-recent { max-height:210px; overflow-y:auto; }

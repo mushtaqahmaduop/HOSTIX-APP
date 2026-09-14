@@ -345,6 +345,12 @@ body.light-theme .lk-sin:focus {
 .lk-rmenu__sep { height: 1px; background: var(--border2); margin: 4px 2px; }
 .lk-rmenu .is-danger { color: var(--ant-danger-fg); }
 .lk-rmenu .is-danger:hover { background: var(--ant-danger-bg); color: var(--ant-danger-fg); }
+/* A disabled item keeps its place and says why underneath (warden ledger
+   step 6) — "Reverse a collection / Collected by Sara". */
+.lk-rmenu button.is-disabled,
+.lk-rmenu button.is-disabled:hover { opacity: .55; cursor: not-allowed; background: none; color: var(--text2); }
+.lk-rmenu__lbl  { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
+.lk-rmenu__hint { font-size: 10.5px; font-weight: 500; color: var(--text3); margin-top: 1px; white-space: normal; max-width: 190px; }
 
 /* The button that opens it. Square now that the word has gone (owner,
    2026-09-09) — the naming lives on the menu items and on aria-label/title. */

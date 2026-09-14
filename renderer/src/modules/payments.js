@@ -1301,6 +1301,8 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
 async function deletePayment(id) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dp = DB.payments.find(x => x.id === id);
+  // Step 6: a record holding money is reversed first, never deleted in one go.
+  if (_dp) { const _ok = ownCanDelete(_dp); if (!_ok.ok) { toast(_ok.reason, 'error'); return; } }
   showConfirm('Delete payment record?','This cannot be undone.',async ()=>{
     // Logged before the record goes. Every other money action writes to the
     // activity log; the one that destroys money was the only one that did not,
@@ -1317,6 +1319,7 @@ async function deletePayment(id) {
 async function deletePaymentFromStudentView(payId, studentId) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dpv = DB.payments.find(x => x.id === payId);
+  if (_dpv) { const _ok = ownCanDelete(_dpv); if (!_ok.ok) { toast(_ok.reason, 'error'); return; } }
   showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',async ()=>{
     if (_dpv) logActivity('Payment Deleted',
       `${_dpv.studentName||'—'} — ${_dpv.month||'—'} · ${fmtPKR(_dpv.amount)} collected, ${fmtPKR(_dpv.unpaid)} outstanding`, 'Finance');
@@ -3212,10 +3215,20 @@ function showEditPaymentModal(id) {
   // p.monthlyRent is the rent at the time the payment was recorded and may be stale
   // if the warden has since updated fees in Settings. t.rent is always kept in sync.
   const c = t ? resolveCharges(t) : null;
-  const monthlyRent  = (c && c.rent) || p.monthlyRent || p.totalRent || 0;
+  /* WARDEN LEDGER STEP 6 (ownership.js). Once the record holds money, Amount
+     paid, method, month and payment date are read-only for everyone; the bill
+     stays editable by the collector or an admin, with a reason; anyone else
+     sees the form view-only. A record holding money also shows ITS OWN rent
+     and mess, not the student's current price — otherwise opening an old month
+     and pressing Save would re-price it and ask for a reason nobody gave. */
+  const held  = ownHeld(p);
+  const canEd = ownCanEdit(p);
+  const monthlyRent  = held ? (p.monthlyRent || p.totalRent || (c && c.rent) || 0)
+                            : ((c && c.rent) || p.monthlyRent || p.totalRent || 0);
   // Mess follows the same rule as rent above: the current configured charge
   // wins, falling back to what was recorded on this payment.
-  const messCharge   = c && c.mess != null ? c.mess : Number(p.messCharge || 0);
+  const messCharge   = held ? Number(p.messCharge || 0)
+                            : (c && c.mess != null ? c.mess : Number(p.messCharge || 0));
   const messIncluded = p.messIncluded != null ? p.messIncluded !== false : (c ? c.messOptIn : true);
   const paidAmount   = p.amount || 0;
   const admissionFee = p.admissionFee || p.fee || 0;
@@ -3248,6 +3261,9 @@ function showEditPaymentModal(id) {
         <span class="hf-mh__s">Update payment details, charges and adjustments for this student.</span>
       </span>
     </div>`, `
+    ${!held ? '' : `<div class="pef-lock${canEd.ok ? '' : ' is-view'}" id="pef-lock">${icon('lock','sm')}<span>${canEd.ok
+        ? `<b>${fmtPKR(money(p.amount))} has been collected on this record.</b> Amount paid, payment method, month and payment date are locked. To collect more use Add Payment; to take money back use Reverse a collection. Changing a charge needs a reason.`
+        : `<b>${escHtml(canEd.reason)}</b> This record is view-only for you.`}</span></div>`}
     <div class="pef-who">
       <div class="pef-who__av">${escHtml((p.studentName||'?')[0].toUpperCase())}</div>
       <div class="pef-who__id">
@@ -3280,9 +3296,10 @@ function showEditPaymentModal(id) {
                        <input type="checkbox" id="f-pmess-on" ${messIncluded?'checked':''} onchange="pfMessToggle()">
                        <span id="f-pmess-note">${messIncluded?'Rent + mess = total monthly charge':'Room only — mess not charged'}</span>
                      </label>` })}
-          ${F('Amount paid (PKR)', 'wallet',
-             `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()">`,
-             { req: true, for: 'f-ppaid' })}
+          ${F('Amount paid (PKR)', held ? 'lock' : 'wallet',
+             `<input class="form-control" id="f-ppaid" type="number" value="${paidAmount||''}" oninput="recalcUnpaid()"${held ? ' readonly' : ''}>`,
+             held ? { for: 'f-ppaid', cls: 'is-readonly', note: 'Locked — Add Payment to collect more, Reverse to take money back' }
+                  : { req: true, for: 'f-ppaid' })}
         </div>
       </div>
 
@@ -3345,13 +3362,13 @@ function showEditPaymentModal(id) {
              <option value="Paid" ${unpaid===0&&monthlyRent>0?'selected':''}>Paid</option>
              <option value="Pending" ${unpaid>0||!monthlyRent?'selected':''}>Unpaid / Pending</option>
            </select>`, { for: 'f-pstat' })}
-        ${F('Payment method', 'card', `<select class="form-control" id="f-pmethod">${pmOpts}</select>`,
-           { for: 'f-pmethod' })}
-        ${F('Month', 'calendar', `<select class="form-control" id="f-pmonth">${payMonthPickerOptions(p.month || '', p.studentId || '')}</select>`,
-           { for: 'f-pmonth' })}
-        ${F('Payment date', 'calendar',
-           `<input class="form-control cdp-trigger" id="f-pdate" type="text" readonly onclick="showCustomDatePicker(this,event)" value="${escHtml(p.date||'')}">`,
-           { for: 'f-pdate' })}
+        ${F('Payment method', held ? 'lock' : 'card', `<select class="form-control" id="f-pmethod"${held ? ' disabled' : ''}>${pmOpts}</select>`,
+           { for: 'f-pmethod', cls: held ? 'is-readonly' : '' })}
+        ${F('Month', held ? 'lock' : 'calendar', `<select class="form-control" id="f-pmonth"${held ? ' disabled' : ''}>${payMonthPickerOptions(p.month || '', p.studentId || '')}</select>`,
+           { for: 'f-pmonth', cls: held ? 'is-readonly' : '' })}
+        ${F('Payment date', held ? 'lock' : 'calendar',
+           `<input class="form-control cdp-trigger" id="f-pdate" type="text" readonly${held ? '' : ' onclick="showCustomDatePicker(this,event)"'} value="${escHtml(p.date||'')}">`,
+           { for: 'f-pdate', cls: held ? 'is-readonly' : '' })}
         ${F('Due date', 'calendar',
            `<input class="form-control cdp-trigger" id="f-pdue" type="text" readonly onclick="showCustomDatePicker(this,event)" placeholder="Select due date" value="${escHtml(p.dueDate||'')}">`,
            { for: 'f-pdue' })}
@@ -3365,9 +3382,21 @@ function showEditPaymentModal(id) {
         <textarea class="form-control" id="f-pnotes" rows="2" maxlength="250" placeholder="Anything worth remembering about this payment…" oninput="pefNoteCount()">${escHtml(p.notes||'')}</textarea>
       </div>
       <div class="pef-notes-count" id="f-pnotes-count"></div>
-    </div>`,
-  `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-danger btn-sm" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete</button>
+    </div>
+    ${held && canEd.ok ? `
+    <div class="pef-sec">
+      ${secHead(5, 'Reason for changing a charge', 'Required only if rent, mess, admission, concession or extras changed. It goes on the student ledger.')}
+      <div class="hf-in">
+        <span class="hf-in__i">${icon('fileText','sm')}</span>
+        <input class="form-control" id="f-pedit-reason" maxlength="120" placeholder="e.g. Mess stopped from the 10th">
+      </div>
+    </div>` : ''}`,
+  !canEd.ok
+    ? `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`
+    : `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+   ${held
+     ? `<button class="btn btn-danger btn-sm" disabled title="${escHtml(ownCanDelete(p).reason)}">${icon('trash','sm')} Delete</button>`
+     : `<button class="btn btn-danger btn-sm" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete</button>`}
    <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Save Changes</button>`);
   setTimeout(function() {
     const ecl = document.getElementById('extra-charges-list');
@@ -3377,15 +3406,30 @@ function showEditPaymentModal(id) {
     }
     recalcUnpaid();
     pefNoteCount();
+    // View-only for an account that may not change this record's money.
+    if (!canEd.ok) {
+      ['f-pamt','f-pmess','f-pmess-on','f-ppaid','f-padmfee','f-pconcession','f-pconcession-desc',
+       'f-pstat','f-pmethod','f-pmonth','f-pdate','f-pdue','f-pnotes'].forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) { el.setAttribute('disabled', ''); el.removeAttribute('onclick'); }
+      });
+      document.querySelectorAll('#extra-charges-list input, #extra-charges-list button, .pef-extra__add')
+        .forEach(el => el.setAttribute('disabled', ''));
+    }
   }, 50);
 }
 async function submitEditPayment(id) {
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
+  /* Step 6, refused here as well as on the form (ownership.js). */
+  const held  = ownHeld(p);
+  const canEd = ownCanEdit(p);
+  if (!canEd.ok) { toast(canEd.reason, 'error'); return; }
   const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
   const messCharge   = pfMessAmount();
-  const paidAmount   = parseFloat(document.getElementById('f-ppaid')?.value)||0;
+  // Collected money is never typed over: a record holding money keeps its amount.
+  const paidAmount   = held ? money(p.amount) : (parseFloat(document.getElementById('f-ppaid')?.value)||0);
   const admissionFee = parseFloat(document.getElementById('f-padmfee')?.value)||0;
   const concession   = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc = (document.getElementById('f-pconcession-desc')?.value||'').trim();
@@ -3397,6 +3441,24 @@ async function submitEditPayment(id) {
   });
   const unpaid       = Math.max(0, totalDue - money(paidAmount));
   const prevPaid     = money(p.amount);
+
+  /* A CHANGED CHARGE ON A RECORD HOLDING MONEY NEEDS A REASON (owner,
+     2026-09-14), and that reason is what the ledger adjustment says. */
+  let editWhy = 'Edited on the payment form';
+  if (held) {
+    const before = [money(calculateBill(p)), money(p.admissionFee || p.fee || 0),
+                    money(p.concession || p.discount || 0), money(p.extraTotal || 0)];
+    const after  = [money(totalDue), money(admissionFee), money(concession), money(extraTotal)];
+    if (before.join('|') !== after.join('|')) {
+      const why = (document.getElementById('f-pedit-reason')?.value || '').trim();
+      if (!why) {
+        toast('A charge changed — give the reason. It goes on the student ledger.', 'error');
+        document.getElementById('f-pedit-reason')?.focus();
+        return;
+      }
+      editWhy = why;
+    }
+  }
   if (!p.partialPayments) p.partialPayments = [];
   if (paidAmount > prevPaid) {
     p.partialPayments.push({
@@ -3424,14 +3486,17 @@ async function submitEditPayment(id) {
   // the amount beside it are both editable, so the credit is whatever those two
   // now say it is.
   p.overpaid       = Math.max(0, money(paidAmount) - totalDue);
-  p.method         = document.getElementById('f-pmethod')?.value || p.method;
-  p.month          = document.getElementById('f-pmonth')?.value  || p.month;
+  // Method, month and payment date stay as collected once the record holds money.
+  if (!held) {
+    p.method       = document.getElementById('f-pmethod')?.value || p.method;
+    p.month        = document.getElementById('f-pmonth')?.value  || p.month;
+    p.date         = document.getElementById('f-pdate')?.value   || p.date;
+  }
   p.status         = document.getElementById('f-pstat')?.value   || p.status;
-  p.date           = document.getElementById('f-pdate')?.value   || p.date;
   p.dueDate        = document.getElementById('f-pdue')?.value    || p.dueDate;
   p.paidDate       = p.status==='Paid' ? p.date : '';
   p.notes          = document.getElementById('f-pnotes')?.value  || '';
-  ledgerTrack(p, { why: 'Edited on the payment form' });
+  ledgerTrack(p, { why: editWhy });
   // Editing one month's record does NOT re-price the student. It used to write
   // monthlyRent back to _st.rent, so correcting a single historical bill
   // silently changed every future one. Price changes belong in
@@ -3472,6 +3537,10 @@ function showReversePaymentModal(id) {
 
   const collected = money(p.amount);
   if (collected <= 0) { toast('Nothing has been collected on this record', 'info'); return; }
+  /* Step 6: a warden reverses only what they collected here and still hold;
+     an admin any amount (ownership.js). */
+  const rv = ownReversible(p);
+  if (rv.max <= 0) { toast(rv.reason, 'error'); return; }
 
   const due    = calculateOutstanding(p);
   const credit = calculateRefund(p).refundable;
@@ -3491,6 +3560,7 @@ function showReversePaymentModal(id) {
        </div>
        <div class="pay-rev__box">
          ${line('Collected on this record', fmtPKR(collected))}
+         ${rv.admin ? '' : line('You collected (not yet handed over)', fmtPKR(rv.max))}
          ${line('Still owed', fmtPKR(due), due > 0 ? 'is-red' : '')}
          ${credit > 0 ? line('Credit held', fmtPKR(credit), 'is-amber') : ''}
        </div>
@@ -3498,12 +3568,12 @@ function showReversePaymentModal(id) {
           past.map(r => fmtPKR(money(r.amount)) + ' on ' + escHtml(r.date || '—')).join(' · ')}</div>` : ''}
        <div class="field">
          <label>Amount to reverse</label>
-         <input class="form-control" id="f-prev-amt" type="number" min="1" max="${collected}"
-                value="${collected}" oninput="pfReverseHint()">
+         <input class="form-control" id="f-prev-amt" type="number" min="1" max="${rv.max}"
+                data-collected="${collected}" value="${rv.max}" oninput="pfReverseHint()">
          <div class="pay-rev__hint" id="f-prev-hint"></div>
        </div>
        <div class="field">
-         <label>Reason</label>
+         <label>Reason <span class="req">*</span></label>
          <input class="form-control" id="f-prev-reason" type="text" maxlength="120"
                 placeholder="Why is this being reversed?">
        </div>
@@ -3531,9 +3601,12 @@ function pfReverseHint() {
   if (!el || !inp) return;
   const amt = money(parseFloat(inp.value) || 0);
   const max = money(parseFloat(inp.max) || 0);
+  // What the RECORD keeps is its whole collection less this — not the limit,
+  // which since step 6 can be only this warden's share of it.
+  const collected = money(parseFloat(inp.dataset.collected) || max);
   if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
-  if (amt > max)  { el.textContent = 'More than was collected (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
-  el.textContent = 'Leaves ' + fmtPKR(max - amt) + ' collected on this record.';
+  if (amt > max)  { el.textContent = 'More than you can reverse here (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
+  el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected on this record.';
   el.className = 'pay-rev__hint';
 }
 
@@ -3544,6 +3617,16 @@ async function submitReversePayment(id) {
   const amount = money(parseFloat(document.getElementById('f-prev-amt')?.value) || 0);
   const reason = (document.getElementById('f-prev-reason')?.value || '').trim();
   const date   = document.getElementById('f-prev-date')?.value || today();
+
+  /* Step 6, refused here too: within what this account may reverse, and with a
+     reason — a correction is a ledger entry that says why (spec §3.2). */
+  const rv = ownReversible(p);
+  if (rv.max <= 0) { toast(rv.reason, 'error'); return; }
+  if (amount > rv.max) {
+    toast('You can reverse up to ' + fmtPKR(rv.max) + ' on this record' + (rv.admin ? '' : ' — what you collected and still hold'), 'error');
+    return;
+  }
+  if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
 
   const r = reversePayment(p, { amount, reason, date });
   if (!r.ok) {
@@ -3652,14 +3735,25 @@ function payRowMenu(id, btn) {
     reverse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>',
     del:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
   };
+  /* Step 6 (ownership.js): everyone sees every action; the ones this account
+     may not use are disabled with the reason under them. */
+  const ed = ownCanEdit(p), dl = ownCanDelete(p);
   const items = [
-    { label: 'Edit payment',  svg: S.edit,    on: "showEditPaymentModal('" + id + "')" },
+    { label: ed.ok ? 'Edit payment' : 'View payment', svg: S.edit, on: "showEditPaymentModal('" + id + "')" },
     { label: 'Print receipt', svg: S.receipt, on: "printReceipt('" + id + "')" },
   ];
   if (money(p.amount) > 0) {
-    items.push({ label: 'Reverse a collection', svg: S.reverse, on: "showReversePaymentModal('" + id + "')" });
+    const rv = ownReversible(p);
+    items.push(rv.max > 0
+      ? { label: 'Reverse a collection', svg: S.reverse, on: "showReversePaymentModal('" + id + "')" }
+      : { label: 'Reverse a collection', svg: S.reverse, disabled: true,
+          hint: rv.waiting > 0 ? 'In a handover waiting for approval'
+              : rv.approved > 0 ? 'Approved in a handover — admin only'
+              : 'Collected by ' + (ownOwner(p).name || 'another account') });
   }
   items.push('sep');
-  items.push({ label: 'Delete payment', svg: S.del, danger: true, on: "deletePayment('" + id + "')" });
+  items.push(dl.ok
+    ? { label: 'Delete payment', svg: S.del, danger: true, on: "deletePayment('" + id + "')" }
+    : { label: 'Delete payment', svg: S.del, danger: true, disabled: true, hint: 'Reverse the collection first' });
   lkRowMenu(btn, items);
 }

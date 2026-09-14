@@ -223,6 +223,15 @@ function lkRowMenu(btn, items) {
   el.setAttribute('role', 'menu');
   el.innerHTML = items.map(function (it) {
     if (it === 'sep') return '<div class="lk-rmenu__sep"></div>';
+    /* A DISABLED ITEM SAYS WHY (warden ledger step 6): "Reverse a collection"
+       greyed out with "Collected by Sara" under it, rather than missing — a
+       missing action reads as a bug, a disabled one with a reason reads as a rule. */
+    if (it.disabled) {
+      return '<button role="menuitem" disabled aria-disabled="true" class="is-disabled' + (it.danger ? ' is-danger' : '') + '"'
+        + (it.hint ? ' title="' + escHtml(it.hint) + '"' : '') + '>' + (it.svg || '')
+        + '<span class="lk-rmenu__lbl">' + escHtml(it.label)
+        + (it.hint ? '<span class="lk-rmenu__hint">' + escHtml(it.hint) + '</span>' : '') + '</span></button>';
+    }
     return '<button role="menuitem"' + (it.danger ? ' class="is-danger"' : '')
       + ' onclick="lkCloseRowMenu();' + it.on + '">' + (it.svg || '') + escHtml(it.label) + '</button>';
   }).join('');

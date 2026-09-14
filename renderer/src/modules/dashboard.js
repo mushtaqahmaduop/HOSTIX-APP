@@ -2984,8 +2984,10 @@ function renderMonthModal(monthKey, monthLabel) {
     <td><span style="color:var(--text);font-weight:600">${escHtml(p.studentName||'—')}</span></td>
     <td style="color:var(--text2);font-weight:700">#${escHtml(String(p.roomNumber||'—'))}</td>
     <td class="text-muted">${escHtml(p.month||'—')}</td>
+    ${''/* NOT CLICK-TO-EDIT (warden ledger step 6): collected money is never
+           typed over. More cash is Add Payment; money back is Reverse. */}
     <td>
-      <span class="editable-cell" onclick="editMonthFeeField('${p.id}','amount',this)" title="Click to edit">${fmtPKR(p.amount)}</span>
+      <span style="font-weight:700;color:var(--text)">${fmtPKR(p.amount)}</span>
     </td>
     <td>${pmBadge(p.method)}</td>
     <td>
@@ -2995,7 +2997,9 @@ function renderMonthModal(monthKey, monthLabel) {
       </select>
     </td>
     <td class="text-muted" style="font-size:12px">
-      <span class="editable-cell" onclick="editMonthFeeField('${p.id}','date',this)" title="Click to edit">${fmtDate(p.date)||'—'}</span>
+      ${money(p.amount) > 0
+        ? `<span title="Locked — money has been collected on this record">${fmtDate(p.date)||'—'}</span>`
+        : `<span class="editable-cell" onclick="editMonthFeeField('${p.id}','date',this)" title="Click to edit">${fmtDate(p.date)||'—'}</span>`}
     </td>
     <td>
       <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 8px" onclick="deleteMonthPayment('${p.id}','${monthKey}','${escHtml(monthLabel)}')">${ICONS.trash}</button>
@@ -3107,6 +3111,14 @@ function switchMonthTab(tab) {
 async function editMonthFeeField(payId, field, cell) {
   const pay = DB.payments.find(p=>p.id===payId);
   if(!pay) return;
+  /* Collected money and the date it arrived are never typed over (warden ledger
+     step 6) — refused here too, not only by the cell no longer being clickable. */
+  if (field === 'amount' || (field === 'date' && money(pay.amount) > 0)) {
+    toast(field === 'amount'
+      ? 'Collected money cannot be edited. Use Add Payment to collect more, or Reverse a collection.'
+      : 'The payment date is locked once money has been collected.', 'error');
+    return;
+  }
   const old = field==='amount'?pay.amount:pay[field];
   const inp = document.createElement('input');
   inp.type = field==='date'?'date':'text';
@@ -3175,6 +3187,8 @@ async function updateMonthPayStatus(payId, newStatus) {
 
 async function deleteMonthPayment(payId, monthKey, monthLabel) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
+  const _chk = ownCanDelete(DB.payments.find(p => p.id === payId));
+  if (!_chk.ok) { toast(_chk.reason, 'error'); return; }
   showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',async ()=>{
     const _dm = DB.payments.find(p=>p.id===payId);
     if (_dm) ledgerTrackDeleted(_dm);

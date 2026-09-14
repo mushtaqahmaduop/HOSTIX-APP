@@ -1491,8 +1491,12 @@ function stuLedgerMenu(payId, studentId, btn) {
     + '<button role="menuitem" onclick="closeStuRowMenu();editPaymentFromStudentView(\'' + a + '\',\'' + b + '\')">'
       + icon('edit', 'sm') + 'Edit payment</button>'
     + '<div class="stu-rmenu__sep"></div>'
-    + '<button role="menuitem" class="is-danger" onclick="closeStuRowMenu();deletePaymentFromStudentView(\'' + a + '\',\'' + b + '\')">'
-      + icon('trash', 'sm') + 'Delete payment</button>';
+    /* Delete only a record holding no money (warden ledger step 6). */
+    + (typeof ownCanDelete === 'function' && !ownCanDelete(p).ok
+        ? '<button role="menuitem" disabled aria-disabled="true" class="is-danger is-disabled" title="' + escHtml(ownCanDelete(p).reason) + '">'
+          + icon('trash', 'sm') + '<span class="lk-rmenu__lbl">Delete payment<span class="lk-rmenu__hint">Reverse the collection first</span></span></button>'
+        : '<button role="menuitem" class="is-danger" onclick="closeStuRowMenu();deletePaymentFromStudentView(\'' + a + '\',\'' + b + '\')">'
+          + icon('trash', 'sm') + 'Delete payment</button>');
   document.body.appendChild(el);
 
   const r = btn.getBoundingClientRect();

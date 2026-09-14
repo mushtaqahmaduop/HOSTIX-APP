@@ -135,6 +135,15 @@ declare function ledgerHistoryLine(e: any): { id: string; by: string; sign: stri
 declare function ledgerHistoryFor(studentId: string, recordId: string | null, n?: number):
   { rows: ReturnType<typeof ledgerHistoryLine>[]; earlier: number; bf: number } | null;
 declare function ledgerCollectorOf(recordId: string): string;
+declare function ledgerEntriesForRecord(recordId: string): any[];
+declare function ledgerRecordOwner(recordId: string): { id: string | null; name: string } | null;
+// -- ownership.js: who may change collected money (warden ledger spec §3.2) ---
+declare function ownIsAdmin(): boolean;
+declare function ownHeld(p: any): boolean;
+declare function ownOwner(p: any): { id: string | null; name: string };
+declare function ownCanEdit(p: any): { ok: boolean; reason: string };
+declare function ownCanDelete(p: any): { ok: boolean; reason: string };
+declare function ownReversible(p: any): { max: number; mine: number; waiting: number; approved: number; admin: boolean; reason: string };
 // -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
 declare function handoverSync(): number;
 declare function hoNeedsHandover(accountId: string): boolean;

@@ -615,6 +615,21 @@ function ledgerHistoryFor(studentId, recordId, n) {
            bf: earlier ? money(upto[earlier - 1].runningBalance) : 0 };
 }
 
+/** A month record's entries, in the order they were posted. */
+function ledgerEntriesForRecord(recordId) {
+  return (_ledgerByRecord.get(recordId) || []).slice();
+}
+
+/** The account that took the latest money on a record: { id, name }. `id` is
+    null for history imported before the ledger; null when nobody has collected. */
+function ledgerRecordOwner(recordId) {
+  const list = _ledgerByRecord.get(recordId) || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].type === 'payment') return { id: list[i].createdBy || null, name: list[i].createdByName || '' };
+  }
+  return null;
+}
+
 /** Who took the latest money on a month record, as the ledger recorded it. '' when nobody has. */
 function ledgerCollectorOf(recordId) {
   const list = _ledgerByRecord.get(recordId) || [];

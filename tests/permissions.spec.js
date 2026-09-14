@@ -309,9 +309,12 @@ test("'delete' is enforced on every register, not only on students", async () =>
     DB.rooms = [{ id: 'rEmpty', number: '901', floor: 'Ground',
                   typeId: (DB.settings.roomTypes[0] || {}).id, amenities: [] }];
     DB.students = [];
+    /* amount 0: since warden ledger step 6 a record HOLDING money cannot be
+       deleted by anyone (reverse it first) — that rule is ownership.test.js.
+       This test is about the 'delete' permission, so its payment holds none. */
     DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'Seed', roomNumber: '901',
-                     month: thisMonth(), monthlyRent: 1000, amount: 1000, unpaid: 0,
-                     status: 'Paid', method: 'Cash', date: t }];
+                     month: thisMonth(), monthlyRent: 1000, amount: 0, unpaid: 1000,
+                     status: 'Pending', method: 'Cash', date: t }];
     DB.cancellations = [{ id: 'c1', studentId: 's1', studentName: 'Seed', roomNumber: '901',
                           status: 'Pending', requestDate: t, vacateDate: t, reason: 'Seed' }];
     DB.expenses    = [{ id: 'e1', category: 'Utilities', amount: 500, date: t, description: 'Seed' }];

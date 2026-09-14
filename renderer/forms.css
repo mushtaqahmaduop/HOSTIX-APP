@@ -317,6 +317,10 @@ body.has-titlebar .modal-overlay { top: var(--titlebar-offset, var(--titlebar-h)
 .hf-in.is-readonly { background: var(--bg4); }
 .hf-in.is-good .hf-in__i { background: var(--ant-success-bg); color: var(--ant-success-fg); }
 .hf-in.is-warn .hf-in__i { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
+/* A disabled control looks disabled (warden ledger step 6: the view-only
+   payment form). Without this a disabled box kept its white ground and read as
+   one that simply ignored the keyboard. */
+.hf-in > .form-control:disabled { background: var(--bg3); color: var(--text2); cursor: not-allowed; }
 
 /* ── 8. ACTION BAR (spec §9) ────────────────────────────────────────────────
    Buttons share one height across every form, and a destructive action is
