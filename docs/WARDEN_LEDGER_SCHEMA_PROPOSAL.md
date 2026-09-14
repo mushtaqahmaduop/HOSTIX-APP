@@ -308,7 +308,26 @@ collectors named and no account id.
 | A payment record is deleted after money was collected on it | **The money stays in the collector's total**, tagged "record deleted". |
 | Order of the collections list | **Newest first, by date** — a stated exception to the room-number ordering rule, for this cash list only. |
 
-Step 2 was approved and committed (`a27837a`).
+Step 2 was approved and committed (`a27837a`). Step 3 was approved and committed (`6160599`).
+
+## Step 4 decisions (owner, 2026-09-14, asked before design)
+
+| Case | Decided |
+|---|---|
+| What a warden hands over | **Net cash** — their collections minus the reversals / amounts edited down they recorded; both kinds of line are listed. |
+| Collecting again after tapping Hand over | **Snapshot, one open at a time.** A handover holds everything waiting when it is sent; later collections wait for the next one; a new handover cannot start while one is still waiting. |
+| A handover sent by mistake | **The warden may take it back** until the admin acts on it; the money returns to their pending list; logged. |
+| How the admin enters counted money | **Per payment method**, each beside what the system expects. *Schema change:* `handovers.countedAmount` (Q9) becomes a per-method map. |
+| Where the admin finds waiting handovers | **Top of the Wardens tab**, a "Waiting for approval" list (concession approvals join it in step 8). |
+| Alerting the admin | **The existing header bell**, for accounts that can approve. |
+| What a warden sees afterwards | **Handover history** on My Collections: status and the admin's note. |
+| Printed slip | **No** — each handover exports to PDF / Excel through the export engine. |
+| Licence expired (read-only) | **Blocked like every other write.** |
+
+Implementation choices (not owner-facing): the three new tables are backed up, but a
+backup or recovery snapshot made before step 4 still restores (they are not required
+by the missing-table check); collections posted before step 4 get their
+`pending_handover` row once, at start-up, so status is always read from one place.
 
 ## What happens next
 

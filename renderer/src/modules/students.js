@@ -1092,9 +1092,10 @@ function _stuPanelOverview(t) {
      red only when something IS outstanding; §13 is explicit that red is not the
      colour of ordinary financial information. */
   const money_ = _pcard('Status & Fee', 'money', 'is-green',
-        _pf('Monthly rent',   pkr(c.rent), { mono: true })
-      + _pf('Mess charges',   c.messOptIn && c.mess > 0 ? pkr(c.mess) : 'Not billed', { mono: true })
-      + _pf('Monthly total',  pkr(c.total), { mono: true })
+        // One charge, named by its plan (owner, 2026-09-14) — the split is in Settings.
+        _pf('Plan',           chargeCoverage({ rent: c.rent, mess: c.mess,
+                                messIncluded: c.messOptIn && c.mess > 0, hasMess: c.mess > 0 }).label)
+      + _pf('Monthly charge', pkr(c.total), { mono: true })
       + _pf('Outstanding',
           '<b class="' + (f.outstanding > 0 ? 'is-due' : 'is-clear') + '">' + escHtml(pkr(f.outstanding)) + '</b>',
           { mono: true, html: true })
@@ -1208,15 +1209,15 @@ function _stuPanelFinancial(t) {
      plan and total are the agreement; outstanding, last payment and fee status
      are the position against it. */
   const head = _pcard('Charges & Balance', 'money', 'is-green',
-      _pf('Monthly rent',   pkr(c.rent), { mono: true })
+      // One charge, named by its plan (owner, 2026-09-14) — the split is in Settings.
+      _pf('Plan',           chargeCoverage({ rent: c.rent, mess: c.mess,
+                              messIncluded: c.messOptIn && c.mess > 0, hasMess: c.mess > 0 }).label)
     + _pf('Outstanding',    pkr(f.outstanding), { mono: true })
-    + _pf('Mess charge',    c.messOptIn && c.mess > 0 ? pkr(c.mess) : 'Not billed', { mono: true })
+    + _pf('Monthly total',  pkr(c.total), { mono: true })
     + _pf('Last payment',   f.lastPaymentDate ? fmtDate(f.lastPaymentDate) : '')
-    + _pf('Plan',           c.messOptIn && c.mess > 0 ? 'Rent + Mess' : 'Rent only')
     + _pf('Fee status',
         '<span class="stu-pill ' + stuFeeHue(f.status) + '"><i></i>' + f.status + '</span>',
         { html: true })
-    + _pf('Monthly total',  pkr(c.total), { mono: true })
     + (f.credit > 0 ? _pf('Credit held', pkr(f.credit), { mono: true }) : ''),
     { wide: true });
 
@@ -1244,9 +1245,10 @@ function _stuPanelFinancial(t) {
          app where a bare number is unambiguous, which is why it is not a
          precedent for dropping it anywhere else. */
       + '<td class="svw-t__num">' + (mRent > 0 ? pkr(mRent) : '<span class="is-empty">—</span>')
+        // The plan's name, not the split (owner, 2026-09-14).
         + (_ch.messIncluded
-            ? '<span class="svw-sub">' + fmtNum(_ch.rent) + ' + ' + fmtNum(_ch.mess) + ' mess</span>'
-            : _ch.hasMess ? '<span class="svw-sub">mess off</span>' : '')
+            ? '<span class="svw-sub">Rent + Mess</span>'
+            : _ch.hasMess ? '<span class="svw-sub">Rent only</span>' : '')
         + '</td>'
       + '<td class="svw-t__conc">' + (conc > 0 ? '−' + pkr(conc) : '<span class="is-empty">—</span>') + '</td>'
       + '<td>' + paidCell + '</td>'
@@ -1281,7 +1283,7 @@ function _stuPanelFinancial(t) {
     + '</div>'
     + (n
         ? '<div class="svw-tw"><table class="svw-t"><thead><tr>'
-          + '<th>Month</th><th>Monthly Rent</th><th>Concession</th><th>Paid (+Extras)</th>'
+          + '<th>Month</th><th>Monthly Charge</th><th>Concession</th><th>Paid (+Extras)</th>'
           + '<th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th>'
           + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
           + '<div class="svw-tfoot">'
@@ -1465,7 +1467,11 @@ function stuDocRemove(studentId, docId) {
    downward menu opens off-screen, and a menu you cannot see is a row whose
    actions have quietly disappeared. */
 function stuLedgerMenu(payId, studentId, btn) {
+  // A second click on the same ⋮ closes it (owner, 2026-09-14).
+  const cur = document.getElementById('stu-rmenu');
+  const wasOpen = !!cur && cur.dataset.for === 'ledger:' + payId;
   closeStuRowMenu();
+  if (wasOpen) return;
   const p = (DB.payments || []).find(x => x.id === payId);
   if (!p) return;
   const a = escHtml(payId), b = escHtml(studentId);
@@ -1473,6 +1479,7 @@ function stuLedgerMenu(payId, studentId, btn) {
   const el = document.createElement('div');
   el.className = 'lk-rmenu';
   el.id = 'stu-rmenu';
+  el.dataset.for = 'ledger:' + payId;
   el.setAttribute('role', 'menu');
   el.innerHTML =
       (p.status !== 'Paid'
@@ -1722,13 +1729,18 @@ function _stuPanelHistory(t) {
    otherwise carry 100 hidden menus, and the table is re-rendered on every save
    anyway. */
 function stuRowMenu(id, btn) {
+  // A second click on the same ⋮ closes it (owner, 2026-09-14).
+  const cur = document.getElementById('stu-rmenu');
+  const wasOpen = !!cur && cur.dataset.for === 'row:' + id;
   closeStuRowMenu();
+  if (wasOpen) return;
   const t = DB.students.find(x => x.id === id);
   if (!t) return;
 
   const el = document.createElement('div');
   el.className = 'lk-rmenu';
   el.id = 'stu-rmenu';
+  el.dataset.for = 'row:' + id;
   el.setAttribute('role', 'menu');
   el.innerHTML =
       `<button role="menuitem" onclick="closeStuRowMenu();showStudentPanel('${escHtml(id)}')">`
@@ -2915,8 +2927,8 @@ function showViewStudentModal(id) {
           </div>
         </div>
         <div class="svw-hero__rent">
-          <div class="svw-hero__rentk">Monthly Rent</div>
-          <div class="svw-hero__rentv">${fmtPKR(t.rent||0)}</div>
+          <div class="svw-hero__rentk">Monthly Charge</div>
+          <div class="svw-hero__rentv">${fmtPKR(resolveCharges(t).total||0)}</div>
           <div class="svw-hero__rents">Admission paid: ${fmtPKR(admPaid)}</div>
         </div>
       </div>
@@ -3010,7 +3022,7 @@ function showViewStudentModal(id) {
           }).join('');
           return `<div class="svw-tw"><table class="svw-t">
             <thead><tr>
-              <th>Month</th><th>Monthly Rent</th><th>Concession</th><th>Paid (+Extras)</th>
+              <th>Month</th><th>Monthly Charge</th><th>Concession</th><th>Paid (+Extras)</th>
               <th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th>
             </tr></thead>
             <tbody>${rows}</tbody></table></div>
@@ -3289,9 +3301,10 @@ function printStudentCard(id) {
     `<span class="fact__v${(v === null || v === undefined || v === '') ? ' is-empty' : ''}">` +
     `${(v === null || v === undefined || v === '') ? '—' : escHtml(String(v))}</span></div>`;
 
-  const coverage = ch.messOptIn && ch.mess > 0
-    ? `Rent + mess · ${fmtPKR(ch.rent)} + ${fmtPKR(ch.mess)}`
-    : ch.mess > 0 ? 'Rent only · mess not included' : 'Rent only';
+  // The plan's name, not the split (owner, 2026-09-14): "Rent + Mess".
+  const _cov = chargeCoverage({ rent: ch.rent, mess: ch.mess,
+                                messIncluded: ch.messOptIn && ch.mess > 0, hasMess: ch.mess > 0 });
+  const coverage = _cov.key === 'rent' ? 'Rent only · mess not included' : _cov.label;
 
   const _cardHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Resident Record — ${escHtml(t.name)}</title>
@@ -3415,8 +3428,7 @@ function printStudentCard(id) {
       ${fact('Room Type', rtype ? rtype.name : '')}
       ${fact('Floor', room ? room.floor : '')}
       ${fact('Capacity', rtype ? rtype.capacity + ' bed' + (rtype.capacity === 1 ? '' : 's') : '')}
-      ${fact('Room Rent', ch.configured ? fmtPKR(ch.rent) : '')}
-      ${fact('Mess Charge', ch.mess > 0 ? fmtPKR(ch.mess) + (ch.messOptIn ? '' : ' (not billed)') : 'Not applicable')}
+      ${fact('Monthly Charge', ch.configured ? fmtPKR(ch.total) + ' · ' + _cov.label : '')}
       ${fact('Amenities', (room && (room.amenities || []).join(', ')) || '')}
       ${fact('Room Notes', room ? room.notes : '')}
     </div>
@@ -3439,8 +3451,8 @@ function printStudentCard(id) {
       return `<tr>
         <td><b>${escHtml(p.month || '—')}</b></td>
         <td>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}${c.messIncluded
-              ? `<span class="sub">${fmtPKR(c.rent)} + ${fmtPKR(c.mess)} mess</span>`
-              : c.hasMess ? '<span class="sub">mess not billed</span>' : ''}</td>
+              ? '<span class="sub">Rent + Mess</span>'
+              : c.hasMess ? '<span class="sub">Rent only</span>' : ''}</td>
         <td>${conc > 0 ? '−' + fmtPKR(conc) : '—'}</td>
         <td><b class="is-paid">${fmtPKR(p.amount)}</b>${adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : ''}${
           extras.map(x => `<span class="sub">+ ${fmtPKR(x.amount)} ${escHtml(x.description || x.desc || x.label || 'extra')}</span>`).join('')}</td>
@@ -4687,7 +4699,9 @@ function doGenerateStudentsPDF(monthKey) {
     // Zebra striping is a :nth-child rule in the stylesheet now, not a colour
     // computed per row and pasted onto every <tr>.
 
-    grandRent    += Number(s.rent||0);
+    // The month's whole charge — "Rent + Mess" where food is billed (owner, 2026-09-14).
+    var monthlyCharge = Number(resolveCharges(s).total || 0);
+    grandRent    += monthlyCharge;
     grandAdmFee  += admFee;
     grandExtra   += extraTotal;
     grandConc    += concession;
@@ -4727,7 +4741,7 @@ function doGenerateStudentsPDF(monthKey) {
     // Masked, like every other printed CNIC (owner, 2026-09-10).
     rows += '<td class="mono">'+escHtml(maskCnic(s.cnic)||'—')+'</td>';
     rows += '<td class="ph">'+escHtml(s.phone||'—')+'</td>';
-    rows += '<td class="money rent">'+fmtPKR(s.rent||0)+'</td>';
+    rows += '<td class="money rent">'+fmtPKR(monthlyCharge)+'</td>';
     rows += '<td class="money '+(admFee>0?'adm':'nil')+'">'+(admFee>0?fmtPKR(admFee):dash)+'</td>';
     rows += '<td class="money '+(extraTotal>0?'ext':'nil')+'">'+extCell+'</td>';
     rows += '<td class="money '+(concession>0?'conc':'nil')+'">'+concCell+'</td>';
@@ -4897,7 +4911,7 @@ function doGenerateStudentsPDF(monthKey) {
   html += '<colgroup><col class="c-no"><col class="c-name"><col class="c-father"><col class="c-room"><col class="c-cnic"><col class="c-phone"><col class="c-rent"><col class="c-adm"><col class="c-ext"><col class="c-conc"><col class="c-paid"><col class="c-pend"><col class="c-fst"><col class="c-sst"></colgroup>';
   html += '<thead><tr>';
   html += '<th class="c">#</th><th>Student Name</th><th>Father\'s Name</th><th class="c">Room</th><th>CNIC</th><th>Phone</th>';
-  html += '<th class="r">Rent/Mo</th>';
+  html += '<th class="r">'+(hostelServesMess() ? 'Rent + Mess/Mo' : 'Rent/Mo')+'</th>';
   // These five kept the tints they were given for the old navy header strip —
   // #7ab4ff, #ffd27a, #7aefcf were picked to glow on #0f1a2e and are close to
   // invisible on a light one. Same coding, at the weight the column's own

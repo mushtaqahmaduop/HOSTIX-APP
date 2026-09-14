@@ -129,7 +129,9 @@ test('the sidebar account menu opens on screen with all of its items', async () 
   // A full-access account sees every entry. Settings is deliberately NOT one of
   // them any more — it configures the hostel, not the signed-in account, so it
   // lives in the sidebar's System group with the other configuration items.
-  expect(info.items).toEqual(['Former Students', 'Manage Users', 'Logout']);
+  // Former Students and Manage Users left for the sidebar on 2026-09-14 (owner);
+  // the menu keeps what is about the signed-in account.
+  expect(info.items).toEqual(['My Account', 'Logout']);
   expect(info.settingsInRail, 'Settings must be reachable from the sidebar').toBe(true);
 
   await app.close();

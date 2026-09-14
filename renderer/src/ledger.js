@@ -444,7 +444,9 @@ async function ledgerAdopt(entries) {
   }
   DB.studentLedger = list.slice();
   ledgerLoaded();
-  if (ledgerImportIfEmpty() > 0) await saveDB();
+  const posted = ledgerImportIfEmpty();
+  const synced = typeof handoverSync === 'function' ? handoverSync() : 0;
+  if (posted > 0 || synced > 0) await saveDB();
   return ok;
 }
 
@@ -462,6 +464,16 @@ async function ledgerAdopt(entries) {
 
    Each row: { entry, kind: 'collected' | 'reversed' | 'edited', amount, deleted }
    where `amount` is signed — a reduction is negative. Newest first. */
+/** Is this entry money an account holds — and how much, signed? null when it is not.
+    The one rule, shared by My Collections and the handover status rows. */
+function ledgerCollectionLine(e) {
+  if (!e) return null;
+  if (e.type === 'payment')                                  return { kind: 'collected', amount: money(e.amount) };
+  if (e.type === 'adjustment' && e.part === 'reversal')      return { kind: 'reversed',  amount: -money(e.amount) };
+  if (e.type === 'adjustment' && e.part === 'collected')     return { kind: 'edited',    amount: -money(e.amount) };
+  return null;
+}
+
 function ledgerCollections(accountId) {
   const out = [];
   if (!accountId) return out;
@@ -470,12 +482,9 @@ function ledgerCollections(accountId) {
   list.forEach(e => { if (e && e.part === 'deleted' && e.paymentRecordId) deleted.add(e.paymentRecordId); });
   list.forEach(e => {
     if (!e || e.imported || e.createdBy !== accountId) return;
-    let kind, amount;
-    if (e.type === 'payment')                                 { kind = 'collected'; amount = money(e.amount); }
-    else if (e.type === 'adjustment' && e.part === 'reversal')  { kind = 'reversed';  amount = -money(e.amount); }
-    else if (e.type === 'adjustment' && e.part === 'collected') { kind = 'edited';    amount = -money(e.amount); }
-    else return;
-    out.push({ entry: e, kind, amount, deleted: deleted.has(e.paymentRecordId) });
+    const line = ledgerCollectionLine(e);
+    if (!line) return;
+    out.push({ entry: e, kind: line.kind, amount: line.amount, deleted: deleted.has(e.paymentRecordId) });
   });
   return out.reverse();
 }

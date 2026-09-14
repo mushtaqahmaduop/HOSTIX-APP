@@ -121,11 +121,9 @@ function applyFeaturesToChrome() {
         .forEach(function (el) { el.style.display = 'none'; });
     }
   }
-  // Staff management is a feature as well as a permission.
-  if (!hasFeature('multiUser')) {
-    var manage = document.getElementById('user-menu-manage');
-    if (manage) manage.style.display = 'none';
-  }
+  /* The account menu's Manage Users entry this used to hide left the menu on
+     2026-09-14 (owner) — staff management is reached from the sidebar only, and
+     the menu's remaining entry, My Account, is every account's own. */
 }
 
 /** The flag that gates a page, or null. Used by nav.js's page-level check. */

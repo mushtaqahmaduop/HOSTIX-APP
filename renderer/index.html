@@ -19,6 +19,7 @@
   <!-- App Styles — tokens first, then components, then main -->
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="pw-eye.css">
   <link rel="stylesheet" href="style.css">
   <!-- Global form + modal layout system (viewport-fit spec). After style.css
        so it can correct the shared modal shell; before the screen sheets so a
@@ -242,7 +243,7 @@
       <label class="lg-lbl" for="login-input">Password</label>
       <div class="lg-field">
         <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <input id="login-input" class="lg-in" type="password" placeholder="Enter your password"
+        <input id="login-input" class="lg-in" type="password" data-pw-eye="own" placeholder="Enter your password"
                autocomplete="current-password" aria-label="Password">
         <button id="login-pw-toggle" class="lg-eye" type="button" aria-label="Show password"
                 onclick="(function(b){var i=document.getElementById('login-input');var s=i.type==='password';i.type=s?'text':'password';b.setAttribute('aria-label',s?'Hide password':'Show password');})(this)">
@@ -630,13 +631,11 @@
         <b id="user-menu-name">Warden</b>
         <span id="user-menu-role">Admin</span>
       </div>
-      <button class="hdr-menu__item" onclick="closeHdrMenus();navigate('former')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        Former Students
-      </button>
-      <button class="hdr-menu__item" id="user-menu-manage" onclick="closeHdrMenus();showUserMgmt()">
+      <!-- Former Students and Manage Users left this menu: both are in the
+           sidebar (owner, 2026-09-14). The menu is about THIS account now. -->
+      <button class="hdr-menu__item" id="user-menu-account" onclick="closeHdrMenus();showAccountPanel(CUR_ROLE)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>
-        Manage Users
+        My Account
       </button>
       <!-- Settings moved out of this menu and into the sidebar's System group;
            it configures the hostel, not this account. -->
@@ -779,6 +778,8 @@
        records with money() and calculateOutstanding(). BEFORE storage.js, whose
        saveDB() hands it each save. -->
   <script src="src/ledger.js"></script>
+  <!-- Cash handovers (warden ledger step 4): the rules, no screens. AFTER ledger.js. -->
+  <script src="src/handovers.js"></script>
   <script src="src/icons.js"></script>
   <script src="src/auth-nev.js"></script>
   <script src="src/storage.js"></script>
@@ -792,6 +793,8 @@
        picker and Clear all. AFTER icons.js (it draws glyphs) and BEFORE the
        modules (they call it while rendering). -->
   <script src="src/toolbar.js"></script>
+  <!-- Show / hide on every password field, including ones built later. -->
+  <script src="src/pw-eye.js"></script>
   <!-- Feature modules -->
   <script src="src/modules/theme.js"></script>
   <script src="src/modules/nav.js"></script>

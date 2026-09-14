@@ -206,7 +206,7 @@ test('one avatar everywhere, and a photo always beats the fallback', async () =>
   await app.close();
 });
 
-test('the printed resident record carries the charge, its split, and a history', async () => {
+test('the printed resident record carries the charge, its plan, and a history', async () => {
   const { app, win } = await openApp();
   await seed(win);
 
@@ -234,7 +234,9 @@ test('the printed resident record carries the charge, its split, and a history',
   // The headline figure is the CHARGE. Printing 8,000 above a history of
   // 16,500s is the bug this document had.
   expect(doc.rentPanel).toContain('14,500');
-  expect(doc.coverage).toContain('Rent + mess');
+  /* The plan's name, not the 8,000 + 6,500 split (owner, 2026-09-14). */
+  expect(doc.coverage).toContain('Rent + Mess');
+  expect(doc.text).not.toContain('8,000 +');
 
   // The reference's four figures, its two panels, and somewhere to sign.
   expect(doc.stats).toEqual(['Total Paid', 'Outstanding', 'Join Date', 'Payments Made']);

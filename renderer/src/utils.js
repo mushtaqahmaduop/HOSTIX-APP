@@ -1246,11 +1246,14 @@ const BACKUP_COLLECTIONS = [
   // The student ledger: camelCase from Settings → Export Data, the table name
   // from the menu backup. Both are lists of records with ids.
   'studentLedger', 'student_ledger',
+  // The handover tables (warden ledger step 4), under both spellings too.
+  'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
   'studentLedger', 'student_ledger',
+  'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;

@@ -150,10 +150,82 @@
 .usr-split.is-open .usr-wtable { min-width: 0; }
 /* Holding is the column an administrator reads first. */
 .usr-hold .usr-amt { font-size: 14px; font-weight: 800; }
+.usr-wait .usr-amt { font-weight: 800; }
 .usr-wtable tfoot td {
     font-weight: 800; color: var(--text);
     background: var(--dash-sunk); border-top: 2px solid var(--border);
 }
+
+/* ══ THE ACCOUNT SLIDE-OVER (owner, 2026-09-14: "just like the student details")
+   The student drawer's shell (.stu-pan*, students.css), at an account's width. */
+.usr-pan { width: min(460px, 100vw); max-width: 460px; }
+.usr-pan__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 18px 18px; }
+.usr-pan .usr-rail__chips { border-top: 1px solid var(--border); }
+.usr-pan .stu-pan__print svg { width: 14px; height: 14px; }
+/* The actions, at the top under Edit (owner, 2026-09-14). */
+.usr-pan__acts { padding-top: 12px; border-top: 1px solid var(--border); }
+.usr-pan__acts .stu-pan__act svg { width: 13px; height: 13px; }
+.usr-pan__acts .stu-pan__act.is-danger { color: var(--danger-fg); }
+.usr-pan__acts .stu-pan__act:disabled { opacity: .5; cursor: not-allowed; }
+.usr-pan .usr-rail__chips + .usr-pan__acts { border-top: 0; padding-top: 0; }
+
+/* ══ HANDOVERS (warden ledger spec §5 step 4) ═════════════════════════════════
+   Built from the page's own parts. States are words in chips (hoLabel) with a
+   hue beside them, never a colour alone. */
+.usr-kpis--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .usr-kpis--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.usr-ho-card { margin-bottom: 14px; }
+.usr-ho-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.usr-ho-head .usr-sec { margin: 0; }
+.usr-ho-acts { white-space: nowrap; text-align: right; }
+.usr-ho-acts .set-btn + .set-btn { margin-left: 6px; }
+.usr-ho-note { font-size: 12px; line-height: 1.45; color: var(--text2); overflow-wrap: anywhere; max-width: 360px; }
+.usr-ho-note small { display: block; margin-top: 2px; font-size: 11px; color: var(--text3); }
+.usr-ho-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* The lines scroll; the counting panel and the buttons stay in view at 768px. */
+.usr-ho-list, .usr-ho-lines {
+    overflow-y: auto; border: 1px solid var(--border); border-radius: 12px;
+}
+.usr-ho-list  { max-height: 42vh; }
+.usr-ho-lines { max-height: calc(94vh - 300px); }
+.usr-ho-list .set-table, .usr-ho-lines .set-table { min-width: 0; }
+.usr-ho-methods { margin: 12px 0 0; }
+.usr-ho-summary {
+    margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+    background: var(--dash-sunk); color: var(--text); font-size: 13px; line-height: 1.5;
+}
+
+.usr-ho-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12px; color: var(--text3); }
+.usr-ho-review { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .usr-ho-review { grid-template-columns: 1fr; } }
+.usr-ho-lines td:first-child, .usr-ho-lines th:first-child { width: 32px; text-align: center; }
+.usr-ho-lines input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.usr-ho-lines input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.usr-ho-lines tr.is-off td:not(:first-child) { opacity: .5; }
+
+.usr-ho-count .usr-sec { margin-top: 0; }
+.usr-ho-ctable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.usr-ho-ctable th {
+    text-align: left; padding: 6px 4px; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text3);
+}
+.usr-ho-ctable td { padding: 7px 4px; border-top: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+.usr-ho-ctable tfoot td { font-weight: 800; border-top: 2px solid var(--border); }
+.usr-ho-ctable .is-num { text-align: right; }
+.usr-ho-cin { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.usr-ho-cin input { width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
+.usr-ho-diff {
+    font-weight: 700; white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track); font-variant-numeric: tabular-nums;
+}
+/* The shared disabled button does not dim, and here Approve being off IS the
+   message: the count does not match yet. */
+#ho-approve:disabled { opacity: .45; }
+.usr-ho-diff.is-ok  { color: var(--success-fg); }
+.usr-ho-diff.is-bad { color: var(--danger-fg); }
+.usr-ho-flagbtn:not(:disabled) { color: var(--danger-fg); }
 
 /* ══ THE FORM ═════════════════════════════════════════════════════════════ */
 .usf-top { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; }

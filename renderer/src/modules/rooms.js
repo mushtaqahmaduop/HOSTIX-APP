@@ -455,8 +455,10 @@ function _roomExportDef(list) {
 
       { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
 
-      { label: 'Rent / mo', type: 'money', width: 14, value: r => rentOf(r) || null },
-      { label: 'Mess / mo', type: 'money', width: 14, value: r => messOf(r) || null },
+      /* ONE CHARGE COLUMN (owner, 2026-09-14): "Rent + Mess" where the hostel
+         serves food — never rent and mess as two columns. */
+      { label: hostelServesMess() ? 'Rent + Mess / mo' : 'Rent / mo', type: 'money', width: 16,
+        value: r => (rentOf(r) + (hostelServesMess() ? messOf(r) : 0)) || null },
 
       { label: 'Status', type: 'status', width: 12,
         value: r => occOf(r) >= (typeOf(r).capacity || 0) && (typeOf(r).capacity || 0) > 0

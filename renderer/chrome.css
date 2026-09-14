@@ -114,7 +114,9 @@ body.light-theme {
 
        Contrast on #EDEFF3: #0F172A is 15.4:1, #334155 is 9.3:1, #64748B is
        4.8:1. All past AA. */
-    --sidebar-bg:  #EDEFF3;
+    /* WHITE (owner, 2026-09-14: "change the sidebar colour to the white mode").
+       The dark foregrounds below only gain contrast on it. */
+    --sidebar-bg:  #FFFFFF;
     --sb-border:   rgba(15,23,42,.08);
     --sb-fg:       #0F172A;
     --sb-fg2:      #334155;

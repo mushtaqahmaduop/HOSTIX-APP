@@ -191,11 +191,12 @@ test('every printed monthly charge carries the mess, not just the rent', async (
 
      The bug this test exists for is unchanged and still asserted on the line
      above: the printed charge is the ALL-IN figure, never the rent alone. */
+  /* NO SEPARATE RENT AND MESS COLUMNS (owner, 2026-09-14, replacing the
+     2026-09-10 split): the Charges column carries the month's whole
+     "Rent + Mess" charge, and the split lives in Settings and the form. */
   expect(doc.headers).toContain('Charges (Rs.)');
-  expect(doc.headers).toContain('Rent (Rs.)');
-  expect(doc.headers).toContain('Mess (Rs.)');
-  expect(doc.text, 'the rent half is missing from the printed register').toContain('8,000.00');
-  expect(doc.text, 'the mess half is missing from the printed register').toContain('6,500.00');
+  expect(doc.headers).not.toContain('Rent (Rs.)');
+  expect(doc.headers).not.toContain('Mess (Rs.)');
   expect(doc.text, 'the old two-number sub-line is back').not.toContain('rent + PKR');
   /* …and it comes out in room order too. The FIRST cell is the row's number
      since the owner's sheet added a `#` column, so room order is read from the

@@ -718,7 +718,6 @@ function applyPermissionsToChrome() {
   // nav.js renderPage(). Keep the two in step or the rail offers a page that
   // then refuses to render.
   showNav('archive',  canDo('reports'));
-  show('user-menu-manage',   canDo('users'));
   // Settings is no longer in the account menu — showNav('settings') above is
   // the only gate it needs now that the rail item is the single entry point.
 

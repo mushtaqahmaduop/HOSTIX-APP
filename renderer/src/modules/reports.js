@@ -199,13 +199,13 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         <span style="font-size:12px;color:var(--text3)">Showing <strong style="color:var(--text)">${studentReportFilter}</strong> (${filtered.length})</span>
         <button onclick="studentReportFilter='All';renderPage('reports')" class="btn btn-secondary btn-sm" style="font-size:11px">✕ Clear</button>
       </div>`:''}
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>Rent</th><th>Status</th><th>Phone</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>${hostelServesMess() ? 'Rent + Mess' : 'Rent'}</th><th>Status</th><th>Phone</th></tr></thead><tbody>
       ${_pg.slice.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showStudentPanel('${t.id}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(t.name)}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(t.fatherName||'—')}</td>
         <td class="text-gold fw-700">${r?'#'+r.number:'—'}</td>
         <td class="text-muted" style="font-size:12px">${fmtDate(t.joinDate)}</td>
-        <td class="text-green fw-700">${fmtPKR(t.rent)}</td>
+        <td class="text-green fw-700">${fmtPKR(resolveCharges(t).total)}</td>
         <td>${statusBadge(t.status)}</td>
         <td class="text-muted">${escHtml(t.phone||'—')}</td>
       </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No students found</td></tr>'}

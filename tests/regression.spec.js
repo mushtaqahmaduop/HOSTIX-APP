@@ -463,18 +463,18 @@ test('payments: table pans by dragging, and CSV column order matches the table',
      is still a column — the brief's §5 forbids removing one — under the name
      the sheet gives it. */
   const at = name => book.headers.indexOf(name);
-  for (const col of ['Room', 'Student Name', 'Month', 'Charges (Rs.)', 'Rent (Rs.)',
-                     'Mess (Rs.)', 'Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
+  for (const col of ['Room', 'Student Name', 'Month', 'Charges (Rs.)',
+                     'Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
                      'Status', 'Date', 'Admission (Rs.)', 'Extra charges (detail)',
                      'Discount (Rs.)', 'Refund (Rs.)']) {
     expect(book.headers, col + ' is missing from the workbook').toContain(col);
   }
 
-  // Rent and mess joined the export on 2026-08-31: a sheet that quoted the rent
-  // half alone could not be reconciled against what the student actually paid,
-  // because the mess is a separate field on the record.
-  expect(book.row[at('Rent (Rs.)')] + book.row[at('Mess (Rs.)')],
-    'the two halves must make the charge').toBe(book.row[at('Charges (Rs.)')]);
+  /* One charge column, never rent and mess as two (owner, 2026-09-14). The
+     Charges column still holds the whole month — rent AND mess — which is the
+     fact the 2026-08-31 fix was for. */
+  expect(book.headers).not.toContain('Rent (Rs.)');
+  expect(book.headers).not.toContain('Mess (Rs.)');
 
   // §62 — amounts are NUMBERS, not "Rs. 12,000" strings nobody can sum.
   expect(book.row[at('Paid (Rs.)')], 'Paid column').toBe(12000);

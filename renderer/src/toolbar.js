@@ -211,7 +211,12 @@ function lkKebab(onclick, label) {
 }
 
 function lkRowMenu(btn, items) {
+  /* A SECOND CLICK ON THE SAME ⋮ CLOSES IT (owner, 2026-09-14). This used to
+     close and reopen in one step, so a menu could not be put away the way it
+     was taken out. */
+  const wasOpen = _lkMenuBtn === btn && !!document.getElementById('lk-rmenu');
   lkCloseRowMenu();
+  if (wasOpen) return;
   const el = document.createElement('div');
   el.className = 'lk-rmenu';
   el.id = 'lk-rmenu';

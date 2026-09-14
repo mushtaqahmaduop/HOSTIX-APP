@@ -2965,7 +2965,7 @@ function renderMonthModal(monthKey, monthLabel) {
     return `<tr>
       <td><span style="font-weight:700;color:var(--text)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
       <td style="font-weight:700;color:var(--text2)">#${escHtml(String(room?room.number:'—'))}</td>
-      <td style="color:var(--text3);font-size:12px">${fmtPKR(s.rent)}/mo</td>
+      <td style="color:var(--text3);font-size:12px">${fmtPKR(resolveCharges(s).total)}/mo</td>
       <td style="color:var(--text);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
       <td style="color:${sPend>0?'var(--text)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
       <td>${statusBadge(s.status)}</td>
@@ -3049,7 +3049,7 @@ function renderMonthModal(monthKey, monthLabel) {
   <!-- STUDENTS TAB -->
   <div id="mpanel-students">
     <div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>Room Rent</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Student</th><th>Room</th><th>${hostelServesMess() ? 'Rent + Mess' : 'Room Rent'}</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
       <tbody>${studentRows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">No students found</td></tr>'}</tbody>
       </table>
     </div>

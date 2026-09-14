@@ -19,6 +19,7 @@
     "renderer/src/toolbar.js",
     "renderer/src/finance.js",
     "renderer/src/ledger.js",
+    "renderer/src/handovers.js",
     "renderer/src/storage.js",
     "renderer/src/receipt.js",
     "renderer/src/export/xlsx-writer.js",

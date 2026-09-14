@@ -120,10 +120,11 @@ test('a warden sees their own collections; an administrator sees every account',
     expect(sara.title).toBe('My Collections');
     expect(sara.rows).toEqual(['collected', 'collected']);
     expect(sara.amounts).toEqual(['Rs. 3,000', 'Rs. 5,000']);
-    expect(sara.handover).toBe(true);
+    expect(sara.handover).toBe(false);   // step 4: enabled while she holds money
     expect(sara.methods).toEqual(['Cash=Rs. 3,000', 'JazzCash=Rs. 5,000']);
     expect(sara.overflow).toBe(false);
-    expect(await kpis(win)).toEqual(['Rs. 8,000', 'Rs. 8,000', 'Rs. 8,000']);
+    // To hand over · Waiting approval · Today · This month (step 4).
+    expect(await kpis(win)).toEqual(['Rs. 8,000', '—', 'Rs. 8,000', 'Rs. 8,000']);
 
     // The figures on screen are the helper's figures.
     const helper = await win.evaluate(() => ledgerCollectionTotals(ledgerCollections('w_sara')).holding);
@@ -156,12 +157,14 @@ test('a warden sees their own collections; an administrator sees every account',
     expect(board.adminHold).toBe('−Rs. 1,000');
     expect(board.adminHandover).toBe('Not needed');
     expect(board.total).toBe('Rs. 7,000');
-    expect(board.heads).toEqual(['Account', 'Holding', 'Cash', 'JazzCash', 'Today', 'Last collection', 'Handover']);
+    expect(board.heads).toEqual(['Account', 'To hand over', 'Waiting', 'Cash', 'JazzCash', 'Today', 'Last collection', 'Handover']);
 
     // Opening Sara shows her register in the rail.
     await win.click('.usr-wtable tbody tr[data-account="w_sara"]');
-    await win.waitForSelector('.usr-wrail .usr-coltable', { timeout: 15000 });
-    expect(await win.evaluate(() => document.querySelectorAll('.usr-wrail .usr-coltable tbody tr').length)).toBe(2);
+    await win.waitForSelector('#usr-panel.is-open .usr-coltable', { timeout: 15000 });   // slide-over (owner, 2026-09-14)
+    expect(await win.evaluate(() => document.querySelectorAll('#usr-panel .usr-coltable tbody tr').length)).toBe(2);
+    await win.evaluate(() => closeAccountPanel());
+    await win.waitForFunction(() => !document.querySelector('#usr-panel'), null, { timeout: 5000 });
 
     // The administrator's own list carries the reversal as its own row, with its reason.
     await win.click('.set-tab[data-tab="mine"]');
@@ -186,6 +189,52 @@ test('a warden sees their own collections; an administrator sees every account',
     expect(mine.neg).toBe(true);
     expect(mine.handover).toBe(false);
     expect(await win.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+
+    // Viewing an account opens the slide-over, like student details (owner, 2026-09-14).
+    await win.evaluate(() => { usersTab = 'users'; navigate('users'); });
+    await win.waitForSelector('.usr-table:not(.usr-wtable) tbody tr', { timeout: 10000 });
+    await win.evaluate(() => usrOpen('w_sara'));
+    await win.waitForSelector('#usr-panel.is-open', { timeout: 5000 });
+    expect(await win.evaluate(() => ({
+      name: document.querySelector('#usr-panel .stu-pan__name').textContent.trim(),
+      title: document.querySelector('#usr-panel .stu-pan__title').textContent.trim(),
+      rail: !!document.querySelector('.usr-split.is-open'),
+    }))).toEqual({ name: 'Sara Warden', title: 'Account Details', rail: false });
+    await win.keyboard.press('Escape');
+    await win.waitForFunction(() => !document.querySelector('#usr-panel.is-open'), null, { timeout: 5000 });
+
+    // My Account, from the account menu, opens the signed-in account with Edit.
+    const menu = await win.evaluate(() => [...document.querySelectorAll('#user-menu .hdr-menu__item')]
+      .map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+    expect(menu).toEqual(['My Account', 'Logout']);
+    await win.evaluate(() => { document.getElementById('user-menu').style.display = 'block'; });
+    await win.click('#user-menu-account');
+    await win.waitForSelector('#usr-panel.is-open', { timeout: 5000 });
+    expect(await win.evaluate(() => ({
+      title: document.querySelector('#usr-panel .stu-pan__title').textContent.trim(),
+      edit: (document.getElementById('usr-panel-edit') || {}).textContent,
+    }))).toEqual({ title: 'My Account', edit: 'Edit my details' });
+    // The actions sit at the top of the panel, under Edit.
+    expect(await win.evaluate(() => [...document.querySelectorAll('#usr-panel .usr-pan__acts .stu-pan__act')]
+      .map(b => b.textContent.trim()))).toEqual(['Reset password', 'Sign in as user']);
+    await win.evaluate(() => closeAccountPanel());
+    await win.waitForFunction(() => !document.querySelector('#usr-panel'), null, { timeout: 5000 });
+
+    // A second click on the same ⋮ closes its menu (owner, 2026-09-14).
+    const kebab = '.usr-table:not(.usr-wtable) tbody tr:nth-child(2) .lk-kebab';
+    await win.click(kebab);
+    expect(await win.evaluate(() => !!document.getElementById('lk-rmenu'))).toBe(true);
+    await win.click(kebab);
+    expect(await win.evaluate(() => !!document.getElementById('lk-rmenu'))).toBe(false);
+
+    // Every password field gets a show / hide eye (owner, 2026-09-14).
+    await win.evaluate(() => usrResetPassword('w_sara'));
+    await win.waitForSelector('#usr-pw1 + .pw-eye__btn', { timeout: 5000 });
+    await win.click('#usr-pw1 + .pw-eye__btn');
+    expect(await win.evaluate(() => document.getElementById('usr-pw1').type)).toBe('text');
+    await win.click('#usr-pw1 + .pw-eye__btn');
+    expect(await win.evaluate(() => document.getElementById('usr-pw1').type)).toBe('password');
+    await win.evaluate(() => closeModal());
 
     // An account deleted after collecting keeps its row, and the Total does not move.
     await win.evaluate(() => {

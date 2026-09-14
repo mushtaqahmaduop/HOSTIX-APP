@@ -186,12 +186,11 @@ function buildReceiptHTML(payId) {
 
   html += '<div style="padding:4px 22px 10px">';
   html += secLabel('Fee Breakdown');
-  // Always "Room Rent" — the label used to flip to "Monthly Rent" when mess was
-  // 0, which made the same line mean the bed on one receipt and the whole
-  // charge on another. Rent is the bed; mess is its own line; the total below
-  // is the monthly charge.
-  html += dotRow('Room Rent', fmtPKR(rcptMonthly));
-  if (rcptMess > 0) html += dotRow('Mess Charges', fmtPKR(rcptMess));
+  // ONE LINE FOR RENT AND MESS (owner, 2026-09-14): a month that bills food
+  // prints "Rent + Mess" with its whole charge — never the split as two lines.
+  // A month of rent alone prints "Room Rent".
+  if (rcptMess > 0) html += dotRow('Rent + Mess', fmtPKR(rcptMonthly + rcptMess));
+  else              html += dotRow('Room Rent', fmtPKR(rcptMonthly));
   if (rcptAdmFee > 0) html += dotRow('Admission Fee', fmtPKR(rcptAdmFee));
   if (p.extraCharges && p.extraCharges.length) {
     p.extraCharges.forEach(function(ch) {
@@ -203,7 +202,7 @@ function buildReceiptHTML(payId) {
   }
   if (rcptDiscount > 0)
     html += dotRow('Concession' + (rcptConcDesc ? ' (' + escHtml(rcptConcDesc) + ')' : ''), '− ' + fmtPKR(rcptDiscount));
-  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0 || rcptMess > 0) {
+  if (rcptAdmFee > 0 || rcptExtra > 0 || rcptDiscount > 0) {
     html += sep('dashed');
     html += dotRow('TOTAL DUE', fmtPKR(rcptTotalDue), true);
   }

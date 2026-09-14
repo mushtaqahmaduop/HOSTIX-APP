@@ -128,6 +128,29 @@ declare function ledgerAdopt(entries: any): Promise<boolean>;
 declare function ledgerBalance(studentId: string): number;
 declare function ledgerEntriesFor(studentId: string): any[];
 declare function ledgerDrift(): any[];
+declare function ledgerCollectionLine(e: any): { kind: string; amount: number } | null;
+// -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
+declare function handoverSync(): number;
+declare function hoNeedsHandover(accountId: string): boolean;
+declare function hoPendingLines(accountId: string): { row: any; entry: any }[];
+declare function hoSum(lines: any[]): number;
+declare function hoByMethod(lines: any[]): { [method: string]: number };
+declare function hoOpenFor(accountId: string): any;
+declare function hoFind(id: string): any;
+declare function hoItems(handoverId: string): { item: any; entry: any; row: any }[];
+declare function hoLabel(h: any): string;
+declare function hoHue(h: any): string;
+declare function hoEvaluate(h: any, ticked: any, counted: any): any;
+declare function hoSend(accountId: string): any;
+declare function hoTakeBack(id: string, accountId: string): any;
+declare function hoApprove(id: string, input: any): any;
+declare function hoFlag(id: string, input: any): any;
+declare function hoAlerts(): any[];
+declare function hoMarkSeen(accountId: string): number;
+declare function canDo(p: string): boolean;
+// -- enforcement-ui.js --------------------------------------------------------
+declare function isReadOnly(): boolean;
+declare function licenceState(): any;
 // Read-only, for My Collections and the Wardens view (spec §5 step 3).
 declare function ledgerCollections(accountId: string): { entry: any; kind: string; amount: number; deleted: boolean }[];
 declare function ledgerCollectionTotals(rows: any[]): {

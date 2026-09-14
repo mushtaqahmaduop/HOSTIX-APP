@@ -136,6 +136,8 @@ function usrAvatar(u, size) {
 
 /* ── THE PAGE ─────────────────────────────────────────────────────────────── */
 function renderUsers() {
+  // An open account panel follows whatever just changed on this page.
+  if (_usrPanelId) setTimeout(refreshAccountPanel, 0);
   /* WHO SEES WHAT (owner, 2026-09-14). An account that cannot manage users met a
      lock here, on a page the rail offers to everybody. It now meets the one thing
      on this page that is its own: the money it has collected — with no tab row,
@@ -287,8 +289,8 @@ function usrKpi(ico, hue, label, value, sub, lock) {
    record's money stays, tagged. Newest first — the owner's stated exception to
    room-number ordering, for this list of cash only.
 
-   Handing over and approval are step 4. The button is drawn, disabled, where it
-   will go; the Wardens table's Handover column says nothing it cannot know. */
+   Handing over and approval (step 4) are drawn here too; their rules live in
+   handovers.js and are only called from these screens. */
 
 function usrTabs() {
   const tabs = [
@@ -372,13 +374,15 @@ function _usrColFiltered(rows, look) {
 
 /* The register. `compact` is the Wardens rail: month and method fold under the
    name so the table fits a 400px column. */
-function _usrColTable(pageRows, look, compact) {
+function _usrColTable(pageRows, look, compact, statusOf) {
+  const withStatus = !compact && typeof statusOf === 'function';
   return `
   <div class="set-table-wrap">
     <table class="set-table usr-coltable${compact ? ' is-compact' : ''}">
       <thead><tr>
         <th>When</th><th>${compact ? 'Student' : 'Student · Room'}</th>
         ${compact ? '' : '<th>Month billed</th><th>Method</th>'}
+        ${withStatus ? '<th>Status</th>' : ''}
         <th class="is-num">Amount</th>
       </tr></thead>
       <tbody>
@@ -395,6 +399,7 @@ function _usrColTable(pageRows, look, compact) {
             </td>
             ${compact ? '' : `<td>${e.month ? escHtml(e.month) : '<span class="lk-dash">—</span>'}</td>
             <td>${e.method ? pmBadge(e.method) : '<span class="lk-dash">Not recorded</span>'}</td>`}
+            ${withStatus ? `<td>${_usrLineStatus(statusOf(e))}</td>` : ''}
             <td class="is-num">${_usrAmt(r.amount)}</td>
           </tr>`;
         }).join('')}
@@ -405,9 +410,8 @@ function _usrColTable(pageRows, look, compact) {
 
 /* ── MY COLLECTIONS ───────────────────────────────────────────────────────── */
 function usrCollectionsView(tabs) {
-  const me = WARDENS[CUR_ROLE] || {};
   // Owner, 2026-09-14: an account that manages users hands nothing over.
-  const noHandover = !!(me.perms && me.perms.users === true);
+  const noHandover = !hoNeedsHandover(CUR_ROLE);
   const rows  = ledgerCollections(CUR_ROLE);
   const tot   = ledgerCollectionTotals(rows);
   const look  = _usrColLookup();
@@ -417,6 +421,18 @@ function usrCollectionsView(tabs) {
   const f = usersColFilter;
   const methodNames = [...new Set(rows.map(r => r.entry.method || 'Not recorded'))];
   const count = n => n + ' collection' + (n === 1 ? '' : 's');
+  const lineN = n => n + ' line' + (n === 1 ? '' : 's');
+
+  // Step 4 — what is still held, and what is sent and waiting.
+  const pending  = noHandover ? [] : hoPendingLines(CUR_ROLE);
+  const toHand   = hoSum(pending);
+  const open     = noHandover ? null : hoOpenFor(CUR_ROLE);
+  const statusOf = noHandover ? null : _usrLineStatusMap();
+  const why      = noHandover ? '' : _usrHandoverBlock(pending, toHand, open);
+  // Opening this page is how a warden sees an outcome, so the bell stops repeating it.
+  if (!noHandover && hoMarkSeen(CUR_ROLE) > 0) {
+    setTimeout(() => { saveDB(); if (typeof refreshNotifBell === 'function') refreshNotifBell(); }, 0);
+  }
 
   return `
   <div class="bk-head">
@@ -430,17 +446,24 @@ function usrCollectionsView(tabs) {
     <div class="al-head__acts">
       <button class="set-btn" onclick="exportMyCollectionsExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
       <button class="set-btn" onclick="exportMyCollectionsPDF()">${icon('print','xs')}Export PDF</button>
-      ${noHandover ? '' : `<button class="set-btn" id="usr-handover" disabled
-          title="Handing cash over, and an administrator approving it, arrive in the next update.">${icon('lock','xs')}Hand over cash</button>`}
+      ${noHandover ? '' : `<button class="set-btn set-btn--go" id="usr-handover" ${why ? 'disabled' : ''}
+          title="${escHtml(why || 'Send the money you hold to an administrator to count and approve.')}"
+          onclick="usrHoShowSend()">${icon(why ? 'lock' : 'wallet','xs')}Hand over cash</button>`}
     </div>
   </div>
   ${tabs}
 
-  <div class="usr-kpis usr-kpis--3">
-    ${usrKpi('wallet', 'dh-blue', noHandover ? 'Collected' : 'Holding', fmtPKR(tot.holding), count(tot.count) + ' since the ledger started')}
-    ${usrKpi('clock', 'dh-green', 'Today', fmtPKR(tot.today), count(tot.todayCount))}
-    ${usrKpi('calendar', 'dh-violet', 'This month', fmtPKR(tot.month), count(tot.monthCount))}
+  <div class="usr-kpis ${noHandover ? 'usr-kpis--3' : 'usr-kpis--4'}">
+    ${noHandover
+      ? usrKpi('wallet', 'dh-blue', 'Collected', fmtPKR(tot.holding), count(tot.count) + ' since the ledger started')
+      : usrKpi('wallet', 'dh-blue', 'To hand over', fmtPKR(toHand), lineN(pending.length))
+        + usrKpi('clock', 'dh-amber', 'Waiting approval', open ? fmtPKR(open.totalAmount) : '—',
+                 open ? hoLabel(open) + ' · ' + lineN(open.lineCount) : 'nothing sent')}
+    ${usrKpi('calendar', 'dh-green', 'Today', fmtPKR(tot.today), count(tot.todayCount))}
+    ${usrKpi('chart', 'dh-violet', 'This month', fmtPKR(tot.month), count(tot.monthCount))}
   </div>
+
+  ${noHandover ? '' : _usrHandoverHistory()}
 
   <div class="set-card">
     ${tot.byMethod.length ? `
@@ -469,7 +492,7 @@ function usrCollectionsView(tabs) {
     </div>
 
     ${shown.length ? `
-      ${_usrColTable(pg.slice, look, false)}
+      ${_usrColTable(pg.slice, look, false, statusOf)}
       <div class="al-foot">
         <span>${pg.from}–${pg.to} of ${shown.length}</span>
         <span>Total shown ${_usrAmt(shownTotal)}</span>
@@ -491,6 +514,429 @@ function usrColReset() {
   renderPage('users');
 }
 
+/* ══ HANDOVERS — warden ledger spec §5 step 4 ═════════════════════════════════
+   Built to docs/WARDEN_LEDGER_STEP4_DESIGN.md. The rules are handovers.js; this
+   is only what the warden and the administrator see and press. */
+
+let usersHoFilter = { page: 1, pageSize: 10 };
+let _hoRev = null;   // the open review: { id, ticked: Set, counted: {}, how: {}, methods: [] }
+
+/* A line's handover status, as a word in a chip. */
+function _usrLineStatusMap() {
+  const m = new Map((DB.wardenCollections || []).map(r => [r.ledgerEntryId, r.status]));
+  return e => m.get(e.id) || '';
+}
+function _usrLineStatus(s) {
+  const hit = ({ pending_handover: ['dh-slate', 'To hand over'], handed_over: ['dh-amber', 'Sent'],
+                 approved: ['dh-green', 'Approved'], disputed: ['dh-red', 'Disputed'] })[s];
+  return hit ? `<span class="lk-chip ${hit[0]}">${hit[1]}</span>` : '<span class="lk-dash">—</span>';
+}
+
+function _usrWhenText(v) { const w = _usrWhen(v); return w ? w.top + ', ' + w.sub : ''; }
+
+/* Why this account cannot hand over right now, or '' when it can. */
+function _usrHandoverBlock(pending, toHand, open) {
+  if (typeof isReadOnly === 'function' && isReadOnly()) {
+    const st = typeof licenceState === 'function' ? licenceState() : null;
+    return (st && st.state === 'SUSPENDED' ? 'This licence is suspended' : 'This licence has expired')
+         + ' — handing over is paused.';
+  }
+  if (open) return 'Your handover of ' + fmtPKR(open.totalAmount) + ' is '
+         + (open.status === 'discrepancy' ? 'in discrepancy' : 'waiting for approval')
+         + '. The next one can be sent after that.';
+  if (!pending.length || toHand <= 0) return 'There is nothing to hand over.';
+  return '';
+}
+
+/* The month record's receipt number, per payment record id. */
+function _usrReceiptLookup() {
+  const m = new Map();
+  (DB.payments || []).forEach(p => { if (p && p.id) m.set(p.id, p.receiptNo || ''); });
+  (DB.archive || []).forEach(p => { if (p && p.id && !m.has(p.id)) m.set(p.id, p.receiptNo || ''); });
+  return e => (e && m.get(e.paymentRecordId)) || '';
+}
+
+/* ── the warden's history ── */
+function _usrHandoverHistory() {
+  const all = (DB.handovers || []).filter(h => h.wardenId === CUR_ROLE)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (!all.length) return '';
+  const pg = paginate(all, usersHoFilter);
+  return `
+  <div class="set-card usr-ho-card">
+    <div class="usr-ho-head"><div class="usr-sec">Handovers</div></div>
+    <div class="set-table-wrap">
+      <table class="set-table usr-coltable usr-hohist">
+        <thead><tr><th>Sent</th><th class="is-num">Lines</th><th class="is-num">Amount</th><th>Status</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+          ${pg.slice.map(h => {
+            const when = _usrWhen(h.createdAt);
+            const note = Array.isArray(h.notes) && h.notes.length ? h.notes[h.notes.length - 1] : null;
+            const part = h.status === 'approved' && money(h.approvedAmount) < money(h.totalAmount);
+            const id = escHtml(h.id);
+            return `<tr data-handover="${id}">
+              <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+              <td class="is-num">${escHtml(String(h.lineCount))}</td>
+              <td class="is-num">${_usrAmt(h.status === 'approved' ? money(h.approvedAmount) : money(h.totalAmount))}
+                ${part ? `<span class="usr-reason">of ${escHtml(fmtPKR(h.totalAmount))}</span>` : ''}</td>
+              <td><span class="lk-chip ${hoHue(h)}">${escHtml(hoLabel(h))}</span></td>
+              <td>${note ? `<div class="usr-ho-note">${escHtml(note.text)}<small>${escHtml((note.byName || '') + ' · ' + _usrWhenText(note.at))}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+              <td class="usr-ho-acts">
+                ${h.status === 'pending' && !h.reviewedAt ? `<button class="set-btn set-btn--sm" onclick="usrHoTakeBack('${id}')">${icon('refreshCw','xs')}Take back</button>` : ''}
+                <button class="set-btn set-btn--sm" onclick="exportHandoverPDF('${id}')" title="Export this handover as PDF">${icon('print','xs')}PDF</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${pg.pages > 1 ? renderPager(pg, 'usersHoFilter', 'users') : ''}
+  </div>`;
+}
+
+/* ── sending ── */
+function usrHoShowSend() {
+  if (typeof requireWritable === 'function' && !requireWritable('Handing over cash')) return;
+  const pending = hoPendingLines(CUR_ROLE);
+  const total   = hoSum(pending);
+  const block   = _usrHandoverBlock(pending, total, hoOpenFor(CUR_ROLE));
+  if (block) { toast(block, 'info'); return; }
+  const look = _usrColLookup();
+  const by   = hoByMethod(pending);
+  const n    = pending.length;
+
+  showModal('modal-md',
+    `<div class="hf-mh"><div class="hf-mh__ico">${icon('wallet','sm')}</div>
+       <div><div class="hf-mh__t">Hand over cash</div>
+       <div class="hf-mh__s">Everything you hold now goes to an administrator to count.</div></div></div>`,
+    `<div class="usr-ho-send">
+       <div class="usr-ho-list">
+         <table class="set-table usr-coltable is-compact">
+           <thead><tr><th>When</th><th>Student · Room</th><th>Method</th><th class="is-num">Amount</th></tr></thead>
+           <tbody>
+             ${pending.map(x => {
+               const e = x.entry, who = look(e), when = _usrWhen(e.createdAt), neg = money(x.row.amount) < 0;
+               return `<tr data-entry="${escHtml(e.id)}">
+                 <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+                 <td><div class="usr-colwho">${neg ? '<span class="usr-kind">Reversed</span>' : ''}<b>${escHtml(who.name)}</b>${who.room ? `<span class="usr-colroom">Room ${escHtml(roomText(who.room))}</span>` : ''}</div></td>
+                 <td>${e.method ? pmBadge(e.method) : '<span class="lk-dash">Not recorded</span>'}</td>
+                 <td class="is-num">${_usrAmt(money(x.row.amount))}</td>
+               </tr>`;
+             }).join('')}
+           </tbody>
+         </table>
+       </div>
+       <div class="usr-methods usr-ho-methods">
+         ${Object.keys(by).map(m => `<span class="usr-method">${pmBadge(m || 'Not recorded')}${_usrAmt(by[m])}</span>`).join('')}
+       </div>
+       <div class="usr-ho-summary" id="ho-send-sum">You are handing over <b>${escHtml(fmtPKR(total))}</b> in ${n} line${n === 1 ? '' : 's'} to the administrator. You can take it back until they act on it.</div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="ho-send-btn" onclick="usrHoDoSend()">Send ${escHtml(fmtPKR(total))}</button>`);
+}
+
+async function usrHoDoSend() {
+  const r = hoSend(CUR_ROLE);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  renderPage('users');
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  toast('Sent ' + fmtPKR(r.handover.totalAmount) + ' to the administrator', 'success', 'Handover sent');
+}
+
+function usrHoTakeBack(id) {
+  if (typeof requireWritable === 'function' && !requireWritable('Taking a handover back')) return;
+  const h = hoFind(id);
+  if (!h) return;
+  showConfirm('Take this handover back?',
+    'The ' + escHtml(fmtPKR(h.totalAmount)) + ' goes back to your list to hand over.',
+    async () => {
+      const r = hoTakeBack(id, CUR_ROLE);
+      if (!r.ok) { toast(r.reason, 'error'); return; }
+      await saveDB();
+      renderPage('users');
+      if (typeof refreshNotifBell === 'function') refreshNotifBell();
+      toast('Handover taken back', 'success');
+    });
+}
+
+/* ── the administrator's queue ── */
+function _usrHandoverQueue() {
+  const q = (DB.handovers || []).filter(h => h.status === 'pending' || h.status === 'discrepancy')
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));   // oldest first
+  return `
+  <div class="set-card usr-ho-card usr-hoq">
+    <div class="usr-ho-head">
+      <div class="usr-sec">Waiting for approval</div>
+      ${q.length ? `<span class="lk-chip dh-amber">${q.length} waiting</span>` : ''}
+    </div>
+    ${q.length ? `
+    <div class="set-table-wrap">
+      <table class="set-table usr-coltable usr-hoqt">
+        <thead><tr><th>Warden</th><th>Sent</th><th class="is-num">Lines</th><th class="is-num">Amount</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${q.map(h => {
+            const when = _usrWhen(h.createdAt);
+            const id = escHtml(h.id);
+            return `<tr data-handover="${id}">
+              <td><b>${escHtml(h.wardenName || h.wardenId)}</b></td>
+              <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+              <td class="is-num">${escHtml(String(h.lineCount))}</td>
+              <td class="is-num">${_usrAmt(money(h.totalAmount))}</td>
+              <td><span class="lk-chip ${hoHue(h)}">${escHtml(hoLabel(h))}</span></td>
+              <td class="usr-ho-acts"><button class="set-btn usr-hoq-review" onclick="usrHoShowReview('${id}')">${icon('eye','xs')}Review</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>` : '<div class="usr-none">Nothing is waiting for approval.</div>'}
+  </div>`;
+}
+
+/* ── reviewing ── */
+function usrHoShowReview(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (typeof requireWritable === 'function' && !requireWritable('Reviewing a handover')) return;
+  const h = hoFind(id);
+  if (!h) return;
+  const items = hoItems(id);
+  const ev0 = hoEvaluate(h, items.map(x => x.item.ledgerEntryId), {});
+  _hoRev = { id, ticked: new Set(items.map(x => x.item.ledgerEntryId)), counted: {}, how: {},
+             methods: ev0.rows.map(r => r.method) };
+  const look = _usrColLookup();
+  const rcpt = _usrReceiptLookup();
+  const mi   = m => _hoRev.methods.indexOf(m || '');
+  const disc = h.status === 'discrepancy';
+
+  showModal('modal-lg',
+    `<div class="hf-mh"><div class="hf-mh__ico">${icon('wallet','sm')}</div>
+       <div><div class="hf-mh__t">Review handover — ${escHtml(h.wardenName || h.wardenId)}</div>
+       <div class="hf-mh__s">Sent ${escHtml(_usrWhenText(h.createdAt))} · ${escHtml(String(h.lineCount))} lines · ${escHtml(fmtPKR(h.totalAmount))}${disc ? ' · in discrepancy' : ''}</div></div></div>`,
+    `<div class="usr-ho-rev">
+       <div class="usr-ho-bulk">
+         <span>Tick what you received:</span>
+         <button type="button" class="set-btn set-btn--sm" onclick="usrHoBulk(-1)">${icon('check','xs')}All</button>
+         ${_hoRev.methods.map((m, i) => `<button type="button" class="set-btn set-btn--sm" onclick="usrHoBulk(${i})">${escHtml(m || 'Not recorded')}</button>`).join('')}
+       </div>
+       <div class="usr-ho-review">
+         <div class="usr-ho-lines">
+           <table class="set-table usr-coltable is-compact">
+             <thead><tr><th></th><th>When</th><th>Student</th><th>Receipt</th><th>Method</th><th class="is-num">Amount</th></tr></thead>
+             <tbody>
+               ${items.map(x => {
+                 const e = x.entry || {}, who = look(e), when = _usrWhen(e.createdAt);
+                 const neg = money(x.item.amount) < 0;
+                 const eid = escHtml(x.item.ledgerEntryId);
+                 return `<tr data-line="${eid}">
+                   <td>${neg
+                     ? `<input type="checkbox" checked disabled title="A reversal is money already given back — it is always included." aria-label="Reversal, always included">`
+                     : `<input type="checkbox" checked data-entry="${eid}" data-mi="${mi(x.item.method)}" aria-label="Received" onchange="usrHoTick('${eid}', this.checked)">`}</td>
+                   <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+                   <td><div class="usr-colwho">${neg ? '<span class="usr-kind">Reversed</span>' : ''}<b>${escHtml(who.name)}</b></div></td>
+                   <td>${rcpt(e) ? escHtml(rcpt(e)) : '<span class="lk-dash">—</span>'}</td>
+                   <td>${x.item.method ? pmBadge(x.item.method) : '<span class="lk-dash">Not recorded</span>'}</td>
+                   <td class="is-num">${_usrAmt(money(x.item.amount))}</td>
+                 </tr>`;
+               }).join('')}
+             </tbody>
+           </table>
+         </div>
+         <div class="usr-ho-count">
+           <div class="usr-sec">Count</div>
+           <table class="usr-ho-ctable">
+             <thead><tr><th>Method</th><th class="is-num">Expected</th><th class="is-num">Counted</th><th class="is-num">Difference</th></tr></thead>
+             <tbody>
+               ${ev0.rows.map((r, i) => `<tr>
+                 <td>${escHtml(r.label)}</td>
+                 <td class="is-num" id="ho-exp-${i}">${_usrAmt(r.expected)}</td>
+                 <td class="is-num"><div class="usr-ho-cin">
+                   <input class="form-control" type="number" inputmode="numeric" step="1" id="ho-cnt-${i}"
+                          aria-label="${escHtml(r.label)} counted" oninput="usrHoCount(${i}, this.value)">
+                   <button type="button" class="set-btn set-btn--sm" onclick="usrHoMatch(${i})" title="Copy the expected amount — use it only after counting">Matches</button>
+                 </div></td>
+                 <td class="is-num" id="ho-diff-${i}"><span class="lk-dash">—</span></td>
+               </tr>`).join('')}
+             </tbody>
+             <tfoot><tr><td>Total</td><td class="is-num" id="ho-exp-total"></td><td class="is-num" id="ho-cnt-total"></td><td></td></tr></tfoot>
+           </table>
+           <div class="field" style="margin-top:12px">
+             <label for="ho-note">${disc ? 'How was it settled? (needed to approve)' : 'Note (needed to flag a discrepancy)'}</label>
+             <textarea class="form-control" id="ho-note" rows="3" maxlength="400" oninput="usrHoRefresh()"
+                       placeholder="${disc ? 'e.g. Sara brought the missing Rs 1,000' : 'e.g. Cash short by Rs 1,000'}"></textarea>
+           </div>
+           ${Array.isArray(h.notes) && h.notes.length ? `<div class="usr-ho-notes">
+             ${h.notes.map(nt => `<div class="usr-ho-note">${escHtml(nt.text)}<small>${escHtml((nt.byName || '') + ' · ' + _usrWhenText(nt.at))}</small></div>`).join('')}
+           </div>` : ''}
+         </div>
+       </div>
+       <div class="usr-ho-summary" id="ho-summary" aria-live="polite"></div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="_hoRev=null;closeModal()">Cancel</button>
+     <button class="btn btn-secondary" onclick="exportHandoverPDF('${escHtml(id)}')">${icon('print','xs')} Export PDF</button>
+     <button class="btn btn-secondary usr-ho-flagbtn" id="ho-flag" onclick="usrHoDoFlag()" disabled>Flag discrepancy</button>
+     <button class="btn btn-primary" id="ho-approve" onclick="usrHoDoApprove()" disabled>Approve</button>`);
+  usrHoRefresh();
+}
+
+function usrHoRefresh() {
+  if (!_hoRev) return;
+  const h = hoFind(_hoRev.id);
+  if (!h) return;
+  const ev = hoEvaluate(h, _hoRev.ticked, _hoRev.counted);
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  let cTotal = 0, cAny = false;
+  ev.rows.forEach((r, i) => {
+    set('ho-exp-' + i, _usrAmt(r.expected));
+    if (r.counted !== null) { cTotal += r.counted; cAny = true; }
+    set('ho-diff-' + i, r.difference === null ? '<span class="lk-dash">—</span>'
+      : r.difference === 0 ? '<span class="usr-ho-diff is-ok">No difference</span>'
+      : `<span class="usr-ho-diff is-bad">${r.difference > 0 ? 'Over ' : 'Short '}${escHtml(fmtPKR(Math.abs(r.difference)))}</span>`);
+  });
+  set('ho-exp-total', _usrAmt(ev.rows.reduce((s, r) => s + r.expected, 0)));
+  set('ho-cnt-total', cAny ? _usrAmt(cTotal) : '<span class="lk-dash">—</span>');
+  document.querySelectorAll('.usr-ho-lines tr[data-line]').forEach(tr => {
+    tr.classList.toggle('is-off', !ev.ticked.has(tr.getAttribute('data-line')));
+  });
+
+  const note = String((document.getElementById('ho-note') || {}).value || '').trim();
+  const disc = h.status === 'discrepancy';
+  const who  = h.wardenName || 'the warden';
+  let say = ev.returnedCount
+    ? `Approving <b>${escHtml(fmtPKR(ev.approvedAmount))}</b> of ${escHtml(fmtPKR(ev.total))}. `
+      + `${ev.returnedCount} line${ev.returnedCount === 1 ? '' : 's'} (${escHtml(fmtPKR(ev.returnedAmount))}) go${ev.returnedCount === 1 ? 'es' : ''} back to ${escHtml(who)}.`
+    : `Approving <b>${escHtml(fmtPKR(ev.approvedAmount))}</b> — all ${ev.approvedCount} lines.`;
+  if (!ev.allMatch) say += ' Count every method to approve; if the money does not match, flag a discrepancy.';
+  else if (disc && !note) say += ' Write how the discrepancy was settled to approve.';
+  set('ho-summary', say);
+
+  const approve = /** @type {HTMLButtonElement|null} */ (document.getElementById('ho-approve'));
+  if (approve) {
+    approve.disabled = !(ev.canApprove && (!disc || note));
+    approve.textContent = 'Approve ' + fmtPKR(ev.approvedAmount);
+  }
+  const flag = /** @type {HTMLButtonElement|null} */ (document.getElementById('ho-flag'));
+  if (flag) flag.disabled = !note;
+}
+
+function usrHoTick(entryId, on) {
+  if (!_hoRev) return;
+  if (on) _hoRev.ticked.add(entryId); else _hoRev.ticked.delete(entryId);
+  usrHoRefresh();
+}
+
+/* Tick or untick every line of one method at once (-1 = all methods). */
+function usrHoBulk(i) {
+  if (!_hoRev) return;
+  const boxes = Array.from(document.querySelectorAll('.usr-ho-lines input[data-entry]'))
+    .filter(b => i < 0 || b.getAttribute('data-mi') === String(i));
+  const allOn = boxes.every(b => /** @type {HTMLInputElement} */ (b).checked);
+  boxes.forEach(b => {
+    const box = /** @type {HTMLInputElement} */ (b);
+    box.checked = !allOn;
+    const id = box.getAttribute('data-entry');
+    if (box.checked) _hoRev.ticked.add(id); else _hoRev.ticked.delete(id);
+  });
+  usrHoRefresh();
+}
+
+function usrHoCount(i, value) {
+  if (!_hoRev) return;
+  const m = _hoRev.methods[i];
+  _hoRev.counted[m] = value;
+  _hoRev.how[m] = 'typed';
+  usrHoRefresh();
+}
+
+/* Owner, 2026-09-14: a Matches button may copy the expected amount. The handover
+   records that the figure was confirmed this way rather than typed. */
+function usrHoMatch(i) {
+  if (!_hoRev) return;
+  const h = hoFind(_hoRev.id);
+  if (!h) return;
+  const m = _hoRev.methods[i];
+  const row = hoEvaluate(h, _hoRev.ticked, _hoRev.counted).rows[i];
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById('ho-cnt-' + i));
+  if (input) input.value = String(row.expected);
+  _hoRev.counted[m] = String(row.expected);
+  _hoRev.how[m] = 'matched';
+  usrHoRefresh();
+}
+
+async function _usrHoFinish(fn, done) {
+  if (!_hoRev) return;
+  const note = String((document.getElementById('ho-note') || {}).value || '');
+  const r = fn(_hoRev.id, { ticked: _hoRev.ticked, counted: _hoRev.counted, how: _hoRev.how, note });
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  _hoRev = null;
+  await saveDB();
+  closeModal();
+  renderPage('users');
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  done(r);
+}
+function usrHoDoApprove() {
+  _usrHoFinish(hoApprove, r => toast(
+    fmtPKR(r.handover.approvedAmount) + ' approved from ' + (r.handover.wardenName || 'the warden')
+    + (r.evaluation.returnedCount ? ' · ' + fmtPKR(r.evaluation.returnedAmount) + ' returned to their list' : ''),
+    'success', hoLabel(r.handover)));
+}
+function usrHoDoFlag() {
+  _usrHoFinish(hoFlag, r => toast('Flagged — the handover stays in the queue with your note',
+    'warning', 'Discrepancy'));
+}
+
+/* ── export of one handover ── */
+function _usrHandoverExportDef(id) {
+  const h = hoFind(id);
+  const items = hoItems(id);
+  const look = _usrColLookup();
+  const rcpt = _usrReceiptLookup();
+  const time = v => v ? new Date(v).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+  const summary = [
+    { label: 'Status', value: hoLabel(h) },
+    { label: 'Handed over', value: fmtPKR(h.totalAmount) },
+  ];
+  if (h.status === 'approved') summary.push({ label: 'Approved', value: fmtPKR(h.approvedAmount) });
+  Object.keys(h.expected || {}).forEach(m => {
+    const c = h.counted ? h.counted[m] : null;
+    const how = h.countedHow && h.countedHow[m] === 'matched' ? ' (confirmed with Matches)' : c != null ? ' (typed)' : '';
+    summary.push({ label: (m || 'Not recorded') + ' counted',
+                   value: c == null ? 'Not counted' : fmtPKR(c) + how });
+  });
+  return {
+    module: 'Handover',
+    title:  'Cash Handover',
+    scope:  (h.wardenName || h.wardenId) + ' · sent ' + _usrWhenText(h.createdAt),
+    filters: [['Reviewed by', h.adminName || 'Not yet reviewed']],
+    summary,
+    columns: [
+      { label: 'Date',     type: 'date',  width: 13, value: x => x.entry ? ymd(new Date(x.entry.createdAt)) : '' },
+      { label: 'Time',     type: 'text',  width: 9,  value: x => x.entry ? time(x.entry.createdAt) : '' },
+      { label: 'Student',  type: 'text',  width: 22, value: x => x.entry ? look(x.entry).name : '' },
+      { label: 'Room',     type: 'id',    width: 9,  value: x => x.entry ? look(x.entry).room : '' },
+      { label: 'Receipt',  type: 'id',    width: 12, value: x => x.entry ? rcpt(x.entry) : '' },
+      { label: 'Method',   type: 'text',  width: 14, value: x => x.item.method || 'Not recorded' },
+      { label: 'Outcome',  type: 'text',  width: 12, value: x => x.item.outcome === 'approved' ? 'Approved'
+                                                          : x.item.outcome === 'returned' ? 'Returned' : '—' },
+      { label: 'Amount (Rs.)', type: 'money', width: 14, value: x => money(x.item.amount), total: 'sum' },
+    ],
+    rows: items,
+    note: (Array.isArray(h.notes) && h.notes.length
+      ? 'Notes — ' + h.notes.map(nt => (nt.byName || '') + ', ' + _usrWhenText(nt.at) + ': ' + nt.text).join(' | ')
+      : 'No notes.'),
+    empty: 'This handover has no lines.',
+  };
+}
+
+function exportHandoverPDF(id) {
+  const h = hoFind(id);
+  if (!h) return;
+  const mayRead = h.wardenId === CUR_ROLE || (typeof canDo === 'function' && canDo('users'));
+  if (!mayRead) { toast('Only the warden or an administrator can export this handover', 'error'); return; }
+  EXPORT.pdf(_usrHandoverExportDef(id));
+}
+
 /* ── THE WARDENS VIEW ─────────────────────────────────────────────────────── */
 function _usrWardenAccounts() {
   const known = usrList();
@@ -506,8 +952,13 @@ function _usrWardenAccounts() {
   });
   return known.concat([...gone.values()]).map(u => {
     const rows = ledgerCollections(u.id);
-    return { u, rows, tot: ledgerCollectionTotals(rows),
-             noHandover: !!(u.perms && u.perms.users === true) };
+    const tot  = ledgerCollectionTotals(rows);
+    const noHandover = !!(u.perms && u.perms.users === true);
+    const open = noHandover ? null : hoOpenFor(u.id);
+    return { u, rows, tot, noHandover, open,
+             // Step 4: what is still with the account, and what is sent and waiting.
+             toHand:  noHandover ? tot.holding : hoSum(hoPendingLines(u.id)),
+             waiting: open ? money(open.totalAmount) : 0 };
   }).filter(a => a.rows.length || a.u.active !== false)
     .sort((a, b) => b.tot.holding - a.tot.holding
                  || String(a.u.name || '').localeCompare(String(b.u.name || '')));
@@ -528,6 +979,30 @@ function _usrMethodAmt(a, m) {
   return hit ? hit.amount : 0;
 }
 
+/* WHERE AN ACCOUNT'S MONEY STANDS, as a word (owner, 2026-09-14: after an
+   approval the column showed a dash, which explained nothing). */
+function _usrHandoverState(a) {
+  if (a.noHandover) return { label: 'Not needed', hue: 'dh-slate',
+    title: 'An account that manages users has nothing to hand over.' };
+  if (a.open) return { label: hoLabel(a.open), hue: hoHue(a.open),
+    title: 'Sent ' + _usrWhenText(a.open.createdAt) };
+  const last = (DB.handovers || []).filter(h => h.wardenId === a.u.id && h.status === 'approved')
+    .sort((x, y) => String(y.approvedAt).localeCompare(String(x.approvedAt)))[0] || null;
+  if (a.toHand > 0) return { label: 'To hand over', hue: 'dh-slate',
+    title: fmtPKR(a.toHand) + ' collected and not handed over yet'
+         + (last ? ' · last cleared ' + _usrWhenText(last.approvedAt) : '') };
+  if (last) return { label: 'Cleared', hue: 'dh-green',
+    title: 'Everything handed over has been received · ' + _usrWhenText(last.approvedAt)
+         + (last.adminName ? ' by ' + last.adminName : '') };
+  return { label: '', hue: '', title: 'Nothing collected yet' };
+}
+function _usrHandoverCell(a) {
+  const s = _usrHandoverState(a);
+  return s.label
+    ? `<span class="lk-chip ${s.hue}" title="${escHtml(s.title)}">${escHtml(s.label)}</span>`
+    : `<span class="lk-dash" title="${escHtml(s.title)}">—</span>`;
+}
+
 function usrWardensView(tabs) {
   const accounts = _usrWardenAccounts();
   const selAcc = usersWardenSel ? accounts.find(a => a.u.id === usersWardenSel) || null : null;
@@ -544,7 +1019,7 @@ function usrWardensView(tabs) {
     <div class="set-head__ico dh-blue">${icon('wallet', 'md')}</div>
     <div class="set-head__mid">
       <div class="bk-head__t">Wardens' collections</div>
-      <div class="bk-head__s">What each account has collected since the ledger started. Handing over and approval arrive in the next update.</div>
+      <div class="bk-head__s">What each account holds, and the handovers waiting for you to count.</div>
     </div>
     <div class="al-head__acts">
       <button class="set-btn" onclick="exportWardensExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
@@ -553,12 +1028,14 @@ function usrWardensView(tabs) {
   </div>
   ${tabs}
 
+  ${_usrHandoverQueue()}
+
   <div class="usr-split${sel ? ' is-open' : ''}">
     <div class="set-card usr-listcard">
       <div class="set-table-wrap">
         <table class="set-table usr-table usr-wtable">
           <thead><tr>
-            <th>Account</th><th class="is-num">Holding</th>
+            <th>Account</th><th class="is-num">To hand over</th><th class="is-num">Waiting</th>
             ${cols.map(m => `<th class="is-num">${escHtml(m)}</th>`).join('')}
             <th class="is-num">Today</th><th>Last collection</th><th>Handover</th>
           </tr></thead>
@@ -577,19 +1054,19 @@ function usrWardensView(tabs) {
                     </div>
                   </div>
                 </td>
-                <td class="is-num usr-hold">${_usrAmt(a.tot.holding)}</td>
+                <td class="is-num usr-hold">${_usrAmt(a.toHand)}</td>
+                <td class="is-num usr-wait">${cell(a.waiting)}</td>
                 ${cols.map(m => `<td class="is-num">${cell(_usrMethodAmt(a, m))}</td>`).join('')}
                 <td class="is-num">${cell(a.tot.today)}</td>
                 <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">None yet</span>'}</td>
-                <td>${a.noHandover
-                  ? '<span class="lk-chip dh-slate" title="An account that manages users has nothing to hand over.">Not needed</span>'
-                  : '<span class="lk-dash" title="Handing over arrives in the next update.">—</span>'}</td>
+                <td>${_usrHandoverCell(a)}</td>
               </tr>`;
             }).join('')}
           </tbody>
           <tfoot><tr>
             <td>Total</td>
-            <td class="is-num usr-hold">${_usrAmt(sum(a => a.tot.holding))}</td>
+            <td class="is-num usr-hold">${_usrAmt(sum(a => a.toHand))}</td>
+            <td class="is-num usr-wait">${_usrAmt(sum(a => a.waiting))}</td>
             ${cols.map(m => `<td class="is-num">${_usrAmt(sum(a => _usrMethodAmt(a, m)))}</td>`).join('')}
             <td class="is-num">${_usrAmt(sum(a => a.tot.today))}</td>
             <td></td><td></td>
@@ -599,7 +1076,7 @@ function usrWardensView(tabs) {
       <div class="cfg-note">${icon('info','xs')}<span>Each account's own collections, less the reversals it recorded. Payments imported from before the ledger started carry no account and are in none of these figures.</span></div>
     </div>
 
-    ${selAcc ? usrWardenRail(selAcc.u) : ''}
+    ${''/* An account opens in the slide-over now (showWardenPanel), not beside the table. */}
   </div>`;
 }
 
@@ -611,20 +1088,32 @@ function usrWardenRail(u) {
   const fact = (label, value) => `
     <div class="hi-fact"><span class="hi-fact__l">${escHtml(label)}</span><span class="hi-fact__v">${escHtml(value)}</span></div>`;
 
+  /* The account slide-over's shell, like student details (owner, 2026-09-14). */
   return `
-  <aside class="set-card usr-rail usr-wrail">
-    <div class="usr-rail__h">
-      ${usrAvatar(u, 48)}
-      <div style="min-width:0">
-        <div class="usr-rail__n">${escHtml(u.name || '(no name)')}</div>
-        <div class="usr-rail__s">${escHtml(u.deleted ? 'Account deleted — its collections are kept' : usrRole(u))}</div>
+  <div class="stu-pan__scrim" onclick="closeAccountPanel()"></div>
+  <aside class="stu-pan usr-pan usr-wrail" id="usr-panel" role="dialog" aria-modal="true"
+         aria-label="Collections of ${escHtml(u.name || u.id)}">
+    <header class="stu-pan__head">
+      <div class="stu-pan__headtext">
+        <span class="stu-pan__title">Collections</span>
+        <span class="stu-pan__sub">What this account holds, newest first</span>
       </div>
-      <button class="set-rowbtn" onclick="usrWardenClose()" title="Close">${icon('close','xs')}</button>
+      <button class="stu-pan__x" onclick="closeAccountPanel()" aria-label="Close">${icon('close','sm')}</button>
+    </header>
+    <div class="stu-pan__id">
+      ${usrAvatar(u, 54)}
+      <div class="stu-pan__idtext">
+        <div class="stu-pan__name">${escHtml(u.name || '(no name)')}</div>
+        <div class="stu-pan__meta">${escHtml(u.deleted ? 'Account deleted — its collections are kept' : usrRole(u))}</div>
+      </div>
     </div>
-    <div class="usr-rail__b">
+    <div class="usr-pan__body">
       <div class="usr-sec">Collections</div>
       <div class="hi-facts" style="border-top:none;margin-top:0;padding-top:0">
-        ${fact(u.perms && u.perms.users ? 'Collected' : 'Holding', fmtPKR(tot.holding))}
+        ${u.perms && u.perms.users
+          ? fact('Collected', fmtPKR(tot.holding))
+          : fact('To hand over', fmtPKR(hoSum(hoPendingLines(u.id))))
+            + fact('Waiting approval', hoOpenFor(u.id) ? fmtPKR(hoOpenFor(u.id).totalAmount) : '—')}
         ${fact('Today', fmtPKR(tot.today))}
         ${fact('This month', fmtPKR(tot.month))}
         ${fact('Collections', String(tot.count))}
@@ -642,8 +1131,8 @@ function usrWardenRail(u) {
   </aside>`;
 }
 
-function usrWardenOpen(id)  { usersWardenSel = id; usersRailFilter.page = 1; renderPage('users'); }
-function usrWardenClose()   { usersWardenSel = null; renderPage('users'); }
+function usrWardenOpen(id)  { usersRailFilter.page = 1; showWardenPanel(id); }
+function usrWardenClose()   { closeAccountPanel(); }
 
 /* ── EXPORTS — through the one engine (export/engine.js) ─────────────────────
    The document is the list on screen: the same rows, the same filters. */
@@ -699,7 +1188,7 @@ function exportMyCollectionsExcel() {
 function _usrWardensExportDef() {
   const accounts = _usrWardenAccounts();
   const cols = _usrWardenMethods(accounts);
-  const holding = accounts.reduce((s, a) => s + a.tot.holding, 0);
+  const holding = accounts.reduce((s, a) => s + a.toHand + a.waiting, 0);
   return {
     module: 'Collections',
     title:  "Wardens' Collections",
@@ -712,13 +1201,14 @@ function _usrWardensExportDef() {
     columns: [
       { label: 'Account', type: 'text', width: 22, value: a => a.u.name || '(no name)' },
       { label: 'Role',    type: 'text', width: 14, value: a => a.u.deleted ? 'Account deleted' : usrRole(a.u) },
-      { label: 'Holding (Rs.)', type: 'money', width: 14, value: a => a.tot.holding, total: 'sum' },
+      { label: 'To hand over (Rs.)', type: 'money', width: 15, value: a => a.toHand, total: 'sum' },
+      { label: 'Waiting (Rs.)',      type: 'money', width: 13, value: a => a.waiting, total: 'sum' },
     ].concat(cols.map(m => ({ label: m + ' (Rs.)', type: 'money', width: 13, value: a => _usrMethodAmt(a, m), total: 'sum' })))
      .concat([
       { label: 'Today (Rs.)', type: 'money', width: 13, value: a => a.tot.today, total: 'sum' },
       { label: 'Collections', type: 'number', width: 12, value: a => a.tot.count },
       { label: 'Last collection', type: 'date', width: 15, value: a => a.tot.last ? ymd(new Date(a.tot.last)) : '' },
-      { label: 'Handover', type: 'text', width: 18, value: a => a.noHandover ? 'No handover needed' : 'Not yet available' },
+      { label: 'Handover', type: 'text', width: 18, value: a => _usrHandoverState(a).label || 'Nothing collected' },
     ]),
     rows: accounts,
     note: 'Read from the student ledger. Each account\'s collections less the reversals it recorded. Imported history carries no account and is not included.',
@@ -756,23 +1246,45 @@ function usrDetail(id) {
      action was taken under, which is the only join this log supports. */
   const mine = (DB.activityLog || []).filter(a => a.by && a.by === u.name).slice(0, 6);
 
+  const self   = id === CUR_ROLE;
+  const manage = typeof canDo === 'function' && canDo('users');
+
+  /* THE STUDENT DRAWER'S SHELL (owner, 2026-09-14: "just like the student
+     details"). .stu-pan* is students.css; .usr-pan narrows it to an account. */
   return `
-  <aside class="set-card usr-rail">
-    <div class="usr-rail__h">
-      ${usrAvatar(user, 48)}
-      <div style="min-width:0">
-        <div class="usr-rail__n">${escHtml(u.name || '(no name)')}</div>
-        <div class="usr-rail__s">${escHtml(u.email || u.username || id)}</div>
+  <div class="stu-pan__scrim" onclick="closeAccountPanel()"></div>
+  <aside class="stu-pan usr-pan" id="usr-panel" role="dialog" aria-modal="true"
+         aria-label="Account details for ${escHtml(u.name || id)}">
+    <header class="stu-pan__head">
+      <div class="stu-pan__headtext">
+        <span class="stu-pan__title">${self ? 'My Account' : 'Account Details'}</span>
+        <span class="stu-pan__sub">Profile, access and recent activity</span>
       </div>
-      <button class="set-rowbtn" onclick="usrClose()" title="Close">${icon('close','xs')}</button>
+      ${manage ? `<button class="stu-pan__print" id="usr-panel-edit" onclick="showUserEditor('${escHtml(id)}')">${icon('edit','xs')}${self ? 'Edit my details' : 'Edit user'}</button>` : ''}
+      <button class="stu-pan__x" onclick="closeAccountPanel()" aria-label="Close">${icon('close','sm')}</button>
+    </header>
+    <div class="stu-pan__id">
+      ${usrAvatar(user, 54)}
+      <div class="stu-pan__idtext">
+        <div class="stu-pan__name">${escHtml(u.name || '(no name)')}${self ? '<span class="usr-you">you</span>' : ''}</div>
+        <div class="stu-pan__meta">${escHtml(u.email || u.username || id)}</div>
+      </div>
     </div>
     <div class="usr-rail__chips">
       <span class="lk-chip ${usrRoleHue(role)}">${escHtml(role)}</span>
       <span class="lk-chip ${u.active === false ? 'dh-slate' : 'dh-green'}">${icon(u.active === false ? 'close' : 'check','xs')}${u.active === false ? 'Inactive' : 'Active'}</span>
       ${u.builtin ? `<span class="lk-chip dh-slate">${icon('shield','xs')}Built-in</span>` : ''}
     </div>
+    ${''/* THE ACTIONS SIT AT THE TOP, under Edit (owner, 2026-09-14) — the
+           student drawer's action grid, not a section at the bottom. */}
+    ${manage ? `
+    <div class="stu-pan__acts usr-pan__acts">
+      <button class="stu-pan__act" onclick="usrResetPassword('${escHtml(id)}')">${icon('key','xs')}Reset password</button>
+      <button class="stu-pan__act" disabled title="Impersonation needs a server to authorise it and an audit trail to record it. Neither exists in the offline edition.">${icon('userCheck','xs')}Sign in as user</button>
+      ${self ? '' : `<button class="stu-pan__act${u.active === false ? '' : ' is-danger'}" onclick="usrToggleActive('${escHtml(id)}')">${icon(u.active === false ? 'check' : 'lock','xs')}${u.active === false ? 'Reactivate' : 'Deactivate'}</button>`}
+    </div>` : ''}
 
-    <div class="usr-rail__b">
+    <div class="usr-pan__body">
       <div class="usr-sec">User information</div>
       <div class="hi-facts" style="border-top:none;margin-top:0;padding-top:0">
         ${row('Full name', u.name || 'Not set')}
@@ -809,21 +1321,96 @@ function usrDetail(id) {
         </div>`).join('')}</div>`
         : `<div class="usr-none">Nothing in the activity log under this name yet. The log records the NAME an action was taken under, so renaming an account leaves its older entries behind.</div>`}
 
-      <div class="usr-sec">Quick actions</div>
-      <div class="hi-quick">
-        <button class="set-btn" onclick="showUserEditor('${escHtml(id)}')">${icon('edit','xs')}Edit user</button>
-        <button class="set-btn" onclick="usrResetPassword('${escHtml(id)}')">${icon('key','xs')}Reset password</button>
-        <button class="set-btn" disabled title="Impersonation needs a server to authorise it and an audit trail to record it. Neither exists in the offline edition.">${icon('userCheck','xs')}Sign in as user</button>
-        <button class="set-btn set-btn--danger" onclick="usrToggleActive('${escHtml(id)}')">
-          ${icon(u.active === false ? 'check' : 'lock','xs')}${u.active === false ? 'Reactivate' : 'Deactivate'}</button>
-      </div>
+      ${manage ? '' : `
+      <div class="cfg-note">${icon('info','xs')}<span>An administrator changes the details of this account. Ask one if anything here is wrong.</span></div>`}
     </div>
   </aside>`;
 }
 
 /* ── CONTROLS ─────────────────────────────────────────────────────────────── */
-function usrOpen(id) { usersFilter.sel = id; renderPage('users'); }
-function usrClose() { usersFilter.sel = null; renderPage('users'); }
+/* ── THE ACCOUNT SLIDE-OVER ───────────────────────────────────────────────────
+   Opened from a Users row, from "View account", and from My Account in the
+   account menu. Same layering as the student drawer (331, under modals), so
+   the editor opens over it and the panel is still there when it closes. */
+let _usrPanelId   = null;
+let _usrPanelMode = 'account';   // 'account' (details) or 'collections' (Wardens tab)
+
+function _usrPanelHtml() {
+  if (_usrPanelMode === 'collections') {
+    const acc = _usrWardenAccounts().find(a => a.u.id === _usrPanelId);
+    return acc ? usrWardenRail(acc.u) : '';
+  }
+  return WARDENS[_usrPanelId] ? usrDetail(_usrPanelId) : '';
+}
+
+function _usrPanelMount() {
+  let host = document.getElementById('usr-panel-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'usr-panel-host';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = _usrPanelHtml();
+  requestAnimationFrame(() => {
+    const p = document.getElementById('usr-panel');
+    if (p) p.classList.add('is-open');
+  });
+  document.addEventListener('keydown', _usrPanelEsc, true);
+}
+
+function showAccountPanel(id) {
+  if (!id || typeof WARDENS === 'undefined' || !WARDENS[id]) { toast('Account not found', 'error'); return; }
+  // Anyone may read their own account; another account's is for administrators.
+  if (id !== CUR_ROLE && typeof requirePerm === 'function' && !requirePerm('users')) return;
+  _usrPanelId = id;
+  _usrPanelMode = 'account';
+  _usrPanelMount();
+}
+
+/* An account's collections from the Wardens tab — including an account that was
+   deleted after it collected, which is no longer in WARDENS. */
+function showWardenPanel(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (!_usrWardenAccounts().some(a => a.u.id === id)) { toast('Account not found', 'error'); return; }
+  _usrPanelId = id;
+  _usrPanelMode = 'collections';
+  _usrPanelMount();
+}
+
+function closeAccountPanel() {
+  const p = document.getElementById('usr-panel');
+  const host = document.getElementById('usr-panel-host');
+  document.removeEventListener('keydown', _usrPanelEsc, true);
+  _usrPanelId = null;
+  if (!p) { if (host) host.innerHTML = ''; return; }
+  p.classList.remove('is-open');
+  setTimeout(() => { if (host && !_usrPanelId) host.innerHTML = ''; }, 200);
+}
+
+/* Capture phase, for the reason students.js gives: app.js's Escape empties the
+   modal container first when bubbling, and one key press would shut both. */
+function _usrPanelEsc(e) {
+  if (e.key !== 'Escape') return;
+  const m = document.getElementById('modal-container');
+  if (m && m.firstElementChild) return;
+  closeAccountPanel();
+}
+
+/* Re-read what is open after an edit, a password reset or a deactivation. */
+function refreshAccountPanel() {
+  if (!_usrPanelId) return false;
+  const host = document.getElementById('usr-panel-host');
+  if (!host) { _usrPanelId = null; return false; }
+  const html = _usrPanelHtml();
+  if (!html) { closeAccountPanel(); return false; }
+  host.innerHTML = html;
+  const el = document.getElementById('usr-panel');
+  if (el) el.classList.add('is-open');
+  return true;
+}
+
+function usrOpen(id) { showAccountPanel(id); }
+function usrClose() { closeAccountPanel(); }
 function usrReset() {
   usersFilter = { search: '', role: 'All', status: 'All', dept: 'All', page: 1, sel: usersFilter.sel };
   renderPage('users');

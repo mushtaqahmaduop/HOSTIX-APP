@@ -65,6 +65,8 @@ function closeModal() {
      otherwise the panel behind shows the values from before the save. No-op
      unless the panel is actually open. */
   if (typeof refreshStudentPanel === 'function') refreshStudentPanel();
+  // The account slide-over (users.js) follows an edit made in a dialog over it.
+  if (typeof refreshAccountPanel === 'function') setTimeout(refreshAccountPanel, 0);
 }
 let _pendingConfirmCb = null;
 let _pendingConfirmCancelCb = null;
@@ -258,6 +260,9 @@ function _initDBFields(d) {
   if (!d.roomShifts) d.roomShifts = [];   // Room shift history records
   if (!d.archive) d.archive = [];         // Annual Archive — historical records
   if (!Array.isArray(d.studentLedger)) d.studentLedger = [];   // ledger.js — append-only
+  if (!Array.isArray(d.wardenCollections)) d.wardenCollections = [];   // handovers.js
+  if (!Array.isArray(d.handovers))         d.handovers = [];
+  if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
   if (!d.settings) d.settings = {};
   // Init roomTypes BEFORE generateRooms so rooms get correct default rents
   // roomTypes already initialized above (before generateRooms)

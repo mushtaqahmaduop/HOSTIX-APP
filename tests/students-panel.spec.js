@@ -164,9 +164,11 @@ test('Financial reads the real payments, through the §14 layer', async () => {
   await win.waitForTimeout(300);
 
   const body = await win.evaluate(() => document.getElementById('stu-panel-body').innerText.replace(/\s+/g, ' '));
-  expect(body).toContain('Rs. 10,000');       // rent
-  expect(body).toContain('Rs. 7,000');        // mess
-  expect(body).toContain('Rs. 17,000');       // total, and the payment row
+  /* One charge named by its plan, never rent and mess apart (owner, 2026-09-14):
+     the 10,000 + 7,000 split is in Settings, not on the student. */
+  expect(body).not.toContain('Rs. 10,000');
+  expect(body).not.toContain('Rs. 7,000');
+  expect(body).toContain('Rs. 17,000');       // the monthly charge, and the payment row
   expect(body).toContain('Rent + Mess');
   expect(body).toMatch(/Payment history/i);   // the heading is uppercased in CSS
 
@@ -455,7 +457,8 @@ test('Financial carries the old profile ledger, whole', async () => {
   // ALL NINE COLUMNS, in the modal's order.
   // Uppercased in CSS, so compare on the words rather than their casing.
   expect(led.head.map(h => h.toLowerCase()))
-    .toEqual(['month', 'monthly rent', 'concession', 'paid (+extras)',
+    // "Monthly charge": the column holds rent AND mess (owner, 2026-09-14).
+    .toEqual(['month', 'monthly charge', 'concession', 'paid (+extras)',
               'unpaid', 'method', 'status', 'date', 'actions']);
   expect(led.bar).toContain('Full Payment History (3 records)');
   expect(led.bar).toContain('Total paid: Rs. 28,500');
@@ -641,8 +644,10 @@ test('the tabs pair their fields instead of stacking them', async () => {
   expect(fin.cols, 'Charges & Balance is still one column').toBe(2);
   /* The column break is the meaning: what is billed on the left, where the
      student stands against it on the right. */
+  /* Rent and mess are no longer two fields (owner, 2026-09-14): the plan's name
+     and its one monthly figure on the left, the student's position on the right. */
   expect(fin.labels.slice(0, 4))
-    .toEqual(['Monthly rent', 'Outstanding', 'Mess charge', 'Last payment']);
+    .toEqual(['Plan', 'Outstanding', 'Monthly total', 'Last payment']);
 
   await app.close();
 });

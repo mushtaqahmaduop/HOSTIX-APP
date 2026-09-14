@@ -990,21 +990,12 @@ function _payRefund(p) {
   return rev + Math.abs(Number(p.refund || 0));
 }
 
-/* Rent and mess as their own columns, but only where the hostel sells both.
-   serviceModel() is the app's own answer, set at onboarding. */
+/* NO SEPARATE RENT AND MESS COLUMNS (owner, 2026-09-14 — replacing the
+   2026-09-10 split): the Charges column already holds the month's whole
+   "Rent + Mess" charge, and the split lives in Settings and the payment form.
+   Kept as a function so the column list below reads the same. */
 function _paySplitColumns() {
-  /* `hostelServesMess()` is the app's own answer and reads serviceModel() —
-     which is 'rent' for a hostel that sells a room and nothing else. Asking it
-     rather than testing the id keeps this in step if a fourth model is ever
-     added. */
-  if (typeof hostelServesMess === 'function' && !hostelServesMess()) return [];
-  return [
-    { label: 'Rent (Rs.)', type: 'money', width: 11, total: 'sum',
-      value: p => Number(paymentCharges(p, DB.students.find(s => s.id === p.studentId)).rent || 0) },
-    { label: 'Mess (Rs.)', type: 'money', width: 11, total: 'sum',
-      value: p => { const c = paymentCharges(p, DB.students.find(s => s.id === p.studentId));
-        return c.messIncluded ? Number(c.mess || 0) : 0; } },
-  ];
+  return [];
 }
 
 function _payPrevPair(p) {

@@ -288,6 +288,8 @@ updateSidebar(); // shows zeros/defaults until boot() completes
   // Existing payment history enters the student ledger once — AFTER the repairs
   // above, so it is imported as repaired (warden ledger schema Q17).
   if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
+  // Every collection line gets its handover status row once (warden ledger step 4).
+  if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
   await processAutoCancellations();
   // Sync login screen hostel name now that DB is loaded
   const loginNameEl = document.getElementById('login-hostel-name');

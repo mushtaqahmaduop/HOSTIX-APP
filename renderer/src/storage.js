@@ -32,7 +32,11 @@ const _TABLE_MAP = {
   inspections:   'inspections',
   billSplits:    'billsplits',
   transfers:     'transfers',
-  archive:       'archive'
+  archive:       'archive',
+  // Warden ledger step 4 — ordinary mutable tables (statuses move), unlike the ledger.
+  wardenCollections: 'warden_collections',
+  handovers:         'handovers',
+  handoverItems:     'handover_items'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────
@@ -445,6 +449,7 @@ if (window.electronAPI) {
       // A backup from before the ledger restores an empty one; rebuild it from
       // the records that were just restored.
       if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
+      if (typeof handoverSync === 'function' && handoverSync() > 0) await saveDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
       if (typeof toast         === 'function') toast('Backup imported successfully', 'success');

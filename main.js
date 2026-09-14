@@ -48,6 +48,13 @@ const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
   'maintenance','complaints','checkinlog','notices','fines',
   'activitylog','inspections','billsplits','transfers','archive'];
 
+/* THE HANDOVER TABLES (warden ledger spec §2.2–2.3, step 4). Backed up and
+   restored with everything else, but kept OUT of BACKUP_TABLES on purpose:
+   _verifySnapshot refuses a snapshot missing any BACKUP_TABLES table, and every
+   backup taken before step 4 has none of these. A backup without them restores
+   them empty; the renderer rebuilds the waiting rows from the ledger. */
+const HANDOVER_TABLES = ['warden_collections', 'handovers', 'handover_items'];
+
 /* DATABASE HEALTH  —  spec §17.
  *
  * Until now a corrupt database was an unhandled crash. initDatabase() was
@@ -324,6 +331,9 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS billsplits    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS transfers     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS archive       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS warden_collections (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS handovers          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS handover_items     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
   // Created here rather than in the block above because it carries triggers
   // that refuse UPDATE and DELETE — see migrations/002-student-ledger.js.
@@ -2115,7 +2125,10 @@ function _validateBackupPayload(data) {
     return { ok: false, reason: 'This file contains no Hostyllo data.' };
   }
 
-  for (const t of present) {
+  // The handover tables are checked when a backup has them; one from before
+  // step 4 simply does not.
+  const optional = HANDOVER_TABLES.filter(t => Object.prototype.hasOwnProperty.call(data, t));
+  for (const t of present.concat(optional)) {
     const rows = data[t];
     if (!Array.isArray(rows)) {
       return { ok: false, reason: `"${t}" must be a list of records.` };
@@ -2329,7 +2342,7 @@ ipcMain.handle('recovery:restart', () => {
 
 ipcMain.handle('db:exportFull', () => {
   try {
-    const tables = BACKUP_TABLES;
+    const tables = BACKUP_TABLES.concat(HANDOVER_TABLES);
     const result = {};
     for (const t of tables) {
       result[t] = db.prepare(`SELECT data FROM ${t}`).all().map(r => JSON.parse(r.data));
@@ -2384,6 +2397,15 @@ ipcMain.handle('db:importFull', (_e, data) => {
       }
       // Same transaction: a restore never lands its records without its ledger.
       ledgerStore.replaceRows(db, ledger || []);
+      // The handover tables too. Absent from a backup made before step 4, which
+      // empties them; the renderer rebuilds the waiting rows from the ledger.
+      for (const t of HANDOVER_TABLES) {
+        db.prepare(`DELETE FROM ${t}`).run();
+        if (Array.isArray(data[t])) {
+          const ins = db.prepare(`INSERT OR REPLACE INTO ${t} (id, data) VALUES (?, ?)`);
+          for (const r of data[t]) ins.run(r.id, JSON.stringify(r));
+        }
+      }
     });
     transaction();
     // The snapshot's fate is reported, never guessed at. A restore that
