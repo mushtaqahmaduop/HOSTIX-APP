@@ -263,6 +263,7 @@ function _initDBFields(d) {
   if (!Array.isArray(d.wardenCollections)) d.wardenCollections = [];   // handovers.js
   if (!Array.isArray(d.handovers))         d.handovers = [];
   if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
+  if (!Array.isArray(d.concessions))       d.concessions = [];   // concessions.js (step 8)
   if (!d.settings) d.settings = {};
   // Init roomTypes BEFORE generateRooms so rooms get correct default rents
   // roomTypes already initialized above (before generateRooms)

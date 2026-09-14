@@ -159,6 +159,24 @@ declare function meDecline(studentId: string, note: string): { ok: boolean; reas
 declare function meMarkSeen(studentId: string): boolean;
 declare function meSeen(studentId: string): void;
 declare function meAlerts(): any[];
+// -- concessions.js: standing concessions (warden ledger spec §2.4, §3.9, step 8) ---
+declare function _payMonthKey(p: any): string;
+declare function cnIsAdmin(): boolean;
+declare function cnTypeLabel(type: string): string;
+declare function cnCovers(c: any, monthKey: string): boolean;
+declare function cnForStudent(studentId: string): any[];
+declare function cnActiveFor(studentId: string, monthKey: string): any[];
+declare function cnMonthsLabel(c: any): string;
+declare function cnQueue(): { c: any; kind: 'start' | 'end'; at: string }[];
+declare function cnRequest(o: { studentId: string; type: string; value: number; reason: string; startMonth: string; endMonth?: string }): { ok: boolean; pending?: boolean; concession?: any; applied?: number; reason?: string };
+declare function cnApprove(id: string): { ok: boolean; pending?: boolean; applied?: number; reason?: string };
+declare function cnDecline(id: string, note: string): { ok: boolean; reason?: string };
+declare function cnRequestEnd(id: string, reason: string): { ok: boolean; pending?: boolean; applied?: number; reason?: string };
+declare function cnApplyAll(studentId: string): number;
+declare function cnApplyToRecord(p: any): boolean;
+declare function cnMarkSeen(id: string): boolean;
+declare function cnSeen(id: string): void;
+declare function cnAlerts(): any[];
 // -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
 declare function handoverSync(): number;
 declare function hoNeedsHandover(accountId: string): boolean;

@@ -695,6 +695,8 @@ function chromeAlerts() {
   if (typeof hoAlerts === 'function') out.unshift(...hoAlerts());
   // Mess exemption requests and outcomes (warden ledger step 7) — also a person waiting.
   if (typeof meAlerts === 'function') out.unshift(...meAlerts());
+  // Standing concession requests and outcomes (warden ledger step 8).
+  if (typeof cnAlerts === 'function') out.unshift(...cnAlerts());
   return out;
 }
 

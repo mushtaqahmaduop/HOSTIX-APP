@@ -1226,6 +1226,8 @@ async function generateMonthlyRents() {
       const _rec = {id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''};
       DB.payments.push(_rec);
       ledgerTrack(_rec);   // the month's charge, into the student ledger
+      // Standing concessions covering this month (warden ledger step 8).
+      if (typeof cnApplyToRecord === 'function') cnApplyToRecord(_rec);
       added++;
     }
   });
@@ -3539,6 +3541,12 @@ async function submitEditPayment(id) {
   p.messIncluded   = messIncluded;
   p.amount         = paidAmount;
   p.admissionFee   = admissionFee;
+  /* A concession typed BELOW what standing concessions put on this month is a
+     deliberate override (step 8): the record is marked so a later approval or
+     end for this student does not quietly put the standing amount back. */
+  const _cnStanding = (Array.isArray(p.concessionsApplied) ? p.concessionsApplied : [])
+    .reduce((s, a) => s + money(a.amount), 0);
+  if (_cnStanding > 0 && money(concession) < _cnStanding) p.concessionsOverridden = true;
   p.concession     = concession;
   p.concessionDesc = concessionDesc;
   p.discount       = concession;

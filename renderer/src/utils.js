@@ -1253,12 +1253,15 @@ const BACKUP_COLLECTIONS = [
   'studentLedger', 'student_ledger',
   // The handover tables (warden ledger step 4), under both spellings too.
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
+  // Standing concessions (warden ledger step 8).
+  'concessions',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
   'studentLedger', 'student_ledger',
   'wardenCollections', 'warden_collections', 'handovers', 'handoverItems', 'handover_items',
+  'concessions',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;

@@ -734,6 +734,85 @@ function _usrMessQueue() {
   </div>`;
 }
 
+/* ── CONCESSIONS WAITING (warden ledger spec §3.9, step 8) ─────────────────────
+   A new concession or an early end a warden asked for; one tap to approve.
+   Rules in concessions.js. Always drawn, empty state included, like handovers. */
+function _usrConcessionQueue() {
+  if (typeof cnQueue !== 'function') return '';
+  const q = cnQueue();
+  return `
+  <div class="set-card usr-ho-card usr-hoq usr-cnq">
+    <div class="usr-ho-head">
+      <div class="usr-sec">Concessions</div>
+      ${q.length ? `<span class="lk-chip dh-amber">${q.length} waiting</span>` : ''}
+    </div>
+    ${!q.length ? '<div class="usr-none">No concession requests are waiting.</div>' : `
+    <div class="set-table-wrap">
+      <table class="set-table usr-coltable usr-hoqt">
+        <thead><tr><th>Student</th><th>Room</th><th>Asked by</th><th>Request</th><th class="is-num">Rs./month</th><th>Months</th><th>Reason</th><th></th></tr></thead>
+        <tbody>
+          ${q.map(({ c, kind }) => {
+            const s = (DB.students || []).find(x => x.id === c.studentId);
+            const room = s ? (DB.rooms || []).find(x => x.id === s.roomId) : null;
+            const id = escHtml(c.id);
+            const who = kind === 'start' ? c.requestedByName : (c.endRequest && c.endRequest.requestedByName);
+            const why = kind === 'start' ? c.reason : (c.endRequest && c.endRequest.reason);
+            return `<tr data-concession-request="${id}">
+              <td><b>${escHtml(s ? s.name : '—')}</b></td>
+              <td>${room ? escHtml(roomText(room)) : '<span class="lk-dash">—</span>'}</td>
+              <td>${escHtml(who || '—')}</td>
+              <td><span class="lk-chip ${kind === 'start' ? 'dh-amber' : 'dh-slate'}">${kind === 'start' ? escHtml(cnTypeLabel(c.type)) : 'End'}</span></td>
+              <td class="is-num">${_usrAmt(money(c.value))}</td>
+              <td>${escHtml(kind === 'start' ? cnMonthsLabel(c) : 'stops after ' + (typeof monthLabel === 'function' ? monthLabel(thisMonth()) : thisMonth()))}</td>
+              <td>${escHtml(why || '')}</td>
+              <td class="usr-ho-acts">
+                <button class="set-btn" onclick="usrCnApprove('${id}')">${icon('check','xs')}Approve</button>
+                <button class="set-btn" onclick="usrCnShowDecline('${id}')">Decline</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  </div>`;
+}
+
+async function usrCnApprove(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (typeof requireWritable === 'function' && !requireWritable('Approving a concession')) return;
+  const r = cnApprove(id);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  renderPage('users');
+  toast('Approved' + (r.applied ? ' — ' + r.applied + ' unpaid month' + (r.applied === 1 ? '' : 's') + ' updated' : ''), 'success');
+}
+
+function usrCnShowDecline(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (typeof requireWritable === 'function' && !requireWritable('Declining a concession')) return;
+  const c = (DB.concessions || []).find(x => x.id === id);
+  if (!c) return;
+  const s = (DB.students || []).find(x => x.id === c.studentId);
+  showModal('modal-sm', 'Decline the request',
+    `<p style="margin:0 0 10px;color:var(--text2)">${escHtml(s ? s.name : '')} — ${c.status === 'pending'
+        ? escHtml(fmtPKR(c.value)) + '/month concession' : 'end of concession'}.</p>
+     <div class="field"><label for="cn-decline-note">Why <span class="req">*</span></label>
+       <textarea class="form-control" id="cn-decline-note" rows="3" maxlength="200" placeholder="The warden sees this"></textarea></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="usrCnDoDecline('${escHtml(id)}')">Decline</button>`);
+}
+
+async function usrCnDoDecline(id) {
+  const r = cnDecline(id, document.getElementById('cn-decline-note')?.value || '');
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  renderPage('users');
+  toast('Request declined', 'info');
+}
+
 async function usrMeApprove(id) {
   if (typeof requirePerm === 'function' && !requirePerm('users')) return;
   if (typeof requireWritable === 'function' && !requireWritable('Approving a mess exemption')) return;
@@ -1107,6 +1186,7 @@ function usrWardensView(tabs) {
 
   ${_usrHandoverQueue()}
   ${_usrMessQueue()}
+  ${_usrConcessionQueue()}
 
   <div class="usr-split${sel ? ' is-open' : ''}">
     <div class="set-card usr-listcard">

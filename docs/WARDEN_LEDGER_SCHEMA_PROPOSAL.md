@@ -364,6 +364,15 @@ read by both the receipt (`buildReceiptHTML`) and the Add Payment card (`pfRende
 | Which hostels | **"Rent + mess together" only**; optional hostels already have the Rent only switch. |
 | Request / approval | (feature decisions, second round) warden requests with a reason, admin approves from the Users page Wardens view; an admin's own request is approved at once. |
 
+## Step 8 decisions (owner, 2026-09-15, asked before design)
+
+| Case | Decided |
+|---|---|
+| The payment forms' free Concession box | **Left as today** — editable on the forms; the approval flow covers standing concessions only. |
+| Rupees or percent | **Rupees only — "no percent, only a whole number concession".** *Schema change:* Q11's `isPercent` flag is dropped; `value` is always whole rupees. |
+| Which months an approved concession changes | **Unpaid months in range + future.** Generated months inside the dates that are not fully paid get it now; months generated later inside the range get it when generated; paid months are never rewritten. |
+| Overlapping, and ending early | **Overlapping concessions add up, capped** so a month's rent + mess never goes negative. **An admin ends one early** (it stops from next month); a warden asks an admin to end it, as with exemptions. |
+
 ## What happens next
 
 Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**

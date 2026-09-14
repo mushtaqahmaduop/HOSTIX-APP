@@ -311,8 +311,10 @@ test('every verb the old profile modal had is on the panel', async () => {
   /* CANCEL SEAT IS LAST because it is the conditional one: it shows only for an
      Active student, and a conditional cell anywhere else makes the tiles after
      it move when a student's status changes. */
+  /* Concession (warden ledger step 8) follows it — conditional on the same
+     statuses, so the fixed six keep their places. */
   expect(acts.map(a => a.label))
-    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete', 'Cancel Seat']);
+    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete', 'Cancel Seat', 'Concession']);
   // Each hands off to the function that already owns the workflow.
   expect(acts.find(a => a.label === 'Move Room').call).toContain('showRoomShiftModal');
   expect(acts.find(a => a.label === 'Print').call).toContain('printStudentCard');

@@ -883,6 +883,125 @@ async function stuMeDoRequest(id, kind) {
         : 'Exemption ended — mess is billed again from next month'), 'success');
 }
 
+/* ── STANDING CONCESSIONS ON THE PANEL (warden ledger spec §2.4, §3.9, step 8) ─
+   One action asks for a concession (an admin's own applies at once); the
+   Financial tab lists the student's concessions with their state and an End /
+   Ask to end button. The rules are concessions.js. The payment forms' free
+   Concession box is untouched (owner). */
+function _stuCnAction(t) {
+  if (typeof cnRequest !== 'function') return '';
+  if (t.status && t.status !== 'Active' && t.status !== 'Cancelling') return '';
+  return `
+      <button class="stu-pan__act" onclick="stuCnShowRequest('${escHtml(t.id)}')" title="${
+        cnIsAdmin() ? 'Add a standing concession' : 'Ask an admin for a standing concession'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg><span>Concession</span></button>`;
+}
+
+function stuCnShowRequest(id) {
+  if (typeof requireWritable === 'function' && !requireWritable('A concession')) return;
+  const t = DB.students.find(x => x.id === id);
+  if (!t) return;
+  const admin = cnIsAdmin();
+  const withMess = typeof hostelServesMess === 'function' && hostelServesMess();
+  const opt = (v, label, on) =>
+    `<label class="stu-cn-opt"><input type="radio" name="cn-type" value="${v}"${on ? ' checked' : ''}><span>${label}</span></label>`;
+  showModal('modal-sm', escHtml(admin ? 'Add a concession' : 'Request a concession') + ' — ' + escHtml(t.name || ''),
+    `<div class="stu-cn-req">
+       ${withMess
+         ? `<div class="field"><label>Applies to</label>
+              <div class="stu-cn-opts">${opt('rent', 'Rent', true)}${opt('mess', 'Mess')}${opt('both', 'Rent + Mess')}</div></div>`
+         : '<input type="radio" name="cn-type" value="rent" checked hidden>'}
+       <div class="field"><label for="cn-value">Amount per month (Rs.) <span class="req">*</span></label>
+         <input class="form-control" id="cn-value" type="number" min="1" step="1" placeholder="e.g. 1500"></div>
+       <div class="stu-cn-months">
+         <div class="field"><label for="cn-from">From month <span class="req">*</span></label>
+           <input class="form-control" id="cn-from" type="month" value="${escHtml(thisMonth())}"></div>
+         <div class="field"><label for="cn-until">Until month <span class="opt">(optional)</span></label>
+           <input class="form-control" id="cn-until" type="month"></div>
+       </div>
+       <div class="field"><label for="cn-reason">Reason <span class="req">*</span></label>
+         <textarea class="form-control" id="cn-reason" rows="2" maxlength="160" placeholder="e.g. Financial hardship"></textarea></div>
+       <p class="stu-cn-note">${admin
+         ? 'Applies at once to unpaid months in range, and to months generated later. Paid months are not changed.'
+         : 'Nothing changes until an admin approves it.'}</p>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="stuCnDoRequest('${escHtml(id)}')">${admin ? 'Save' : 'Send request'}</button>`);
+}
+
+async function stuCnDoRequest(id) {
+  const type = /** @type {HTMLInputElement|null} */ (document.querySelector('input[name="cn-type"]:checked'));
+  const r = cnRequest({
+    studentId: id,
+    type: type ? type.value : 'rent',
+    value: Number(document.getElementById('cn-value')?.value),
+    reason: document.getElementById('cn-reason')?.value || '',
+    startMonth: document.getElementById('cn-from')?.value || '',
+    endMonth: document.getElementById('cn-until')?.value || '',
+  });
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  refreshStudentView(id);
+  toast(r.pending ? 'Request sent — an admin approves it from Users → Wardens'
+    : 'Concession added' + (r.applied ? ' — ' + r.applied + ' unpaid month' + (r.applied === 1 ? '' : 's') + ' updated' : ''),
+    'success');
+}
+
+function _stuCnCard(t) {
+  if (typeof cnForStudent !== 'function') return '';
+  const list = cnForStudent(t.id);
+  if (!list.length) return '';
+  const admin = cnIsAdmin();
+  const state = c => c.status === 'pending' ? ['dh-amber', 'Waiting']
+    : c.status === 'approved' ? (c.endRequest ? ['dh-amber', 'End requested'] : ['dh-green', 'Active'])
+    : c.status === 'ended' ? ['dh-slate', 'Ended'] : ['dh-red', 'Declined'];
+  const rows = list.map(c => {
+    const [hue, label] = state(c);
+    return `<div class="stu-cn-row" data-concession="${escHtml(c.id)}">
+      <div class="stu-cn-main">
+        <div><b>${fmtPKR(c.value)}/month</b> · ${escHtml(cnTypeLabel(c.type))} · ${escHtml(cnMonthsLabel(c))}</div>
+        <div class="stu-cn-why">${escHtml(c.reason)}${c.approvedByName ? ' · approved by ' + escHtml(c.approvedByName) : ''}${
+          c.status === 'declined' && c.decidedNote ? ' · declined: ' + escHtml(c.decidedNote) : ''}</div>
+      </div>
+      <span class="lk-chip ${hue}">${label}</span>
+      ${c.status === 'approved' && !c.endRequest
+        ? `<button class="set-btn" onclick="stuCnShowEnd('${escHtml(c.id)}')">${admin ? 'End' : 'Ask to end'}</button>` : ''}
+    </div>`;
+  }).join('');
+  // The Financial tab's own card — the same shell as the payment history below it.
+  return '<section class="stu-pan__sec"><div class="svw-card svw-card--flush stu-cn-card">'
+       + '<div class="svw-card__head dh-green svw-card__head--bar">'
+       + '<span class="svw-card__ico">' + icon('tag', 'sm') + '</span>'
+       + '<span>Concessions (' + list.length + ')</span></div>' + rows + '</div></section>';
+}
+
+function stuCnShowEnd(cid) {
+  if (typeof requireWritable === 'function' && !requireWritable('Ending a concession')) return;
+  const c = (DB.concessions || []).find(x => x.id === cid);
+  if (!c) return;
+  const admin = cnIsAdmin();
+  showModal('modal-sm', admin ? 'End the concession' : 'Ask to end the concession',
+    `<p style="margin:0 0 12px;color:var(--text2);line-height:1.5">${escHtml(fmtPKR(c.value))}/month on the ${escHtml(cnTypeLabel(c.type).toLowerCase())}
+       stops from next month${admin ? '' : ', once an admin approves'}. This month keeps it.</p>
+     <div class="field"><label for="cn-end-reason">Reason <span class="req">*</span></label>
+       <textarea class="form-control" id="cn-end-reason" rows="2" maxlength="160"></textarea></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="stuCnDoEnd('${escHtml(cid)}')">${admin ? 'End it' : 'Send request'}</button>`);
+}
+
+async function stuCnDoEnd(cid) {
+  const c = (DB.concessions || []).find(x => x.id === cid);
+  const r = cnRequestEnd(cid, document.getElementById('cn-end-reason')?.value || '');
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  if (c) refreshStudentView(c.studentId);
+  toast(r.pending ? 'Request sent to an admin' : 'Concession ended — it stops from next month', 'success');
+}
+
 function stuPanelTab(tab) {
   if (!_stuPanelId) return;
   const t = DB.students.find(x => x.id === _stuPanelId);
@@ -1077,6 +1196,7 @@ function _stuPanelHtml(t) {
       <button class="stu-pan__act is-warn" onclick="showAddCancellationModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><span>Cancel Seat</span></button>` : ''}
       ${_stuMeAction(t)}
+      ${_stuCnAction(t)}
     </div>
 
     <nav class="stu-pan__tabs" role="tablist">
@@ -1377,7 +1497,7 @@ function _stuPanelFinancial(t) {
     + 'stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'
     + 'Record a payment</button>';
 
-  return head + '<section class="stu-pan__sec stu-pan__sec--flush">'
+  return head + _stuCnCard(t) + '<section class="stu-pan__sec stu-pan__sec--flush">'
        + ledger + '<div class="stu-pan__secpad">' + add + '</div></section>';
 }
 

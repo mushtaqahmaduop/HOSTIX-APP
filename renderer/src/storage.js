@@ -36,7 +36,9 @@ const _TABLE_MAP = {
   // Warden ledger step 4 — ordinary mutable tables (statuses move), unlike the ledger.
   wardenCollections: 'warden_collections',
   handovers:         'handovers',
-  handoverItems:     'handover_items'
+  handoverItems:     'handover_items',
+  // Warden ledger step 8 — standing concessions: requested, decided, ended.
+  concessions:       'concessions'
 };
 
 // ── Load DB ───────────────────────────────────────────────────────────────────

@@ -1323,7 +1323,29 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
 .stu-pan__roombadge.stu-pan__mechip.is-wait { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
 /* A tile left alone on the last row of the three-across grid (the Mess Exemption
    action makes seven) spans the row instead of sitting in one cell of three. */
-.stu-pan__acts > .stu-pan__act:last-child:nth-child(3n+1) { grid-column: 1 / -1; }
+/* Up to eight tiles now (Mess Exemption, step 7; Concession, step 8). The grid
+   is six tracks with each tile spanning two — three across as before — so a
+   last row of one tile spans the row and a last row of two splits it in half,
+   instead of leaving an empty cell. #stu-panel out-ranks the base rule below. */
+#stu-panel .stu-pan__acts { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+#stu-panel .stu-pan__acts > .stu-pan__act { grid-column: span 2; }
+#stu-panel .stu-pan__acts > .stu-pan__act:last-child:nth-child(3n+1) { grid-column: 1 / -1; }
+#stu-panel .stu-pan__acts > .stu-pan__act:last-child:nth-child(3n+2),
+#stu-panel .stu-pan__acts > .stu-pan__act:nth-last-child(2):nth-child(3n+1) { grid-column: span 3; }
+
+/* ── Standing concessions (warden ledger step 8) ──────────────────────────── */
+/* The card itself is .svw-card (the Financial tab's shell); only rows are new. */
+.stu-cn-row   { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.stu-cn-row:last-child { border-bottom: none; }
+.stu-cn-main  { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); }
+.stu-cn-main b { font-variant-numeric: tabular-nums; }
+.stu-cn-why   { margin-top: 2px; font-size: 11.5px; color: var(--text3); }
+.stu-cn-opts  { display: flex; flex-wrap: wrap; gap: 8px; }
+.stu-cn-opt   { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; cursor: pointer; }
+/* The chosen part reads as chosen — Settings' service-model pills (.svc-opt.is-on). */
+.stu-cn-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-dim); color: var(--accent-strong); font-weight: 650; }
+.stu-cn-months { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.stu-cn-note  { margin: 6px 0 0; color: var(--text3); font-size: 12px; line-height: 1.45; }
 
 .stu-pan__acts {
     flex: 0 0 auto;

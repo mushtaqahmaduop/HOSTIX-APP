@@ -3592,7 +3592,7 @@ function _showExcelImportResult(rows, errors) {
 // ════════════════════════════════════════════════════════════════════════════
 async function resetAllData() {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
-  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections and bill splits. Rooms will be reset. This CANNOT be undone.',async ()=>{
+  showConfirm('⚠️ Reset ALL Data?','This will permanently delete all students, payments, expenses, maintenance, complaints, fines, notices, inspections, bill splits, cash handovers and concessions. Rooms will be reset. This CANNOT be undone.',async ()=>{
     // BUG FIX: Previously only cleared students/payments/expenses, leaving
     // maintenance, complaints, fines, notices, activityLog, inspections,
     // billSplits, cancellations, checkinlog as orphaned ghost records.
@@ -3608,6 +3608,14 @@ async function resetAllData() {
     DB.inspections=[];
     DB.billSplits=[];
     DB.checkinlog=[];
+    /* The warden-ledger tables too (owner, 2026-09-15: "yes clear both"):
+       cash handovers and their lines (step 4) and standing concessions
+       (step 8). Reset left them behind, pointing at students that no longer
+       existed. */
+    DB.wardenCollections=[];
+    DB.handovers=[];
+    DB.handoverItems=[];
+    DB.concessions=[];
     DB.rooms=generateRooms();
     await saveDB();
     // Reset is a restore to empty — the one other action allowed to replace
