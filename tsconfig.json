@@ -21,6 +21,7 @@
     "renderer/src/ledger.js",
     "renderer/src/handovers.js",
     "renderer/src/ownership.js",
+    "renderer/src/messExempt.js",
     "renderer/src/storage.js",
     "renderer/src/receipt.js",
     "renderer/src/export/xlsx-writer.js",

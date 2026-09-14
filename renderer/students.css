@@ -1316,6 +1316,15 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
    whether the seat action is showing or not — with auto-fit, a student going
    Active → Left would silently resize every remaining tile, and the block would
    look like it had changed rather than lost one item. */
+/* The mess exemption chip beside the room badge (warden ledger step 7): neutral
+   while exempt — a billing arrangement, not a state to act on — and amber while
+   a request waits for an admin, which is. */
+.stu-pan__roombadge.stu-pan__mechip         { background: var(--ant-neutral-bg); color: var(--ant-neutral-fg); }
+.stu-pan__roombadge.stu-pan__mechip.is-wait { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
+/* A tile left alone on the last row of the three-across grid (the Mess Exemption
+   action makes seven) spans the row instead of sitting in one cell of three. */
+.stu-pan__acts > .stu-pan__act:last-child:nth-child(3n+1) { grid-column: 1 / -1; }
+
 .stu-pan__acts {
     flex: 0 0 auto;
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;

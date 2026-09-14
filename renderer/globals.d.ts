@@ -144,6 +144,21 @@ declare function ownOwner(p: any): { id: string | null; name: string };
 declare function ownCanEdit(p: any): { ok: boolean; reason: string };
 declare function ownCanDelete(p: any): { ok: boolean; reason: string };
 declare function ownReversible(p: any): { max: number; mine: number; waiting: number; approved: number; admin: boolean; reason: string };
+// Module functions messExempt.js reaches for at call time (dashboard.js, nav.js, students.js).
+declare function _payMatchesMonth(p: any, monthKey: string): boolean;
+declare function refreshNotifBell(): void;
+declare function showStudentPanel(id: string, tab?: string): void;
+// -- messExempt.js: mess exemption requests (warden ledger spec §2.6, step 7) ---
+declare function meApplies(): boolean;
+declare function meIsAdmin(): boolean;
+declare function mePending(s: any): any;
+declare function meQueue(): any[];
+declare function meRequest(studentId: string, kind: 'start' | 'end', reason: string): { ok: boolean; pending?: boolean; reason?: string; outcome?: string; adjusted?: number };
+declare function meApprove(studentId: string): { ok: boolean; reason?: string; outcome?: string; adjusted?: number };
+declare function meDecline(studentId: string, note: string): { ok: boolean; reason?: string; outcome?: string; adjusted?: number };
+declare function meMarkSeen(studentId: string): boolean;
+declare function meSeen(studentId: string): void;
+declare function meAlerts(): any[];
 // -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
 declare function handoverSync(): number;
 declare function hoNeedsHandover(accountId: string): boolean;

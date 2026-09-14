@@ -1445,7 +1445,9 @@ function selectStudentForPayment(studentId) {
   if (rentEl) rentEl.value = currentRent;
   const messAmtEl = document.getElementById('f-pmess');
   const messOnEl  = document.getElementById('f-pmess-on');
-  if (messAmtEl) messAmtEl.value = currentMess;
+  // Where a student cannot opt out, what is billed is the answer — which is 0
+  // for a student exempt from a bundled hostel's mess (step 7).
+  if (messAmtEl) messAmtEl.value = c.messOptional ? currentMess : c.messBilled;
   if (messOnEl)  messOnEl.checked = messOn;
   if (messOnEl || messAmtEl) pfMessToggle();
   pfPaintCharge();
@@ -1850,6 +1852,23 @@ function pfRentAmount() {
   return parseFloat(document.getElementById('f-pamt')?.value) || 0;
 }
 
+/* The Edit form's single "Rent + Mess" box (spec §3.6, step 7): what is typed is
+   the whole charge, so the rent half is that less the mess the record carries. */
+function pfComboInput() {
+  const combo = parseFloat(document.getElementById('f-pcombo')?.value) || 0;
+  const r = document.getElementById('f-prent');
+  if (r) r.value = String(Math.max(0, combo - pfMessAmount()));
+  recalcUnpaid();
+}
+
+/* The same for the student row's Add Payment modal. */
+function psComboInput() {
+  const combo = parseFloat(document.getElementById('f-ps-combo')?.value) || 0;
+  const r = document.getElementById('f-ps-amt');
+  if (r) r.value = String(Math.max(0, combo - psMessAmount()));
+  recalcUnpaidPS();
+}
+
 function pfMessToggle() {
   const on   = document.getElementById('f-pmess-on');
   const amt  = document.getElementById('f-pmess');
@@ -1905,11 +1924,17 @@ function pfPaintCharge() {
   box.value = fmtNum(rent + mess);
   wsPaint((rent + mess) ? 'is-plus' : 'is-muted');
   if (note) {
-    note.textContent = isOn && messConfigured
-      ? 'Mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
-      : messConfigured
-        ? 'Rent only — mess (' + fmtPKR(messConfigured) + ') not charged this month'
-        : 'Rent only — no mess charge configured';
+    /* A "rent + mess together" hostel names the plan, never the split (spec
+       §3.6, step 7) — and an exempt student's line says why it is rent only. */
+    const _sid = document.getElementById('f-pstudent')?.value;
+    const _st  = _sid ? (DB.students || []).find(x => x.id === _sid) : null;
+    note.textContent = serviceModel() === 'rent_mess_bundled'
+      ? (_st && _st.messExempt ? 'Rent only — mess exempt' : 'Rent + Mess')
+      : isOn && messConfigured
+        ? 'Mess included — ' + fmtPKR(rent) + ' rent + ' + fmtPKR(messConfigured) + ' mess'
+        : messConfigured
+          ? 'Rent only — mess (' + fmtPKR(messConfigured) + ') not charged this month'
+          : 'Rent only — no mess charge configured';
   }
 }
 
@@ -2121,11 +2146,20 @@ function showAddPaymentForStudent(studentId) {
     </div>
     <input type="hidden" id="f-ps-studentId" value="${t.id}">
     <div class="form-grid">
-      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${c.rent||''}" placeholder="Set in Settings → Rent &amp; Mess" oninput="recalcUnpaidPS()"></div>
+      ${c.hostelMess && !c.messOptional ? `
+      <!-- ONE BOX IN A "RENT + MESS TOGETHER" HOSTEL (spec §3.6, step 7). The
+           halves stay apart in hidden fields; psComboInput() keeps rent in step. -->
+      <div class="field"><label>Rent + Mess (PKR) *</label>
+        <input class="form-control" id="f-ps-combo" type="number" min="0" value="${c.total||''}" placeholder="Set in Settings → Rent &amp; Mess" oninput="psComboInput()">
+        <input type="hidden" id="f-ps-amt" value="${c.rent||0}">
+        <input type="hidden" id="f-ps-mess" value="${c.messBilled||0}">
+        ${c.messExempt ? '<div class="mess-fixed">Mess exempt — rent only</div>' : ''}
+      </div>` : `
+      <div class="field"><label>Room Rent (PKR) *</label><input class="form-control" id="f-ps-amt" type="number" value="${c.rent||''}" placeholder="Set in Settings → Rent &amp; Mess" oninput="recalcUnpaidPS()"></div>`}
       <!-- MESS — the food half of the monthly charge. This screen used to omit
            it entirely, so the same student was billed a different amount here
            than in the main Add Payment modal. -->
-      ${!c.hostelMess ? '' : `
+      ${!c.hostelMess || !c.messOptional ? '' : `
       <div class="field"><label>Mess Charges (PKR)</label>
         <input class="form-control" id="f-ps-mess" type="number" min="0" value="${c.mess||''}" placeholder="0" ${c.messOptIn?'':'disabled'} oninput="recalcUnpaidPS()">
         ${!c.messOptional ? `<div class="mess-fixed">Included for every student</div>` : `
@@ -2207,8 +2241,13 @@ function showAddPaymentForStudent(studentId) {
     const messEl  = document.getElementById('f-ps-mess');
     const messOnEl= document.getElementById('f-ps-mess-on');
     if (rentEl)   rentEl.value   = currentRentPS;
-    if (messEl)   messEl.value   = c.mess || 0;
+    /* Where a student cannot opt out, the mess on this form is what is BILLED —
+       0 for a student exempt from a bundled hostel's mess (step 7). The full
+       configured figure here re-billed an exempt student's part-paid month. */
+    if (messEl)   messEl.value   = c.messOptional ? (c.mess || 0) : (c.messBilled || 0);
     if (messOnEl) messOnEl.checked = c.messOptIn;
+    const comboEl = document.getElementById('f-ps-combo');
+    if (comboEl)  comboEl.value  = currentRentPS + (c.messOptional ? 0 : (c.messBilled || 0));
     if (paidEl)   paidEl.value   = existingPending.amount || 0;
     if (unpaidEl) unpaidEl.value = outstandingOf(existingPending);
     if (statEl)   statEl.value   = existingPending.status;
@@ -2300,7 +2339,11 @@ async function submitPaymentForStudent() {
            merge path in submitAddPayment() had had exactly this bug and carries
            a comment about the fix; this copy was missed. One expression now:
            calculateBill() in finance.js. */
-        const newMessOn      = document.getElementById('f-ps-mess-on')?.checked !== false;
+        // No tick in a bundled hostel: the student is on the mess unless exempt (step 7).
+        const _psBundledExempt = serviceModel() === 'rent_mess_bundled' && t.messExempt === true;
+        const newMessOn      = document.getElementById('f-ps-mess-on')
+          ? document.getElementById('f-ps-mess-on').checked !== false
+          : !_psBundledExempt;
         const newMess        = psMessAmount();
         const newAdmFee      = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
         const newConcession  = parseFloat(document.getElementById('f-ps-concession')?.value) || 0;
@@ -2319,7 +2362,8 @@ async function submitPaymentForStudent() {
 
         alreadyPending.monthlyRent  = newMonthlyRent;
         alreadyPending.totalRent    = newMonthlyRent;
-        alreadyPending.messCharge   = newMess;
+        // An exempt month keeps its mess AMOUNT with messIncluded false (spec §3.6).
+        alreadyPending.messCharge   = _psBundledExempt ? money(alreadyPending.messCharge) : newMess;
         alreadyPending.messIncluded = newMessOn;
         alreadyPending.extraCharges = newExtras;
         alreadyPending.extraTotal   = newExtraTotal;
@@ -2351,7 +2395,9 @@ async function submitPaymentForStudent() {
   window._updatePendingPS = false;
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
-  const messIncludedPS = document.getElementById('f-ps-mess-on')?.checked !== false;
+  const messIncludedPS = document.getElementById('f-ps-mess-on')
+    ? document.getElementById('f-ps-mess-on').checked !== false
+    : !(serviceModel() === 'rent_mess_bundled' && t.messExempt === true);   // step 7
   const messChargePS   = psMessAmount();
   const admissionFeePS = parseFloat(document.getElementById('f-ps-admfee')?.value) || 0;
   const paidAmount  = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
@@ -3223,6 +3269,10 @@ function showEditPaymentModal(id) {
      and pressing Save would re-price it and ask for a reason nobody gave. */
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
+  /* ONE COMBINED FIELD IN A "RENT + MESS TOGETHER" HOSTEL (spec §3.6, step 7).
+     The record still keeps rent and mess apart; the box shows their sum and
+     pfComboInput() writes the rent half back into a hidden f-prent. */
+  const _bundled = serviceModel() === 'rent_mess_bundled';
   const monthlyRent  = held ? (p.monthlyRent || p.totalRent || (c && c.rent) || 0)
                             : ((c && c.rent) || p.monthlyRent || p.totalRent || 0);
   // Mess follows the same rule as rent above: the current configured charge
@@ -3280,13 +3330,20 @@ function showEditPaymentModal(id) {
       <div class="pef-sec">
         ${secHead(1, 'Monthly charge (PKR)', 'Set the standard charges for this student.')}
         <div class="hf-g3">
-          ${F('Room rent (PKR)', 'home',
+          ${_bundled
+            ? F('Rent + Mess (PKR)', 'home',
+                `<input class="form-control" id="f-pcombo" type="number" min="0" value="${monthlyRent + (messIncluded ? messCharge : 0)}" oninput="pfComboInput()">
+                 <input type="hidden" id="f-prent" value="${monthlyRent}">
+                 <input type="hidden" id="f-pmess" value="${messCharge || 0}">
+                 <input type="checkbox" id="f-pmess-on" hidden ${messIncluded ? 'checked' : ''}>`,
+                { req: true, for: 'f-pcombo', note: messIncluded ? '' : 'Mess exempt — rent only' })
+            : F('Room rent (PKR)', 'home',
              `<input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()">`,
              { req: true, for: 'f-pamt' })}
           ${/* MESS — this modal used to omit it, so saving an edit recomputed the
                 total without the food charge while leaving p.messCharge on the
                 record: the balance and the printed receipt disagreed. */''}
-          ${!hostelServesMess() ? '' :
+          ${!hostelServesMess() || _bundled ? '' :
             F('Mess charges (PKR)', 'utensils',
               `<input class="form-control" id="f-pmess" type="number" min="0" value="${messCharge||''}" placeholder="0" ${messIncluded?'':'disabled'} oninput="recalcUnpaid()">`,
               { for: 'f-pmess',
@@ -3408,7 +3465,7 @@ function showEditPaymentModal(id) {
     pefNoteCount();
     // View-only for an account that may not change this record's money.
     if (!canEd.ok) {
-      ['f-pamt','f-pmess','f-pmess-on','f-ppaid','f-padmfee','f-pconcession','f-pconcession-desc',
+      ['f-pamt','f-pcombo','f-pmess','f-pmess-on','f-ppaid','f-padmfee','f-pconcession','f-pconcession-desc',
        'f-pstat','f-pmethod','f-pmonth','f-pdate','f-pdue','f-pnotes'].forEach(fid => {
         const el = document.getElementById(fid);
         if (el) { el.setAttribute('disabled', ''); el.removeAttribute('onclick'); }
@@ -3425,7 +3482,8 @@ async function submitEditPayment(id) {
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
   if (!canEd.ok) { toast(canEd.reason, 'error'); return; }
-  const monthlyRent  = parseFloat(document.getElementById('f-pamt')?.value)||0;
+  // pfRentAmount(): the hidden rent half of a combined box (step 7), else f-pamt.
+  const monthlyRent  = pfRentAmount();
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
   const messCharge   = pfMessAmount();
   // Collected money is never typed over: a record holding money keeps its amount.
@@ -3471,7 +3529,13 @@ async function submitEditPayment(id) {
   }
   p.monthlyRent    = monthlyRent;
   p.totalRent      = monthlyRent;
-  p.messCharge     = messCharge;
+  /* An exempt month in a "rent + mess together" hostel keeps its mess AMOUNT on
+     the record with messIncluded false (step 7, spec §3.6: stored separately),
+     so ending the exemption has the figure to bill again. pfMessAmount() is 0
+     while the hidden tick is off, which is right for the bill, not the record. */
+  p.messCharge     = (!messIncluded && serviceModel() === 'rent_mess_bundled')
+                       ? money(parseFloat(document.getElementById('f-pmess')?.value) || p.messCharge)
+                       : messCharge;
   p.messIncluded   = messIncluded;
   p.amount         = paidAmount;
   p.admissionFee   = admissionFee;

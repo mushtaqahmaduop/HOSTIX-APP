@@ -694,6 +694,83 @@ function _usrHandoverQueue() {
   </div>`;
 }
 
+/* ── MESS EXEMPTIONS WAITING (warden ledger spec §2.6, step 7) ─────────────────
+   Beside the handovers, because it is the same kind of thing: a warden asked,
+   and an admin has to say yes or no. Rules in messExempt.js. Drawn only in a
+   "rent + mess together" hostel; empty, it says so, like the handover card. */
+function _usrMessQueue() {
+  if (typeof meApplies !== 'function' || !meApplies()) return '';
+  const q = meQueue();
+  return `
+  <div class="set-card usr-ho-card usr-hoq usr-meq">
+    <div class="usr-ho-head">
+      <div class="usr-sec">Mess exemptions</div>
+      ${q.length ? `<span class="lk-chip dh-amber">${q.length} waiting</span>` : ''}
+    </div>
+    ${!q.length ? '<div class="usr-none">No mess exemption requests are waiting.</div>' : `
+    <div class="set-table-wrap">
+      <table class="set-table usr-coltable usr-hoqt">
+        <thead><tr><th>Student</th><th>Room</th><th>Asked by</th><th>Request</th><th>Reason</th><th></th></tr></thead>
+        <tbody>
+          ${q.map(s => {
+            const r = s.messExemptRequest;
+            const room = (DB.rooms || []).find(x => x.id === s.roomId);
+            const id = escHtml(s.id);
+            return `<tr data-mess-request="${id}">
+              <td><b>${escHtml(s.name || '—')}</b></td>
+              <td>${room ? escHtml(roomText(room)) : '<span class="lk-dash">—</span>'}</td>
+              <td>${escHtml(r.requestedByName || r.requestedBy || '—')}</td>
+              <td><span class="lk-chip ${r.kind === 'start' ? 'dh-amber' : 'dh-slate'}">${r.kind === 'start' ? 'Start' : 'End'}</span></td>
+              <td>${escHtml(r.reason || '')}</td>
+              <td class="usr-ho-acts">
+                <button class="set-btn" onclick="usrMeApprove('${id}')">${icon('check','xs')}Approve</button>
+                <button class="set-btn" onclick="usrMeShowDecline('${id}')">Decline</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  </div>`;
+}
+
+async function usrMeApprove(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (typeof requireWritable === 'function' && !requireWritable('Approving a mess exemption')) return;
+  const r = meApprove(id);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  renderPage('users');
+  toast(r.adjusted ? "Approved — this month's unpaid bill no longer carries the mess" : 'Approved', 'success');
+}
+
+function usrMeShowDecline(id) {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  if (typeof requireWritable === 'function' && !requireWritable('Declining a mess exemption')) return;
+  const s = (DB.students || []).find(x => x.id === id);
+  if (!s || !s.messExemptRequest) return;
+  showModal('modal-sm', 'Decline the request',
+    `<div class="usr-me-dec">
+       <p style="margin:0 0 10px;color:var(--text2)">${escHtml(s.name || '')} — ${s.messExemptRequest.kind === 'start' ? 'mess exemption' : 'end of exemption'}, asked by ${escHtml(s.messExemptRequest.requestedByName || 'a warden')}.</p>
+       <div class="field"><label for="me-decline-note">Why <span class="req">*</span></label>
+         <textarea class="form-control" id="me-decline-note" rows="3" maxlength="200" placeholder="The warden sees this"></textarea></div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="usrMeDoDecline('${escHtml(id)}')">Decline</button>`);
+}
+
+async function usrMeDoDecline(id) {
+  const note = document.getElementById('me-decline-note')?.value || '';
+  const r = meDecline(id, note);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  renderPage('users');
+  toast('Request declined', 'info');
+}
+
 /* ── reviewing ── */
 function usrHoShowReview(id) {
   if (typeof requirePerm === 'function' && !requirePerm('users')) return;
@@ -1029,6 +1106,7 @@ function usrWardensView(tabs) {
   ${tabs}
 
   ${_usrHandoverQueue()}
+  ${_usrMessQueue()}
 
   <div class="usr-split${sel ? ' is-open' : ''}">
     <div class="set-card usr-listcard">

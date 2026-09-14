@@ -518,7 +518,11 @@ function renderRentMessPanel() {
         <td style="padding:10px 12px;font-weight:700;color:var(--accent-strong)">${room?escHtml(roomText(room)):'—'}</td>
         <td style="padding:10px 12px"><span style="font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2)">${rtype?escHtml(rtype.name):'—'}</span></td>
         <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sr-${s.id}" value="${Number(s.rent)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')"></td>
-        <td style="padding:10px 12px"><input class="form-control" type="number" min="0" id="sm-${s.id}" value="${Number(s.mess)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')" ${on?'':'disabled'}></td>
+        ${''/* An exempt student's mess is changed through the request flow, not
+               here (warden ledger step 7) — the cell says so. */}
+        <td style="padding:10px 12px">${s.messExempt === true && serviceModel() === 'rent_mess_bundled'
+          ? `<span class="lk-chip dh-slate" title="${escHtml(s.messExemptReason || 'Mess exempt')}">Exempt</span>`
+          : `<input class="form-control" type="number" min="0" id="sm-${s.id}" value="${Number(s.mess)||0}" style="width:110px;font-size:13px" oninput="rmRowPreview('${s.id}')" ${on?'':'disabled'}>`}</td>
         <td style="padding:10px 12px;text-align:center">
           <label class="rm-check" title="Untick for a student who takes the room but not the mess">
             <input type="checkbox" ${on?'checked':''} onchange="rmToggleMess('${s.id}',this.checked)">

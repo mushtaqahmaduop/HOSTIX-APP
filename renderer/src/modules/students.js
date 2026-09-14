@@ -815,6 +815,74 @@ function refreshStudentView(id) {
   return refreshStudentPanel();
 }
 
+/* ── MESS EXEMPTION ON THE PANEL (warden ledger spec §2.6, step 7) ─────────────
+   A chip beside the room badge says where the student stands, and one action
+   asks for the change. The rules are messExempt.js; only a "rent + mess
+   together" hostel draws either. */
+function _stuMeChip(t) {
+  if (typeof meApplies !== 'function' || !meApplies()) return '';
+  const r = t.messExemptRequest;
+  if (r) {
+    return '<span class="stu-pan__roombadge stu-pan__mechip is-wait" title="' + escHtml(r.reason || '') + '">'
+      + (r.kind === 'start' ? 'Exemption requested' : 'End of exemption requested') + '</span>';
+  }
+  if (t.messExempt === true) {
+    return '<span class="stu-pan__roombadge stu-pan__mechip" title="' + escHtml(t.messExemptReason || '') + '">Mess exempt</span>';
+  }
+  return '';
+}
+
+function _stuMeAction(t) {
+  if (typeof meApplies !== 'function' || !meApplies() || t.messExemptRequest) return '';
+  if (t.status && t.status !== 'Active' && t.status !== 'Cancelling') return '';
+  const kind  = t.messExempt === true ? 'end' : 'start';
+  const label = kind === 'start' ? 'Mess Exemption' : 'End Exemption';
+  return `
+      <button class="stu-pan__act" onclick="stuMeShowRequest('${escHtml(t.id)}','${kind}')" title="${
+        meIsAdmin() ? (kind === 'start' ? 'Exempt this student from the mess' : 'End this exemption')
+                    : (kind === 'start' ? 'Ask an admin to exempt this student from the mess' : 'Ask an admin to end this exemption')}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg><span>${label}</span></button>`;
+}
+
+function stuMeShowRequest(id, kind) {
+  if (typeof requireWritable === 'function' && !requireWritable('A mess exemption')) return;
+  const t = DB.students.find(x => x.id === id);
+  if (!t) return;
+  const c = resolveCharges(t);
+  const admin = meIsAdmin();
+  const title = kind === 'start'
+    ? (admin ? 'Exempt from mess' : 'Request mess exemption')
+    : (admin ? 'End mess exemption' : 'Request end of exemption');
+  const lead = kind === 'start'
+    ? 'Mess of ' + fmtPKR(c.mess) + ' a month stops ' + (admin ? 'now' : 'once an admin approves')
+      + ". This month's bill loses the mess too, if it is not fully paid."
+    : 'Mess of ' + fmtPKR(c.mess) + ' a month is billed again from next month'
+      + (admin ? '.' : ', once an admin approves.');
+  showModal('modal-sm', escHtml(title) + ' — ' + escHtml(t.name || ''),
+    `<div class="stu-me-req">
+       <p style="margin:0 0 12px;color:var(--text2);line-height:1.5">${escHtml(lead)}</p>
+       <div class="field"><label for="me-req-reason">Reason <span class="req">*</span></label>
+         <textarea class="form-control" id="me-req-reason" rows="3" maxlength="200"
+                   placeholder="${kind === 'start' ? "e.g. Medical — doctor's diet plan" : 'e.g. Back on the hostel mess'}"></textarea></div>
+     </div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="stuMeDoRequest('${escHtml(id)}','${kind}')">${admin ? 'Save' : 'Send request'}</button>`);
+}
+
+async function stuMeDoRequest(id, kind) {
+  const reason = document.getElementById('me-req-reason')?.value || '';
+  const r = meRequest(id, kind, reason);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  await saveDB();
+  closeModal();
+  if (typeof refreshNotifBell === 'function') refreshNotifBell();
+  refreshStudentView(id);
+  toast(r.pending ? 'Request sent — an admin approves it from Users → Wardens'
+    : (kind === 'start'
+        ? 'Exempt from mess' + (r.adjusted ? " — this month's unpaid bill no longer carries it" : '')
+        : 'Exemption ended — mess is billed again from next month'), 'success');
+}
+
 function stuPanelTab(tab) {
   if (!_stuPanelId) return;
   const t = DB.students.find(x => x.id === _stuPanelId);
@@ -964,6 +1032,7 @@ function _stuPanelHtml(t) {
               rtype ? ' · ' + escHtml(rtype.name) : ''}${
               t.bed ? ' · Bed ' + escHtml(String(t.bed)) : ''}</span>`
                  : '<span class="stu-pan__roombadge is-none">No room assigned</span>'}
+          ${_stuMeChip(t)}
         </div>
         ${t.joinDate ? `<div class="stu-pan__meta">Joined ${escHtml(fmtDate(t.joinDate))}</div>` : ''}
       </div>
@@ -1007,6 +1076,7 @@ function _stuPanelHtml(t) {
       ${status === 'Active' ? `
       <button class="stu-pan__act is-warn" onclick="showAddCancellationModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><span>Cancel Seat</span></button>` : ''}
+      ${_stuMeAction(t)}
     </div>
 
     <nav class="stu-pan__tabs" role="tablist">
@@ -4509,7 +4579,8 @@ function _rsChargesFromRoom() {
   // was rent-only before does not come back on the mess.
   const sid = document.getElementById('rs-studentId')?.value || '';
   const st  = sid ? DB.students.find(x=>x.id===sid) : null;
-  return resolveCharges({ roomId, mess: st ? st.mess : undefined, messOptIn: st ? st.messOptIn : undefined });
+  return resolveCharges({ roomId, mess: st ? st.mess : undefined, messOptIn: st ? st.messOptIn : undefined,
+                          messExempt: st ? st.messExempt : undefined });
 }
 
 function rsRecalc() {
@@ -4537,7 +4608,7 @@ async function submitRestoreStudent(studentId) {
   const roomId=document.getElementById('rs-room').value;
   if(!roomId){toast('Please select a room','error');return;}
   const room=DB.rooms.find(r=>r.id===roomId);
-  const rsCharges=resolveCharges({ roomId, mess:t.mess, messOptIn:t.messOptIn });
+  const rsCharges=resolveCharges({ roomId, mess:t.mess, messOptIn:t.messOptIn, messExempt:t.messExempt });
   const rent=rsCharges.rent;
   if(!rsCharges.configured) {toast('That room has no rent configured — set it in Settings → Rent & Mess','error');return;}
   const type=getRoomType(room);

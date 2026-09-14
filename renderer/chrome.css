@@ -834,6 +834,28 @@ body.light-theme #sidebar { --sb-active-surface: #FFFFFF; --sb-active-edge: var(
    it. This is the card shadow, not a glow: no hue, 2px of blur. */
 body.light-theme #sidebar .nav-item.active { box-shadow: 0 1px 3px rgba(15, 23, 42, .07); }
 
+/* ══ A VIVID NEUTRAL PILL (owner, 2026-09-14: "vivid neutral nav bar on
+   sidebar") ═════════════════════════════════════════════════════════════════
+   The rail went white on 2026-09-14, and a white pill on a white rail is the
+   one thing the rules above cannot survive: the selected page stopped showing.
+   The selected item is a SOLID GREY pill with near-white type (owner, same day:
+   "change the nav bar colour to grey" — the first cut used the ink colour). It
+   is as loud as a marker can be without spending a hue. The grey is the
+   neutral ramp's 500 in light (4.54:1 against the near-white type — AA, narrowly) and one step
+   darker in dark, where a 500 pill would glare on the near-black rail. The
+   accent edge goes; the fill says it. */
+#sidebar .nav-item.active,
+body.light-theme #sidebar .nav-item.active {
+    background: var(--gray-600);
+    color: var(--gray-50);
+    border-color: var(--gray-600);
+    box-shadow: none;
+}
+body.light-theme #sidebar .nav-item.active { background: var(--gray-500); border-color: var(--gray-500); }
+#sidebar .nav-item.active::before { display: none; }
+#sidebar .nav-item.active .nav-icon { color: var(--gray-50); opacity: 1; }
+#sidebar .nav-item.active .nav-badge { background: var(--gray-50); color: var(--gray-700); }
+
 /* THE SECTION LABELS. 1.4px of tracking at 10px on --sb-fg3 is five words of
    near-invisible grey, and there are five of them down the rail — the same
    "thin and washed out" the owner reports on the dashboard's small type, from

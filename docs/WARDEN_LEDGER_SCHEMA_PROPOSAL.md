@@ -354,6 +354,16 @@ read by both the receipt (`buildReceiptHTML`) and the Add Payment card (`pfRende
 | Viewing | **Everyone sees, owner changes.** All records, receipts and ledger lines stay visible; ownership governs edit, reverse and delete. |
 | Method / month / payment date once collected | **All three lock** (owner, 2026-09-14: "ok lock and proceed"). |
 
+## Step 7 decisions (owner, 2026-09-14, asked before design)
+
+| Case | Decided |
+|---|---|
+| Where a "Rent + mess together" hostel shows one combined field | **Forms one field, Settings split.** Payment and student forms show one "Rent + Mess" amount; Settings → Rent & Mess keeps rent and mess separate per room type, so an exemption takes out exactly the mess part. |
+| What an approved exemption changes | **This month's unpaid bill and future months.** Months generated after approval bill rent only; the current month's record, if not fully paid, loses its mess now (ledger adjustment with the exemption reason). Paid and older months are untouched. |
+| Ending an exemption | **Warden requests, admin approves** — the same flow as starting one. |
+| Which hostels | **"Rent + mess together" only**; optional hostels already have the Rent only switch. |
+| Request / approval | (feature decisions, second round) warden requests with a reason, admin approves from the Users page Wardens view; an admin's own request is approved at once. |
+
 ## What happens next
 
 Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**

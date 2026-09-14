@@ -412,9 +412,13 @@ function resolveCharges(student, opts) {
      serves no food. The configured amount is untouched in roomTypes, so
      switching the model back restores it. */
   const hostelMess = hostelServesMess();
+  /* A MESS EXEMPTION (warden ledger spec §2.6, step 7) is the one way off the
+     mess in a "rent + mess together" hostel: admin-approved, with a reason
+     (messExempt.js). Outside that model the flag is kept but ignored. */
+  const messExempt = serviceModel() === 'rent_mess_bundled' && s.messExempt === true;
   const messOptIn =
     !hostelMess       ? false :
-    !messIsOptional() ? true  :
+    !messIsOptional() ? !messExempt :
                         s.messOptIn !== false;
   const messAmount = hostelMess ? messFrom.v : 0;
   const messBilled = messOptIn ? messAmount : 0;
@@ -424,6 +428,7 @@ function resolveCharges(student, opts) {
     mess:       messAmount,      // the configured amount, billed or not
     messBilled,                  // what actually goes into the total
     messOptIn,
+    messExempt,                  // exempt from a bundled hostel's mess (step 7)
     hostelMess,                  // does this hostel serve food at all
     messOptional: hostelMess && messIsOptional(),  // may a student opt out
     total:      rentFrom.v + messBilled,   // the Monthly Charge

@@ -691,10 +691,15 @@ test('the ledger row menu carries the four verbs, and only what applies', async 
   await win.evaluate(() => closeStuRowMenu());
   await win.evaluate(() => document.querySelectorAll('.svw-t tbody .svw-kebab')[1].click());
   await win.waitForSelector('#stu-rmenu', { timeout: 4000 });
+  /* Delete stays on the menu but DISABLED, with its reason under it: since
+     warden ledger step 6 a record holding money is reversed before it can be
+     deleted. The label is read from the first line so the hint does not count. */
   expect(await win.evaluate(
-    () => [...document.querySelectorAll('#stu-rmenu button')].map(b => b.innerText.trim())),
+    () => [...document.querySelectorAll('#stu-rmenu button')]
+      .map(b => ({ t: b.innerText.trim().split('\n')[0], off: b.disabled }))),
     'a settled record was offered Mark paid')
-    .toEqual(['Print receipt', 'Edit payment', 'Delete payment']);
+    .toEqual([{ t: 'Print receipt', off: false }, { t: 'Edit payment', off: false },
+              { t: 'Delete payment', off: true }]);
 
   await win.evaluate(() => closeStuRowMenu());
   await app.close();

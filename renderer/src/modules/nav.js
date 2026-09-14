@@ -693,6 +693,8 @@ function chromeAlerts() {
   }
   // Cash handovers (warden ledger step 4) come first: money waiting on a person.
   if (typeof hoAlerts === 'function') out.unshift(...hoAlerts());
+  // Mess exemption requests and outcomes (warden ledger step 7) — also a person waiting.
+  if (typeof meAlerts === 'function') out.unshift(...meAlerts());
   return out;
 }
 
