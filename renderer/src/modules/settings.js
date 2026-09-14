@@ -2796,6 +2796,7 @@ function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
     const alreadyPaid = Number(p.amount) || 0;
     const extras = Number(p.extraTotal || 0) + Number(p.admissionFee || p.fee || 0);
     p.unpaid = Math.max(0, due + extras - alreadyPaid - (Number(p.concession || p.discount) || 0));
+    ledgerTrack(p, { why: 'Rent & mess changed in Settings' });
   });
 }
 
@@ -3070,6 +3071,7 @@ async function updateRoomType(id, field, val) {
             if(p.studentId === s.id && p.status === 'Pending') {
               p.monthlyRent = newRent; p.totalRent = newRent;
               p.unpaid = Math.max(0, newRent - (p.amount||0));
+              ledgerTrack(p, { why: 'Room type rent changed in Settings' });
             }
           });
         }
@@ -3302,6 +3304,7 @@ async function importData(input) {
         toast('The backup could not be written — nothing was changed', 'error');
         return;
       }
+      await ledgerAdopt(DB.studentLedger);
       logActivity('Backup Imported', file.name || 'backup.json', 'Settings');
       navigate('dashboard'); toast('Data imported successfully','success');
     });
@@ -3563,6 +3566,7 @@ async function confirmExcelImport() {
       notes: r.paidAtAdmission > 0 ? 'Paid at admission (imported)' : 'Imported via Excel',
       byWarden: ''
     });
+    ledgerTrack(DB.payments[DB.payments.length - 1]);
     added++;
   });
 
@@ -3601,7 +3605,11 @@ async function resetAllData() {
     DB.billSplits=[];
     DB.checkinlog=[];
     DB.rooms=generateRooms();
-    await saveDB(); navigate('dashboard'); toast('All data reset','info');
+    await saveDB();
+    // Reset is a restore to empty — the one other action allowed to replace
+    // the student ledger (owner, 2026-09-14).
+    await ledgerAdopt([]);
+    navigate('dashboard'); toast('All data reset','info');
   });
 }
 

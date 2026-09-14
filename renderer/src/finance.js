@@ -224,6 +224,10 @@ function applyPayment(p, opts) {
   };
   p.partialPayments.push(entry);
 
+  /* Every collection reaches the student ledger from here (warden ledger spec
+     §2.1). Guarded because tests/finance.test.js runs this file without it. */
+  if (typeof ledgerTrack === 'function') ledgerTrack(p);
+
   return {
     ok: true, applied, credit, entry,
     before: { paid: paidBefore, due: dueBefore },
@@ -287,6 +291,9 @@ function reversePayment(p, opts) {
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
   };
   p.reversals.push(entry);
+
+  // Posted to the ledger as an adjustment that raises what is owed.
+  if (typeof ledgerTrack === 'function') ledgerTrack(p);
 
   return {
     ok: true, reversed: amount, fromCredit, fromApplied, entry,

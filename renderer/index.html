@@ -775,6 +775,10 @@
   <!-- Spec §14 financial integrity layer. AFTER utils.js: it calls
        resolveCharges() and outstandingOf() rather than reimplementing them. -->
   <script src="src/finance.js"></script>
+  <!-- The student ledger (warden ledger spec §2.1). AFTER finance.js: it prices
+       records with money() and calculateOutstanding(). BEFORE storage.js, whose
+       saveDB() hands it each save. -->
+  <script src="src/ledger.js"></script>
   <script src="src/icons.js"></script>
   <script src="src/auth-nev.js"></script>
   <script src="src/storage.js"></script>

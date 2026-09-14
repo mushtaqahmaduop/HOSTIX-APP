@@ -114,6 +114,21 @@ declare function calculateFeeStatus(studentId: string, opts?: any): {
 };
 declare function payIsOverdue(p: any): boolean;
 
+// -- ledger.js: the student ledger (warden ledger spec §2.1) -------------------
+// Posted FROM the month records: a site that changes one calls ledgerTrack()
+// after, and the diff against what was already posted becomes new entries.
+// Entries are never edited; see the header of ledger.js.
+declare function ledgerTrack(p: any, opts?: { why?: string }): any[];
+declare function ledgerTrackAll(why?: string): number;
+declare function ledgerTrackDeleted(p: any, why?: string): any;
+declare function ledgerLoaded(): void;
+declare function ledgerFlush(): Promise<boolean>;
+declare function ledgerImportIfEmpty(): number;
+declare function ledgerAdopt(entries: any): Promise<boolean>;
+declare function ledgerBalance(studentId: string): number;
+declare function ledgerEntriesFor(studentId: string): any[];
+declare function ledgerDrift(): any[];
+
 // -- rooms.js: bulk creation --------------------------------------------------
 declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };
 declare var ROOM_AMENITY_DEFAULTS: string[];

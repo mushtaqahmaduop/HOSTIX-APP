@@ -30,6 +30,8 @@ const os = require('os');
 // ── SQLite Database ───────────────────────────────────────────────────────────
 const Database = require('better-sqlite3');
 const migration001 = require('./migrations/001-relational-schema');
+// The append-only student ledger (warden ledger spec §2.1) and its guards.
+const ledgerStore = require('./migrations/002-student-ledger');
 let db = null;
 // The live database file. Held at module scope because the restore path needs
 // to snapshot it before it mutates it, and initDatabase() is long finished by
@@ -323,6 +325,11 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS transfers     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS archive       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
+  // Created here rather than in the block above because it carries triggers
+  // that refuse UPDATE and DELETE — see migrations/002-student-ledger.js.
+  // Deliberately NOT in BACKUP_TABLES: a recovery snapshot taken before the
+  // ledger existed has no such table, and must still count as restorable.
+  ledgerStore.ensureSchema(db);
 
   // ── Relational-schema migration (Phase 2 §6.3) ──────────────────────────────
   // Promotes UI-filtered fields to real indexed columns while keeping the full
@@ -2033,6 +2040,9 @@ const _ALLOWED_WHERE_COLS = new Set(['id', 'status', 'roomId', 'studentId']);
 function _assertRendererTable(table) {
   if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid table');
   if (onlineServices.INTERNAL_TABLES.has(table)) throw new Error('Reserved table');
+  // The student ledger is append-only. These channels upsert and delete, which
+  // is exactly what it refuses; it has its own (ledger:*) below.
+  if (table === ledgerStore.TABLE) throw new Error('Reserved table');
 }
 
 ipcMain.handle('db:all', (_e, table, where) => {
@@ -2228,6 +2238,34 @@ ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   } catch (e) { console.error('[DB] bulkReplace:', e.message); return _writeFailure(e); }
 });
 
+/* THE STUDENT LEDGER'S OWN CHANNELS (warden ledger spec §2.1, schema Q4).
+ *
+ * Owner, 2026-09-14: the main process refuses any change or delete of a ledger
+ * row, and a full restore is the only thing that replaces the table (Reset All
+ * Data counts as a restore to empty). So there is no upsert and no delete here:
+ * append adds rows, replaceAll swaps the whole table and is gated like an
+ * import. The guards themselves live in migrations/002-student-ledger.js. */
+ipcMain.handle('ledger:all', () => {
+  try { return { ok: true, entries: ledgerStore.all(db) }; }
+  catch (e) { console.error('[DB] ledger:all:', e.message); return { ok: false, error: e.message, entries: [] }; }
+});
+
+ipcMain.handle('ledger:append', (_e, entries) => {
+  try {
+    _assertDbWritable();
+    _assertWritable(ledgerStore.TABLE);
+    return ledgerStore.append(db, entries);
+  } catch (e) { console.error('[DB] ledger:append:', e.message); return _writeFailure(e); }
+});
+
+ipcMain.handle('ledger:replaceAll', (_e, entries) => {
+  try {
+    _assertDbWritable();
+    _assertWritable('import');
+    return ledgerStore.replaceAll(db, entries);
+  } catch (e) { console.error('[DB] ledger:replaceAll:', e.message); return _writeFailure(e); }
+});
+
 ipcMain.handle('db:getSetting', (_e, key) => {
   try {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -2296,6 +2334,8 @@ ipcMain.handle('db:exportFull', () => {
     for (const t of tables) {
       result[t] = db.prepare(`SELECT data FROM ${t}`).all().map(r => JSON.parse(r.data));
     }
+    // In creation order, which is what its running balances were computed in.
+    result[ledgerStore.TABLE] = ledgerStore.all(db);
     const settings = {};
     db.prepare('SELECT key, value FROM settings').all()
       .forEach(r => { settings[r.key] = JSON.parse(r.value); });
@@ -2312,6 +2352,15 @@ ipcMain.handle('db:importFull', (_e, data) => {
   // is the one the user sees, this is the one that cannot be bypassed.
   const valid = _validateBackupPayload(data);
   if (!valid.ok) return { ok: false, error: valid.reason, code: 'INVALID_BACKUP' };
+
+  // The ledger travels with a backup that has one. A backup written before the
+  // ledger existed has none, and restoring it empties the table; the renderer
+  // then rebuilds it from the restored records (renderer/src/ledger.js).
+  const ledger = ledgerStore.backupEntries(data);
+  const ledgerBad = ledger === null ? null : ledgerStore.validateAll(ledger);
+  if (ledgerBad) {
+    return { ok: false, error: 'The ledger in this backup is damaged — ' + ledgerBad + '.', code: 'INVALID_BACKUP' };
+  }
 
   // Snapshot the live database while it is still the good one.
   const snap = _preRestoreSnapshot();
@@ -2333,6 +2382,8 @@ ipcMain.handle('db:importFull', (_e, data) => {
         const settingsObj = data.settings.hostelSettings || data.settings;
         ins.run('hostelSettings', JSON.stringify(settingsObj));
       }
+      // Same transaction: a restore never lands its records without its ledger.
+      ledgerStore.replaceRows(db, ledger || []);
     });
     transaction();
     // The snapshot's fate is reported, never guessed at. A restore that

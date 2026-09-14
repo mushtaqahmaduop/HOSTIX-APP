@@ -1243,10 +1243,14 @@ const BACKUP_COLLECTIONS = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
   'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
   'billSplits', 'transfers', 'roomShifts', 'archive',
+  // The student ledger: camelCase from Settings → Export Data, the table name
+  // from the menu backup. Both are lists of records with ids.
+  'studentLedger', 'student_ledger',
 ];
 // Collections whose records are written to SQLite by id, so an id is mandatory.
 const BACKUP_ID_REQUIRED = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'transfers', 'archive',
+  'studentLedger', 'student_ledger',
 ];
 const BACKUP_MAX_RECORDS = 200000;   // ~40x the largest real hostel seen
 const BACKUP_MAX_DEPTH   = 24;

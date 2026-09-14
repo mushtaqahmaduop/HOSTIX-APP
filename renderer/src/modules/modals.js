@@ -257,6 +257,7 @@ function _initDBFields(d) {
   if (!d.transfers) d.transfers = [];
   if (!d.roomShifts) d.roomShifts = [];   // Room shift history records
   if (!d.archive) d.archive = [];         // Annual Archive — historical records
+  if (!Array.isArray(d.studentLedger)) d.studentLedger = [];   // ledger.js — append-only
   if (!d.settings) d.settings = {};
   // Init roomTypes BEFORE generateRooms so rooms get correct default rents
   // roomTypes already initialized above (before generateRooms)
@@ -355,6 +356,9 @@ async function restoreBackup() {
             } else {
               await saveDB();
             }
+            // The backup's own ledger replaces this one; a backup from before
+            // the ledger is rebuilt from its records (ledger.js).
+            await ledgerAdopt(DB.studentLedger);
             updateSidebar();
             navigate('dashboard');
             toast('Data restored successfully from backup!', 'success');
@@ -394,6 +398,7 @@ async function restoreFromPaste() {
         } else {
           await saveDB();
         }
+        await ledgerAdopt(DB.studentLedger);
         updateSidebar();
         navigate('dashboard');
         toast('Data restored from pasted backup!', 'success');

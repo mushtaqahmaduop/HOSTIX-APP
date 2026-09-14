@@ -278,10 +278,16 @@ updateSidebar(); // shows zeros/defaults until boot() completes
     const _rp = repairPaymentComposition();
     const _rpTotal = _rp.drift + _rp.messFlag + _rp.students + _rp.dupEntries + _rp.ghostTrails;
     if (_rpTotal > 0) {
+      // A repaired record is a changed record, so the ledger hears of it. On the
+      // first boot this posts nothing: the import below has not run yet.
+      if (typeof ledgerTrackAll === 'function') ledgerTrackAll('Record repaired at start-up');
       await saveDB();
       console.info('[HOSTYLLO] Repaired payment composition: ' + JSON.stringify(_rp));
     }
   }
+  // Existing payment history enters the student ledger once — AFTER the repairs
+  // above, so it is imported as repaired (warden ledger schema Q17).
+  if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
   await processAutoCancellations();
   // Sync login screen hostel name now that DB is loaded
   const loginNameEl = document.getElementById('login-hostel-name');

@@ -92,6 +92,12 @@ async function loadDB() {
     for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
       DB[dbKey] = await window.electronAPI.dbAll(table);
     }
+    // The student ledger has its own channel and is not in _TABLE_MAP: that
+    // map's save path upserts and deletes, and the ledger refuses both.
+    if (window.electronAPI.ledgerAll) {
+      const led = await window.electronAPI.ledgerAll();
+      DB.studentLedger = (led && Array.isArray(led.entries)) ? led.entries : [];
+    }
 
   } else {
     // Fallback: no Electron API (browser dev mode)
@@ -99,6 +105,7 @@ async function loadDB() {
   }
 
   if (typeof _initDBFields === 'function') DB = _initDBFields(DB);
+  if (typeof ledgerLoaded === 'function') ledgerLoaded();
   _takeFullSnapshot();
   _checkBackupReminder();
 }
@@ -247,6 +254,10 @@ async function saveDB() {
         }
       }
       await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
+      // New ledger entries go with the save that carries their records. A
+      // refusal throws, and the fallback below tries once more before the
+      // not-saved bar is raised; the entries stay queued either way.
+      if (typeof ledgerFlush === 'function') await ledgerFlush();
 
       _takeFullSnapshot();
       _clearSaveFailure();
@@ -272,6 +283,7 @@ async function _saveDBFull() {
         await window.electronAPI.dbBulkReplace(table, DB[dbKey] || []);
       }
       await window.electronAPI.dbSetSetting('hostelSettings', DB.settings);
+      if (typeof ledgerFlush === 'function') await ledgerFlush();
 
       _takeFullSnapshot();
       _clearSaveFailure();
@@ -430,6 +442,9 @@ if (window.electronAPI) {
         return;
       }
       await loadDB();
+      // A backup from before the ledger restores an empty one; rebuild it from
+      // the records that were just restored.
+      if (typeof ledgerImportIfEmpty === 'function' && ledgerImportIfEmpty() > 0) await saveDB();
       if (typeof updateSidebar === 'function') updateSidebar();
       if (typeof renderPage    === 'function') renderPage('dashboard');
       if (typeof toast         === 'function') toast('Backup imported successfully', 'success');

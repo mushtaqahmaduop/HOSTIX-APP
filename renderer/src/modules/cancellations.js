@@ -1411,6 +1411,7 @@ async function _cancApplyRefund(c, offer) {
   const had = money(rec.concession != null ? rec.concession : rec.discount);
   rec.concession = had + offer.amount;
   rec.concessionDesc = 'Part-month refund — ' + refundPolicyLabel();
+  ledgerTrack(rec, { why: 'Part-month refund at checkout' });
   logActivity('Charges Updated',
     (c.studentName || '—') + ' — part-month refund ' + fmtPKR(offer.amount)
     + ' on ' + offer.month + ' (' + refundPolicyLabel() + ')', 'Finance');

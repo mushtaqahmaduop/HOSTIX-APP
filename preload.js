@@ -109,6 +109,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   recoveryRestart: ()      => ipcRenderer.invoke('recovery:restart'),
   dbExportFull:  ()                  => ipcRenderer.invoke('db:exportFull'),
   dbImportFull:  (data)              => ipcRenderer.invoke('db:importFull',  data),
+  /* The student ledger (warden ledger spec §2.1). Its own channels, because its
+     rows are only ever added — see migrations/002-student-ledger.js. */
+  ledgerAll:        ()        => ipcRenderer.invoke('ledger:all'),
+  ledgerAppend:     (entries) => ipcRenderer.invoke('ledger:append', entries),
+  ledgerReplaceAll: (entries) => ipcRenderer.invoke('ledger:replaceAll', entries),
   /* Open a report in its own window.
 
      THE 2MB CEILING WAS THE BUG (owner brief, 2026-09-10: "clicking View/Open

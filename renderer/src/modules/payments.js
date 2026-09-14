@@ -1345,7 +1345,9 @@ async function generateMonthlyRents() {
       // A bill of nothing is not a bill. Raising one hides the real problem —
       // an unpriced room type — behind a row that reads as settled.
       if (!c.configured || due <= 0) { skipped++; return; }
-      DB.payments.push({id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''});
+      const _rec = {id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''};
+      DB.payments.push(_rec);
+      ledgerTrack(_rec);   // the month's charge, into the student ledger
       added++;
     }
   });
@@ -1428,6 +1430,8 @@ async function deletePayment(id) {
     // left to say it had ever existed.
     if (_dp) logActivity('Payment Deleted',
       `${_dp.studentName||'—'} — ${_dp.month||'—'} · ${fmtPKR(_dp.amount)} collected, ${fmtPKR(_dp.unpaid)} outstanding`, 'Finance');
+    // The ledger keeps the record's entries and cancels their effect (owner, 2026-09-14).
+    if (_dp) ledgerTrackDeleted(_dp);
     DB.payments=DB.payments.filter(x=>x.id!==id);
     await saveDB(); renderPage('payments'); toast('Payment deleted','info');
   });
@@ -1438,6 +1442,7 @@ async function deletePaymentFromStudentView(payId, studentId) {
   showConfirm('Delete this payment record?','This will remove it from the student\'s financial history permanently.',async ()=>{
     if (_dpv) logActivity('Payment Deleted',
       `${_dpv.studentName||'—'} — ${_dpv.month||'—'} · ${fmtPKR(_dpv.amount)} collected, ${fmtPKR(_dpv.unpaid)} outstanding`, 'Finance');
+    if (_dpv) ledgerTrackDeleted(_dpv);
     DB.payments=DB.payments.filter(x=>x.id!==payId);
     await saveDB();
     toast('Payment record deleted','info');
@@ -2450,6 +2455,7 @@ async function submitPaymentForStudent() {
         alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
         alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
         if (newNotes) alreadyPending.notes = newNotes;
+        ledgerTrack(alreadyPending, { why: 'Updated on the payment form' });
 
         logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
         await saveDB(); closeModal(); renderPage(currentPage);
@@ -2510,6 +2516,7 @@ async function submitPaymentForStudent() {
     paidDate: status === 'Paid' ? document.getElementById('f-ps-date')?.value || today() : '',
     notes: document.getElementById('f-ps-notes')?.value || '',
   });
+  ledgerTrack(DB.payments.find(x => x.id === _newPayIdPS));
   await saveDB(); closeModal();
   renderPage(currentPage);
   toast(`Payment recorded for ${t.name}`, 'success');
@@ -3193,6 +3200,7 @@ async function submitAddPayment() {
           alreadyPending2.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending2.paidDate || '');
           alreadyPending2.collectedBy  = CUR_USER?.name || alreadyPending2.collectedBy || '';
           if (newNotes) alreadyPending2.notes = newNotes;
+          ledgerTrack(alreadyPending2, { why: 'Updated on the payment form' });
 
           // Arrears entered alongside this update still post to their own months.
           const arrearsU = pfOutstandingAllocations();
@@ -3272,6 +3280,8 @@ async function submitAddPayment() {
       date: document.getElementById('f-pdate')?.value || today(),
     })),
   });
+  // A manual-name payment has no student and stays out of the ledger.
+  ledgerTrack(DB.payments.find(x => x.id === _newPayId));
   // Arrears collected on this visit are posted to the months they belong to,
   // never folded into the record just created for the selected month.
   const arrearsDesc = arrears.length
@@ -3544,6 +3554,7 @@ async function submitEditPayment(id) {
   p.dueDate        = document.getElementById('f-pdue')?.value    || p.dueDate;
   p.paidDate       = p.status==='Paid' ? p.date : '';
   p.notes          = document.getElementById('f-pnotes')?.value  || '';
+  ledgerTrack(p, { why: 'Edited on the payment form' });
   // Editing one month's record does NOT re-price the student. It used to write
   // monthlyRent back to _st.rent, so correcting a single historical bill
   // silently changed every future one. Price changes belong in

@@ -3111,6 +3111,7 @@ async function editMonthFeeField(payId, field, cell) {
     const newVal = inp.value.trim();
     if(field==='amount') pay.amount=Number(newVal)||pay.amount;
     else pay[field]=newVal;
+    ledgerTrack(pay, { why: 'Edited in the month view' });
     await saveDB();
     const span=document.createElement('span');
     span.className='editable-cell';
@@ -3167,6 +3168,8 @@ async function updateMonthPayStatus(payId, newStatus) {
 async function deleteMonthPayment(payId, monthKey, monthLabel) {
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete Fee Record','Remove this fee record? This cannot be undone.',async ()=>{
+    const _dm = DB.payments.find(p=>p.id===payId);
+    if (_dm) ledgerTrackDeleted(_dm);
     DB.payments = DB.payments.filter(p=>p.id!==payId);
     await saveDB();
     toast('Fee record deleted','success');
