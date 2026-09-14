@@ -41,6 +41,14 @@
 
 let usersFilter = { search: '', role: 'All', status: 'All', dept: 'All', page: 1, sel: null };
 
+/* Warden ledger spec §5 step 3 — My Collections and the Wardens view. `usersTab`
+   only means anything to an account that can manage users; everyone else has
+   exactly one view on this page and no tab row. */
+let usersTab = 'users';
+let usersColFilter  = { search: '', method: 'All', period: 'All', page: 1, pageSize: 25 };
+let usersWardenSel  = null;
+let usersRailFilter = { page: 1, pageSize: 25 };
+
 /* The presets. Each names a set of the eight real permissions — nothing here
    grants anything the app does not enforce.
 
@@ -128,12 +136,26 @@ function usrAvatar(u, size) {
 
 /* ── THE PAGE ─────────────────────────────────────────────────────────────── */
 function renderUsers() {
+  /* WHO SEES WHAT (owner, 2026-09-14). An account that cannot manage users met a
+     lock here, on a page the rail offers to everybody. It now meets the one thing
+     on this page that is its own: the money it has collected — with no tab row,
+     because a single destination needs no navigation. */
   if (typeof canDo === 'function' && !canDo('users')) {
-    return `<div class="empty-state"><div class="icon">${icon('lock','sm')}</div>
-      <h3>You cannot manage users</h3>
-      <p>Ask an administrator for the “Manage users” permission.</p></div>`;
+    if (typeof CUR_ROLE === 'undefined' || !CUR_ROLE || !WARDENS[CUR_ROLE] || !CUR_USER) {
+      return `<div class="empty-state"><div class="icon">${icon('lock','sm')}</div>
+        <h3>Sign in to see this page</h3>
+        <p>This page shows the account that is signed in.</p></div>`;
+    }
+    return usrCollectionsView('');
   }
+  const tabs = usrTabs();
+  if (usersTab === 'wardens') return usrWardensView(tabs);
+  if (usersTab === 'mine')    return usrCollectionsView(tabs);
+  return _usrAccountsView(tabs);
+}
 
+/* The account register — the page as it was before step 3, now the Users tab. */
+function _usrAccountsView(tabs) {
   const all = usrList();
   const rows = usrFiltered();
   const nActive = all.filter(u => u.active !== false).length;
@@ -143,15 +165,7 @@ function renderUsers() {
     return (Date.now() - new Date(u.createdAt).getTime()) < 30 * 86400000;
   }).length;
 
-  const kpi = (ico, hue, label, value, sub, lock) => `
-    <div class="usr-kpi ${hue}${lock ? ' is-locked' : ''}">
-      <div class="usr-kpi__i">${icon(ico, 'md')}</div>
-      <div style="min-width:0">
-        <div class="usr-kpi__l">${escHtml(label)}${lock ? ` <span class="al-lock" title="${escHtml(lock)}">${icon('lock','xs')}</span>` : ''}</div>
-        <div class="usr-kpi__v">${escHtml(String(value))}</div>
-        <div class="usr-kpi__s">${escHtml(sub)}</div>
-      </div>
-    </div>`;
+  const kpi = usrKpi;
 
   return `
   <div class="bk-head">
@@ -168,6 +182,7 @@ function renderUsers() {
       <button class="set-btn" disabled title="There is no importer for accounts. Each one is created here, because a password has to be set for it.">${icon('upload','xs')}Import</button>
     </div>
   </div>
+  ${tabs}
 
   <div class="usr-kpis">
     ${kpi('users','dh-blue','Total users',all.length, all.length === 1 ? 'one account' : 'accounts on this machine')}
@@ -243,6 +258,481 @@ function renderUsers() {
 
     ${usersFilter.sel ? usrDetail(usersFilter.sel) : ''}
   </div>`;
+}
+
+/* One counter tile, in the page's own shape. */
+function usrKpi(ico, hue, label, value, sub, lock) {
+  return `
+    <div class="usr-kpi ${hue}${lock ? ' is-locked' : ''}">
+      <div class="usr-kpi__i">${icon(ico, 'md')}</div>
+      <div style="min-width:0">
+        <div class="usr-kpi__l">${escHtml(label)}${lock ? ` <span class="al-lock" title="${escHtml(lock)}">${icon('lock','xs')}</span>` : ''}</div>
+        <div class="usr-kpi__v">${escHtml(String(value))}</div>
+        <div class="usr-kpi__s">${escHtml(sub)}</div>
+      </div>
+    </div>`;
+}
+
+/* ══ MY COLLECTIONS AND THE WARDENS VIEW — warden ledger spec §5 step 3 ═══════
+
+   READ-ONLY, built to docs/WARDEN_LEDGER_STEP3_DESIGN.md. Every figure comes
+   from ledgerCollections() / ledgerCollectionTotals() in ledger.js, which read
+   the student ledger and nothing else:
+
+     collections  the payment entries this account created
+     reductions   reversals and amounts edited down that this account RECORDED
+     holding      the two together, since the ledger started
+
+   Imported history carries no account and is in nobody's figures; a deleted
+   record's money stays, tagged. Newest first — the owner's stated exception to
+   room-number ordering, for this list of cash only.
+
+   Handing over and approval are step 4. The button is drawn, disabled, where it
+   will go; the Wardens table's Handover column says nothing it cannot know. */
+
+function usrTabs() {
+  const tabs = [
+    { id: 'users',   label: 'Users',          ico: 'users'  },
+    { id: 'wardens', label: 'Wardens',        ico: 'wallet' },
+    { id: 'mine',    label: 'My Collections', ico: 'card'   },
+  ];
+  return `
+  <div class="set-tabs-wrap">
+    <div class="set-tabs" role="tablist" aria-label="User management sections">
+      ${tabs.map(t => `<div class="set-tab ${usersTab === t.id ? 'is-on' : ''}" role="tab" tabindex="0"
+             aria-selected="${usersTab === t.id}" title="${escHtml(t.label)}" data-tab="${t.id}"
+             onclick="usrTab('${t.id}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();usrTab('${t.id}');}"
+        >${icon(t.ico, 'xs')}${escHtml(t.label)}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function usrTab(id) { usersTab = id; renderPage('users'); }
+
+/* The student and room an entry belongs to. The month record first — it holds
+   the room the student was in THAT month — then the student, because a deleted
+   month record leaves only the student behind. */
+function _usrColLookup() {
+  const pays = new Map();
+  (DB.payments || []).forEach(p => { if (p && p.id) pays.set(p.id, p); });
+  (DB.archive || []).forEach(p => { if (p && p.id && p._src !== 'expenses' && !pays.has(p.id)) pays.set(p.id, p); });
+  const studs = new Map((DB.students || []).map(s => [s.id, s]));
+  const rooms = new Map((DB.rooms || []).map(r => [r.id, r]));
+  return function (e) {
+    const p = pays.get(e.paymentRecordId) || null;
+    const s = studs.get(e.studentId) || null;
+    const r = s ? rooms.get(s.roomId) : null;
+    return {
+      name: (s && s.name) || (p && p.studentName) || '—',
+      room: (p && p.roomNumber) || (r && r.number) || '',
+    };
+  };
+}
+
+/* The reason as the ledger stored it repeats what the row already says — the
+   word Reversed and the month billed. The row keeps the rest: the words the
+   person typed, or what an edit changed from and to. */
+function _usrReason(e) {
+  let s = String((e && e.reason) || '');
+  if (e.month) s = s.split(' · ' + e.month).join('');
+  return s.replace(/^Collection reversed:?\s*/, '')
+          .replace(/^Amount collected changed\s*/, 'Changed ')
+          .trim();
+}
+
+function _usrColKind(r) {
+  return r.kind === 'reversed' ? 'Reversed' : r.kind === 'edited' ? 'Amount corrected' : 'Collected';
+}
+
+/* A signed amount. A reduction carries a minus sign AND is coloured, so it is
+   never told by colour alone. */
+function _usrAmt(n) {
+  return `<span class="usr-amt${n < 0 ? ' is-neg' : ''}">${n < 0 ? '−' : ''}${escHtml(fmtPKR(Math.abs(n)))}</span>`;
+}
+
+function _usrColFiltered(rows, look) {
+  const f = usersColFilter;
+  const q = String(f.search || '').trim().toLowerCase();
+  const td = today(), mo = td.slice(0, 7);
+  return rows.filter(r => {
+    const e = r.entry;
+    const day = ymd(new Date(e.createdAt));
+    if (f.period === 'Today' && day !== td) return false;
+    if (f.period === 'This month' && day.slice(0, 7) !== mo) return false;
+    if (f.method !== 'All' && (e.method || 'Not recorded') !== f.method) return false;
+    if (q) {
+      const who = look(e);
+      const hay = [who.name, who.room, e.month, e.reason].filter(Boolean).join(' ').toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
+/* The register. `compact` is the Wardens rail: month and method fold under the
+   name so the table fits a 400px column. */
+function _usrColTable(pageRows, look, compact) {
+  return `
+  <div class="set-table-wrap">
+    <table class="set-table usr-coltable${compact ? ' is-compact' : ''}">
+      <thead><tr>
+        <th>When</th><th>${compact ? 'Student' : 'Student · Room'}</th>
+        ${compact ? '' : '<th>Month billed</th><th>Method</th>'}
+        <th class="is-num">Amount</th>
+      </tr></thead>
+      <tbody>
+        ${pageRows.map(r => {
+          const e = r.entry, who = look(e), when = _usrWhen(e.createdAt);
+          const adj = r.kind !== 'collected';
+          return `<tr class="${adj ? 'is-adj' : ''}" data-kind="${r.kind}">
+            <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">—</span>'}</td>
+            <td>
+              <div class="usr-colwho">${adj ? `<span class="usr-kind">${escHtml(_usrColKind(r))}</span>` : ''}<b>${escHtml(who.name)}</b>${who.room && !compact ? `<span class="usr-colroom">Room ${escHtml(roomText(who.room))}</span>` : ''}</div>
+              ${adj && _usrReason(e) ? `<span class="usr-reason">${escHtml(_usrReason(e))}</span>` : ''}
+              ${compact ? `<span class="usr-reason">${escHtml([e.month, e.method || 'Method not recorded'].filter(Boolean).join(' · '))}</span>` : ''}
+              ${r.deleted ? '<span class="lk-chip dh-slate usr-deleted">Record deleted</span>' : ''}
+            </td>
+            ${compact ? '' : `<td>${e.month ? escHtml(e.month) : '<span class="lk-dash">—</span>'}</td>
+            <td>${e.method ? pmBadge(e.method) : '<span class="lk-dash">Not recorded</span>'}</td>`}
+            <td class="is-num">${_usrAmt(r.amount)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/* ── MY COLLECTIONS ───────────────────────────────────────────────────────── */
+function usrCollectionsView(tabs) {
+  const me = WARDENS[CUR_ROLE] || {};
+  // Owner, 2026-09-14: an account that manages users hands nothing over.
+  const noHandover = !!(me.perms && me.perms.users === true);
+  const rows  = ledgerCollections(CUR_ROLE);
+  const tot   = ledgerCollectionTotals(rows);
+  const look  = _usrColLookup();
+  const shown = _usrColFiltered(rows, look);
+  const pg    = paginate(shown, usersColFilter);
+  const shownTotal = shown.reduce((s, r) => s + r.amount, 0);
+  const f = usersColFilter;
+  const methodNames = [...new Set(rows.map(r => r.entry.method || 'Not recorded'))];
+  const count = n => n + ' collection' + (n === 1 ? '' : 's');
+
+  return `
+  <div class="bk-head">
+    <div class="set-head__ico dh-green">${icon('wallet', 'md')}</div>
+    <div class="set-head__mid">
+      <div class="bk-head__t">My Collections</div>
+      <div class="bk-head__s">${noHandover
+        ? 'Money you have collected. An account that manages users has nothing to hand over.'
+        : 'Money you have collected and not yet handed over.'}</div>
+    </div>
+    <div class="al-head__acts">
+      <button class="set-btn" onclick="exportMyCollectionsExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
+      <button class="set-btn" onclick="exportMyCollectionsPDF()">${icon('print','xs')}Export PDF</button>
+      ${noHandover ? '' : `<button class="set-btn" id="usr-handover" disabled
+          title="Handing cash over, and an administrator approving it, arrive in the next update.">${icon('lock','xs')}Hand over cash</button>`}
+    </div>
+  </div>
+  ${tabs}
+
+  <div class="usr-kpis usr-kpis--3">
+    ${usrKpi('wallet', 'dh-blue', noHandover ? 'Collected' : 'Holding', fmtPKR(tot.holding), count(tot.count) + ' since the ledger started')}
+    ${usrKpi('clock', 'dh-green', 'Today', fmtPKR(tot.today), count(tot.todayCount))}
+    ${usrKpi('calendar', 'dh-violet', 'This month', fmtPKR(tot.month), count(tot.monthCount))}
+  </div>
+
+  <div class="set-card">
+    ${tot.byMethod.length ? `
+    <div class="usr-methods">
+      <span class="usr-methods__l">By method</span>
+      ${tot.byMethod.map(m => `<span class="usr-method">${pmBadge(m.method)}${_usrAmt(m.amount)}</span>`).join('')}
+    </div>` : ''}
+
+    ${rows.length ? `
+    <div class="al-filters">
+      <div class="stu-search">
+        ${icon('search','xs')}
+        <input id="usr-col-search" class="lk-sin" placeholder="Search student, room or month…"
+               value="${escHtml(f.search)}"
+               oninput="usersColFilter.search=this.value;usersColFilter.page=1;renderPage('users')">
+        ${lkSearchX('usr-col-search','usersColFilter','users')}
+      </div>
+      <select class="set-sel" aria-label="Method" onchange="usersColFilter.method=this.value;usersColFilter.page=1;renderPage('users')">
+        <option value="All">All methods</option>
+        ${methodNames.map(m => `<option ${f.method === m ? 'selected' : ''}>${escHtml(m)}</option>`).join('')}
+      </select>
+      <select class="set-sel" aria-label="Period" onchange="usersColFilter.period=this.value;usersColFilter.page=1;renderPage('users')">
+        ${['All', 'Today', 'This month'].map(p => `<option value="${p}" ${f.period === p ? 'selected' : ''}>${p === 'All' ? 'All time' : p}</option>`).join('')}
+      </select>
+      <button class="set-btn" onclick="usrColReset()">${icon('refreshCw','xs')}Reset</button>
+    </div>
+
+    ${shown.length ? `
+      ${_usrColTable(pg.slice, look, false)}
+      <div class="al-foot">
+        <span>${pg.from}–${pg.to} of ${shown.length}</span>
+        <span>Total shown ${_usrAmt(shownTotal)}</span>
+      </div>
+      ${pg.pages > 1 ? renderPager(pg, 'usersColFilter', 'users') : ''}`
+    : `<div class="bk-empty">${icon('search','md')}
+        <div class="bk-empty__t">Nothing matches those filters</div>
+        <div class="bk-empty__s">Reset the filters to see all ${rows.length}.</div></div>`}`
+    : `<div class="bk-empty">${icon('wallet','md')}
+        <div class="bk-empty__t">No collections yet</div>
+        <div class="bk-empty__s">Money you collect from now on appears here, newest first.</div></div>`}
+
+    <div class="cfg-note">${icon('info','xs')}<span>Counted from the day the ledger started — earlier payments stay on each student's record. A payment typed against a name with no student record is not counted here.</span></div>
+  </div>`;
+}
+
+function usrColReset() {
+  usersColFilter = { search: '', method: 'All', period: 'All', page: 1, pageSize: 25 };
+  renderPage('users');
+}
+
+/* ── THE WARDENS VIEW ─────────────────────────────────────────────────────── */
+function _usrWardenAccounts() {
+  const known = usrList();
+  const ids = new Set(known.map(u => u.id));
+  /* AN ACCOUNT DELETED AFTER IT COLLECTED keeps a row, under the name it last
+     collected with (owner, 2026-09-14). Its ledger entries outlive it; a table
+     built from today's accounts alone would drop that money from the Total. */
+  const gone = new Map();
+  (DB.studentLedger || []).forEach(e => {
+    if (!e || e.imported || !e.createdBy || ids.has(e.createdBy)) return;
+    gone.set(e.createdBy, { id: e.createdBy, name: e.createdByName || '(deleted account)',
+                            active: false, deleted: true, perms: {} });
+  });
+  return known.concat([...gone.values()]).map(u => {
+    const rows = ledgerCollections(u.id);
+    return { u, rows, tot: ledgerCollectionTotals(rows),
+             noHandover: !!(u.perms && u.perms.users === true) };
+  }).filter(a => a.rows.length || a.u.active !== false)
+    .sort((a, b) => b.tot.holding - a.tot.holding
+                 || String(a.u.name || '').localeCompare(String(b.u.name || '')));
+}
+
+/* Only methods that hold money get a column, in the order Settings lists them. */
+function _usrWardenMethods(accounts) {
+  const order = (DB.settings && Array.isArray(DB.settings.paymentMethods)) ? DB.settings.paymentMethods : [];
+  const seen = new Set();
+  accounts.forEach(a => a.tot.byMethod.forEach(m => seen.add(m.method)));
+  return order.filter(m => seen.has(m))
+    .concat([...seen].filter(m => order.indexOf(m) === -1 && m !== 'Not recorded').sort())
+    .concat(seen.has('Not recorded') ? ['Not recorded'] : []);
+}
+
+function _usrMethodAmt(a, m) {
+  const hit = a.tot.byMethod.find(x => x.method === m);
+  return hit ? hit.amount : 0;
+}
+
+function usrWardensView(tabs) {
+  const accounts = _usrWardenAccounts();
+  const selAcc = usersWardenSel ? accounts.find(a => a.u.id === usersWardenSel) || null : null;
+  const sel  = selAcc ? selAcc.u.id : null;
+  /* With an account open beside it the table keeps about 700px at 1366×768.
+     The per-method split moves into the rail then, rather than scrolling Today
+     and Handover out of sight. */
+  const cols = sel ? [] : _usrWardenMethods(accounts);
+  const sum  = get => accounts.reduce((s, a) => s + get(a), 0);
+  const cell = v => v ? _usrAmt(v) : '<span class="lk-dash">—</span>';
+
+  return `
+  <div class="bk-head">
+    <div class="set-head__ico dh-blue">${icon('wallet', 'md')}</div>
+    <div class="set-head__mid">
+      <div class="bk-head__t">Wardens' collections</div>
+      <div class="bk-head__s">What each account has collected since the ledger started. Handing over and approval arrive in the next update.</div>
+    </div>
+    <div class="al-head__acts">
+      <button class="set-btn" onclick="exportWardensExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
+      <button class="set-btn" onclick="exportWardensPDF()">${icon('print','xs')}Export PDF</button>
+    </div>
+  </div>
+  ${tabs}
+
+  <div class="usr-split${sel ? ' is-open' : ''}">
+    <div class="set-card usr-listcard">
+      <div class="set-table-wrap">
+        <table class="set-table usr-table usr-wtable">
+          <thead><tr>
+            <th>Account</th><th class="is-num">Holding</th>
+            ${cols.map(m => `<th class="is-num">${escHtml(m)}</th>`).join('')}
+            <th class="is-num">Today</th><th>Last collection</th><th>Handover</th>
+          </tr></thead>
+          <tbody>
+            ${accounts.map(a => {
+              const when = _usrWhen(a.tot.last);
+              const id = escHtml(a.u.id);
+              return `<tr class="${sel === a.u.id ? 'is-on' : ''}" data-account="${id}" tabindex="0"
+                          onclick="usrWardenOpen('${id}')"
+                          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();usrWardenOpen('${id}')}">
+                <td>
+                  <div class="usr-who">${usrAvatar(a.u, 32)}
+                    <div style="min-width:0">
+                      <div class="usr-who__n">${escHtml(a.u.name || '(no name)')}${a.u.id === CUR_ROLE ? '<span class="usr-you">you</span>' : ''}</div>
+                      <div class="usr-who__s">${a.u.deleted ? '<span class="lk-chip dh-slate">Account deleted</span>' : escHtml(usrRole(a.u))}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="is-num usr-hold">${_usrAmt(a.tot.holding)}</td>
+                ${cols.map(m => `<td class="is-num">${cell(_usrMethodAmt(a, m))}</td>`).join('')}
+                <td class="is-num">${cell(a.tot.today)}</td>
+                <td>${when ? `<div class="al-when">${escHtml(when.top)}<small>${escHtml(when.sub)}</small></div>` : '<span class="lk-dash">None yet</span>'}</td>
+                <td>${a.noHandover
+                  ? '<span class="lk-chip dh-slate" title="An account that manages users has nothing to hand over.">Not needed</span>'
+                  : '<span class="lk-dash" title="Handing over arrives in the next update.">—</span>'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot><tr>
+            <td>Total</td>
+            <td class="is-num usr-hold">${_usrAmt(sum(a => a.tot.holding))}</td>
+            ${cols.map(m => `<td class="is-num">${_usrAmt(sum(a => _usrMethodAmt(a, m)))}</td>`).join('')}
+            <td class="is-num">${_usrAmt(sum(a => a.tot.today))}</td>
+            <td></td><td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+      <div class="cfg-note">${icon('info','xs')}<span>Each account's own collections, less the reversals it recorded. Payments imported from before the ledger started carry no account and are in none of these figures.</span></div>
+    </div>
+
+    ${selAcc ? usrWardenRail(selAcc.u) : ''}
+  </div>`;
+}
+
+/* `u` is the account row — a deleted account is not in WARDENS any more. */
+function usrWardenRail(u) {
+  const rows = ledgerCollections(u.id);
+  const tot  = ledgerCollectionTotals(rows);
+  const pg   = paginate(rows, usersRailFilter);
+  const fact = (label, value) => `
+    <div class="hi-fact"><span class="hi-fact__l">${escHtml(label)}</span><span class="hi-fact__v">${escHtml(value)}</span></div>`;
+
+  return `
+  <aside class="set-card usr-rail usr-wrail">
+    <div class="usr-rail__h">
+      ${usrAvatar(u, 48)}
+      <div style="min-width:0">
+        <div class="usr-rail__n">${escHtml(u.name || '(no name)')}</div>
+        <div class="usr-rail__s">${escHtml(u.deleted ? 'Account deleted — its collections are kept' : usrRole(u))}</div>
+      </div>
+      <button class="set-rowbtn" onclick="usrWardenClose()" title="Close">${icon('close','xs')}</button>
+    </div>
+    <div class="usr-rail__b">
+      <div class="usr-sec">Collections</div>
+      <div class="hi-facts" style="border-top:none;margin-top:0;padding-top:0">
+        ${fact(u.perms && u.perms.users ? 'Collected' : 'Holding', fmtPKR(tot.holding))}
+        ${fact('Today', fmtPKR(tot.today))}
+        ${fact('This month', fmtPKR(tot.month))}
+        ${fact('Collections', String(tot.count))}
+      </div>
+      ${tot.byMethod.length ? `
+      <div class="usr-sec">By method</div>
+      <div class="hi-facts" style="border-top:none;margin-top:0;padding-top:0">
+        ${tot.byMethod.map(m => fact(m.method, (m.amount < 0 ? '−' : '') + fmtPKR(Math.abs(m.amount)))).join('')}
+      </div>` : ''}
+      <div class="usr-sec">Newest first</div>
+      ${rows.length
+        ? _usrColTable(pg.slice, _usrColLookup(), true) + (pg.pages > 1 ? renderPager(pg, 'usersRailFilter', 'users') : '')
+        : '<div class="usr-none">Nothing collected by this account since the ledger started.</div>'}
+    </div>
+  </aside>`;
+}
+
+function usrWardenOpen(id)  { usersWardenSel = id; usersRailFilter.page = 1; renderPage('users'); }
+function usrWardenClose()   { usersWardenSel = null; renderPage('users'); }
+
+/* ── EXPORTS — through the one engine (export/engine.js) ─────────────────────
+   The document is the list on screen: the same rows, the same filters. */
+function _usrCollectionsExportDef() {
+  const rows  = ledgerCollections(CUR_ROLE);
+  const tot   = ledgerCollectionTotals(rows);
+  const look  = _usrColLookup();
+  const shown = _usrColFiltered(rows, look);
+  const f  = usersColFilter;
+  const me = WARDENS[CUR_ROLE] || {};
+  const time = r => new Date(r.entry.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return {
+    module: 'Collections',
+    title:  'My Collections',
+    scope:  (me.name || CUR_ROLE) + ' · since the ledger started',
+    filters: [
+      ['Period', f.period === 'All' ? 'All time' : f.period],
+      ['Method', f.method === 'All' ? 'All methods' : f.method],
+      ['Search', f.search || 'None'],
+    ],
+    summary: [
+      { label: me.perms && me.perms.users ? 'Collected' : 'Holding', value: fmtPKR(tot.holding) },
+      { label: 'Today',       value: fmtPKR(tot.today) },
+      { label: 'This month',  value: fmtPKR(tot.month) },
+      { label: 'Collections', value: String(tot.count) },
+    ],
+    columns: [
+      { label: 'Date',         type: 'date',  width: 13, value: r => ymd(new Date(r.entry.createdAt)) },
+      { label: 'Time',         type: 'text',  width: 9,  value: time },
+      { label: 'Student',      type: 'text',  width: 22, value: r => look(r.entry).name },
+      { label: 'Room',         type: 'id',    width: 9,  value: r => look(r.entry).room },
+      { label: 'Month billed', type: 'text',  width: 16, value: r => r.entry.month || '' },
+      { label: 'Method',       type: 'text',  width: 14, value: r => r.entry.method || 'Not recorded' },
+      { label: 'Type',         type: 'text',  width: 18, value: r => _usrColKind(r) + (r.deleted ? ' (record deleted)' : '') },
+      { label: 'Reason',       type: 'wrap',  width: 34, value: r => r.kind === 'collected' ? '' : _usrReason(r.entry) },
+      { label: 'Amount (Rs.)', type: 'money', width: 14, value: r => r.amount, total: 'sum' },
+    ],
+    rows: shown,
+    note: 'Read from the student ledger. Payments imported from before the ledger started, and payments typed against a name with no student record, are not included.',
+    empty: 'No collections match the selected filters.',
+  };
+}
+
+function exportMyCollectionsPDF() {
+  if (typeof requirePerm === 'function' && !requirePerm('reports')) return;
+  EXPORT.pdf(_usrCollectionsExportDef());
+}
+function exportMyCollectionsExcel() {
+  if (typeof requirePerm === 'function' && !requirePerm('reports')) return;
+  EXPORT.excel(_usrCollectionsExportDef());
+}
+
+function _usrWardensExportDef() {
+  const accounts = _usrWardenAccounts();
+  const cols = _usrWardenMethods(accounts);
+  const holding = accounts.reduce((s, a) => s + a.tot.holding, 0);
+  return {
+    module: 'Collections',
+    title:  "Wardens' Collections",
+    scope:  'Since the ledger started',
+    filters: [['Accounts', 'Active accounts, and any account with collections']],
+    summary: [
+      { label: 'Accounts', value: String(accounts.length) },
+      { label: 'Holding, all accounts', value: fmtPKR(holding) },
+    ],
+    columns: [
+      { label: 'Account', type: 'text', width: 22, value: a => a.u.name || '(no name)' },
+      { label: 'Role',    type: 'text', width: 14, value: a => a.u.deleted ? 'Account deleted' : usrRole(a.u) },
+      { label: 'Holding (Rs.)', type: 'money', width: 14, value: a => a.tot.holding, total: 'sum' },
+    ].concat(cols.map(m => ({ label: m + ' (Rs.)', type: 'money', width: 13, value: a => _usrMethodAmt(a, m), total: 'sum' })))
+     .concat([
+      { label: 'Today (Rs.)', type: 'money', width: 13, value: a => a.tot.today, total: 'sum' },
+      { label: 'Collections', type: 'number', width: 12, value: a => a.tot.count },
+      { label: 'Last collection', type: 'date', width: 15, value: a => a.tot.last ? ymd(new Date(a.tot.last)) : '' },
+      { label: 'Handover', type: 'text', width: 18, value: a => a.noHandover ? 'No handover needed' : 'Not yet available' },
+    ]),
+    rows: accounts,
+    note: 'Read from the student ledger. Each account\'s collections less the reversals it recorded. Imported history carries no account and is not included.',
+    empty: 'No accounts have collections.',
+  };
+}
+
+function exportWardensPDF() {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  EXPORT.pdf(_usrWardensExportDef());
+}
+function exportWardensExcel() {
+  if (typeof requirePerm === 'function' && !requirePerm('users')) return;
+  EXPORT.excel(_usrWardensExportDef());
 }
 
 /* ── THE DETAIL RAIL ──────────────────────────────────────────────────────── */

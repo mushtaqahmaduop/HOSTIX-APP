@@ -386,7 +386,7 @@ function _ledgerHistory() {
  */
 function ledgerImportIfEmpty() {
   if (_ledgerList().length) { _ledgerReady = true; return 0; }
-  const empty = _ledgerPosted(' ');
+  const empty = _ledgerPosted(' ');
   const drafts = [];
   _ledgerHistory().forEach((p, ri) => {
     _ledgerDiff(p, empty, '').forEach((d, di) => drafts.push({ p, d, ri, di }));
@@ -446,6 +446,68 @@ async function ledgerAdopt(entries) {
   ledgerLoaded();
   if (ledgerImportIfEmpty() > 0) await saveDB();
   return ok;
+}
+
+/* ── READING IT BACK: COLLECTIONS BY ACCOUNT (spec §5 step 3) ──────────────────
+
+   What My Collections and the Wardens view show. Read-only; nothing here posts.
+   The owner's rules of 2026-09-14, each one a line below:
+
+     · an account's collections are the `payment` entries IT created;
+     · a reversal, or an amount edited down, counts against whoever RECORDED
+       it — they are the one handing the cash back — as its own row;
+     · imported history has no account (createdBy null) and is in nobody's;
+     · a deleted record's collections stay, marked `deleted`: deleting a record
+       does not put cash back in anyone's hand.
+
+   Each row: { entry, kind: 'collected' | 'reversed' | 'edited', amount, deleted }
+   where `amount` is signed — a reduction is negative. Newest first. */
+function ledgerCollections(accountId) {
+  const out = [];
+  if (!accountId) return out;
+  const list = _ledgerList();
+  const deleted = new Set();
+  list.forEach(e => { if (e && e.part === 'deleted' && e.paymentRecordId) deleted.add(e.paymentRecordId); });
+  list.forEach(e => {
+    if (!e || e.imported || e.createdBy !== accountId) return;
+    let kind, amount;
+    if (e.type === 'payment')                                 { kind = 'collected'; amount = money(e.amount); }
+    else if (e.type === 'adjustment' && e.part === 'reversal')  { kind = 'reversed';  amount = -money(e.amount); }
+    else if (e.type === 'adjustment' && e.part === 'collected') { kind = 'edited';    amount = -money(e.amount); }
+    else return;
+    out.push({ entry: e, kind, amount, deleted: deleted.has(e.paymentRecordId) });
+  });
+  return out.reverse();
+}
+
+/**
+ * The figures above a collections list. `holding` is every row, since the
+ * ledger started (nothing is handed over before step 4); `count` counts
+ * collections only, so a reversal never reads as money in. Days are local.
+ */
+function ledgerCollectionTotals(rows) {
+  const td = today(), mo = td.slice(0, 7);
+  const t = { holding: 0, count: 0, today: 0, todayCount: 0, month: 0, monthCount: 0, last: '', byMethod: [] };
+  const byM = new Map();
+  (rows || []).forEach(r => {
+    const day = ymd(new Date(r.entry.createdAt));
+    const isCol = r.kind === 'collected';
+    t.holding += r.amount;
+    if (isCol) t.count++;
+    if (day === td)               { t.today += r.amount; if (isCol) t.todayCount++; }
+    if (day.slice(0, 7) === mo)   { t.month += r.amount; if (isCol) t.monthCount++; }
+    if (isCol && String(r.entry.createdAt) > t.last) t.last = String(r.entry.createdAt);
+    const m = r.entry.method || 'Not recorded';
+    byM.set(m, (byM.get(m) || 0) + r.amount);
+  });
+  // In the order Settings lists the methods; anything else after; unrecorded last.
+  const order = (DB.settings && Array.isArray(DB.settings.paymentMethods)) ? DB.settings.paymentMethods : [];
+  const rank = m => m === 'Not recorded' ? 1e6 : (order.indexOf(m) >= 0 ? order.indexOf(m) : 1e5);
+  t.byMethod = [...byM.entries()]
+    .filter(kv => kv[1] !== 0)
+    .map(kv => ({ method: kv[0], amount: kv[1] }))
+    .sort((a, b) => rank(a.method) - rank(b.method) || (a.method < b.method ? -1 : 1));
+  return t;
 }
 
 /**

@@ -43,6 +43,7 @@ const L = vm.runInContext(`({
   DB, money, calculateBill, applyPayment, reversePayment, calculateOutstanding,
   ledgerTrack, ledgerTrackAll, ledgerTrackDeleted, ledgerLoaded, ledgerImportIfEmpty,
   ledgerBalance, ledgerEntriesFor, ledgerDrift, ledgerEffect,
+  ledgerCollections, ledgerCollectionTotals,
   setUser: (u, r) => { CUR_USER = u; CUR_ROLE = r; },
 })`, sandbox);
 const { DB } = L;
@@ -327,6 +328,63 @@ ok('a legacy record with no rent on it is priced the way the Payments page price
   assert.strictEqual(DB.studentLedger[0].type, 'charge');
   assert.strictEqual(DB.studentLedger[0].amount, 5000);
   assert.strictEqual(L.ledgerBalance('s9'), L.calculateOutstanding(legacy));
+});
+
+// ── reading collections back (spec §5 step 3) ────────────────────────────────
+
+ok('an account\'s collections are the payments it posted, newest first, by method', () => {
+  fresh();
+  const p = rec(); DB.payments.push(p); L.ledgerTrack(p);
+  L.setUser({ name: 'Sara Warden' }, 'w_sara');
+  L.applyPayment(p, { amount: 5000, method: 'JazzCash' });
+  L.applyPayment(p, { amount: 3000, method: 'Cash' });
+  const rows = L.ledgerCollections('w_sara');
+  same(rows.map(r => r.kind + ':' + r.amount), ['collected:3000', 'collected:5000']);
+  const t = L.ledgerCollectionTotals(rows);
+  assert.strictEqual(t.holding, 8000);
+  assert.strictEqual(t.count, 2);
+  assert.strictEqual(t.today, 8000);
+  assert.strictEqual(t.month, 8000);
+  same(t.byMethod.map(m => m.method + '=' + m.amount), ['Cash=3000', 'JazzCash=5000']);
+  assert.strictEqual(L.ledgerCollections('warden1').length, 0, 'the charge posted by nobody\'s collection');
+});
+
+ok('a reversal counts against whoever records it, as its own row', () => {
+  L.setUser({ name: 'Owner' }, 'warden1');
+  const p = DB.payments[0];
+  L.reversePayment(p, { amount: 1000, reason: 'Wrong amount' });
+  assert.strictEqual(L.ledgerCollectionTotals(L.ledgerCollections('w_sara')).holding, 8000);
+  const mine = L.ledgerCollections('warden1');
+  same(mine.map(r => r.kind + ':' + r.amount), ['reversed:-1000']);
+  const t = L.ledgerCollectionTotals(mine);
+  assert.strictEqual(t.holding, -1000);
+  assert.strictEqual(t.count, 0, 'a reversal is not a collection');
+});
+
+ok('an amount edited down counts against the account that edited it', () => {
+  const p = DB.payments[0];
+  p.amount = L.money(p.amount) - 500; reprice(p);
+  L.ledgerTrack(p, { why: 'Edited on the payment form' });
+  same(L.ledgerCollections('warden1').map(r => r.kind), ['edited', 'reversed']);
+});
+
+ok('a deleted record\'s collections stay in the collector\'s total, marked', () => {
+  const p = DB.payments[0];
+  L.ledgerTrackDeleted(p);
+  DB.payments = [];
+  const rows = L.ledgerCollections('w_sara');
+  assert.ok(rows.every(r => r.deleted === true));
+  assert.strictEqual(L.ledgerCollectionTotals(rows).holding, 8000);
+});
+
+ok('imported history is in nobody\'s collections', () => {
+  DB.payments = [rec({ id: 'imp', amount: 14500, status: 'Paid',
+    partialPayments: [{ date: '2026-08-03', amount: 14500, collectedBy: 'Ali Warden' }] })];
+  DB.archive = []; DB.studentLedger = [];
+  L.ledgerLoaded(); L.ledgerImportIfEmpty();
+  assert.ok(DB.studentLedger.some(e => e.type === 'payment'));
+  assert.strictEqual(L.ledgerCollections('warden1').length, 0);
+  assert.strictEqual(L.ledgerCollections(null).length, 0);
 });
 
 // ── the store's validation ───────────────────────────────────────────────────

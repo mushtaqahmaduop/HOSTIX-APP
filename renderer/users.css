@@ -104,6 +104,57 @@
 .usr-act__t { flex: 1; min-width: 0; font-size: 12px; color: var(--text2); }
 .usr-none { font-size: 11.5px; line-height: 1.55; color: var(--text3); }
 
+/* ══ MY COLLECTIONS AND THE WARDENS VIEW (warden ledger spec §5 step 3) ═══════
+   Read-only. The tiles, card, table, rail and empty states are the page's own;
+   only what a register of money needs is added here. */
+.usr-kpis--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .usr-kpis--3 { grid-template-columns: 1fr; } }
+
+/* Methods are categories, not states — pmBadge() draws them neutral. */
+.usr-methods { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.usr-methods__l {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--text3); margin-right: 4px;
+}
+.usr-method {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 3px 11px 3px 3px; border-radius: 999px;
+    background: var(--dash-sunk); border: 1px solid var(--border);
+}
+
+/* Money: tabular and right-aligned. A reduction says so with a minus sign and a
+   word before its colour says it a third time. */
+.usr-amt {
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.usr-amt.is-neg { color: var(--danger-fg); }
+.usr-coltable .is-num, .usr-wtable .is-num { text-align: right; }
+
+.usr-colwho { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
+.usr-colwho b { font-size: 13px; font-weight: 700; color: var(--text); }
+.usr-colroom { font-size: 11.5px; color: var(--text3); }
+.usr-kind {
+    font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--danger-fg);
+}
+.usr-reason { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--text3); overflow-wrap: anywhere; }
+.usr-deleted { margin-top: 5px; }
+
+/* The rail's register fits a 400px column; the shared table's page minimum does not. */
+.usr-coltable.is-compact { min-width: 0; }
+
+.usr-wtable tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* With an account open beside it the table has no method columns left, and
+   the shared table's 860px minimum would still scroll Handover out of sight. */
+.usr-split.is-open .usr-wtable { min-width: 0; }
+/* Holding is the column an administrator reads first. */
+.usr-hold .usr-amt { font-size: 14px; font-weight: 800; }
+.usr-wtable tfoot td {
+    font-weight: 800; color: var(--text);
+    background: var(--dash-sunk); border-top: 2px solid var(--border);
+}
+
 /* ══ THE FORM ═════════════════════════════════════════════════════════════ */
 .usf-top { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; }
 @media (max-width: 900px) { .usf-top { grid-template-columns: 1fr; } }

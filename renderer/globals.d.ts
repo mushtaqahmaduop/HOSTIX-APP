@@ -128,6 +128,12 @@ declare function ledgerAdopt(entries: any): Promise<boolean>;
 declare function ledgerBalance(studentId: string): number;
 declare function ledgerEntriesFor(studentId: string): any[];
 declare function ledgerDrift(): any[];
+// Read-only, for My Collections and the Wardens view (spec §5 step 3).
+declare function ledgerCollections(accountId: string): { entry: any; kind: string; amount: number; deleted: boolean }[];
+declare function ledgerCollectionTotals(rows: any[]): {
+  holding: number; count: number; today: number; todayCount: number;
+  month: number; monthCount: number; last: string; byMethod: { method: string; amount: number }[];
+};
 
 // -- rooms.js: bulk creation --------------------------------------------------
 declare function bulkRoomPlan(o: any): { create: string[]; skip: string[]; error: string };

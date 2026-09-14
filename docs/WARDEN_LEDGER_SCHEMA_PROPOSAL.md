@@ -299,8 +299,19 @@ collectors named and no account id.
 
 ---
 
+## Step 3 decisions (owner, 2026-09-14, asked before design)
+
+| Case | Decided |
+|---|---|
+| A collection is reversed, or its amount edited down | **Counts against whoever records the reversal** — they hand the cash back. Shown as its own line with its reason, never hidden inside a total. |
+| History imported from before the ledger (a name, no account) | **Not in any My Collections.** Collections count from go-live; old history stays visible in student history. |
+| A payment record is deleted after money was collected on it | **The money stays in the collector's total**, tagged "record deleted". |
+| Order of the collections list | **Newest first, by date** — a stated exception to the room-number ordering rule, for this cash list only. |
+
+Step 2 was approved and committed (`a27837a`).
+
 ## What happens next
 
-Your review of step 2 above. Then spec §5 step 3: the read-only **My Collections**
+Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**
 view on the Users page — shown to you before code — and steps 4 → 11 in the spec's
 order, each approved before the next.
