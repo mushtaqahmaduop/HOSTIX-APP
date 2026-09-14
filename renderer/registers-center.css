@@ -68,6 +68,24 @@
 .lk-table  .lk-who  > div, .stu-table .stu-who > div,
 .pay-table .pay-who > div, .exp-table .lk-who  > div { text-align: center; }
 
+/* ── THE STUDENT NAME BLOCK: CENTRED, AVATARS IN ONE LINE ───────────────────
+   Owner, 2026-09-14: "align the student names and emoji/svg in payments and
+   students". Centring each row's avatar-plus-name on its own put the avatar
+   wherever that name's length left it — "AK" beside a short name sat far to
+   the right of "MU" beside a long one. The block is now one width on every
+   row and centred in the column, so the avatars share one x-position and the
+   names start on one left edge; a name longer than the block ellipsises, with
+   the whole name in its title. In a column narrower than the block it simply
+   fills the column. */
+.stu-table .stu-who, .pay-table .pay-who {
+    width: 100%; max-width: 240px; margin: 0 auto; justify-content: flex-start;
+}
+/* :last-child — the text block. On Payments the avatar is a <div> too, and a
+   bare `> div` stretched it into an oval as wide as the name. */
+.stu-table .stu-who > div:last-child, .pay-table .pay-who > div:last-child { text-align: left; flex: 1; min-width: 0; }
+.stu-table .stu-who__name, .stu-table .stu-who__sub,
+.pay-table .pay-who__name { overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Prose columns stay flush left ───────────────────────────────────────── */
 .lk-prose,
 .lk-table  td.lk-prose,

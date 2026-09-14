@@ -155,16 +155,27 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
 
      Each of these is a thing that was on the receipt and is not any more, so
      each is asserted as an absence. A slip that starts re-growing them is the
-     regression this guards. */
-  expect(receipt, 'the payment history section is back on the receipt')
-    .not.toContain('Payment History');
+     regression this guards.
+
+     The one exception is the history: warden ledger spec §3.1 (step 5, owner
+     2026-09-14) re-adds it in COMPACT form — at most 5 ledger lines plus a
+     b/f line — so what is guarded now is its size, not its absence. */
+  const histLines = await win.evaluate((pid) => {
+    const box = document.createElement('div');
+    box.innerHTML = buildReceiptHTML(pid);
+    const h = box.querySelector('[data-rcpt="history"]');
+    return h ? h.querySelectorAll(':scope > div').length - 1 : -1;
+  }, over.id);
+  expect(histLines, 'the compact payment history is missing').toBeGreaterThan(0);
+  expect(histLines, 'the payment history grew past 5 lines + b/f').toBeLessThanOrEqual(6);
   expect(receipt, 'the instalment list is back under another name')
     .not.toContain('Recorded Instalments');
   expect(receipt, 'the student signature block is back').not.toContain('Student Signature');
   expect(receipt, 'the success emoji is back on the status row').not.toContain('✅');
   expect(receipt, 'the pending emoji is back on the status row').not.toContain('⏳');
-  // The hostel still signs it — that is the half that attests anything.
-  expect(receipt, 'the warden signature line was removed too').toContain('Authorized Warden');
+  // The hostel still signs it — that is the half that attests anything. Since
+  // warden ledger step 5 the line names the collector (spec §3.1).
+  expect(receipt, 'the collector signature line is missing').toContain('Collected by');
 
   /* THE LOGO COMES FROM DB.settings.logo. It was read from a localStorage key
      that Hostel Info stopped writing, so the block was never entered and no
@@ -463,12 +474,12 @@ test('payments: table pans by dragging, and CSV column order matches the table',
      is still a column — the brief's §5 forbids removing one — under the name
      the sheet gives it. */
   const at = name => book.headers.indexOf(name);
-  for (const col of ['Room', 'Student Name', 'Month', 'Charges (Rs.)',
-                     'Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode',
-                     'Status', 'Date', 'Admission (Rs.)', 'Extra charges (detail)',
-                     'Discount (Rs.)', 'Refund (Rs.)']) {
-    expect(book.headers, col + ' is missing from the workbook').toContain(col);
-  }
+  /* THE OWNER'S COLUMN ORDER, 2026-09-14 — exactly these, in this order. The
+     previous-month Paid/Unpaid column is gone (an unpaid month is its own
+     arrears row). */
+  expect(book.headers).toEqual(['Room', 'Name', 'Month', 'Contact', 'Charges (Rs.)',
+    'Admit (Rs.)', 'Extras (Rs.)', 'Discount (Rs.)', 'Refund (Rs.)',
+    'Paid (Rs.)', 'Unpaid (Rs.)', 'Pay Mode', 'Status', 'Date', 'Receipt #', 'Remarks']);
 
   /* One charge column, never rent and mess as two (owner, 2026-09-14). The
      Charges column still holds the whole month — rent AND mess — which is the
@@ -481,9 +492,10 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   expect(book.numeric[at('Paid (Rs.)')], 'Paid must be a number cell').toBe('money');
   expect(book.row[at('Unpaid (Rs.)')], 'Unpaid column').toBe(4000);
   expect(book.row[at('Pay Mode')], 'Pay Mode column').toBe('Cash');
-  expect(book.row[at('Admission (Rs.)')], 'Admission fee column').toBe(5000);
-  expect(String(book.row[at('Extra charges (detail)')]), 'Extra charges column').toContain('Laundry');
+  expect(book.row[at('Admit (Rs.)')], 'Admission fee column').toBe(5000);
+  expect(String(book.row[at('Remarks')]), 'the extras are named in Remarks').toMatch(/Extras: .*Laundry/i);
   expect(book.row[at('Discount (Rs.)')], 'Concession column').toBe(1000);
+  expect(String(book.row[at('Date')]), 'Date reads dd/mm/yyyy').toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
 
   await app.close();
 });

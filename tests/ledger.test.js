@@ -44,6 +44,7 @@ const L = vm.runInContext(`({
   ledgerTrack, ledgerTrackAll, ledgerTrackDeleted, ledgerLoaded, ledgerImportIfEmpty,
   ledgerBalance, ledgerEntriesFor, ledgerDrift, ledgerEffect,
   ledgerCollections, ledgerCollectionTotals,
+  ledgerHistoryFor, ledgerHistoryLine, ledgerCollectorOf, ledgerFirstName,
   setUser: (u, r) => { CUR_USER = u; CUR_ROLE = r; },
 })`, sandbox);
 const { DB } = L;
@@ -388,6 +389,50 @@ ok('imported history is in nobody\'s collections', () => {
 });
 
 // ── the store's validation ───────────────────────────────────────────────────
+
+// ── payment history lines (spec §3.1, step 5) ───────────────────────────────
+
+ok('history lines: first name, plain payments, tagged charges, balance after', () => {
+  fresh();
+  L.setUser({ name: 'Ali Warden' }, 'warden1');
+  const p1 = rec(); DB.payments.push(p1); L.ledgerTrack(p1);
+  L.applyPayment(p1, { amount: 5000, method: 'Cash' });
+  L.setUser({ name: 'Sara Khan' }, 'w_sara');
+  L.applyPayment(p1, { amount: 3000, method: 'JazzCash' });
+
+  const h = L.ledgerHistoryFor('s1', 'p1', 5);
+  assert.strictEqual(h.rows.length, 3);
+  assert.strictEqual(h.earlier, 0);
+  assert.strictEqual(h.rows[0].sign, '+');
+  assert.strictEqual(h.rows[0].amount, 14500);
+  assert.ok(/^Sep rent\+mess$/.test(h.rows[0].tag), 'charge tag: ' + h.rows[0].tag);
+  same([h.rows[1].by, h.rows[1].sign, h.rows[1].amount, h.rows[1].tag, h.rows[1].balance], ['Ali', '', 5000, '', 9500]);
+  same([h.rows[2].by, h.rows[2].balance], ['Sara', 6500]);
+  assert.strictEqual(L.ledgerCollectorOf('p1'), 'Sara Khan');
+  assert.strictEqual(L.ledgerFirstName('  Sara   Khan '), 'Sara');
+  L.setUser({ name: 'Ali Warden' }, 'warden1');
+});
+
+ok('history ends at the receipt\'s record, with a b/f balance when lines are cut', () => {
+  const p2 = rec({ id: 'p2', month: 'October 2026', date: '2026-10-01' });
+  DB.payments.push(p2); L.ledgerTrack(p2);
+  assert.strictEqual(L.ledgerHistoryFor('s1', 'p1', 5).rows.length, 3, 'a later month is not on an older receipt');
+  const cut = L.ledgerHistoryFor('s1', null, 2);
+  same([cut.rows.length, cut.earlier, cut.bf], [2, 2, 9500]);
+  assert.strictEqual(L.ledgerHistoryFor('s1', 'nope', 5), null);
+  assert.strictEqual(L.ledgerCollectorOf('p2'), '', 'nobody has collected on p2');
+});
+
+ok('history lines: concession and reversal read as minus', () => {
+  const p2 = DB.payments.find(p => p.id === 'p2');
+  p2.concession = 1000; p2.concessionDesc = 'Hardship'; reprice(p2); L.ledgerTrack(p2);
+  const c = L.ledgerHistoryFor('s1', 'p2', 5).rows.pop();
+  same([c.sign, c.amount, c.tag], ['−', 1000, 'concession']);
+  const rev = L.ledgerHistoryLine({ type: 'adjustment', part: 'reversal', amount: 2000, runningBalance: 0, createdByName: 'Admin' });
+  same([rev.by, rev.sign, rev.amount, rev.tag], ['Admin', '−', 2000, 'reversed']);
+  const del = L.ledgerHistoryLine({ type: 'adjustment', part: 'deleted', amount: -700, runningBalance: 0 });
+  same([del.sign, del.amount, del.tag], ['−', 700, 'deleted']);
+});
 
 ok('every entry this file posts passes the store\'s validation', () => {
   assert.strictEqual(store.validateAll(DB.studentLedger), null);

@@ -425,8 +425,15 @@ function exCellHtml(c, row, i) {
 }
 
 function exTable(columns, group) {
+  /* `pdfLabel` (opt-in, 2026-09-14): the printed heading on two lines, split at
+     "\n" — "Charges\n(Rs.)". Headings never wrap on their own (th is nowrap),
+     so a sixteen-column register whose money headings carry "(Rs.)" is set by
+     its headings rather than its figures. The workbook keeps `label`. */
   const head = '<tr>' + columns.map(function (c) {
-    return '<th class="a-' + exAlign(c) + '">' + _exEsc(c.label) + '</th>';
+    // ' <br>', not '<br>': the heading still READS "Charges (Rs.)" when copied
+    // or read aloud, and the line break costs nothing in a nowrap cell.
+    const text = c.pdfLabel ? _exEsc(c.pdfLabel).replace(/\n/g, ' <br>') : _exEsc(c.label);
+    return '<th class="a-' + exAlign(c) + '">' + text + '</th>';
   }).join('') + '</tr>';
 
   /* `i` is the row's number WITHIN ITS GROUP, and `group.from` offsets it when
@@ -505,7 +512,10 @@ function exSignatures(list) {
    · body type is 9pt, headings 8pt: the floor the spec sets, not smaller (§14).
    · fills are pale and borders are hairlines, because this is going through a
      hostel's inkjet onto ordinary paper (§53).                              */
-function exStyles(landscape) {
+/* `dense` (opt-in per definition, 2026-09-14): 4px of side padding in every
+   cell instead of 7px, for a register with more columns than a landscape page
+   holds at the default. Type sizes are untouched — §14's floor still stands. */
+function exStyles(landscape, dense) {
   const c = EX_COLOR;
   const margin = landscape ? '9mm 9mm 14mm' : '12mm 12mm 16mm';
   return '<style>' +
@@ -600,6 +610,7 @@ function exStyles(landscape) {
   'td{padding:4.5px 7px;border-bottom:1px solid ' + c.border + ';' +
      'border-right:1px solid ' + c.border + ';vertical-align:top;font-size:8.5pt}' +
   'td:last-child{border-right:none}' +
+  (dense ? 'th{padding-left:4px;padding-right:4px}td{padding-left:4px;padding-right:4px}' : '') +
   'tbody tr:nth-child(even) td{background:#FBFCFE}' +
   '.a-left{text-align:left}.a-right{text-align:right}.a-center{text-align:center}' +
   /* A CENTRED, LARGER DASH FOR A MISSING WORD (owner, 2026-09-10). At body size
@@ -675,7 +686,7 @@ function exDocument(def) {
       footer: 'Hostyllo · ' + hostel + ' · ' + (def.title || 'Report'),
       file: exFileName(def, 'pdf'),
     })) + '">' +
-    exStyles(landscape) + '</head><body><div class="ex-page">' + body + '</div></body></html>';
+    exStyles(landscape, !!def.dense) + '</head><body><div class="ex-page">' + body + '</div></body></html>';
 
   return { html: html, landscape: landscape, filename: exFileName(def, 'pdf'), rows: rows };
 }

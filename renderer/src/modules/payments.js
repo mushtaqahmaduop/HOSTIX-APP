@@ -739,12 +739,17 @@ function renderPayments() {
               <div class="pay-who">
                 <div class="pay-who__av ${payAvatarHue(nm)}">${escHtml(ini)}</div>
                 <div style="min-width:0">
-                  <div class="pay-who__name">${escHtml(nm)}</div>
+                  <div class="pay-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
                   ${/* The student was deleted but the record of their money was
                        not. Say so, or the row reads as an ordinary payment whose
                        name happens to open nothing. */''}
                   ${p.studentRemoved?`<div class="pay-who__meta" style="color:var(--amber)" title="This student was removed from the roster${p.studentRemovedOn?' on '+escHtml(fmtDate(p.studentRemovedOn)):''}. The payment stays in the books.">No longer on the roster</div>`:''}
-                  ${st&&st.cnic?`<div class="pay-who__meta">CNIC: ${payMaskCnic(st.cnic)}</div>`:''}
+                  ${/* WHAT THE MONTH COVERS, UNDER THE NAME (owner, 2026-09-14:
+                       "remove student cnic detail from payments page below student
+                       name and move the rent+mess or rent only tag there"). The
+                       badge used to sit under the figure in Charge/Mo. */''}
+                  ${(()=>{const _cv=chargeCoverage(paymentCharges(p, st));
+                          return `<span class="pay-cov ${_cv.hue}">${escHtml(_cv.label)}</span>`;})()}
                   ${st&&st.phone?`<div class="pay-who__meta"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92"/></svg>${escHtml(st.phone)}</div>`:''}
                 </div>
               </div>
@@ -792,9 +797,8 @@ function renderPayments() {
                  assert the wrong one. The breakdown moves into the title, where
                  it costs no width. */''}
             ${(()=>{const _c=paymentCharges(p, DB.students.find(x=>x.id===p.studentId));
-                    const _cov=chargeCoverage(_c);
-                    return `<td class="pay-money"><span title="${escHtml(payChargeTitle(_c))}">${payMoney(_c.monthly||p.amount)}</span>`
-                         + `<span class="pay-cov ${_cov.hue}">${escHtml(_cov.label)}</span></td>`;})()}
+                    // The coverage badge moved under the student's name (owner, 2026-09-14).
+                    return `<td class="pay-money"><span title="${escHtml(payChargeTitle(_c))}">${payMoney(_c.monthly||p.amount)}</span></td>`;})()}
             <td class="pay-money pay-money--in">${payMoney(p.amount)}</td>
             <td class="pay-money ${unpaid>0?'pay-money--due':'pay-money--nil'}">${payMoney(unpaid)}</td>
             <td>${pmBadge(p.method)}</td>
@@ -966,18 +970,6 @@ async function payBulkMarkPaid() {
 
    A student with no record for that month prints "0 / 0", not a dash: nothing
    billed IS nothing owed, and a dash here would read as "not known". */
-/* The heading for the previous-month column: the month before the one being
-   reported, by name. `payScopeKey()` is null for an all-months export, and
-   then there is nothing to name. */
-function _payPrevLabel() {
-  const k = (typeof payScopeKey === 'function') ? payScopeKey() : null;
-  if (!k || !/^\d{4}-\d{2}$/.test(k)) return 'Earlier Months (Paid/Unpaid)';
-  let [y, m] = k.split('-').map(Number);
-  m -= 1; if (m < 1) { m = 12; y -= 1; }
-  const label = monthLabel(y + '-' + String(m).padStart(2, '0'));
-  return (label.split(' ')[0] || 'Previous') + ' (Paid/Unpaid)';
-}
-
 /* WHAT WENT BACK OUT ON THIS RECORD. Two things in this app move money the
    other way and finance.js owns both: `p.reversals`, written by the reverse-a-
    collection flow, and `p.refund`, written when a cancellation is settled with
@@ -990,89 +982,39 @@ function _payRefund(p) {
   return rev + Math.abs(Number(p.refund || 0));
 }
 
-/* NO SEPARATE RENT AND MESS COLUMNS (owner, 2026-09-14 — replacing the
-   2026-09-10 split): the Charges column already holds the month's whole
-   "Rent + Mess" charge, and the split lives in Settings and the payment form.
-   Kept as a function so the column list below reads the same. */
-function _paySplitColumns() {
-  return [];
-}
+/* THE PREVIOUS-MONTH PAID/UNPAID COLUMN IS GONE (owner, 2026-09-14: "remove the
+   previous month paid/unpaid from payments pdf/excel because a previous unpaid
+   already shows as arrears with the previous month"). An unpaid earlier month
+   is its own row on the register, marked arrears, so the pair restated it. */
 
-function _payPrevPair(p) {
-  const k = _payMonthKey(p);
-  if (!k || !/^\d{4}-\d{2}$/.test(k)) return EXPORT.fmt.cash(0) + ' / ' + EXPORT.fmt.cash(0);
-  let [y, m] = k.split('-').map(Number);
-  m -= 1; if (m < 1) { m = 12; y -= 1; }
-  const prev = y + '-' + String(m).padStart(2, '0');
-  const mine = (DB.payments || []).filter(x =>
-    String(x.studentId) === String(p.studentId) && _payMatchesMonth(x, prev));
-  const paid   = mine.reduce((n, x) => n + Number(x.amount || 0), 0);
-  const unpaid = mine.reduce((n, x) => n + outstandingOf(x), 0);
-
-  /* AND WHETHER IT WAS SETTLED LATE (owner, 2026-09-10: "plan for what if the
-     previous [month] also paid in the current month").
-
-     "8,000.00 / 0.00" is true of two different students: one who paid August in
-     August, and one who was in arrears until the counter caught them in
-     September. Those are opposite facts about the same person to anybody
-     chasing money, and the pair alone cannot tell them apart.
-
-     The DATE the cash actually arrived is what separates them, and this app
-     already records it per instalment — `partialPayments[].date`, and `date` on
-     a record settled in one go. Where any of that money landed in a LATER month
-     than the one it settles, the cell says so. */
-  const late = mine.some(x => {
-    const parts = Array.isArray(x.partialPayments) && x.partialPayments.length
-      ? x.partialPayments.map(q => q && q.date)
-      : [x.date];
-    return parts.some(d => d && String(d).slice(0, 7) > prev);
-  });
-
-  return EXPORT.fmt.cash(paid) + ' / ' + EXPORT.fmt.cash(unpaid) + (late ? ' (late)' : '');
-}
-
-/* WHAT THE SHEET'S "Remarks" COLUMN SAYS. Its own examples are "Concession 500"
-   and "Extra Charge 200" — the two adjustment columns, in words, for the rows
-   where they are not zero. Built from the record, never typed, so it cannot
-   disagree with the figures three columns to its left. */
-function _payRemark(p) {
+/* THE REMARKS, ONE NOTE PER LINE (owner, 2026-09-14): "Auto generated" when the
+   app made the record, "Conc: poverty" for the concession's reason, "Extras:
+   cooler fee" for the extra charges by name, and a note a warden wrote kept
+   whole. Built from the record, never typed. Returned as lines — the PDF cell
+   breaks them with <br>, the workbook cell with a newline. */
+function _payRemarkLines(p) {
   const out = [];
+  const note = String(p.notes || '').trim();
+  const auto = /^auto[- ]?generated/i.test(note);
+  if (auto) out.push('Auto generated');
 
-  /* WHAT THE ADJUSTMENT WAS FOR, in the space the figures do not use (owner,
-     2026-09-10: "in remarks there should be fetched data for concession and
-     extra charges descriptions"). The AMOUNTS are two columns of their own; the
-     WORDS are what those columns cannot hold, so this carries the reason and
-     not the arithmetic. Lower case, because it is a note beside a figure and
-     not a heading. */
   const conc = Number(p.concession || p.discount || 0);
   if (conc > 0) {
-    const why = String(p.concessionDesc || p.concessionReason || '').trim();
-    out.push(why ? 'concession — ' + why : 'concession');
+    const why = String(p.concessionDesc || p.discountDesc || p.concessionReason || '').trim();
+    out.push('Conc: ' + (why || 'concession'));
   }
-  /* extrasOf/extrasSum are locals inside _payExportDef; this runs from a column
-     callback, so it does its own filtering rather than reaching for them. */
   const ex = (p.extraCharges || []).filter(c => Number(c.amount) > 0);
   if (ex.length) {
-    out.push(ex.map(c => String(c.description || c.desc || c.label || 'extra').toLowerCase())
-               .join(', '));
+    out.push('Extras: ' + ex.map(c => String(c.label || c.description || c.desc || 'extra').trim()).join(', '));
   }
+  if (note && !auto) out.push(note);
+  return out;
+}
 
-  /* THE AUTO-GENERATED NOTE, CUT DOWN (owner, 2026-09-10: "the auto generate
-     fills it by auto which takes very much space: 'Auto-generated | Remaining
-     PKR 8,000 collected on 2026-09-04'").
-
-     Every one of those facts is already a column on this sheet — what was
-     billed, what was paid, what is left — so the note was the row restated in
-     a sentence, in the widest column, on every auto-generated record in the
-     register. "Auto-generated" alone says the one thing the columns do not:
-     that nobody typed this row. A note a warden actually WROTE is kept whole;
-     it is only the app's own boilerplate that is trimmed. */
-  const note = String(p.notes || '').trim();
-  if (note) {
-    if (/^auto[- ]?generated/i.test(note)) out.push('auto');
-    else out.push(note);
-  }
-  return out.join(' · ');
+/* "20/09/2026" (owner, 2026-09-14). */
+function _payExportDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : String(v || '');
 }
 
 function _payExportDef(list, opts) {
@@ -1099,6 +1041,8 @@ function _payExportDef(list, opts) {
     title:  opts.title || 'Payment Register',
     scope:  opts.scope || scope,
     sheet:  'Payments',
+    // Sixteen columns on a landscape page: tighter cells (engine option).
+    dense:  true,
 
     /* §16 — the scope is stated on the file, not left in the reader's head. A
        register of nine rows is either a quiet month or a filtered view of a
@@ -1124,143 +1068,86 @@ function _payExportDef(list, opts) {
       { label: 'Collection rate', value: billed > 0 ? Math.round(collected / billed * 100) + '%' : '—' },
     ],
 
-    /* ========================================================================
-       THE COLUMNS ARE THE OWNER'S SHEET, EXACTLY (`payments excel redesign.png`,
-       2026-09-10), and the same sixteen in the PDF as in the workbook.
-
-       Six of them used to be `pdf:false` — Rent, Mess, Concession, Admission
-       fee, Extras, Receipt — so the printed register and the exported one were
-       two different documents from one definition, and the printed one could
-       not be reconciled: it showed a charge and an amount paid with nothing
-       between them to explain the difference.
-
-       TWO COLUMNS ARE NEW AND BOTH ARE DERIVED, not stored:
-
-         · PREVIOUS MONTH (Paid/Unpaid) — the same student's record for the
-           month before this row's month. The sheet prints it as one cell
-           because that is how it is read: "0 / 17,000" is a student who owes
-           last month too, and the row above it that says "17,000 / 0" is one
-           who does not. It is looked up, not carried, so it cannot go stale.
-
-         · REMARKS — the sheet's own examples are "Concession 500" and "Extra
-           Charge 200", which is what the two adjustment columns say in words.
-           Built from the record rather than typed, so a row with neither
-           prints a dash rather than an empty cell somebody has to interpret.
-
-       ADMISSION FEE came out. It is not on the sheet, it is a one-off charge
-       at intake rather than part of a monthly bill, and it is still on the
-       payment's own record and on its receipt.
-       ======================================================================== */
+    /* THE OWNER'S COLUMN ORDER, 2026-09-14: room, name, month, contact,
+       charges, admit, extras, discount, refund, paid, unpaid, pay mode, status,
+       date (20/09/2026), receipt, remarks — the owner offered a long and a
+       short name for five of them ("charges or charges/month", "admit or
+       admission fee", "discount or concession", "refund or refunded"); the
+       short ones are used, because a printed heading never wraps and the long
+       ones pushed the landscape page past its edge. The same sixteen
+       in the PDF and the workbook — one definition, so the printed register and
+       the exported one cannot drift apart. No previous-month Paid/Unpaid column
+       and no row number: an unpaid earlier month is its own arrears row. */
     columns: [
-      { label: '#', type: 'number', width: 5, align: 'center',
-        value: (p, i) => (i == null ? '' : i + 1) },
-
       { label: 'Room', type: 'id', width: 8,
         value: p => String(p.roomNumber || ''),
         get:   p => p.roomNumber ? '<b>' + escHtml(String(p.roomNumber)) + '</b>' : '—' },
 
-      { label: 'Student Name', type: 'text', width: 22,
+      { label: 'Name', type: 'text', width: 22,
         value: p => p.studentName || '',
         get:   p => '<b>' + escHtml(p.studentName || '') + '</b>' },
 
-      { label: 'Month', type: 'text', width: 16, value: p => monthLabel(p.month) },
+      { label: 'Month', type: 'text', width: 12, value: p => monthLabel(p.month) },
+
+      /* A phone number never breaks across two lines on the printed sheet —
+         "0300-" over "0000000" is two wrong numbers. The PDF table sizes its
+         columns by content, so the cell says so itself. */
+      { label: 'Contact', type: 'id', width: 17,
+        value: p => String((stuById.get(p.studentId) || {}).phone || ''),
+        get:   p => { const ph = String((stuById.get(p.studentId) || {}).phone || '');
+                      return ph ? '<span style="white-space:nowrap">' + escHtml(ph) + '</span>' : '—'; } },
 
       /* Rs., NOT PKR, IN THE HEADINGS (owner brief, 2026-09-10). The value is
          still a number — the currency lives in the workbook's number format,
-         which is what keeps the column summable — and the printed sheet drops
-         the prefix from the cell because the heading has already said it. */
-      { label: 'Charges (Rs.)', type: 'money', width: 13, total: 'sum',
+         which is what keeps the column summable. The whole month's charge is
+         one figure; rent and mess are never split here (owner, 2026-09-14). */
+      { label: 'Charges (Rs.)', pdfLabel: 'Charges\n(Rs.)', type: 'money', width: 13, total: 'sum',
         value: p => charges(p).monthly },
 
-      /* RENT AND MESS SPLIT ONLY WHERE THERE IS A SPLIT (owner, 2026-09-10:
-         "use separate columns for rent and mess only when the hostel allows
-         both … for a hostel which allows only full suite or only rent, use a
-         combined charges/month").
+      { label: 'Admit (Rs.)', pdfLabel: 'Admit\n(Rs.)', type: 'money', width: 10, total: 'sum',
+        value: p => Number(p.admissionFee || p.fee || 0) },
 
-         serviceModel() is the app's own answer to what this hostel sells, set
-         at onboarding: a rent-only hostel has no mess figure to print, and two
-         columns of zeros beside a Charges column that already holds the whole
-         number is 24 characters of sheet saying nothing. Where both are sold
-         the split is exactly what the sheet is reconciled with, so it stays. */
-      ..._paySplitColumns(),
-
-      /* THE THREE LONGEST HEADINGS ON THE SHEET, SHORTENED (owner,
-         2026-09-10: "extra charges and concession and admission fee column
-         headings are taking very much space and also have usually no high
-         amount of data"). Each is one word plus the currency now, and the
-         figures under them are usually 0.00 — the column is sized by its
-         heading, not by what it holds. */
-      { label: 'Discount (Rs.)', type: 'money', width: 12, total: 'sum',
-        value: p => Number(p.concession || p.discount || 0) },
-      { label: 'Extras (Rs.)', type: 'money', width: 11, total: 'sum',
+      { label: 'Extras (Rs.)', pdfLabel: 'Extras\n(Rs.)', type: 'money', width: 9, total: 'sum',
         value: p => extrasSum(p) },
 
-      { label: 'Paid (Rs.)', type: 'money', width: 12, total: 'sum',
+      { label: 'Discount (Rs.)', pdfLabel: 'Discount\n(Rs.)', type: 'money', width: 10, total: 'sum',
+        value: p => Number(p.concession || p.discount || 0) },
+
+      /* REFUNDED, FOR WHAT THE APP ALREADY RECORDS: a cancellation settled with
+         money going back writes `p.refund`, and reversals live in
+         `p.reversals` — finance.js is the authority for both. */
+      { label: 'Refund (Rs.)', pdfLabel: 'Refund\n(Rs.)', type: 'money', width: 10, total: 'sum',
+        value: p => _payRefund(p) },
+
+      { label: 'Paid (Rs.)', pdfLabel: 'Paid\n(Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => Number(p.amount || 0),
         get:   p => Number(p.amount || 0) > 0
                  ? '<span class="pos">' + escHtml(EXPORT.fmt.cash(p.amount)) + '</span>'
                  : EXPORT.fmt.cash(0) },
 
-      /* UNPAID AND ADMISSION FEE ARE BACK (owner brief, 2026-09-10, §5: "Do
-         NOT … remove columns"). An earlier pass took both out because the
-         owner's reference sheet does not draw them — the sheet answers what is
-         still owed through Status and its own summary. The brief is the later
-         word and it is explicit, and both are real figures a register is read
-         for: what THIS record still owes, and the one-off charge at intake
-         that is not part of a monthly bill. They keep the sheet's Rs. naming
-         and sit where they read: what was paid, then what was not. */
-      { label: 'Unpaid (Rs.)', type: 'money', width: 12, total: 'sum',
+      { label: 'Unpaid (Rs.)', pdfLabel: 'Unpaid\n(Rs.)', type: 'money', width: 12, total: 'sum',
         value: p => outstandingOf(p),
         get:   p => outstandingOf(p) > 0
                  ? '<span class="neg">' + escHtml(EXPORT.fmt.cash(outstandingOf(p))) + '</span>'
                    + (_exArrear(p) ? '<span class="sub">arrears · ' + escHtml(monthLabel(p.month) || '—') + '</span>' : '')
                  : EXPORT.fmt.cash(0) },
 
-      { label: 'Admission (Rs.)', type: 'money', width: 13, total: 'sum',
-        value: p => Number(p.admissionFee || p.fee || 0) },
-
-      /* REFUND, FOR WHAT THE APP ALREADY RECORDS (owner, 2026-09-10: "add
-         refund column for future use"). It is not empty scaffolding: a
-         cancellation settled with money going back writes `p.refund`, and
-         reversals live in `p.reversals` — finance.js is the authority for
-         both. Anything not refunded is 0.00, which is the truth for almost
-         every row and the reason the column costs nothing to carry. */
-      { label: 'Refund (Rs.)', type: 'money', width: 12, total: 'sum',
-        value: p => _payRefund(p) },
-
-      /* THE COLUMN NAMES THE MONTH (owner brief: "August (Paid/Unpaid)", not
-         "Previous Month"). It can only name one when the export covers one —
-         with several months on the sheet there is no single month before them,
-         and the honest heading says so rather than naming the wrong August. */
-      { label: _payPrevLabel(), type: 'text', width: 20,
-        value: p => _payPrevPair(p) },
-
-      { label: 'Pay Mode', type: 'text', width: 14, value: p => p.method || '' },
+      { label: 'Pay Mode', pdfLabel: 'Pay\nMode', type: 'text', width: 12, value: p => p.method || '' },
       { label: 'Status',       type: 'status', width: 11, value: p => payStatusOf(p) },
-      { label: 'Date',         type: 'date',   width: 13, value: p => p.date || '' },
+      { label: 'Date',         type: 'text',   width: 12, align: 'center',
+        value: p => _payExportDate(p.date) },
       /* THE RECEIPT NUMBER, NOT THE ROW'S INTERNAL ID. `p.receiptNo` is assigned
          by receipt.js the first time a receipt is printed and stored on the
          record, so a reprint keeps the same number. A payment nobody has
          issued a receipt for has no receipt number, and prints a dash — the id
          ("p2") is a database key and means nothing to the person holding the
          sheet. */
-      { label: 'Receipt #',    type: 'id',     width: 14, value: p => String(p.receiptNo || '') },
+      { label: 'Receipt #', pdfLabel: 'Receipt\n#', type: 'id', width: 14, value: p => String(p.receiptNo || '') },
 
-      { label: 'Remarks', type: 'wrap', width: 22, value: p => _payRemark(p) },
-
-      /* TWO MORE THE BRIEF SAYS NOT TO REMOVE, kept out of the PRINTED sheet
-         because the owner's reference does not draw them and a sixteen-column
-         page has no room for a seventeenth. A spreadsheet has all the room it
-         needs, and both are things somebody sorts or filters a sheet by:
-
-           · the extra charges spelled out, where Remarks only names them;
-           · which of these balances is an old month rather than this one. */
-      { label: 'Extra charges (detail)', type: 'wrap', width: 28, pdf: false,
-        value: p => extrasOf(p).map(c =>
-          (c.description || c.desc || c.label || 'extra') + ' ' + Number(c.amount || 0)).join('; ') },
-
-      { label: 'Arrears from', type: 'text', width: 16, pdf: false,
-        value: p => _exArrear(p) ? (monthLabel(p.month) || '') : '' },
+      { label: 'Remarks', type: 'wrap', width: 30, align: 'left',
+        value: p => _payRemarkLines(p).join('\n'),
+        // One note per line, and a note does not break inside itself ("Auto" / "generated").
+        get:   p => _payRemarkLines(p).map(l => '<span style="white-space:nowrap">' + escHtml(l) + '</span>').join('<br>') || '—' },
     ],
 
     rows: list,
@@ -2815,7 +2702,7 @@ function renderAddPayment() {
             Ledger
             <button class="ap-card__lnk" onclick="navigate('payments')">View all</button>
           </div>
-          <div class="ap-led__head"><span>Month</span><span>Method</span><span>Paid</span></div>
+          <div class="ap-led__head"><span>Date</span><span>By</span><span>Amount</span><span>Balance</span></div>
           <div id="ap-recent"><div class="ap-empty">Pick a student to see their history</div></div>
         </div>
       </aside>
@@ -3007,30 +2894,29 @@ function pfRenderSummary(vals) {
         : '');
 }
 
-/* The student's ledger — what has already been collected, month by month, so
-   the warden can check this worksheet against their history without leaving
-   the form. Records only: nothing is drawn for a month with no record. */
+/* Previous payments (warden ledger spec §3.1, §5 step 5; owner, 2026-09-14):
+   the student's newest 5 `student_ledger` lines, newest first, so whoever is
+   about to collect sees who took what before them and where the balance
+   stands. The month-by-month view is the month rail above this card. The line
+   rules (first name, signs, tags) are ledgerHistoryLine()'s, the same as the
+   receipt's Payment History. */
 function pfRenderRecent(t) {
   const box = document.getElementById('ap-recent');
   if (!box) return;
   if (!t) { box.innerHTML = '<div class="ap-empty">Pick a student to see their history</div>'; return; }
-  const rows = DB.payments
-    .filter(p => p.studentId === t.id)
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 6);
-  if (!rows.length) { box.innerHTML = '<div class="ap-empty">No payments recorded yet</div>'; return; }
-  box.innerHTML = rows.map(p => {
-    const owed  = outstandingOf(p);
-    const clear = p.status === 'Paid' || owed <= 0;
-    return `<div class="ap-led__r">
-      <span class="ap-led__m">${escHtml(p.month || '—')}</span>
-      <span class="ap-led__meth">${escHtml(p.method || '—')}</span>
-      <span class="ap-led__v">${fmtNum(p.amount)}
-        <i class="${clear ? 'is-clear' : 'is-due'}">${clear
-          ? (p.paidDate ? 'Cleared ' + escHtml(fmtDate(p.paidDate)) : 'Cleared')
-          : fmtNum(owed) + ' owing'}</i></span>
-    </div>`;
-  }).join('');
+  const hist = typeof ledgerHistoryFor === 'function' ? ledgerHistoryFor(t.id, null, 5) : null;
+  if (!hist || !hist.rows.length) { box.innerHTML = '<div class="ap-empty">No ledger entries yet</div>'; return; }
+  // Money taken back or a record deleted is a state worth the red; every other
+  // tag is a routine label.
+  const tagCls = tag => (tag === 'reversed' || tag === 'deleted') ? 'is-due' : 'is-clear';
+  box.innerHTML = hist.rows.slice().reverse().map(r => `<div class="ap-led__r"${
+      r.reason ? ` title="${escHtml(r.reason)}"` : ''}>
+      <span class="ap-led__m">${escHtml(fmtDateShort(r.date) || '—')}</span>
+      <span class="ap-led__by">${escHtml(r.by || '—')}</span>
+      <span class="ap-led__v">${r.sign}${fmtNum(r.amount)}${
+        r.tag ? `<i class="${tagCls(r.tag)}">${escHtml(r.tag)}</i>` : ''}</span>
+      <span class="ap-led__b">${r.balance < 0 ? '&minus;' : ''}${fmtNum(Math.abs(r.balance))}</span>
+    </div>`).join('');
 }
 
 // Notes counter for the payment modal.

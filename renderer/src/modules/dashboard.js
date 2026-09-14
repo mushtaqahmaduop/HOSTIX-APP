@@ -2381,8 +2381,16 @@ function printSeatAvailability() {
       } else {
         body += `<div class="empty-row">— Vacant —</div>`;
       }
-      // Outgoing: students with pending/confirmed cancellation in this room
-      const outgoing = (DB.cancellations||[]).filter(c=>c.roomId===r.id&&(c.status==='Pending'||c.status==='Confirmed'));
+      /* OUTGOING: THIS MONTH'S NOTICES ONLY (owner, 2026-09-14: "visit room
+         print should be only based on monthly basis and should not show left
+         students and should show only cancelling or outgoing students"). It
+         listed every Pending AND Confirmed cancellation the room ever had, so a
+         student who left in March was still printed as outgoing in September.
+         Now: a Pending notice (still in the room) whose vacate date falls in
+         the current month. Confirmed means already gone — never printed. */
+      const _visitMonth = today().slice(0, 7);
+      const outgoing = (DB.cancellations||[]).filter(c=>c.roomId===r.id && c.status==='Pending'
+        && String(c.vacateDate||'').slice(0, 7) === _visitMonth);
       outgoing.forEach(c => {
         const vacDate = c.vacateDate ? new Date(c.vacateDate+'T00:00:00').toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : 'TBD';
         body += `<div class="student-row outgoing-row"><span class="snum">↩</span><span class="sname">${escHtml(c.studentName||'—')}</span><span class="out-badge">Out Going · ${vacDate}</span></div>`;

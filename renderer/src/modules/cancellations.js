@@ -1198,7 +1198,7 @@ function cancellationsFiltered() {
       .some(v => String(v || '').toLowerCase().includes(q));
   });
 
-  return applySort(filtered, cancelFilter, {
+  const sorted = applySort(filtered, cancelFilter, {
     student: c => c.studentName || '',
     room:    { get: c => c.roomNumber || '', cmp: cmpRoomNo },
     type:    c => c.roomType || '',
@@ -1207,6 +1207,12 @@ function cancellationsFiltered() {
     status:  c => c.status || '',
     reason:  c => c.reason || '',
   });
+  /* PENDING FIRST (owner, 2026-09-14: "the pending cancellations sets at the
+     top"). A Pending notice is the one a warden still has to act on. Whatever
+     column the list is sorted by, that order holds inside each group — the
+     sort is stable. The export reads this function, so it keeps the order. */
+  return sorted.slice().sort((a, b) =>
+    (b.status === 'Pending' ? 1 : 0) - (a.status === 'Pending' ? 1 : 0));
 }
 
 /* ══ THE CANCELLATIONS EXPORT ══════════════════════════════════════════════

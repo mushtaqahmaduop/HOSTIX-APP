@@ -70,7 +70,7 @@ const SUP_ARTICLES = [
     b: ['Nothing on the admission form sets the charge. It is resolved in one order every time: the student\'s own override, then their room type\'s rent and mess from Settings → Rent & Mess.',
         'That is why the Students register can show "not set" for a student in a room whose type has no rent yet. Set the room type\'s rent and every student in it is priced at once.'] },
   { id: 'a-cnic', cat: 'Adding Students', t: 'Why a CNIC shows as 17301-30*******',
-    b: ['A CNIC is masked everywhere it is displayed, and on every export and printed sheet. Hold the cursor over it to see the whole number.',
+    b: ['A CNIC is masked everywhere it is displayed, and on every export and printed sheet except the student profile print, which carries the whole number. Hold the cursor over it to see the whole number.',
         'The record itself is untouched — this is only how it is shown. The two edit forms show and save the real number.'] },
 
   { id: 'a-shift', cat: 'Room Allotment', t: 'Moving a student to another room',

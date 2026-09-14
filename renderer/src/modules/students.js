@@ -530,7 +530,7 @@ function renderStudents() {
               <div class="stu-who">
                 ${studentAvatar(t, 32, stuAvatarHue(nm))}
                 <div style="min-width:0">
-                  <div class="stu-who__name">${escHtml(nm)}</div>
+                  <div class="stu-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
                   ${t.fatherName?`<div class="stu-who__sub">${escHtml(t.fatherName)}</div>`:''}
                 </div>
               </div>
@@ -3413,9 +3413,11 @@ function printStudentCard(id) {
       <div class="panel__t">Personal Information</div>
       ${fact('Father / Guardian', t.fatherName)}
       ${fact('Occupation / Course', t.occupation || t.course)}
-      ${''/* Masked, and NOT with the hover reveal: this is a printed card, and
-              a sheet of paper has no cursor. Same rule the exports follow. */}
-      ${fact('CNIC / ID', maskCnic(t.cnic))}
+      ${''/* THE WHOLE NUMBER (owner, 2026-09-14: "show full cnic in student
+              profile print"). This sheet is the student's own record, printed
+              on purpose for the file — the one printed surface where the
+              identity number is the point. Registers and exports stay masked. */}
+      ${fact('CNIC / ID', t.cnic)}
       ${fact('Nationality', t.nationality)}
       ${fact('Phone Number', t.phone)}
       ${fact('Email Address', t.email)}

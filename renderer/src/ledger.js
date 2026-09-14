@@ -543,3 +543,83 @@ function ledgerDrift() {
   });
   return out;
 }
+
+/* ── PAYMENT HISTORY LINES (spec §3.1, §5 step 5) ──────────────────────────────
+   The receipt's compact history and the Add Payment ledger card read the same
+   lines. Owner, 2026-09-14:
+     · the collector is written as a first name, no role label;
+     · a payment is a plain amount; money taken back (a reversal, an edit down)
+       reads "−"; a charge reads "+" with a short tag; a concession "−";
+       any other correction is signed by what it does to the balance, tagged;
+     · every entry gets its line, so each balance follows from the one above. */
+
+/** "Sara Khan" → "Sara". */
+function ledgerFirstName(name) {
+  const s = String(name || '').trim();
+  return s ? s.split(/\s+/)[0] : '';
+}
+
+/* A charge's short tag: "Sep rent+mess", "admission", or the extra's own label. */
+function _ledgerChargeTag(e) {
+  const part = String(e.part || '');
+  if (part === 'admission') return 'admission';
+  if (part.indexOf('extra:') === 0) return part.slice(6).trim().slice(0, 18) || 'extra';
+  if (part !== 'monthly') return 'charge';
+  const recs = [].concat(DB.payments || [], DB.archive || []);
+  const p    = recs.find(r => r && r.id === e.paymentRecordId);
+  const food = !!p && p.messIncluded !== false && money(p.messCharge) > 0;
+  const mo   = String(typeof monthLabel === 'function' && e.month ? monthLabel(e.month) : (e.month || '')).slice(0, 3);
+  return (mo ? mo + ' ' : '') + (food ? 'rent+mess' : 'rent');
+}
+
+/** One entry as a history line. `sign` is '', '+' or '−'; `amount` is unsigned. */
+function ledgerHistoryLine(e) {
+  const col = ledgerCollectionLine(e);
+  let sign = '', amount = Math.abs(money(e.amount)), tag = '';
+  if (col) {
+    sign   = col.amount < 0 ? '−' : '';
+    amount = Math.abs(col.amount);
+    tag    = col.kind === 'reversed' ? 'reversed' : col.kind === 'edited' ? 'adj' : '';
+  } else if (e.type === 'charge') {
+    sign = '+'; tag = _ledgerChargeTag(e);
+  } else if (e.type === 'concession') {
+    sign = '−'; tag = 'concession';
+  } else {
+    sign = ledgerEffect(e) < 0 ? '−' : '+';
+    tag  = e.part === 'deleted' ? 'deleted' : 'adj';
+  }
+  return { id: e.id, by: ledgerFirstName(e.createdByName), sign, amount, tag,
+           balance: money(e.runningBalance), date: e.createdAt || '',
+           reason: e.reason || '', method: e.method || '' };
+}
+
+/**
+ * A student's newest `n` lines (default 5), oldest first. With `recordId`, the
+ * list ends at that month record's last entry, so reprinting an old month's
+ * receipt never shows money taken after it; null when that record has no
+ * entries. `earlier` counts the lines before the first one shown, and `bf` is
+ * the balance they left.
+ */
+function ledgerHistoryFor(studentId, recordId, n) {
+  const all = ledgerEntriesFor(studentId);
+  let end = all.length;
+  if (recordId) {
+    end = 0;
+    all.forEach((e, i) => { if (e.paymentRecordId === recordId) end = i + 1; });
+    if (!end) return null;
+  }
+  const upto = all.slice(0, end);
+  const rows = upto.slice(-(n || 5));
+  const earlier = upto.length - rows.length;
+  return { rows: rows.map(ledgerHistoryLine), earlier,
+           bf: earlier ? money(upto[earlier - 1].runningBalance) : 0 };
+}
+
+/** Who took the latest money on a month record, as the ledger recorded it. '' when nobody has. */
+function ledgerCollectorOf(recordId) {
+  const list = _ledgerByRecord.get(recordId) || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].type === 'payment' && list[i].createdByName) return list[i].createdByName;
+  }
+  return '';
+}

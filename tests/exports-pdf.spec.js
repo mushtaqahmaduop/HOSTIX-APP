@@ -194,6 +194,7 @@ test('every printed monthly charge carries the mess, not just the rent', async (
   /* NO SEPARATE RENT AND MESS COLUMNS (owner, 2026-09-14, replacing the
      2026-09-10 split): the Charges column carries the month's whole
      "Rent + Mess" charge, and the split lives in Settings and the form. */
+  // "Charges (Rs.)" — the short name the owner offered on 2026-09-14.
   expect(doc.headers).toContain('Charges (Rs.)');
   expect(doc.headers).not.toContain('Rent (Rs.)');
   expect(doc.headers).not.toContain('Mess (Rs.)');
@@ -201,7 +202,8 @@ test('every printed monthly charge carries the mess, not just the rent', async (
   /* …and it comes out in room order too. The FIRST cell is the row's number
      since the owner's sheet added a `#` column, so room order is read from the
      second — which is the column the ordering is actually about. */
-  expect(doc.secondCells).toEqual(['1', '2', '10', 'A 01']);
+  // Room is the first column again since the owner's order of 2026-09-14 (no `#`).
+  expect(doc.firstCells).toEqual(['1', '2', '10', 'A 01']);
 
   await app.close();
 });

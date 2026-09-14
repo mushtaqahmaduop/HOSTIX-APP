@@ -100,26 +100,43 @@ function buildReceiptHTML(payId) {
   var receiptNo = p.receiptNo || 'PREVIEW';
 
   var studentId  = (student && student.id) ? student.id.slice(-8).toUpperCase() : receiptNo;
-  var wardenName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name)
-    ? CUR_USER.name : 'Authorized Warden';
+  /* THE COLLECTOR SIGNS (warden ledger spec §3.1; owner, 2026-09-14). The name
+     is the one the session recorded when the money was taken — so an admin
+     reprinting a warden's receipt prints the warden, not themselves. Who
+     printed it is still on the "Printed: … By:" line under the slip. Records
+     from before the ledger fall back to the collector the record names; a
+     receipt with no money on it is signed by whoever issues it, as before.
+     'Auto' and 'Warden' are placeholders the old forms wrote, not names. */
+  var rcptPaidBy = (p.partialPayments || []).filter(function (t) { return t && t.collectedBy; });
+  var rcptCollector = (typeof ledgerCollectorOf === 'function' ? ledgerCollectorOf(p.id) : '')
+    || (Number(p.amount) > 0
+        ? ((rcptPaidBy.length && rcptPaidBy[rcptPaidBy.length - 1].collectedBy)
+           || (p.collectedBy && p.collectedBy !== 'Auto' && p.collectedBy !== 'Warden' ? p.collectedBy : ''))
+        : '');
+  var wardenName = rcptCollector
+    || ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Authorized Warden');
+  var signCaption = rcptCollector ? 'Collected by' : 'Authorized Warden';
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  /* COMPACT SPACING (owner, 2026-09-14: "the receipt … will consume much paper,
+     so compact the receipt a little"). Rows, rules and section labels keep
+     their sizes close to before; the height came off the margins between them. */
   function dotRow(label, value, bold) {
     var w  = bold ? '900' : '800';
-    var sz = bold ? '15px' : '13px';
+    var sz = bold ? '14px' : '12px';
     return '<div style="display:flex;align-items:baseline;font-family:\'Courier New\',Courier,monospace;'
-      + 'font-size:' + sz + ';font-weight:' + w + ';color:#000;margin:6px 0">'
+      + 'font-size:' + sz + ';font-weight:' + w + ';color:#000;margin:3px 0">'
       + '<span style="white-space:nowrap;color:#111;font-weight:' + (bold?'900':'800') + '">' + label + '</span>'
       + '<span style="flex:1;overflow:hidden;letter-spacing:2px;margin:0 4px;color:#aaa">................................................................................................................................................................</span>'
       + '<span style="white-space:nowrap;font-weight:900;color:#000">' + value + '</span>'
       + '</div>';
   }
   function sep(style) {
-    return '<div style="border-top:1.5px ' + (style||'dashed') + ' #888;margin:8px 0"></div>';
+    return '<div style="border-top:1.5px ' + (style||'dashed') + ' #888;margin:4px 0"></div>';
   }
   function secLabel(txt) {
-    return '<div style="font-family:\'Courier New\',Courier,monospace;font-size:12px;letter-spacing:2px;'
-      + 'text-transform:uppercase;color:#000;font-weight:900;margin:10px 0 6px;'
+    return '<div style="font-family:\'Courier New\',Courier,monospace;font-size:11px;letter-spacing:2px;'
+      + 'text-transform:uppercase;color:#000;font-weight:900;margin:5px 0 3px;'
       + 'border-left:4px solid #222;padding-left:8px">' + txt + '</div>';
   }
 
@@ -128,34 +145,42 @@ function buildReceiptHTML(payId) {
     + 'max-width:360px;margin:0 auto;border-radius:4px;overflow:hidden;'
     + 'box-shadow:0 4px 24px rgba(0,0,0,0.18);border:1px solid #e0e0e0">';
 
-  html += '<div style="height:12px;background:#fafaf8;border-bottom:2px dashed #bbb;position:relative">'
+  html += '<div style="height:8px;background:#fafaf8;border-bottom:2px dashed #bbb;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';
 
-  html += '<div style="padding:16px 22px 12px;text-align:center">';
-  html += '<div style="font-size:8px;letter-spacing:4px;color:#555;font-weight:800;margin-bottom:8px">* * * PAYMENT RECEIPT * * *</div>';
+  /* ONE HEADER ROW (owner, 2026-09-14): the hostel on the left — logo, name,
+     address, phone — and the student number, date, time and receipt number on
+     the right, top-aligned with it. They used to be two stacked centred blocks
+     with a rule between them, which cost the slip about a quarter of its head. */
+  html += '<div style="padding:8px 18px 4px">';
+  html += '<div style="font-size:8px;letter-spacing:4px;color:#555;font-weight:800;margin-bottom:6px;text-align:center">* * * PAYMENT RECEIPT * * *</div>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">';
+  html += '<div style="display:flex;gap:8px;align-items:flex-start;flex:1;min-width:0;text-align:left">';
   if (logoData) {
-    html += '<div style="margin:0 auto 8px;width:54px;height:54px;border-radius:12px;overflow:hidden;border:1.5px solid #ccc">'
+    html += '<div style="flex:none;width:40px;height:40px;border-radius:8px;overflow:hidden;border:1.5px solid #ccc">'
       + '<img src="' + logoData + '" style="width:100%;height:100%;object-fit:cover">'
       + '</div>';
   }
-  html += '<div style="font-size:18px;font-weight:900;letter-spacing:1.5px;line-height:1.2;color:#000">' + escHtml(hostel) + '</div>';
-  if (location) html += '<div style="font-size:9.5px;color:#333;font-weight:700;margin-top:4px;letter-spacing:0.5px">' + escHtml(location) + '</div>';
-  if (phone)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:2px">Tel: ' + escHtml(phone) + '</div>';
-  if (email)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:1px">Email: ' + escHtml(email) + '</div>';
-
-  html += sep();
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#000;font-weight:900">';
-  html += '<span style="letter-spacing:1px">STU-' + studentId + '</span>';
-  html += '<span>' + now2 + ' ' + nowTime + '</span>';
+  html += '<div style="min-width:0">';
+  html += '<div style="font-size:14px;font-weight:900;letter-spacing:1px;line-height:1.15;color:#000">' + escHtml(hostel) + '</div>';
+  if (location) html += '<div style="font-size:9px;color:#333;font-weight:700;margin-top:2px;letter-spacing:0.3px">' + escHtml(location) + '</div>';
+  if (phone)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:1px">Tel: ' + escHtml(phone) + '</div>';
+  if (email)    html += '<div style="font-size:9px;color:#555;font-weight:700;margin-top:1px;word-break:break-all">Email: ' + escHtml(email) + '</div>';
+  html += '</div></div>';
+  html += '<div style="flex:none;text-align:right;font-size:10px;font-weight:900;color:#000;line-height:1.4">'
+    + '<div style="letter-spacing:1px">STU-' + escHtml(studentId) + '</div>'
+    + '<div>' + now2 + '</div>'
+    + '<div>' + nowTime + '</div>'
+    + '<div style="font-size:9px;color:#555;font-weight:700">Receipt #: ' + escHtml(receiptNo) + '</div>'
+    + '</div>';
   html += '</div>';
-  html += '<div style="font-size:9.5px;color:#555;font-weight:700;margin-top:3px;text-align:right">Receipt #: ' + escHtml(receiptNo) + '</div>';
   html += '</div>';
 
   html += sep('solid');
 
-  html += '<div style="padding:4px 22px 8px">';
+  html += '<div style="padding:2px 18px 4px">';
   html += secLabel('Student Details');
   html += dotRow('Name',      escHtml(p.studentName || '—'));
   html += dotRow('Room No',   escHtml(room ? roomText(room)
@@ -184,7 +209,7 @@ function buildReceiptHTML(payId) {
     || (rcptDiscount > 0 || rcptAdmFee > 0 || rcptExtra > 0 || rcptMess > 0 ? 0 : Number(p.amount || 0));
   var rcptTotalDue = Math.max(0, rcptMonthly + rcptMess + rcptAdmFee + rcptExtra - rcptDiscount);
 
-  html += '<div style="padding:4px 22px 10px">';
+  html += '<div style="padding:2px 18px 4px">';
   html += secLabel('Fee Breakdown');
   // ONE LINE FOR RENT AND MESS (owner, 2026-09-14): a month that bills food
   // prints "Rent + Mess" with its whole charge — never the split as two lines.
@@ -243,54 +268,60 @@ function buildReceiptHTML(payId) {
   }
   html += '</div>';
 
-  /* THE PAYMENT HISTORY SECTION IS GONE (owner, 2026-09-10: "remove payment
-     history and student signing area and success and pending emojis").
+  /* THE PAYMENT HISTORY IS BACK, COMPACT (warden ledger spec §3.1, §5 step 5;
+     owner, 2026-09-14). The section removed on 2026-09-10 listed every
+     instalment behind this month's figure with a reconciliation warning; that
+     one stays gone. This one is the student's newest 5 `student_ledger` lines
+     up to this receipt — across months, ending at this record's last entry so
+     a reprint of an old month never shows later money. One line each: first
+     name, amount, the balance after. A "b/f" line carries the balance from
+     before the first line shown. The line rules live in ledgerHistoryLine().
 
-     It listed every instalment behind this month's figure — often five or six
-     entries — on a slip whose whole job is to say "you handed over X today".
-     The student already knows what they paid before; the warden has the full
-     trail on the payment record and in the student's ledger, where it can be
-     read on a screen instead of an 80mm roll.
-
-     The reconciliation warning it carried goes with it. That check still runs
-     where it matters: the boot repair removes instalment trails that are
-     provably false, and the ledger in the student panel is the surface that
-     shows what survives. The receipt was never the place to raise it — a
-     student holding a slip cannot act on "these entries do not reconcile".
-
-     THE STUDENT SIGNATURE BLOCK IS GONE TOO. The hostel signs the receipt
+     THE STUDENT SIGNATURE BLOCK STAYS GONE. The hostel signs the receipt
      because the hostel is the one attesting that money was received; asking
-     the payer to sign the payer's own copy attests nothing, and it cost two
-     blank lines on every slip. The warden's line stays. */
+     the payer to sign the payer's own copy attests nothing. */
+  var rcptHist = (p.studentId && typeof ledgerHistoryFor === 'function')
+    ? ledgerHistoryFor(p.studentId, p.id, 5) : null;
+  if (rcptHist && rcptHist.rows.length) {
+    var histRow = function (left, right) {
+      return '<div style="display:flex;gap:8px;align-items:baseline;font-family:\'Courier New\',Courier,monospace;'
+        + 'font-size:11px;font-weight:800;color:#111;margin:3px 0">'
+        + '<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + left + '</span>'
+        + '<span style="white-space:nowrap;font-weight:900;color:#000">' + right + '</span></div>';
+    };
+    var histBal = function (b) { return 'bal ' + (b < 0 ? '−' : '') + fmtNum(Math.abs(b)); };
+    html += sep('dashed');
+    html += '<div style="padding:2px 18px 4px" data-rcpt="history">';
+    html += secLabel('Payment History');
+    if (rcptHist.earlier) html += histRow('b/f', histBal(rcptHist.bf));
+    rcptHist.rows.forEach(function (r) {
+      html += histRow(escHtml(r.by || '—') + ': ' + r.sign + fmtNum(r.amount)
+        + (r.tag ? ' ' + escHtml(r.tag) : ''), histBal(r.balance));
+    });
+    html += '</div>';
+  }
   html += sep('dashed');
 
-  html += '<div style="padding:8px 22px 6px">';
+  html += '<div style="padding:2px 18px 4px">';
   html += '<div style="display:flex;justify-content:flex-end;font-family:monospace;font-size:10px;color:#333">';
-  html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:4px;margin-top:28px;min-width:110px">'
-    + escHtml(wardenName) + '<br><span style="font-size:8px;color:#888">Authorized Warden</span></div></div>';
+  html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:3px;margin-top:20px;min-width:110px">'
+    + escHtml(wardenName) + '<br><span style="font-size:8px;color:#888">' + signCaption + '</span></div></div>';
   html += '</div>';
   html += '</div>';
 
   html += sep('dashed');
 
-  html += '<div style="padding:10px 22px 8px;text-align:center">';
-  html += '<div style="font-size:12px;font-weight:900;letter-spacing:3px;margin-bottom:6px;color:#000">** THANK YOU **</div>';
-  html += '<div style="font-size:9px;color:#888;font-family:monospace">This is a computer-generated receipt.</div>';
+  /* ONE FOOTER BLOCK (owner, 2026-09-14): the hostel name and phone are no
+     longer repeated here — the header already carries them — and the
+     "computer-generated receipt" line is gone. Thank-you and the Powered-by
+     line are all that is left. */
+  var appName = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTYLLO';
+  html += '<div style="padding:4px 18px 4px;text-align:center">';
+  html += '<div style="font-size:11px;font-weight:900;letter-spacing:3px;color:#000">** THANK YOU **</div>';
+  html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace;margin-top:2px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
   html += '</div>';
 
-  // ── Powered-by footer (uses client's hostel name + system name) ───────────
-  var appName   = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTYLLO';
-  var hostelFtr = (typeof DB !== 'undefined' && DB.settings && DB.settings.hostelName) ? DB.settings.hostelName : '';
-  var phoneFtr  = (typeof DB !== 'undefined' && DB.settings && DB.settings.phone)      ? DB.settings.phone      : '';
-  html += '<div style="border-top:1px dashed #ccc;margin:0 22px;padding:8px 0 6px;text-align:center">';
-  if (hostelFtr) html += '<div style="font-size:9px;color:#555;font-family:monospace;font-weight:700">' + escHtml(hostelFtr) + '</div>';
-  // "Tel:", not a telephone emoji — same reason the status row lost its two:
-  // a colour emoji prints as a black blob on an 80mm thermal roll.
-  if (phoneFtr)  html += '<div style="font-size:8px;color:#888;font-family:monospace;margin-top:1px">Tel: ' + escHtml(phoneFtr) + '</div>';
-  html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace;margin-top:3px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
-  html += '</div>';
-
-  html += '<div style="height:12px;background:#fafaf8;border-top:2px dashed #bbb;position:relative">'
+  html += '<div style="height:8px;background:#fafaf8;border-top:2px dashed #bbb;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';

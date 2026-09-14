@@ -718,9 +718,9 @@ input.ws__amt {
 .ap-stub__bal.is-clear { background:var(--green);  border:1px solid var(--green);  color:var(--bg); }
 .ap-stub__bal.is-none b, .ap-stub__bal.is-due b, .ap-stub__bal.is-clear b { color:inherit; }
 
-/* Ledger — what has already been collected, month by month. */
+/* Ledger — the student's newest ledger lines: date, who, amount, balance after. */
 .ap-led__head, .ap-led__r {
-    display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr) auto; gap:8px;
+    display:grid; grid-template-columns:minmax(44px,auto) minmax(0,1fr) auto minmax(52px,auto); gap:8px;
     align-items:baseline; padding:6px 12px;
 }
 .ap-led__head {
@@ -728,12 +728,17 @@ input.ws__amt {
     font-size:9px; font-weight:700; color:var(--text3);
     text-transform:uppercase; letter-spacing:.6px;
 }
-.ap-led__head > span:last-child { text-align:right; }
+.ap-led__head > span:nth-child(n+3) { text-align:right; }
+.ap-led__b    {
+    text-align:right; font-size:11.5px; font-weight:600; color:var(--text3); white-space:nowrap;
+    font-family:var(--ant-num-font); font-variant-numeric:tabular-nums;
+    letter-spacing:var(--ant-num-track);
+}
 .ap-led__r { border-bottom:1px solid var(--border); padding:8px 12px; }
 .ap-led__r:last-child { border-bottom:none; }
 .ap-led__m    { font-size:11.5px; font-weight:700; color:var(--text);
                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ap-led__meth { font-size:11px; color:var(--text3);
+.ap-led__by   { font-size:11px; color:var(--text3);
                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ap-led__v    {
     text-align:right; font-size:12.5px; font-weight:800; color:var(--text); white-space:nowrap;
@@ -1014,6 +1019,20 @@ input.ws__amt {
 /* "September 2026" broke across two lines in a 76px column, which is a date
    turned into two facts and an extra line of height on every row in the table. */
 .pay-table tbody td:nth-child(4) { white-space:nowrap; }
+/* ROOM AND MONTH HUG WHAT THEY HOLD (owner, 2026-09-14: "reduce the free space
+   between room number and month to have full content view port"). An auto
+   table shares its spare width across every column, and these two got a large
+   share of air around a small label. width:1% shrinks each to its content; the
+   width they gave back goes to the columns that need it. */
+.pay-table thead th:nth-child(3), .pay-table tbody td:nth-child(3),
+.pay-table thead th:nth-child(4), .pay-table tbody td:nth-child(4) { width:1%; }
+/* …and the room label never breaks inside its box. "#A 01" was wrapping to
+   "#A" over "01", which made every row a line taller than it needed to be. */
+.pay-table tbody td:nth-child(3) .lk-room__n { white-space:nowrap; }
+/* The name block is 210px here, not the shared 240: measured at 1366 the table
+   was 24px wider than its card, and the Student column was the widest in it.
+   (td + .pay-who out-ranks registers-center.css, which loads last.) */
+.pay-table td .pay-who { max-width:210px; }
 /* NEUTRAL, AND THE HUE CLASS IS IGNORED ON PURPOSE.
 
    chargeCoverage() returns a dh-green / dh-amber / dh-slate / dh-blue hue and

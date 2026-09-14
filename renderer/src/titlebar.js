@@ -129,6 +129,9 @@
     }
     menuEl.classList.add('hz-open');
     btnOf(menuEl).setAttribute('aria-expanded', 'true');
+    // An auto-hidden bar comes down with its menu — Alt+F must not open a
+    // panel hanging from a bar that is above the window.
+    document.body.classList.add('hz-tb-show');
     openMenu = menuEl;
     if (focusFirst) { var it = itemsOf(menuEl)[0]; if (it) it.focus(); }
   }
@@ -239,7 +242,40 @@
   });
   // Alt-Tabbing away with the hints up left them underlined until the next
   // keystroke, and an open menu floating over an unfocused window.
-  window.addEventListener('blur', function () { closeMenus(false); });
+  window.addEventListener('blur', function () {
+    closeMenus(false);
+    document.body.classList.remove('hz-tb-show');
+  });
+
+  // ── Auto-hide (owner, 2026-09-14) ─────────────────────────────────────────
+  // See titlebar.css. The bar is a drag region, and Windows gives a drag
+  // region's mouse events to the OS, not the page — so "is the cursor on the
+  // bar" cannot be read from the bar's own mouseenter/leave. It is read from
+  // where the page's mousemove says the cursor is instead: at the very top edge
+  // the bar comes down; below the bar it goes back up, after a short grace so
+  // brushing past its lower edge does not flicker it. While a menu is open it
+  // stays. license.html (minimal) keeps a fixed bar.
+  if (!minimal) {
+    document.body.classList.add('hz-tb-autohide');
+    var hideTimer = null;
+    document.addEventListener('mousemove', function (e) {
+      var shown = document.body.classList.contains('hz-tb-show');
+      var h = bar.offsetHeight || 40;
+      if (e.clientY <= 4) {
+        clearTimeout(hideTimer);
+        document.body.classList.add('hz-tb-show');
+      } else if (shown && e.clientY > h + 8) {
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(function () {
+          if (!openMenu) document.body.classList.remove('hz-tb-show');
+        }, 300);
+      } else if (shown) {
+        clearTimeout(hideTimer);
+      }
+    }, { passive: true });
+    // Keyboard focus inside the bar (Tab from the page) brings it down too.
+    bar.addEventListener('focusin', function () { document.body.classList.add('hz-tb-show'); });
+  }
 
   // ── Window controls ────────────────────────────────────────────────────────
   var maxBtn = bar.querySelector('.hz-max');

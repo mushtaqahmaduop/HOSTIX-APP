@@ -77,7 +77,7 @@ html {
    modal 722px tall with 20px of header padding; at the density this file sets,
    the header's first line lands at 27px and the bar cuts the title in half.
    The overlay joins the list. */
-body.has-titlebar .modal-overlay { top: var(--titlebar-h); }
+body.has-titlebar .modal-overlay { top: var(--titlebar-offset, var(--titlebar-h)); }
 
 .modal-body {
     min-height: 0;

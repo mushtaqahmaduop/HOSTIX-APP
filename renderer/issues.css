@@ -50,11 +50,18 @@
    because `complaints2.png` draws one, and because the Payments ruling on the
    identical conflict was to keep every column and let the table pan.       */
 .iss-wrap  { margin-top:12px; }
-.iss-table { min-width:1150px; }
+/* 1150 → 1000 (owner, 2026-09-14: "the title space should be reduced to have
+   full content viewport"). 1150 was wider than the register's own card at
+   1366 (1070px), so the table panned even with every column at its minimum.
+   Below ~1000 it still pans, as the Payments ruling above says. */
+.iss-table { min-width:1000px; }
 
 .iss-table thead th:nth-child(1),
-.iss-table tbody td:nth-child(1)  { width:82px; }
-.iss-table thead th:nth-child(2)  { min-width:230px; }
+.iss-table tbody td:nth-child(1)  { width:72px; }
+/* 230 → 140, with .iss-c-title's floor below (owner, 2026-09-14). This header
+   floor was what kept the Issue column at 230px after the cell's own floor
+   came down. */
+.iss-table thead th:nth-child(2)  { min-width:140px; }
 .iss-table thead th:nth-child(4),
 .iss-table tbody td:nth-child(4)  { width:84px; }
 /* Actions. `.lk-acts` wraps by default, and at 132px the four icon buttons
@@ -172,3 +179,30 @@
    that is a row-height decision, not a width one, and a register whose rows
    are three lines tall stops being scannable. */
 .iss-c-title { max-width:none; width:100%; min-width:340px; }
+
+/* ══ …AND GIVES IT BACK WHEN THE REGISTER IS FULL (owner, 2026-09-14: "in
+   complaints, the title space should be reduced to have full content
+   viewport") ══════════════════════════════════════════════════════════════
+   The 340px floor pushed the register past the window once rows carried a
+   student, a room and an assignee, so the last columns sat off-screen behind
+   a scroll. The floor is now 200px: the title still takes the slack when there
+   is some, and its description still clamps to two lines with the whole text
+   on hover. */
+/* Measured at 1366 with a student, a room and an assignee on the rows: the
+   register was 1229px in a 1070px card. It fits after three cuts — the Issue
+   floor to 140px, 7px of side padding in every cell instead of 12px, and the
+   Raised by name/phone capped at 100px (both ellipsise; the title keeps its
+   whole text on hover). Vertical padding is untouched. */
+/* width:auto undoes the earlier width:100% — in an overflowing auto table that
+   made the Issue column greedy (241px against its 140px floor). */
+.iss-c-title { min-width:140px; width:auto; }
+.iss-table thead th, .iss-table tbody td { padding-left:7px; padding-right:7px; }
+.iss-table .lk-who__n,
+.iss-table .lk-who__s  { max-width:100px; }
+/* The room label stays on one line — "#A 01" broke to "#A" over "01". */
+.iss-table .lk-room__n { white-space:nowrap; }
+
+/* The Student / Staff switch on the maintenance form's "Raised by" — the form's
+   kind switch at field size, sitting directly above the control it chooses. */
+.hf-switch--in { margin-bottom:6px; border-radius:9px; }
+.hf-switch--in .hf-switch__b { padding:6px 10px; font-size:12px; }

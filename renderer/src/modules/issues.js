@@ -101,7 +101,12 @@ function _issAll() {
   const rooms  = DB.rooms || [];
   const roomNo = id => { const r = rooms.find(x => x.id === id); return r ? String(r.number) : ''; };
 
-  const m = (DB.maintenance||[]).map(x => ({
+  const m = (DB.maintenance||[]).map(x => {
+    /* RAISED BY A STUDENT (owner, 2026-09-14): `raisedById` links the resident
+       who reported it, so the register shows them like a complaint's student.
+       A ticket raised by staff keeps the typed name and no link. */
+    const s = x.raisedById ? ((DB.students||[]).find(t => t.id === x.raisedById) || null) : null;
+    return {
     kind:'maintenance', raw:x, id:x.id, title:x.title||'',
     desc:x.description||'', date:x.date||'', resolved:x.resolvedDate||'',
     status:x.status||'Open', priority:x.priority||'Medium',
@@ -111,8 +116,9 @@ function _issAll() {
        the maintenance form never asked — so every maintenance row printed an
        empty Student cell. Tickets written before the field existed still have
        nothing to show, and show nothing rather than a guess. */
-    roomNo: roomNo(x.roomId), by:x.raisedBy||'', student:null, response:'',
-  }));
+    roomNo: roomNo(x.roomId), by: s ? s.name : (x.raisedBy||''), student: s, response:'',
+    };
+  });
 
   const c = (DB.complaints||[]).map(x => {
     const s = (DB.students||[]).find(t => t.id === x.studentId) || null;
@@ -375,10 +381,10 @@ function renderIssues() {
             <div class="lk-who__av dh-violet">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</div>
             <div style="min-width:0">
               <div class="lk-who__n">${escHtml(i.by)}</div>
-              ${/* A CNIC is masked and revealed on hover (owner, 2026-09-10);
-                    a phone is not — the whole point of the sub-line is that a
-                    warden can dial it. */''}
-              <div class="lk-who__s">${i.student.cnic ? cnicHtml(i.student.cnic) : escHtml(i.student.phone || '')}</div>
+              ${/* THE PHONE, NEVER THE CNIC (owner, 2026-09-14: "remove cnic
+                    from complaints page"). A complaint needs a number a warden
+                    can dial; the identity number is on the student's record. */''}
+              <div class="lk-who__s">${escHtml(i.student.phone || '')}</div>
             </div>
           </div>`
         : i.by ? `${/* A maintenance ticket now records who reported it (owner,
@@ -656,6 +662,17 @@ function showIssueModal(id) {
          + `${escHtml(s.name)}${r ? ' — Room ' + escHtml(String(r.number)) : ''}</option>`;
   }).join('');
 
+  /* The maintenance form's student list — same pool, selected by the ticket's
+     `raisedById` rather than a complaint's `studentId`. */
+  const mtByStu = !!(rec && rec.kind === 'maintenance' && rec.raw.raisedById);
+  const mtStuPool = (DB.students || []).filter(s =>
+    s.status === 'Active' || (rec && rec.raw.raisedById === s.id));
+  const mtStuOpts = studentsByRoom(mtStuPool).map(s => {
+    const r = (DB.rooms || []).find(x => x.id === s.roomId);
+    return `<option value="${escHtml(s.id)}" ${rec && rec.raw.raisedById === s.id ? 'selected' : ''}>`
+         + `${escHtml(s.name)}${r ? ' — Room ' + escHtml(String(r.number)) : ''}</option>`;
+  }).join('');
+
   const catOpts = ISS_CATS.map(c =>
     `<option value="${escHtml(c.key)}" ${rec && rec.category === c.key ? 'selected' : ''}>${escHtml(c.key)}</option>`).join('');
 
@@ -737,9 +754,29 @@ function showIssueModal(id) {
                  that only offers logins cannot hold three of those four. It
                  defaults to whoever is signed in, since that is who is at the
                  keyboard writing the ticket. */}
-          ${_issField('Raised by', 'person',
-            `<input id="mt-raised" class="form-control" list="iss-raisers" placeholder="Who reported it"
-                    value="${rec ? escHtml(rec.by) : escHtml((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '')}">`)}
+          ${''/* A STUDENT OR STAFF (owner, 2026-09-14: "maintenance should also be
+                 raised by student and its room number"). Student: picked from
+                 the residents, and the ticket's room becomes the room on their
+                 record (the Room box locks to it). Staff: the free-text name as
+                 before, and the room is chosen by hand. */}
+          <div class="field">
+            <label>Raised by</label>
+            <div class="hf-switch hf-switch--in" role="tablist">
+              <button type="button" id="mt-by-stu" role="tab" class="hf-switch__b${mtByStu ? ' is-on' : ''}"
+                      onclick="_issMtRaiser('student')">${icon('student','xs')} Student</button>
+              <button type="button" id="mt-by-staff" role="tab" class="hf-switch__b${mtByStu ? '' : ' is-on'}"
+                      onclick="_issMtRaiser('staff')">${icon('person','xs')} Staff</button>
+            </div>
+            <div class="hf-in" id="mt-by-stu-box"${mtByStu ? '' : ' style="display:none"'}>
+              <span class="hf-in__i">${icon('student', 'xs')}</span>
+              <select id="mt-raised-stu" class="form-control" onchange="_issSyncMtRoom()"><option value="">Select student</option>${mtStuOpts}</select>
+            </div>
+            <div class="hf-in" id="mt-by-staff-box"${mtByStu ? ' style="display:none"' : ''}>
+              <span class="hf-in__i">${icon('person', 'xs')}</span>
+              <input id="mt-raised" class="form-control" list="iss-raisers" placeholder="Who reported it"
+                     value="${rec ? (mtByStu ? '' : escHtml(rec.by)) : escHtml((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '')}">
+            </div>
+          </div>
           ${_issField('Assigned to', 'person',
             `<input id="mt-assigned" class="form-control" list="iss-staff" placeholder="Staff member or contractor" value="${rec ? escHtml(rec.assigned) : ''}">`)}
         </div>
@@ -822,6 +859,39 @@ function showIssueModal(id) {
      </div>`);
 
   if (kind === 'complaint' && !rec) _issSyncCompRoom();
+  if (mtByStu) _issSyncMtRoom();
+}
+
+/** Is the maintenance form's "Raised by" on Student? */
+function _issMtByStudent() {
+  const b = document.getElementById('mt-by-stu');
+  return !!(b && b.classList.contains('is-on'));
+}
+
+/** Switch "Raised by" between a resident and a staff name (owner, 2026-09-14). */
+function _issMtRaiser(mode) {
+  const stu = mode === 'student';
+  const bs = document.getElementById('mt-by-stu'), bf = document.getElementById('mt-by-staff');
+  if (bs) bs.classList.toggle('is-on', stu);
+  if (bf) bf.classList.toggle('is-on', !stu);
+  const boxS = document.getElementById('mt-by-stu-box'), boxF = document.getElementById('mt-by-staff-box');
+  if (boxS) boxS.style.display = stu ? '' : 'none';
+  if (boxF) boxF.style.display = stu ? 'none' : '';
+  _issSyncMtRoom();
+}
+
+/** A student's ticket is for the room on their record — shown in the Room box
+ *  and locked there. Staff pick the room themselves. */
+function _issSyncMtRoom() {
+  const room = document.getElementById('mt-room');
+  if (!room) return;
+  const byStu = _issMtByStudent();
+  room.disabled = byStu;
+  if (byStu) {
+    const sel = document.getElementById('mt-raised-stu');
+    const s = sel ? (DB.students || []).find(t => t.id === sel.value) : null;
+    room.value = s && s.roomId ? s.roomId : '';
+  }
 }
 
 /** Swap which of the two forms is on screen. */
@@ -870,10 +940,17 @@ async function saveIssue(id) {
     if (!title) { toast('Enter an issue title', 'error'); return; }
     if (!DB.maintenance) DB.maintenance = [];
 
+    /* Raised by a student: their name and link are recorded, and the room is
+       the one on their record — not whatever the room box says. */
+    const byStudent = _issMtByStudent();
+    const byStu = byStudent
+      ? ((DB.students || []).find(s => s.id === _issVal('mt-raised-stu')) || null) : null;
+    if (byStudent && !byStu) { toast('Select the student who raised it', 'error'); return; }
+
     const status = _issVal('mt-status') || 'Open';
     const fields = {
       title,
-      roomId:       _issVal('mt-room'),
+      roomId:       byStu ? (byStu.roomId || '') : _issVal('mt-room'),
       category:     _issVal('mt-category'),
       priority:     _issVal('mt-priority') || 'Medium',
       location:     _issVal('mt-location'),
@@ -882,7 +959,8 @@ async function saveIssue(id) {
       expectedDate: _issVal('mt-expected'),
       assignedTo:   _issVal('mt-assigned'),
       // Who reported it (owner, 2026-09-10). Read back by _issAll() as `by`.
-      raisedBy:     _issVal('mt-raised'),
+      raisedBy:     byStu ? byStu.name : _issVal('mt-raised'),
+      raisedById:   byStu ? byStu.id : '',
       status,
     };
 

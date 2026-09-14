@@ -129,6 +129,12 @@ declare function ledgerBalance(studentId: string): number;
 declare function ledgerEntriesFor(studentId: string): any[];
 declare function ledgerDrift(): any[];
 declare function ledgerCollectionLine(e: any): { kind: string; amount: number } | null;
+declare function ledgerFirstName(name: string): string;
+declare function ledgerHistoryLine(e: any): { id: string; by: string; sign: string; amount: number; tag: string;
+  balance: number; date: string; reason: string; method: string };
+declare function ledgerHistoryFor(studentId: string, recordId: string | null, n?: number):
+  { rows: ReturnType<typeof ledgerHistoryLine>[]; earlier: number; bf: number } | null;
+declare function ledgerCollectorOf(recordId: string): string;
 // -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
 declare function handoverSync(): number;
 declare function hoNeedsHandover(accountId: string): boolean;

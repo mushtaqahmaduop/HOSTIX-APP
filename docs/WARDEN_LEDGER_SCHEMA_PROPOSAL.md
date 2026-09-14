@@ -329,6 +329,18 @@ backup or recovery snapshot made before step 4 still restores (they are not requ
 by the missing-table check); collections posted before step 4 get their
 `pending_handover` row once, at start-up, so status is always read from one place.
 
+## Step 5 decisions (owner, 2026-09-14, asked before code)
+
+| Case | Decided |
+|---|---|
+| Name on the receipt's signature line | **The collector** — the name the session recorded when the money was taken (latest payment entry on the record), captioned "Collected by". A reprint by someone else still names the collector; the "Printed … By:" line under the slip names who printed. A record with no money on it is signed by whoever issues it, as before. |
+| Which lines the receipt's Payment History shows | **Newest 5 up to this receipt**, across months, ending at this month record's last entry (a reprint of an old month never shows later money). A **b/f** line gives the balance before the first line shown — the spec's "10,000 total" line. |
+| Concessions, corrections, reversals in the history | **Every entry gets a line**, signed with a short tag: charge `+17,000 Sep rent+mess`, payment plain `5,000`, concession `−1,500 concession`, reversal `−10,000 reversed`, amount edited down `−X adj`, other corrections signed by their effect on the balance `±X adj`, deleted record `±X deleted`. |
+| Add Payment "previous payments" | **The existing Ledger card** on the Add Payment page now lists the newest 5 ledger lines, newest first: Date · By · Amount (with tag) · Balance. The full reason shows on hover. |
+
+As built: the line rules are one function, `ledgerHistoryLine()` in `renderer/src/ledger.js`,
+read by both the receipt (`buildReceiptHTML`) and the Add Payment card (`pfRenderRecent`).
+
 ## What happens next
 
 Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**

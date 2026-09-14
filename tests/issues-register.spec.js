@@ -248,7 +248,9 @@ test('the form adds, edits in place, and fills a complaint room from its student
     raised: document.getElementById('mt-raised').value,
     // A complaint cannot become a maintenance ticket, so the kind switch is
     // not offered on an edit.
-    hasSwitch: !!document.querySelector('.hf-switch'),
+    // The KIND switch specifically: since 2026-09-14 the form also carries a
+    // Student / Staff switch on "Raised by", drawn with the same component.
+    hasSwitch: !!document.getElementById('ib-maint'),
   }));
   expect(prefill).toEqual({ title: 'Water leakage in bathroom', cat: 'Plumbing',
     prio: 'High', loc: 'Bathroom', exp: '2026-09-05', asg: 'Azat Ullah',

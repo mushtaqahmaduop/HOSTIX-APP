@@ -111,7 +111,13 @@ test('the stack is centred, and clears the controls it used to cover', async () 
   /* And it starts below the title bar rather than under it — #hz-titlebar is
      z-index 100000, above everything, so a toast at top:0 loses its close
      button to it. */
-  expect(geo.top).toBeGreaterThan(30);
+  // Since 2026-09-14 the bar auto-hides and takes no height, so "below it"
+  // means below wherever its bottom edge is now.
+  const barBottom = await win.evaluate(() => {
+    const b = document.getElementById('hz-titlebar');
+    return b ? Math.max(0, b.getBoundingClientRect().bottom) : 0;
+  });
+  expect(geo.top).toBeGreaterThanOrEqual(barBottom);
 
   await app.close();
 });
