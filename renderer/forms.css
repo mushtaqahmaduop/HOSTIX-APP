@@ -321,6 +321,10 @@ body.has-titlebar .modal-overlay { top: var(--titlebar-offset, var(--titlebar-h)
    payment form). Without this a disabled box kept its white ground and read as
    one that simply ignored the keyboard. */
 .hf-in > .form-control:disabled { background: var(--bg3); color: var(--text2); cursor: not-allowed; }
+/* A disabled button looks disabled. `.btn` had no :disabled state anywhere the
+   app loads, so the payment form's locked Delete kept its full red fill and a
+   pointer cursor while doing nothing (design-governance, step 6). */
+.btn:disabled, .btn[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; }
 
 /* ── 8. ACTION BAR (spec §9) ────────────────────────────────────────────────
    Buttons share one height across every form, and a destructive action is
