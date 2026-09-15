@@ -98,6 +98,13 @@ body.light-theme #login-screen { background:
     font-size: 12.5px; font-weight: 650; color: var(--lg-ink);
 }
 .lg-p + .lg-lbl, .lg-addr + .lg-lbl { margin-top: 28px; }
+/* The username label shares its row with Switch account (loginSwitchAccount()
+   in auth-nev.js), so the row carries the label's spacing. */
+.lg-lblrow { display: flex; align-items: flex-end; gap: 10px; margin-top: 18px; margin-bottom: 7px; }
+.lg-lblrow > .lg-lbl { margin: 0; }
+.lg-p + .lg-lblrow, .lg-addr + .lg-lblrow { margin-top: 28px; }
+#login-screen .lg-swap { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+#login-screen .lg-swap[hidden], #login-screen .lg-forget[hidden] { display: none; }
 .lg-field { position: relative; display: flex; align-items: center; }
 .lg-field > svg.lg-lead { position: absolute; left: 15px; color: var(--lg-ink3); pointer-events: none; }
 #login-screen .lg-in {
@@ -288,6 +295,8 @@ body.light-theme #login-screen { background:
     .lg-h          { font-size: 27px; }
     .lg-lbl        { margin-top: 14px; }
     .lg-p + .lg-lbl, .lg-addr + .lg-lbl { margin-top: 20px; }
+    .lg-lblrow     { margin-top: 14px; }
+    .lg-p + .lg-lblrow, .lg-addr + .lg-lblrow { margin-top: 20px; }
     .lg-safe       { margin-top: 16px; }
     .lg-side       { padding: 30px 40px 24px; }
     .lg-brand      { margin-bottom: 18px; }

@@ -327,33 +327,34 @@ function _remainingAttempts(role) {
 /*
  * REMEMBER ME.
  *
- * Owner's call, 2026-08-30: wardens were retyping a password every time the
- * app opened, several times a shift. This screen had deliberately shipped
- * WITHOUT the checkbox, on the argument that it defeats the 8h session and the
- * 30min idle logout on a shared counter PC. It does not have to. What is
- * remembered is the session that already exists, never the password:
+ * Owner's calls: 2026-08-30 added the box; 2026-09-15 narrowed it, after an
+ * installed app kept opening with no password asked. What is remembered is
+ * USERNAMES, never a session and never a password:
  *
- *   - The 8h sessionTTL still bounds it. A shift is a shift; tomorrow asks
- *     again. Nothing here raises that ceiling.
- *   - The 30min idle logout still runs the whole time the app is open.
- *   - The password is not stored, in any form. Nothing new lands on disk that
- *     could be read back as a credential -- only a token that dies with the
- *     shift.
- *
- * The real cost, stated plainly: the session token now sits in localStorage,
- * so it survives closing the app. That is the entire feature. On a machine
- * where the hostel's whole database already lives beside it, the token is not
- * the most valuable thing on that disk.
- *
- * The idle rule is deliberately NOT charged for the time the app was shut.
- * Idle logout protects an app left open and unattended; a closed app is not
- * sitting on a counter showing anybody's data. Without this exception a warden
- * who closed the app over lunch would be asked to sign in again anyway, which
- * is the complaint that started this.
+ *   - Every launch asks for the password. The session lives in sessionStorage
+ *     only, so closing the app ends it. (The 2026-08-30 version kept the
+ *     session in localStorage for up to 8h, which is what let the app open
+ *     straight in.)
+ *   - The 8h sessionTTL and the 30min idle logout still bound a running app.
+ *   - Each account that signs in with the box ticked goes to the front of this
+ *     PC's list, and signing in unticked takes it off. "Switch account" on the
+ *     login screen steps through that list and only ever fills the username;
+ *     × in the username box forgets the name shown. See loginSwitchAccount().
  */
-function _rememberedUser() {
+/* The usernames remembered on this PC, newest first. Older installs stored one
+   name as { user }; that shape reads as a list of one. */
+function _rememberedUsers() {
   const r = _getJSON(_key('remember'));
-  return (r && typeof r.user === 'string') ? r.user : '';
+  if (!r) return [];
+  const list = Array.isArray(r.users) ? r.users : (typeof r.user === 'string' ? [r.user] : []);
+  return list
+    .filter(u => typeof u === 'string' && u.trim())
+    .filter((u, i, a) => a.findIndex(x => x.toLowerCase() === u.toLowerCase()) === i);
+}
+function _rememberedUser() { return _rememberedUsers()[0] || ''; }
+function _saveRememberedUsers(list) {
+  if (list.length) _setJSON(_key('remember'), { users: list, user: list[0] });
+  else localStorage.removeItem(_key('remember'));
 }
 
 function _createSession(role, remember) {
@@ -365,22 +366,21 @@ function _createSession(role, remember) {
     createdAt:  now,
     expiresAt:  now + AUTH_CFG.sessionTTL,
     lastActive: now,
-    remembered: !!remember,
   };
+  // This run only. Nothing about the session is written where the next launch
+  // can read it, so closing the app always ends it.
   _ssSet(_key('session'), session);
-  if (remember) {
-    _setJSON(_key('session'),  session);
-    _setJSON(_key('remember'), { user: WARDENS[role].username || role });
-  } else {
-    // Unticking the box is also how a warden revokes an earlier tick.
-    localStorage.removeItem(_key('session'));
-    localStorage.removeItem(_key('remember'));
-  }
+  localStorage.removeItem(_key('session'));
+  const uname  = String(WARDENS[role].username || role);
+  const others = _rememberedUsers().filter(u => u.toLowerCase() !== uname.toLowerCase());
+  // Ticked: this username goes to the front. Unticked: it leaves the list — how
+  // a warden revokes an earlier tick — and everyone else's name stays.
+  _saveRememberedUsers(remember ? [uname].concat(others) : others);
   return session;
 }
 
-/** This run's session, or the remembered one a previous run left behind. */
-function _getSession()  { return _ssGet(_key('session')) || _getJSON(_key('session')); }
+/** This run's session. */
+function _getSession()  { return _ssGet(_key('session')); }
 
 /**
  * End the session everywhere. The remembered USERNAME survives on purpose:
@@ -397,19 +397,15 @@ function _killSession() {
  * Returns the session object if valid, or null (and destroys the session).
  */
 function _validateSession() {
-  const fromThisRun = _ssGet(_key('session'));
-  const s = fromThisRun || _getJSON(_key('session'));
+  // sessionStorage only: a session a previous launch left in localStorage is
+  // never restored, and _killSession() below clears it off the disk.
+  const s = _ssGet(_key('session'));
   if (!s?.token) return null;
   const now = Date.now();
-  // The shift ceiling is absolute and applies to both kinds of session.
   if (now > s.expiresAt) { _killSession(); return null; }
-  // Idle only counts while the app was actually open. A remembered session
-  // coming back on a fresh launch has not been sitting idle in front of anyone.
-  const restoring = !fromThisRun && s.remembered;
-  if (!restoring && now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
+  if (now - s.lastActive > AUTH_CFG.idleTimeout) { _killSession(); return null; }
   s.lastActive = now;
   _ssSet(_key('session'), s);
-  if (s.remembered) _setJSON(_key('session'), s);
   return s;
 }
  
@@ -756,6 +752,51 @@ function logout() {
   clearTimeout(_idleTimer);
   location.reload();
 }
+
+/* ── SWITCH ACCOUNT (owner, 2026-09-15) ─────────────────────────────────────
+   Steps through the usernames remembered on this PC. It only ever fills the
+   username: the password box is emptied and focused, so whoever is switching
+   still types their own password. Shown while Remember me is ticked and more
+   than one name is remembered. × in the username box forgets the name shown,
+   on this PC only — the account itself is not touched. */
+function loginPaintRemembered() {
+  const list   = _rememberedUsers();
+  const uinp   = _ui('login-user');
+  const box    = _ui('login-remember');
+  const swap   = _ui('login-swap');
+  const forget = _ui('login-forget');
+  const typed  = uinp ? uinp.value.trim().toLowerCase() : '';
+  const known  = !!typed && list.some(u => u.toLowerCase() === typed);
+  if (swap)   swap.hidden   = !(box && box.checked && list.length > 1);
+  if (forget) forget.hidden = !known;
+}
+
+function loginSwitchAccount() {
+  const list = _rememberedUsers();
+  const uinp = _ui('login-user');
+  const pinp = _ui('login-input');
+  if (!uinp || list.length < 2) return;
+  const at = list.findIndex(u => u.toLowerCase() === uinp.value.trim().toLowerCase());
+  uinp.value = list[(at + 1) % list.length];
+  if (pinp) { pinp.value = ''; pinp.type = 'password'; pinp.focus(); }
+  _setLoginState('reset');
+  loginPaintRemembered();
+}
+
+function loginForgetUser() {
+  const uinp = _ui('login-user');
+  const pinp = _ui('login-input');
+  if (!uinp) return;
+  const name = uinp.value.trim().toLowerCase();
+  const rest = _rememberedUsers().filter(u => u.toLowerCase() !== name);
+  _saveRememberedUsers(rest);
+  uinp.value = rest[0] || '';
+  if (pinp) pinp.value = '';
+  const box = _ui('login-remember');
+  if (box && !rest.length) box.checked = false;
+  loginPaintRemembered();
+  ((rest.length && pinp) ? pinp : uinp).focus();
+}
  
 // ─────────────────────────────────────────────────────────────────────────────
 // 15. LOGIN SCREEN — BRANDING SYNC  (runs before first paint)
@@ -838,6 +879,7 @@ var CUR_USER = null;
     const rememberEl = _ui('login-remember');
     if (rememberEl) rememberEl.checked = !!remembered;
     if (uinp && remembered) uinp.value = remembered;
+    loginPaintRemembered();
     const focusTarget = (remembered && pinp) ? pinp : uinp;
     if (focusTarget) setTimeout(() => focusTarget.focus(), 120);
   }

@@ -233,11 +233,26 @@
       <!-- Username. The two-card warden picker was removed earlier: the app has
            an open user list, and a picker printed every staff name to anyone
            who opened the app. -->
-      <label class="lg-lbl" for="login-user">Username</label>
+      <!-- Switch account (owner, 2026-09-15) steps through the usernames
+           remembered on this PC. It fills the username only — the password is
+           always typed. × forgets the name shown. See loginSwitchAccount() in
+           auth-nev.js. -->
+      <div class="lg-lblrow">
+        <label class="lg-lbl" for="login-user">Username</label>
+        <button type="button" id="login-swap" class="lg-link lg-swap" hidden onclick="loginSwitchAccount()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+          Switch account</button>
+      </div>
       <div class="lg-field">
         <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
         <input id="login-user" class="lg-in" type="text" placeholder="Enter your username"
-               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username">
+               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username"
+               oninput="loginPaintRemembered()">
+        <button id="login-forget" class="lg-eye lg-forget" type="button" hidden
+                aria-label="Forget this username on this PC" title="Forget this username on this PC"
+                onclick="loginForgetUser()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
       </div>
 
       <label class="lg-lbl" for="login-input">Password</label>
@@ -253,7 +268,7 @@
 
       <div class="lg-meta">
         <label class="lg-remember">
-          <input type="checkbox" id="login-remember">
+          <input type="checkbox" id="login-remember" onchange="loginPaintRemembered()">
           <span class="lg-check" aria-hidden="true">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
           </span>

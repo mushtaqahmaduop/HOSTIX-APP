@@ -1,21 +1,15 @@
 // ════════════════════════════════════════════════════════════════════════════
-// HOSTYLLO — Remember me
+// HOSTYLLO — Remember me and Switch account
 //
-// The owner asked for this because wardens were retyping a password every time
-// the app opened. The feature is only worth anything if the session actually
-// survives closing the app, and it is only safe if unticking the box actually
-// stops it surviving — neither of which any amount of reading the code proves,
-// because the thing under test is what Chromium keeps on disk between two
-// separate launches of Electron.
+// Owner, 2026-09-15: an installed app that had been signed into once kept
+// opening with no password asked. Remember me now keeps USERNAMES only: every
+// launch asks for the password, and "Switch account" on the login screen steps
+// through the usernames remembered on this PC without ever filling a password.
 //
-// So this spec launches the app four times against one profile:
-//   1. sign in with the box TICKED
-//   2. relaunch  → must land inside the app, no password asked
-//   3. sign out, sign in again with the box UNTICKED
-//   4. relaunch  → must be back at the login screen
-//
-// The profile is reset once, in beforeAll, and deliberately NOT between
-// launches: what carries over is the whole point.
+// What is under test is what Chromium keeps on disk between two separate
+// launches of Electron, so this spec relaunches against one profile. The
+// profile is reset once, in beforeAll, and deliberately NOT between launches:
+// what carries over is the whole point.
 // ════════════════════════════════════════════════════════════════════════════
 'use strict';
 
@@ -55,101 +49,124 @@ function insideApp(win, timeout = 30000) {
     null, { timeout });
 }
 
-async function signIn(win, { remember }) {
+/** The login screen is up and the accounts are loaded. */
+async function atLogin(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
   await win.waitForFunction(
     () => typeof WARDENS !== 'undefined' && Object.keys(WARDENS).length > 0,
     null, { timeout: 30000 });
-  await win.fill('#login-user', 'warden1');
-  await win.fill('#login-input', 'admin123');
+}
+
+async function signIn(win, { user = 'warden1', pass = 'admin123', remember }) {
+  await atLogin(win);
+  await win.fill('#login-user', user);
+  await win.fill('#login-input', pass);
   const box = win.locator('#login-remember');
   if (remember) await box.check(); else await box.uncheck();
   await win.click('#login-btn');
   await insideApp(win);
 }
 
-test('a remembered session survives closing the app, and unticking ends it', async () => {
-  // ── 1. Sign in, remembering ───────────────────────────────────────────────
+const stored = win => win.evaluate(() => {
+  const k = 'damam_auth_' + (sessionStorage.getItem('active_hostel') || 'hostel_1') + '_';
+  return { session: localStorage.getItem(k + 'session'),
+           remember: JSON.parse(localStorage.getItem(k + 'remember') || 'null') };
+});
+
+const loginView = win => win.evaluate(() => ({
+  shown:  document.getElementById('login-screen').style.display !== 'none',
+  user:   document.getElementById('login-user').value,
+  pass:   document.getElementById('login-input').value,
+  ticked: document.getElementById('login-remember').checked,
+  swap:   !document.getElementById('login-swap').hidden,
+  forget: !document.getElementById('login-forget').hidden,
+}));
+
+test('remember me keeps the username, never the session: the next launch asks for the password', async () => {
   let { app, win } = await open();
   await signIn(win, { remember: true });
-  const stored = await win.evaluate(() => {
-    const k = 'damam_auth_' + (sessionStorage.getItem('active_hostel') || 'hostel_1') + '_';
-    const sess = JSON.parse(localStorage.getItem(k + 'session') || 'null');
-    return {
-      persisted: !!(sess && sess.token),
-      remembered: !!(sess && sess.remembered),
-      user: JSON.parse(localStorage.getItem(k + 'remember') || 'null'),
-      // The password must not be anywhere in what we just wrote.
-      leaksPassword: JSON.stringify(sess || {}).includes('admin123'),
-    };
-  });
-  expect(stored.persisted, 'nothing was persisted for next time').toBe(true);
-  expect(stored.remembered).toBe(true);
-  expect(stored.user).toEqual({ user: 'warden1' });
-  expect(stored.leaksPassword, 'the password reached disk').toBe(false);
+  const s1 = await stored(win);
+  expect(s1.session, 'the session was written where the next launch can read it').toBeNull();
+  expect(s1.remember).toEqual({ users: ['warden1'], user: 'warden1' });
+  expect(JSON.stringify(s1).includes('admin123'), 'the password reached disk').toBe(false);
   await app.close();
 
-  // ── 2. Relaunch: straight in, no password ────────────────────────────────
   ({ app, win } = await open());
-  await insideApp(win);
-  const who = await win.evaluate(() => (CUR_USER && CUR_USER.username) || null);
-  expect(who, 'restored the session as the wrong account').toBe('warden1');
-
-  // Sign out. The username is deliberately kept so the warden does not retype
-  // who they are; the session is not.
-  await win.evaluate(() => logout());
-  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
-  const afterLogout = await win.evaluate(() => ({
-    user: document.getElementById('login-user').value,
-    boxTicked: document.getElementById('login-remember').checked,
-    focused: document.activeElement && document.activeElement.id,
-  }));
-  expect(afterLogout.user, 'the remembered username was thrown away too').toBe('warden1');
-  expect(afterLogout.boxTicked).toBe(true);
-
-  // ── 3. Sign in again, this time NOT remembering ──────────────────────────
-  await signIn(win, { remember: false });
-  const cleared = await win.evaluate(() => {
-    const k = 'damam_auth_' + (sessionStorage.getItem('active_hostel') || 'hostel_1') + '_';
-    return { session: localStorage.getItem(k + 'session'), remember: localStorage.getItem(k + 'remember') };
-  });
-  expect(cleared.session, 'unticking left the session on disk').toBeNull();
-  expect(cleared.remember, 'unticking left the username on disk').toBeNull();
-  await app.close();
-
-  // ── 4. Relaunch: the login screen is back ────────────────────────────────
-  ({ app, win } = await open());
-  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
-  const stillOut = await win.evaluate(() => {
-    const s = document.getElementById('login-screen');
-    return s && s.style.display !== 'none';
-  });
-  expect(stillOut, 'an unremembered session came back anyway').toBe(true);
+  await atLogin(win);
+  await win.waitForTimeout(400);
+  const v = await loginView(win);
+  expect(v.shown, 'the app opened without asking for the password').toBe(true);
+  expect(v.user, 'the remembered username was not filled in').toBe('warden1');
+  expect(v.pass).toBe('');
+  expect(v.ticked).toBe(true);
+  expect(v.swap, 'Switch account showed with only one remembered name').toBe(false);
+  expect(v.forget).toBe(true);
   await app.close();
 });
 
-test('an expired shift is not remembered, however the box was ticked', async () => {
-  // The 8h ceiling is the whole safety argument for the feature, so it gets its
-  // own proof: a persisted session whose expiresAt has passed must not restore.
+test('a session the older build left on disk does not open the app', async () => {
   let { app, win } = await open();
   await signIn(win, { remember: true });
   await win.evaluate(() => {
     const k = 'damam_auth_' + (sessionStorage.getItem('active_hostel') || 'hostel_1') + '_';
-    const s = JSON.parse(localStorage.getItem(k + 'session'));
-    s.expiresAt = Date.now() - 1000;          // the shift ended a second ago
-    localStorage.setItem(k + 'session', JSON.stringify(s));
+    localStorage.setItem(k + 'session', JSON.stringify({
+      token: 'a'.repeat(64), role: 'warden1', name: 'Warden', remembered: true,
+      createdAt: Date.now(), expiresAt: Date.now() + 3600e3, lastActive: Date.now() }));
   });
   await app.close();
 
   ({ app, win } = await open());
-  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
-  const asked = await win.evaluate(() => {
-    const s = document.getElementById('login-screen');
-    return { shown: s && s.style.display !== 'none',
-             user: document.getElementById('login-user').value };
+  await atLogin(win);
+  await win.waitForTimeout(400);
+  expect((await loginView(win)).shown, 'the old stored session opened the app').toBe(true);
+  expect((await stored(win)).session, 'the old session was left on disk').toBeNull();
+  await app.close();
+});
+
+test('switch account steps through remembered usernames and never fills a password', async () => {
+  let { app, win } = await open();
+  await signIn(win, { remember: true });                       // warden1 remembered
+  await win.evaluate(async () => {
+    WARDENS.w_sara = { username: 'sara', name: 'Sara Warden', active: true,
+      perms: { payments: true }, pw: await hashNewPassword('Sara@12345') };
+    saveWardenConfig();
   });
-  expect(asked.shown, 'an expired session restored anyway').toBe(true);
-  // …but it still knows who they are. Only the proof expired, not the name.
-  expect(asked.user).toBe('warden1');
+  await win.evaluate(() => logout());
+  await signIn(win, { user: 'sara', pass: 'Sara@12345', remember: true });
+  await app.close();
+
+  ({ app, win } = await open());
+  await atLogin(win);
+  await win.waitForTimeout(400);
+  let v = await loginView(win);
+  expect(v.user).toBe('sara');
+  expect(v.swap, 'Switch account is missing with two remembered names').toBe(true);
+
+  await win.fill('#login-input', 'typed-before-switching');
+  await win.click('#login-swap');
+  v = await loginView(win);
+  expect(v.user).toBe('warden1');
+  expect(v.pass, 'switching kept the password that was typed').toBe('');
+  expect(await win.evaluate(() => document.activeElement && document.activeElement.id)).toBe('login-input');
+  await win.click('#login-swap');
+  expect((await loginView(win)).user).toBe('sara');
+
+  // Switch account belongs to Remember me.
+  await win.locator('#login-remember').uncheck();
+  expect((await loginView(win)).swap).toBe(false);
+  await win.locator('#login-remember').check();
+  expect((await loginView(win)).swap).toBe(true);
+
+  // × forgets the name shown, on this PC only.
+  await win.click('#login-forget');
+  v = await loginView(win);
+  expect(v.user).toBe('warden1');
+  expect(v.swap).toBe(false);
+  expect((await stored(win)).remember).toEqual({ users: ['warden1'], user: 'warden1' });
+  expect(await win.evaluate(() => !!WARDENS.w_sara), 'forgetting the name touched the account').toBe(true);
+
+  // Signing in unticked takes the name off the list.
+  await signIn(win, { remember: false });
+  expect((await stored(win)).remember).toBeNull();
   await app.close();
 });
