@@ -1011,6 +1011,8 @@ async function saveUser(id) {
   var pw = (document.getElementById('u-pw') || {}).value || '';
   var phone = (document.getElementById('u-phone') || {}).value || '';
   var active = !!(document.getElementById('u-active') || {}).checked;
+  // Step 10: confirm money with a PIN (pin.js). Off unless ticked.
+  var pinRequired = !!(document.getElementById('u-pin-req') || {}).checked;
   /* Three fields the 2026-09-09 form added. None of them is enforced by
      anything — they are the account's own record, which is why the reference
      asks for them and why they cost one line each. */
@@ -1067,6 +1069,7 @@ async function saveUser(id) {
       /* The photo chosen on the Add form, which had nowhere to go until now
          (owner, 2026-09-10). */
       perms: perms, active: active, pw: newHash, photo: _uPendingPhoto || '',
+      pinRequired: pinRequired,
       /* Stamped so "Recently joined" and the account's own Joined row have
          something to read. Accounts made before today have no stamp and the
          page says so rather than guessing one. */
@@ -1076,7 +1079,7 @@ async function saveUser(id) {
     var t = WARDENS[id];
     t.name = name; t.username = username; t.phone = phone;
     t.email = email.trim(); t.department = department; t.role = roleLabel;
-    t.perms = perms; t.active = active;
+    t.perms = perms; t.active = active; t.pinRequired = pinRequired;
     if (newHash) t.pw = newHash;
     if (id === CUR_ROLE) {
       CUR_USER = t;

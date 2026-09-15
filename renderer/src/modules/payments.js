@@ -925,6 +925,8 @@ async function payBulkMarkPaid() {
   if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
   showConfirm(`Mark ${targets.length} payment${targets.length>1?'s':''} as paid?`,
     `This collects the outstanding balance on each selected row and stamps today's date.`, async () => {
+      // Step 10: one PIN for the whole batch.
+      if (!(await pinConfirm({ what: 'marking ' + targets.length + ' payment' + (targets.length > 1 ? 's' : '') + ' paid' }))) return;
       // applyPayment() again, so a bulk settle is indistinguishable from
       // settling each row by hand — including the D-1 fix: the balance comes
       // from calculateOutstanding(), not from `p.unpaid || 0`, which is 0 on a
@@ -1262,6 +1264,8 @@ async function markPaymentPaid(id) {
     toast('Already settled — nothing left to collect on this record', 'info');
     return;
   }
+  // Step 10: an account that confirms money with a PIN does so here (pin.js).
+  if (!(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;
   const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
@@ -1288,6 +1292,7 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     if (!refreshStudentView(studentId)) showStudentPanel(studentId);
     return;
   }
+  if (!(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;   // step 10
   const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
@@ -2345,6 +2350,7 @@ async function submitPaymentForStudent() {
       + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
       async function() {
         // ── UPDATE existing pending record in-place ──────────────────
+        if (!(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingPS = false; return; }   // step 10
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
         const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
         /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
@@ -2412,6 +2418,8 @@ async function submitPaymentForStudent() {
   }
   window._forcePayPS  = false;
   window._updatePendingPS = false;
+  // Step 10: confirmed with the PIN before anything is written (pin.js).
+  if (!(await pinConfirm({ what: 'posting ' + fmtPKR(money(parseFloat(document.getElementById('f-ps-paid')?.value) || 0)) }))) return;
   const room        = DB.rooms.find(r => r.id === t.roomId);
   const monthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value) || 0;
   const messIncludedPS = document.getElementById('f-ps-mess-on')
@@ -3139,6 +3147,7 @@ async function submitAddPayment() {
       window._forcePayAP = false;
       const arrearsOnly = pfOutstandingAllocations();
       if (arrearsOnly.length) {
+        if (!(await pinConfirm({ what: 'collecting arrears' }))) return;   // step 10
         const aMethod = document.getElementById('f-pmethod')?.value || 'Cash';
         const aDate   = document.getElementById('f-pdate')?.value   || today();
         const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate);
@@ -3177,6 +3186,8 @@ async function submitAddPayment() {
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
+          // Step 10: asked here, once — the posting happens on this OK.
+          if (!(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingAP = false; return; }
           const prevPaid       = Number(alreadyPending2.amount || 0);
           const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
           const newMessOn      = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
@@ -3262,6 +3273,8 @@ async function submitAddPayment() {
     window._updatePendingAP = false;
   }
   window._forcePayAP = false;
+  // Step 10: confirmed with the PIN before anything is written (pin.js).
+  if (!(await pinConfirm({ what: 'posting ' + fmtPKR(money(parseFloat(document.getElementById('f-ppaid')?.value) || 0)) }))) return;
   const monthlyRent = pfRentAmount();                  // days × rate while By days is on
   const messIncluded = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
   // By days keeps the month's mess figure on the record, not billed (step 9).
@@ -3634,6 +3647,8 @@ async function submitEditPayment(id) {
       editWhy = why;
     }
   }
+  // Step 10: changing the amount collected is confirmed with the PIN.
+  if (money(paidAmount) !== prevPaid && !(await pinConfirm({ what: 'changing the amount collected' }))) return;
   if (!p.partialPayments) p.partialPayments = [];
   if (paidAmount > prevPaid) {
     p.partialPayments.push({
@@ -3817,6 +3832,7 @@ async function submitReversePayment(id) {
     return;
   }
   if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
+  if (!(await pinConfirm({ what: 'reversing ' + fmtPKR(amount) }))) return;   // step 10
 
   const r = reversePayment(p, { amount, reason, date });
   if (!r.ok) {

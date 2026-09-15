@@ -1435,11 +1435,14 @@ function usrDetail(id) {
     </div>
     ${''/* THE ACTIONS SIT AT THE TOP, under Edit (owner, 2026-09-14) — the
            student drawer's action grid, not a section at the bottom. */}
-    ${manage ? `
+    ${manage || self ? `
     <div class="stu-pan__acts usr-pan__acts">
-      <button class="stu-pan__act" onclick="usrResetPassword('${escHtml(id)}')">${icon('key','xs')}Reset password</button>
-      <button class="stu-pan__act" disabled title="Impersonation needs a server to authorise it and an audit trail to record it. Neither exists in the offline edition.">${icon('userCheck','xs')}Sign in as user</button>
-      ${self ? '' : `<button class="stu-pan__act${u.active === false ? '' : ' is-danger'}" onclick="usrToggleActive('${escHtml(id)}')">${icon(u.active === false ? 'check' : 'lock','xs')}${u.active === false ? 'Reactivate' : 'Deactivate'}</button>`}
+      ${manage ? `<button class="stu-pan__act" onclick="usrResetPassword('${escHtml(id)}')">${icon('key','xs')}Reset password</button>
+      <button class="stu-pan__act" disabled title="Impersonation needs a server to authorise it and an audit trail to record it. Neither exists in the offline edition.">${icon('userCheck','xs')}Sign in as user</button>` : ''}
+      ${manage && !self ? `<button class="stu-pan__act${u.active === false ? '' : ' is-danger'}" onclick="usrToggleActive('${escHtml(id)}')">${icon(u.active === false ? 'check' : 'lock','xs')}${u.active === false ? 'Reactivate' : 'Deactivate'}</button>` : ''}
+      ${''/* Step 10: every account owns its PIN; an admin can only clear someone else's. */}
+      ${self ? `<button class="stu-pan__act" id="usr-pin-set" onclick="usrPinShowSet()">${icon('lock','xs')}${pinHasOne(u) ? 'Change my PIN' : 'Set my PIN'}</button>` : ''}
+      ${manage && !self && pinHasOne(u) ? `<button class="stu-pan__act" id="usr-pin-clear" onclick="usrPinClear('${escHtml(id)}')">${icon('lock','xs')}Clear PIN</button>` : ''}
     </div>` : ''}
 
     <div class="usr-pan__body">
@@ -1460,6 +1463,8 @@ function usrDetail(id) {
         ${row('Role', role)}
         ${row('Access level', usrLevel(user))}
         ${row('Permissions', granted.length + ' of ' + PERM_KEYS.length)}
+        ${row('PIN to post payments', !pinIsRequired(u) ? 'Not required'
+              : pinHasOne(u) ? 'Required · PIN set' : 'Required · not set yet')}
         ${row('Sessions', 'Not recorded',
           'One window on one machine. There is no session list to end, and nothing to sign out remotely.')}
       </div>
@@ -1657,6 +1662,63 @@ async function usrDoResetPassword(id) {
   toast('Password set for ' + (u.name || u.username), 'success');
 }
 
+/* ── MY PIN (warden ledger spec §3.5, step 10) ────────────────────────────────
+   The signed-in account sets or changes its own PIN; changing asks for the
+   current one first. An administrator can only clear someone else's (pin.js). */
+function _usrPinBox(fid, label, ph) {
+  return `<div class="field"><label for="${fid}">${label}</label>
+     <div class="hf-in"><span class="hf-in__i">${icon('lock','sm')}</span>
+     <input class="form-control" id="${fid}" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+            placeholder="${ph}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div></div>`;
+}
+
+function usrPinShowSet() {
+  const u = WARDENS[CUR_ROLE];
+  if (!u) return;
+  const had = pinHasOne(u);
+  showModal('modal-sm',
+    `<div class="hf-mh">
+       <div class="hf-mh__ico">${icon('lock','sm')}</div>
+       <div><div class="hf-mh__t">${had ? 'Change my PIN' : 'Set my PIN'}</div>
+       <div class="hf-mh__s">${pinIsRequired(u) ? 'Asked when this account posts or reverses money'
+                                                : 'Asked once an administrator switches PIN on for this account'}</div></div>
+     </div>`,
+    `${had ? _usrPinBox('usr-pin-cur', 'Current PIN', 'Your 4-digit PIN') : ''}
+     ${_usrPinBox('usr-pin-1', 'New PIN', '4 digits')}
+     ${_usrPinBox('usr-pin-2', 'Repeat it', 'Type it again')}
+     <div class="cfg-note">${icon('info','xs')}<span>Stored as a hash, like your password — nobody can read it back. If you forget it, an administrator can clear it and you set a new one.</span></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="usr-pin-save" onclick="usrPinDoSet()">${had ? 'Change PIN' : 'Set PIN'}</button>`);
+}
+
+async function usrPinDoSet() {
+  const u = WARDENS[CUR_ROLE];
+  if (!u) return;
+  const val = fid => (document.getElementById(fid) || {}).value || '';
+  const had = pinHasOne(u);
+  if (had && !(await pinCheck(CUR_ROLE, val('usr-pin-cur')))) { toast('The current PIN is wrong', 'error'); return; }
+  const a = val('usr-pin-1'), b = val('usr-pin-2');
+  if (!pinValid(a)) { toast('The PIN is exactly 4 digits', 'error'); return; }
+  if (a !== b) { toast('The two PINs do not match', 'error'); return; }
+  const r = await pinSet(CUR_ROLE, a);
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  closeModal();
+  toast(had ? 'PIN changed' : 'PIN set', 'success');
+}
+
+function usrPinClear(id) {
+  const u = WARDENS[id];
+  if (!u) return;
+  showConfirm('Clear this PIN?',
+    `${escHtml(u.name || u.username || id)} sets a new PIN the next time one is needed. Nobody sees the old one.`,
+    async () => {
+      const r = await pinClear(id);
+      if (!r.ok) { toast(r.reason, 'error'); return; }
+      toast('PIN cleared for ' + (u.name || u.username || id), 'success');
+      if (typeof refreshAccountPanel === 'function') refreshAccountPanel();
+    });
+}
+
 /* ── THE FORM ─────────────────────────────────────────────────────────────────
    `add user.png`, with the permission model this app actually enforces.
 
@@ -1839,6 +1901,12 @@ function showUserEditor(id) {
           <label class="usf-active">
             <input type="checkbox" id="u-active" ${u.active !== false ? 'checked' : ''}>
             <span><b>Account is active</b><small>An inactive account cannot sign in</small></span>
+          </label>
+          ${''/* Step 10 (spec §3.5): off by default. pin.js asks for it. */}
+          <label class="usf-active">
+            <input type="checkbox" id="u-pin-req" ${u.pinRequired === true ? 'checked' : ''}>
+            <span><b>Require PIN to post payments</b><small>Asked each time this account records or reverses collected money. ${
+              pinHasOne(u) ? 'A PIN is set.' : 'They set their PIN the first time it is needed.'}</small></span>
           </label>
         </div>
       </div>

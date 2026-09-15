@@ -1063,6 +1063,10 @@ async function confirmCancellation(cancId) {
 async function submitCancellationSettlement(cancId) {
   const c = DB.cancellations.find(x => x.id === cancId);
   if (!c) return;
+  // Step 10: collecting or handing back money at checkout is confirmed with the
+  // PIN, before anything below changes (pin.js).
+  if (document.getElementById('canc-set-do')?.checked
+      && !(await pinConfirm({ what: 'settling a checkout' }))) return;
 
   /* THE PART-MONTH REFUND IS APPLIED FIRST, and the settlement is worked out
      afterwards — deliberately, and in that order. It reduces the bill on the

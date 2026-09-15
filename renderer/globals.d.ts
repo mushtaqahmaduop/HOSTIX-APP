@@ -177,6 +177,14 @@ declare function cnApplyToRecord(p: any): boolean;
 declare function cnMarkSeen(id: string): boolean;
 declare function cnSeen(id: string): void;
 declare function cnAlerts(): any[];
+// -- pin.js: PIN to confirm money (warden ledger spec §3.5, step 10) ----------
+declare function pinValid(s: any): boolean;
+declare function pinIsRequired(u: any): boolean;
+declare function pinHasOne(u: any): boolean;
+declare function pinCheck(accountId: string, plain: string): Promise<boolean>;
+declare function pinSet(accountId: string, plain: string): Promise<{ ok: boolean; reason?: string }>;
+declare function pinClear(accountId: string): Promise<{ ok: boolean; reason?: string }>;
+declare function pinConfirm(opts?: { what?: string }): Promise<boolean>;
 // -- utils.js: prorated charging (warden ledger spec §2.5, step 9) ------------
 declare function prorateMonthOf(key: string): { y: number; m: number; days: number } | null;
 declare function prorateDefaultDays(monthKey: string, joinDate?: string, todayYmd?: string): number;
