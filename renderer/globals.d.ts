@@ -185,6 +185,22 @@ declare function pinCheck(accountId: string, plain: string): Promise<boolean>;
 declare function pinSet(accountId: string, plain: string): Promise<{ ok: boolean; reason?: string }>;
 declare function pinClear(accountId: string): Promise<{ ok: boolean; reason?: string }>;
 declare function pinConfirm(opts?: { what?: string }): Promise<boolean>;
+// -- undertaking.js: rules & undertaking (warden ledger spec §2.7, §3.8, step 11) --
+declare const UND_STARTER: { rules: string; declaration: string };
+declare function undVersions(): { v: number; rules: string; declaration: string; savedAt: string; savedByName: string }[];
+declare function undIsStarter(): boolean;
+declare function undCurrent(): { v: number; rules: string; declaration: string; savedAt: string; savedByName: string };
+declare function undVersion(v: number): { v: number; rules: string; declaration: string; savedAt: string; savedByName: string } | null;
+declare function undRuleLines(text: string): string[];
+declare function undSave(o: { rules: string; declaration: string }): { ok: boolean; unchanged?: boolean; version?: number; reason?: string };
+declare function undSignedCount(v: number): number;
+declare function undSigned(t: any): boolean;
+declare function undSignedVersion(t: any): { v: number; rules: string; declaration: string; savedAt: string; savedByName: string } | null;
+declare function undSignOriginal(t: any): { ok: boolean; version?: number; signedAt?: string; reason?: string };
+declare function undReprintLabel(t: any, doc?: any): string;
+declare function undScanOf(t: any): any;
+declare function undScanIsImage(doc: any): boolean;
+declare function undFilterMatch(t: any, key: string): boolean;
 // -- utils.js: prorated charging (warden ledger spec §2.5, step 9) ------------
 declare function prorateMonthOf(key: string): { y: number; m: number; days: number } | null;
 declare function prorateDefaultDays(monthKey: string, joinDate?: string, todayYmd?: string): number;

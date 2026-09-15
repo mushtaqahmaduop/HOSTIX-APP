@@ -131,6 +131,8 @@ function studentsFiltered() {
     // Payments screen about the same student.
     if (studentFilter.fee && studentFilter.fee !== 'All'
         && _stuFee(t.id).status !== studentFilter.fee) return false;
+    // Step 11: signed undertaking on file, or not (undertaking.js).
+    if (studentFilter.und && studentFilter.und !== 'All' && !undFilterMatch(t, studentFilter.und)) return false;
     if (studentFilter.search) {
       const s = studentFilter.search.toLowerCase();
       const hay = [t.name, t.fatherName, t.id, t.cnic, t.phone, t.email, t.address,
@@ -253,7 +255,7 @@ function renderStudents() {
   const roomNums = [...new Set(DB.students.map(t=>{const r=_roomById.get(t.roomId);return r?String(r.number):'';}).filter(Boolean))].sort(cmpRoomNo);
   const courses  = [...new Set(DB.students.map(t=>String(t.occupation||t.course||'')).filter(Boolean))].sort();
   const activeFilters = [studentFilter.room!=='All', (studentFilter.plan||'All')!=='All',
-                         studentFilter.fee!=='All'].filter(Boolean).length;
+                         studentFilter.fee!=='All', (studentFilter.und||'All')!=='All'].filter(Boolean).length;
 
   const th = (key,label,extra) => {
     const on = studentFilter.sortKey===key;
@@ -347,6 +349,13 @@ function renderStudents() {
         <option value="both" ${studentFilter.plan==='both'?'selected':''}>Rent + mess</option>
         <option value="rent" ${studentFilter.plan==='rent'?'selected':''}>Rent only</option>
         <option value="mess" ${studentFilter.plan==='mess'?'selected':''}>Mess only</option>
+      </select>
+
+      ${''/* Step 11 (spec §3.8): students without a signed undertaking on file. */}
+      <select class="stu-select${studentFilter.und&&studentFilter.und!=='All'?' is-set':''}" id="stu-und-filter" aria-label="Undertaking" onchange="studentFilter.und=this.value;studentFilter.page=1;renderPage('students')" title="Filter by a signed undertaking on file">
+        <option value="All">Undertaking: all</option>
+        <option value="scan" ${studentFilter.und==='scan'?'selected':''}>Signed scan on file</option>
+        <option value="noscan" ${studentFilter.und==='noscan'?'selected':''}>No signed scan</option>
       </select>
 
       <select class="stu-select${studentFilter.status!=='All'?' is-set':''}" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')" title="Filter by status">
@@ -688,7 +697,7 @@ function stuSetStatus(s) {
 }
 function stuResetFilters() {
   studentFilter.month=thisMonth(); studentFilter.status='All'; studentFilter.room='All'; studentFilter.course='All'; studentFilter.plan='All';
-  studentFilter.fee='All';
+  studentFilter.fee='All'; studentFilter.und='All';
   studentFilter.search=''; studentFilter.page=1;
   stuSelected.clear();
   renderPage('students');
@@ -1122,7 +1131,7 @@ function _stuPanelHtml(t) {
         <span class="stu-pan__title">Student Details</span>
         <span class="stu-pan__sub">Complete profile and information</span>
       </div>
-      <button class="stu-pan__print" onclick="printStudentCard('${id}')" title="Print the A4 resident record">
+      <button class="stu-pan__print" onclick="printStudentCard('${id}')" title="Print the student profile — one page, no payment table">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print Profile</button>
       <button class="stu-pan__x" onclick="closeStudentPanel()" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -1186,8 +1195,11 @@ function _stuPanelHtml(t) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Edit</span></button>
       <button class="stu-pan__act" onclick="showRoomShiftModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Move Room</span></button>
-      <button class="stu-pan__act" onclick="printStudentCard('${id}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg><span>Print</span></button>
+      ${''/* Step 11: Print Profile stays in the header; this tile prints the
+             profile with the Rules & Undertaking back side — the first print is
+             the signed original, every later one a reprint. */}
+      <button class="stu-pan__act" onclick="printAdmissionForm('${id}')" title="Profile plus Rules &amp; Undertaking. The first print is the signed original.">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg><span>Admission Form</span></button>
       <button class="stu-pan__act is-primary" onclick="openAddPayment('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg><span>Payment</span></button>
       <button class="stu-pan__act is-danger" onclick="confirmDeleteStudent('${id}')">
@@ -1481,6 +1493,9 @@ function _stuPanelFinancial(t) {
           /* The ledger is this student's. Payments is everyone's, and getting
              there used to mean leaving the panel and typing the name back in,
              so the link carries it. */
+          // Step 11 (spec §3.7): the full ledger as its own document, any number of pages.
+          + '<button class="svw-tfoot__link" id="stu-print-history" onclick="printPaymentHistory(\'' + escHtml(id) + '\')">'
+          + 'Print payment history</button>'
           + '<button class="svw-tfoot__link" onclick="stuAllPayments(\'' + escHtml(id) + '\')">'
           + 'View all payments'
           + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
@@ -1543,11 +1558,21 @@ function _stuPanelDocuments(t) {
   const files = stuDocsOf(t);
   const named = STU_DOC_KINDS.map(k => {
     const d = files.find(f => f.kind === k.key);
-    return d
+    /* The signed undertaking (step 11): an image scan reprints watermarked; a
+       PDF can only be viewed or downloaded, and the disabled button says why. */
+    const reprint = (k.key === 'undertaking' && d)
+      ? (undScanIsImage(d)
+          ? `<button class="stu-pan__mini" onclick="stuUndReprintScan('${sid}')" title="Print the scan marked REPRINT">Reprint</button>`
+          : `<button class="stu-pan__mini" disabled title="A PDF scan can be viewed or downloaded. The app can not stamp REPRINT on a PDF.">Reprint</button>`)
+      : '';
+    const html = d
       ? row(k.label + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
-            acts(d.id) + `<button class="stu-pan__mini" style="color:var(--red)"
+            acts(d.id) + reprint + `<button class="stu-pan__mini" style="color:var(--red)"
                 onclick="stuDocRemove('${sid}','${escHtml(d.id)}')" title="Remove this document">Remove</button>`)
       : row(k.label, false, addBtn(k.key, k.label));
+    return html + (k.key !== 'undertaking' ? '' : `<p class="stu-pan__note" id="stu-und-state">${t.firstSignedAt
+      ? 'Original admission form printed ' + escHtml(fmtDate(t.firstSignedAt)) + ' · rules v' + escHtml(String(t.rulesVersionAtSigning || '?'))
+      : 'Admission form not printed yet'}</p>`);
   }).join('');
   const extra = files.filter(f => f.kind === 'other').map(d =>
     row((d.label || d.name || 'Other document') + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
@@ -2538,6 +2563,8 @@ const STU_DOC_KINDS = [
   { key: 'studentId',  label: 'Student ID / B-Form' },
   { key: 'fatherCnic', label: "Father's CNIC" },
   { key: 'por',        label: 'Proof of residence (POR)' },
+  // The scan of the signed admission form's back side (spec §2.7, step 11).
+  { key: 'undertaking', label: 'Signed undertaking' },
 ];
 /* 3MB a file and 5 files. The photo's own cap is 5MB and it is ONE image per
    student; five scans at five megabytes is 25MB on a single record, which is
@@ -3477,18 +3504,35 @@ function closeEditStudentCamera() {
      · What the charge COVERS, in words. "Rent + mess" and "rent only, mess not
        included" are different agreements with a family, and a printed record
        that does not say which is not a record of the agreement. */
-function printStudentCard(id) {
+/* THE STUDENT PROFILE (warden ledger spec §3.7, §3.8, step 11).
+   One page, the same format whenever it is printed: who, which room, which
+   plan, and where the balance stands. The month-by-month table moved to
+   printPaymentHistory() — it was what pushed this sheet onto a second page —
+   and so did the signature line: signatures belong to the admission form.
+
+   `opts.admission` makes this the front of the Full Admission Form:
+   { reprint, version, label } adds the Rules & Undertaking back side
+   (_stuUndPage) and, on a reprint, the REPRINT watermark on both pages. */
+function printStudentCard(id, opts) {
   const t = DB.students.find(x => x.id === id); if (!t) return;
+  const _adm  = opts && opts.admission ? opts.admission : null;
   const room  = DB.rooms.find(r => r.id === t.roomId);
   const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
   const ch    = resolveCharges(t);
 
-  const payHistory = DB.payments.filter(p => p.studentId === id)
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-  const paidRecords = payHistory.filter(p => p.status === 'Paid');
-  const totalPaid = paidRecords.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalDue  = payHistory.reduce((s, p) => s + calculateOutstanding(p), 0);
-  const admission = payHistory.reduce((s, p) => s + Number(p.admissionFee || p.fee || 0), 0);
+  /* The balance summary. Paid is what the records hold (money() on `amount`,
+     which is net of reversals), across live and archived months; pending is
+     calculateOutstanding() — finance.js is the one answer to what is owed.
+     The last payment is the ledger's own latest collection line. */
+  const _recs     = [].concat(DB.payments || [], DB.archive || []).filter(p => p && p.studentId === id);
+  const totalPaid = _recs.reduce((s, p) => s + money(p.amount), 0);
+  const totalDue  = (DB.payments || []).filter(p => p.studentId === id).reduce((s, p) => s + calculateOutstanding(p), 0);
+  const _lastPay  = (typeof ledgerEntriesFor === 'function' ? ledgerEntriesFor(id) : [])
+                      .filter(e => e.type === 'payment').pop() || null;
+  const lastPayDate = _lastPay ? fmtDate(String(_lastPay.createdAt || '').slice(0, 10)) : '';
+  const lastPayMeta = _lastPay ? fmtPKR(money(_lastPay.amount))
+                      + (_lastPay.createdByName ? ' · ' + ledgerFirstName(_lastPay.createdByName) : '') : '';
+  const _by = (typeof CUR_USER !== 'undefined' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '';
 
   const hostel = DB.settings.hostelName || 'Hostel';
   const fact = (k, v) => `<div class="fact"><span class="fact__k">${escHtml(k)}</span>` +
@@ -3501,7 +3545,7 @@ function printStudentCard(id) {
   const coverage = _cov.key === 'rent' ? 'Rent only · mess not included' : _cov.label;
 
   const _cardHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Resident Record — ${escHtml(t.name)}</title>
+  <title>${_adm ? 'Admission Form' : 'Student Profile'} — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:12.5px}
@@ -3547,31 +3591,35 @@ function printStudentCard(id) {
     .fact__v{font-size:11.5px;font-weight:700;text-align:right}
     .fact__v.is-empty{color:#cbd5e1;font-weight:500}
 
-    .hist{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
-    .hist__head{display:flex;align-items:baseline;justify-content:space-between;
-                padding:13px 18px;border-bottom:1px solid #e2e8f0}
-    .hist__t{font-size:12.5px;font-weight:800;color:#1d4ed8}
-    .hist__m{font-size:11.5px;color:#64748b}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}
-    th{background:#f8fafc;padding:9px 14px;text-align:left;font-size:9.5px;text-transform:uppercase;
-       letter-spacing:.6px;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0}
-    td{padding:9px 14px;border-bottom:1px solid #f8fafc}
-    tr:last-child td{border-bottom:none}
-    .sub{display:block;font-size:9.5px;color:#64748b;font-weight:600;margin-top:1px}
-    .none{padding:26px;text-align:center;color:#94a3b8}
+    .stat__s{font-size:10.5px;color:#64748b;margin-top:2px}
 
-    /* Signed by a person, so there has to be somewhere to sign. */
-    .foot{margin-top:22px;padding-top:14px;border-top:1px solid #e2e8f0;
-          display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:end;font-size:10.5px;color:#64748b}
-    .foot__mid{text-align:center}
-    .sig{margin-top:26px;border-top:1px dashed #94a3b8;padding-top:5px;font-weight:700;color:#475569}
-    .foot__r{text-align:right}
-    @media print{body{padding:14px} .hist,.panel,.stat{page-break-inside:avoid}}
+    /* The hostel is the masthead; HOSTYLLO is this one small line (design spec Part 8). */
+    .foot{margin-top:18px;padding-top:10px;border-top:1px solid #e2e8f0;
+          display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#94a3b8}
+
+    /* The back side of the admission form (_stuUndPage). */
+    .und{page-break-before:always}
+    .und__rules{margin:4px 0 16px 20px;font-size:12px;line-height:1.65}
+    .und__rules li{padding-left:4px;margin-bottom:3px}
+    .und__decl{border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;font-size:12px;line-height:1.6}
+    .und__h{font-size:10.5px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+    .und__sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:22px}
+    .und__sig{padding-top:46px;font-size:11px;color:#475569}
+    .und__line{border-top:1.5px solid #334155;margin-bottom:6px}
+    .und__sig b{display:block;color:#1e293b}
+    .und__date{margin-top:22px;font-size:11px;color:#475569}
+
+    /* A reprint says so across every page — never confused with the filed original. */
+    .wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
+    .wm span{transform:rotate(-32deg);font-size:38px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+             color:rgba(220,38,38,.18);border:4px solid rgba(220,38,38,.18);border-radius:12px;padding:10px 22px}
+    @media print{body{padding:14px} .panel,.stat{page-break-inside:avoid}}
   </style></head><body>
+  ${_adm && _adm.reprint ? `<div class="wm"><span>${escHtml(_adm.label)}</span></div>` : ''}
 
   <div class="doc-head">
     <div><div class="doc-head__t">${escHtml(hostel)}</div>
-         <div class="doc-head__s">Resident Record</div></div>
+         <div class="doc-head__s">${DB.settings.location ? escHtml(DB.settings.location) + ' · ' : ''}Student Profile</div></div>
     <div class="doc-head__d">${escHtml(fmtDate(today()))}</div>
   </div>
 
@@ -3597,9 +3645,10 @@ function printStudentCard(id) {
 
   <div class="stats">
     <div class="stat"><div class="stat__l">Total Paid</div><div class="stat__v is-paid">${fmtPKR(totalPaid)}</div></div>
-    <div class="stat"><div class="stat__l">Outstanding</div><div class="stat__v ${totalDue > 0 ? 'is-due' : 'is-paid'}">${fmtPKR(totalDue)}</div></div>
+    <div class="stat"><div class="stat__l">Pending Balance</div><div class="stat__v ${totalDue > 0 ? 'is-due' : 'is-paid'}">${fmtPKR(totalDue)}</div></div>
+    <div class="stat"><div class="stat__l">Last Payment</div><div class="stat__v" style="font-size:15px">${lastPayDate ? escHtml(lastPayDate) : '—'}</div>${
+      lastPayMeta ? `<div class="stat__s">${escHtml(lastPayMeta)}</div>` : ''}</div>
     <div class="stat"><div class="stat__l">Join Date</div><div class="stat__v" style="font-size:15px">${escHtml(fmtDate(t.joinDate))}</div></div>
-    <div class="stat"><div class="stat__l">Payments Made</div><div class="stat__v">${paidRecords.length}</div></div>
   </div>
 
   <div class="panels">
@@ -3630,47 +3679,182 @@ function printStudentCard(id) {
     </div>
   </div>
 
-  <div class="hist">
-    <div class="hist__head">
-      <span class="hist__t">Full Payment History (${payHistory.length} record${payHistory.length === 1 ? '' : 's'})</span>
-      <span class="hist__m">Total paid: <b style="color:#1d4ed8">${fmtPKR(totalPaid)}</b>${admission > 0 ? ` · Admission: ${fmtPKR(admission)}` : ''}</span>
-    </div>
-    ${payHistory.length ? `<table><thead><tr>
-      <th>Month</th><th>Charge / mo</th><th>Concession</th><th>Paid (+extras)</th>
-      <th>Unpaid</th><th>Method</th><th>Status</th><th>Date</th>
-    </tr></thead><tbody>${payHistory.map(p => {
-      const c    = paymentCharges(p, t);
-      const conc = Number(p.concession != null ? p.concession : p.discount || 0);
-      const adm  = Number(p.admissionFee || p.fee || 0);
-      const extras = (p.extraCharges || []).filter(x => Number(x.amount) > 0);
-      const unpaid = calculateOutstanding(p);
-      return `<tr>
-        <td><b>${escHtml(p.month || '—')}</b></td>
-        <td>${c.monthly > 0 ? fmtPKR(c.monthly) : '—'}${c.messIncluded
-              ? '<span class="sub">Rent + Mess</span>'
-              : c.hasMess ? '<span class="sub">Rent only</span>' : ''}</td>
-        <td>${conc > 0 ? '−' + fmtPKR(conc) : '—'}</td>
-        <td><b class="is-paid">${fmtPKR(p.amount)}</b>${adm > 0 ? `<span class="sub">+ ${fmtPKR(adm)} admission</span>` : ''}${
-          extras.map(x => `<span class="sub">+ ${fmtPKR(x.amount)} ${escHtml(x.description || x.desc || x.label || 'extra')}</span>`).join('')}</td>
-        <td>${unpaid > 0 ? `<b class="is-due">${fmtPKR(unpaid)}</b>` : '—'}</td>
-        <td>${escHtml(p.method || '—')}</td>
-        <td>${escHtml(p.status || '—')}</td>
-        <td>${escHtml(fmtDate(p.date))}</td>
-      </tr>`;
-    }).join('')}</tbody></table>`
-    : '<div class="none">No payment records for this resident yet.</div>'}
-  </div>
-
   <div class="foot">
-    <div><b style="color:#1e3a8a">${escHtml(hostel)}</b>${DB.settings.location ? `<br>${escHtml(DB.settings.location)}` : ''}</div>
-    <div class="foot__mid">This is a computer generated document.<div class="sig">Authorised By</div></div>
-    <div class="foot__r">Generated ${new Date().toLocaleString('en-PK')}</div>
+    <span>Printed ${escHtml(new Date().toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}${_by ? ' by ' + escHtml(_by) : ''}</span>
+    <span>HOSTYLLO Offline</span>
+  </div>
+  ${_adm ? _stuUndPage(t, _adm) : ''}
+  </body></html>`;
+
+  const _cardName = printFileName((_adm ? 'Admission-Form-' : 'Student-Profile-') +
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), '');
+  _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
+}
+
+/* The back side of the admission form (spec §3.8): the rules of the version
+   being printed, the declaration and three signature lines. The names under
+   the lines are what is on file; on a reprint the warden line names whoever
+   printed the original, because that is who signed it. */
+function _stuUndPage(t, adm) {
+  const ver = adm.version || undCurrent();
+  const hostel = DB.settings.hostelName || 'Hostel';
+  const warden = adm.reprint
+    ? (t.firstSignedByName || '')
+    : ((typeof CUR_USER !== 'undefined' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '');
+  const sig = (role, name) => `<div class="und__sig"><div class="und__line"></div><b>${escHtml(role)}</b><span>${escHtml(name || '')}</span></div>`;
+  return `
+  <section class="und">
+    <div class="doc-head">
+      <div><div class="doc-head__t">${escHtml(hostel)}</div>
+           <div class="doc-head__s">Rules &amp; Undertaking · Version ${escHtml(String(ver.v))}</div></div>
+      <div class="doc-head__d">${escHtml(t.name || '')} · #${escHtml(String(t.id))}</div>
+    </div>
+    <ol class="und__rules">${undRuleLines(ver.rules).map(l => `<li>${escHtml(l)}</li>`).join('')}</ol>
+    <div class="und__decl"><div class="und__h">Declaration</div>${escHtml(ver.declaration).replace(/\n/g, '<br>')}</div>
+    <div class="und__sigs">
+      ${sig('Student', t.name)}${sig('Guardian', t.fatherName)}${sig('Warden / Admin', warden)}
+    </div>
+    <div class="und__date">${adm.reprint
+      ? 'Originally signed ' + escHtml(fmtDate(t.firstSignedAt))
+      : 'Date: ________________________'}</div>
+  </section>`;
+}
+
+/* PRINT FULL ADMISSION FORM (spec §3.8, step 11). The first print is the
+   original: it asks first, then freezes today and the current rules version on
+   the student (undSignOriginal). Every later print is a reprint of the version
+   that was signed, watermarked, and asks nothing. */
+function printAdmissionForm(id) {
+  const t = DB.students.find(x => x.id === id);
+  if (!t) return;
+  if (undSigned(t)) {
+    const ver = undSignedVersion(t) || undCurrent();
+    printStudentCard(id, { admission: { reprint: true, version: ver, label: undReprintLabel(t) } });
+    return;
+  }
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  if (undIsStarter()) {
+    toast('An administrator must review and save the rules in Settings → Rules & Undertaking first.', 'error', 'Rules not saved yet');
+    return;
+  }
+  const cur = undCurrent();
+  showConfirm('Print the original admission form?',
+    `This prints the <b>original</b> admission form for ${escHtml(t.name || '')}. Today (${escHtml(fmtDate(today()))}) and rules version ${escHtml(String(cur.v))} will be recorded as the signing. Every later print will be marked <b>REPRINT</b>.`,
+    async () => {
+      const s = DB.students.find(x => x.id === id);
+      const r = undSignOriginal(s);
+      if (!r.ok) {
+        if (r.reason === 'already') { printAdmissionForm(id); return; }
+        toast(r.reason, 'error'); return;
+      }
+      logActivity('Admission Form Printed', (s.name || s.id) + ' — original, rules version ' + r.version, 'Student');
+      await saveDB();
+      printStudentCard(id, { admission: { reprint: false, version: undVersion(r.version) } });
+      if (typeof refreshStudentView === 'function') refreshStudentView(id);
+    });
+}
+
+/* PRINT PAYMENT HISTORY (spec §3.7, step 11). Every student_ledger entry,
+   oldest first, as its own document — headings repeat on every page, and it
+   runs to as many pages as the history has. Tags are the receipt's. */
+function printPaymentHistory(id) {
+  const t = DB.students.find(x => x.id === id);
+  if (!t) return;
+  const entries = typeof ledgerEntriesFor === 'function' ? ledgerEntriesFor(id) : [];
+  if (!entries.length) { toast('No ledger entries for this student yet', 'info'); return; }
+
+  const hostel = DB.settings.hostelName || 'Hostel';
+  const by = (typeof CUR_USER !== 'undefined' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '';
+  let charged = 0, less = 0;
+  const rows = entries.map(e => {
+    const hl  = ledgerHistoryLine(e);
+    const eff = ledgerEffect(e);
+    if (eff > 0) charged += eff; else less += -eff;
+    const what = e.type === 'payment'
+      ? 'Payment' + (e.method ? ' · ' + e.method : '')
+      : (hl.tag || e.type || '');
+    return `<tr>
+      <td>${escHtml(fmtDate(String(e.createdAt || '').slice(0, 10)))}</td>
+      <td>${escHtml(e.month ? monthLabel(e.month) : '—')}</td>
+      <td><b>${escHtml(what)}</b>${e.reason ? `<span class="sub">${escHtml(e.reason)}</span>` : ''}</td>
+      <td>${escHtml(ledgerFirstName(e.createdByName) || '—')}</td>
+      <td class="n">${eff > 0 ? fmtNum(eff) : ''}</td>
+      <td class="n">${eff < 0 ? fmtNum(-eff) : ''}</td>
+      <td class="n"><b>${money(e.runningBalance) < 0 ? '−' : ''}${fmtNum(Math.abs(money(e.runningBalance)))}</b></td>
+    </tr>`;
+  }).join('');
+  const closing = money(entries[entries.length - 1].runningBalance);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Payment History — ${escHtml(t.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:11.5px}
+    .doc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+              padding-bottom:12px;border-bottom:3px solid #2563eb;margin-bottom:14px}
+    .doc-head__t{font-size:20px;font-weight:800;color:#1e3a8a}
+    .doc-head__s{font-size:11px;color:#64748b;margin-top:2px}
+    .doc-head__d{font-size:11px;color:#475569;text-align:right}
+    table{width:100%;border-collapse:collapse}
+    thead{display:table-header-group}
+    th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10.5px;color:#475569;font-weight:600;
+       border-bottom:1px solid #e2e8f0}
+    td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+    tr{page-break-inside:avoid}
+    .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .sub{display:block;font-size:10px;color:#64748b;margin-top:1px}
+    tfoot td{border-top:2px solid #cbd5e1;font-weight:700;background:#f8fafc}
+    .foot{margin-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+  </style></head><body>
+  <div class="doc-head">
+    <div><div class="doc-head__t">${escHtml(hostel)}</div>
+         <div class="doc-head__s">${DB.settings.location ? escHtml(DB.settings.location) + ' · ' : ''}Payment History</div></div>
+    <div class="doc-head__d"><b>${escHtml(t.name || '')}</b><br>#${escHtml(String(t.id))} · ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}</div>
+  </div>
+  <table>
+    <thead><tr><th>Date</th><th>Month</th><th>Entry</th><th>By</th>
+      <th class="n">Charged (+)</th><th class="n">Paid / less (−)</th><th class="n">Balance</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="4">Totals</td><td class="n">${fmtNum(charged)}</td><td class="n">${fmtNum(less)}</td>
+      <td class="n">${closing < 0 ? '−' : ''}${fmtNum(Math.abs(closing))}</td></tr></tfoot>
+  </table>
+  <div class="foot">
+    <span>Printed ${escHtml(new Date().toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}${by ? ' by ' + escHtml(by) : ''}</span>
+    <span>HOSTYLLO Offline</span>
   </div>
   </body></html>`;
 
-  const _cardName = printFileName('Resident-' +
-    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), '');
-  _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
+  _electronPDF(html, printFileName('Payment-History-' +
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: 'A4' });
+}
+
+/* The signed undertaking scan, reprinted (spec §3.8, step 11). Images only —
+   the watermark goes across the scan so a copy is never taken for the filed
+   original. A PDF has no reprint (the Documents row disables it). */
+function stuUndReprintScan(id) {
+  const t = DB.students.find(x => x.id === id);
+  const doc = undScanOf(t);
+  if (!t || !doc || !doc.data) { toast('No signed undertaking is attached', 'info'); return; }
+  if (!undScanIsImage(doc)) { toast('A PDF scan can be viewed or downloaded, not reprinted from the app', 'info'); return; }
+  const hostel = DB.settings.hostelName || 'Hostel';
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Signed undertaking (reprint) — ${escHtml(t.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;padding:18px;color:#475569}
+    .cap{display:flex;justify-content:space-between;font-size:10.5px;margin-bottom:8px}
+    .img{text-align:center}
+    .img img{max-width:100%;max-height:1040px}
+    .wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
+    .wm span{transform:rotate(-32deg);font-size:38px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+             color:rgba(220,38,38,.28);border:4px solid rgba(220,38,38,.28);border-radius:12px;padding:10px 22px}
+  </style></head><body>
+  <div class="wm"><span>${escHtml(undReprintLabel(t, doc))}</span></div>
+  <div class="cap"><span><b>${escHtml(hostel)}</b> · Signed undertaking · ${escHtml(t.name || '')} · #${escHtml(String(t.id))}</span><span>HOSTYLLO Offline</span></div>
+  <div class="img"><img src="${escHtml(doc.data)}" alt="Signed undertaking"></div>
+  </body></html>`;
+  _electronPDF(html, printFileName('Undertaking-Reprint-' +
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: 'A4' });
 }
 function showEditStudentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;

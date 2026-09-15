@@ -313,11 +313,13 @@ test('every verb the old profile modal had is on the panel', async () => {
      it move when a student's status changes. */
   /* Concession (warden ledger step 8) follows it — conditional on the same
      statuses, so the fixed six keep their places. */
+  /* Step 11: the Print tile became Admission Form; Print Profile stays in the
+     panel header. */
   expect(acts.map(a => a.label))
-    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete', 'Cancel Seat', 'Concession']);
+    .toEqual(['Edit', 'Move Room', 'Admission Form', 'Payment', 'Delete', 'Cancel Seat', 'Concession']);
   // Each hands off to the function that already owns the workflow.
   expect(acts.find(a => a.label === 'Move Room').call).toContain('showRoomShiftModal');
-  expect(acts.find(a => a.label === 'Print').call).toContain('printStudentCard');
+  expect(acts.find(a => a.label === 'Admission Form').call).toContain('printAdmissionForm');
   /* Cancel Seat OPENS THE FORM. It used to call quickCancelStudent(), which
      wrote a Pending cancellation on the press with an invented date and reason;
      a button that puts a resident on notice without asking anything is the one
@@ -328,8 +330,8 @@ test('every verb the old profile modal had is on the panel', async () => {
      let the buttons rather than the person decide where the tabs started. */
   expect(acts.every(a => a.h <= 40), 'the action tiles have grown tall again').toBe(true);
   expect(acts.find(a => a.label === 'Cancel Seat').call).not.toContain('quickCancel');
-  // Print renders a PDF rather than opening a modal, so it leaves the panel up.
-  expect(acts.find(a => a.label === 'Print').call).not.toContain('closeStudentPanel');
+  // Admission Form renders a PDF rather than opening a modal, so it leaves the panel up.
+  expect(acts.find(a => a.label === 'Admission Form').call).not.toContain('closeStudentPanel');
   /* AND NEITHER DOES DELETE, on the way to the confirm. Closing first meant a
      warden who read the dialog and said no lost the record for saying no. */
   expect(acts.find(a => a.label === 'Delete').call).toContain('confirmDeleteStudent');
@@ -374,7 +376,7 @@ test('every verb the old profile modal had is on the panel', async () => {
   await openPanel(win);
   expect(await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
     .map(b => b.innerText.trim())))
-    .toEqual(['Edit', 'Move Room', 'Print', 'Payment', 'Delete']);
+    .toEqual(['Edit', 'Move Room', 'Admission Form', 'Payment', 'Delete']);
 
   await app.close();
 });
@@ -468,7 +470,8 @@ test('Financial carries the old profile ledger, whole', async () => {
   /* The footer states the count AND carries the way out to the full Payments
      list, which is filtered to this student on the way — getting there used to
      mean closing the drawer and typing the name back in. */
-  expect(led.foot.replace(/\s+/g, ' ')).toBe('Showing 3 of 3 records View all payments');
+  // Step 11 (spec §3.7) added Print payment history beside it.
+  expect(led.foot.replace(/\s+/g, ' ')).toBe('Showing 3 of 3 records Print payment history View all payments');
 
   // The concession is broken out under the paid figure, which is the point.
   expect(led.rows[2][2]).toBe('−Rs. 500');

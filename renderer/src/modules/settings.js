@@ -270,6 +270,7 @@ async function deleteInspection(id) {
 
 /* Lucide outline paths. Kept as bare `d` markup so `setIco` can size them. */
 const SET_ICO = {
+  rules:   '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
   hostel:  '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
   bed:     '<path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8"/><path d="M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/><path d="M12 4v6"/><path d="M2 18h20"/>',
   card:    '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
@@ -635,6 +636,92 @@ function renderRentMessPanel() {
       <div class="set-empty"><div class="set-empty__t">No active students</div>
         <div class="set-empty__s">Admit a student and their charges will be editable here.</div></div>`}
     </div>`;
+}
+
+/* ── RULES & UNDERTAKING (warden ledger spec §2.7, §3.8, step 11) ──────────────
+   The rules and the declaration printed on the back of the admission form.
+   Save adds a version (undertaking.js); earlier versions are listed with how
+   many students signed each, because a reprint always shows the one signed. */
+function renderRulesPanel() {
+  const cur = undCurrent();
+  const starter = undIsStarter();
+  const older = undVersions().slice(0, -1).reverse();
+  const stamp = x => escHtml(fmtDate(String(x.savedAt || '').slice(0, 10)))
+                   + (x.savedByName ? ' by ' + escHtml(x.savedByName) : '');
+  return `
+    <div class="set-card">
+      <div class="set-head">
+        <div class="set-head__ico dh-blue">${setIco(SET_ICO.rules, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Rules &amp; Undertaking</div>
+          <div class="set-head__s">Printed on the back of the admission form, above the student's, guardian's and warden's signatures.</div>
+        </div>
+        <div class="set-head__end">
+          <span class="lk-chip ${starter ? 'dh-amber' : 'dh-blue'}" id="und-state">${starter
+            ? 'Starter text &middot; not saved'
+            : 'Version ' + cur.v + ' &middot; saved ' + stamp(cur) + ' &middot; signed by ' + undSignedCount(cur.v)}</span>
+        </div>
+      </div>
+      ${starter ? `
+      <div class="set-note dh-amber" style="margin-bottom:14px">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span><b>Starter text — review and save it before printing admission forms.</b> It names no hostel and no person; change anything that does not match your hostel.</span>
+      </div>` : ''}
+      <div class="field"><label for="und-rules">Rules <span class="opt">one per line &mdash; printed as a numbered list</span></label>
+        <textarea class="form-control" id="und-rules" rows="12" maxlength="6000">${escHtml(cur.rules)}</textarea></div>
+      <div class="field" style="margin-top:12px"><label for="und-decl">Responsibility declaration</label>
+        <textarea class="form-control" id="und-decl" rows="4" maxlength="1500">${escHtml(cur.declaration)}</textarea></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-primary" id="und-save" onclick="setRulesSave()">Save as new version</button>
+      </div>
+      <div class="set-note dh-blue" style="margin-top:16px">
+        <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
+        <span>Saving never changes an earlier version. A student's admission form always reprints the version they signed.</span>
+      </div>
+    </div>
+    ${older.length ? `
+    <div class="set-card" style="margin-top:16px">
+      <div class="set-head">
+        <div class="set-head__ico dh-slate">${setIco(SET_ICO.rules, 24)}</div>
+        <div style="min-width:0">
+          <div class="set-head__t">Earlier versions</div>
+          <div class="set-head__s">Kept so every reprint shows what was actually signed</div>
+        </div>
+      </div>
+      <div class="set-table-wrap">
+        <table class="set-table">
+          <thead><tr><th style="width:1%">Version</th><th>Saved</th><th style="width:1%">Signed by</th><th style="width:1%"></th></tr></thead>
+          <tbody>${older.map(x => `<tr>
+            <td>v${escHtml(String(x.v))}</td>
+            <td>${stamp(x)}</td>
+            <td style="white-space:nowrap">${undSignedCount(x.v)} student${undSignedCount(x.v) === 1 ? '' : 's'}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="setRulesView(${Number(x.v)})">View</button></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}`;
+}
+
+async function setRulesSave() {
+  const r = undSave({
+    rules: (document.getElementById('und-rules') || {}).value || '',
+    declaration: (document.getElementById('und-decl') || {}).value || '',
+  });
+  if (!r.ok) { toast(r.reason, 'error'); return; }
+  if (r.unchanged) { toast('Nothing changed — the rules are still version ' + r.version, 'info'); return; }
+  logActivity('Rules Saved', 'Rules & Undertaking version ' + r.version, 'Settings');
+  await saveDB();
+  toast('Rules saved as version ' + r.version, 'success');
+  renderPage('settings');
+}
+
+function setRulesView(v) {
+  const x = undVersion(v);
+  if (!x) return;
+  showModal('modal-md', 'Rules &amp; Undertaking — version ' + escHtml(String(x.v)),
+    `<ol style="margin:0 0 14px 20px;line-height:1.65">${undRuleLines(x.rules).map(l => `<li>${escHtml(l)}</li>`).join('')}</ol>
+     <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(x.declaration)}</span></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
 }
 
 /* The hostel's daily rate for part-month stays (warden ledger spec §2.5, step 9).
@@ -1936,6 +2023,8 @@ function renderSettings() {
     // This panel has existed in the markup all along but was never listed here,
     // so nothing could reach it. It is also where the rent/mess split is set.
     {id:'rentupdate', label:'Rent & Mess',      svg:SET_ICO.coins},
+    // Step 11: the text printed on the back of the admission form.
+    {id:'rules',    label:'Rules & Undertaking', svg:SET_ICO.rules},
     {id:'data',     label:'Data Management',    svg:SET_ICO.database},
     {id:'license',  label:'License',            svg:SET_ICO.key},
     // Diagnostic, not decoration. This build makes no network calls, so a
@@ -1981,6 +2070,11 @@ function renderSettings() {
       <!-- RENT & MESS -->
       <div class="settings-panel ${settingsTab==='rentupdate'?'active':''}">
         ${settingsTab==='rentupdate' ? renderRentMessPanel() : ''}
+      </div>
+
+      <!-- RULES & UNDERTAKING (step 11) -->
+      <div class="settings-panel ${settingsTab==='rules'?'active':''}">
+        ${settingsTab==='rules' ? renderRulesPanel() : ''}
       </div>
 
       <!-- LICENSE -->

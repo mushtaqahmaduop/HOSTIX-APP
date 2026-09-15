@@ -206,7 +206,7 @@ test('one avatar everywhere, and a photo always beats the fallback', async () =>
   await app.close();
 });
 
-test('the printed resident record carries the charge, its plan, and a history', async () => {
+test('the printed student profile carries the charge, its plan, and a balance summary', async () => {
   const { app, win } = await openApp();
   await seed(win);
 
@@ -238,13 +238,15 @@ test('the printed resident record carries the charge, its plan, and a history', 
   expect(doc.coverage).toContain('Rent + Mess');
   expect(doc.text).not.toContain('8,000 +');
 
-  // The reference's four figures, its two panels, and somewhere to sign.
-  expect(doc.stats).toEqual(['Total Paid', 'Outstanding', 'Join Date', 'Payments Made']);
+  /* SUMMARY ONLY (warden ledger spec §3.7, step 11). The month-by-month table
+     is Print Payment History now, and signatures belong to the admission form —
+     the table is what pushed this sheet onto a second page. */
+  expect(doc.stats).toEqual(['Total Paid', 'Pending Balance', 'Last Payment', 'Join Date']);
   expect(doc.panels).toEqual(['Personal Information', 'Room & Accommodation']);
-  expect(doc.historyCols).toContain('Charge / mo');
-  expect(doc.hasSignature, 'a record a warden hands over needs a signature line').toBe(true);
-  expect(doc.text).toContain('Admission');
-  expect(doc.name).toMatch(/^Test-Hostel_Resident-Both-Charges_\d{4}-\d{2}-\d{2}\.pdf$/);
+  expect(doc.historyCols, 'the payment table came back into the profile').toEqual([]);
+  expect(doc.hasSignature, 'the routine profile carries a signature line').toBe(false);
+  expect(doc.text).toContain('HOSTYLLO Offline');
+  expect(doc.name).toMatch(/^Test-Hostel_Student-Profile-Both-Charges_\d{4}-\d{2}-\d{2}\.pdf$/);
 
   await app.close();
 });

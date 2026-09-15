@@ -81,7 +81,8 @@ test('four tabs became one page, and an old tab id does not land on a blank one'
 
   const tabs = await win.evaluate(() =>
     [...document.querySelectorAll('.set-tabs .set-tab')].map(t => t.textContent.trim()));
-  expect(tabs).toEqual(['Hostel Info', 'Configuration', 'Rent & Mess',
+  // Rules & Undertaking joined after Rent & Mess in warden ledger step 11.
+  expect(tabs).toEqual(['Hostel Info', 'Configuration', 'Rent & Mess', 'Rules & Undertaking',
                         'Data Management', 'License', 'Connection']);
 
   const shape = await win.evaluate(() => ({

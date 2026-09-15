@@ -1035,6 +1035,8 @@ let studentFilter = {status:'All', room:'All', course:'All', plan:'All', search:
                         answers "have they paid", and the spec is explicit that one
                         must never be read as the other. */
                      fee:'All',
+                     /* Signed undertaking on file (step 11): 'All' | 'scan' | 'noscan'. */
+                     und:'All',
                      /* Scoped to one month by default. _stuInMonth() over in
                         students.js carries living students forward into every
                         month they were here for, and leaves departed ones
@@ -1048,6 +1050,6 @@ let stuSelected = new Set();
    cosmetic: a selection left over from a previous visit sits invisibly behind
    the bulk action bar on the next one. See FILTER_REGISTRY in nav.js. */
 registerFilter('students', studentFilter, () => ({
-  status:'All', room:'All', course:'All', search:'', fee:'All',
+  status:'All', room:'All', course:'All', search:'', fee:'All', und:'All',
   month:thisMonth(), page:1, sortKey:'room', sortDir:'asc',
 }), () => stuSelected.clear());
