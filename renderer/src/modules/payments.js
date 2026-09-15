@@ -1723,6 +1723,7 @@ function pfLoadMonthContext() {
       if (concEl) concEl.value = '';
       if (cdEl)   cdEl.value   = '';
       if (list)   list.innerHTML = '';
+      pfProSet(false);
     }
     recalcUnpaid();
     return;
@@ -1747,6 +1748,8 @@ function pfLoadMonthContext() {
   // it with what has already been taken means the warden edits a figure they
   // can see instead of overwriting one they cannot.
   if (paidEl) paidEl.value = already || '';
+  // A month charged by days opens as By days, with the figures it was charged on.
+  pfProSet(!!rec.prorate, rec.prorate || null);
 
   box.style.display = '';
   box.className = 'pf-mstate ' + (settled ? 'is-paid' : 'is-partial');
@@ -1840,6 +1843,7 @@ function pfApplyOutstandings(allocations, method, date) {
 // The mess charge currently on the form — 0 when the tick is off, so the total
 // follows the checkbox without the resolved amount being lost.
 function pfMessAmount() {
+  if (pfProrate()) return 0;        // By days: the daily rate is the whole charge
   const on = document.getElementById('f-pmess-on');
   if (on && !on.checked) return 0;
   return parseFloat(document.getElementById('f-pmess')?.value) || 0;
@@ -1849,6 +1853,8 @@ function pfMessAmount() {
 // two halves in hidden f-prent/f-pmess and shows only their sum; the older
 // Edit Payment modal still types into a visible f-pamt. Read whichever exists.
 function pfRentAmount() {
+  const pr = pfProrate();
+  if (pr) return pr.days * pr.rate;  // By days (step 9)
   const r = document.getElementById('f-prent');
   if (r) return parseFloat(r.value) || 0;
   return parseFloat(document.getElementById('f-pamt')?.value) || 0;
@@ -1917,6 +1923,14 @@ function pfPaintCharge() {
     if (sg) { sg.textContent = hue === 'is-plus' ? '+' : ''; sg.className = 'ws__sign ' + hue; }
   };
 
+  const pr = pfProrate();
+  if (pr) {
+    const amt = pr.days * pr.rate;
+    box.value = amt ? fmtNum(amt) : '—';
+    wsPaint(amt ? 'is-plus' : 'is-muted');
+    if (note) note.textContent = amt ? prorateText(pr) : 'Enter whole days and a daily rate';
+    return;
+  }
   if (!rent && !messConfigured) {
     box.value = '—';
     wsPaint('is-muted');
@@ -2362,6 +2376,9 @@ async function submitPaymentForStudent() {
         const newDate        = document.getElementById('f-ps-date')?.value   || today();
         const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
 
+        // A different charge turns a by-days month back into an ordinary one (step 9).
+        if (alreadyPending.prorate && (money(newMonthlyRent) !== money(alreadyPending.monthlyRent)
+            || (newMessOn && newMess > 0))) delete alreadyPending.prorate;
         alreadyPending.monthlyRent  = newMonthlyRent;
         alreadyPending.totalRent    = newMonthlyRent;
         // An exempt month keeps its mess AMOUNT with messIncluded false (spec §3.6).
@@ -2589,7 +2606,23 @@ function renderAddPayment() {
               <b>Monthly charge<span class="req">*</span></b>
               <i id="f-pcharge-note">Pick a student to load the charge</i>
             </div>
-            <div class="ws__d">${messSeg}</div>
+            <div class="ws__d">
+              <!-- BY DAYS (warden ledger spec §2.5, step 9). Opens on Full month
+                   every time; By days makes the charge days × rate and sets the
+                   mess switch aside — the daily rate is the whole charge (owner). -->
+              <input type="checkbox" id="f-pro-on" class="ws__hid" onchange="pfProToggle()">
+              <div class="ws__seg" id="f-pro-seg">
+                <button type="button" class="ws__seg-b is-on" data-on="0" onclick="pfProSet(false)">Full month</button>
+                <button type="button" class="ws__seg-b" data-on="1" onclick="pfProSet(true)">By days</button>
+              </div>
+              <div class="ws__minis" id="f-pro-box" style="display:none;margin-top:8px">
+                <label class="ws__mini"><span>Days</span>
+                  <input class="pf-in" id="f-pro-days" type="number" min="1" step="1" placeholder="0" oninput="recalcUnpaid()"></label>
+                <label class="ws__mini"><span>Rate/day</span>
+                  <input class="pf-in" id="f-pro-rate" type="number" min="1" step="1" placeholder="0" oninput="recalcUnpaid()"></label>
+              </div>
+              <div id="f-pmess-wrap" style="margin-top:8px">${messSeg}</div>
+            </div>
             <div class="ws__a" title="Room rent, plus mess when included. Set in Settings &rarr; Rent &amp; Mess.">
               <span class="ws__sign" id="ws-s-01"></span>
               <input class="ws__amt is-muted" id="f-pcharge" type="text" readonly value="&mdash;" size="2">
@@ -2866,6 +2899,58 @@ function pfPayableTotal() {
   });
 }
 
+/* ── BY DAYS ON LINE 01 (warden ledger spec §2.5, §3.10, step 9) ─────────────
+   f-pro-on is the switch every reader checks; the two buttons only move it.
+   Returns {days, rate} while By days is on — each a whole number, 0 when the box
+   holds anything else — and null otherwise. */
+function pfProrate() {
+  const on = document.getElementById('f-pro-on');
+  if (!on || !on.checked) return null;
+  const whole = id => {
+    const v = String(document.getElementById(id)?.value || '').trim();
+    return /^\d+$/.test(v) ? Number(v) : 0;
+  };
+  return { days: whole('f-pro-days'), rate: whole('f-pro-rate') };
+}
+
+/* Turns By days on or off. `from` is a record's saved {days, rate}. Without it,
+   switching on fills the defaults: the days left in the month being charged,
+   join day included, and the daily rate from Settings (empty when none). */
+function pfProSet(on, from) {
+  const el = document.getElementById('f-pro-on');
+  if (!el) return;
+  const was = el.checked;
+  el.checked = !!on;
+  if (on && (from || !was)) {
+    const dEl = document.getElementById('f-pro-days');
+    const rEl = document.getElementById('f-pro-rate');
+    if (from) {
+      if (dEl) dEl.value = from.days || '';
+      if (rEl) rEl.value = from.rate || '';
+    } else {
+      const sid  = document.getElementById('f-pstudent')?.value || '';
+      const st   = (DB.students || []).find(s => s.id === sid);
+      const days = prorateDefaultDays(document.getElementById('f-pmonth')?.value || '', st && st.joinDate, today());
+      const rate = Math.round(Number(DB.settings.dailyRate) || 0);
+      if (dEl) dEl.value = days || '';
+      if (rEl) rEl.value = rate > 0 ? rate : '';
+    }
+  }
+  pfProToggle();
+}
+
+function pfProToggle() {
+  const on  = !!pfProrate();
+  const seg = document.getElementById('f-pro-seg');
+  if (seg) seg.querySelectorAll('.ws__seg-b').forEach(b =>
+    b.classList.toggle('is-on', (b.dataset.on === '1') === on));
+  const box  = document.getElementById('f-pro-box');
+  if (box)  box.style.display  = on ? '' : 'none';
+  const mess = document.getElementById('f-pmess-wrap');
+  if (mess) mess.style.display = on ? 'none' : '';
+  recalcUnpaid();
+}
+
 // The segmented control on line 01 sets the checkbox the rest of the form reads.
 function pfMessSet(on) {
   const el = document.getElementById('f-pmess-on');
@@ -2886,6 +2971,7 @@ function pfClearStudent() {
   if (info) { info.style.display = 'none'; info.innerHTML = ''; }
   if (pick) pick.style.display = '';
   ['f-prent', 'f-pmess'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  pfProSet(false);
   pfRenderRecent(null);
   pfReloadOutstandings();
   pfRenderMonthRail();
@@ -3020,6 +3106,22 @@ async function submitAddPayment() {
     document.getElementById('f-pstudent-search')?.focus();
     return;
   }
+  // By days (step 9): Days and Rate/day must be whole numbers above zero, and
+  // the days can not run past the month being charged.
+  const _pro = pfProrate();
+  if (_pro) {
+    if (!(_pro.days > 0) || !(_pro.rate > 0)) {
+      toast('By days needs whole numbers above zero for Days and Rate/day.', 'error');
+      document.getElementById(_pro.days > 0 ? 'f-pro-rate' : 'f-pro-days')?.focus();
+      return;
+    }
+    const _mo = prorateMonthOf(document.getElementById('f-pmonth')?.value || '');
+    if (_mo && _pro.days > _mo.days) {
+      toast('Days can not be more than the ' + _mo.days + ' days in this month.', 'error');
+      document.getElementById('f-pro-days')?.focus();
+      return;
+    }
+  }
   // Duplicate guard: block double-charging for the same month
   if (!isManual && !window._forcePayAP) {
     const enteredMonth2 = document.getElementById('f-pmonth')?.value || '';
@@ -3076,8 +3178,8 @@ async function submitAddPayment() {
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
           const prevPaid       = Number(alreadyPending2.amount || 0);
-          const newMonthlyRent = pfRentAmount() || alreadyPending2.monthlyRent || 0;
-          const newMessOn      = document.getElementById('f-pmess-on')?.checked !== false;
+          const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
+          const newMessOn      = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
           const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
           const newExtraCharges= getExtraChargesData();
@@ -3100,8 +3202,13 @@ async function submitAddPayment() {
           // Merge into the existing record
           alreadyPending2.monthlyRent  = newMonthlyRent;
           alreadyPending2.totalRent    = newMonthlyRent;
-          alreadyPending2.messCharge   = newMess;
+          // By days keeps the month's mess figure on the record, not billed (step 9).
+          alreadyPending2.messCharge   = _pro
+            ? money(parseFloat(document.getElementById('f-pmess')?.value) || alreadyPending2.messCharge || 0)
+            : newMess;
           alreadyPending2.messIncluded = newMessOn;
+          if (_pro) alreadyPending2.prorate = { days: _pro.days, rate: _pro.rate };
+          else delete alreadyPending2.prorate;
           alreadyPending2.amount       = newPaid;
           alreadyPending2.unpaid       = newUnpaid;
           alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
@@ -3155,9 +3262,10 @@ async function submitAddPayment() {
     window._updatePendingAP = false;
   }
   window._forcePayAP = false;
-  const monthlyRent = pfRentAmount();
-  const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
-  const messCharge   = pfMessAmount();
+  const monthlyRent = pfRentAmount();                  // days × rate while By days is on
+  const messIncluded = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
+  // By days keeps the month's mess figure on the record, not billed (step 9).
+  const messCharge   = _pro ? money(parseFloat(document.getElementById('f-pmess')?.value) || 0) : pfMessAmount();
   const paidAmount  = parseFloat(document.getElementById('f-ppaid')?.value)||0;
   const extraCharges = getExtraChargesData();
   const extraTotal  = extraCharges.reduce((s,c)=>s+c.amount,0);
@@ -3165,7 +3273,7 @@ async function submitAddPayment() {
   const concession    = parseFloat(document.getElementById('f-pconcession')?.value)||0;
   const concessionDesc= (document.getElementById('f-pconcession-desc')?.value||'').trim();
   const totalDue    = calculateBill({
-    rent: monthlyRent, messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
+    rent: monthlyRent, messCharge: _pro ? 0 : messCharge, messIncluded: true,   // pfMessAmount() is 0 when off
     extraTotal, admissionFee, concession,
   });
   const totalRent   = monthlyRent;                // display rent = base only
@@ -3191,6 +3299,9 @@ async function submitAddPayment() {
     // §14 overpayment — see submitPaymentForStudent() for the reasoning.
     overpaid: Math.max(0, money(paidAmount) - totalDue),
     messCharge, messIncluded,
+    // What a by-days month was charged on (step 9): the ledger, the receipt and
+    // the Edit form all read it.
+    ...(_pro ? { prorate: { days: _pro.days, rate: _pro.rate } } : {}),
     extraCharges, extraTotal,
     admissionFee, concession, concessionDesc,
     totalRent,
@@ -3275,11 +3386,14 @@ function showEditPaymentModal(id) {
      The record still keeps rent and mess apart; the box shows their sum and
      pfComboInput() writes the rent half back into a hidden f-prent. */
   const _bundled = serviceModel() === 'rent_mess_bundled';
-  const monthlyRent  = held ? (p.monthlyRent || p.totalRent || (c && c.rent) || 0)
+  /* A month charged by days (step 9) shows its own figures too: the student's
+     current price is a whole month, and saving that unchanged would un-prorate it. */
+  const _own = held || !!p.prorate;
+  const monthlyRent  = _own ? (p.monthlyRent || p.totalRent || (c && c.rent) || 0)
                             : ((c && c.rent) || p.monthlyRent || p.totalRent || 0);
   // Mess follows the same rule as rent above: the current configured charge
   // wins, falling back to what was recorded on this payment.
-  const messCharge   = held ? Number(p.messCharge || 0)
+  const messCharge   = _own ? Number(p.messCharge || 0)
                             : (c && c.mess != null ? c.mess : Number(p.messCharge || 0));
   const messIncluded = p.messIncluded != null ? p.messIncluded !== false : (c ? c.messOptIn : true);
   const paidAmount   = p.amount || 0;
@@ -3338,10 +3452,11 @@ function showEditPaymentModal(id) {
                  <input type="hidden" id="f-prent" value="${monthlyRent}">
                  <input type="hidden" id="f-pmess" value="${messCharge || 0}">
                  <input type="checkbox" id="f-pmess-on" hidden ${messIncluded ? 'checked' : ''}>`,
-                { req: true, for: 'f-pcombo', note: messIncluded ? '' : 'Mess exempt — rent only' })
+                { req: true, for: 'f-pcombo',
+                  note: p.prorate ? escHtml(prorateText(p.prorate)) : (messIncluded ? '' : 'Mess exempt — rent only') })
             : F('Room rent (PKR)', 'home',
              `<input class="form-control" id="f-pamt" type="number" value="${monthlyRent}" oninput="recalcUnpaid()">`,
-             { req: true, for: 'f-pamt' })}
+             { req: true, for: 'f-pamt', note: p.prorate ? escHtml(prorateText(p.prorate)) : '' })}
           ${/* MESS — this modal used to omit it, so saving an edit recomputed the
                 total without the food charge while leaving p.messCharge on the
                 record: the balance and the printed receipt disagreed. */''}
@@ -3529,6 +3644,9 @@ async function submitEditPayment(id) {
       note: 'Updated payment'
     });
   }
+  /* Changing the charge turns a by-days month back into an ordinary one (step 9);
+     the note would otherwise describe a figure the record no longer carries. */
+  if (p.prorate && (money(monthlyRent) !== money(p.monthlyRent) || (messIncluded && messCharge > 0))) delete p.prorate;
   p.monthlyRent    = monthlyRent;
   p.totalRent      = monthlyRent;
   /* An exempt month in a "rent + mess together" hostel keeps its mess AMOUNT on

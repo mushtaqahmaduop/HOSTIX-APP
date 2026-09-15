@@ -177,6 +177,10 @@ declare function cnApplyToRecord(p: any): boolean;
 declare function cnMarkSeen(id: string): boolean;
 declare function cnSeen(id: string): void;
 declare function cnAlerts(): any[];
+// -- utils.js: prorated charging (warden ledger spec §2.5, step 9) ------------
+declare function prorateMonthOf(key: string): { y: number; m: number; days: number } | null;
+declare function prorateDefaultDays(monthKey: string, joinDate?: string, todayYmd?: string): number;
+declare function prorateText(pr: { days: number; rate: number } | null | undefined): string;
 // -- handovers.js: cash handovers (spec §5 step 4) ---------------------------
 declare function handoverSync(): number;
 declare function hoNeedsHandover(accountId: string): boolean;

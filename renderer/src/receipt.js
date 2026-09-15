@@ -214,8 +214,12 @@ function buildReceiptHTML(payId) {
   // ONE LINE FOR RENT AND MESS (owner, 2026-09-14): a month that bills food
   // prints "Rent + Mess" with its whole charge — never the split as two lines.
   // A month of rent alone prints "Room Rent".
-  if (rcptMess > 0) html += dotRow('Rent + Mess', fmtPKR(rcptMonthly + rcptMess));
-  else              html += dotRow('Room Rent', fmtPKR(rcptMonthly));
+  // A month charged by days (step 9) names the days and the rate it used.
+  if (p.prorate && Number(p.prorate.days) > 0 && Number(p.prorate.rate) > 0)
+    html += dotRow('Prorated (' + fmtNum(p.prorate.days) + ' days @ ' + fmtNum(p.prorate.rate) + ')',
+                   fmtPKR(rcptMonthly + rcptMess));
+  else if (rcptMess > 0) html += dotRow('Rent + Mess', fmtPKR(rcptMonthly + rcptMess));
+  else                   html += dotRow('Room Rent', fmtPKR(rcptMonthly));
   if (rcptAdmFee > 0) html += dotRow('Admission Fee', fmtPKR(rcptAdmFee));
   if (p.extraCharges && p.extraCharges.length) {
     p.extraCharges.forEach(function(ch) {

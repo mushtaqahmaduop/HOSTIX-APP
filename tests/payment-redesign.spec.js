@@ -120,7 +120,8 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   expect(ticked.summary.toLowerCase(), 'summary should show the remaining balance').toContain('remaining');
 
   // Untick → rent only, immediately.
-  await win.click('.ws__seg-b[data-on="0"]');
+  // Scoped: line 01 also carries the Full month / By days switch (step 9).
+  await win.click('#f-pmess-seg .ws__seg-b[data-on="0"]');
   await win.waitForTimeout(200);
   const unticked = await win.evaluate(() => ({
     charge: document.getElementById('f-pcharge').value,
@@ -133,7 +134,7 @@ test('monthly charge is derived from Settings and arrears post to their own mont
   expect(Number(unticked.unpaid)).toBe(RENT);
 
   // Re-tick → back to the full charge.
-  await win.click('.ws__seg-b[data-on="1"]');
+  await win.click('#f-pmess-seg .ws__seg-b[data-on="1"]');
   await win.waitForTimeout(200);
   const reticked = await win.evaluate(() => document.getElementById('f-pcharge').value);
   expect(reticked.replace(/,/g, ''), 're-ticked charge').toBe(String(FULL));

@@ -586,6 +586,14 @@ function renderRentMessPanel() {
         <button class="btn btn-primary" onclick="applyRentToAll()">Apply to All Students</button>
       </div>
 
+      <div class="rm-sub" style="margin-top:18px">Daily rate for part-month stays</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--text3)">Daily rate (${cur})
+          <input class="form-control" type="number" min="0" step="1" id="set-daily-rate" placeholder="e.g. 700" style="max-width:170px"
+                 value="${Math.round(Number(DB.settings.dailyRate) || 0) || ''}" onchange="setDailyRate(this.value)"></label>
+        <span style="font-size:11.5px;color:var(--text3);padding-bottom:10px">A suggestion for <b>By days</b> on Add Payment &mdash; it covers rent${hostelServesMess() ? ' + mess' : ''} together. Changing it never changes a month already charged.</span>
+      </div>
+
       <div class="set-note dh-blue" style="margin-top:16px">
         <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
         <span>Applying a change updates the student and every <b>still-unpaid</b> payment record. Records already marked Paid are receipts of what was actually charged and are never rewritten.</span>
@@ -627,6 +635,24 @@ function renderRentMessPanel() {
       <div class="set-empty"><div class="set-empty__t">No active students</div>
         <div class="set-empty__s">Admit a student and their charges will be editable here.</div></div>`}
     </div>`;
+}
+
+/* The hostel's daily rate for part-month stays (warden ledger spec §2.5, step 9).
+   Whole rupees; an empty box clears it. It is only ever a suggestion for By days
+   on Add Payment — no month record reads it, so changing it re-prices nothing. */
+async function setDailyRate(val) {
+  const s  = String(val == null ? '' : val).trim();
+  const el = document.getElementById('set-daily-rate');
+  if (s !== '' && !/^\d+$/.test(s)) {
+    toast('The daily rate is a whole number of rupees.', 'error');
+    if (el) el.value = Math.round(Number(DB.settings.dailyRate) || 0) || '';
+    return;
+  }
+  DB.settings.dailyRate = s === '' ? 0 : Number(s);
+  logActivity('Settings Updated',
+    'Daily rate ' + (DB.settings.dailyRate ? 'set to ' + fmtPKR(DB.settings.dailyRate) : 'cleared'), 'Settings');
+  await saveDB();
+  toast(DB.settings.dailyRate ? 'Daily rate set to ' + fmtPKR(DB.settings.dailyRate) : 'Daily rate cleared', 'success');
 }
 
 /* Live total under a room-type card — typed values, before Apply is pressed. */
@@ -2793,6 +2819,7 @@ function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
 
   DB.payments.forEach(function (p) {
     if (p.studentId !== student.id || p.status === 'Paid') return;
+    if (p.prorate) return;   // a month charged by days keeps its charge (step 9)
     p.monthlyRent  = newRent;
     p.totalRent    = newRent;
     p.messCharge   = mess;
@@ -3072,7 +3099,7 @@ async function updateRoomType(id, field, val) {
           s.rent = newRent;
           // Also update any pending payments for this student
           DB.payments.forEach(function(p) {
-            if(p.studentId === s.id && p.status === 'Pending') {
+            if(p.studentId === s.id && p.status === 'Pending' && !p.prorate) {   // by-days months keep their charge (step 9)
               p.monthlyRent = newRent; p.totalRent = newRent;
               p.unpaid = Math.max(0, newRent - (p.amount||0));
               ledgerTrack(p, { why: 'Room type rent changed in Settings' });

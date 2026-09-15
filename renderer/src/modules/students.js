@@ -4218,9 +4218,10 @@ async function submitRoomShift(studentId) {
     if (p.studentId === studentId && p.status === 'Pending') {
       p.roomId     = newRoomId;
       p.roomNumber = toRoom.number;
-      p.monthlyRent = newRent;
+      // A month charged by days keeps its charge through a room shift (step 9).
+      if (!p.prorate) p.monthlyRent = newRent;
       // Recalculate unpaid using new rent if not yet partially paid
-      if (!p.amount || p.amount === 0) {
+      if (!p.prorate && (!p.amount || p.amount === 0)) {
         p.amount  = 0;
         p.unpaid  = newRent;
       }

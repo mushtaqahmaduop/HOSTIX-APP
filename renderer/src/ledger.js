@@ -232,12 +232,17 @@ function _ledgerDiff(p, posted, why) {
   keys.forEach(k => {
     const want = parts[k] || 0, have = posted.parts[k] || 0, d = want - have;
     if (!d) return;
+    // A month charged by days says so, with the numbers actually used (step 9).
+    const pr = (k === 'monthly' && p.prorate && money(p.prorate.days) > 0 && money(p.prorate.rate) > 0
+                && typeof prorateText === 'function')
+      ? prorateText(p.prorate) + ' = ' + n(money(p.prorate.days) * money(p.prorate.rate)) : '';
     if (have === 0 && d > 0) {
       out.push({ type: 'charge', amount: d, part: k, date: recDate,
-                 reason: _ledgerPartLabel(k) + tail });
+                 reason: (pr || _ledgerPartLabel(k)) + tail });
     } else {
       out.push({ type: 'adjustment', amount: d, part: k, date: recDate,
-                 reason: _ledgerPartLabel(k) + ' changed ' + n(have) + ' → ' + n(want) + tail + also });
+                 reason: pr ? pr + tail
+                            : _ledgerPartLabel(k) + ' changed ' + n(have) + ' → ' + n(want) + tail + also });
     }
   });
 

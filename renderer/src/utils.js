@@ -752,6 +752,50 @@ function monthLabel(key) {
   return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 }
 
+/* ── PRORATED CHARGING (warden ledger spec §2.5, §3.10, step 9) ──────────────
+   The month a "By days" charge is for, as { y, m (1-12), days }. Takes a stored
+   'YYYY-MM' key or a 'September 2026' label, the same inputs monthLabel() takes.
+   null for anything else. */
+function prorateMonthOf(key) {
+  const s = String(key || '').trim();
+  let y, m;
+  const k = /^(\d{4})-(\d{2})$/.exec(s);
+  if (k) { y = Number(k[1]); m = Number(k[2]); }
+  else {
+    const l = /^([A-Za-z]{3,})\s+(\d{4})$/.exec(s);
+    if (!l) return null;
+    const names = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+                   'august', 'september', 'october', 'november', 'december'];
+    const i = names.findIndex(n => n.indexOf(l[1].toLowerCase()) === 0);
+    if (i < 0) return null;
+    y = Number(l[2]); m = i + 1;
+  }
+  if (!(m >= 1 && m <= 12)) return null;
+  return { y, m, days: new Date(y, m, 0).getDate() };
+}
+
+/* The days left in the month being charged, the first day counted (owner): from
+   the join date when it falls in that month, otherwise from today when the month
+   is this one; any other month counts from the 1st. Never more than the month. */
+function prorateDefaultDays(monthKey, joinDate, todayYmd) {
+  const mo = prorateMonthOf(monthKey);
+  if (!mo) return 0;
+  const dayIn = d => {
+    const x = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''));
+    return (x && Number(x[1]) === mo.y && Number(x[2]) === mo.m) ? Number(x[3]) : 0;
+  };
+  const from = dayIn(joinDate) || dayIn(todayYmd || today()) || 1;
+  return Math.max(1, Math.min(mo.days, mo.days - from + 1));
+}
+
+/* "Prorated: 16 days @ 700/day" — one wording for the form, the Edit form and
+   the ledger. */
+function prorateText(pr) {
+  if (!pr) return '';
+  const days = Number(pr.days) || 0;
+  return 'Prorated: ' + fmtNum(days) + (days === 1 ? ' day' : ' days') + ' @ ' + fmtNum(Number(pr.rate) || 0) + '/day';
+}
+
 // ── String helpers ────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')

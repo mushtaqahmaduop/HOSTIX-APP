@@ -373,6 +373,16 @@ read by both the receipt (`buildReceiptHTML`) and the Add Payment card (`pfRende
 | Which months an approved concession changes | **Unpaid months in range + future.** Generated months inside the dates that are not fully paid get it now; months generated later inside the range get it when generated; paid months are never rewritten. |
 | Overlapping, and ending early | **Overlapping concessions add up, capped** so a month's rent + mess never goes negative. **An admin ends one early** (it stops from next month); a warden asks an admin to end it, as with exemptions. |
 
+## Step 9 decisions (owner, 2026-09-15, asked before design)
+
+| Case | Decided |
+|---|---|
+| Where a warden charges by days | **Add Payment, line 01** — a Full month / By days switch; By days shows editable Days and Rate and the live total replaces the monthly charge. |
+| What the daily rate covers | **The whole charge** — one daily figure for rent + mess together (the owner's example: monthly 17,000, daily 700). |
+| Default days | **Join day included** — from the join date (or today) to the last day of the month, both counted; always editable. |
+| When By days switches on by itself | **Never** — the form always opens on Full month; the warden switches when needed. |
+| Where the daily rate lives | (Q13) one hostel-wide `settings.dailyRate`, a default suggestion only. |
+
 ## What happens next
 
 Step 3 design, shown to you before code. Then spec §5 step 3: the read-only **My Collections**
