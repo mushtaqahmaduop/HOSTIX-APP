@@ -16,6 +16,15 @@ function pinValid(s) { return /^\d{4}$/.test(String(s == null ? '' : s)); }
 function pinIsRequired(u) { return !!(u && u.pinRequired === true); }
 function pinHasOne(u) { return !!(u && u.pin && typeof u.pin === 'object' && u.pin.hash); }
 
+/* Does the signed-in account confirm money with a PIN? The money paths test
+   this BEFORE awaiting pinConfirm(), so an account without PIN switched on
+   saves exactly as it did before step 10 — synchronously, with no extra tick
+   between the click and the record being written. */
+function pinNeeded() {
+  const id = typeof CUR_ROLE !== 'undefined' ? CUR_ROLE : '';
+  return pinIsRequired(id && typeof WARDENS !== 'undefined' ? WARDENS[id] : null);
+}
+
 /** True when `plain` is this account's PIN. */
 async function pinCheck(accountId, plain) {
   const u = WARDENS[accountId];

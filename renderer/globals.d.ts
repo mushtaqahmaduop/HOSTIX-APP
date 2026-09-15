@@ -181,6 +181,7 @@ declare function cnAlerts(): any[];
 declare function pinValid(s: any): boolean;
 declare function pinIsRequired(u: any): boolean;
 declare function pinHasOne(u: any): boolean;
+declare function pinNeeded(): boolean;
 declare function pinCheck(accountId: string, plain: string): Promise<boolean>;
 declare function pinSet(accountId: string, plain: string): Promise<{ ok: boolean; reason?: string }>;
 declare function pinClear(accountId: string): Promise<{ ok: boolean; reason?: string }>;

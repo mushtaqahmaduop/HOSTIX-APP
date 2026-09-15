@@ -214,9 +214,10 @@ test('a warden sees their own collections; an administrator sees every account',
       title: document.querySelector('#usr-panel .stu-pan__title').textContent.trim(),
       edit: (document.getElementById('usr-panel-edit') || {}).textContent,
     }))).toEqual({ title: 'My Account', edit: 'Edit my details' });
-    // The actions sit at the top of the panel, under Edit.
+    // The actions sit at the top of the panel, under Edit. Every account's own
+    // panel carries Set my PIN since warden ledger step 10.
     expect(await win.evaluate(() => [...document.querySelectorAll('#usr-panel .usr-pan__acts .stu-pan__act')]
-      .map(b => b.textContent.trim()))).toEqual(['Reset password', 'Sign in as user']);
+      .map(b => b.textContent.trim()))).toEqual(['Reset password', 'Sign in as user', 'Set my PIN']);
     await win.evaluate(() => closeAccountPanel());
     await win.waitForFunction(() => !document.querySelector('#usr-panel'), null, { timeout: 5000 });
 
