@@ -366,9 +366,14 @@ test('every colour token differs between themes, or is listed as deliberately sh
   // is blocked and yields an empty list without throwing — which would make
   // this spec pass by measuring nothing.
   const cssDir = path.join(REPO_ROOT, 'renderer');
+  /* Recursive since 2026-09-16 — the design-spec tokens live in renderer/css/. */
+  const cssFiles = (function walk(dir) {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory() ? (e.name === 'vendor' ? [] : walk(path.join(dir, e.name)))
+                      : (e.name.endsWith('.css') ? [path.join(dir, e.name)] : []));
+  })(cssDir);
   const names = [...new Set(
-    fs.readdirSync(cssDir).filter(f => f.endsWith('.css'))
-      .flatMap(f => (fs.readFileSync(path.join(cssDir, f), 'utf8')
+    cssFiles.flatMap(f => (fs.readFileSync(f, 'utf8')
         .match(/--[A-Za-z0-9_-]+\s*:/g) || []).map(s => s.replace(/\s*:$/, ''))))].sort();
   expect(names.length, 'no tokens found — the scan is measuring nothing').toBeGreaterThan(150);
 

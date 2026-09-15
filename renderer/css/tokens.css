@@ -1,0 +1,444 @@
+/* ============================================================
+   HOSTYLLO Offline — design tokens
+   HOSTYLLO_DESIGN_SPEC.md Part 2 (owner, 2026-09-15; adopted 2026-09-16).
+   Single source of truth. Rules enforced in review:
+   - No hardcoded px for font-size, spacing, radius anywhere else
+   - No colour literal outside this file
+   - Screen files place components; they never restyle them
+
+   Replaces renderer/tokens.css. Two things are added to the spec's text, both
+   so the app stays correct and shippable while screens are rebuilt one at a time:
+
+   1. LIGHT SHADOWS. The spec gives its light shadow values on the first :root
+      and redefines all three in the dark :root below, which wins — so light
+      mode would inherit the heavy dark shadows. They are restated inside
+      body.light-theme.
+
+   2. THE LEGACY BRIDGE, at the end. Every older name a not-yet-rebuilt screen
+      still reads (--card, --text3, --border2, --green …) is an alias of the new
+      tokens, declared in BOTH theme scopes, so all 19 screens paint the new
+      palette today (owner's choice, 2026-09-16). A rebuilt screen uses the new
+      names; the bridge is deleted after the last screen.
+   ============================================================ */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../vendor/fonts/inter-latin.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2074,
+                 U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../vendor/fonts/inter-latin-ext.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../vendor/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  font-weight: 400 500; font-style: normal; font-display: swap;
+}
+
+:root {
+  /* ---- Type ------------------------------------------------ */
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Six steps. A seventh means the layout is wrong, not the scale. */
+  --text-xs:   11px;  /* micro labels, badge counts — floor, never go below */
+  --text-sm:   12px;  /* table headers, meta, helper text, chips */
+  --text-base: 13px;  /* body, table cells, inputs, buttons, labels */
+  --text-lg:   15px;  /* section headings, card titles */
+  --text-xl:   20px;  /* page titles */
+  --text-2xl:  26px;  /* dashboard KPI figures only */
+
+  --leading-tight:  1.25;
+  --leading-normal: 1.5;
+
+  --weight-normal: 400;  /* body, table cells, descriptions */
+  --weight-medium: 500;  /* labels, table headers, buttons, chips */
+  --weight-strong: 600;  /* page titles, KPI figures, emphasis */
+
+  --track-tight: -0.011em;  /* --text-xl and --text-2xl only */
+
+  /* ---- Spacing — 4px grid ---------------------------------- */
+  --space-1: 4px;    /* icon-to-label gap — the only sub-8 gap */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---- Radius ---------------------------------------------- */
+  --radius-sm:   4px;    /* inputs, selects, buttons, chips */
+  --radius-md:   8px;    /* cards, panels, table wrappers */
+  --radius-lg:   12px;   /* modals, dialogs */
+  --radius-full: 999px;  /* pills, avatars, counts */
+
+  /* ---- Control heights ------------------------------------- */
+  --h-sm: 32px;   /* toolbar filters and selects */
+  --h-md: 36px;   /* default button and input */
+  --h-lg: 42px;   /* data-entry form fields */
+  --row-h:     48px;  /* single-line table row */
+  --row-h-two: 56px;  /* two-line table row — use sparingly */
+
+  /* ---- Elevation — only things that float ------------------ */
+  --shadow-menu:  0 4px 12px rgba(15, 23, 42, 0.10);
+  --shadow-modal: 0 16px 48px rgba(15, 23, 42, 0.18);
+  --shadow-toast: 0 8px 24px rgba(15, 23, 42, 0.14);
+
+  /* ---- Motion ---------------------------------------------- */
+  --dur-fast:  150ms;   /* hover, focus, colour, small state change */
+  --dur-panel: 250ms;   /* modal, drawer, panel entry */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- z-index — six layers, nothing between --------------- */
+  --z-sticky:  10;   /* sticky table headers, sticky toolbars */
+  --z-nav:     20;   /* sidebar, app header */
+  --z-dropdown: 30;  /* menus, selects, autocompletes */
+  --z-overlay: 40;   /* modal scrim */
+  --z-modal:   50;   /* modal, drawer */
+  --z-toast:   60;   /* toasts, titlebar */
+}
+
+/* ============================================================
+   LIGHT — default when body has .light-theme (theme.js:41-45)
+   ============================================================ */
+body.light-theme {
+  color-scheme: light;
+
+  --surface-page:   #F5F6F9;
+  --surface-1:      #FFFFFF;   /* cards, panels, table body */
+  --surface-2:      #FAFBFD;   /* sunken, table header, striped rows */
+  --surface-hover:  #F2F4F8;
+
+  --border:         #E4E7EE;
+  --border-strong:  #D3D8E2;
+
+  --text-primary:   #17233A;
+  --text-secondary: #4A5568;   /* was #677187 — failed AA on every tint */
+  --text-tertiary:  #5B647A;   /* on --surface-1 only */
+
+  --accent:         #2451D6;
+  --accent-hover:   #1B3FAE;
+  --accent-bg:      #EAF0FE;
+  --accent-fg:      #1B3FAE;   /* accent text on --accent-bg */
+  --on-accent:      #FFFFFF;
+
+  --success-bg: #E3F2E9;  --success-fg: #14663F;
+  --warning-bg: #FBF0DC;  --warning-fg: #7A5309;
+  --danger-bg:  #FBEAE7;  --danger-fg:  #9E2F20;
+  --neutral-bg: #EDEFF3;  --neutral-fg: #4A5568;
+
+  /* Addition 1 — the spec's light shadows, restated so the dark block below
+     cannot leak into light mode. */
+  --shadow-menu:  0 4px 12px rgba(15, 23, 42, 0.10);
+  --shadow-modal: 0 16px 48px rgba(15, 23, 42, 0.18);
+  --shadow-toast: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+
+/* ============================================================
+   DARK — no .light-theme class
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  --surface-page:   #0F1115;
+  --surface-1:      #171A1F;
+  --surface-2:      #1E2228;
+  --surface-hover:  #232830;
+
+  --border:         #2A2F37;
+  --border-strong:  #3A404A;
+
+  --text-primary:   #E6E8EB;
+  --text-secondary: #A2AAB6;
+  --text-tertiary:  #7C8593;
+
+  --accent:         #7BA0FF;
+  --accent-hover:   #9DB8FF;
+  --accent-bg:      rgba(123, 160, 255, 0.16);
+  --accent-fg:      #9DB8FF;
+  --on-accent:      #0F1115;
+
+  --success-bg: rgba(95, 215, 155, 0.16);  --success-fg: #5FD79B;
+  --warning-bg: rgba(232, 184, 75, 0.16);  --warning-fg: #E8B84B;
+  --danger-bg:  rgba(240, 138, 122, 0.16); --danger-fg:  #F08A7A;
+  --neutral-bg: rgba(162, 170, 182, 0.14); --neutral-fg: #A2AAB6;
+
+  --shadow-menu:  0 4px 12px rgba(0, 0, 0, 0.40);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-toast: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Native select popups take the author's colours once a <select> is styled;
+   both halves resolve from the same two tokens so the popup can never take one
+   theme's ink onto the other's ground. */
+option {
+  background-color: var(--surface-1);
+  color: var(--text-primary);
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LEGACY BRIDGE — delete after the last screen is rebuilt (spec Part 6)
+
+   Addition 2. The names below are what the 19 screens were written against.
+   They are aliases of the tokens above, so every screen paints the new
+   palette now; nothing new may be written against them.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Shape, type and spacing — not themed, so :root alone is correct. Values that
+   had no spec step keep their old literal, marked, until their users are
+   rebuilt. */
+:root {
+  --font-sans:       var(--font);
+  --font-display:    var(--font);          /* Outfit is deleted (spec Part 6) */
+  --ant-num-font:    var(--font);          /* Inter carries tabular figures */
+  --ant-num-track:   0;
+  --ant-unit-track:  0.1em;
+
+  --radius:          var(--radius-md);     /* 8px, unchanged */
+  --radius-xl:       var(--radius-lg);     /* 12px, unchanged */
+  --radius-sm-new:   var(--radius-sm);
+
+  --space-8:         var(--space-6);       /* 32px, unchanged */
+  --space-10:        40px;                 /* no spec step — legacy */
+  --space-12:        var(--space-7);       /* 48px, unchanged */
+
+  --text-md:         15px;                 /* = --text-lg; literal, see note */
+  --text-3xl:        30px;                 /* no spec step — legacy */
+  --weight-regular:  400;
+  --weight-semibold: 600;
+  --weight-bold:     700;                  /* outside the spec's set — legacy */
+  --leading-loose:   1.75;
+
+  /* (--text-md is a literal rather than var(--text-lg) because the theme
+     hygiene test treats any var() alias whose NAME contains "text" as a colour
+     alias that must be restated per theme. It is not a colour.) */
+}
+
+/* Raw scales. Not themed on purpose (theme-parity SHARED_ON_PURPOSE). */
+:root {
+  --gray-50:  #fafafa;  --gray-100: #f5f5f5;  --gray-200: #e5e5e5;
+  --gray-300: #d4d4d4;  --gray-400: #a3a3a3;  --gray-500: #737373;
+  --gray-600: #525252;  --gray-700: #404040;  --gray-800: #262626;
+  --gray-900: #171717;  --gray-950: #0a0a0a;
+
+  --accent-50:  #EAF0FE;  --accent-200: #B3C8FA;  --accent-300: #86A5F5;
+  --accent-400: #5480EA;  --accent-500: #3A63DE;
+  --accent-800: #163289;  --accent-900: #132868;
+
+  /* The print documents' palette — white paper, no stylesheet, no theme. */
+  --ant-teal:  #5db8a6;
+  --ant-amber: #e8a55a;
+}
+
+/* Colour aliases — DARK scope. Every line here is repeated, identically, in the
+   body.light-theme block that follows: a var() alias resolves where it is
+   DECLARED, so declared on :root alone it would freeze the dark value and light
+   mode would inherit it. */
+:root {
+  --bg:                 var(--surface-page);
+  --bg2:                var(--surface-2);
+  --bg3:                var(--surface-2);
+  --bg4:                var(--surface-hover);
+  --card:               var(--surface-1);
+  --card2:              var(--surface-2);
+  --sidebar-bg:         var(--surface-1);
+  --border2:            var(--border-strong);
+  --divider:            var(--border);
+  --dash-sunk:          var(--surface-2);
+  --dash-track:         var(--border);
+
+  --text:               var(--text-primary);
+  --text2:              var(--text-secondary);
+  --text3:              var(--text-tertiary);
+  --muted:              var(--text-tertiary);
+  --text-on-accent:     var(--on-accent);
+  --text-link:          var(--accent-fg);
+  --text-disabled:      var(--gray-400);
+
+  --surface:            var(--surface-1);
+  --surface-muted:      var(--surface-2);
+  --surface-sunken:     var(--surface-page);
+  --surface-border:     var(--border);
+  --surface-divider:    var(--border-strong);
+  --surface-secondary:  var(--surface-2);
+  --background:         var(--surface-page);
+  --border-token:       var(--border);
+  --border-default:     var(--border);
+  --border-focus:       var(--accent);
+
+  --primary:            var(--accent);
+  --accent-600:         var(--accent);
+  --accent-700:         var(--accent-fg);
+  --accent-100:         var(--accent-bg);
+  --accent-strong:      var(--accent-fg);
+  --accent-soft:        var(--accent-bg);
+  --accent-dim:         var(--accent-bg);
+  --brand-primary:       var(--accent);
+  --brand-primary-hover: var(--accent-hover);
+  --brand-primary-soft:  var(--accent-bg);
+  --brand-primary-dark:  var(--accent-800);
+
+  --success:            var(--success-fg);
+  --danger:             var(--danger-fg);
+  --warning:            var(--warning-fg);
+  --green:              var(--success-fg);
+  --red:                var(--danger-fg);
+  --amber:              var(--warning-fg);
+  --blue:               var(--accent);
+  --green-dim:          var(--success-bg);
+  --red-dim:            var(--danger-bg);
+  --amber-dim:          var(--warning-bg);
+  --blue-dim:           var(--accent-bg);
+  --info-bg:            var(--accent-bg);
+  --info-fg:            var(--accent-fg);
+
+  --ant-success-fg:     var(--success-fg);
+  --ant-success-bg:     var(--success-bg);
+  --ant-warning-fg:     var(--warning-fg);
+  --ant-warning-bg:     var(--warning-bg);
+  --ant-danger-fg:      var(--danger-fg);
+  --ant-danger-bg:      var(--danger-bg);
+  --ant-neutral-fg:     var(--neutral-fg);
+  --ant-neutral-bg:     var(--neutral-bg);
+
+  --conn-online-fg:       var(--success-fg);
+  --conn-online-bg:       var(--success-bg);
+  --conn-degraded-fg:     var(--warning-fg);
+  --conn-degraded-bg:     var(--warning-bg);
+  --conn-offline-fg:      var(--text-secondary);
+  --conn-offline-bg:      var(--surface-2);
+  --conn-unconfigured-fg: var(--text-tertiary);
+  --conn-unconfigured-bg: var(--surface-2);
+}
+
+/* Colour aliases — LIGHT scope. Identical to the block above, on purpose. */
+body.light-theme {
+  --bg:                 var(--surface-page);
+  --bg2:                var(--surface-2);
+  --bg3:                var(--surface-2);
+  --bg4:                var(--surface-hover);
+  --card:               var(--surface-1);
+  --card2:              var(--surface-2);
+  --sidebar-bg:         var(--surface-1);
+  --border2:            var(--border-strong);
+  --divider:            var(--border);
+  --dash-sunk:          var(--surface-2);
+  --dash-track:         var(--border);
+
+  --text:               var(--text-primary);
+  --text2:              var(--text-secondary);
+  --text3:              var(--text-tertiary);
+  --muted:              var(--text-tertiary);
+  --text-on-accent:     var(--on-accent);
+  --text-link:          var(--accent-fg);
+  --text-disabled:      var(--gray-400);
+
+  --surface:            var(--surface-1);
+  --surface-muted:      var(--surface-2);
+  --surface-sunken:     var(--surface-page);
+  --surface-border:     var(--border);
+  --surface-divider:    var(--border-strong);
+  --surface-secondary:  var(--surface-2);
+  --background:         var(--surface-page);
+  --border-token:       var(--border);
+  --border-default:     var(--border);
+  --border-focus:       var(--accent);
+
+  --primary:            var(--accent);
+  --accent-600:         var(--accent);
+  --accent-700:         var(--accent-fg);
+  --accent-100:         var(--accent-bg);
+  --accent-strong:      var(--accent-fg);
+  --accent-soft:        var(--accent-bg);
+  --accent-dim:         var(--accent-bg);
+  --brand-primary:       var(--accent);
+  --brand-primary-hover: var(--accent-hover);
+  --brand-primary-soft:  var(--accent-bg);
+  --brand-primary-dark:  var(--accent-800);
+
+  --success:            var(--success-fg);
+  --danger:             var(--danger-fg);
+  --warning:            var(--warning-fg);
+  --green:              var(--success-fg);
+  --red:                var(--danger-fg);
+  --amber:              var(--warning-fg);
+  --blue:               var(--accent);
+  --green-dim:          var(--success-bg);
+  --red-dim:            var(--danger-bg);
+  --amber-dim:          var(--warning-bg);
+  --blue-dim:           var(--accent-bg);
+  --info-bg:            var(--accent-bg);
+  --info-fg:            var(--accent-fg);
+
+  --ant-success-fg:     var(--success-fg);
+  --ant-success-bg:     var(--success-bg);
+  --ant-warning-fg:     var(--warning-fg);
+  --ant-warning-bg:     var(--warning-bg);
+  --ant-danger-fg:      var(--danger-fg);
+  --ant-danger-bg:      var(--danger-bg);
+  --ant-neutral-fg:     var(--neutral-fg);
+  --ant-neutral-bg:     var(--neutral-bg);
+
+  --conn-online-fg:       var(--success-fg);
+  --conn-online-bg:       var(--success-bg);
+  --conn-degraded-fg:     var(--warning-fg);
+  --conn-degraded-bg:     var(--warning-bg);
+  --conn-offline-fg:      var(--text-secondary);
+  --conn-offline-bg:      var(--surface-2);
+  --conn-unconfigured-fg: var(--text-tertiary);
+  --conn-unconfigured-bg: var(--surface-2);
+}
+
+/* Legacy literals that have no spec role yet: two categorical hues, the status
+   borders, and the dashboard's KPI chip ramp. Each retires with the screens
+   that use it (the KPI ramp with the dashboard rebuild, spec Part 6 #5). */
+:root {
+  --teal:           #44d3c4;
+  --teal-dim:       rgba(68, 211, 196, 0.12);
+  --purple:         #9B8CF0;
+  --purple-dim:     rgba(155, 140, 240, 0.14);
+
+  --success-border: rgba(95, 215, 155, 0.26);
+  --warning-border: rgba(232, 184, 75, 0.26);
+  --danger-border:  rgba(240, 138, 122, 0.26);
+  --info-border:    rgba(123, 160, 255, 0.26);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+
+  --kpi-1a: #3F7FE8;  --kpi-1b: #2B55B8;   /* Total Revenue    */
+  --kpi-2a: #C07D14;  --kpi-2b: #8A540B;   /* Pending          */
+  --kpi-3a: #1E9350;  --kpi-3b: #15703A;   /* Available Fund   */
+  --kpi-4a: #D2591A;  --kpi-4b: #A63F0D;   /* Expenses         */
+  --kpi-5a: #7048D2;  --kpi-5b: #522BA0;   /* Advance/Arrears  */
+  --kpi-loss-a: #D8443C; --kpi-loss-b: #A5211E;  /* Fund, negative */
+}
+body.light-theme {
+  --teal:           #0E7D87;
+  --teal-dim:       rgba(14, 125, 135, 0.08);
+  --purple:         #5B4BC4;
+  --purple-dim:     rgba(91, 75, 196, 0.09);
+
+  --success-border: #BFE3D0;
+  --warning-border: #EFD9A8;
+  --danger-border:  #F2C5BC;
+  --info-border:    #B3C8FA;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  --kpi-1a: #3B82F6;  --kpi-1b: #1D4ED8;
+  --kpi-2a: #D97706;  --kpi-2b: #92400E;
+  --kpi-3a: #16A34A;  --kpi-3b: #15803D;
+  --kpi-4a: #EA580C;  --kpi-4b: #C2410C;
+  --kpi-5a: #7C3AED;  --kpi-5b: #5B21B6;
+  --kpi-loss-a: #EF4444; --kpi-loss-b: #B91C1C;
+}

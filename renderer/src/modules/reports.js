@@ -1464,7 +1464,7 @@ function showEditTransferModal(id) {
       </div>
     </div>`,
   `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-   <button class="btn btn-primary" onclick="submitEditTransfer('${id}')"><span class=\"micon\" style=\"font-size:14px\">save</span> Save</button>`);
+   <button class="btn btn-primary" onclick="submitEditTransfer('${id}')">${icon('save', 'sm')} Save</button>`);
 }
 
 async function submitEditTransfer(id) {

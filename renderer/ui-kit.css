@@ -66,8 +66,7 @@ body.light-theme .dh-slate  { --dh:var(--text2); --dh-2:var(--text3); --dh-bg:#E
    page ground on all three channels (247/248/251 against 245/246/249), so the
    original property is kept: a well inside a white card is lighter than the
    workspace behind the card, never darker. */
-:root            { --dash-sunk:rgba(255,255,255,.055); --dash-track:rgba(255,255,255,.10); }
-body.light-theme { --dash-sunk:#F7F8FB;                --dash-track:#E7EBF2;              }
+/* --dash-sunk / --dash-track: css/tokens.css, LEGACY BRIDGE (2026-09-16). */
 
 /* ── Numerals ────────────────────────────────────────────────────────────────
    style.css sets the shared money component in --font-mono, which rendered

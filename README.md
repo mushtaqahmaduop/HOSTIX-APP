@@ -72,7 +72,7 @@ HOSTIX-APP/
 │
 ├── renderer/
 │   ├── index.html      ← App shell, login screen, sidebar, script load order
-│   ├── tokens.css      ← Design tokens (violet --accent set)
+│   ├── css/tokens.css  ← Design tokens (HOSTYLLO_DESIGN_SPEC Part 2)
 │   ├── components.css  ← Shared component styles
 │   ├── style.css       ← Main stylesheet
 │   ├── license.html    ← Activation screen (shown when no valid license)

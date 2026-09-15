@@ -359,7 +359,7 @@ function printReceipt(payId) {
 
   var _rcptFooter = backBtn
     + '<button class="btn btn-success" onclick="exportReceiptPDF(\'' + payId + '\')"><span style="font-size:13px">📄</span> Save PDF</button>'
-    + '<button class="btn btn-primary" onclick="doPrintReceipt(\'' + payId + '\')"><span class="micon" style="font-size:15px">print</span> Print</button>';
+    + '<button class="btn btn-primary" onclick="doPrintReceipt(\'' + payId + '\')">' + icon('print', 'sm') + ' Print</button>';
 
   showModal('modal-md', '🧾 Receipt', html, _rcptFooter);
 }

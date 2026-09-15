@@ -1,0 +1,53 @@
+/* ============================================================
+   HOSTYLLO Offline — base
+   HOSTYLLO_DESIGN_SPEC.md Part 3 (owner, 2026-09-15; adopted 2026-09-16).
+   Loads right after css/tokens.css, before every other stylesheet.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  font-family: var(--font);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  font-weight: var(--weight-normal);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6, button, input, select, textarea, table, th, td {
+  font-family: inherit;
+}
+
+h1 { font-size: var(--text-xl);   font-weight: var(--weight-strong);
+     line-height: var(--leading-tight); letter-spacing: var(--track-tight); margin: 0; }
+h2 { font-size: var(--text-lg);   font-weight: var(--weight-medium);
+     line-height: var(--leading-tight); margin: 0; }
+h3, h4, h5, h6 {
+     font-size: var(--text-base); font-weight: var(--weight-medium);
+     line-height: var(--leading-tight); margin: 0; }
+
+/* Numbers in a column must line up with the one above.
+   This single rule removes most of the untidiness in the tables. */
+table, .amount, .num, .kpi-value, .stat-value, input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* One focus rule for the whole app. 44 `outline:none` declarations are
+   deleted, 26 of which had no replacement at all. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Handled once, globally. Was handled 11 separate times. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

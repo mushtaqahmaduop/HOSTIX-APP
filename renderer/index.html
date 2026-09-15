@@ -6,8 +6,8 @@
   <title>HOSTYLLO | Hostel Management System</title>
   <!-- CSP is enforced via a single header policy in main.js (session.defaultSession). -->
 
-  <!-- Self-hosted fonts (bundled — no network required) -->
-  <link rel="stylesheet" href="vendor/fonts.css">
+  <!-- Self-hosted fonts (bundled — no network required) are declared in
+       css/tokens.css (HOSTYLLO_DESIGN_SPEC Part 2). -->
 
   <!-- SheetJS for Excel/CSV import (bundled locally) -->
   <script src="vendor/js/xlsx.full.min.js"></script>
@@ -16,8 +16,10 @@
   <script src="vendor/js/chart.umd.js"></script>
   <script src="vendor/js/chartjs-plugin-datalabels.min.js"></script>
 
-  <!-- App Styles — tokens first, then components, then main -->
-  <link rel="stylesheet" href="tokens.css">
+  <!-- App styles — HOSTYLLO_DESIGN_SPEC Part 5: tokens (with the bundled faces),
+       then base, then everything else. -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="components.css">
   <link rel="stylesheet" href="pw-eye.css">
   <link rel="stylesheet" href="style.css">
@@ -116,7 +118,7 @@
           <svg width="50" height="56" viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M25 2.6 46 14.3v27.4L25 53.4 4 41.7V14.3z" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/>
             <path d="M20.4 15.6h9.2M25 12.4v3.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            <text x="25" y="38" text-anchor="middle" fill="currentColor" font-family="Outfit, sans-serif" font-size="20" font-weight="800">H</text>
+            <text x="25" y="38" text-anchor="middle" fill="currentColor" font-family="Inter, sans-serif" font-size="20" font-weight="800">H</text>
           </svg>
         </span>
         <span>
@@ -167,7 +169,7 @@
                are naturalistic, not branding, and cool-blue windows read as an
                empty building. -->
           <rect x="60" y="52" width="300" height="34" rx="6" fill="#EFF6FF" stroke="#DFE5EC" stroke-width="1.5"/>
-          <text x="210" y="75" text-anchor="middle" fill="#2563EB" font-family="Outfit, sans-serif" font-size="15" font-weight="800" letter-spacing="2.5">HOSTYLLO</text>
+          <text x="210" y="75" text-anchor="middle" fill="#2563EB" font-family="Inter, sans-serif" font-size="15" font-weight="800" letter-spacing="2.5">HOSTYLLO</text>
           <linearGradient id="lgWin" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#FFD9A8"/><stop offset="1" stop-color="#F9B25E"/>
           </linearGradient>
@@ -701,7 +703,7 @@
         <button id="dash-search-clear"
           onclick="document.getElementById('dash-global-search').value='';dashGlobalSearchClear()"
           style="display:none;background:var(--bg3);border:none;color:var(--text2);cursor:pointer;padding:0 8px;font-size:13px;line-height:1;flex-shrink:0;border-radius:6px;height:24px;align-items:center;justify-content:center"
-          title="Clear search (Esc)"><span class="micon" style="font-size:16px">close</span></button>
+          title="Clear search (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         <kbd class="hdr-kbd" onclick="openCommandPalette&&openCommandPalette()" title="Command palette (Ctrl+K)">Ctrl K</kbd>
       </div>
       <!-- Search results dropdown.

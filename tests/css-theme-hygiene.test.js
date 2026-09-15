@@ -41,7 +41,15 @@ const fs = require('fs');
 const path = require('path');
 
 const CSS_DIR = path.join(__dirname, '..', 'renderer');
-const files = fs.readdirSync(CSS_DIR).filter(f => f.endsWith('.css'));
+/* RECURSIVE since 2026-09-16: the design-spec tokens and base live in
+   renderer/css/ (HOSTYLLO_DESIGN_SPEC Part 5). vendor/ holds only the bundled
+   @font-face file and is not scanned. */
+const files = (function walk(dir, pre) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory()
+      ? (e.name === 'vendor' ? [] : walk(path.join(dir, e.name), pre + e.name + '/'))
+      : (e.name.endsWith('.css') ? [pre + e.name] : []));
+})(CSS_DIR, '');
 
 let passed = 0;
 const problems = [];
@@ -106,7 +114,7 @@ const COLOUR_NAME = /(colou?r|accent|bg|background|border|surface|text|ink|shado
    them resolve correctly; the handful that are not are the ones that freeze.
    Checking for the alias alone flags 25 correct declarations and trains the
    reader to ignore the output. */
-const tokensCss = read('tokens.css');
+const tokensCss = read('css/tokens.css');
 /* Across EVERY stylesheet, not just tokens.css: the cascade is global, and
    `style.css` restates --red / --green / --amber / --text3 in its own
    `body.light-theme` block. Looking in one file reported those four as frozen

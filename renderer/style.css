@@ -25,15 +25,10 @@
        Values are the Anthropic teardown's canvas / card / feature / hairline,
        extended to the eight rungs this app needs (the extract declares four;
        this app has progress tracks and hover grounds it does not). */
-    --bg:            #181715;
-    --bg2:           #1F1E1B;
-    --bg3:           #252320;
-    --bg4:           #2F2C28;
-    --sidebar-bg:    #131211;
-    --card:          #1F1E1B;
-    --card2:         #252320;
-    --border:        rgba(255, 255, 255, 0.08);
-    --border2:       #35322D;
+    /* THE PALETTE MOVED TO css/tokens.css, 2026-09-16 (HOSTYLLO_DESIGN_SPEC
+       Part 2). --bg, --card, --border, --text, --green and the rest are aliases
+       in its LEGACY BRIDGE now, declared for both themes; declaring them here
+       as well would override the new palette, since this file loads later. */
 
     /* Accent tokens (--gold/--royal) removed in Phase 1 §5.5b — the app now
        uses the single violet --accent set from tokens.css. */
@@ -43,24 +38,8 @@
        --danger-fg/--success-fg/--warning-fg/--info-fg in tokens.css. They were
        a second, brighter palette saying the same things, which is how one
        screen's "overdue" ended up a different red from another's. */
-    --teal:          #44d3c4;
-    --teal-dim:      rgba(68, 211, 196, 0.12);
-    /* Aliased to the semantic set for the same reason as the light block far
-       below: these are the names the app renders with, and a second copy of a
-       value is a second thing to forget. The dark values were already correct
-       and are UNCHANGED — --danger-fg is #F0796A, --success-fg #3FBF83,
-       --warning-fg #D9A441 in this theme, so this swap moves no pixel. It
-       removes the possibility of drift, which is what actually bit. */
-    --red:           var(--danger-fg);
-    --red-dim:       rgba(240, 121, 106, 0.14);
-    --green:         var(--success-fg);
-    --green-dim:     rgba(63, 191, 131, 0.14);
-    --amber:         var(--warning-fg);
-    --amber-dim:     rgba(217, 164, 65, 0.14);
-    --blue:          #7BA0FF;
-    --blue-dim:      rgba(123, 160, 255, 0.14);
-    --purple:        #9B8CF0;
-    --purple-dim:    rgba(155, 140, 240, 0.14);
+    /* --teal/--red/--green/--amber/--blue/--purple and their -dim washes:
+       css/tokens.css, LEGACY BRIDGE (2026-09-16). */
 
     /* Text */
     /* WARM AGAIN, and the comment that used to sit here explains why better
@@ -75,9 +54,7 @@
        #7F8AA3 is 4.82:1 on the warm ground, the warm #A09D96 is 6.16:1. */
     /* §18. Was #FAF9F5 / #D8D5CD — near-white, and the spec's first complaint
        ("in dark mode, text is too white and harsh"). */
-    --text:          #E7EAF0;
-    --text2:         #A8B0BE;
-    --text3:         var(--text-tertiary);   /* #7F8AA3, 4.92:1 on --card */
+    /* --text/--text2/--text3: css/tokens.css, LEGACY BRIDGE (2026-09-16). */
 
     /* Typography -- the type system from the Add Student design
        (claude.ai/design "Add student form mockups"), bundled in
@@ -112,8 +89,8 @@
        It is used ONLY for page titles, KPI figures and document headings. Body,
        tables, forms and controls stay on Inter: a display face in a data table
        is how a product stops being readable. */
-    --font:          'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
-    --font-display:  'Outfit', 'Inter', 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    /* --font and --font-display: css/tokens.css (2026-09-16). The spec's type is
+       Inter + JetBrains Mono only; Outfit and Barlow are deleted. */
 
     /* §3 — the weight set, named so screens stop reaching past it. 800 and 900
        are deliberately absent: the spec says hierarchy comes from size, weight,
@@ -124,14 +101,14 @@
     --fw-semibold:   600;
     --fw-bold:       700;
     --fw-strong:     750;
-    --font-mono:     'JetBrains Mono', 'Courier New', monospace;
+    /* --font-mono: css/tokens.css (2026-09-16). */
 
     /* Shape */
     /* The reference system is 8px, with 6-7px on controls. 14px cards read as
        consumer software beside it; this is the single change that most moves
        the app from "app" to "operations console". */
-    --radius:        8px;
-    --radius-sm:     6px;
+    /* --radius / --radius-sm: css/tokens.css (2026-09-16) — 8px and the spec's
+       4px control radius. */
 
     /* Shadows */
     --shadow:          0 4px 16px rgba(0, 0, 0, 0.45);
@@ -155,7 +132,7 @@
     --transition:          background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
     --transition-bounce:   transform 0.2s ease, box-shadow 0.2s ease;
 
-    --font-icon: 'Material Symbols Rounded';
+    /* --font-icon removed 2026-09-16 with Material Symbols (icons are SVG only). */
 
     /* ── SEMANTIC DESIGN TOKENS — MOVED TO tokens.css, 2026-09-04 ────────────
        These eleven were declared here under the header "single source of truth",
@@ -234,16 +211,8 @@ body.light-theme {
        --border, --border-strong and --sidebar are theirs. --bg2/--bg4 sit
        between their steps because the app needs two more rungs than the
        mockups declare (progress tracks, hover grounds). */
-    --bg:            #F5F6F9;   /* workspace ground — their --bg */
-    --bg2:           #EEF1F6;
-    --bg3:           #E7EBF2;   /* progress-track / sunk surfaces */
-    --bg4:           #DCE1EA;
-    --sidebar-bg:    #131B2E;   /* their --sidebar */
-    --card:          #FFFFFF;
-    --card2:         #FAFBFD;   /* their --surface-sunk */
-    --border:        #E4E7EE;   /* their --border */
-    --border2:       #D3D8E2;   /* their --border-strong */
-    --divider:       #EDEFF4;   /* soft row separator (guide §19) */
+    /* The light palette moved to css/tokens.css, 2026-09-16 — see the note in
+       :root above. */
 
     /* --gold/--royal removed in Phase 1 §5.5b (see :root above). */
 
@@ -264,29 +233,11 @@ body.light-theme {
        their targets (tokens.css). The freeze bug that started all of this came
        from aliasing ACROSS a theme boundary — :root reaching for a value that
        body overrides — which is a different thing and still forbidden. */
-    --teal:          #0E7D87;   /* was #0F8A94 — 3.82:1 on the workspace ground */
-    --teal-dim:      rgba(14, 125, 135, 0.08);
-    --red:           var(--danger-fg);
-    --red-dim:       rgba(192, 64, 47, 0.08);
-    --green:         var(--success-fg);
-    --green-dim:     rgba(29, 128, 84, 0.09);
-    --amber:         var(--warning-fg);
-    --amber-dim:     rgba(149, 105, 26, 0.09);
-    --blue:          #2451D6;
-    --blue-dim:      rgba(36, 81, 214, 0.08);
-    --purple:        #5B4BC4;
-    --purple-dim:    rgba(91, 75, 196, 0.09);
+    /* (css/tokens.css, LEGACY BRIDGE — 2026-09-16) */
 
     /* §18. Was #152238 / #5B647A — the spec's second complaint, "in light mode
        text becomes too black and visually heavy". */
-    --text:          #17233A;
-    --text2:         #52627A;
-    /* WAS #8A93A6, the mockups' --ink-faint, at 2.86:1 on the workspace ground.
-       This is the single most-read token in the app — 552 uses, under every
-       timestamp, room subtitle, table subtext and helper line — and it was the
-       one that made light mode look washed out. It now follows --text-tertiary
-       so there is one faint-ink value, not two. */
-    --text3:         var(--text-tertiary);
+    /* --text/--text2/--text3: css/tokens.css, LEGACY BRIDGE (2026-09-16). */
 
     /* Guide §21 — subtle and professional, never heavy. */
     --shadow:           0 8px 24px rgba(21, 34, 56, 0.10);
@@ -553,15 +504,8 @@ body.light-theme .stat-card::after {
     padding: 0;
 }
 
-.micon {
-    font-family: 'Material Symbols Rounded';
-    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
-    font-size: inherit;
-    line-height: 1;
-    display: inline-block;
-    vertical-align: middle;
-    user-select: none;
-}
+/* .micon removed 2026-09-16 with the Material Symbols font (spec Part 6); its
+   four users are icon() SVGs now. */
 
 /* ── PILL HEADING ────────────────────────────────────────────────────────── */
 .dash-pill-heading {
@@ -4217,12 +4161,13 @@ body.light-theme::after { display: none; }
 
 /* ── SCROLLBAR — Stitch refined ─────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #0e0e0e; }
-::-webkit-scrollbar-thumb { background: #353534; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #52443a; }
+/* The old ivory-pass literals, repointed to the spec palette (2026-09-16). */
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
-body.light-theme ::-webkit-scrollbar-track { background: #f0ede9; }
-body.light-theme ::-webkit-scrollbar-thumb { background: #d7c3b5; }
+body.light-theme ::-webkit-scrollbar-track { background: var(--bg2); }            /* was #f0ede9 (2026-09-16) */
+body.light-theme ::-webkit-scrollbar-thumb { background: var(--border-strong); }  /* was #d7c3b5 */
 
 /* ── FOCUS RING — Stitch system ──────────────────────────────────────────── */
 :focus-visible {
@@ -4234,12 +4179,12 @@ body.light-theme ::-webkit-scrollbar-thumb { background: #d7c3b5; }
 #sidebar {
     background: var(--bg);
     border-right: var(--hairline);
-    box-shadow: 1px 0 0 #52443a;
+    box-shadow: 1px 0 0 var(--border);   /* was #52443a (2026-09-16) */
 }
 
 body.light-theme #sidebar {
     background: var(--card);
-    border-right: 1px solid #d7c3b5;
+    border-right: 1px solid var(--border);   /* was #d7c3b5 (2026-09-16) */
     box-shadow: 2px 0 16px rgba(0,0,0,0.04);
 }
 
@@ -4311,8 +4256,8 @@ body.light-theme .nav-item.active .nav-icon { color: #0ea5e9; }
 body.light-theme #header {
     background: rgba(255,255,255,0.92);
     backdrop-filter: blur(16px);
-    border-bottom: 1px solid #d7c3b5;
-    box-shadow: 0 1px 0 #d7c3b5;
+    border-bottom: 1px solid var(--border);   /* was #d7c3b5 (2026-09-16) */
+    box-shadow: 0 1px 0 var(--border);
 }
 
 /* ── CONTENT AREA ─────────────────────────────────────────────────────────── */
@@ -4321,7 +4266,7 @@ body.light-theme #header {
     padding: 20px 24px;
 }
 
-body.light-theme #content { background: #f3f3f3; }
+body.light-theme #content { background: var(--bg); }   /* was #f3f3f3 — the spec's --surface-page, 2026-09-16 */
 
 /* ── CARDS — Stitch surface-container-low + hairline ─────────────────────── */
 .card {
@@ -4339,7 +4284,7 @@ body.light-theme #content { background: #f3f3f3; }
 
 body.light-theme .card {
     background: var(--card);
-    border: 1px solid #d7c3b5;
+    border: 1px solid var(--border);   /* was #d7c3b5 (2026-09-16) */
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
@@ -4459,7 +4404,7 @@ body.light-theme .stat-card {
     box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(59,130,246,0.05);
 }
 
-body.light-theme .stat-card:hover { background: #fafafa; }
+body.light-theme .stat-card:hover { background: var(--surface-hover); }   /* was #fafafa (2026-09-16) */
 
 /* ── TABLES — Stitch clean ───────────────────────────────────────────────── */
 .table-wrap {
@@ -4493,8 +4438,9 @@ tbody tr:hover td {
     background: rgba(96,165,250,0.04);
 }
 
-body.light-theme th { background: #f3f3f3; color: #7a6a60; border-bottom: 1px solid #d7c3b5; }
-body.light-theme td { border-bottom: 1px solid #d7c3b5; }
+/* The old warm ivory literals, repointed to the spec palette (2026-09-16). */
+body.light-theme th { background: var(--surface-2); color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+body.light-theme td { border-bottom: 1px solid var(--border); }
 body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 
 /* ── BADGES — Stitch pill style ─────────────────────────────────────────── */
@@ -4522,7 +4468,7 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 /* ── FORMS — Stitch inputs ───────────────────────────────────────────────── */
 .form-control {
     background: var(--bg3);
-    border: 1px solid #52443a;
+    border: 1px solid var(--border-strong);   /* was #52443a (2026-09-16) */
     border-radius: var(--r-md);
     padding: 10px 14px;
     color: var(--text);
@@ -4544,8 +4490,8 @@ body.light-theme tbody tr:hover td { background: rgba(0,0,0,0.04); }
 
 body.light-theme .form-control {
     background-color: var(--card);
-    border-color: #d7c3b5;
-    color: #1c1b1b;
+    border-color: var(--border-strong);   /* was #d7c3b5 (2026-09-16) */
+    color: var(--text);                   /* was #1c1b1b */
 }
 body.light-theme .form-control:focus {
     border-color: var(--accent);
@@ -4564,7 +4510,7 @@ body.light-theme .form-control:focus {
 
 body.light-theme .filter-bar {
     background: var(--card);
-    border-color: #d7c3b5;
+    border-color: var(--border);   /* was #d7c3b5 (2026-09-16) */
 }
 
 .ftab {
@@ -4622,13 +4568,13 @@ body.light-theme .filter-bar {
 
 body.light-theme .modal {
     background: var(--card);
-    border: 1px solid #d7c3b5;
+    border: 1px solid var(--border);   /* was #d7c3b5 (2026-09-16) */
     box-shadow: 0 16px 48px rgba(0,0,0,0.12);
 }
 
 body.light-theme .modal-header {
     background: linear-gradient(180deg, rgba(59,130,246,0.03) 0%, transparent 100%);
-    border-bottom: 1px solid #d7c3b5;
+    border-bottom: 1px solid var(--border);   /* was #d7c3b5 (2026-09-16) */
 }
 
 /* ── BUTTONS — the Stitch gradient system, REMOVED 2026-09-03 ─────────────
@@ -4670,8 +4616,8 @@ body.light-theme .modal-header {
 .room-card.vacant   { border-color: rgba(0,0,0,0.1); }
 .room-card.maintenance { border-color: rgba(255,180,171,0.20); }
 
-body.light-theme .room-card { background: var(--card); border: 1px solid #d7c3b5; }
-body.light-theme .room-card:hover { background: #f8f7f6; }
+body.light-theme .room-card { background: var(--card); border: 1px solid var(--border); }   /* was #d7c3b5 (2026-09-16) */
+body.light-theme .room-card:hover { background: var(--surface-hover); }                    /* was #f8f7f6 */
 
 /* ── TOASTS — Stitch polished ────────────────────────────────────────────── */
 /* THE TOAST IS DEFINED ONCE, and it is not here - see the TOASTS block above,
@@ -4778,7 +4724,7 @@ body.light-theme .arch-s-card,
 body.light-theme .arch-ov-card,
 body.light-theme .dash-card {
     background: var(--card);
-    border-color: #d7c3b5;
+    border-color: var(--border);   /* was #d7c3b5 (2026-09-16) */
 }
 
 /* ── ROOM TYPE ROW ───────────────────────────────────────────────────────── */

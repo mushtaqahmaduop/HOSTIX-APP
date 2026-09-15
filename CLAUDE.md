@@ -75,7 +75,7 @@ Three things follow from that, and each is a way to break 50 hostels quietly:
 ## Code structure
 - `app.js` was a 9,270-line monolith — now split into 13 modular feature files.
 - All DB writes go through async `saveDB()`. Never call it without await.
-- CSS uses a single accent token set: `--accent`, `--accent-hover`, etc. **Royal blue** (`--accent-600` = `#2563eb`), set in `renderer/tokens.css`. It was violet once; both this line and that file's own header still said so long after it changed.
+- CSS uses a single accent token set: `--accent`, `--accent-hover`, `--accent-bg`, `--accent-fg`, `--on-accent`. **Blue** — `#2451D6` light, `#7BA0FF` dark — set in `renderer/css/tokens.css` (HOSTYLLO_DESIGN_SPEC Part 2, adopted 2026-09-16). It was violet once; blue is decided (spec Part 9).
 
 ## Exports — one engine, nine modules
 
@@ -241,60 +241,68 @@ case-insensitively or you will assert against text that is never produced.
 
 ## Design governance
 
-**`renderer/tokens.css` is the bound design system.** It is not a suggestion and
-it is not a starting point to riff on.
+**`renderer/css/tokens.css` is the bound design system**, and
+`HOSTYLLO_DESIGN_SPEC.md` (owner, 2026-09-15; adopted 2026-09-16) is the
+document it implements: tokens (Part 2), base (Part 3), component rules
+(Part 4), file structure (Part 5), screen order (Part 6) and the per-screen
+prompt (Part 7). Where this section and the spec disagree, the spec wins —
+except for the owner decisions under "Decided against the spec" below.
 
-> Reconciled 2026-08-31. The design studio shipped with its own `BASELINE.css`
-> and a rule set written for it. That file defined a DIFFERENT system — accent
-> `#cc785c`, `"Anthropic Sans"` — and collided with `tokens.css` on `--accent`,
-> `--surface` and `--font-sans`, so a stray `<link>` would have repainted the
-> whole app. It was removed rather than kept as a reference, and the rules below
-> are its rules restated against the system this app actually has. Four were
-> written about the other system and describe nothing here; they are recorded at
-> the end rather than deleted, so nobody re-adds them from the original manifest.
+> Rewritten 2026-09-16 when the spec was adopted. The previous section bound
+> `renderer/tokens.css` (removed), kept shadows as elevation, kept a warm dark
+> ground and kept the `dh-*` hue classes. The spec reverses all four.
 
 ### Hard rules
 
-- Never edit on master. Branch first, always.
-- Verify the app boots before declaring any refactor or redesign complete.
-- Colours come from `var()` tokens in `renderer/tokens.css`. A raw hex in a
-  renderer component is a bug — **except** in the print and PDF documents, whose
-  hex is deliberate: they render in a separate window with no stylesheet and
-  must not follow the app's theme onto a sheet of white paper.
-- Rebranding means overriding the `--accent-50 … --accent-900` ramp, from which
-  `--accent`, `--accent-strong`, `--accent-soft` and `--accent-dim` derive.
-  Nothing else. Never fork the token file.
+- Never edit on master. Branch first — one spec step, one branch, one commit.
+- Verify the app boots, and check the screen in BOTH themes, before declaring
+  any rebuild done.
+- Colours come from `var()` tokens in `renderer/css/tokens.css`: neutral
+  surfaces, one accent (blue — decided), four status roles. A raw hex anywhere
+  else is a bug, **except** the print and PDF documents, whose hex is
+  deliberate: they render on white paper in a window with no stylesheet.
+- Type, spacing, radius, control heights, motion and z-index come from their
+  tokens too — six text sizes, weights 400/500/600, a 4px spacing grid, radius
+  4/8/12/999. A value that does not map is a question for the owner, never a new
+  token and never a kept raw value.
+- Elevation is borders. Only floating things — menus, modals, toasts — carry a
+  shadow, from `--shadow-menu` / `--shadow-modal` / `--shadow-toast`.
+- Chips have five roles only — success, warning, danger, accent, neutral — at
+  12px weight 500, a `*-bg` with its matching `*-fg`. The `dh-*` hue classes and
+  the per-screen pill variants retire as each screen is rebuilt.
+- A screen stylesheet may PLACE components (grid, position, width, order). It
+  may not RESTYLE them (font-size, colour, radius, padding on a component's own
+  class). A missing component is built in `renderer/css/components/`.
+- The old names (`--card`, `--text`, `--text2`, `--text3`, `--border2`, `--bg3`,
+  `--green` …) are aliases in the LEGACY BRIDGE of tokens.css, so screens not yet
+  rebuilt paint the new palette. Nothing new is written against them; the bridge
+  is deleted after the last screen.
+- An alias of a themed token is declared in BOTH `:root` (dark) and
+  `body.light-theme`. Declared on :root alone it freezes the dark value.
+  `npm run test:theme` and `theme-parity.spec.js` check both halves.
 - One primary accent action per screen. Colour means "act", never "look".
-- Payment methods and other CATEGORIES are neutral. Hue is reserved for state —
-  see `pmBadge()` versus `statusBadge()`.
-- Use `fmtPKR()` for currency. Never duplicate it, never double-prefix.
-- Money a user might compare is `font-variant-numeric: tabular-nums`.
+- Payment methods and other CATEGORIES are neutral. Hue is reserved for state.
+- Money on screen goes through ONE formatter in `utils.js`. Never duplicate it,
+  never double-prefix (`fmtPKR()` or a `.pkr` span, not both).
+- Money a user might compare is tabular figures (`base.css` sets them on every
+  table).
 - A monthly figure means the whole charge — rent **and** mess. `paymentCharges()`
   for a record, `resolveCharges()` for a student. Quoting `monthlyRent` alone is
   the bug fixed on 2026-08-31; it is not a shortcut.
 - Every list, table, export, report and PDF is ordered by room number ascending,
   through `cmpRoomNo` / `studentsByRoom` / `roomsByNumber`. Room numbers are
   strings — `Number(r.number)` is a bug, "A 01" is a legal room.
-- New CSS goes in the screen's own `renderer/<screen>.css` under a prefixed
-  class. Do not edit shared selectors in `style.css` to fix one screen.
+- Icons are SVG only, through `icon()`. No emoji, no icon font.
 - 1366x768 is the QA floor. If it fails there, it does not ship.
 
-### Rules from the manifest that do NOT apply here
+### Decided against the spec (owner, 2026-09-16)
 
-Kept visible on purpose — each was true of `BASELINE.css` and false of this app,
-and deleting them silently invites their return.
-
-- ~~"No `box-shadow` for elevation, anywhere."~~ This app has **166** of them and
-  `--shadow` is a token. `dashboard.css` states the reasoning: cards on a tinted
-  workspace read as outlines rather than surfaces without one. If flat elevation
-  is ever wanted it is a design decision to take deliberately, not a lint rule.
-- ~~"Filled primary buttons keep the bottom-only 8px radius. It is the
-  signature."~~ It is `BASELINE.css`'s signature. This app has one occurrence.
-- ~~"Serif appears in three places only."~~ This app is sans throughout; the only
-  serif is the optional hostel-name display face in Settings.
-- ~~"No new inline `style` attributes. Ever."~~ The renderer builds its markup as
-  template strings and uses them extensively. Worth reducing over time, but as
-  an absolute rule it fails on the existing code the moment it is enforced.
+- **Register alignment stays as approved on 2026-09-10 and 2026-09-15**: values
+  centred; names, course, address and "raised by" on one left edge. The spec's
+  right-aligned numeric columns are not applied — the shared table component
+  carries this rule when `registers-center.css` is dissolved.
+- **Money on screen is 14,000.00 below a million and 1.25M above**, the exact
+  figure in its title, through one formatter.
 
 ### When to reach for the studio
 

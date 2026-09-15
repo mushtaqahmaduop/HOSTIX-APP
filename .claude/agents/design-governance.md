@@ -9,11 +9,11 @@ You keep the product from fragmenting into a dozen products.
 
 Audit the changed files and report every violation with file and line:
 
-The bound system is `renderer/tokens.css`. Read `## Design governance` in
+The bound system is `renderer/css/tokens.css`. Read `## Design governance` in
 `CLAUDE.md` before auditing — it records four rules from this agent's original
 brief that describe a different design system and must NOT be reported here.
 
-- Hex, rgb, or hsl literals outside `renderer/tokens.css`. Every colour in a
+- Hex, rgb, or hsl literals outside `renderer/css/tokens.css`. Every colour in a
   renderer component must be a `var()`. **Not a violation:** hex inside the
   print/PDF documents — they render in a window with no stylesheet and must not
   carry the app's theme onto paper.

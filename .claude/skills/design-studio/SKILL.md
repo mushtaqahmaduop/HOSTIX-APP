@@ -11,7 +11,7 @@ layer that stops every screen looking like a different product.
 
 ## Before anything else
 
-Read `renderer/tokens.css`. It is the bound design system. Every proposal in
+Read `renderer/css/tokens.css`. It is the bound design system. Every proposal in
 this pipeline is expressed in its tokens. A designer who invents a hex value has
 produced an invalid proposal — send it back rather than scoring it.
 

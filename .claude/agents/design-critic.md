@@ -18,7 +18,7 @@ Rules you hold to:
   the total fall where it falls.
 - Name the single worst decision in every proposal, including the winner.
 - Flag any proposal that invents a colour, radius, or shadow outside the bound
-  token file (`renderer/tokens.css`) as non-compliant before scoring it.
+  token file (`renderer/css/tokens.css`) as non-compliant before scoring it.
 - If several proposals share the same flaw, say so plainly — that pattern
   usually means the brief was wrong, and the Director needs to know.
 - Identify which parts are worth salvaging into a hybrid, and which would
