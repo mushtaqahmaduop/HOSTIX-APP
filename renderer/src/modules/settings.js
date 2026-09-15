@@ -1587,6 +1587,15 @@ function renderHostelInfoPanel() {
           ${['Rs.', 'USD', 'EUR', 'GBP', 'AED', 'SAR'].map(c =>
             `<option ${currencyWord() === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>` }),
+    /* PAPER SIZE (owner, 2026-09-15): every PDF, register and printout is laid
+       out for this paper — Letter unless the hostel picks another. The 80mm
+       receipt roll is not affected. paper.js owns the value. */
+    _setRow({ key: 'paper', ico: 'receipt', hue: 'dh-blue', title: 'Paper size',
+      sub: 'The paper every PDF and printout is laid out for. Registers print landscape, forms portrait.',
+      control: `<select class="set-sel" id="hi-paper" onchange="setPaperSize(this.value)">
+          ${Object.keys(PAPER_SIZES).map(k =>
+            `<option value="${k}" ${paperSize() === k ? 'selected' : ''}>${escHtml(PAPER_SIZES[k].label + ' · ' + PAPER_SIZES[k].detail)}</option>`).join('')}
+        </select>` }),
     _setRow({ key: 'acad', ico: 'layers', hue: 'dh-amber', title: 'Academic year',
       sub: 'The year reports and records are filed under.',
       control: _setDead('Calendar months'),

@@ -269,7 +269,8 @@ function _ledgerDiff(p, posted, why) {
       const amt = Math.min(money(t.amount), dp);
       out.push({ type: 'payment', amount: amt, part: 'instalment',
                  date: t.date || p.paidDate || recDate,
-                 method: t.method || p.method || '', byName: t.collectedBy || '' });
+                 method: t.method || p.method || '', byName: t.collectedBy || '',
+                 reference: t.reference || '' });
       dp -= amt;
     }
     // Money the record holds that no instalment explains — a form that wrote
@@ -321,6 +322,7 @@ function _ledgerPost(p, d, opts) {
   };
   if (!entry.reason) delete entry.reason;
   if (d.method) entry.method = d.method;
+  if (d.reference) entry.reference = d.reference;
   if (o.imported) entry.imported = true;
 
   _ledgerList().push(entry);

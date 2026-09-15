@@ -308,7 +308,10 @@
    (below 1320px it is already hidden entirely), and the padding takes back
    what that leaves. */
 .exp-stats .exp-stat        { padding: 14px 15px; }
-.exp-stats .exp-stat__vrow  { flex-wrap: nowrap; }
+/* WRAPS AGAIN (2026-09-15). With the exact figure ("Rs. 16,700.00", owner's
+   money rule) the one-line row clipped the comparison pill to "No compa…";
+   the pill now drops under the figure when the card is too narrow for both. */
+.exp-stats .exp-stat__vrow  { flex-wrap: wrap; row-gap: 2px; }
 
 
 /* ══ DESCRIPTION TAKES THE SLACK (owner, 2026-09-10) ═══════════════════════

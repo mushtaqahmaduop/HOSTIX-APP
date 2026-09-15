@@ -177,7 +177,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // opts: { landscape: bool, pageSize: string }
     const safeOpts = (opts && typeof opts === 'object') ? {
       landscape: opts.landscape === true,
-      pageSize:  typeof opts.pageSize === 'string' ? opts.pageSize : 'A4'
+      pageSize:  typeof opts.pageSize === 'string' ? opts.pageSize : 'Letter'
     } : {};
     return ipcRenderer.invoke('receipt:savePDF', htmlContent, safeName, safeOpts);
   }

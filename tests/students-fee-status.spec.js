@@ -114,10 +114,12 @@ test('the three fee states are still computed, and the column really is gone', a
 
   // Every column the spec's §5-§14 require is still present…
   for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY', 'CNIC',
-                     'COURSE', 'ADDRESS', 'NATIONALITY', 'CHARGES / MONTH',
-                     'STATUS']) {
+                     'COURSE', 'ADDRESS', 'CHARGES / MONTH', 'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
+  // Nationality left the register on 2026-09-15 (owner: "so that the CNIC,
+  // course and address should relax a little"); it stays on the form and the PDF.
+  expect(headers, 'Nationality was removed on 2026-09-15').not.toContain('NATIONALITY');
   // …and Fee Status is not one of them any more. Asserted, not merely dropped:
   // a column removed by deleting one <th> and leaving its <td> behind is a
   // table whose header and body disagree from that row on.

@@ -86,20 +86,21 @@ test('collected money is locked, and only its collector or an admin may change i
     await actAs(win, 'w_sara');
     await win.evaluate(pid => showEditPaymentModal(pid), pid);
     await win.waitForSelector('#pef-lock');
-    await win.waitForFunction(() => document.getElementById('f-pamt') && document.getElementById('f-pamt').disabled);
+    await win.waitForFunction(() => document.getElementById('f-pcombo') && document.getElementById('f-pcombo').disabled);
     const saraView = await win.evaluate(() => ({
       view:  document.getElementById('pef-lock').classList.contains('is-view'),
       text:  document.getElementById('pef-lock').textContent,
       save:  [...document.querySelectorAll('.modal-overlay button')].some(b => /Save Changes/.test(b.textContent)),
-      rent:  document.getElementById('f-pamt').disabled,
+      rent:  document.getElementById('f-pcombo').disabled,
+      receive: document.getElementById('f-precv').disabled,
     }));
     expect(saraView.view, 'the form is not view-only for a warden who did not collect last').toBe(true);
     expect(saraView.text).toContain('Collected by Ali Warden');
     expect(saraView.save, 'Save is offered on a view-only form').toBe(false);
     expect(saraView.rent).toBe(true);
+    expect(saraView.receive, 'a view-only form offers to receive money').toBe(true);
     const saraForced = await win.evaluate(async pid => {
-      document.getElementById('f-pamt').disabled = false;
-      document.getElementById('f-pamt').value = '1';
+      document.getElementById('f-prent').value = '1';
       await submitEditPayment(pid);
       return DB.payments.find(p => p.id === pid).monthlyRent;
     }, pid);
@@ -144,24 +145,26 @@ test('collected money is locked, and only its collector or an admin may change i
     expect(rev.afterNoReason, 'a reversal went through without a reason').toBe(8000);
     expect(rev.afterOk).toBe(7000);
 
-    // ── Ali (owner): Amount paid, method, month, date locked; a charge needs a reason
+    /* ── Ali (owner): what was collected and the month stay locked; a charge needs
+       a reason. Since the 2026-09-15 redesign Amount paid is not a box at all
+       (money comes in through Receive pending), and the date / method in section
+       4 describe money received now — the first collection keeps its own. */
     await win.evaluate(() => closeModal());
     await win.evaluate(pid => showEditPaymentModal(pid), pid);
     await win.waitForSelector('#f-pedit-reason');
     const locks = await win.evaluate(() => ({
-      paid:   document.getElementById('f-ppaid').readOnly,
-      method: document.getElementById('f-pmethod').disabled,
+      paid:   document.getElementById('f-ppaid').type === 'hidden',
       month:  document.getElementById('f-pmonth').disabled,
-      date:   !document.getElementById('f-pdate').getAttribute('onclick'),
       view:   document.getElementById('pef-lock').classList.contains('is-view'),
-      rent:   document.getElementById('f-pamt').value,
+      rent:   document.getElementById('f-prent').value,
+      receive: document.getElementById('f-precv').value,
     }));
-    expect(locks).toEqual({ paid: true, method: true, month: true, date: true, view: false, rent: '10000' });
+    expect(locks).toEqual({ paid: true, month: true, view: false, rent: '10000', receive: '' });
 
     const edit = await win.evaluate(async pid => {
       const p = () => DB.payments.find(x => x.id === pid);
-      document.getElementById('f-ppaid').value = '99999';          // ignored — locked
-      document.getElementById('f-pamt').value = '9000'; recalcUnpaid();
+      document.getElementById('f-ppaid').value = '99999';          // ignored — never typed over
+      document.getElementById('f-prent').value = '9000'; recalcUnpaid();
       await submitEditPayment(pid);
       const noReason = p().monthlyRent;
       document.getElementById('f-pedit-reason').value = 'Rent lowered for a shared room';

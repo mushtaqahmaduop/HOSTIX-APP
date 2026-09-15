@@ -136,6 +136,7 @@ async function capture(win, fn) {
       groups: [...doc.querySelectorAll('.group__t')].map(g => g.textContent.trim()),
       subtotals: [...doc.querySelectorAll('tr.subtotal')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
       grand: (doc.querySelector('.grand__v') || {}).textContent || '',
+      emCells: doc.querySelectorAll('td.c-em').length,
       text: doc.body.textContent.replace(/\s+/g, ' '),
     };
   }, fn);
@@ -204,6 +205,8 @@ test('every printed monthly charge carries the mess, not just the rent', async (
      second — which is the column the ordering is actually about. */
   // Room is the first column again since the owner's order of 2026-09-14 (no `#`).
   expect(doc.firstCells).toEqual(['1', '2', '10', 'A 01']);
+  // The charge is the emphasised figure — bold, dark blue (owner, 2026-09-15). One per row.
+  expect(doc.emCells, 'the Charges cells are not emphasised').toBe(4);
 
   await app.close();
 });

@@ -443,7 +443,8 @@ function _xwSheetXml(sheet) {
      many pages tall as the data needs. fitToHeight="0" is what says "as many
      as it takes" — setting it to 1 is the mistake the spec calls out, because
      it shrinks a 200-row register until nobody can read it. */
-  const setup = '<pageSetup paperSize="9" orientation="' +
+  // The paper is the caller's (Settings → Paper size); 9 (A4) only when none is given.
+  const setup = '<pageSetup paperSize="' + (Number(sheet.paperSize) || 9) + '" orientation="' +
     (sheet.landscape ? 'landscape' : 'portrait') + '"' +
     (sheet.fitToWidth === false ? '' : ' fitToWidth="1" fitToHeight="0"') +
     ' horizontalDpi="300" verticalDpi="300"/>';

@@ -38,7 +38,7 @@ const CANC_REASONS = [CANC_DEFAULT_REASON,
                       'Discipline', 'Other'];
 
 let cancelFilter = { status:'All', search:'', type:'All',
-                     month:thisMonth(), page:1, pageSize:30, sortKey:'room', sortDir:'asc' };
+                     month:thisMonth(), page:1, pageSize:10, sortKey:'room', sortDir:'asc' };   // 10, per cancellations2.png
 /* A fresh visit starts here. `month` is evaluated on every reset, not captured
    at load, so a session left open past the turn of a month still opens on the
    month it now is. See FILTER_REGISTRY in nav.js. */
@@ -120,164 +120,144 @@ function _cancInitials(name) {
 }
 
 function renderCancellations(filterStatus='All') {
+  /* ══ THE CANCELLATIONS PAGE, TO `cancellations2.png` (owner, 2026-09-15) ══
+     Four cards in the shared KPI style, a toolbar whose selects carry their
+     glyph, a counted heading, and a numbered register with the settlement as
+     a pill. Decided by the owner rather than read off the picture:
+       · Pending rows keep Confirm (it marks the student Left and settles);
+       · the statuses stay Pending / Confirmed / Restored — no "Completed";
+       · no row checkboxes and no More Filters: there is nothing behind them;
+       · no mini chart on the Leaving card.
+     The "N leaving in <month>" banner is gone with the design; its sentence is
+     the Leaving card's sub-line now. */
   cancelFilter.status = filterStatus;   // the route is the authority; mirror it
   const all  = DB.cancellations || [];
-  // Everything below counts THIS MONTH's departures. Before this, the strip
-  // counted the whole database, so a hostel two years in read "All Records
-  // 214" on a page a warden opens to answer "who is going this month".
+  // Everything below counts THIS MONTH's departures (the month the student leaves).
   const list = all.filter(_cancInScope);
-  const pending = list.filter(c=>c.status==='Pending');
+  const pending   = list.filter(c=>c.status==='Pending');
   const confirmed = list.filter(c=>c.status==='Confirmed');
-  const restored = list.filter(c=>c.status==='Restored');
-  const freed = list.filter(c=>c.status==='Pending'||c.status==='Confirmed');
-  const byStatus = filterStatus==='All'?list:filterStatus==='Freed'?freed:list.filter(c=>c.status===filterStatus);
+  const restored  = list.filter(c=>c.status==='Restored');
+  const freed     = list.filter(c=>c.status==='Pending'||c.status==='Confirmed');
 
-  // Toolbar narrowing, applied on top of the status the cards/route select.
-  // Shared with the exports so a printed register cannot hold a different set
-  // of departures from the page it was printed from.
+  // Shared with the exports, so a printed register holds the same departures.
   const q = cancelFilter.search.trim().toLowerCase();
   const filtered = cancellationsFiltered();
   const _pg = paginate(filtered, cancelFilter);
 
-  const types    = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
-  const nActive  = [cancelFilter.type!=='All', cancelFilter.month!==thisMonth(), !!q]
-                   .filter(Boolean).length;
+  const types   = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
+  const nActive = [cancelFilter.type!=='All', cancelFilter.month!==thisMonth(), !!q].filter(Boolean).length;
 
   const SV = {
-    // Pending is genuinely "act on me", Confirmed is settled, Restored reversed.
-    // The sub-line states what the status DID, which is what a warden scanning
-    // the column actually needs.
-    Pending:   { hue:'dh-amber', sub:'Awaiting action',
-                 svg:'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>' },
-    Confirmed: { hue:'dh-green', sub:'Student left',
-                 svg:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
-    Restored:  { hue:'dh-blue',  sub:'Back to active',
-                 svg:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>' }
+    Pending:   { hue:'dh-amber', svg:'<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>' },
+    Confirmed: { hue:'dh-green', svg:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    Restored:  { hue:'dh-blue',  svg:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>' }
   };
   const calSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>';
 
-  const mkRow = (c) => {
+  /* Icon buttons, each with its full sentence on title and aria-label. Confirm
+     and Restore keep their hue — they are the two that change a student's life. */
+  const _ic = (hue, onclick, label, path) =>
+    `<button class="lk-act lk-act--icon canc-act${hue ? ' lk-act--hue ' + hue : ''}" onclick="${onclick}"
+             title="${escHtml(label)}" aria-label="${escHtml(label)}">
+       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${path}</svg>
+     </button>`;
+  const P_EDIT    = '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>';
+  const P_CONFIRM = '<polyline points="20 6 9 17 4 12"/>';
+  const P_RESTORE = '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>';
+  const P_DELETE  = '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>';
+
+  const mkRow = (c, i) => {
     const student = DB.students.find(s=>s.id===c.studentId);
     const st  = SV[c.status] || SV.Pending;
-    const tc  = _cancTypeColor(c.roomType);
-    // Pending can be confirmed or reversed; Confirmed can still be reversed;
-    // Restored is terminal. Same rules the previous list enforced.
-    /* ICONS ONLY, ONE ROW (owner, 2026-09-10: "the action button should only be
-       svgs and in widget way to take less space").
-
-       Four labelled buttons — Edit, Delete, Confirm, Restore — came to ~300px
-       and wrapped onto a second line in a 13-column register, which made the
-       row two lines tall for every pending departure on the page. As icons they
-       are 4 x 28 plus gaps: 124px, one line, and the row height goes back to
-       being set by the student cell.
-
-       NOTHING IS UNLABELLED, which is the trade this has to survive. Each
-       button keeps its full sentence on `title` and its own `aria-label`, and
-       the two that change a student's life — Confirm marks them Left, Restore
-       puts them back — keep their hue, which is what tells them apart at a
-       glance in a row of grey. */
-    const _ic = (hue, onclick, label, path) =>
-      `<button class="lk-act lk-act--icon${hue ? ' lk-act--hue ' + hue : ''}" onclick="${onclick}"
-               title="${escHtml(label)}" aria-label="${escHtml(label)}">
-         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${path}</svg>
-       </button>`;
+    const rm  = DB.rooms.find(r => String(r.number) === String(c.roomNumber)) || {};
+    const nm  = String(c.studentName || '—');
+    const hue = typeof payAvatarHue === 'function' ? payAvatarHue(nm) : 'dh-violet';
+    /* What the student's month covered, as the reference tags it: blue
+       Rent + Mess, green Rent Only. A removed student has no charge to read. */
+    const cov = (() => {
+      if (!student) return '';
+      const ch = resolveCharges(student);
+      if (!ch.configured) return '';
+      const withMess = ch.messOptIn && ch.mess > 0;
+      const lbl = chargeCoverage({ rent: ch.rent, mess: ch.mess, messIncluded: withMess, hasMess: ch.mess > 0 }).label;
+      return `<span class="canc-cov ${withMess ? 'canc-cov--mess' : 'canc-cov--rent'}">${escHtml(lbl)}</span>`;
+    })();
+    // Pending can be confirmed or restored; Confirmed can still be restored; Restored is terminal.
     const acts = c.status==='Pending'
-      ? _ic('dh-green', `confirmCancellation('${c.id}')`, 'Confirm — marks the student Left', '<polyline points="20 6 9 17 4 12"/>')
-        + _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')
+      ? _ic('dh-green', `confirmCancellation('${c.id}')`, 'Confirm — marks the student Left', P_CONFIRM)
+        + _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
       : c.status==='Confirmed'
-        ? _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')
+        ? _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
         : '';
     return `<tr>
+      <td class="canc-col-no">${_pg.from + i}</td>
       <td>
-        <div class="lk-who dh-violet">
+        <div class="lk-who ${hue}">
           <div class="lk-who__av">${escHtml(_cancInitials(c.studentName))}</div>
           <div style="min-width:0">
-            <div class="lk-who__n">${escHtml(c.studentName||'—')}</div>
-            ${student&&student.phone?`<div class="lk-who__s">${escHtml(student.phone)}</div>`:''}
-            <div class="lk-who__id">ID: ${_cancSeq(c, list)}</div>
+            <div class="lk-who__n" title="${escHtml(nm)} · ${_cancSeq(c, list)}">${escHtml(nm)}</div>
+            ${cov}
           </div>
         </div>
       </td>
-      ${''/* THE ROOM CELL CARRIES ITS OWN TYPE, as `cancellations.2.png`
-             draws it — "#3 / 3-Seater". It used to have a column of its own,
-             painted with the owner's per-type colour from Settings: a CATEGORY
-             wearing a hue, three columns from a Status chip drawn out of the
-             same palette. The column it vacates goes to the settlement, which
-             is a fact about this cancellation rather than about the room. */}
       <td>
-        ${roomLabel(c.roomNumber, (DB.rooms.find(r => String(r.number) === String(c.roomNumber)) || {}).floor)}
-        ${c.roomType ? `<div class="lk-sub">${escHtml(c.roomType)}</div>` : ''}
+        <div class="canc-room">
+          <span class="canc-room__n">${c.roomNumber !== undefined && c.roomNumber !== null && String(c.roomNumber) !== '' ? '#' + escHtml(String(c.roomNumber)) : '—'}</span>
+          <span class="canc-room__m">${rm.floor ? `<span>${escHtml(floorShort(rm.floor))}</span>` : ''}${c.roomType ? `<span>${escHtml(c.roomType)}</span>` : ''}</span>
+        </div>
       </td>
-      <td>${cancSettleCell(c)}</td>
+      <td>${cancSettlePill(c)}</td>
       <td><div class="lk-when">${calSvg}${fmtDate(c.requestDate)}</div></td>
       <td>${c.vacateDate
             ? `<div class="lk-when">${calSvg}${fmtDate(c.vacateDate)}</div>`
             : '<span class="lk-dash">End of month</span>'}</td>
+      <td><span class="lk-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span></td>
+      ${/* lk-prose keeps the reason flush left — a sentence, not a value. */''}
+      <td class="lk-prose canc-reason">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
       <td>
-        <span class="lk-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span>
-        <div class="lk-sub">${st.sub}</div>
-      </td>
-      ${/* `lk-prose` keeps this one column flush left while every other value
-            in the register centres (registers-center.css) — a reason is a
-            sentence, and a centred sentence that wraps reads badly. */''}
-      <td class="lk-prose" style="max-width:170px;white-space:normal">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
-      <td>
-        <div class="lk-acts lk-acts--widget">
-          ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>')}
+        <div class="lk-acts canc-acts">
+          ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', P_EDIT)}
           ${acts}
-          ${_ic('dh-red', `deleteCancellationRecord('${c.id}')`, 'Delete this record', '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>')}
+          ${_ic('dh-red', `deleteCancellationRecord('${c.id}')`, 'Delete this record', P_DELETE)}
         </div>
       </td>
     </tr>`;
   };
 
-  const card = (status, hue, label, sub, value, svg) => `
-    <div class="lk-stat lk-stat--click ${hue}${filterStatus===status?' is-on':''}" onclick="renderPage('cancellations_${status}')" title="Show ${label.toLowerCase()}">
-      <div class="lk-stat__top">
-        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
-        <div class="lk-stat__label">${label}</div>
+  /* A card filters the register to its status; pressed again, it clears. */
+  const kpi = (status, hue, label, value, sub, svg) => `
+    <div class="lk-kpi lk-kpi--click ${hue}${filterStatus===status?' is-on':''}" onclick="renderPage('cancellations_${filterStatus===status?'All':status}')"
+         title="${filterStatus===status?'Show every record':'Show ' + escHtml(label.toLowerCase())}">
+      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
+      <div class="lk-kpi__body">
+        <div class="lk-kpi__l">${escHtml(label)}</div>
+        <div class="lk-kpi__v">${value}</div>
+        <div class="lk-kpi__s"><span>${filterStatus===status?'Showing these':escHtml(sub)}</span></div>
       </div>
-      <div class="lk-stat__val">${value}</div>
-      <div class="lk-stat__sub">${filterStatus===status?'Showing these':sub}</div>
     </div>`;
 
-  const th = (key,label) => {
-    const on  = cancelFilter.sortKey===key;
-    const arw = on ? (cancelFilter.sortDir==='asc'?'▲':'▼') : '⇅';
-    return `<th class="is-sortable${on?' is-sorted':''}" onclick="toggleSort(cancelFilter,'cancellations_${filterStatus}','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
-  };
+  const m = cancelFilter.month;
+  const leavingLabel = m ? 'Leaving (' + (/^\d{4}$/.test(m) ? m : _cancMonthLabel(m).split(' ')[0]) + ')' : 'Leaving (All Months)';
+  const headTitle = filterStatus==='All' ? 'All Cancellations'
+                  : filterStatus==='Freed' ? 'Leaving (Pending + Confirmed)'
+                  : filterStatus + ' Cancellations';
 
   return `
-  <!-- ══ STAT STRIP ══ -->
-  <div class="lk-stats">
-    ${/* THE NUMBER THAT MUST NOT SHRINK.
-          It used to be four status counts and nothing else, so as wardens
-          marked leavers Left the Pending card fell 20 -> 15 while the month's
-          real answer was still 20. An owner asking "you said twenty are going
-          this month" read 15 and concluded the warden was making it up. The
-          headline is now the month's departures — Pending plus Confirmed —
-          which only moves when a departure is added, cancelled or restored,
-          never when one merely progresses from one status to the other. */''}
-    ${card('Freed','dh-violet',cancelFilter.month?('Leaving '+(/^\d{4}$/.test(cancelFilter.month)?cancelFilter.month:_cancMonthLabel(cancelFilter.month).split(' ')[0])):'Leaving (all months)',
-        'Still in + already left',freed.length,'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>')}
-    ${card('Pending','dh-amber','Still in hostel','Notice given, not gone yet',pending.length,'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>')}
-    ${card('Confirmed','dh-green','Already left','Seat is free',confirmed.length,'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')}
-    ${card('Restored','dh-blue','Restored','Notice withdrawn',restored.length,'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')}
-  </div>
-
-  <!-- ══ FREED SEATS ══ -->
-  <div class="lk-banner dh-violet${filterStatus==='Freed'?' is-on':''}" onclick="renderPage('cancellations_Freed')" title="Show everyone leaving — those still here and those already gone">
-    <div class="lk-banner__l">
-      <div class="lk-banner__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/><path d="M12 4v5"/></svg></div>
-      <div>
-        <div class="lk-banner__t">${freed.length} leaving in ${escHtml(_cancMonthLabel(cancelFilter.month))}</div>
-        <div class="lk-banner__s">${confirmed.length} already left &middot; ${pending.length} still in the hostel, seat theirs until their vacate date</div>
-      </div>
-    </div>
-    <div>
-      <div class="lk-banner__v">${freed.length}</div>
-      <div class="lk-banner__a">${filterStatus==='Freed'?'Showing these':'Click to filter'}</div>
-    </div>
+  <!-- ══ KPI CARDS ══ -->
+  ${/* THE NUMBER THAT MUST NOT SHRINK. The headline is the month's departures —
+        Pending plus Confirmed — which only moves when a departure is added,
+        cancelled or restored, never when one merely goes from Pending to
+        Confirmed. */''}
+  <div class="lk-kpis">
+    ${kpi('Freed', 'dh-blue', leavingLabel, freed.length,
+          `${confirmed.length} already left • ${pending.length} still in hostel`,
+          '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>')}
+    ${kpi('Pending', 'dh-amber', 'Still in Hostel', pending.length, 'Notice given, not gone yet',
+          '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>')}
+    ${kpi('Confirmed', 'dh-green', 'Already Left', confirmed.length, 'Seat is free now',
+          '<path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M5 18v2"/><path d="M19 18v2"/>')}
+    ${kpi('Restored', 'dh-violet', 'Restored', restored.length, 'Notice withdrawn',
+          '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>')}
   </div>
 
   <!-- ══ TOOLBAR + TABLE ══ -->
@@ -285,28 +265,35 @@ function renderCancellations(filterStatus='All') {
     <div class="lk-tools">
       <div class="lk-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="canc-search" class="lk-sin" placeholder="Search student, room, reason, request ID…"
+        <input id="canc-search" class="lk-sin" placeholder="Search by name, room, reason, request ID…"
                value="${escHtml(cancelFilter.search)}" oninput="canSearch(this.value)">
         ${lkSearchX('canc-search','cancelFilter','cancellations')}
       </div>
 
-      ${/* First control on the row on purpose: it governs every number above
-            it, so it has to be the first thing read, not a filter tucked in
-            among the room-type dropdowns. */''}
-      <select class="lk-select${cancelFilter.month?' is-set':''}" onchange="canSetMonth(this.value)" title="Show one month only">
-        <option value="" ${!cancelFilter.month?'selected':''}>All months</option>
-        ${_cancMonthOptions().map(k=>`<option value="${escHtml(k)}" ${cancelFilter.month===k?'selected':''}>${escHtml(_cancMonthLabel(k))}</option>`).join('')}
-      </select>
+      ${/* The month governs every number above it, so it comes first. */''}
+      <label class="canc-selwrap" title="Show one month only">
+        <span class="canc-selwrap__i">${icon('calendar', 'xs')}</span>
+        <select class="lk-select canc-select--ico${cancelFilter.month?' is-set':''}" onchange="canSetMonth(this.value)">
+          <option value="" ${!cancelFilter.month?'selected':''}>All months</option>
+          ${_cancMonthOptions().map(k=>`<option value="${escHtml(k)}" ${cancelFilter.month===k?'selected':''}>${escHtml(_cancMonthLabel(k))}</option>`).join('')}
+        </select>
+      </label>
 
-      <select class="lk-select${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)" title="Filter by status">
-        ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
-          `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'All Leaving':s}</option>`).join('')}
-      </select>
+      <label class="canc-selwrap" title="Filter by status">
+        <span class="canc-selwrap__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
+        <select class="lk-select canc-select--ico${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)">
+          ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
+            `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'All Leaving':s}</option>`).join('')}
+        </select>
+      </label>
 
-      <select class="lk-select${cancelFilter.type!=='All'?' is-set':''}" onchange="canSet('type',this.value)" title="Filter by room type">
-        <option value="All">All Types</option>
-        ${types.map(t=>`<option value="${escHtml(t)}" ${cancelFilter.type===t?'selected':''}>${escHtml(t)}</option>`).join('')}
-      </select>
+      <label class="canc-selwrap" title="Filter by room type">
+        <span class="canc-selwrap__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
+        <select class="lk-select canc-select--ico${cancelFilter.type!=='All'?' is-set':''}" onchange="canSet('type',this.value)">
+          <option value="All">All Types</option>
+          ${types.map(t=>`<option value="${escHtml(t)}" ${cancelFilter.type===t?'selected':''}>${escHtml(t)}</option>`).join('')}
+        </select>
+      </label>
 
       <div class="lk-tools__end">
         ${tbExport({ id:'canc-export', excel:'exportCancellationsExcel()',
@@ -314,12 +301,12 @@ function renderCancellations(filterStatus='All') {
       </div>
     </div>
 
-    <div class="lk-head">
-      <div class="lk-head__t">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-        ${filterStatus==='All'?'All Cancellations':filterStatus==='Freed'?'Freed Seats (Pending + Confirmed)':filterStatus+' Cancellations'}
+    <div class="canc-head">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+      <div>
+        <div class="canc-head__t">${escHtml(headTitle)}</div>
+        <div class="canc-head__n">${_pg.total} record${_pg.total!==1?'s':''}${_pg.total ? ` • Showing ${_pg.from}–${_pg.to} of ${_pg.total}` : ''}</div>
       </div>
-      <div class="lk-head__n">${_pg.total} record${_pg.total!==1?'s':''}</div>
     </div>
 
     ${_pg.total===0?`
@@ -332,18 +319,54 @@ function renderCancellations(filterStatus='All') {
           : nActive?`<button class="lk-btn" onclick="canClearFilters()">Clear filters</button>`:''}
       </div>`
     : `<div class="lk-table-wrap">
-        <table class="lk-table">
+        <table class="lk-table canc-table">
           <thead><tr>
+            <th class="canc-col-no">#</th>
             ${th('student','Student')}${th('room','Room')}<th>Settlement</th>
             ${th('request','Request Date')}${th('vacate','Vacate By')}
             ${th('status','Status')}${th('reason','Reason')}
             <th>Actions</th>
           </tr></thead>
-          <tbody>${_pg.slice.map(c=>mkRow(c)).join('')}</tbody>
+          <tbody>${_pg.slice.map((c, i)=>mkRow(c, i)).join('')}</tbody>
         </table>
       </div>
       ${canPager(_pg, filterStatus)}`}
   </div>`;
+
+  function th(key, label) {
+    const on  = cancelFilter.sortKey===key;
+    const arw = on ? (cancelFilter.sortDir==='asc'?'▲':'▼') : '⇅';
+    return `<th class="is-sortable${on?' is-sorted':''}" onclick="toggleSort(cancelFilter,'cancellations_${filterStatus}','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+  }
+}
+
+/** "17,000.00" — the register's money shape. */
+function _cancCash(n) {
+  return Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* The settlement as the reference draws it: a pill carrying the word and, when
+   money moved, the amount under it. The same states cancSettleCell() reads —
+   `settlement` is frozen onto the record at checkout, so this is what was true
+   on the day the student left. cancSettleCell() stays for its other callers. */
+function cancSettlePill(c) {
+  const s = c && c.settlement;
+  const X  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+  const OK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
+  const pill = (hue, ico, word, amt) =>
+    `<span class="canc-settle ${hue}">${ico}<span class="canc-settle__b"><b>${escHtml(word)}</b>${amt ? `<i>${escHtml(amt)}</i>` : ''}</span></span>`;
+  if (!s) return c && c.status === 'Pending' ? pill('dh-red', X, 'Not settled') : '<span class="lk-dash">—</span>';
+  const moved = Number(s.settledNow || 0);
+  if (s.action === 'refund') {
+    return pill('dh-amber', OK, 'Refunded', _cancCash(moved > 0 ? moved : Number(s.credit || 0)) + (moved > 0 ? '' : ' credit left'));
+  }
+  if (s.action === 'collect') {
+    const left = Number(s.outstanding || 0) - moved;
+    return left > 0
+      ? pill('dh-red', X, 'Part collected', _cancCash(moved) + ' of ' + _cancCash(Number(s.outstanding || 0)))
+      : pill('dh-green', OK, 'Collected', _cancCash(moved));
+  }
+  return pill('dh-green', OK, 'Settled', 'Nothing owed');
 }
 
 /* ── Cancellations v5 — toolbar behaviour ────────────────────────────────── */
@@ -358,11 +381,13 @@ const canSearch = debounce(function (v) { canSet('search', v); }, 220);
    from the Clear all button beside it. */
 function canClearFilters() { tbClearAll('cancellations'); }
 function canPager(pg, status) {
+  /* The footer in the reference's order (owner, 2026-09-15): the sentence,
+     "Rows per page", then ‹ pages ›. */
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled>${label}</button>`;
-    if (o.active)   return `<button class="is-on">${label}</button>`;
-    return `<button onclick="gotoPage(cancelFilter,'cancellations_${status}',${target})">${label}</button>`;
+    if (o.disabled) return `<button disabled${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
+    if (o.active)   return `<button class="is-on" aria-current="page">${label}</button>`;
+    return `<button onclick="gotoPage(cancelFilter,'cancellations_${status}',${target})"${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
@@ -372,21 +397,18 @@ function canPager(pg, status) {
   for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
   if (hi < pages) nums += (hi<pages-1?'<span class="lk-pager__gap">…</span>':'') + btn(String(pages), pages);
 
-  return `<div class="lk-foot">
+  return `<div class="lk-foot canc-foot">
+    <div class="lk-foot__info">${pg.total ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total!==1?'s':''}` : 'No records'}</div>
     <div class="lk-foot__size">
-      Show
-      <select onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')">
-        ${[10,30,50,100].map(n=>`<option value="${n}" ${cancelFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+      <span>Rows per page</span>
+      <select onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')" aria-label="Rows per page">
+        ${[10,30,50,100].map(n=>`<option value="${n}" ${Number(cancelFilter.pageSize)===n?'selected':''}>${n}</option>`).join('')}
       </select>
-      entries
     </div>
-    <div class="lk-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} record${pg.total!==1?'s':''}</div>
     <div class="lk-pager">
-      ${btn('«',1,{disabled:page<=1})}
-      ${btn('‹',page-1,{disabled:page<=1})}
+      ${btn('‹',page-1,{disabled:page<=1, aria:'Previous page'})}
       ${nums}
-      ${btn('›',page+1,{disabled:page>=pages})}
-      ${btn('»',pages,{disabled:page>=pages})}
+      ${btn('›',page+1,{disabled:page>=pages, aria:'Next page'})}
     </div>
   </div>`;
 }

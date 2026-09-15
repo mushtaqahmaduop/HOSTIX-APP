@@ -376,7 +376,7 @@ function renderIssues() {
         ${i.desc?`<div class="iss-d" title="${escHtml(i.desc)}">${escHtml(i.desc)}</div>`:''}
         ${i.location?`<div class="iss-d">${icon('pin','xs')} ${escHtml(i.location)}</div>`:''}
       </td>
-      <td>
+      <td class="iss-c-by">
         ${i.student ? `<div class="lk-who">
             <div class="lk-who__av dh-violet">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</div>
             <div style="min-width:0">

@@ -139,13 +139,16 @@ const wideDef = {
   console.log('\n── the PDF document ──────────────────────────────────────────');
   const doc = ctx.EXPORT.document(wideDef);
 
-  ok(doc.landscape === true, '§5 nine columns choose the long edge of the paper');
-  ok(/@page\{size:A4 landscape/.test(doc.html), '§5 the page is A4 landscape');
+  ok(doc.landscape === true, '§5 a register prints on the long edge of the paper');
+  // Letter unless Settings → Paper size says otherwise (owner, 2026-09-15).
+  ok(/@page\{size:Letter landscape/.test(doc.html), '§5 the page is Letter landscape by default');
+  ok(/"pageSize":"Letter"|&quot;pageSize&quot;:&quot;Letter&quot;/.test(doc.html), 'the print setup names the paper for Save as PDF');
   ok(/margin:9mm 9mm 14mm/.test(doc.html), '§6 landscape margins are inside the print-safe band');
   ok(doc.html.includes('thead{display:table-header-group}'),
      '§9 column headings repeat on every printed page');
   ok(doc.html.includes('tr{break-inside:avoid'), '§10 a record is never split across pages');
-  ok(/font-size:9pt/.test(doc.html), '§14 body type is at the specification floor, not below it');
+  ok(/body\{[^}]*font-size:10\.5pt/.test(doc.html), '§14 body type fills the page (owner, 2026-09-15: 10.5pt)');
+  ok(!/font-size:[0-7](\.\d+)?pt/.test(doc.html), 'nothing on the page is set below 8pt');
   ok(doc.html.includes('HOSTYLLO') && doc.html.includes('Hostel Management System'),
      '§7 the header band identifies the product');
   ok(doc.html.includes('Test Hostel'), '§4 …and the hostel');
@@ -162,10 +165,15 @@ const wideDef = {
     module: 'Room', title: 'Room Record',
     columns: wideDef.columns.slice(0, 3), rows: rows.slice(0, 2),
   });
-  ok(narrow.landscape === false, '§5 a narrow table stays portrait');
+  ok(narrow.landscape === true, 'a narrow register prints landscape too (owner: "all the pdfs opens upright")');
 
   const forced = ctx.EXPORT.document(Object.assign({}, wideDef, { orientation: 'portrait' }));
-  ok(forced.landscape === false, 'a module may override the orientation deliberately');
+  ok(forced.landscape === false, 'a one-person record may ask for portrait deliberately');
+  ok(/@page\{size:Letter portrait/.test(forced.html), '…and gets it on the same paper');
+
+  const a4 = loadEngine({ paperSize: () => 'A4', paperXlsxCode: () => 9, today: () => '2026-09-07',
+                          DB: { settings: { hostelName: 'Test Hostel' } } });
+  ok(/@page\{size:A4 landscape/.test(a4.EXPORT.document(wideDef).html), 'Settings → Paper size A4 reaches the page');
 
   console.log('\n── the workbook ──────────────────────────────────────────────');
   const parts = unzip(await ctx.HXW.build(ctx.EXPORT.workbook(wideDef)));
@@ -176,7 +184,7 @@ const wideDef = {
      'the workbook has the parts Excel requires');
   ok(/<pane [^>]*ySplit="\d+"[^>]*state="frozen"/.test(sheet), '§24 the header row is frozen');
   ok(/<autoFilter ref="A\d+:I\d+"\/>/.test(sheet), '§25 the data carries an autofilter');
-  ok(/paperSize="9"/.test(sheet) && /orientation="landscape"/.test(sheet), '§27 A4, landscape');
+  ok(/paperSize="1"/.test(sheet) && /orientation="landscape"/.test(sheet), '§27 Letter (the default paper), landscape');
   ok(/fitToWidth="1" fitToHeight="0"/.test(sheet),
      '§27 fit to ONE page wide and as many as it takes tall');
   ok(/_xlnm.Print_Titles/.test(book), '§28 the column headings repeat on every printed page');

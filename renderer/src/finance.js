@@ -222,6 +222,9 @@ function applyPayment(p, opts) {
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
     note: o.note || 'Collected',
   };
+  // A bank or wallet transaction number, when the collector gave one (Edit Payment).
+  const ref = String(o.reference == null ? '' : o.reference).trim().slice(0, 40);
+  if (ref) entry.reference = ref;
   p.partialPayments.push(entry);
 
   /* Every collection reaches the student ledger from here (warden ledger spec

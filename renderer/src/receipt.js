@@ -127,7 +127,7 @@ function buildReceiptHTML(payId) {
     return '<div style="display:flex;align-items:baseline;font-family:\'Courier New\',Courier,monospace;'
       + 'font-size:' + sz + ';font-weight:' + w + ';color:#000;margin:3px 0">'
       + '<span style="white-space:nowrap;color:#111;font-weight:' + (bold?'900':'800') + '">' + label + '</span>'
-      + '<span style="flex:1;overflow:hidden;letter-spacing:2px;margin:0 4px;color:#aaa">................................................................................................................................................................</span>'
+      + '<span style="flex:1;overflow:hidden;letter-spacing:2px;margin:0 4px;color:#666">................................................................................................................................................................</span>'
       + '<span style="white-space:nowrap;font-weight:900;color:#000">' + value + '</span>'
       + '</div>';
   }
@@ -143,9 +143,9 @@ function buildReceiptHTML(payId) {
   // ── Receipt wrapper ────────────────────────────────────────────────────────
   var html = '<div id="rc-print" data-pay-id="' + escHtml(payId) + '" style="background:#fafaf8;color:#111;font-family:\'Courier New\',Courier,monospace;'
     + 'max-width:360px;margin:0 auto;border-radius:4px;overflow:hidden;'
-    + 'box-shadow:0 4px 24px rgba(0,0,0,0.18);border:1px solid #e0e0e0">';
+    + 'box-shadow:0 4px 24px rgba(0,0,0,0.18);border:1px solid #888">';
 
-  html += '<div style="height:8px;background:#fafaf8;border-bottom:2px dashed #bbb;position:relative">'
+  html += '<div style="height:8px;background:#fafaf8;border-bottom:2px dashed #888;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';
@@ -243,7 +243,9 @@ function buildReceiptHTML(payId) {
     html += '<div style="font-family:monospace;font-size:9px;font-weight:900;color:#c00;'
       + 'letter-spacing:1.5px;text-align:right;margin-top:2px">** PENDING BALANCE **</div>';
   }
-  html += dotRow('Method', escHtml(p.method || 'Cash'));
+  // The latest collection's transaction number, when one was given (Edit Payment).
+  var rcptRef = (p.partialPayments || []).filter(function (x) { return x && x.reference; }).map(function (x) { return x.reference; }).pop() || '';
+  html += dotRow('Method', escHtml(p.method || 'Cash') + (rcptRef ? ' · Ref ' + escHtml(rcptRef) : ''));
   /* NO EMOJI ON THE STATUS (owner, 2026-09-10: "remove … success and pending
      emojis"). This slip prints on an 80mm thermal roll and gets photographed
      and sent on WhatsApp; a colour emoji renders as a black blob on the first
@@ -309,7 +311,7 @@ function buildReceiptHTML(payId) {
   html += '<div style="padding:2px 18px 4px">';
   html += '<div style="display:flex;justify-content:flex-end;font-family:monospace;font-size:10px;color:#333">';
   html += '<div style="text-align:center"><div style="border-top:1px solid #666;padding-top:3px;margin-top:20px;min-width:110px">'
-    + escHtml(wardenName) + '<br><span style="font-size:8px;color:#888">' + signCaption + '</span></div></div>';
+    + escHtml(wardenName) + '<br><span style="font-size:8px;color:#555">' + signCaption + '</span></div></div>';
   html += '</div>';
   html += '</div>';
 
@@ -322,10 +324,10 @@ function buildReceiptHTML(payId) {
   var appName = (typeof DB !== 'undefined' && DB.settings && DB.settings.appName) ? DB.settings.appName : 'HOSTYLLO';
   html += '<div style="padding:4px 18px 4px;text-align:center">';
   html += '<div style="font-size:11px;font-weight:900;letter-spacing:3px;color:#000">** THANK YOU **</div>';
-  html += '<div style="font-size:7.5px;color:#bbb;font-family:monospace;margin-top:2px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
+  html += '<div style="font-size:7.5px;color:#666;font-family:monospace;margin-top:2px;letter-spacing:0.5px">Powered by ' + escHtml(appName) + ' · Hostel Management System</div>';
   html += '</div>';
 
-  html += '<div style="height:8px;background:#fafaf8;border-top:2px dashed #bbb;position:relative">'
+  html += '<div style="height:8px;background:#fafaf8;border-top:2px dashed #888;position:relative">'
     + '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent 8px,'
     + 'rgba(0,0,0,0.04) 8px,rgba(0,0,0,0.04) 9px)"></div>'
     + '</div>';
@@ -337,6 +339,8 @@ function buildReceiptHTML(payId) {
 
 // ── MAIN RECEIPT ENTRY POINT ──────────────────────────────────────────────────
 function printReceipt(payId) {
+  // No placeholder name on paper (hostel-name.js): ask once, then show the receipt.
+  if (typeof hostelNameGate === 'function' && hostelNameGate(function () { printReceipt(payId); })) return;
   // The number is spent here, once per payment — see buildReceiptHTML().
   if (payId) _assignReceiptNo(payId);
   var html = buildReceiptHTML(payId);
@@ -391,7 +395,7 @@ function doPrintReceipt(payId) {
   overlay.id = '_rcp_print_overlay';
   overlay.style.display = 'none'; // hidden on screen; shown only via @media print
   overlay.innerHTML = el.outerHTML
-    + '<div style="text-align:center;font-size:9px;color:#888;margin-top:8px;font-family:monospace">'
+    + '<div style="text-align:center;font-size:9px;color:#555;margin-top:8px;font-family:monospace">'
     + 'Printed: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>';
   document.body.appendChild(overlay);
 
@@ -418,6 +422,7 @@ function doPrintReceipt(payId) {
 // ── EXPORT RECEIPT AS PDF ─────────────────────────────────────────────────────
 // FIX: Uses in-page print overlay — NO window.open() which hangs Electron.
 async function exportReceiptPDF(payId) {
+  if (typeof hostelNameGate === 'function' && hostelNameGate(function () { exportReceiptPDF(payId); })) return;
   var resolvedPayId = payId;
   if (!resolvedPayId) {
     var el = document.getElementById('rc-print');
@@ -450,7 +455,7 @@ async function exportReceiptPDF(payId) {
   overlay.id = '_rcp_print_overlay';
   overlay.style.display = 'none';
   overlay.innerHTML = receiptCard
-    + '<div style="text-align:center;font-size:9px;color:#888;margin-top:8px;font-family:monospace">'
+    + '<div style="text-align:center;font-size:9px;color:#555;margin-top:8px;font-family:monospace">'
     + 'Generated: ' + printDateTime + ' · By: ' + escHtml(wardenName) + '</div>';
   document.body.appendChild(overlay);
 
@@ -459,7 +464,7 @@ async function exportReceiptPDF(payId) {
   style.textContent = '@media print {'
     + '  body > *:not(#_rcp_print_overlay) { display:none !important; }'
     + '  #_rcp_print_overlay { display:block !important; padding:20px; background:#fff; }'
-    + '  @page { size: A4; margin: 18mm; }'
+    + '  @page { size: ' + (typeof paperSize === 'function' ? paperSize() : 'Letter') + ' portrait; margin: 18mm; }'
     + '}';
   document.head.appendChild(style);
 
@@ -476,6 +481,8 @@ async function exportReceiptPDF(payId) {
 
 // ── WHATSAPP PAYMENT REMINDER ─────────────────────────────────────────────────
 function sendWA(payId) {
+  // The message says "Reminder from <hostel>", so the same rule applies.
+  if (typeof hostelNameGate === 'function' && hostelNameGate(function () { sendWA(payId); })) return;
   var p = DB.payments.find(function(x){ return x.id === payId; });
   if (!p) return;
   var student     = DB.students.find(function(s){ return s.id === p.studentId; });

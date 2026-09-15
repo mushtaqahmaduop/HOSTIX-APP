@@ -212,11 +212,13 @@ test('admit a student with full detail, then proceed to payment', async () => {
 
   // ── Screen 3: Edit the payment we just saved ──────────────────────────────
   await win.evaluate(pid => showEditPaymentModal(pid), pay.id);
-  await win.waitForSelector('#f-pamt', { timeout: 8000 });
+  // One Amount box since the 2026-09-15 redesign; the rent half is its hidden f-prent.
+  await win.waitForSelector('#f-pcombo', { timeout: 8000 });
   const screen3 = await win.evaluate(() => {
     const q = id => document.getElementById(id);
     return {
-      rent: q('f-pamt').value,
+      rent: q('f-prent').value,
+      combo: q('f-pcombo').value,
       mess: q('f-pmess') ? q('f-pmess').value : 'NO MESS FIELD',
       messOn: q('f-pmess-on') ? q('f-pmess-on').checked : null,
       paid: q('f-ppaid').value,

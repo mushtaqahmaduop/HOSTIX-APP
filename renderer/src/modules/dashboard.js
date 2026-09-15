@@ -2295,6 +2295,8 @@ function showRoomSeatDetailModal(roomId) {
 // ── SEAT AVAILABILITY PRINT REPORT ──────────────────────────────────────────
 function printSeatAvailability() {
   if (typeof requireFeature === 'function' && !requireFeature('printDocs')) return;
+  // No placeholder name on paper (hostel-name.js): ask once, then print.
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => printSeatAvailability())) return;
   const hostel = DB.settings.hostelName || 'Hostel Name';
   const location = DB.settings.location || '';
   const now2 = new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'long',year:'numeric'});
@@ -2412,40 +2414,43 @@ function printSeatAvailability() {
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Room Visit Sheet</title>
   <style>
-    @page { size: A4; margin: 10mm 10mm; }
+    /* LANDSCAPE, ON THE HOSTEL'S PAPER, AT A SIZE THAT FILLS IT (owner,
+       2026-09-15). The @page comes from _pdfInject() — Settings → Paper size —
+       and every size below went up by about a quarter: the sheet is carried
+       round the building and read standing in a corridor. */
     @media print { .no-print{display:none!important} }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#0f172a;background:#fff;padding:10px}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;background:#fff;padding:10px}
 
     /* icons.js emits <svg class="icon">, and this print document has none of the
        app stylesheets — without these rules the SVGs fall back to the replaced
        element default (300×150) and blow the layout apart. */
-    svg.icon{width:14px;height:14px;flex-shrink:0;vertical-align:-2px}
-    svg.icon-xs{width:11px;height:11px}
-    svg.icon-sm{width:13px;height:13px}
-    svg.icon-lg{width:18px;height:18px}
+    svg.icon{width:16px;height:16px;flex-shrink:0;vertical-align:-3px}
+    svg.icon-xs{width:13px;height:13px}
+    svg.icon-sm{width:15px;height:15px}
+    svg.icon-lg{width:20px;height:20px}
 
     /* ── Header ─────────────────────────────────────────────────────────── */
     .header{display:flex;justify-content:space-between;align-items:flex-end;
-            border-bottom:2px solid #1e293b;padding-bottom:9px;margin-bottom:12px}
-    .header h1{font-size:21px;font-weight:900;color:#0f172a;letter-spacing:-.02em}
-    .header .sub{display:flex;align-items:center;gap:4px;font-size:10px;color:#64748b;margin-top:3px}
-    .header .kicker{margin-top:5px;font-size:9.5px;font-weight:800;color:#475569;
+            border-bottom:2px solid #1e293b;padding-bottom:10px;margin-bottom:14px}
+    .header h1{font-size:26px;font-weight:900;color:#0f172a;letter-spacing:-.02em}
+    .header .sub{display:flex;align-items:center;gap:4px;font-size:12.5px;color:#374151;margin-top:3px}
+    .header .kicker{margin-top:5px;font-size:12px;font-weight:800;color:#475569;
                     text-transform:uppercase;letter-spacing:1.6px}
     .header .date{text-align:right}
     .header .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;
-                     font-size:12px;font-weight:800;color:#1e293b}
-    .header .date .h{font-size:9px;color:#94a3b8;margin-top:3px}
+                     font-size:15px;font-weight:800;color:#1e293b}
+    .header .date .h{font-size:11.5px;color:#4b5563;margin-top:3px}
 
     /* ── Summary tiles ──────────────────────────────────────────────────── */
-    .summary{display:flex;gap:8px;margin-bottom:14px}
-    .sbox{flex:1;display:flex;align-items:center;gap:9px;
-          border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px}
-    .sbox .ico{width:32px;height:32px;border-radius:9px;flex-shrink:0;
+    .summary{display:flex;gap:10px;margin-bottom:16px}
+    .sbox{flex:1;display:flex;align-items:center;gap:10px;
+          border:1px solid #888888;border-radius:8px;padding:10px 13px}
+    .sbox .ico{width:36px;height:36px;border-radius:9px;flex-shrink:0;
                display:flex;align-items:center;justify-content:center}
-    .sbox .v{display:block;font-size:21px;font-weight:900;line-height:1.1;color:#0f172a}
-    .sbox .l{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:1.1px;
-             color:#94a3b8;font-weight:700;margin-top:1px}
+    .sbox .v{display:block;font-size:25px;font-weight:900;line-height:1.1;color:#0f172a}
+    .sbox .l{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1.1px;
+             color:#4b5563;font-weight:700;margin-top:1px}
     .sbox.t-rooms .ico{background:#ede9fe;color:#7c3aed}
     .sbox.t-seats .ico{background:#dbeafe;color:#2563eb}
     .sbox.t-occ   .ico{background:#fee2e2;color:#dc2626}
@@ -2460,18 +2465,18 @@ function printSeatAvailability() {
     .floor-head{display:flex;align-items:center;gap:9px;margin:13px 0 8px;
                 background:#0f172a;border-radius:8px;padding:7px 11px;
                 page-break-after:avoid;page-break-inside:avoid}
-    .fbadge{width:22px;height:22px;flex-shrink:0;border-radius:6px;background:#334155;
-            color:#fff;font-size:11px;font-weight:900;
+    .fbadge{width:26px;height:26px;flex-shrink:0;border-radius:6px;background:#334155;
+            color:#fff;font-size:13.5px;font-weight:900;
             display:flex;align-items:center;justify-content:center}
-    .fname{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:900;
+    .fname{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:900;
            color:#fff;text-transform:uppercase;letter-spacing:1.8px}
-    .fcount{font-size:8.5px;font-weight:700;letter-spacing:.6px;text-transform:none;
-            color:#cbd5e1;background:#1e293b;border-radius:20px;padding:2px 8px}
-    .fstats{display:flex;align-items:center;gap:7px;margin-left:auto}
-    .fstat{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;
+    .fcount{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:none;
+            color:#cbd5e1;background:#1e293b;border-radius:20px;padding:2px 9px}
+    .fstats{display:flex;align-items:center;gap:8px;margin-left:auto}
+    .fstat{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
            letter-spacing:.5px;text-transform:uppercase;color:#cbd5e1;
-           background:#1e293b;border-radius:20px;padding:3px 9px}
-    .fstat b{font-size:11px;font-weight:900;color:#fff;letter-spacing:0}
+           background:#1e293b;border-radius:20px;padding:3px 10px}
+    .fstat b{font-size:13.5px;font-weight:900;color:#fff;letter-spacing:0}
     .fstat.is-occ b{color:#fca5a5}
     .fstat.is-free b{color:#86efac}
 
@@ -2480,43 +2485,44 @@ function printSeatAvailability() {
        put a full-bleed colour behind every room and left the status badge
        saying the same thing twice. The card is neutral now; the badge carries
        the state. Prints far cleaner on a mono office printer too. */
-    .room-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
-    .room-box{border:1px solid #e2e8f0;border-radius:9px;padding:9px 11px;
+    /* Four across on a landscape sheet; three was the portrait page's count. */
+    .room-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:4px}
+    .room-box{border:1px solid #888888;border-radius:9px;padding:10px 12px;
               page-break-inside:avoid;background:#fff}
     .room-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
-              padding-bottom:7px;border-bottom:1px solid #f1f5f9}
-    .rnum{font-size:14px;font-weight:900;color:#0f172a;letter-spacing:-.01em}
-    .rtype{font-size:9px;background:#f1f5f9;border-radius:20px;padding:2px 7px;
+              padding-bottom:7px;border-bottom:1px solid #888888}
+    .rnum{font-size:17px;font-weight:900;color:#0f172a;letter-spacing:-.01em}
+    .rtype{font-size:11px;background:#f1f5f9;border-radius:20px;padding:2px 8px;
            color:#475569;font-weight:700}
-    .bath{display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#e0f2fe;
-          color:#0369a1;border-radius:20px;padding:2px 7px;font-weight:700}
-    .seats{font-size:9px;font-weight:800;margin-left:auto;padding:2px 8px;border-radius:20px}
+    .bath{display:inline-flex;align-items:center;gap:3px;font-size:11px;background:#e0f2fe;
+          color:#0369a1;border-radius:20px;padding:2px 8px;font-weight:700}
+    .seats{font-size:11px;font-weight:800;margin-left:auto;padding:2px 9px;border-radius:20px}
     .seats-full{background:#dcfce7;color:#15803d}
     .seats-free{background:#fef3c7;color:#b45309}
     .seats-over{background:#fee2e2;color:#dc2626}
 
     .room-rows{padding-top:2px}
-    .student-row{display:flex;align-items:center;gap:6px;padding:3px 0;
-                 border-bottom:1px solid #f8fafc;font-size:10px}
+    .student-row{display:flex;align-items:center;gap:6px;padding:3.5px 0;
+                 border-bottom:1px solid #888888;font-size:12.5px}
     .student-row:last-child{border-bottom:none}
-    .snum{width:13px;color:#cbd5e1;font-weight:700;flex-shrink:0;text-align:center}
+    .snum{width:15px;color:#4b5563;font-weight:700;flex-shrink:0;text-align:center}
     .sname{font-weight:700;flex:1;color:#0f172a;min-width:0;
            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .scourse{color:#1d4ed8;font-size:8.5px;font-weight:700;background:#eff6ff;
-             border-radius:20px;padding:2px 7px;white-space:nowrap}
-    .scourse.is-none{color:#cbd5e1;background:#f8fafc}
-    .empty-row{font-size:10px;color:#94a3b8;font-style:italic;padding:5px 0}
-    .outgoing-row .sname{text-decoration:line-through;color:#94a3b8}
-    .out-badge{font-size:8px;font-weight:800;background:#fee2e2;color:#dc2626;
-               border-radius:20px;padding:2px 7px;white-space:nowrap}
+    .scourse{color:#1d4ed8;font-size:11px;font-weight:700;background:#eff6ff;
+             border-radius:20px;padding:2px 8px;white-space:nowrap}
+    .scourse.is-none{color:#4b5563;background:#fff;border:1px solid #888888}
+    .empty-row{font-size:12.5px;color:#4b5563;font-style:italic;padding:5px 0}
+    .outgoing-row .sname{text-decoration:line-through;color:#4b5563}
+    .out-badge{font-size:10.5px;font-weight:800;background:#fee2e2;color:#dc2626;
+               border-radius:20px;padding:2px 8px;white-space:nowrap}
 
-    .slot-list{margin-top:6px;padding-top:6px;border-top:1px dashed #e2e8f0}
-    .seat-slot{font-size:9.5px;color:#94a3b8;padding:1.5px 0}
-    .seat-slot span{color:#cbd5e1}
+    .slot-list{margin-top:6px;padding-top:6px;border-top:1px dashed #888888}
+    .seat-slot{font-size:12px;color:#4b5563;padding:2px 0}
+    .seat-slot span{color:#6b7280}
     .seat-slot.is-over{color:#dc2626;font-weight:700}
 
-    .footer{margin-top:14px;text-align:center;font-size:9px;color:#94a3b8;
-            border-top:1px solid #e2e8f0;padding-top:7px}
+    .footer{margin-top:16px;text-align:center;font-size:11.5px;color:#4b5563;
+            border-top:1px solid #888888;padding-top:8px}
     .print-btn{display:inline-flex;align-items:center;gap:7px;margin:0 auto 14px;
                padding:9px 22px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;
                font-size:13px;font-weight:700;cursor:pointer}
@@ -2552,7 +2558,9 @@ function printSeatAvailability() {
   <div class="footer">${escHtml(hostel)} · Room Visit Sheet · ${now2}</div>
   </body></html>`;
 
-  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+today()+'.pdf', {pageSize:'A4'});
+  // A register: landscape, on the hostel's paper (owner, 2026-09-15).
+  _electronPDF(html, (DB.settings.hostelName||'Hostel').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9\-]/g,'')+'_Room-Visit-Sheet_'+today()+'.pdf',
+               { pageSize: paperSize(), landscape: true });
 }
 // ─────────────────────────────────────────────────────────────────────────────
 /* ── THE SEAT-AVAILABILITY EXPAND MODAL ──────────────────────────────────────

@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('hostylloPdf', {
     } catch (e) { opts = {}; }
     return ipcRenderer.invoke('pdf-window:save', {
       landscape: opts.landscape === true,
+      // The paper the document was laid out for (Settings → Paper size).
+      pageSize:  typeof opts.pageSize === 'string' ? opts.pageSize.slice(0, 12) : '',
       footer:    typeof opts.footer === 'string' ? opts.footer.slice(0, 200) : '',
       file:      typeof opts.file === 'string' ? opts.file.slice(0, 160) : '',
       title:     (document.title || 'Report').slice(0, 160),

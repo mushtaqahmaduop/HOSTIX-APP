@@ -97,3 +97,16 @@
 .stu-table td .stu-addr__t {
     text-align: left;
 }
+
+
+/* ══ EVERY KPI CARD HAS THE STUDENTS CARD'S CORNERS (owner, 2026-09-15) ══════
+   "in all pages the kpis design should be like the students page kpi design"
+   — "copy only the design of the kpis, not the svgs and content, only the
+   square like edges". Each page keeps its own card content, icons and hues;
+   only the corner changes, to the Students card's var(--radius) (8px). Here,
+   in the sheet that loads last, because each page sheet sets its own radius
+   and one rule after all of them is the one that wins. */
+.lk-kpi, .lk-stat, .exp-stat, .rms-stat, .rpt-stat,
+.dash-kpi-grid .dsh-card {
+    border-radius: var(--radius);
+}

@@ -192,6 +192,8 @@ test('payment: partial + overpayment persist correctly; receipt has no PKR-PKR',
      register was copying the word PREVIEW. Opening it twice must not spend a
      second number. */
   const nums = await win.evaluate((pid) => {
+    // A named hostel, so opening the receipt does not stop to ask for the name.
+    DB.settings.hostelName = 'Test Hostel';
     printReceipt(pid);
     const first = (DB.payments.find(p => p.id === pid) || {}).receiptNo;
     const counterAfterFirst = DB.settings.receiptCounter;
@@ -453,6 +455,7 @@ test('payments: table pans by dragging, and CSV column order matches the table',
      been written — the part that can actually be wrong. */
   const book = await win.evaluate(async () => {
     let captured = null;
+    DB.settings.hostelName = 'Test Hostel';   // exports ask for a name while there is none
     const real = HXW.save;
     HXW.save = async (spec, name) => { captured = { spec, name }; return name; };
     try { await exportPaymentsCSV(); } finally { HXW.save = real; }

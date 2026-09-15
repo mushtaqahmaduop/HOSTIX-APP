@@ -105,7 +105,7 @@ test('the donut reports the month, and its slices are the real split', async () 
   /* FOUR ARCS FOR FIVE ROWS: the zero row draws no arc, because it has no
      value to draw. That is the whole reason a zero row is safe to show. */
   expect(d.segments).toBe(4);
-  expect(d.centre.replace(/\s/g, '')).toBe('Rs.100K');
+  expect(d.centre.replace(/\s/g, '')).toBe('Rs.100,000.00');
   expect(d.sub).toBe('Total Collected');
   expect(d.chip).toBe(thisMonthLabelIn(d.chip));    // whatever the picker says
 
@@ -118,10 +118,9 @@ test('the donut reports the month, and its slices are the real split', async () 
   /* §8 — the parts sum to the whole. A donut whose slices do not add up to its
      own centre figure is worse than no donut. */
   expect(d.rows.reduce((s, r) => s + r.pct, 0)).toBeCloseTo(100, 1);
-  /* The METHOD list stays compact — `exact .png` shows "Rs. 1.02M / Rs. 156K"
-     there while showing the pending rows in full, and the two are read
-     differently: this column is a proportion, that one is a debt. */
-  expect(d.rows.map(r => r.amt)).toEqual(['Rs. 40K', 'Rs. 30K', 'Rs. 20K', 'Rs. 10K', 'Rs. 0']);
+  /* The METHOD list was compact ("Rs. 156K") until the owner's one money rule of
+     2026-09-15: exact with two decimals below a million, "1.25M" above. */
+  expect(d.rows.map(r => r.amt)).toEqual(['Rs. 40,000.00', 'Rs. 30,000.00', 'Rs. 20,000.00', 'Rs. 10,000.00', 'Rs. 0.00']);
 
   await app.close();
 });
@@ -190,7 +189,8 @@ test('a pending row carries the three verbs, and never a stored month key', asyn
      settling `exact .png` against spec §14). A warden reconciles Rs. 10,000
      against a cash drawer; nobody reconciles Rs. 100,000,007,000, and that one
      compacts instead. */
-  expect(d.amts).toEqual(['Rs. 10,000', 'Rs. 10,000', 'Rs. 10,000']);
+  // Two decimals below a million (owner, 2026-09-15).
+  expect(d.amts).toEqual(['Rs. 10,000.00', 'Rs. 10,000.00', 'Rs. 10,000.00']);
   /* NEVER the raw key. 'Room 4 · September 2026', not 'Room 4 · 2026-09'. */
   d.rooms.forEach(r => {
     expect(r).not.toMatch(/\d{4}-\d{2}/);

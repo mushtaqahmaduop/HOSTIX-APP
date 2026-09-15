@@ -1498,7 +1498,7 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
   }
 
   const landscape = !!(opts && opts.landscape);
-  const pageSize  = (opts && opts.pageSize) || 'A4';
+  const pageSize  = ['Letter', 'A4', 'Legal'].indexOf(opts && opts.pageSize) !== -1 ? opts.pageSize : 'Letter';
   /* INCHES, not millimetres. printToPDF has taken inches since Electron 21,
      so the previous `{top:18,…}` asked for an eighteen-inch margin on a sheet
      eleven inches tall — the values here are the export specification's
@@ -1775,6 +1775,8 @@ ipcMain.handle('pdf-window:save', async (event, opts) => {
 
   const o = opts && typeof opts === 'object' ? opts : {};
   const landscape = o.landscape === true;
+  // The document's own paper (Settings → Paper size); Letter when it names none.
+  const pageSize = ['Letter', 'A4', 'Legal'].indexOf(o.pageSize) !== -1 ? o.pageSize : 'Letter';
   const title = (typeof o.title === 'string' ? o.title : 'Report').slice(0, 160);
   const footer = (typeof o.footer === 'string' ? o.footer : '').slice(0, 200);
   const suggested = (typeof o.file === 'string' && o.file.trim())
@@ -1799,7 +1801,7 @@ ipcMain.handle('pdf-window:save', async (event, opts) => {
 
   try {
     const pdf = await event.sender.printToPDF({
-      pageSize: 'A4',
+      pageSize,
       landscape,
       printBackground: true,
       displayHeaderFooter: true,

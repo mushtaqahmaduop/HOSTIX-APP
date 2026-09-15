@@ -190,10 +190,20 @@ function fmtNum(n) { return Number(n || 0).toLocaleString('en-PK'); } // number 
    THE EXACT FIGURE IS NEVER LOST. Every caller pairs this with a title
    attribute carrying the full number (moneyValue does it automatically), so
    the rounding is a display choice a hover undoes, not a discarded fact. */
+/* ── MONEY ON SCREEN, ONE RULE (owner, 2026-09-15) ──────────────────────────
+   "in expenses and some other places, the amount less than 1 million should be
+   like 14,000.00" — exact, thousands comma, two decimals, below a million; a
+   million and up is short: 1.25M. It replaces two older rules that disagreed —
+   fmtCompact was exact without decimals up to ten million, fmtCompactK shortened
+   from a thousand ("14K") — so both names now return the same string. Every
+   caller still carries the exact figure in its title. */
+function _fmtMoney2(v) {
+  return Number(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtCompact(n) {
   const v = Number(n || 0);
   const abs = Math.abs(v);
-  if (abs < 1e7) return fmtNum(v);                 // exact while it still fits
+  if (abs < 1e6) return _fmtMoney2(v);             // exact below a million
   const sign = v < 0 ? '-' : '';
   /* Divisor and suffix as separate values rather than a [suffix, divisor]
      tuple: a mixed array types as (string|number)[], so the division fails
@@ -221,18 +231,8 @@ function fmtCompact(n) {
    One decimal, trimmed: "PKR 10K" not "PKR 10.0K", "PKR 476.5K" kept. Below a
    thousand there is nothing to compact and the exact figure is shorter anyway. */
 function fmtCompactK(n) {
-  const v = Number(n || 0);
-  const abs = Math.abs(v);
-  if (abs < 1000) return fmtNum(v);
-  const sign = v < 0 ? '-' : '';
-  const div = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : abs >= 1e6 ? 1e6 : 1e3;
-  const suffix = abs >= 1e12 ? 'T' : abs >= 1e9 ? 'B' : abs >= 1e6 ? 'M' : 'K';
-  /* ONE DECIMAL AT THOUSANDS, TWO ABOVE. 476.5K needs one to stay useful;
-     1.24M needs two, because 1.2M and 1.29M are ninety thousand rupees apart
-     and the spec's own example (§6) is "PKR 1.24M". Trailing zeros go either
-     way: "10K", not "10.0K". */
-  const num = (abs / div).toFixed(div === 1e3 ? 1 : 2).replace(/\.?0+$/, '');
-  return sign + num + suffix;
+  /* No "K" any more (owner, 2026-09-15) — see the one rule above fmtCompact(). */
+  return fmtCompact(n);
 }
 /** The same, with the currency word — the lower widgets print it everywhere. */
 function fmtPKRk(n) { return 'Rs. ' + fmtCompactK(n); }

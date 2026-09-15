@@ -136,15 +136,15 @@ test('by days: days × rate is the charge, and the record, ledger, receipt and E
 
     // ── Edit Payment: the note, then a changed charge ends it ─────────────
     await win.evaluate(id => { navigate('payments'); showEditPaymentModal(id); }, saved.id);
-    await win.waitForSelector('#f-pamt', { state: 'visible', timeout: 15000 });
+    await win.waitForSelector('#f-pcombo', { state: 'visible', timeout: 15000 });
     const edit = await win.evaluate(() => ({
-      rent: document.getElementById('f-pamt').value,
-      note: document.getElementById('f-pamt').closest('.field').textContent,
+      rent: document.getElementById('f-pcombo').value,
+      note: document.getElementById('f-pcombo').closest('.field').textContent,
     }));
     expect(edit.rent).toBe('11200');
     expect(edit.note).toContain('Prorated: 16 days @ 700/day');
 
-    await win.fill('#f-pamt', '12000');
+    await win.fill('#f-pcombo', '12000');
     await win.fill('#f-pedit-reason', 'Stayed the whole month after all');
     await win.evaluate(id => submitEditPayment(id), saved.id);
     await win.waitForFunction(() => DB.payments[0].monthlyRent === 12000, null, { timeout: 15000 });

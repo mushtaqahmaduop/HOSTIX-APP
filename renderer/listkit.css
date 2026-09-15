@@ -360,7 +360,14 @@ body.light-theme .lk-sin:focus {
 .lk-kebab {
     display: inline-flex; align-items: center; justify-content: center; gap: 5px;
     width: 28px; height: 28px; padding: 0; border-radius: 8px; cursor: pointer;
-    background: var(--card); border: 1px solid var(--border); color: var(--text3);
+    /* HIGHER CONTRAST (owner, 2026-09-15: "increase the contrast of 3dot action
+       button in payments and students in both light/dark mode"). Full text ink
+       on a sunk ground inside the stronger border — theme tokens, so both modes
+       get it. It was --text3 on --card inside the faint --border. */
+    /* The border is mixed from the text ink, so it flips with the theme: the
+       --border2 token measured rgb(53,50,45) on a rgb(37,35,32) ground in dark
+       mode — a border you could not see (2026-09-15). */
+    background: var(--bg3); border: 1px solid color-mix(in srgb, var(--text) 38%, transparent); color: var(--text);
     font-family: inherit; font-size: 12px; font-weight: 600;
     transition: var(--transition);
 }
@@ -437,4 +444,62 @@ body.light-theme .lk-sin:focus {
     display:inline-block; margin-top:4px; padding:2px 8px; border-radius:999px;
     font-size:9.5px; font-weight:800; letter-spacing:.3px; text-transform:uppercase;
     background:var(--dh-bg); color:var(--dh); white-space:nowrap;
+}
+
+
+/* ══ THE KPI CARD, SHARED (owner references: pay page.png, cancellations2.png — 2026-09-15) ══
+   Drawn first for Payments and moved here the same day, when Cancellations took the same card.
+   One card, one definition. */
+/* ── KPI cards ── */
+.lk-kpis { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:12px; }
+@media (max-width:1100px) { .lk-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+.lk-kpi {
+    position:relative; min-width:0; display:flex; align-items:flex-start; gap:12px;
+    padding:14px 16px; background:var(--card); border:1px solid var(--border); border-radius:14px;
+}
+.lk-kpi--click { cursor:pointer; transition:border-color .15s ease; }
+.lk-kpi--click:hover, .lk-kpi--click.is-on { border-color:var(--dh); }
+.lk-kpi__ico {
+    width:34px; height:34px; border-radius:10px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--dh-bg); color:var(--dh);
+}
+.lk-kpi__body { flex:1 1 auto; min-width:0; }
+.lk-kpi__l { font-size:13px; font-weight:600; color:var(--text2); line-height:1.3; }
+.lk-kpi__v {
+    margin-top:4px; font-size:24px; font-weight:800; line-height:1.1; color:var(--text);
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lk-kpi__v small { font-size:.75em; font-weight:700; color:var(--text2); }
+.lk-kpi__s {
+    margin-top:5px; display:flex; align-items:center; gap:10px; min-width:0;
+    font-size:12px; color:var(--text3); white-space:nowrap;
+}
+.lk-kpi__s > span:first-child { display:inline-flex; align-items:center; gap:4px; }
+.lk-kpi__delta { display:inline-flex; align-items:center; gap:2px; font-weight:700; }
+.lk-kpi__delta.is-up   { color:var(--ant-success-fg); }
+.lk-kpi__delta.is-down { color:var(--ant-danger-fg); }
+.lk-kpi__track {
+    flex:1 1 auto; min-width:40px; height:6px; border-radius:999px; overflow:hidden;
+    background:var(--dash-track, var(--bg3));
+}
+.lk-kpi__track > i { display:block; height:100%; border-radius:999px; background:var(--dh); transition:width .5s ease; }
+@media (prefers-reduced-motion: reduce) { .lk-kpi__track > i { transition:none; } }
+.lk-kpi__bars { flex-shrink:0; align-self:flex-end; color:var(--dh); }
+.lk-kpi__bars rect { fill:currentColor; opacity:.5; }
+.lk-kpi__bars rect.is-now { opacity:1; }
+/* The bars are the first thing to give way when four cards get narrow. */
+@media (max-width:1320px) { .lk-kpi__bars { display:none; } }
+.lk-kpi__go {
+    align-self:center; flex-shrink:0; width:34px; height:34px; border-radius:10px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--card); border:1px solid var(--border2); color:var(--text2); transition:var(--transition);
+}
+.lk-kpi__go:hover { background:var(--dash-sunk); color:var(--text); }
+.lk-kpi__go.is-on { background:var(--dh-bg); border-color:var(--dh); color:var(--dh); }
+.lk-kpi__go:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (max-width:1440px) {
+    .lk-kpi__bars { display:none; }
+    .lk-kpi__v { font-size:22px; }
 }

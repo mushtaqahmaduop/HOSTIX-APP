@@ -43,17 +43,27 @@ function _pdfInject(html, opts) {
   // This avoids the native OS Save dialog that blocks the Electron renderer.
   opts = opts || {};
   var isLandscape = !!(opts && opts.landscape);
+  /* THE PAPER IS THE HOSTEL'S (owner, 2026-09-15): Settings → Paper size,
+     Letter unless another is picked. It used to be A4 here, which Chromium
+     shrank onto the Letter paper in the tray. */
+  var paper = (opts && typeof opts.pageSize === 'string' && opts.pageSize)
+           || (typeof paperSize === 'function' ? paperSize() : 'Letter');
   /* §6 — the export specification's margins: 10–12mm portrait, 8–10mm
-     landscape. The old 18mm portrait threw away a fifth of the printable
-     width, which is exactly the pressure that makes a register's columns look
-     like they need shrinking. A document built by the export engine declares
-     its own @page and its own margins, so it is left alone. */
+     landscape. A document built by the export engine declares its own @page,
+     its own margins and its own print setup, so it is left alone. */
   var ownsPage = html.indexOf('name="hx-export"') !== -1;
   var pageCSS = ownsPage ? ''
-    : isLandscape ? '@page { size: A4 landscape; margin: 9mm; }'
-                  : '@page { size: A4; margin: 12mm; }';
+    : '@page { size: ' + paper + (isLandscape ? ' landscape; margin: 9mm; }' : ' portrait; margin: 12mm; }');
+  /* A document that brings no print setup gets one, so the window's Save as PDF
+     prints it on the same paper and the same way round as its preview — every
+     document outside the engine used to save as portrait A4 ("all the pdfs
+     opens upright"). pdf-window-preload.js reads this. */
+  var setupMeta = ownsPage ? '' : '<meta name="hx-export" content="' + escHtml(JSON.stringify({
+    landscape: isLandscape, pageSize: paper,
+    footer: String((opts && opts.footer) || ''), file: String((opts && opts.file) || ''),
+  })) + '">';
   // Inject print CSS + a visible Print/Save button into the HTML
-  var injected = html.replace('</head>',
+  var injected = html.replace('</head>', setupMeta +
     '<style>' + pageCSS +
     '@media print { .no-print { display:none!important; } body { background:#fff!important; } }' +
     /* THE CENTRE OF THE FILE HEADER (owner, 2026-09-09, third pass). Three
@@ -146,6 +156,10 @@ function _pdfInject(html, opts) {
 
 function _electronPDF(html, suggestedName, opts) {
   opts = opts || {};
+  // The suggested name travels with the print setup, for the window's Save as PDF.
+  if (!opts.file && /\.pdf$/i.test(String(suggestedName || ''))) {
+    opts = Object.assign({}, opts, { file: String(suggestedName).slice(0, 160) });
+  }
   var injected = _pdfInject(html, opts);
 
   /* ── THE WINDOW IS OPENED BY THE MAIN PROCESS, NOT BY THIS ONE ────────────

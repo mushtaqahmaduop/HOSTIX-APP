@@ -245,6 +245,7 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   const visit = await win.evaluate(async () => {
     const real = window._electronPDF;
     let captured = '';
+    DB.settings.hostelName = 'Test Hostel';   // prints ask for a name while there is none
     window._electronPDF = (html) => { captured = html; };
     try { printSeatAvailability(); } finally { window._electronPDF = real; }
 
@@ -408,12 +409,14 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   // 'flex'. An unstyled <span> in that same row would blockify to 'block', so
   // this still tells the two apart.
   expect(visit.fstatDisplay, 'floor stat pill is unstyled').toBe('flex');
-  expect(visit.fbadgeW, 'floor badge is unstyled').toBe(22);
+  // 26, up from 22: the sheet's type went up by a quarter to fill a landscape page (owner, 2026-09-15).
+  expect(visit.fbadgeW, 'floor badge is unstyled').toBe(26);
   expect(visit.iconW, 'print-doc icon is unsized (300px fallback)').toBeLessThan(20);
   expect(fee.tiles, 'fee report summary tiles').toBe(8);
   expect(fee.iconW, 'fee report icon is unsized (300px fallback)').toBeLessThan(20);
   expect(fee.blankIcons, 'empty tile icon chips (bad icon name)').toBe(0);
-  expect(fee.labelH, 'tile label wrapped onto a second line').toBeLessThan(14);
+  // One line of the 10px label is 14px since the type went up (owner, 2026-09-15); two would be ~28.
+  expect(fee.labelH, 'tile label wrapped onto a second line').toBeLessThan(20);
   expect(fee.inlineCells, 'roster cells drifted back to inline styles').toBeLessThan(8);
   expect(fee.paleHeaders, 'column header too pale to read on the light strip').toBe(0);
   expect(fee.totalsRow, 'fee report totals band').toBe(1);

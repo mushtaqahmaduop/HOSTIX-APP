@@ -69,20 +69,25 @@
    window with no stylesheet and must not follow the app's dark theme onto a
    sheet of white paper. These are the specification's values, and the same
    ones xlsx-writer.js paints the workbook with — one palette, two renderers. */
+/* BUILT FOR THE PHOTOCOPIER (owner, 2026-09-15: "the contrast of colour and
+   grid lines and cards border are barely visible in black and white
+   photostate"). The old border #D9E2F2, labels #94A3B8 and fills #EEF4FF all
+   copied as white. Lines and card borders are medium grey #888 (owner's pick),
+   labels dark grey, and colour stays but darkened so it copies as dark grey. */
 const EX_COLOR = {
-  blue:     '#155EEF',
-  blueDark: '#123B8F',
-  blueSoft: '#EEF4FF',
-  ink:      '#172B4D',
-  muted:    '#64748B',
-  faint:    '#94A3B8',
-  border:   '#D9E2F2',
+  blue:     '#1D4ED8',
+  blueDark: '#1E3A8A',
+  blueSoft: '#DCE3EE',
+  ink:      '#111827',
+  muted:    '#374151',
+  faint:    '#4B5563',
+  border:   '#888888',
   surface:  '#FFFFFF',
-  soft:     '#F8FAFD',
-  positive: '#087443', positiveSoft: '#EAF8F0',
-  warning:  '#A15C00', warningSoft:  '#FFF6E5',
-  danger:   '#B42318', dangerSoft:   '#FDECEC',
-  neutral:  '#475569', neutralSoft:  '#F1F5F9',
+  soft:     '#EEF0F3',
+  positive: '#05603A', positiveSoft: '#DCF3E6',
+  warning:  '#8A4B00', warningSoft:  '#FCEBCB',
+  danger:   '#9F1C12', dangerSoft:   '#F9DADA',
+  neutral:  '#374151', neutralSoft:  '#E5E7EB',
 };
 
 /* §48 — one representation for a missing value, everywhere. */
@@ -196,21 +201,20 @@ const EX_TYPE = {
 function exType(c) { return EX_TYPE[c && c.type] || EX_TYPE.text; }
 function exAlign(c) { return c.align || exType(c).align; }
 
-/* ── §5 + §13 ORIENTATION ────────────────────────────────────────────────────
-   Portrait is the default, and the wrong answer for most registers. The
-   decision is made from what the columns actually hold, not from a habit: sum
-   the type weights, and if the table is wider than a portrait page can carry
-   at a readable size, turn the paper rather than shrink the type (§14).
+/* ── THE PAPER (owner, 2026-09-15) ───────────────────────────────────────────
+   Settings → Paper size (paper.js), Letter until a hostel picks another. The
+   fallbacks are for tests/export-engine.test.js, which runs this file alone. */
+function exPaper() { return typeof paperSize === 'function' ? paperSize() : 'Letter'; }
+function exPaperXlsx() { return typeof paperXlsxCode === 'function' ? paperXlsxCode() : 1; }
 
-   A4 portrait holds roughly 186mm of printable width and landscape 293mm; the
-   threshold below is those, expressed in the same weight units the column
-   types are scored in. */
-function exOrientation(def, columns) {
-  if (def.orientation === 'portrait' || def.orientation === 'landscape') {
-    return def.orientation === 'landscape';
-  }
-  const weight = columns.reduce(function (n, c) { return n + (c.pdfWeight || exType(c).pdfWeight); }, 0);
-  return weight > 7.2;
+/* ── §5 + §13 ORIENTATION (owner, 2026-09-15) ────────────────────────────────
+   Registers and reports print LANDSCAPE: "all the pdfs opens upright" was the
+   complaint, on paper that sits landscape in the tray. A record about one
+   person says so with `orientation: 'portrait'` (the archive's Student
+   Record). The old rule weighed the columns and left a narrow register
+   upright, which is exactly what the owner did not want. */
+function exOrientation(def) {
+  return !(def && def.orientation === 'portrait');
 }
 
 /* ── §32 FILE NAMES ──────────────────────────────────────────────────────────
@@ -443,7 +447,11 @@ function exTable(columns, group) {
   const body = (group.rows || []).map(function (r, i) {
     return '<tr>' + columns.map(function (c) {
       return '<td class="a-' + exAlign(c) + (c.type === 'wrap' ? ' c-wrap' : '') +
-             (c.type === 'money' || c.type === 'number' ? ' c-num' : '') + '">' +
+             (c.type === 'money' || c.type === 'number' ? ' c-num' : '') +
+             /* `emphasis` (opt-in, owner 2026-09-15: "a bold and little high
+                contrast colour for charges in payments pdf") — the figure the
+                reader looks for first, set apart from the columns around it. */
+             (c.emphasis ? ' c-em' : '') + '">' +
              exCellHtml(c, r, _base + i) + '</td>';
     }).join('') + '</tr>';
   }).join('');
@@ -509,20 +517,35 @@ function exSignatures(list) {
    · thead {display:table-header-group} is what repeats a column heading on
      every page. It is §9, and it is non-negotiable.
    · tr {break-inside:avoid} keeps a record whole across a page break (§10).
-   · body type is 9pt, headings 8pt: the floor the spec sets, not smaller (§14).
+   · body type is 10.5pt, cells 10pt, headings 12pt+, nothing below 8pt
+     (owner, 2026-09-15: "fill the page").
    · fills are pale and borders are hairlines, because this is going through a
      hostel's inkjet onto ordinary paper (§53).                              */
-/* `dense` (opt-in per definition, 2026-09-14): 4px of side padding in every
-   cell instead of 7px, for a register with more columns than a landscape page
-   holds at the default. Type sizes are untouched — §14's floor still stands. */
-function exStyles(landscape, dense) {
+/* `dense` (opt-in per definition, 2026-09-14): 3px of side padding in every
+   cell instead of 8px, headings at the 8pt floor and a slimmer status pill,
+   for a register with more columns than a landscape page holds at the
+   default. The Payment Register's sixteen columns were ~45px wider than a
+   Letter landscape page at 4px (2026-09-15). Cells keep their 10pt.
+
+   `wide` (automatic, 14 columns or more — owner, 2026-09-15): the Student
+   Roster's eighteen columns came out 118px wider than a Letter landscape page
+   at the larger type, and Chromium CLIPS what does not fit. Single-word
+   headings (EMERGENCY, NATIONALITY) cannot wrap, so a wide register takes 5px
+   side padding and 8.5pt headings with no letter-spacing — still above the 8pt
+   floor, and the cells keep their 10pt. */
+function exStyles(landscape, dense, colCount) {
+  const wide = (colCount || 0) >= 14;
   const c = EX_COLOR;
   const margin = landscape ? '9mm 9mm 14mm' : '12mm 12mm 16mm';
   return '<style>' +
-  '@page{size:A4 ' + (landscape ? 'landscape' : 'portrait') + ';margin:' + margin + '}' +
+  '@page{size:' + exPaper() + ' ' + (landscape ? 'landscape' : 'portrait') + ';margin:' + margin + '}' +
   '*{box-sizing:border-box;margin:0;padding:0}' +
+  /* FILL THE PAGE (owner, 2026-09-15: "the current pdfs prints size is very
+     small"). Body 10.5pt, table cells 10pt, headings 12pt and up, and nothing
+     below 8pt. A register wider than the page wraps its cells or runs onto the
+     next page — it is never shrunk to fit. */
   'body{font-family:"Segoe UI",Inter,Arial,sans-serif;color:' + c.ink + ';background:#fff;' +
-       'font-size:9pt;line-height:1.35;padding:0}' +
+       'font-size:10.5pt;line-height:1.4;padding:0}' +
   '.ex-page{padding:0}' +
   /* header */
   '.ex-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;' +
@@ -530,20 +553,20 @@ function exStyles(landscape, dense) {
   '.ex-brand{display:flex;align-items:center;gap:9px}' +
   '.ex-mark{width:26px;height:26px;border-radius:7px;background:' + c.blue + ';color:#fff;' +
           'font-weight:800;font-size:14pt;line-height:26px;text-align:center;letter-spacing:0}' +
-  '.ex-word{font-size:12pt;font-weight:800;letter-spacing:1.4px;color:' + c.blueDark + '}' +
-  '.ex-tag{font-size:7pt;color:' + c.muted + ';letter-spacing:.4px}' +
+  '.ex-word{font-size:13pt;font-weight:800;letter-spacing:1.4px;color:' + c.blueDark + '}' +
+  '.ex-tag{font-size:8.5pt;color:' + c.muted + ';letter-spacing:.4px}' +
   '.ex-doc{text-align:right}' +
   /* Capped both ways: the upload is downscaled to 256px on the way in, and a
      wide wordmark must not push the document title off its own line. */
   '.ex-hlogo{flex:0 0 auto;display:flex;align-items:center;padding-left:12px;' +
            'border-left:1px solid ' + c.border + '}' +
-  '.ex-logo{max-height:34px;max-width:110px;object-fit:contain;display:block}' +
-  '.ex-doc .title{font-size:15pt;font-weight:800;color:' + c.ink + ';line-height:1.15}' +
-  '.ex-doc .subtitle{font-size:8.5pt;color:' + c.muted + ';margin-top:2px}' +
+  '.ex-logo{max-height:40px;max-width:130px;object-fit:contain;display:block}' +
+  '.ex-doc .title{font-size:18pt;font-weight:800;color:' + c.ink + ';line-height:1.15}' +
+  '.ex-doc .subtitle{font-size:10pt;color:' + c.muted + ';margin-top:2px}' +
   /* metadata strip */
   '.ex-meta{display:flex;flex-wrap:wrap;gap:4px 22px;padding:7px 10px;margin-top:8px;' +
           'background:' + c.soft + ';border:1px solid ' + c.border + ';border-radius:6px}' +
-  '.ex-meta__i{display:flex;gap:6px;align-items:baseline;font-size:7.5pt}' +
+  '.ex-meta__i{display:flex;gap:6px;align-items:baseline;font-size:9pt}' +
   '.ex-meta__l{color:' + c.faint + ';text-transform:uppercase;letter-spacing:.6px;font-weight:700}' +
   '.ex-meta__v{color:' + c.ink + ';font-weight:600}' +
   /* KPIs — SMALLER (owner, 2026-09-10: "the kpis should have be removed or
@@ -554,34 +577,34 @@ function exStyles(landscape, dense) {
      somebody has to add up — at two thirds the size: 8.5pt figures in a 5pt
      box, one line each. Nothing is dropped, and the table starts higher up. */
   '.ex-kpis{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}' +
-  '.ex-kpi{flex:1 1 0;min-width:78px;border:1px solid ' + c.border + ';border-radius:5px;' +
-         'padding:4px 7px;background:#fff}' +
-  '.ex-kpi__l{display:block;font-size:5.8pt;text-transform:uppercase;letter-spacing:.5px;' +
+  '.ex-kpi{flex:1 1 0;min-width:96px;border:1px solid ' + c.border + ';border-radius:5px;' +
+         'padding:6px 9px;background:#fff}' +
+  '.ex-kpi__l{display:block;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;' +
              'color:' + c.faint + ';font-weight:700}' +
-  '.ex-kpi__v{display:block;font-size:8.5pt;font-weight:800;margin-top:1px;' +
+  '.ex-kpi__v{display:block;font-size:11.5pt;font-weight:800;margin-top:1px;' +
              'font-variant-numeric:tabular-nums}' +
-  '.ex-kpi__s{display:block;font-size:5.8pt;color:' + c.muted + ';margin-top:0}' +
+  '.ex-kpi__s{display:block;font-size:8pt;color:' + c.muted + ';margin-top:0}' +
   /* record facts */
   '.ex-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:10px;' +
            'border:1px solid ' + c.border + ';border-radius:7px;overflow:hidden}' +
   '.ex-fact{padding:6px 10px;border-right:1px solid ' + c.border + ';' +
           'border-bottom:1px solid ' + c.border + '}' +
-  '.ex-fact__l{display:block;font-size:6.8pt;text-transform:uppercase;letter-spacing:.7px;' +
+  '.ex-fact__l{display:block;font-size:8pt;text-transform:uppercase;letter-spacing:.7px;' +
               'color:' + c.faint + ';font-weight:700}' +
-  '.ex-fact__v{display:block;font-size:9pt;font-weight:700;margin-top:1px}' +
-  '.ex-note{margin-top:10px;font-size:8pt;color:' + c.muted + '}' +
+  '.ex-fact__v{display:block;font-size:10.5pt;font-weight:700;margin-top:1px}' +
+  '.ex-note{margin-top:10px;font-size:9pt;color:' + c.muted + '}' +
   /* sections */
   '.ex-sec{margin-top:14px}' +
   '.ex-sec__h{display:flex;align-items:baseline;justify-content:space-between;' +
              'border-bottom:1px solid ' + c.border + ';padding-bottom:4px;margin-bottom:7px}' +
-  '.ex-sec__h h2{font-size:9.5pt;font-weight:800;text-transform:uppercase;letter-spacing:1px;' +
+  '.ex-sec__h h2{font-size:12pt;font-weight:800;text-transform:uppercase;letter-spacing:1px;' +
                 'color:' + c.blueDark + '}' +
-  '.ex-sec__m{font-size:7.5pt;color:' + c.muted + '}' +
+  '.ex-sec__m{font-size:9pt;color:' + c.muted + '}' +
   '.ex-grp{margin-bottom:11px;break-inside:auto}' +
   '.ex-grp__h{display:flex;align-items:baseline;justify-content:space-between;' +
              'padding-bottom:3px;margin-bottom:4px;border-bottom:1px solid ' + c.border + '}' +
-  '.group__t{font-size:9pt;font-weight:800}' +
-  '.group__m{font-size:7.5pt;color:' + c.muted + '}' +
+  '.group__t{font-size:11pt;font-weight:800}' +
+  '.group__m{font-size:9pt;color:' + c.muted + '}' +
   /* tables */
   'table{width:100%;border-collapse:collapse;table-layout:auto}' +
   'thead{display:table-header-group}' +          /* §9 — headings on every page */
@@ -600,36 +623,51 @@ function exStyles(landscape, dense) {
      heavy black borders" — so the verticals are the palette's own faint border
      at hairline weight, and the outer frame and the header's underline stay
      the only strong lines on the page. Printed at A4 landscape that is still
-     visible on a laser printer, which is the other half of the brief. */
+     visible on a laser printer, which is the other half of the brief.
+
+     …BUT NOT ON A PHOTOCOPY (owner, 2026-09-15). The faint border vanished in
+     black and white, so every rule is medium grey #888 at 1px now — the
+     owner's choice over dark grey and black, still not a heavy black grid. */
   'table{border:1px solid ' + c.border + '}' +
-  'th{background:' + c.blueSoft + ';color:' + c.blueDark + ';font-size:7.5pt;font-weight:800;' +
-     'text-transform:uppercase;letter-spacing:.5px;padding:5px 7px;' +
+  'th{background:' + c.blueSoft + ';color:' + c.blueDark + ';font-size:9pt;font-weight:800;' +
+     'text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;' +
      'border-bottom:1.4px solid ' + c.blue + ';border-right:1px solid ' + c.blue + ';' +
-     'white-space:nowrap}' +
+     /* Headings WRAP (owner, 2026-09-15: "fill the page" — wide tables wrap,
+        never shrink). At 9pt a one-line "STUDENT NAME" across eighteen columns
+        is wider than a Letter landscape page, and Chromium clips what does not
+        fit rather than scaling it. */
+     'white-space:normal;overflow-wrap:break-word;vertical-align:bottom}' +
   'th:last-child{border-right:none}' +
-  'td{padding:4.5px 7px;border-bottom:1px solid ' + c.border + ';' +
-     'border-right:1px solid ' + c.border + ';vertical-align:top;font-size:8.5pt}' +
+  'td{padding:6px 8px;border-bottom:1px solid ' + c.border + ';' +
+     'border-right:1px solid ' + c.border + ';vertical-align:top;font-size:10pt}' +
   'td:last-child{border-right:none}' +
-  (dense ? 'th{padding-left:4px;padding-right:4px}td{padding-left:4px;padding-right:4px}' : '') +
-  'tbody tr:nth-child(even) td{background:#FBFCFE}' +
+  (wide ? 'th{font-size:8.5pt;letter-spacing:0;padding-left:5px;padding-right:5px}' +
+          'td{padding-left:5px;padding-right:5px}' : '') +
+  (dense ? 'th{font-size:8pt;padding-left:3px;padding-right:3px}td{padding-left:3px;padding-right:3px}' +
+           '.ex-st{padding:1px 5px}.ex-st__d{margin-right:3px}' : '') +
+  /* No zebra stripes (owner, 2026-09-15): too pale to survive a photocopy and
+     too dark to leave out of a colour print — the #888 grid separates the rows. */
   '.a-left{text-align:left}.a-right{text-align:right}.a-center{text-align:center}' +
   /* A CENTRED, LARGER DASH FOR A MISSING WORD (owner, 2026-09-10). At body size
      an em dash sitting hard left in a cell reads as a hyphen somebody typed;
      centred and a size up it reads as "nothing here", which is what it is. */
-  '.ex-none{display:block;text-align:center;font-size:11pt;line-height:1;color:#94A3B8}' +
+  '.ex-none{display:block;text-align:center;font-size:12pt;line-height:1;color:#4B5563}' +
   /* An address of one word wrapped mid-word because the column was told to
      break anywhere. It wraps between words now, and only breaks a word that
      genuinely cannot fit. §13's rule — wrap, never clip — is unchanged. */
   '.c-wrap{overflow-wrap:break-word;word-break:normal;hyphens:auto}' +
   '.c-num{font-variant-numeric:tabular-nums;white-space:nowrap}' +
+  /* An emphasised column: extra bold in dark blue — high contrast in colour,
+     and still near-black on a black-and-white photocopy. */
+  '.c-em{font-weight:800;color:' + c.blueDark + '}' +
   '.c-wrap{white-space:normal}' +   /* §13 — wrap, never clip; see .c-wrap above */
-  '.sub{display:block;font-size:7pt;color:' + c.muted + ';font-weight:600;margin-top:1px}' +
+  '.sub{display:block;font-size:8.5pt;color:' + c.muted + ';font-weight:600;margin-top:1px}' +
   '.neg{color:' + c.danger + ';font-weight:700}' +
   '.pos{color:' + c.positive + ';font-weight:700}' +
   'tr.subtotal td{border-top:1px solid ' + c.border + ';border-bottom:none;font-weight:800;' +
                  'background:' + c.soft + '}' +
   /* status pills — colour plus the word, never colour alone (§47) */
-  '.ex-st{display:inline-block;padding:1px 7px;border-radius:9px;font-size:7.5pt;font-weight:700;' +
+  '.ex-st{display:inline-block;padding:1px 7px;border-radius:9px;font-size:8.5pt;font-weight:700;' +
          'white-space:nowrap}' +
   '.ex-st__d{display:inline-block;width:4px;height:4px;border-radius:50%;margin-right:4px;' +
             'vertical-align:middle}' +
@@ -637,21 +675,21 @@ function exStyles(landscape, dense) {
   '.grand{display:flex;align-items:center;justify-content:space-between;margin-top:6px;' +
          'padding:8px 12px;border-radius:7px;background:' + c.blueSoft + ';' +
          'border:1px solid ' + c.border + ';break-inside:avoid}' +
-  '.grand__l{font-size:8pt;text-transform:uppercase;letter-spacing:.9px;color:' + c.blueDark + ';' +
+  '.grand__l{font-size:9.5pt;text-transform:uppercase;letter-spacing:.9px;color:' + c.blueDark + ';' +
             'font-weight:800}' +
-  '.grand__v{font-size:13pt;font-weight:800;font-variant-numeric:tabular-nums}' +
-  '.ex-empty{padding:26px;text-align:center;color:' + c.muted + ';font-size:9pt;' +
+  '.grand__v{font-size:15pt;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.ex-empty{padding:26px;text-align:center;color:' + c.muted + ';font-size:10.5pt;' +
             'border:1px dashed ' + c.border + ';border-radius:7px;background:' + c.soft + '}' +
   /* signatures (§57) */
   '.ex-sign{display:flex;gap:36px;margin-top:26px;break-inside:avoid}' +
   '.ex-sign__b{flex:1}' +
   '.ex-sign__r{border-bottom:1px solid ' + c.ink + ';height:26px}' +
-  '.ex-sign__l{font-size:7.5pt;color:' + c.muted + ';margin-top:3px;text-transform:uppercase;' +
+  '.ex-sign__l{font-size:8.5pt;color:' + c.muted + ';margin-top:3px;text-transform:uppercase;' +
               'letter-spacing:.6px}' +
   /* the closing line, once, at the end of the document — the per-page footer
      is drawn by the PDF writer so that it can carry a real page number */
   '.ex-foot{margin-top:16px;padding-top:7px;border-top:1px solid ' + c.border + ';' +
-           'display:flex;justify-content:space-between;gap:14px;font-size:7.5pt;color:' + c.faint + '}' +
+           'display:flex;justify-content:space-between;gap:14px;font-size:8.5pt;color:' + c.faint + '}' +
   '@media print{.no-print{display:none!important}body{background:#fff!important}}' +
   '</style>';
 }
@@ -662,7 +700,7 @@ function exDocument(def) {
   const sections = exSections(def);
   const rows     = exRowCount(sections);
   const cols     = exPdfColumns(sections[0].columns || []);
-  const landscape = exOrientation(def, cols);
+  const landscape = exOrientation(def);
 
   const body =
     exHeaderBand(def, hostel) +
@@ -683,10 +721,11 @@ function exDocument(def) {
     '<title>' + _exEsc(def.title || 'Report') + ' — ' + _exEsc(hostel) + '</title>' +
     '<meta name="hx-export" content="' + _exEsc(JSON.stringify({
       landscape: landscape,
+      pageSize: exPaper(),
       footer: 'Hostyllo · ' + hostel + ' · ' + (def.title || 'Report'),
       file: exFileName(def, 'pdf'),
     })) + '">' +
-    exStyles(landscape, !!def.dense) + '</head><body><div class="ex-page">' + body + '</div></body></html>';
+    exStyles(landscape, !!def.dense, cols.length) + '</head><body><div class="ex-page">' + body + '</div></body></html>';
 
   return { html: html, landscape: landscape, filename: exFileName(def, 'pdf'), rows: rows };
 }
@@ -888,7 +927,8 @@ function exSheet(def, sec, hostel, name) {
     freeze: { row: HEADER_ROW },                                   // §24
     autofilter: allRows.length                                     // §25
       ? { r1: HEADER_ROW, c1: 1, r2: DATA_END, c2: headCols.length } : null,
-    landscape: exOrientation(def, headCols),                       // §27
+    landscape: exOrientation(def),                                  // §27
+    paperSize: exPaperXlsx(),                                       // Settings → Paper size
     printTitleRow: HEADER_ROW,                                     // §28
     printArea: { r1: 1, c1: 1, r2: END, c2: headCols.length },     // §30
     header: { left: 'HOSTYLLO — ' + (def.title || 'Report'), right: hostel },
@@ -937,10 +977,13 @@ const EXPORT = {
      transport that does not hang the renderer on Windows — the main process
      owns the window, this one never blocks. */
   pdf(def) {
+    /* No placeholder name on paper (hostel-name.js): every register export
+       comes through here, so one question covers all of them. */
+    if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.pdf(def))) return null;
     try {
       const doc = exDocument(def);
       _exBusy(def, doc.rows, 'PDF');
-      _electronPDF(doc.html, doc.filename, { pageSize: 'A4', landscape: doc.landscape });
+      _electronPDF(doc.html, doc.filename, { pageSize: exPaper(), landscape: doc.landscape });
       return doc;
     } catch (e) {
       console.error('[HOSTYLLO] PDF export failed:', e);
@@ -952,6 +995,7 @@ const EXPORT = {
   /* Export as a real .xlsx. Asynchronous because the workbook is deflated in
      the browser; the caller does not need to await it. */
   async excel(def) {
+    if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.excel(def))) return null;
     try {
       const spec = exWorkbook(def);
       const rows = exRowCount(exSections(def));

@@ -202,6 +202,15 @@
 /* The room label stays on one line — "#A 01" broke to "#A" over "01". */
 .iss-table .lk-room__n { white-space:nowrap; }
 
+/* RAISED BY ON ONE LEFT EDGE (owner, 2026-09-15: "aligned data in other pages
+   also if not aligned"). Measured: the avatar-and-name block was centred row by
+   row, so each avatar sat wherever its name's length left it (a 65px spread),
+   and a ticket with no reporter centred its dash. The cell now starts every
+   row — block or dash — at its left edge. (0,2,1) beats registers-center.css. */
+.lk-table.iss-table td.iss-c-by { text-align:left; }
+.lk-table.iss-table td.iss-c-by .lk-who { width:100%; justify-content:flex-start; }
+.lk-table.iss-table td.iss-c-by .lk-who > div:last-child { flex:1; min-width:0; text-align:left; }
+
 /* The Student / Staff switch on the maintenance form's "Raised by" — the form's
    kind switch at field size, sitting directly above the control it chooses. */
 .hf-switch--in { margin-bottom:6px; border-radius:9px; }

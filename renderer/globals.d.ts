@@ -186,6 +186,18 @@ declare function pinCheck(accountId: string, plain: string): Promise<boolean>;
 declare function pinSet(accountId: string, plain: string): Promise<{ ok: boolean; reason?: string }>;
 declare function pinClear(accountId: string): Promise<{ ok: boolean; reason?: string }>;
 declare function pinConfirm(opts?: { what?: string }): Promise<boolean>;
+// -- paper.js: the paper every printed page is laid out for (owner, 2026-09-15) --
+declare const PAPER_SIZES: { [k: string]: { label: string; detail: string; xlsx: number } };
+declare const PAPER_DEFAULT: string;
+declare function paperSize(): string;
+declare function paperXlsxCode(): number;
+declare function setPaperSize(v: string): Promise<{ ok: boolean; unchanged?: boolean; reason?: string }>;
+// -- hostel-name.js: no placeholder name on paper (owner, 2026-09-15) --------
+declare const HOSTEL_NAME_PLACEHOLDER: string;
+declare function hostelNameMissing(): boolean;
+declare function hostelNameGate(retry?: () => void): boolean;
+declare function hostelNameSave(name: string): Promise<{ ok: boolean; name?: string; reason?: string }>;
+declare function ensureHostelName(): Promise<boolean>;
 // -- undertaking.js: rules & undertaking (warden ledger spec §2.7, §3.8, step 11) --
 declare const UND_STARTER: { rules: string; declaration: string };
 declare function undVersions(): { v: number; rules: string; declaration: string; savedAt: string; savedByName: string }[];

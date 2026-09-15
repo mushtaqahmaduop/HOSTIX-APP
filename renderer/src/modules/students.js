@@ -485,10 +485,13 @@ function renderStudents() {
           <col style="width:15.3%">  <!-- student     -->
           <col style="width:9%">     <!-- room        -->
           <col style="width:11.5%">  <!-- contact     -->
-          <col style="width:11.4%">  <!-- CNIC        -->
-          <col style="width:7.6%">   <!-- course      -->
-          <col style="width:7.5%">   <!-- address     -->
-          <col style="width:7%">     <!-- nationality -->
+          ${''/* NATIONALITY IS GONE (owner, 2026-09-15: "remove nationality
+                 column from students page so that the CNIC, course and address
+                 should relax a little"). Its 7% went to them: CNIC +1, course +2,
+                 address +4. The field stays on the form, the profile and the PDF. */}
+          <col style="width:12.4%">  <!-- CNIC        -->
+          <col style="width:9.6%">   <!-- course      -->
+          <col style="width:11.5%">  <!-- address     -->
           <col style="width:10%">    <!-- charges     -->
           <col style="width:8.8%">   <!-- status      -->
           <col style="width:5.2%">   <!-- actions     -->
@@ -502,7 +505,6 @@ function renderStudents() {
           <th>CNIC</th>
           ${th('course','Course')}
           <th>Address</th>
-          <th>Nationality</th>
           ${''/* "Charges / month", not "Rent + Mess / mo". The old heading named
                 the two components; the cell under it now shows the total and a
                 badge saying which components are in it, so the heading naming
@@ -521,7 +523,7 @@ function renderStudents() {
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="12"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="stu-empty">No students match these filters.</div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -540,7 +542,12 @@ function renderStudents() {
                 ${studentAvatar(t, 32, stuAvatarHue(nm))}
                 <div style="min-width:0">
                   <div class="stu-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
-                  ${t.fatherName?`<div class="stu-who__sub">${escHtml(t.fatherName)}</div>`:''}
+                  ${''/* S/O or D/O BEFORE THE FATHER'S NAME (owner, 2026-09-15). From
+                         the record's gender, or the hostel's default when it has
+                         none; no prefix for "Other", rather than a wrong one. */}
+                  ${t.fatherName?(()=>{const _g=String(t.gender||_stuDefaultGender()||'').toLowerCase();
+                    const _rel=_g==='female'?'D/O':_g==='male'?'S/O':'';
+                    return `<div class="stu-who__sub" title="${escHtml((_rel?_rel+' ':'')+t.fatherName)}">${_rel?`<span class="stu-who__rel">${_rel}</span> `:''}${escHtml(t.fatherName)}</div>`;})():''}
                 </div>
               </div>
             </td>
@@ -552,6 +559,9 @@ function renderStudents() {
               <div class="stu-room">
                 <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
                 ${room&&room.floor?`<div class="stu-room__t">${escHtml(stuFloorShort(room.floor))}</div>`:''}
+                ${''/* The room type, inside the label under the floor (owner,
+                       2026-09-15) — moved here from under the Payments room box. */}
+                ${rtype&&rtype.name?`<div class="stu-room__t stu-room__type">${escHtml(rtype.name)}</div>`:''}
               </div>
             </td>
             ${''/* THE WHATSAPP MARK BELONGS TO THE STUDENT'S NUMBER, not the
@@ -578,21 +588,11 @@ function renderStudents() {
                    halves are nowrap. `.stu-cnic` still carries the type
                    styling; cnicHtml() carries the mask and the reveal. */}
             <td>${t.cnic?`<span class="stu-cnic">${cnicHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
-            <td>${t.occupation||t.course?escHtml(t.occupation||t.course):'<span class="stu-dash">—</span>'}</td>
-            <td>${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
-            ${''/* PAKISTANI UNLESS THE RECORD SAYS OTHERWISE (owner,
-                   2026-09-10). Every hostel this app ships to is in Pakistan
-                   and all but a handful of students are Pakistani; a column of
-                   dashes over a fact that is true 199 times in 200 is a column
-                   nobody reads. The stored record is untouched — this is what
-                   a blank field MEANS, not a value written into it.
-
-                   "Pakistani", not "Pakistan": the admission form's own
-                   nationality list offers Pakistani / Afghan / Other, so that
-                   is the word every record with a value in it already holds,
-                   and a fallback that read differently from the real data
-                   would look like two different columns. */}
-            <td><span class="stu-nat">${escHtml(t.nationality || 'Pakistani')}</span></td>
+            ${''/* ONE LINE, THE REST ON HOVER (owner, 2026-09-15: "if has large text
+                   then hidden half and Mdcat prep... and show default pop hover").
+                   The native title is the hover; the address below does the same. */}
+            <td class="stu-c-left">${t.occupation||t.course?`<span class="stu-course" title="${escHtml(t.occupation||t.course)}">${escHtml(t.occupation||t.course)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            <td class="stu-c-left">${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
                 ${''/* THE SUB-LINE IS GONE (owner, 2026-09-06). It read
@@ -2242,7 +2242,7 @@ function _stuExportDef(list, opts) {
       { label: 'Charges (Rs.)', type: 'money', width: 14, total: 'sum',
         value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; },
         get:   t => { const c = resolveCharges(t);
-          if (!c.configured) return '<span style="color:#94A3B8">not set</span>';
+          if (!c.configured) return '<span style="color:#4B5563">not set</span>';
           /* The label, not the sum restated (owner, 2026-09-10). */
           return '<b>' + fmtPKR(c.total) + '</b><span class="sub">' +
                  escHtml(chargeCoverage({ rent: c.rent, mess: c.mess,
@@ -2367,17 +2367,31 @@ const ASF_TRACKED = [
   'f-texpstay', 'f-tblood', 'f-tallergies', 'f-tnotes',
 ];
 
+/* THE FOUR STEPS (add form.png, owner 2026-09-15) replace the completion meter.
+   A step is DONE when its required fields hold a value — the fourth has none,
+   so any note at all completes it — and the CURRENT step is the first one that
+   is not done. Read from the fields on every input, like the meter was. */
+const ASF_STEP_REQ = {
+  1: ['f-tname', 'f-tfname'],
+  2: ['f-tphone'],
+  3: ['f-troom', 'f-tjoin'],
+  4: ['f-tallergies', 'f-tnotes'],
+};
 function asfCompletion() {
-  let filled = 0;
-  for (const id of ASF_TRACKED) {
-    const el = document.getElementById(id);
-    if (el && String(el.value || '').trim()) filled++;
-  }
-  const pct = Math.round(filled / ASF_TRACKED.length * 100);
-  const fill = document.getElementById('asf-meter-fill');
-  const val  = document.getElementById('asf-meter-pct');
-  if (fill) fill.style.width = pct + '%';
-  if (val)  val.textContent = pct + '%';
+  const filled = id => { const el = document.getElementById(id); return !!(el && String(el.value || '').trim()); };
+  let current = 0;
+  [1, 2, 3, 4].forEach(n => {
+    const done = n === 4 ? ASF_STEP_REQ[n].some(filled) : ASF_STEP_REQ[n].every(filled);
+    const li = document.querySelector('.asf-step[data-step="' + n + '"]');
+    if (li) li.classList.toggle('is-done', done);
+    if (!done && !current) current = n;
+  });
+  if (!current) current = 4;
+  document.querySelectorAll('.asf-step').forEach(li =>
+    li.classList.toggle('is-on', Number(li.getAttribute('data-step')) === current));
+  // Record Preview's Admission Date follows the Join date field as it is typed.
+  const rj = document.getElementById('asf-rec-join'), jv = document.getElementById('f-tjoin');
+  if (rj && jv) rj.textContent = jv.value ? fmtDate(jv.value) : '—';
 }
 
 /** Post-render hook, called from renderPage the way bindSettingsEvents is. */
@@ -2530,8 +2544,9 @@ function asfCountFields() {
     if (!card) return;
     const fields = card.querySelectorAll('.sf-f').length;
     const req    = card.querySelectorAll('.sf-f .req').length;
+    // "10 FIELDS • 2 REQUIRED" — the reference's separator; the CSS uppercases it.
     el.textContent = fields + (fields === 1 ? ' field' : ' fields')
-                   + (req ? ' · ' + req + ' required' : '');
+                   + (req ? ' • ' + req + ' required' : '');
   });
 }
 
@@ -2610,111 +2625,144 @@ function stuDocsOf(t) {
    the drop target now; it used to be a picture frame with a second, separate
    "Upload photo / or drag and drop" box stacked under it asking for the same
    file twice. */
+/* The empty photo well, as add form.png draws it: a silhouette, what to do, the
+   real limit (loadAddStudentPhoto() refuses over 5 MB), and a Choose Photo
+   button. The whole well stays the click and drop target; the button is the
+   visible, keyboard-reachable way in. */
 function asfPhotoPlaceholder() {
   return `<div class="asf-photo__empty">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
-    <b>Upload photo</b><span>or drag and drop</span>
+    <span class="asf-photo__av"><svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="currentColor" opacity=".14"/><circle cx="32" cy="25" r="10" fill="currentColor" opacity=".5"/><path d="M13 53c3-10 10.5-15 19-15s16 5 19 15" fill="currentColor" opacity=".5"/></svg></span>
+    <b>Upload student photo</b><span>JPG, PNG (Max 5 MB)</span>
+    <span class="asf-photo__choose" role="button" tabindex="0"
+          onclick="event.stopPropagation();triggerStudentPhotoUpload()"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();triggerStudentPhotoUpload()}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/></svg>
+      Choose Photo</span>
   </div>`;
 }
 
 function renderAddStudent() {
+  /* ══ NEW STUDENT ADMISSION, TO `add form.png` (owner, 2026-09-15) ═════════
+     "align and improve hierarchy like the reference". The fields, their ids
+     and every handler are unchanged — submitAddStudent() and each reader find
+     them by id, so an id here is a contract. What moved is the hierarchy:
+       · a page title and a four-step progress row (asfCompletion) instead of
+         the completion meter;
+       · numbered sections with a one-line description and "N FIELDS • N
+         REQUIRED";
+       · an icon segment inside the inputs the reference marks;
+       · the rail's three cards as drawn — Student Photo, Record Preview,
+         Documents;
+       · the action bar OUTSIDE .asf, docked to the bottom edge of the window
+         like the Add Payment buttons ("lowered and narrowed and adjacent to
+         the windows taskbar"). */
   const presetRoomId = _addStudentPresetRoom || '';
   const allRooms = roomsByNumber(DB.rooms);
   const preset = presetRoomId ? DB.rooms.find(r=>r.id===presetRoomId) : null;
   const presetType = preset ? getRoomType(preset) : null;
   const presetLabel = preset ? 'Room #'+preset.number+' · '+(presetType?presetType.name:'')+' · '+(preset.floor||'')+' Floor' : '';
-
-  // Facts for the Record card. Every one of these is computed from the
-  // database — nothing here is illustrative.
-  const totalBeds = DB.rooms.reduce((s,r)=>{ const t=getRoomType(r); return s+((t&&t.capacity)||0); },0);
-  const freeBeds  = DB.rooms.reduce((s,r)=>s+Math.max(0, roomFreeBeds(r)), 0);
-  const openRooms = DB.rooms.filter(r=>roomFreeBeds(r)>0).length;
   const enteredBy = (typeof CUR_USER === 'object' && CUR_USER && (CUR_USER.name || CUR_USER.username)) || '—';
   const presetCharges = preset ? resolveCharges({ roomId: preset.id }) : null;
 
-  // A section is the app's .sf-sec — the same card the Edit Student form is
-  // built from. The number and the field count ride inside its existing head.
-  //
-  // meta === 'auto' means asfCountFields() writes the count after render, from
-  // the fields the section actually holds. It was a hand-typed string until
-  // 2026-09-03, and it had already drifted: identity was labelled "9 fields"
-  // while rendering ten. A stated count nobody recomputes is an invented
-  // number on a screen, which is the one thing the house rule forbids.
-  const sec = (num, icon, title, meta, body) => `
-    <div class="sf-sec">
-      <div class="sf-sec__h">
-        ${icon}
-        ${num ? `<span class="asf-n">${escHtml(num)}</span>` : ''}
-        ${escHtml(title)}
+  // A 15px line glyph, for the input segments and the card heads.
+  const S = path => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  const P = {
+    id:      '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.3 1.5-2 2.5-2s1.9.7 2.5 2"/><path d="M14 10h4"/><path d="M14 13h3"/>',
+    globe:   '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20"/>',
+    book:    '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+    cal:     '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+    mail:    '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+    user:    '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    phone:   '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2z"/>',
+    pin:     '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+    bed:     '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
+    seat:    '<path d="M7 18v3"/><path d="M17 18v3"/><path d="M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"/><path d="M3 11h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    layers:  '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/>',
+    coin:    '<circle cx="12" cy="12" r="10"/><path d="M15 9.5a3 3 0 0 0-3-1.5h-.5a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 1 0 5H12a3 3 0 0 1-3-1.5"/><path d="M12 6v2"/><path d="M12 16v2"/>',
+    heart:   '<path d="M19 14c1.5-1.5 3-3.4 3-5.5A5.5 5.5 0 0 0 12 5.4 5.5 5.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7z"/>',
+    note:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+    photo:   '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+    eye:     '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    doc:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>',
+    cam:     '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+    chev:    '<path d="m9 18 6-6-6-6"/>',
+  };
+  // An input or select with the reference's icon segment on its left.
+  const ic = (path, control, extra) => `<div class="asf-ic${extra ? ' ' + extra : ''}"><span class="asf-ic__i">${S(path)}</span>${control}</div>`;
+
+  /* A numbered section. meta === 'auto' means asfCountFields() writes
+     "N FIELDS • N REQUIRED" after render, from the fields the card holds. */
+  const sec = (n, title, sub, meta, body) => `
+    <section class="sf-sec asf-sec" id="asf-sec-${n}">
+      <div class="sf-sec__h asf-sec__h">
+        <span class="asf-disc">${n}</span>
+        <div class="asf-sec__tt">
+          <div class="asf-sec__t">${escHtml(title)}</div>
+          <div class="asf-sec__s">${escHtml(sub)}</div>
+        </div>
         ${meta === 'auto'
           ? '<span class="asf-secmeta" data-asf-count="1"></span>'
           : (meta ? `<span class="asf-secmeta">${escHtml(meta)}</span>` : '')}
       </div>
       ${body}
+    </section>`;
+  // A rail card: a filled icon square and a title (.sf-sec__h > svg).
+  const card = (path, title, body) => `
+    <div class="sf-sec asf-card">
+      <div class="sf-sec__h asf-card__h">${S(path)}${escHtml(title)}</div>
+      ${body}
     </div>`;
 
-  const sel = (id, label, opts, cur, req) => `
+  const sel = (id, label, opts, cur, req, path) => {
+    const control = `<select class="sf-sel" id="${id}">
+        ${opts.map(o=>`<option value="${escHtml(o)}" ${o===cur?'selected':''}>${escHtml(o||'Select '+label.toLowerCase())}</option>`).join('')}
+      </select>`;
+    return `
     <div class="sf-f">
       <label for="${id}">${label}${req?'<span class="req">*</span>':''}</label>
-      <select class="sf-sel" id="${id}">
-        ${opts.map(o=>`<option value="${escHtml(o)}" ${o===cur?'selected':''}>${escHtml(o||'—')}</option>`).join('')}
-      </select>
+      ${path ? ic(path, control) : control}
     </div>`;
-
-  const ico = {
-    photo:   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>',
-    record:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
-    doc:     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>',
-    person:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-12 0"/><circle cx="12" cy="8" r="5"/></svg>',
-    contact: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2z"/></svg>',
-    room:    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M3 21h18"/><path d="M9 21v-6h6v6"/></svg>',
-    health:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A5.5 5.5 0 0 0 12 5.4 5.5 5.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7z"/></svg>',
-    chev:    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   };
+
+  const STEPS = ['Student Info', 'Contact Info', 'Hostel Allotment', 'Health & Notes'];
 
   return `
   <div class="asf" oninput="asfCompletion()" onchange="asfCompletion()">
 
-    <!-- ══ HEADER ══
-         The chrome bar names the section; this names the task. One page title,
-         at the size Add Payment sets — the 38px display headline that used to
-         sit here stuttered against the header three centimetres above it. -->
-    <div>
-      <nav class="asf-crumb" aria-label="Breadcrumb">
-        <span>Students</span>${ico.chev}
-        <!-- href, not a bare onclick: an <a> with no href is not in the tab
-             order and cannot be pressed from the keyboard at all. .ap-crumb
-             on Add Payment has that gap; this is not the place to copy it. -->
-        <a href="#" onclick="event.preventDefault();navigate('students')">Roster</a>${ico.chev}
-        <b aria-current="page">New admission</b>
-      </nav>
-      <div class="asf-head">
-        <div>
-          <h2 class="asf-title">Student intake</h2>
-          <div class="asf-sub">Register a new student — payment is collected in the next step.</div>
-        </div>
-        <div class="asf-meter">
-          <span class="asf-meter__l">Completed</span>
-          <div class="asf-meter__track"><i id="asf-meter-fill"></i></div>
-          <span class="asf-meter__v" id="asf-meter-pct">0%</span>
-        </div>
+    <!-- ══ HEADER: where, what, and how far ══ -->
+    <div class="asf-top">
+      <div class="asf-top__l">
+        <nav class="asf-crumb" aria-label="Breadcrumb">
+          <span>Students</span>${S(P.chev)}
+          <a href="#" onclick="event.preventDefault();navigate('students')">Roster</a>${S(P.chev)}
+          <b aria-current="page">New Admission</b>
+        </nav>
+        <h2 class="asf-title">New Student Admission</h2>
+        <div class="asf-sub">Register a new student — payment is collected in the next step.</div>
       </div>
+      <ol class="asf-steps" aria-label="Form progress">
+        ${STEPS.map((l, i) => `
+        <li class="asf-step${i === 0 ? ' is-on' : ''}" data-step="${i + 1}">
+          <button type="button" onclick="asfGoStep(${i + 1})" title="Go to ${escHtml(l)}">
+            <span class="asf-step__n">${i + 1}</span><span class="asf-step__l">${escHtml(l)}</span>
+          </button>
+        </li>`).join('')}
+      </ol>
     </div>
 
     <div class="asf-body">
 
       <!-- ══ LEFT RAIL ══ -->
       <div class="asf-rail">
-        ${sec('', ico.photo, 'Student photo', '', `
+        ${card(P.photo, 'Student Photo', `
           <div class="asf-photo" id="add-student-photo-preview" title="Click to upload a photo"
                onclick="triggerStudentPhotoUpload()"
                ondragover="event.preventDefault();this.classList.add('is-over')"
                ondragleave="this.classList.remove('is-over')"
                ondrop="sfDropPhoto(event)">${asfPhotoPlaceholder()}</div>
           <div class="asf-photo-acts">
-            <button type="button" class="sf-btn sf-btn--ghost" id="add-student-cam-btn" onclick="openAddStudentCamera()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
-              Take photo
+            <button type="button" class="sf-btn" id="add-student-cam-btn" onclick="openAddStudentCamera()">
+              ${S(P.cam)} Take Photo
             </button>
             <button type="button" class="sf-btn" id="add-student-clear-btn" style="display:none;color:var(--red)" onclick="clearAddStudentPhoto()">Remove</button>
           </div>
@@ -2729,25 +2777,19 @@ function renderAddStudent() {
             </div>
           </div>`)}
 
-        ${sec('', ico.record, 'Record summary', '', `
+        ${card(P.eye, 'Record Preview', `
           <div class="asf-rec">
             <div class="asf-rec__r"><span class="asf-rec__k">Student ID</span>
               <span class="asf-rec__v asf-num asf-num--id">#${escHtml(nextStudentId())}</span></div>
             <div class="asf-rec__r"><span class="asf-rec__k">Entered by</span>
               <span class="asf-rec__v">${escHtml(enteredBy)}</span></div>
-            <div class="asf-rec__r"><span class="asf-rec__k">Beds free</span>
-              <span class="asf-rec__v asf-num">${freeBeds} of ${totalBeds}</span></div>
-            <div class="asf-rec__r"><span class="asf-rec__k">Rooms with space</span>
-              <span class="asf-rec__v asf-num">${openRooms}</span></div>
+            <div class="asf-rec__r"><span class="asf-rec__k">Admission Date</span>
+              <span class="asf-rec__v asf-num" id="asf-rec-join">${escHtml(fmtDate(today()))}</span></div>
             <div class="asf-rec__r"><span class="asf-rec__k">Status</span>
-              <span class="badge badge-blue">New — unsaved</span></div>
+              <span class="asf-rec__st">New (Unsaved)</span></div>
           </div>`)}
 
-        ${''/* THE 403px (owner, 2026-09-10). Third rail card, under the photo,
-               where the rail used to simply stop while the main column ran on
-               for another four hundred pixels. See STU_DOC_KINDS above for why
-               the rows are named rather than a free-for-all attach list. */}
-        ${sec('', ico.doc, 'Documents', '', `
+        ${card(P.doc, 'Documents', `
           <div class="asf-docs" id="asf-docs">${asfDocsList()}</div>
           <input type="file" id="asf-doc-file" accept="${STU_DOC_ACCEPT}" style="display:none"
                  onchange="asfDocLoad(this)">
@@ -2757,15 +2799,15 @@ function renderAddStudent() {
       <!-- ══ MAIN ══ -->
       <div class="asf-main">
 
-        ${sec('01', ico.person, 'Student identity', 'auto', `
+        ${sec(1, 'Student Identity', 'Basic information about the student.', 'auto', `
           <div class="asf-fg asf-fg--4">
             <div class="sf-f"><label for="f-tname">Full name<span class="req">*</span></label>
-              <input class="sf-in" id="f-tname" placeholder="Full name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+              ${ic(P.id, `<input class="sf-in" id="f-tname" placeholder="Enter full name" oninput="autoCapName(this)" style="text-transform:capitalize">`)}</div>
             <div class="sf-f"><label for="f-tfname">Father's name<span class="req">*</span></label>
-              <input class="sf-in" id="f-tfname" placeholder="Father's name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
+              <input class="sf-in" id="f-tfname" placeholder="Enter father's name" oninput="autoCapName(this)" style="text-transform:capitalize"></div>
             <div class="sf-f"><label for="f-tcnic">CNIC / B-Form</label>
               <div class="sf-wrapin">
-                <input class="sf-in" id="f-tcnic" placeholder="00000-0000000-0" maxlength="15" oninput="fmtCnic(this);sfCheckCnic()">
+                <input class="sf-in asf-in--plain" id="f-tcnic" placeholder="00000-0000000-0" maxlength="15" oninput="fmtCnic(this);sfCheckCnic()">
                 <svg class="sf-ok" id="f-tcnic-ok" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </div>
             </div>
@@ -2774,23 +2816,19 @@ function renderAddStudent() {
           </div>
 
           <div class="asf-fg asf-fg--4">
-            ${''/* GENDER IS PRESELECTED FROM WHAT THE HOSTEL SAID IT IS
-                   (owner, 2026-09-10: "deaults, gender, nationality to
-                   pakistan"). A boys' hostel admits boys; asking its warden to
-                   pick "Male" on every one of 200 admissions is asking them to
-                   restate a fact the app already holds. A mixed hostel has no
-                   answer and so gets none — _stuDefaultGender() returns '' and
-                   the field stays on its blank option. */}
+            ${''/* Gender is preselected from what the hostel said it is (owner,
+                   2026-09-10); a mixed hostel gets no default. */}
             ${sel('f-tgender','Gender',['','Male','Female','Other'],_stuDefaultGender())}
             ${sel('f-tmarital','Marital status',['','Single','Married'],'Single')}
-            ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani')}
+            ${sel('f-tnationality','Nationality',['Pakistani','Afghan','Other'],'Pakistani', false, P.globe)}
             ${sel('f-tblood','Blood group',['','A+','A-','B+','B-','AB+','AB-','O+','O-'],'')}
           </div>
 
           <div class="asf-fg asf-fg--2">
             <div class="sf-f"><label for="f-tocc">Course / study field</label>
-              <div style="position:relative" id="f-tocc-wrap">
-                <input class="sf-in" id="f-tocc" placeholder="Course or field of study" autocomplete="off"
+              <div class="asf-ic" id="f-tocc-wrap">
+                <span class="asf-ic__i">${S(P.book)}</span>
+                <input class="sf-in" id="f-tocc" placeholder="e.g. BS Computer Science" autocomplete="off"
                   oninput="courseAutocomplete(this)" onfocus="courseAutocomplete(this)" onkeydown="courseKeyNav(event)"
                   onblur="setTimeout(()=>{const d=document.getElementById('course-suggestions');if(d)d.style.display='none';},200)">
                 <div id="course-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:11px;z-index:600;max-height:200px;overflow-y:auto;box-shadow:var(--shadow);margin-top:4px"></div>
@@ -2799,61 +2837,47 @@ function renderAddStudent() {
               <input type="hidden" id="f-tocccustom" value="">
             </div>
             <div class="sf-f"><label for="f-tsession">Session / semester</label>
-              <input class="sf-in" id="f-tsession" placeholder="Session or semester"></div>
+              ${ic(P.cal, `<input class="sf-in" id="f-tsession" placeholder="e.g. Fall 2026 / 3rd Semester">`)}</div>
           </div>`)}
 
         <div class="asf-row">
-          ${sec('02', ico.contact, 'Contact information', 'auto', `
+          ${sec(2, 'Contact Information', 'Phone, email and guardian details.', 'auto', `
             <div class="asf-fg asf-fg--2">
               <div class="sf-f"><label for="f-tphone">Phone number<span class="req">*</span></label>
-                <div style="display:flex"><span class="sf-prefix">+92</span>
-                  <input class="sf-in" id="f-tphone" placeholder="3xx xxxxxxx" maxlength="12" oninput="fmtPhone(this)"></div>
+                <div class="asf-phone"><span class="sf-prefix">+92</span>
+                  <div class="asf-phone__in">
+                    <input class="sf-in" id="f-tphone" placeholder="3xx 1234567" maxlength="12" oninput="fmtPhone(this)">
+                  </div></div>
               </div>
               <div class="sf-f"><label for="f-temail">Email address</label>
-                <div class="sf-wrapin">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                  <input class="sf-in" id="f-temail" type="text" placeholder="username" oninput="fmtEmail(this)" autocomplete="off">
+                <div class="asf-ic">
+                  <span class="asf-ic__i">${S(P.mail)}</span>
+                  <input class="sf-in" id="f-temail" type="text" placeholder="student" oninput="fmtEmail(this)" autocomplete="off">
                   <span id="f-temail-hint" style="display:none;position:absolute;right:11px;font-size:12px;color:var(--text3);pointer-events:none">@gmail.com</span>
                 </div>
               </div>
-              ${''/* GUARDIAN, NOT EMERGENCY (brief §7). For a hostel this is
-                     the parent or guardian who signed the student in — the
-                     person the warden rings about fees, leave and conduct, not
-                     only about an accident. "Emergency" framed a routine field
-                     as a crisis one, and the warden reading it every admission
-                     is the one who pays for that.
-
-                     THE IDS DO NOT MOVE. submitAddStudent() and every reader in
-                     the app find these by `f-temerg` / `f-temergphone`, and the
-                     stored record keys are unchanged — renaming an id here is a
-                     silent data loss there. The label is copy; the id is a
-                     contract. */}
+              ${''/* GUARDIAN, NOT EMERGENCY (brief §7). The ids do not move —
+                     f-temerg / f-temergphone are read by submitAddStudent(). */}
               <div class="sf-f"><label for="f-temerg">Guardian name</label>
-                <input class="sf-in" id="f-temerg" placeholder="Name and relation"></div>
+                ${ic(P.user, `<input class="sf-in" id="f-temerg" placeholder="Enter guardian name">`)}</div>
               <div class="sf-f"><label for="f-temergphone">Guardian contact</label>
-                <input class="sf-in" id="f-temergphone" placeholder="03xx xxxxxxx"></div>
+                ${ic(P.phone, `<input class="sf-in" id="f-temergphone" placeholder="03xx 1234567">`)}</div>
               <div class="sf-f" style="grid-column:span 2"><label for="f-taddress">Home address</label>
-                <div class="sf-wrapin">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
-                  <input class="sf-in" id="f-taddress" placeholder="House, street, city"
-                    autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">
-                </div>
+                ${ic(P.pin, `<input class="sf-in" id="f-taddress" placeholder="House, street, area, city"
+                    autocomplete="off" oninput="cityAutocomplete(this)" onblur="hideCitySuggestions()">`)}
                 <div id="f-taddress-suggestions" class="city-suggestions"></div>
               </div>
             </div>`)}
 
-          ${sec('03', ico.room, 'Hostel allotment', 'auto', `
+          ${sec(3, 'Hostel Allotment', 'Room and stay details.', 'auto', `
             <div class="asf-fg asf-fg--2">
               <div class="sf-f" style="grid-column:span 2"><label for="f-troom-search">Room<span class="req">*</span></label>
                 <div style="position:relative">
                   <input type="hidden" id="f-troom" value="${escHtml(presetRoomId)}">
-                  <div class="sf-wrapin">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-                    <input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor" autocomplete="off"
+                  ${ic(P.bed, `<input class="sf-in" id="f-troom-search" placeholder="Search room number, type or floor" autocomplete="off"
                       value="${escHtml(presetLabel)}"
                       oninput="filterRoomSearch(this.value)" onfocus="filterRoomSearch(this.value)"
-                      onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">
-                  </div>
+                      onblur="setTimeout(()=>{const d=document.getElementById('room-search-drop');if(d)d.style.display='none';},180)">`)}
                   <div id="room-search-drop" class="sf-drop-list">
                     ${allRooms.map(r=>{
                       const rt=getRoomType(r); const free=roomFreeBeds(r); const vac=getRoomVacating(r);
@@ -2875,56 +2899,58 @@ function renderAddStudent() {
                 <div id="f-troom-selected-label" class="asf-picked"></div>
               </div>
               <div class="sf-f"><label for="f-tbed">Bed / seat</label>
-                <select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select></div>
+                ${ic(P.seat, `<select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select>`)}</div>
               <div class="sf-f"><label for="f-tfloor">Floor</label>
-                <input class="sf-in sf-in--ro" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly></div>
+                ${ic(P.layers, `<input class="sf-in sf-in--ro" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly>`)}</div>
               <div class="sf-f" style="grid-column:span 2"><label>Monthly charge</label>
-                <input class="sf-in sf-in--ro" id="f-trent-display" readonly placeholder="Set by room"
-                  value="${presetCharges && presetCharges.configured ? escHtml(fmtPKR(presetCharges.total)+' / month') : ''}"></div>
+                ${ic(P.coin, `<input class="sf-in sf-in--ro" id="f-trent-display" readonly placeholder="Set by room (Rs.)"
+                  value="${presetCharges && presetCharges.configured ? escHtml(fmtPKR(presetCharges.total)+' / month') : ''}">`)}</div>
               <div class="sf-f"><label for="f-tjoin">Join date<span class="req">*</span></label>
-                <input class="sf-in" id="f-tjoin" type="date" value="${today()}"></div>
+                ${ic(P.cal, `<input class="sf-in" id="f-tjoin" type="date" value="${today()}">`)}</div>
               <div class="sf-f"><label for="f-texpstay">Stay until</label>
-                <input class="sf-in" id="f-texpstay" type="date"></div>
+                ${ic(P.cal, `<input class="sf-in" id="f-texpstay" type="date">`)}</div>
             </div>
-            ${/* The intake form does not ask how the FIRST payment will
-                  arrive, so it carries the hostel's first ACTIVE method as the
-                  default. Reading [0] took a retired one whenever the first in
-                  the list had been retired. */''}
+            ${/* The intake form does not ask how the FIRST payment will arrive,
+                  so it carries the hostel's first ACTIVE method as the default. */''}
             <input type="hidden" id="f-tpm" value="${escHtml((DB.settings.paymentMethods||[]).filter(cfgMethodActive)[0] || DB.settings.paymentMethods[0] || 'Cash')}">`)}
         </div>
 
-        ${sec('04', ico.health, 'Health & notes', 'Optional', `
+        ${sec(4, 'Health & Additional Notes', 'Medical information and any other important details.', 'Optional', `
           <div class="asf-fg asf-fg--notes">
             <div class="sf-f"><label for="f-tallergies">Allergies / medical condition</label>
-              <input class="sf-in" id="f-tallergies" placeholder="None reported"></div>
+              ${ic(P.heart, `<input class="sf-in" id="f-tallergies" placeholder="None reported">`)}</div>
             <div class="sf-f"><label for="f-tnotes">Notes for the warden</label>
-              <textarea class="sf-ta" id="f-tnotes" maxlength="250" rows="3"
+              ${ic(P.note, `<textarea class="sf-ta" id="f-tnotes" maxlength="250" rows="1"
                 placeholder="Anything the warden should know about this student…"
-                oninput="sfCount()"></textarea>
+                oninput="sfCount()"></textarea>`, 'asf-ic--ta')}
               <div class="sf-count" id="f-tnotes-count">0/250</div>
             </div>
           </div>`)}
       </div>
     </div>
+  </div>
 
-    <!-- ══ ACTIONS ══ -->
-    ${''/* Cancel keeps the left; everything else is pushed right by the spacer
-           (brief §16). The bar is sticky — see .asf-foot in students.css. */}
-    <footer class="asf-foot">
-      <button class="sf-btn" onclick="navigate('students')">Cancel</button>
-      <span class="asf-foot__spacer"></span>
-      ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        Save &amp; add another</button>`:''}
-      <button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}', false, true)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-        Save as draft</button>
-      <button class="sf-btn sf-btn--go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
-        Save &amp; proceed to payment
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </button>
-    </footer>
-  </div>`;
+  <!-- ══ ACTIONS — docked to the bottom edge of the window, outside .asf ══ -->
+  <footer class="asf-foot">
+    <button class="sf-btn" onclick="navigate('students')">Cancel</button>
+    <span class="asf-foot__spacer"></span>
+    ${presetRoomId?`<button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}',true)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Save &amp; add another</button>`:''}
+    <button class="sf-btn" onclick="submitAddStudent('${escHtml(presetRoomId)}', false, true)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+      Save as draft</button>
+    <button class="sf-btn sf-btn--go" onclick="submitAddStudent('${escHtml(presetRoomId)}')">
+      Save &amp; proceed to payment
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </button>
+  </footer>`;
+}
+
+/* A step in the progress row takes you to its section. */
+function asfGoStep(n) {
+  const el = document.getElementById('asf-sec-' + n);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Bed / seat options for a room — one per seat of its type's capacity.
@@ -3515,6 +3541,8 @@ function closeEditStudentCamera() {
    (_stuUndPage) and, on a reprint, the REPRINT watermark on both pages. */
 function printStudentCard(id, opts) {
   const t = DB.students.find(x => x.id === id); if (!t) return;
+  // No placeholder name on paper (hostel-name.js): ask once, then print.
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => printStudentCard(id, opts))) return;
   const _adm  = opts && opts.admission ? opts.admission : null;
   const room  = DB.rooms.find(r => r.id === t.roomId);
   const rtype = room ? DB.settings.roomTypes.find(x => x.id === room.typeId) : null;
@@ -3548,70 +3576,71 @@ function printStudentCard(id, opts) {
   <title>${_adm ? 'Admission Form' : 'Student Profile'} — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:12.5px}
+    /* Sized to fill a portrait sheet of the hostel's paper (owner, 2026-09-15). */
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:22px;font-size:14px}
     .doc-head{display:flex;align-items:center;justify-content:space-between;
               padding-bottom:14px;border-bottom:3px solid #2563eb;margin-bottom:18px}
-    .doc-head__t{font-size:20px;font-weight:800;color:#1e3a8a}
-    .doc-head__s{font-size:11px;color:#64748b;margin-top:2px}
-    .doc-head__d{font-size:11px;color:#64748b}
+    .doc-head__t{font-size:24px;font-weight:800;color:#1e3a8a}
+    .doc-head__s{font-size:13px;color:#374151;margin-top:2px}
+    .doc-head__d{font-size:13px;color:#374151}
 
-    .hero{display:flex;align-items:center;gap:18px;background:#eff6ff;border:1px solid #dbeafe;
+    .hero{display:flex;align-items:center;gap:18px;background:#eff6ff;border:1px solid #888888;
           border-radius:14px;padding:18px 20px;margin-bottom:14px}
-    .hero__av{width:84px;height:84px;border-radius:50%;flex-shrink:0;overflow:hidden;
+    .hero__av{width:90px;height:90px;border-radius:50%;flex-shrink:0;overflow:hidden;
               background:#fff;border:3px solid #bfdbfe;display:flex;align-items:center;justify-content:center;color:#60a5fa}
     .hero__av img{width:100%;height:100%;object-fit:cover}
     .hero__id{flex:1;min-width:0}
-    .hero__name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#1e3a8a}
-    .hero__no{font-size:12px;color:#64748b;margin-top:1px}
+    .hero__name{font-size:30px;font-weight:800;letter-spacing:-.02em;color:#1e3a8a}
+    .hero__no{font-size:13.5px;color:#374151;margin-top:1px}
     .chips{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
-    .chip{padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid}
+    .chip{padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:700;border:1px solid}
     .chip--ok{background:#dcfce7;color:#166534;border-color:#bbf7d0}
-    .chip--room{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe}
-    .chip--plain{background:#fff;color:#475569;border-color:#e2e8f0}
+    .chip--room{background:#dbeafe;color:#1e3a8a;border-color:#1d4ed8}
+    .chip--plain{background:#fff;color:#334155;border-color:#888888}
     /* The charge panel. The figure a family asks about goes in the one block
        of solid colour on the page. */
     .rent{background:#1d4ed8;color:#fff;border-radius:12px;padding:16px 22px;text-align:center;min-width:230px}
-    .rent__l{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;opacity:.85}
-    .rent__v{font-size:27px;font-weight:900;margin:5px 0;letter-spacing:-.02em}
-    .rent__s{font-size:10.5px;opacity:.9;border-top:1px solid rgba(255,255,255,.28);padding-top:7px}
+    .rent__l{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;opacity:.85}
+    .rent__v{font-size:31px;font-weight:900;margin:5px 0;letter-spacing:-.02em}
+    .rent__s{font-size:12px;opacity:.9;border-top:1px solid rgba(255,255,255,.28);padding-top:7px}
 
     .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}
-    .stat{border:1px solid #e2e8f0;border-radius:12px;padding:13px 15px}
-    .stat__l{font-size:9.5px;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;font-weight:700}
-    .stat__v{font-size:19px;font-weight:800;margin-top:4px}
-    .is-paid{color:#16a34a}.is-due{color:#dc2626}
+    .stat{border:1px solid #888888;border-radius:12px;padding:13px 15px}
+    .stat__l{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#4b5563;font-weight:700}
+    .stat__v{font-size:22px;font-weight:800;margin-top:4px}
+    .is-paid{color:#05603a}.is-due{color:#9f1c12}
 
     .panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    .panel{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
-    .panel__t{font-size:12.5px;font-weight:800;color:#1d4ed8;padding-bottom:8px;
-              border-bottom:2px solid #dbeafe;margin-bottom:10px}
-    .fact{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+    .panel{border:1px solid #888888;border-radius:12px;padding:16px 18px}
+    .panel__t{font-size:14.5px;font-weight:800;color:#1d4ed8;padding-bottom:8px;
+              border-bottom:2px solid #1d4ed8;margin-bottom:10px}
+    .fact{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #888888}
     .fact:last-child{border-bottom:none}
-    .fact__k{font-size:11.5px;color:#64748b}
-    .fact__v{font-size:11.5px;font-weight:700;text-align:right}
-    .fact__v.is-empty{color:#cbd5e1;font-weight:500}
+    .fact__k{font-size:13px;color:#374151}
+    .fact__v{font-size:13px;font-weight:700;text-align:right}
+    .fact__v.is-empty{color:#4b5563;font-weight:500}
 
-    .stat__s{font-size:10.5px;color:#64748b;margin-top:2px}
+    .stat__s{font-size:12px;color:#374151;margin-top:2px}
 
     /* The hostel is the masthead; HOSTYLLO is this one small line (design spec Part 8). */
-    .foot{margin-top:18px;padding-top:10px;border-top:1px solid #e2e8f0;
-          display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#94a3b8}
+    .foot{margin-top:18px;padding-top:10px;border-top:1px solid #888888;
+          display:flex;justify-content:space-between;gap:12px;font-size:11.5px;color:#4b5563}
 
     /* The back side of the admission form (_stuUndPage). */
     .und{page-break-before:always}
-    .und__rules{margin:4px 0 16px 20px;font-size:12px;line-height:1.65}
+    .und__rules{margin:4px 0 16px 22px;font-size:14px;line-height:1.65}
     .und__rules li{padding-left:4px;margin-bottom:3px}
-    .und__decl{border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;font-size:12px;line-height:1.6}
-    .und__h{font-size:10.5px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+    .und__decl{border:1px solid #888888;border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.6}
+    .und__h{font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
     .und__sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:22px}
-    .und__sig{padding-top:46px;font-size:11px;color:#475569}
+    .und__sig{padding-top:46px;font-size:13px;color:#475569}
     .und__line{border-top:1.5px solid #334155;margin-bottom:6px}
     .und__sig b{display:block;color:#1e293b}
-    .und__date{margin-top:22px;font-size:11px;color:#475569}
+    .und__date{margin-top:22px;font-size:13px;color:#475569}
 
     /* A reprint says so across every page — never confused with the filed original. */
     .wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
-    .wm span{transform:rotate(-32deg);font-size:38px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    .wm span{transform:rotate(-32deg);font-size:44px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
              color:rgba(220,38,38,.18);border:4px solid rgba(220,38,38,.18);border-radius:12px;padding:10px 22px}
     @media print{body{padding:14px} .panel,.stat{page-break-inside:avoid}}
   </style></head><body>
@@ -3688,7 +3717,7 @@ function printStudentCard(id, opts) {
 
   const _cardName = printFileName((_adm ? 'Admission-Form-' : 'Student-Profile-') +
     (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), '');
-  _electronPDF(_cardHtml, _cardName, { pageSize: 'A4' });
+  _electronPDF(_cardHtml, _cardName, { pageSize: paperSize() });
 }
 
 /* The back side of the admission form (spec §3.8): the rules of the version
@@ -3727,6 +3756,8 @@ function _stuUndPage(t, adm) {
 function printAdmissionForm(id) {
   const t = DB.students.find(x => x.id === id);
   if (!t) return;
+  // Asked before anything is recorded as the original (hostel-name.js).
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => printAdmissionForm(id))) return;
   if (undSigned(t)) {
     const ver = undSignedVersion(t) || undCurrent();
     printStudentCard(id, { admission: { reprint: true, version: ver, label: undReprintLabel(t) } });
@@ -3760,6 +3791,7 @@ function printAdmissionForm(id) {
 function printPaymentHistory(id) {
   const t = DB.students.find(x => x.id === id);
   if (!t) return;
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => printPaymentHistory(id))) return;
   const entries = typeof ledgerEntriesFor === 'function' ? ledgerEntriesFor(id) : [];
   if (!entries.length) { toast('No ledger entries for this student yet', 'info'); return; }
 
@@ -3789,22 +3821,23 @@ function printPaymentHistory(id) {
   <title>Payment History — ${escHtml(t.name)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:26px;font-size:11.5px}
+    body{font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:22px;font-size:14px}
     .doc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
               padding-bottom:12px;border-bottom:3px solid #2563eb;margin-bottom:14px}
-    .doc-head__t{font-size:20px;font-weight:800;color:#1e3a8a}
-    .doc-head__s{font-size:11px;color:#64748b;margin-top:2px}
+    .doc-head__t{font-size:24px;font-weight:800;color:#1e3a8a}
+    .doc-head__s{font-size:13px;color:#374151;margin-top:2px}
     .doc-head__d{font-size:11px;color:#475569;text-align:right}
     table{width:100%;border-collapse:collapse}
     thead{display:table-header-group}
-    th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10.5px;color:#475569;font-weight:600;
-       border-bottom:1px solid #e2e8f0}
-    td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+    /* Photocopy contrast (owner, 2026-09-15): #888 grid, grey header fill, dark labels. */
+    th{background:#e5e7eb;padding:9px 11px;text-align:left;font-size:12.5px;color:#1f2937;font-weight:700;
+       border:1px solid #888888}
+    td{padding:8px 11px;border:1px solid #888888;vertical-align:top}
     tr{page-break-inside:avoid}
     .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-    .sub{display:block;font-size:10px;color:#64748b;margin-top:1px}
-    tfoot td{border-top:2px solid #cbd5e1;font-weight:700;background:#f8fafc}
-    .foot{margin-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+    .sub{display:block;font-size:11.5px;color:#374151;margin-top:1px}
+    tfoot td{border-top:2px solid #555555;font-weight:700;background:#e5e7eb}
+    .foot{margin-top:14px;display:flex;justify-content:space-between;font-size:11.5px;color:#4b5563}
   </style></head><body>
   <div class="doc-head">
     <div><div class="doc-head__t">${escHtml(hostel)}</div>
@@ -3825,13 +3858,14 @@ function printPaymentHistory(id) {
   </body></html>`;
 
   _electronPDF(html, printFileName('Payment-History-' +
-    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: 'A4' });
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: paperSize() });
 }
 
 /* The signed undertaking scan, reprinted (spec §3.8, step 11). Images only —
    the watermark goes across the scan so a copy is never taken for the filed
    original. A PDF has no reprint (the Documents row disables it). */
 function stuUndReprintScan(id) {
+  if (typeof hostelNameGate === 'function' && hostelNameGate(() => stuUndReprintScan(id))) return;
   const t = DB.students.find(x => x.id === id);
   const doc = undScanOf(t);
   if (!t || !doc || !doc.data) { toast('No signed undertaking is attached', 'info'); return; }
@@ -3842,7 +3876,7 @@ function stuUndReprintScan(id) {
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#fff;padding:18px;color:#475569}
-    .cap{display:flex;justify-content:space-between;font-size:10.5px;margin-bottom:8px}
+    .cap{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px}
     .img{text-align:center}
     .img img{max-width:100%;max-height:1040px}
     .wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
@@ -3854,7 +3888,7 @@ function stuUndReprintScan(id) {
   <div class="img"><img src="${escHtml(doc.data)}" alt="Signed undertaking"></div>
   </body></html>`;
   _electronPDF(html, printFileName('Undertaking-Reprint-' +
-    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: 'A4' });
+    (t.name || 'Record').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-]/g, ''), ''), { pageSize: paperSize() });
 }
 function showEditStudentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
@@ -4449,7 +4483,7 @@ async function submitRoomShift(studentId) {
    the table is doing. Unpaid earlier months still ride along, and "All
    Months" is still the last option in the picker. */
 let payFilter = {status:'All', method:'All', room:'All', month:thisMonth(), search:'',
-                 showAll:false, unpaidOnly:false, arrears:true, pageSize:30,
+                 showAll:false, unpaidOnly:false, arrears:true, pageSize:10,   // 10, per pay page.png (owner, 2026-09-15)
                  page:1, sortKey:'room', sortDir:'asc'};
 let paySelected = new Set();
 /* `arrears:true` is a default that is ON — the screen shows arrears rows
@@ -5169,9 +5203,11 @@ function doGenerateStudentsPDF(monthKey) {
      scheme, and neither matched anything else the app prints. */
   html += '<style>';
   html += '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}';
-  html += '@page{size:A4 landscape;margin:7mm 9mm}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
-  html += 'body{font-family:"Segoe UI",-apple-system,Roboto,Arial,sans-serif;background:#fff;color:#0f172a;padding:14px 18px;font-size:10.5px}';
-  html += '@media print{body{padding:3px 4px;font-size:9.5px}.no-print{display:none!important}}';
+  /* The @page is _pdfInject()'s — landscape on the hostel's paper (owner,
+     2026-09-15) — and every size in this sheet went up to fill it. */
+  html += '@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+  html += 'body{font-family:"Segoe UI",-apple-system,Roboto,Arial,sans-serif;background:#fff;color:#0f172a;padding:14px 18px;font-size:13px}';
+  html += '@media print{body{padding:3px 4px;font-size:12px}.no-print{display:none!important}}';
   // This document opens in its own window with none of the app's stylesheets,
   // so icon() SVGs would fall back to the replaced-element default of 300×150
   // and tear the layout apart. Same rules the visit sheet carries.
@@ -5181,23 +5217,23 @@ function doGenerateStudentsPDF(monthKey) {
   // ── Header
   html += '.hdr{display:flex;justify-content:space-between;align-items:flex-end;';
   html += 'border-bottom:2px solid #1e293b;padding-bottom:9px;margin-bottom:12px}';
-  html += '.hdr h1{font-size:21px;font-weight:900;letter-spacing:-.02em}';
-  html += '.hdr .sub{display:flex;align-items:center;gap:4px;font-size:10px;color:#64748b;margin-top:3px}';
-  html += '.hdr .kicker{margin-top:5px;font-size:9.5px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1.6px}';
+  html += '.hdr h1{font-size:26px;font-weight:900;letter-spacing:-.02em}';
+  html += '.hdr .sub{display:flex;align-items:center;gap:4px;font-size:12.5px;color:#374151;margin-top:3px}';
+  html += '.hdr .kicker{margin-top:5px;font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1.6px}';
   html += '.hdr .date{text-align:right}';
-  html += '.hdr .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;font-size:12px;font-weight:800;color:#1e293b}';
-  html += '.hdr .date .h{font-size:9px;color:#94a3b8;margin-top:3px}';
+  html += '.hdr .date .d{display:flex;align-items:center;justify-content:flex-end;gap:5px;font-size:15px;font-weight:800;color:#1e293b}';
+  html += '.hdr .date .h{font-size:11.5px;color:#4b5563;margin-top:3px}';
 
   // ── Summary tiles. Eight across a landscape page, so the value sits at 15px
   //    and every label is one line — the old ones broke on a <br> mid-phrase.
   html += '.summary{display:flex;gap:6px;margin-bottom:12px}';
-  html += '.sbox{flex:1;min-width:0;display:flex;align-items:center;gap:7px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px}';
+  html += '.sbox{flex:1;min-width:0;display:flex;align-items:center;gap:7px;border:1px solid #888888;border-radius:8px;padding:7px 9px}';
   html += '.sbox .ico{width:26px;height:26px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center}';
-  html += '.sbox .v{display:block;font-size:15px;font-weight:900;line-height:1.15;white-space:nowrap}';
-  html += '.sbox .l{display:block;font-size:7.5px;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;font-weight:700;margin-top:1px;white-space:nowrap}';
+  html += '.sbox .v{display:block;font-size:18px;font-weight:900;line-height:1.15;white-space:nowrap}';
+  html += '.sbox .l{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:#4b5563;font-weight:700;margin-top:1px;white-space:nowrap}';
   html += '.sbox.t-slate .ico{background:#e2e8f0;color:#475569}.sbox.t-slate .v{color:#0f172a}';
   html += '.sbox.t-green .ico{background:#dcfce7;color:#16a34a}.sbox.t-green .v{color:#15803d}';
-  html += '.sbox.t-gray  .ico{background:#f1f5f9;color:#94a3b8}.sbox.t-gray  .v{color:#64748b}';
+  html += '.sbox.t-gray  .ico{background:#e5e7eb;color:#4b5563}.sbox.t-gray  .v{color:#374151}';
   html += '.sbox.t-blue  .ico{background:#dbeafe;color:#2563eb}.sbox.t-blue  .v{color:#1d4ed8}';
   html += '.sbox.t-red   .ico{background:#fee2e2;color:#dc2626}.sbox.t-red   .v{color:#b91c1c}';
   html += '.sbox.t-amber .ico{background:#fef3c7;color:#b45309}.sbox.t-amber .v{color:#b45309}';
@@ -5205,56 +5241,56 @@ function doGenerateStudentsPDF(monthKey) {
   // ── Roster table
   html += 'table{width:100%;border-collapse:collapse;table-layout:fixed}';
   html += 'col.c-no{width:3%}col.c-name{width:13%}col.c-father{width:10%}col.c-room{width:4%}col.c-cnic{width:11%}col.c-phone{width:8%}col.c-rent{width:7%}col.c-adm{width:7%}col.c-ext{width:8%}col.c-conc{width:8%}col.c-paid{width:8%}col.c-pend{width:7%}col.c-fst{width:7%}col.c-sst{width:6%}';
-  html += 'thead th{background:#f1f5f9;color:#475569;padding:7px 5px;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;border:1px solid #e2e8f0;word-break:break-word}';
+  /* Photocopy contrast (owner, 2026-09-15): #888 grid, grey header fill, no zebra, dark labels. */
+  html += 'thead th{background:#e5e7eb;color:#1f2937;padding:8px 6px;text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;border:1px solid #888888;word-break:break-word}';
   html += 'thead th.r{text-align:right}thead th.c{text-align:center}';
-  html += 'td{padding:6px 5px;border:1px solid #e2e8f0;word-break:break-word;vertical-align:middle;font-size:10px}';
-  html += 'tbody tr:nth-child(even) td{background:#f8fafc}';
+  html += 'td{padding:7px 6px;border:1px solid #888888;word-break:break-word;vertical-align:middle;font-size:12px}';
   html += 'td.c{text-align:center}td.r{text-align:right}';
-  html += 'td.no{text-align:center;font-weight:700;color:#94a3b8}';
+  html += 'td.no{text-align:center;font-weight:700;color:#4b5563}';
   html += 'td.nm{font-weight:700;color:#0f172a}';
   html += 'td.fa{color:#475569}';
   html += 'td.rm{text-align:center;font-weight:800;color:#b45309}';
-  html += 'td.mono{font-family:Consolas,"Courier New",monospace;font-size:9.5px;color:#475569}';
+  html += 'td.mono{font-family:Consolas,"Courier New",monospace;font-size:11px;color:#475569}';
   html += 'td.ph{color:#475569}';
   html += 'td.money{text-align:right;font-weight:800}';
   html += 'td.rent{color:#15803d}td.paid{color:#15803d}td.pend{color:#b91c1c}';
   html += 'td.adm{color:#1d4ed8;font-weight:700}td.ext{color:#b45309;font-weight:700}td.conc{color:#0f766e;font-weight:700}';
-  html += 'td.nil{color:#cbd5e1;font-weight:400}';
-  html += '.pill{display:inline-block;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:800;white-space:nowrap}';
+  html += 'td.nil{color:#4b5563;font-weight:400}';
+  html += '.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap}';
   html += '.p-paid{background:#dcfce7;color:#15803d}.p-part{background:#fee2e2;color:#b91c1c}';
-  html += '.p-none{background:#f1f5f9;color:#94a3b8}';
-  html += '.p-act{background:#dcfce7;color:#15803d}.p-left{background:#f1f5f9;color:#64748b}.p-other{background:#fee2e2;color:#b91c1c}';
+  html += '.p-none{background:#e5e7eb;color:#4b5563}';
+  html += '.p-act{background:#dcfce7;color:#05603a}.p-left{background:#e5e7eb;color:#374151}.p-other{background:#fee2e2;color:#9f1c12}';
 
   // ── Totals band — the ink bar the eye lands on, matching the visit sheet's
   //    floor header rather than inventing a third dark shade.
   html += 'tr.totals td{background:#0f172a!important;border:1px solid #1e293b;padding:8px 5px;color:#cbd5e1;font-weight:900}';
-  html += 'tr.totals td.lbl{font-size:12px;color:#fff;text-align:left}';
-  html += 'tr.totals td.lbl span{font-weight:400;font-size:10px;color:#94a3b8}';
+  html += 'tr.totals td.lbl{font-size:14px;color:#fff;text-align:left}';
+  html += 'tr.totals td.lbl span{font-weight:400;font-size:12px;color:#94a3b8}';
   // .r before .g/.rd — same specificity, so source order decides which colour
   // the collected and pending figures keep.
   html += 'tr.totals td.r{text-align:right;color:#fff}';
-  html += 'tr.totals td.g{color:#86efac}tr.totals td.rd{color:#fca5a5}tr.totals td.dim{color:#64748b;font-weight:400;font-size:9px;text-align:center}';
-  html += 'tr.totals td.note{color:#94a3b8;font-weight:400;font-size:10px;text-align:center}';
+  html += 'tr.totals td.g{color:#86efac}tr.totals td.rd{color:#fca5a5}tr.totals td.dim{color:#cbd5e1;font-weight:400;font-size:11px;text-align:center}';
+  html += 'tr.totals td.note{color:#94a3b8;font-weight:400;font-size:12px;text-align:center}';
 
   // ── Outgoings register
-  html += '.outgo{margin-top:16px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px}';
-  html += '.outgo h2{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:9px}';
-  html += '.cat{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;color:#0f172a;margin:11px 0 5px}';
-  html += '.cat .n{font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748b;background:#f1f5f9;border-radius:20px;padding:2px 8px}';
-  html += 'table.exp{font-size:10.5px}';
-  html += 'table.exp th{background:#f1f5f9;color:#475569;padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}';
+  html += '.outgo{margin-top:16px;padding:12px 14px;border:1px solid #888888;border-radius:10px}';
+  html += '.outgo h2{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:9px}';
+  html += '.cat{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:#0f172a;margin:11px 0 5px}';
+  html += '.cat .n{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#374151;background:#e5e7eb;border-radius:20px;padding:2px 8px}';
+  html += 'table.exp{font-size:12.5px}';
+  html += 'table.exp th{background:#e5e7eb;color:#1f2937;padding:7px 10px;border:1px solid #888888;text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}';
   html += 'table.exp th.r{text-align:right}';
-  html += 'table.exp td{padding:5px 10px;border:1px solid #e2e8f0}';
+  html += 'table.exp td{padding:5px 10px;border:1px solid #888888}';
   html += 'table.exp td.amt{text-align:right;font-weight:800;color:#b91c1c}';
   html += 'table.exp td.dsc{color:#475569}';
-  html += 'table.exp tr.sub td{background:#f8fafc!important;font-weight:900;color:#0f172a}';
+  html += 'table.exp tr.sub td{background:#e5e7eb!important;font-weight:900;color:#0f172a}';
   html += 'table.exp tr.sub td.amt{color:#b91c1c}';
-  html += 'table.grand td{background:#0f172a;border:1px solid #1e293b;padding:7px 10px;font-weight:900;color:#fff;font-size:10.5px}';
+  html += 'table.grand td{background:#0f172a;border:1px solid #1e293b;padding:8px 10px;font-weight:900;color:#fff;font-size:12.5px}';
   html += 'table.grand td.amt{text-align:right;color:#fca5a5}';
 
-  html += '.footer{margin-top:12px;padding-top:7px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}';
-  html += '.footer .gen{font-size:9px;color:#94a3b8}';
-  html += '.footer .tally{font-size:10px;color:#475569;font-weight:600}';
+  html += '.footer{margin-top:12px;padding-top:7px;border-top:1px solid #888888;display:flex;justify-content:space-between;align-items:center}';
+  html += '.footer .gen{font-size:11px;color:#4b5563}';
+  html += '.footer .tally{font-size:12px;color:#475569;font-weight:600}';
   html += '.pbtn{display:inline-flex;align-items:center;gap:7px;background:#1d4ed8;color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}';
   html += '</style></head><body>';
 
@@ -5356,7 +5392,7 @@ function doGenerateStudentsPDF(monthKey) {
      print buttons"). It also loses the popup fallback, which _electronPDF has
      its own, better version of. */
   _electronPDF(html, escHtml(hostel) + ' — Students Fee Report · ' + monthLabel,
-               { landscape: true });
+               { landscape: true, pageSize: paperSize() });
 }
 
 // ── ADD STUDENT RECALC ───────────────────────────────────────────────────────

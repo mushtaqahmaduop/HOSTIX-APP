@@ -107,9 +107,11 @@ const pageConfig = {
   dashboard:     { title:'Dashboard', sub:'', action:'Add Student' },
   rooms:         { title:'Rooms', sub:'', action:'Add Room' },
   students:      { title:'Students', sub:'', action:'Add Student' },
-  payments:      { title:'Finance', sub:'', action:'Add Payment' },
+  // The owner's reference (pay page.png, 2026-09-15): the page's own name and one line on what it is for.
+  payments:      { title:'Payments', sub:'Manage student payments, receive pending amounts and track collection status.', action:'Add Payment' },
   expenses:      { title:'Expenses', sub:'', action:'Add Expense' },
-  cancellations: { title:'Cancellations', sub:'', action:'Add Cancellation' },
+  // The owner's reference (cancellations2.png, 2026-09-15).
+  cancellations: { title:'Cancellations', sub:'Manage student cancellations, track settlements and restore records.', action:'Add Cancellation' },
   /* Former Students was a MODAL behind the account menu until 2026-09-10.
      `action:null` on purpose: the page's own verb is Restore, on a row, and
      there is no such thing as adding a former student — somebody becomes one

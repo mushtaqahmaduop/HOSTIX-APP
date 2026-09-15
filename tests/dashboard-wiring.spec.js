@@ -100,8 +100,9 @@ test('one wallet is one slice, however it was spelled', async () => {
      this case is the first row: three spellings, ONE wallet, all the money. */
   expect(rows.map(r => r.name)).toEqual(
     ['Cash', 'EasyPaisa', 'JazzCash', 'Bank Transfer', 'Cheque', 'Other']);
-  expect(rows[0].amt).toBe('Rs. 80K');
-  expect(rows.filter(r => r.amt === 'Rs. 0').map(r => r.name))
+  // Exact below a million, two decimals (owner, 2026-09-15) — it was "Rs. 80K".
+  expect(rows[0].amt).toBe('Rs. 80,000.00');
+  expect(rows.filter(r => r.amt === 'Rs. 0.00').map(r => r.name))
     .toEqual(['JazzCash', 'Bank Transfer', 'Cheque']);
 
   /* AND THE STRANGER IS NOT DISCARDED. 'Barter' is not a configured method,
@@ -109,10 +110,10 @@ test('one wallet is one slice, however it was spelled', async () => {
      a total the slices no longer add up to. It is folded into one 'Other'
      rather than given a name of its own. */
   expect(rows[rows.length - 1].name).toBe('Other');
-  expect(rows[rows.length - 1].amt).toBe('Rs. 5K');
+  expect(rows[rows.length - 1].amt).toBe('Rs. 5,000.00');
 
   const centre = await win.evaluate(() => document.querySelector('.dl-coll .dnut__fig').textContent);
-  expect(centre).toBe('100K');           // 80 + 15 + 5, nothing lost or doubled
+  expect(centre).toBe('100,000.00');     // 80 + 15 + 5, nothing lost or doubled
 
   await app.close();
 });

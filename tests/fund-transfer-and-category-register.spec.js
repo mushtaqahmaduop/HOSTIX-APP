@@ -129,7 +129,9 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(dash.transfersStillStored).toBe(1);     // record preserved, not wiped
   // 3 expenses this month + 1 transfer = 4 items, PKR 16,700
   expect(dash.expPill).toBe('4 items');
-  expect(dash.expValue.replace(/[^0-9]/g, '')).toBe('16700');
+  // Read as a number: the card shows two decimals now ("Rs. 16,700.00", owner 2026-09-15).
+  // Drop the "Rs." prefix (its dot is not a decimal point) and the commas, then parse.
+  expect(parseFloat(dash.expValue.replace(/^[^0-9]+/, '').replace(/,/g, ''))).toBe(16700);
 
   // ── 2. Add Expense offers the Fund Transfer category ─────────────────────
   const cats = await win.evaluate(() => {
@@ -172,8 +174,9 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.cats.join('|')).toMatch(/Fund Transfer/);
   // Headline total must equal the rows, transfer included, and not double it.
   expect(expPage.total).toBe('16700');
-  // ...and the compact rendering of that same figure is what the warden sees.
-  expect(expPage.totalShown).toBe('Rs. 16.7K');
+  // ...and that same figure as the warden sees it: exact below a million, two
+  // decimals (owner, 2026-09-15) — it was the compact "Rs. 16.7K".
+  expect(expPage.totalShown).toBe('Rs. 16,700.00');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
   await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });

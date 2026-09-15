@@ -155,7 +155,11 @@ test('a warden hands over; the administrator counts, unticks a line and approves
     expect(ready.label).toBe('Approve Rs. 5,000');
     expect(ready.say).toContain('1 line (Rs. 3,000) goes back to Sara Warden');
     await win.click('#ho-approve');
-    await win.waitForSelector('.usr-hoq .usr-none', { timeout: 10000 });
+    /* THE HANDOVER QUEUE'S OWN EMPTY STATE. The concession queue (step 8) is
+       drawn on this page with an empty state too, and a bare `.usr-hoq .usr-none`
+       matched it before Approve had re-rendered — so the figures below were read
+       off the page as it stood before approval. */
+    await win.waitForSelector('.usr-hoq:not(.usr-meq):not(.usr-cnq) .usr-none', { timeout: 10000 });
 
     const after = await win.evaluate(() => {
       const h = DB.handovers[0];

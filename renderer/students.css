@@ -934,7 +934,176 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
 .stu-table { table-layout: fixed; width: 100%; }
 
 .stu-table thead th,
-.stu-table tbody td { padding: 8px 7px; }
+.stu-table tbody td { padding: 6px 7px; }
+/* A LITTLE SHORTER, WITH THE ROOM TYPE INSIDE THE LABEL (owner, 2026-09-15).
+   The label now holds three lines — number, floor, type — so its own padding
+   and line gaps come down rather than the row growing. */
+.stu-table .stu-room { padding: 3px 8px; gap: 0; }
+.stu-table .stu-room__t { line-height: 1.25; }
+.stu-table .stu-room__type { font-size: 10.5px; }
+
+/* COURSE AND ADDRESS: ONE LINE, ALIGNED, THE REST ON HOVER (owner, 2026-09-15).
+   Course wrapped to two lines and Address clamped to two, so the two columns
+   sat at different heights in the same row. Both are now a single centred line
+   that ends in "…" when it does not fit; the cell's title holds the full text. */
+/* ONE LEFT EDGE, NOT A CENTRE (owner, 2026-09-15, second pass: "the address
+   and course are still not aligned"). Centred, each row's text started wherever
+   its own length put it — "MBBS" far to the right of "MDCAT Prep…". Both now
+   fill the cell and start at its left edge, the rule the student names follow. */
+.stu-table .stu-course {
+    display: block; width: 100%; text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stu-table td .stu-addr { display: flex; align-items: center; justify-content: flex-start; width: 100%; text-align: left; }
+/* …and the cell itself, so a row with no course or address puts its dash on
+   that same left edge instead of centring it — measured, the centred dash was
+   what still broke the column's line (2026-09-15). (0,2,1) beats the centring
+   in registers-center.css, which loads last. */
+.stu-table td.stu-c-left { text-align: left; }
+.stu-table td .stu-addr__t {
+    display: block; -webkit-line-clamp: unset; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* S/O · D/O before the father's name — quieter than the name it precedes. */
+.stu-who__rel { font-weight: 700; color: var(--text3); }
+
+
+/* ══ NEW STUDENT ADMISSION, TO `add form.png` (owner, 2026-09-15) ══════════════
+   Hierarchy, not new fields: a title with a four-step progress row, numbered
+   section discs with a description and a field count, an icon segment inside
+   the inputs the reference marks, the rail's three cards as drawn, and the
+   action bar docked to the bottom edge of the window. Selectors carry `.asf`
+   where an older rule in this sheet (or a later one, .sf-sec__h at ~1849)
+   would otherwise win. Tokens only. */
+
+/* ── header ── */
+.asf-top   { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+.asf-top__l { min-width:0; }
+.asf .asf-title { font-size:22px; font-weight:800; }
+
+.asf-steps { list-style:none; margin:0; padding:0 0 2px; display:flex; flex:0 1 640px; min-width:0; }
+.asf-step  { position:relative; flex:1 1 0; min-width:0; }
+/* The connector into this step: accent once the step before it is done. */
+.asf-step + .asf-step::before {
+    content:''; position:absolute; top:14px; height:2px;
+    left:calc(-50% + 20px); right:calc(50% + 20px);
+    background:var(--border2); border-radius:2px;
+}
+.asf-step.is-done + .asf-step::before { background:var(--accent); }
+.asf-step > button {
+    width:100%; display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding:0; border:0; background:none; cursor:pointer; font-family:inherit; color:var(--text2);
+}
+.asf-step > button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:8px; }
+.asf-step__n {
+    width:28px; height:28px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--card); border:1.5px solid var(--border2); color:var(--text2);
+    font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;
+}
+.asf-step__l { max-width:100%; font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.asf-step.is-done .asf-step__n { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-strong); }
+.asf-step.is-on   .asf-step__n { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); box-shadow:0 0 0 4px var(--accent-dim); }
+.asf-step.is-on   .asf-step__l { color:var(--accent-strong); }
+
+/* ── numbered section heads ── */
+.asf .sf-sec { border-radius:12px; }
+.asf .asf-sec__h {
+    display:flex; align-items:flex-start; gap:12px; margin-bottom:16px;
+    text-transform:none; letter-spacing:0; color:var(--text);
+}
+.asf-disc {
+    width:30px; height:30px; flex-shrink:0; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--accent); color:var(--text-on-accent);
+    font-size:14px; font-weight:800; font-variant-numeric:tabular-nums;
+}
+.asf-sec__tt { flex:1 1 auto; min-width:0; }
+.asf-sec__t  { font-size:15px; font-weight:700; line-height:1.25; color:var(--text); }
+.asf-sec__s  { margin-top:2px; font-size:12px; font-weight:400; color:var(--text3); }
+.asf .asf-sec__h .asf-secmeta { align-self:center; flex-shrink:0; white-space:nowrap; font-size:10.5px; font-weight:600; letter-spacing:.6px; }
+.asf .asf-card__h { font-size:14px; }
+
+/* ── the icon segment inside an input or select ── */
+.asf-ic { position:relative; display:flex; align-items:center; }
+.asf-ic__i {
+    position:absolute; left:0; top:0; bottom:0; width:38px; z-index:1;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text3); border-right:1px solid var(--border2); pointer-events:none;
+}
+.asf-ic > .sf-in, .asf-ic > .sf-sel, .asf-ic > .sf-ta { padding-left:48px; }
+.asf-ic--ta { align-items:flex-start; }
+.asf-ic--ta .asf-ic__i { bottom:auto; height:42px; }
+.asf-ic > .sf-ta { min-height:42px; padding-top:11px; }
+
+/* ── phone: +92, the number, and the WhatsApp mark it is used for ── */
+.asf-phone     { display:flex; }
+.asf-phone__in { position:relative; flex:1 1 auto; min-width:0; display:flex; }
+.asf-phone__in .sf-in { border-radius:0 10px 10px 0; padding-right:36px; }
+.asf-phone__wa { position:absolute; right:11px; top:50%; transform:translateY(-50%); display:flex; color:var(--green); pointer-events:none; }
+
+/* ── rail ── */
+.asf .asf-photo { aspect-ratio:auto; min-height:176px; padding:14px 10px; border-radius:10px; }
+.asf .asf-photo:has(img) { aspect-ratio:1 / 1; min-height:0; padding:0; }
+.asf-photo__av { display:flex; color:var(--text3); }
+.asf .asf-photo__empty b { margin-top:10px; }
+.asf-photo__choose {
+    margin-top:10px; display:inline-flex; align-items:center; gap:6px;
+    height:32px; padding:0 12px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--accent); background:var(--card); color:var(--accent-strong);
+    font-size:12px; font-weight:600;
+}
+.asf-photo__choose:hover { background:var(--accent-dim); }
+/* THE OLD WELL RULE WAS WINNING. `.asf-photo__empty span` (0,1,1, ~line 713)
+   made every span in the well a grey 11px block — the Choose Photo button
+   became a block with its icon stacked over its word, and the silhouette lost
+   its flex box. These restate both at a specificity that beats it. */
+.asf .asf-photo__empty .asf-photo__choose {
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    margin-top:10px; font-size:12px; color:var(--accent-strong); line-height:1;
+}
+.asf .asf-photo__empty .asf-photo__choose svg { flex-shrink:0; }
+.asf .asf-photo__empty .asf-photo__av { display:flex; margin-top:0; }
+/* With a photo loaded the actions are Take Photo AND Remove, and side by side
+   they are wider than the rail card — Remove was pushed out of it. Stacked. */
+.asf .asf-photo-acts { flex-direction:column; }
+.asf .asf-photo-acts .sf-btn { width:100%; flex:none; }
+.asf-photo__choose:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.asf .asf-photo-acts .sf-btn { height:36px; }
+.asf-rec__st {
+    padding:3px 10px; border-radius:999px; white-space:nowrap;
+    background:var(--accent-dim); color:var(--accent-strong); font-size:11.5px; font-weight:700;
+}
+.asf-docs__hint { margin-top:8px; font-size:10.5px; color:var(--text3); }
+
+/* ── proportions: contact and allotment near-equal, as drawn ── */
+/* Contact wider, Allotment compact (owner, 2026-09-15, second pass). */
+.asf .asf-row       { grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); }
+#asf-sec-3 .asf-fg  { gap:12px; }
+#asf-sec-3 .asf-picked:empty { display:none; }
+.asf .asf-fg--notes { grid-template-columns:minmax(0,1fr) minmax(0,1.18fr); }
+@media (max-width:1300px) { .asf .asf-row { grid-template-columns:1fr; } }
+@media (max-width:760px)  { .asf .asf-fg--notes { grid-template-columns:1fr; } }
+
+/* ── THE ACTION BAR, DOCKED TO THE WINDOW'S BOTTOM EDGE (owner, 2026-09-15:
+   "lowered and narrowed and adjacent to the windows taskbar just like the
+   payment buttons"). It is a sibling of .asf now, a direct child of #content,
+   so its negative margins cancel #content's own padding (20px 24px) and it
+   runs edge to edge; the negative `bottom` pins it to the scroll port's edge
+   rather than 20px above it. 56px tall with 36px buttons — .tsk-foot's size. */
+.asf-foot {
+    position:sticky; bottom:-20px; z-index:30;
+    margin:14px -24px -20px; min-height:56px; padding:9px 24px;
+    border:0; border-top:1px solid var(--border); border-radius:0;
+    background:var(--card); box-shadow:0 -4px 14px rgba(15,23,42,.06);
+}
+body:not(.light-theme) .asf-foot { box-shadow:0 -4px 14px rgba(0,0,0,.30); }
+.asf-foot .sf-btn { height:36px; padding:0 15px; border-radius:10px; font-size:12.5px; }
+/* style.css gives #content 16px of padding at max-width:900px — which is the
+   app's own minimum window — so the bar's offsets follow it there. */
+@media (max-width:900px) {
+    .asf-foot { bottom:-16px; margin:14px -16px -16px; padding:9px 16px; }
+}
 .stu-table tbody td { font-size: 12px; }
 
 /* The columns, in the order they are declared. Percentages rather than pixels
@@ -1088,7 +1257,8 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
 .stu-kebab {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
-    background: var(--card); border: 1px solid var(--border); color: var(--text3);
+    /* Higher contrast in both themes (owner, 2026-09-15) — the same as .lk-kebab. */
+    background: var(--bg3); border: 1px solid color-mix(in srgb, var(--text) 38%, transparent); color: var(--text);
     transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
 .stu-kebab:hover,

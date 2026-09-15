@@ -103,21 +103,8 @@ function expCatHue(cat) {
   return hues[h % hues.length];
 }
 
-// Minimal inline sparkline. Chart.js would be four more canvases on this page
-// for four decorative 60x26 trends; an SVG polyline costs nothing and cannot
-// leak a chart instance on re-render.
-function expSpark(values) {
-  const w = 62, h = 26, pad = 3;
-  const v = (values && values.length) ? values : [0, 0];
-  const max = Math.max.apply(null, v), min = Math.min.apply(null, v);
-  const span = (max - min) || 1;
-  const step = v.length > 1 ? (w - pad * 2) / (v.length - 1) : 0;
-  const pts = v.map((n, i) =>
-    (pad + i * step).toFixed(1) + ',' + (h - pad - ((n - min) / span) * (h - pad * 2)).toFixed(1)
-  ).join(' ');
-  return `<svg class="exp-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" fill="none" preserveAspectRatio="none" aria-hidden="true">
-    <polyline points="${pts}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-}
+/* The card sparklines are gone (owner, 2026-09-15: "remove all the zig zag
+   lines from expenses kpis"). expSpark() drew them and nothing else did. */
 
 /* The one filter+sort pipeline for expenses. The table, the stat strip and
    the PDF export all read from here, so they cannot drift apart — the same
@@ -377,13 +364,6 @@ function renderExpenses() {
   const avgDaily  = Math.round(scopedTotal / daysElapsed);
   const activeCat = new Set(scoped.map(e => e.category).filter(Boolean)).size;
 
-  // Daily totals across the scope drive every sparkline's shape.
-  const byDay = {};
-  scoped.forEach(e => { const d = String(e.date||''); if (d) byDay[d] = (byDay[d]||0) + Number(e.amount||0); });
-  const days      = Object.keys(byDay).sort();
-  const daySeries = days.map(d => byDay[d]);
-  const cntSeries = days.map(d => scoped.filter(e => e.date === d).length);
-
   const scopeLabel = scope === 'All' ? 'All months'
                    : scope === mo    ? 'This Month'
                    : fmtMonthLabel(scope);
@@ -408,7 +388,7 @@ function renderExpenses() {
      element made .exp-stat__v read "PKR 16.7K \u2197 83.3%" — one node holding two
      different numbers, which is wrong for a screen reader and broke a spec that
      reads the headline figure to check it equals the sum of the rows. */
-  const stat = (hue, icon, label, value, sub, series, trend) => `
+  const stat = (hue, icon, label, value, sub, trend) => `
     <div class="exp-stat ${hue}">
       <span class="exp-stat__ic">${icon}</span>
       <div class="exp-stat__c">
@@ -419,7 +399,6 @@ function renderExpenses() {
         </div>
         <div class="exp-stat__s">${sub}</div>
       </div>
-      ${expSpark(series)}
     </div>`;
 
   const stats = `
@@ -427,14 +406,14 @@ function renderExpenses() {
     ${stat('dh-violet','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
           'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">${expMoney(scopedTotal)}</span>`,
           scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
-          daySeries, _expTrend)}
+          _expTrend)}
     ${stat('dh-blue','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
           'Average Daily', expMoney(avgDaily),
-          `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`, daySeries)}
+          `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`)}
     ${stat('dh-green','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
-          'Total Records', String(scoped.length), scopeLabel, cntSeries)}
+          'Total Records', String(scoped.length), scopeLabel)}
     ${stat('dh-amber','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
-          'Categories', String(activeCat), 'Active', cntSeries)}
+          'Categories', String(activeCat), 'Active')}
   </div>`;
 
   // ── Toolbar ───────────────────────────────────────────────────────────────

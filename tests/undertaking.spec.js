@@ -62,6 +62,7 @@ test('admission form: rules versions, the original once, reprints watermarked, p
       window.__printed = [];
       _electronPDF = (html, name) => { window.__printed.push({ html, name }); };
       DB.settings.serviceModel = 'rent_mess_optional';
+      DB.settings.hostelName = 'Test Hostel';   // a real name, so no print stops to ask for one
       DB.settings.undertaking = undefined;
       const rt = DB.settings.roomTypes.find(x => x.id === '2s');
       rt.defaultRent = 10000; rt.defaultMess = 7000;

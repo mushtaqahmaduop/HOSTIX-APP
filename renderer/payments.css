@@ -1034,18 +1034,19 @@ input.ws__amt {
 }
 
 /* "September 2026" broke across two lines in a 76px column, which is a date
-   turned into two facts and an extra line of height on every row in the table. */
-.pay-table tbody td:nth-child(4) { white-space:nowrap; }
+   turned into two facts and an extra line of height on every row in the table.
+   BY CLASS, NOT POSITION, since the # column (2026-09-15) moved every column. */
+.pay-table tbody td.pay-col-mo { white-space:nowrap; }
 /* ROOM AND MONTH HUG WHAT THEY HOLD (owner, 2026-09-14: "reduce the free space
    between room number and month to have full content view port"). An auto
    table shares its spare width across every column, and these two got a large
    share of air around a small label. width:1% shrinks each to its content; the
    width they gave back goes to the columns that need it. */
-.pay-table thead th:nth-child(3), .pay-table tbody td:nth-child(3),
-.pay-table thead th:nth-child(4), .pay-table tbody td:nth-child(4) { width:1%; }
+.pay-table thead th.pay-col-room, .pay-table tbody td.pay-col-room,
+.pay-table thead th.pay-col-mo,   .pay-table tbody td.pay-col-mo { width:1%; }
 /* …and the room label never breaks inside its box. "#A 01" was wrapping to
    "#A" over "01", which made every row a line taller than it needed to be. */
-.pay-table tbody td:nth-child(3) .lk-room__n { white-space:nowrap; }
+.pay-table tbody td.pay-col-room .lk-room__n { white-space:nowrap; }
 /* The name block is 210px here, not the shared 240: measured at 1366 the table
    was 24px wider than its card, and the Student column was the widest in it.
    (td + .pay-who out-ranks registers-center.css, which loads last.) */
@@ -1209,6 +1210,94 @@ input.ws__amt {
 
 .pef-notes-count { float:right; font-size:10px; color:var(--text3); font-weight:600; }
 
+/* ══ EDIT PAYMENT IN TWO COLUMNS (owner reference `edit pay model.png`, 2026-09-15) ══
+   The record in numbered sections on the left; the student and where the month
+   stands on the right. Built from the form's own parts (.pef-sec, .pef-sum__row,
+   .lk-chip, the ant- status tokens) rather than new values. */
+.pef-layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; align-items:start; }
+@media (max-width:1080px) { .pef-layout { grid-template-columns:minmax(0,1fr); } }
+.pef-main { min-width:0; }
+.pef-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.pef-g4 { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; }
+@media (max-width:900px) { .pef-g4 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
+/* Section 2: the three figures, then the box that receives against them. */
+.pef-rcv {
+    display:grid; grid-template-columns:repeat(3, minmax(0,1fr)) minmax(0,1.35fr);
+    border:1px solid var(--border); border-radius:10px; background:var(--bg3);
+}
+@media (max-width:760px) { .pef-rcv { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+.pef-rcv__c { padding:10px 12px; display:flex; flex-direction:column; gap:3px; border-right:1px solid var(--border); min-width:0; }
+.pef-rcv__c span { font-size:11px; font-weight:600; color:var(--text3); }
+.pef-rcv__c b {
+    font-size:17px; font-weight:800; color:var(--text);
+    font-variant-numeric:tabular-nums; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track);
+}
+.pef-rcv__c b.is-paid { color:var(--ant-success-fg); }
+.pef-rcv__c b.is-due  { color:var(--red); }
+.pef-rcv__in { padding:8px 12px; display:flex; flex-direction:column; gap:4px; min-width:0; }
+.pef-rcv__in label { font-size:11px; font-weight:700; color:var(--text2); }
+.pef-rcv__row { display:flex; gap:6px; align-items:center; }
+.pef-rcv__row .hf-in { flex:1; min-width:0; }
+.pef-rcv__full {
+    flex-shrink:0; border:1px solid var(--border); background:var(--card); color:var(--accent-strong);
+    font:700 11px var(--font); padding:6px 9px; border-radius:7px; cursor:pointer; white-space:nowrap;
+}
+.pef-rcv__full:hover { background:var(--accent-soft); border-color:var(--accent); }
+.pef-rcv__full:disabled { opacity:.45; cursor:not-allowed; background:var(--card); border-color:var(--border); }
+.pef-rcv__tip {
+    display:flex; gap:8px; align-items:flex-start; margin-top:9px; padding:8px 11px; border-radius:9px;
+    background:var(--accent-soft); color:var(--accent-strong); font-size:11.5px; line-height:1.45;
+}
+.pef-rcv__tip svg { flex-shrink:0; margin-top:2px; }
+
+/* The right-hand cards. */
+.pef-card { border:1px solid var(--border); border-radius:10px; background:var(--card); overflow:hidden; }
+.pef-card__h {
+    display:flex; align-items:center; gap:7px; padding:10px 13px;
+    border-bottom:1px solid var(--border); font-size:12.5px; font-weight:700; color:var(--text);
+}
+.pef-card__h .lk-chip, .pef-card__lnk { margin-left:auto; }
+.pef-card__lnk {
+    border:1px solid var(--border); background:var(--card); color:var(--accent-strong);
+    font:600 11px var(--font); padding:3px 9px; border-radius:7px; cursor:pointer;
+}
+.pef-card__lnk:hover { background:var(--accent-soft); border-color:var(--accent); }
+.pef-stu { display:flex; align-items:center; gap:10px; padding:11px 13px; background:var(--bg3); }
+.pef-stu__av {
+    width:38px; height:38px; flex-shrink:0; border-radius:50%;
+    background:var(--accent); color:var(--text-on-accent);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px;
+}
+.pef-stu__id { flex:1; min-width:0; display:flex; flex-direction:column; }
+.pef-stu__id b { font-size:13.5px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pef-stu__id span { font-size:11px; color:var(--text3); }
+.pef-card .pef-sum__row { border-top:1px solid var(--border); }
+.pef-card .pef-stu + .pef-sum__row, .pef-card .pef-card__h + .pef-sum__row { border-top:0; }
+.pef-newbal {
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:10px 13px 13px; padding:9px 11px; border-radius:9px; font-size:12px;
+}
+.pef-newbal small { display:block; font-size:11px; font-weight:400; opacity:.85; }
+.pef-newbal > b { font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.pef-newbal.is-clear { background:var(--ant-success-bg); color:var(--ant-success-fg); }
+.pef-newbal.is-due   { background:var(--ant-warning-bg); color:var(--ant-warning-fg); }
+.pef-newbal.is-bad   { background:var(--ant-danger-bg);  color:var(--ant-danger-fg); }
+.pef-month { padding:10px 13px 0; font-size:13px; font-weight:700; color:var(--text); }
+.pef-bar { margin:8px 13px 0; height:8px; border-radius:999px; background:var(--bg3); overflow:hidden; }
+.pef-bar > i { display:block; height:100%; border-radius:inherit; background:var(--ant-success-fg); transition:width .2s ease; }
+.pef-bar__cap {
+    display:flex; justify-content:space-between; padding:6px 13px 11px;
+    font-size:11.5px; color:var(--text2); font-variant-numeric:tabular-nums;
+}
+.pef-recent { width:100%; border-collapse:collapse; font-size:11.5px; }
+.pef-recent th { text-align:left; font-weight:600; color:var(--text3); padding:7px 13px; background:var(--bg3); }
+.pef-recent td { padding:7px 13px; border-top:1px solid var(--border); font-variant-numeric:tabular-nums; color:var(--text2); }
+.pef-recent td b { color:var(--text); font-weight:700; }
+.pef-none { padding:12px 13px; font-size:11.5px; color:var(--text3); }
+/* Delete sits on the left of the footer, apart from Cancel and Save. */
+.pef-modal .modal-footer .pef-foot-del { margin-right:auto; }
+
 
 /* Overdue was bare red text under the status pill — the one mark on the row
    that said its meaning in colour alone. It becomes a pill like the others
@@ -1295,9 +1384,7 @@ input.ws__amt {
        margin. Shrinking the header type was the alternative and was rejected:
        the whole point of the 7 Sep small-type pass was that this app's labels
        are already at the floor. */
-    .pay-table thead th:nth-child(10), .pay-table tbody td:nth-child(10),
-    .pay-table thead th:nth-child(11), .pay-table tbody td:nth-child(11),
-    .pay-table thead th:nth-child(12), .pay-table tbody td:nth-child(12) {
+    .pay-table thead th.pay-col-x, .pay-table tbody td.pay-col-x {
         padding-left: 4px; padding-right: 4px;
     }
 }
@@ -1580,3 +1667,75 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    and a 32px chevron well, and at 140 the longest month label ellipsised on a
    control that has room for it. The row still closes with 7px to spare. */
 .pay-select--mo { min-width: 150px; width: 150px; }
+
+
+/* ══ THE PAYMENTS PAGE, TO `pay page.png` (owner, 2026-09-15) ═══════════════
+   Four cards with exact figures, a toolbar whose month and status selects
+   carry their glyph, a numbered table with every money column together, and
+   the reference's footer. Tokens only; the old `.pay-stat` strip is no longer
+   rendered. */
+
+/* ── Toolbar: a glyph inside the month and status selects ── */
+.pay-selwrap { position:relative; display:inline-flex; align-items:center; margin:0; }
+.pay-selwrap__i {
+    position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    display:flex; color:var(--text3); pointer-events:none;
+}
+.pay-select.pay-select--ico { padding-left:34px; }
+.pay-select--mo.pay-select--ico { min-width:172px; width:172px; }
+.pay-select--st.pay-select--ico { min-width:132px; width:132px; }
+
+/* ── Table ── */
+.pay-table thead th {
+    text-transform:none; letter-spacing:0; font-size:11.5px; font-weight:600;
+    color:var(--text2); line-height:1.25; vertical-align:middle;
+}
+.pay-th { display:inline-flex; align-items:center; gap:4px; }
+.pay-th__l { display:inline-block; }
+.pay-table th.pay-col-num, .pay-table td.pay-col-num { text-align:center; }
+.pay-table th.pay-col-num .pay-th { justify-content:center; text-align:center; }
+.pay-table th.pay-col-no, .pay-table td.pay-col-no { width:1%; text-align:center; color:var(--text3); font-variant-numeric:tabular-nums; }
+.pay-num {
+    font-size:13px; font-weight:500; color:var(--text); white-space:nowrap;
+    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+}
+.pay-num--strong { font-weight:700; }
+.pay-num--in     { font-weight:700; color:var(--ant-success-fg); }
+.pay-num--due    { font-weight:700; color:var(--ant-danger-fg); }
+/* The coverage tag in the reference's colours: blue Rent + Mess, green Rent Only. */
+.pay-table .pay-cov { text-transform:none; letter-spacing:0; font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:6px; }
+.pay-table .pay-cov.pay-cov--mess { background:var(--accent-dim); color:var(--accent-strong); }
+.pay-table .pay-cov.pay-cov--rent { background:var(--ant-success-bg); color:var(--ant-success-fg); }
+.pay-table .pay-pill { border-radius:7px; }
+.pay-table .pay-pill.pay-pill--none { background:var(--ant-danger-bg); color:var(--ant-danger-fg); }
+
+/* ── Footer: sentence, Rows per page, pager ── */
+.pay-foot__size span { white-space:nowrap; }
+.pay-foot__size select { min-width:68px; }
+
+/* ── Row rhythm: nearer the reference's row height ──
+   Compacted again (owner, 2026-09-15: "compact the row a little in height"),
+   with the room type gone from under the room box. */
+.pay-table tbody td { padding-top:6px; padding-bottom:6px; }
+.pay-table .pay-who__av { width:32px; height:32px; }
+.pay-table .pay-cov { margin-top:2px; }
+
+/* ── At the 1366 floor (measured 2026-09-15) ──
+   The reference is drawn at 1670px. At 1366 the first card's exact figure was
+   cut to "152,4…", the toolbar wrapped to two lines — which the owner ruled out
+   on 2026-09-10 — and the table was 60px wider than its panel. Each fix below
+   gives up decoration, never a figure, a filter or a column. */
+@media (max-width:1440px) {
+    .pay-selwrap__i { display:none; }
+    .pay-select.pay-select--ico { padding-left:13px; }
+    .pay-select--mo.pay-select--ico { min-width:150px; width:150px; }
+    .pay-select--st.pay-select--ico { min-width:112px; width:112px; }
+    .pay-lbl-x { display:none; }
+}
+@media (max-width:1400px) {
+    /* The sort glyph stays on the sorted column; the others are still sortable
+       (the heading's title says so) but stop spending ~12px each. */
+    .pay-table thead th:not(.is-sorted) .arw { display:none; }
+    .pay-table thead th, .pay-table tbody td { padding-left:5px; padding-right:5px; }
+    .pay-num { font-size:12.5px; }
+}
