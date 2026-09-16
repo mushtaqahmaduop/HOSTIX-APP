@@ -12,10 +12,10 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 3 | Cancellations | Row action buttons lost their borders | done |
 | 4 | Cancellations | Confirm button should be a centre-filled SVG | done |
 | 5 | Payments | What does Reverse do? Amount goes back to pending | answered |
-| 6 | Payments | Fit the toolbar dropdowns onto one line | todo |
-| 7 | Payments | Concession and extra charges need their reason stated under the figure | todo |
-| 8 | Payments | The +N% delta on Total Collected is hidden behind the trend bars | todo |
-| 9 | Payments | Partial vs Pending — which does a half-paid student get? | todo |
+| 6 | Payments | Fit the toolbar dropdowns onto one line | done |
+| 7 | Payments | Concession and extra charges need their reason stated under the figure | done |
+| 8 | Payments | The +N% delta on Total Collected is hidden behind the trend bars | done |
+| 9 | Payments | Partial vs Pending — which does a half-paid student get? | done |
 | 10 | Expenses | Align the categories and the amounts | todo |
 | 11 | Expenses | "Handed by" should name the RECEIVER of the money | todo |
 | 12 | Rooms | KPI icons are coloured; every rebuilt screen is neutral | todo |

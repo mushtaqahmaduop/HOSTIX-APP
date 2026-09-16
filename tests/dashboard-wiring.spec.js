@@ -177,7 +177,7 @@ test('every jump lands on the answer, and can be undone', async () => {
   expect(await win.evaluate(() =>
     getComputedStyle(document.getElementById('hdr-back')).display)).toBe('none');
 
-  // ── View All -> the PENDING rows, not the whole table ────────────────────
+  // ── View All -> the rows that still OWE, not the whole table ─────────────
   await win.evaluate(() => openPaymentsPending());
   await win.waitForTimeout(700);
   let s = await win.evaluate(() => ({ page: currentPage, status: payFilter.status,
@@ -185,7 +185,12 @@ test('every jump lands on the answer, and can be undone', async () => {
   expect(s.page).toBe('payments');
   /* THE ORDER MATTERS AND IS THE WHOLE BUG: navigate() clears status on every
      change of page, so a filter set BEFORE it is wiped a millisecond later. */
-  expect(s.status).toBe('Pending');
+  /* 'Owing', not 'Pending', since 2026-09-16. openPaymentsPending()'s own
+     doc-comment always said "showing only what is still owed", but 'Pending'
+     means NOTHING WAS COLLECTED — so the jump quietly hid every student who
+     had paid half and still owed the rest. What this test is about is that the
+     filter survives navigate(); the value is the one the function promises. */
+  expect(s.status).toBe('Owing');
   expect(s.back).toBe('flex');
 
   await win.evaluate(() => goBack());

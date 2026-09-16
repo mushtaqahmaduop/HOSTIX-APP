@@ -33,7 +33,16 @@
     background:var(--neutral-bg); color:var(--text-secondary);
 }
 .pay-kpi__body { flex:1 1 auto; min-width:0; }
-.pay-kpi__l { font-size:var(--text-sm); font-weight:var(--weight-medium); color:var(--text-secondary); line-height:var(--leading-tight); }
+/* The label line carries the delta on Total Collected, pushed to the right —
+   see the note at its markup. Every other card has nothing after the label, so
+   the flex row costs them nothing. */
+.pay-kpi__l {
+    display:flex; align-items:center; gap:var(--space-2);
+    font-size:var(--text-sm); font-weight:var(--weight-medium);
+    color:var(--text-secondary); line-height:var(--leading-tight);
+}
+.pay-kpi__l > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pay-kpi__l .pay-kpi__delta { margin-left:auto; }
 .pay-kpi__v {
     margin:var(--space-1) 0;
     font-size:var(--text-xl); font-weight:var(--weight-strong); line-height:var(--leading-tight);
@@ -62,7 +71,14 @@
 .pay-kpi__bars { flex-shrink:0; align-self:flex-end; color:var(--text-tertiary); }
 .pay-kpi__bars rect { fill:currentColor; opacity:.55; }
 .pay-kpi__bars rect.is-now { fill:var(--accent); opacity:1; }
-@media (max-width:1320px) { .pay-kpi__bars { display:none; } }
+/* 1320 -> 1440 (owner, 2026-09-16). Moving the delta onto the label line fixed
+   the bars covering it, and then showed the real crowding underneath: at 1366
+   the first card was holding an icon, a label, a delta, a six-bar chart and a
+   nine-digit figure in about 250px, and both the label and the figure
+   ellipsised — "Total Col…" over "152,400…". The bars are the only thing on
+   that card that is decoration, so they are the thing that goes. This sheet's
+   own rule for the 1366 floor says it: give up decoration, never a figure. */
+@media (max-width:1440px) { .pay-kpi__bars { display:none; } }
 .pay-kpi__go { align-self:center; flex-shrink:0; }
 .pay-kpi__go.is-on { background:var(--accent-bg); color:var(--accent-fg); border-color:transparent; }
 
@@ -1587,10 +1603,24 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    on 2026-09-10 — and the table was 60px wider than its panel. Each fix below
    gives up decoration, never a figure, a filter or a column. */
 @media (max-width:1440px) {
-    .pay-selwrap__i { display:none; }
-    .pay-select.pay-select--ico { padding-left:13px; }
-    .pay-select--mo.pay-select--ico { min-width:150px; width:150px; }
-    .pay-select--st.pay-select--ico { min-width:112px; width:112px; }
+    /* REWRITTEN 2026-09-16 (owner: "fit its dropdowns in the single line of
+       dropdowns"). This block used to name `.pay-selwrap__i`, `.pay-select--mo`
+       and `.pay-select--st` — classes the stage-3 rebuild replaced with the
+       shared `.ui-search` and `.ui-selectw`. The selectors stopped matching
+       anything, so every width below silently stopped applying and the strip
+       wrapped to two lines again at the 1366 floor, which the owner ruled out
+       on 2026-09-10.
+
+       Measured at 1366: the panel is 1067px and the bar wanted 1341. The 274px
+       comes off the search box, which is the only control here that can give
+       up width without giving up a choice, and off three selects whose widest
+       option is shorter than the box the browser sizes for them. No filter and
+       no action leaves the bar. */
+    .pay-tools { gap:var(--space-1); }
+    .pay-tools .ui-search  { flex:1 1 170px; min-width:140px; max-width:185px; }
+    .pay-tools .ui-selectw { min-width:112px; }
+    .pay-tools .ui-selectw--mo { min-width:148px; }
+    .pay-tools__end { gap:var(--space-1); }
     .pay-lbl-x { display:none; }
 }
 @media (max-width:1400px) {
@@ -1599,4 +1629,16 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
     .pay-table thead th:not(.is-sorted) .arw { display:none; }
     .pay-table thead th, .pay-table tbody td { padding-left:5px; padding-right:5px; }
     .pay-num { font-size:12.5px; }
+}
+
+/* WHY A FIGURE IS THERE, under the figure (owner, 2026-09-16).
+   Italic and one step down, because it is an annotation on the number above it
+   and must never be mistaken for a second number. The column is right-aligned,
+   so this is too — a left-aligned caption under a right-aligned figure reads as
+   belonging to the cell beside it. */
+.pay-why {
+    display: block; margin-top: 2px;
+    font-size: var(--text-xs); font-style: italic; font-weight: var(--weight-normal);
+    color: var(--text-tertiary); text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }

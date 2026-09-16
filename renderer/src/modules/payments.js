@@ -380,7 +380,7 @@ function _payResetFilter() {
 function openPaymentsPending() {
   navigate('payments');
   _payResetFilter();
-  payFilter.status = 'Pending';
+  payFilter.status = 'Owing';
   renderPage('payments');
 }
 
@@ -419,9 +419,16 @@ function payFiltered() {
     if (payFilter.unpaidOnly && !(outstandingOf(p) > 0)) return false;
 
     if (payFilter.status !== 'All') {
+      /* 'Owing' IS NOT A STATUS, IT IS THE QUESTION THE CARD ASKS (owner,
+         2026-09-16). payStatusOf() answers Paid / Partial / Pending, and
+         'Pending' means NOTHING WAS COLLECTED — so filtering by it hid every
+         student who had paid half and still owed the rest. The card above
+         counted those students and then showed fewer rows than it counted.
+         'Owing' is Partial + Pending: anyone with a balance. */
+      if (payFilter.status === 'Owing') { if (payStatusOf(p) === 'Paid') return false; }
       // 'Overdue' is no longer offered, but a session that had it selected — or
       // a saved filter — would otherwise filter against a status nothing sets.
-      if (payFilter.status === 'Overdue') { payFilter.status = 'Pending'; }
+      else if (payFilter.status === 'Overdue') { payFilter.status = 'Owing'; }
       else if (payStatusOf(p) !== payFilter.status) return false;
     }
     if (payFilter.search) {
@@ -582,11 +589,20 @@ function renderPayments() {
     <div class="ui-card pay-kpi">
       <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M3 10h18"/></svg></div>
       <div class="pay-kpi__body">
-        <div class="pay-kpi__l">Total Collected</div>
+        ${''/* THE DELTA SITS ON THE LABEL LINE (owner, 2026-09-16: "move the
+               percent up in total collected because it is hidden by the
+               bars"). It used to share the bottom line with the month, which
+               is the same line the six trend bars are bottom-aligned to — so
+               on any card narrower than the reference's the bars sat over it.
+               The top line has nothing to its right on this card and the
+               figure it qualifies is directly under it. */}
+        <div class="pay-kpi__l">
+          <span>Total Collected</span>
+          ${deltaTxt ? `<span class="pay-kpi__delta ${delta >= 0 ? 'is-up' : 'is-down'}" title="Against ${escHtml(monthLabel(trend[4].key))}">${delta >= 0 ? upArrow : downArrow}${deltaTxt}</span>` : ''}
+        </div>
         <div class="pay-kpi__v" title="${escHtml(fmtPKR(total))}">${payCash(total)}</div>
         <div class="pay-kpi__s">
           <span>${icon('calendar', 'xs')} ${_scopeKey ? escHtml(monthLabel(_scopeKey)) : 'All months'}</span>
-          ${deltaTxt ? `<span class="pay-kpi__delta ${delta >= 0 ? 'is-up' : 'is-down'}" title="Against ${escHtml(monthLabel(trend[4].key))}">${delta >= 0 ? upArrow : downArrow}${deltaTxt}</span>` : ''}
         </div>
       </div>
       ${payTrendBars(trend)}
@@ -604,10 +620,16 @@ function renderPayments() {
       </div>
     </button>
 
-    <button type="button" class="ui-card pay-kpi pay-kpi--click${payFilter.status === 'Pending' ? ' is-on' : ''}" onclick="paySetStatus('Pending')" title="Show only unsettled records" aria-pressed="${payFilter.status === 'Pending'}">
+    ${''/* "STILL OWING", NOT "PENDING" (owner, 2026-09-16). This card has always
+           counted every student with a balance — payStudentShare() calls a
+           student paid only when ALL their records are — but it used to filter
+           the table to status 'Pending', which means nothing collected at all.
+           So it counted the half-payers and then hid them, and the figure on
+           the card did not match the rows under it. One word, one meaning. */}
+    <button type="button" class="ui-card pay-kpi pay-kpi--click${payFilter.status === 'Owing' ? ' is-on' : ''}" onclick="paySetStatus('Owing')" title="Show every student who still owes — part paid or not paid at all" aria-pressed="${payFilter.status === 'Owing'}">
       <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
       <div class="pay-kpi__body">
-        <div class="pay-kpi__l">Pending Students</div>
+        <div class="pay-kpi__l">Still owing</div>
         <div class="pay-kpi__v">${share.pending} <small>/ ${share.total}</small></div>
         <div class="pay-kpi__s">
           <span>${pct(share.pending)}% of total</span>
@@ -649,7 +671,7 @@ function renderPayments() {
         </select>
       </span>
 
-      <span class="ui-selectw ui-selectw--ico">
+      <span class="ui-selectw ui-selectw--ico ui-selectw--mo">
         <span class="ui-selectw__i">${icon('calendar', 'xs')}</span>
         <select class="ui-select ui-select--sm${payFilter.month !== thisMonth() ? ' is-set' : ''}" aria-label="Filter by month" onchange="payFilter.month=this.value;payFilter.showAll=false;payFilter.page=1;renderPage('payments')">
           ${monthOpts.map(m => `<option value="${escHtml(m)}" ${_scopeKey === m ? 'selected' : ''}>${escHtml(monthLabel(m))}</option>`).join('')}
@@ -660,7 +682,7 @@ function renderPayments() {
       <span class="ui-selectw ui-selectw--ico">
         <span class="ui-selectw__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
         <select class="ui-select ui-select--sm${payFilter.status !== 'All' ? ' is-set' : ''}" aria-label="Filter by status" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')">
-          ${['All', 'Paid', 'Partial', 'Pending'].map(s => `<option value="${s}" ${payFilter.status === s ? 'selected' : ''}>${s === 'All' ? 'All statuses' : s}</option>`).join('')}
+          ${[['All','All statuses'], ['Paid','Paid'], ['Owing','Still owing'], ['Partial','— part paid'], ['Pending','— nothing paid']].map(o => `<option value="${o[0]}" ${payFilter.status === o[0] ? 'selected' : ''}>${escHtml(o[1])}</option>`).join('')}
         </select>
       </span>
 
@@ -693,7 +715,7 @@ function renderPayments() {
                      excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
         <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-          Generate Month
+          Generate<span class="pay-lbl-x"> Month</span>
         </button>
         <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
           ${waMark(15)}
@@ -787,8 +809,20 @@ function renderPayments() {
             <td class="pay-col-num"><span class="pay-num${paid > 0 ? ' pay-num--in' : ''}">${payCash(paid)}</span></td>
             <td class="pay-col-num"><span class="pay-num ${unpaid > 0 ? 'pay-num--due' : 'pay-num--strong'}">${payCash(unpaid)}</span></td>
             <td class="pay-col-num pay-col-x"><span class="pay-num">${payCash(admFee)}</span></td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${extras.length ? ` title="${escHtml(extras.map(c => (c.label ? c.label + ': ' : '') + fmtPKR(c.amount)).join(' · '))}"` : ''}>${payCash(extraT)}</span></td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span></td>
+            ${''/* WHAT THE MONEY WAS FOR, UNDER THE FIGURE (owner, 2026-09-16:
+                   "if a warden collects an extra charge it should show its
+                   reason"). Both reasons were already on the record and both
+                   were only reachable by hovering — which is no use on a
+                   printed page, on a touch screen, or to anyone scanning the
+                   column to find out why one student was charged 2,300 more
+                   than the rest. The full text stays on the title for the
+                   cases the column is too narrow to hold. */}
+            <td class="pay-col-num pay-col-x"><span class="pay-num"${extras.length ? ` title="${escHtml(extras.map(c => (c.label ? c.label + ': ' : '') + fmtPKR(c.amount)).join(' · '))}"` : ''}>${payCash(extraT)}</span>${
+              extraT > 0 && extras.length
+                ? `<span class="pay-why">${escHtml(extras.map(c => c.label).filter(Boolean).join(', ') || 'Extra charge')}</span>`
+                : ''}</td>
+            <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span>${
+              conc > 0 ? `<span class="pay-why">${escHtml(concD || 'No reason recorded')}</span>` : ''}</td>
             <td>${paid > 0 ? pmBadge(p.method) : '<span class="pay-dash">—</span>'}</td>
             <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
             <td class="pay-col-act">
