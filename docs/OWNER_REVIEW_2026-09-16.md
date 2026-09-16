@@ -22,8 +22,8 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 13 | Rooms | The Bulk Add button needs to be more visible | done |
 | 14 | All | KPI card heights should match the rooms page | done |
 | 15 | Rooms | The Occupied card should also state free seats, as a small label | done |
-| 16 | Complaints | The student field in the add form must be a search box | todo |
-| 17 | Complaints | In Add Maintenance, move the student field up beside the issue title | todo |
+| 16 | Complaints | The student field in the add form must be a search box | done |
+| 17 | Complaints | In Add Maintenance, move the student field up beside the issue title | done |
 
 ---
 

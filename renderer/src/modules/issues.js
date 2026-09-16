@@ -671,6 +671,123 @@ function _issField(label, ico, ctrl, o) {
  * Add or edit a complaint / maintenance record.
  * @param {string} [id] existing record id; omit to add a new one.
  */
+/* ══ A SEARCHABLE STUDENT PICKER ═══════════════════════════════════════════
+   Owner, 2026-09-16: "in complaints page in add forms the student field should
+   be a search bar because in a hostel of thousand student it will be hard to
+   find".
+
+   Both forms asked for the student through a <select>. A native select offers
+   type-ahead only on the first letters of an option, and this app's options
+   read "Name — Room 12", so a warden who knows the ROOM but not the spelling
+   of the name had nothing to type and a thousand-row scroll to do instead.
+
+   THE <select> SURVIVES, HIDDEN. It keeps the options, it keeps the value, and
+   it keeps its own onchange — so _issSyncCompRoom(), _issSyncMtRoom(), the
+   submit paths and the edit-time preselection all read exactly what they read
+   before, and none of them had to learn about this control. The search box is
+   a way of setting it, not a replacement for it.
+
+   The list is read off the select rather than passed in again, so the two can
+   never disagree about who is on the roster. */
+function _issStuPicker(selectId, placeholder, selectEl) {
+  return `<div class="iss-pick" id="${selectId}-pick">
+    <div class="hf-in">
+      <span class="hf-in__i">${icon('search', 'xs')}</span>
+      <input class="form-control" id="${selectId}-q" autocomplete="off" role="combobox"
+             aria-expanded="false" aria-controls="${selectId}-drop" aria-autocomplete="list"
+             placeholder="${escHtml(placeholder)}"
+             oninput="issPickSearch('${selectId}')"
+             onfocus="issPickSearch('${selectId}')"
+             onkeydown="issPickKey(event,'${selectId}')"
+             onblur="setTimeout(()=>issPickClose('${selectId}'),200)">
+      <button type="button" class="caf-clear" title="Clear" aria-label="Clear the student"
+              onclick="issPickClear('${selectId}')">${icon('close', 'xs')}</button>
+    </div>
+    <div id="${selectId}-drop" class="caf-drop" role="listbox" style="display:none"></div>
+    ${selectEl}
+  </div>`;
+}
+
+/* The options the select is holding, as data. */
+function _issPickRows(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return [];
+  return [...sel.options].filter(o => o.value).map(o => ({ v: o.value, t: o.text }));
+}
+
+function issPickSearch(selectId) {
+  const drop = document.getElementById(selectId + '-drop');
+  const q    = (document.getElementById(selectId + '-q') || {}).value || '';
+  if (!drop) return;
+  const needle = q.trim().toLowerCase();
+/* The option text is "Name — Room 12", so one contains() covers searching by
+     name and by room number, which is the pair a warden actually has. */
+  const rows = _issPickRows(selectId).filter(r => !needle || r.t.toLowerCase().includes(needle));
+  if (!rows.length) {
+    drop.innerHTML = '<div class="caf-opt__empty">No students found</div>';
+  } else {
+    drop.innerHTML = rows.slice(0, 12).map((r, i) =>
+      `<div class="caf-opt" role="option" tabindex="-1" data-v="${escHtml(r.v)}"${i === 0 ? ' data-first="1"' : ''}
+            onmousedown="event.preventDefault()" onclick="issPickChoose('${selectId}','${escHtml(r.v)}')">
+         <div class="caf-opt__av">${escHtml((r.t || '?').trim()[0].toUpperCase())}</div>
+         <div class="caf-opt__b"><div class="caf-opt__n">${escHtml(r.t)}</div></div>
+       </div>`).join('')
+      + (rows.length > 12 ? `<div class="caf-opt__empty">${rows.length - 12} more — keep typing</div>` : '');
+  }
+  drop.style.display = 'block';
+  const inp = document.getElementById(selectId + '-q');
+  if (inp) inp.setAttribute('aria-expanded', 'true');
+}
+
+function issPickClose(selectId) {
+  const drop = document.getElementById(selectId + '-drop');
+  if (drop) drop.style.display = 'none';
+  const inp = document.getElementById(selectId + '-q');
+  if (inp) inp.setAttribute('aria-expanded', 'false');
+}
+
+/* Enter takes the first match, so the whole control is reachable from the
+   keyboard without a mouse ever touching the list. Escape closes it. */
+function issPickKey(e, selectId) {
+  if (e.key === 'Escape') { issPickClose(selectId); return; }
+  if (e.key !== 'Enter') return;
+  const first = document.querySelector('#' + selectId + '-drop .caf-opt[data-first]');
+  if (first) { e.preventDefault(); issPickChoose(selectId, first.getAttribute('data-v')); }
+}
+
+function issPickChoose(selectId, value) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.value = value;
+  const inp = document.getElementById(selectId + '-q');
+  const opt = [...sel.options].find(o => o.value === value);
+  if (inp) inp.value = opt ? opt.text : '';
+  issPickClose(selectId);
+/* The select's own handler is what fills the room box. Firing the event
+     rather than calling the handler by name keeps this control ignorant of
+     which form it is in. */
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function issPickClear(selectId) {
+  const sel = document.getElementById(selectId);
+  const inp = document.getElementById(selectId + '-q');
+  if (sel) { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+  if (inp) { inp.value = ''; inp.focus(); }
+  issPickSearch(selectId);
+}
+
+/* On an EDIT the select already carries the recorded student, so the search box
+   has to open showing their name rather than empty — an empty box over a filled
+   select reads as "nobody chosen" and invites the warden to choose again. */
+function issPickSync(selectId) {
+  const sel = document.getElementById(selectId);
+  const inp = document.getElementById(selectId + '-q');
+  if (!sel || !inp) return;
+  const opt = sel.options[sel.selectedIndex];
+  inp.value = (opt && opt.value) ? opt.text : '';
+}
+
 function showIssueModal(id) {
   const rec  = id ? _issAll().find(x => x.id === id) : null;
   const kind = rec ? rec.kind
@@ -721,7 +838,7 @@ function showIssueModal(id) {
     `<input id="${fid}" class="form-control cdp-trigger" type="text" readonly placeholder="${ph}"`
     + ` onclick="showCustomDatePicker(this,event)" value="${escHtml(val || '')}">`;
 
-  /* ── Maintenance ───────────────────────────────────────────────────────── */
+/* ── Maintenance ───────────────────────────────────────────────────────── */
   const maint = `
     <div id="if-maint" class="hf-form"${kind === 'complaint' ? ' hidden' : ''}>
       <div class="hf-sec">
@@ -730,6 +847,40 @@ function showIssueModal(id) {
           ${_issField('Issue title', 'tool',
             `<input id="mt-title" class="form-control" placeholder="e.g. Broken fan, Leaking pipe" value="${rec ? escHtml(rec.title) : ''}">`,
             { req: true, full: true })}
+          ${''/* RAISED BY, BESIDE THE TITLE (owner, 2026-09-16: "move the
+                 student selection field in add maintenance to the above beside
+                 the issue title"). It used to sit in section 3 under
+                 Description, two sections below the Room box it fills in — so
+                 choosing the student silently changed a field the warden had
+                 already scrolled past, and the answer to "whose room is this"
+                 arrived after the question had been asked.
+
+                 A STUDENT OR STAFF (owner, 2026-09-14: "maintenance should
+                 also be raised by student and its room number"). Student:
+                 picked from the residents, and the ticket's room becomes the
+                 room on their record (the Room box locks to it). Staff: the
+                 free-text name, and the room is chosen by hand — a burst pipe
+                 is reported by a student, a warden, the cook, or the man who
+                 came to read the meter, and a dropdown of logins holds three
+                 of those four badly. */}
+          <div class="field">
+            <label>Raised by</label>
+            <div class="hf-switch hf-switch--in" role="tablist">
+              <button type="button" id="mt-by-stu" role="tab" class="hf-switch__b${mtByStu ? ' is-on' : ''}"
+                      onclick="_issMtRaiser('student')">${icon('student','xs')} Student</button>
+              <button type="button" id="mt-by-staff" role="tab" class="hf-switch__b${mtByStu ? '' : ' is-on'}"
+                      onclick="_issMtRaiser('staff')">${icon('person','xs')} Staff</button>
+            </div>
+            <div id="mt-by-stu-box"${mtByStu ? '' : ' style="display:none"'}>
+              ${_issStuPicker('mt-raised-stu', 'Search by name or room number…',
+                `<select id="mt-raised-stu" class="form-control" hidden onchange="_issSyncMtRoom()"><option value="">Select student</option>${mtStuOpts}</select>`)}
+            </div>
+            <div class="hf-in" id="mt-by-staff-box"${mtByStu ? ' style="display:none"' : ''}>
+              <span class="hf-in__i">${icon('person', 'xs')}</span>
+              <input id="mt-raised" class="form-control" list="iss-raisers" placeholder="Who reported it"
+                     value="${rec ? (mtByStu ? '' : escHtml(rec.by)) : escHtml((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '')}">
+            </div>
+          </div>
           ${_issField('Category', 'tag',
             `<select id="mt-category" class="form-control"><option value="">Select category</option>${catOpts}</select>`)}
           ${_issField('Room', 'bed',
@@ -782,29 +933,6 @@ function showIssueModal(id) {
                  that only offers logins cannot hold three of those four. It
                  defaults to whoever is signed in, since that is who is at the
                  keyboard writing the ticket. */}
-          ${''/* A STUDENT OR STAFF (owner, 2026-09-14: "maintenance should also be
-                 raised by student and its room number"). Student: picked from
-                 the residents, and the ticket's room becomes the room on their
-                 record (the Room box locks to it). Staff: the free-text name as
-                 before, and the room is chosen by hand. */}
-          <div class="field">
-            <label>Raised by</label>
-            <div class="hf-switch hf-switch--in" role="tablist">
-              <button type="button" id="mt-by-stu" role="tab" class="hf-switch__b${mtByStu ? ' is-on' : ''}"
-                      onclick="_issMtRaiser('student')">${icon('student','xs')} Student</button>
-              <button type="button" id="mt-by-staff" role="tab" class="hf-switch__b${mtByStu ? '' : ' is-on'}"
-                      onclick="_issMtRaiser('staff')">${icon('person','xs')} Staff</button>
-            </div>
-            <div class="hf-in" id="mt-by-stu-box"${mtByStu ? '' : ' style="display:none"'}>
-              <span class="hf-in__i">${icon('student', 'xs')}</span>
-              <select id="mt-raised-stu" class="form-control" onchange="_issSyncMtRoom()"><option value="">Select student</option>${mtStuOpts}</select>
-            </div>
-            <div class="hf-in" id="mt-by-staff-box"${mtByStu ? ' style="display:none"' : ''}>
-              <span class="hf-in__i">${icon('person', 'xs')}</span>
-              <input id="mt-raised" class="form-control" list="iss-raisers" placeholder="Who reported it"
-                     value="${rec ? (mtByStu ? '' : escHtml(rec.by)) : escHtml((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '')}">
-            </div>
-          </div>
           ${_issField('Assigned to', 'person',
             `<input id="mt-assigned" class="form-control" list="iss-staff" placeholder="Staff member or contractor" value="${rec ? escHtml(rec.assigned) : ''}">`)}
         </div>
@@ -818,7 +946,8 @@ function showIssueModal(id) {
         ${_issSecHead(1, 'Student & room', 'Who raised it — the room follows the student')}
         <div class="hf-g2">
           ${_issField('Student', 'student',
-            `<select id="cp-student" class="form-control" onchange="_issSyncCompRoom()"><option value="">Select student</option>${stuOpts}</select>`,
+            _issStuPicker('cp-student', 'Search by name or room number…',
+              `<select id="cp-student" class="form-control" hidden onchange="_issSyncCompRoom()"><option value="">Select student</option>${stuOpts}</select>`),
             { req: true })}
           ${_issField('Room', 'bed',
             `<input id="cp-room" class="form-control" readonly value="${rec && rec.roomNo ? '#' + escHtml(rec.roomNo) : ''}" placeholder="From the student's record">`,
@@ -888,6 +1017,11 @@ function showIssueModal(id) {
 
   if (kind === 'complaint' && !rec) _issSyncCompRoom();
   if (mtByStu) _issSyncMtRoom();
+  /* On an edit the hidden select already holds the recorded student, so the
+     search box has to open showing their name — an empty box over a filled
+     select reads as "nobody chosen" and invites choosing again. */
+  issPickSync('cp-student');
+  issPickSync('mt-raised-stu');
 }
 
 /** Is the maintenance form's "Raised by" on Student? */

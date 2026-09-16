@@ -193,3 +193,12 @@
    size, sitting directly above the control it chooses. */
 .hf-switch--in { margin-bottom:6px; border-radius:9px; }
 .hf-switch--in .hf-switch__b { padding:6px 10px; font-size:12px; }
+
+/* ── The searchable student picker (owner, 2026-09-16) ─────────────────────
+   It reuses the cancellation form's dropdown (`.caf-drop` / `.caf-opt`) rather
+   than drawing a second one — picking a student out of a thousand is the same
+   job on both forms, and two lists that look different for the same job is how
+   a warden learns to distrust one of them. Only the positioning lives here:
+   the drop hangs off this wrapper, not off the field. */
+.iss-pick { position: relative; }
+.iss-pick .caf-drop { top: 100%; left: 0; right: 0; }
