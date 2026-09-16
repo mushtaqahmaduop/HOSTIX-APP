@@ -1,66 +1,93 @@
-/* ════════════════════════════════════════════════════════════════════════════
-   FORMER STUDENTS — the page (owner ref: `former student page.png`).
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — FORMER STUDENTS  (owner ref: `former student page.png`)
 
-   ALMOST NOTHING LIVES HERE, and that is the point. The register itself is the
-   shared listkit: `.lk-stats`, `.lk-tools`, `.lk-table`, `.lk-foot` — the same
-   components Cancellations and Complaints draw, so a warden who can read one
-   of those can read this without learning anything, and a change to the shared
-   component reaches all three. What follows is only what this page has that
-   the others do not: a two-line contact cell, a money cell, and the dot on its
-   status chip.
-   ════════════════════════════════════════════════════════════════════════════ */
+   Rebuilt 2026-09-16 against css/tokens.css, css/base.css and css/components/
+   (HOSTYLLO_DESIGN_SPEC Parts 4-7), as stage 4 with cancellations and the
+   issues register. This file may PLACE components — grid, position, width,
+   order — and may not restyle one.
 
-/* Phone over email. The reference stacks them, and it is right to: they are
-   two ways of reaching the same person, not two facts, so they belong in one
-   cell rather than in two columns of a table that is already nine wide. */
+   ALMOST NOTHING LIVES HERE, and that is still the point. The register is the
+   shared component layer now — `.ui-stats`, `.ui-card`, `.ui-table`,
+   `.ui-chip`, `.ui-pagebar` — where it used to be the shared listkit. What
+   follows is only what this page has that the others do not: a two-line
+   contact cell, a money cell, and where the reason column takes its slack.
+
+   The `.rsf-*` block at the bottom is the RE-ADMIT FORM, which the spec
+   schedules for stage 8 with addstudent, and it is left exactly as it was.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.fm-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }
+.fm-tools .ui-search  { flex:1 1 200px; min-width:170px; max-width:340px; }
+.fm-tools .ui-selectw { min-width:132px; }
+.fm-tools__end { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+
+/* ── The strip between the toolbar and the table ─────────────────────────── */
+.fm-head {
+    display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
+    padding:var(--space-2) var(--space-4);
+    border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+}
+.fm-head__t {
+    display:inline-flex; align-items:center; gap:var(--space-2);
+    font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-primary);
+}
+.fm-head__n { font-size:var(--text-sm); color:var(--text-tertiary); }
+
+/* ── Who: the avatar and the two lines beside it ─────────────────────────── */
+.fm-who { display:flex; align-items:center; gap:var(--space-3); min-width:0; }
+.fm-who__b  { min-width:0; }
+.fm-who__n  { font-weight:var(--weight-medium); color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fm-who__id { font-size:var(--text-sm); color:var(--text-tertiary); font-variant-numeric:tabular-nums; }
+
+/* ── Contact: phone over email ────────────────────────────────────────────
+   The reference stacks them, and it is right to: they are two ways of reaching
+   the same person, not two facts, so they belong in one cell rather than in
+   two columns of a table that is already nine wide. */
 .fm-c {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12.5px; color: var(--text);
-    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
-    font-variant-numeric: tabular-nums; white-space: nowrap;
+    display:flex; align-items:center; gap:var(--space-2);
+    font-size:var(--text-base); color:var(--text-primary);
+    font-variant-numeric:tabular-nums; white-space:nowrap;
 }
-.fm-c svg { flex-shrink: 0; width: 12px; height: 12px; color: var(--text3); }
+.fm-c svg { flex-shrink:0; width:12px; height:12px; color:var(--text-tertiary); }
 .fm-c--2 {
-    margin-top: 3px; font-size: 11.5px; color: var(--text3);
-    font-family: var(--font); letter-spacing: normal;
-    overflow: hidden; text-overflow: ellipsis; max-width: 190px;
+    margin-top:2px; font-size:var(--text-sm); color:var(--text-tertiary);
+    overflow:hidden; text-overflow:ellipsis; max-width:190px;
 }
 
+/* ── Money and dates ─────────────────────────────────────────────────────── */
 .fm-money {
-    font-size: 13px; font-weight: 800; color: var(--text); white-space: nowrap;
-    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
-    font-variant-numeric: tabular-nums;
-    margin-bottom: 4px;
+    margin-bottom:var(--space-1);
+    font-weight:var(--weight-medium); color:var(--text-primary);
+    white-space:nowrap; font-variant-numeric:tabular-nums;
 }
+.fm-when { display:flex; align-items:center; gap:var(--space-2); white-space:nowrap; }
+.fm-when svg { flex-shrink:0; color:var(--text-tertiary); }
+.fm-statdate { margin-top:var(--space-1); font-size:var(--text-sm); color:var(--text-tertiary); white-space:nowrap; }
 
-/* The status chip's dot. "Left" is a terminal state and wears the neutral
-   slate every other terminal state on this app wears — the hue is not spare
-   decoration, it is the same slate the Restored chip uses on Cancellations. */
-.fm-dot {
-    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-    background: currentColor; display: inline-block; margin-right: 5px;
-    vertical-align: middle;
-}
+/* An absent value, so an empty cell reads as "nothing recorded" rather than as
+   a rendering fault. */
+.fm-dash { color:var(--text-tertiary); }
 
-/* Restore is a LABELLED button inside the icon widget, and it is the only one
-   on this page that is: it is the verb the page exists for, and the reference
-   draws it with its word. The kebab beside it carries everything else. */
-.lk-acts--widget .lk-act--hue.dh-green {
-    width: auto; padding: 0 9px; gap: 5px;
-    font-size: 11.5px; font-weight: 700;
-    background: var(--dh-bg); color: var(--dh);
-}
-.lk-acts--widget .lk-act--hue.dh-green:hover { border-color: var(--dh); }
+/* ── Row actions ─────────────────────────────────────────────────────────
+   Restore is the verb this page exists for, so it keeps its word where every
+   other row action on the app is icon-only; the kebab beside it carries the
+   rest. */
+.fm-acts { display:flex; align-items:center; gap:var(--space-2); }
 
-/* THE REASON COLUMN TAKES THE SLACK, and it is the only free-text column on
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.fm-foot__size { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-secondary); }
+.fm-foot__size span { white-space:nowrap; }
+
+/* ── Column widths ───────────────────────────────────────────────────────
+   THE REASON COLUMN TAKES THE SLACK, and it is the only free-text column on
    the page. `width:100%` on one cell of an auto-layout table hands it whatever
    the eight fixed columns leave, which is what stopped "BS Computer Science"
    from wrapping onto three lines in a 90px Occupation column beside a Reason
    column holding one word. */
-.lk-table th.fm-reason,
-.lk-table td.fm-reason { width: 100%; white-space: normal; min-width: 120px; }
-.fm-occ { white-space: nowrap; }
-
+.ui-table th.fm-reason,
+.ui-table td.fm-reason { width:100%; white-space:normal; min-width:120px; }
+.fm-occ { white-space:nowrap; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    RE-ADMIT A FORMER STUDENT (owner ref: `re admit former student form.png`)

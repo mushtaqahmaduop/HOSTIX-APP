@@ -1483,14 +1483,20 @@ function floorShort(floor) {
  * The boxed room label: the number, with the floor under it when there is one.
  * `number` may be a room object or a bare number/string.
  */
-function roomLabel(number, floor) {
+function roomLabel(number, floor, ui) {
   const room = (number && typeof number === 'object') ? number : null;
   const n = room ? room.number : number;
   const f = floorShort(room ? room.floor : floor);
   const shown = (n === 0 || n) && String(n).trim() !== '' ? '#' + escHtml(String(n)) : '—';
-  return '<span class="lk-room">'
-       + '<span class="lk-room__n">' + shown + '</span>'
-       + (f ? '<span class="lk-room__t">' + escHtml(f) + '</span>' : '')
+  /* `ui` picks the component layer over listkit's copy. It is a flag rather
+     than a free class string because the pill is three nested elements, not
+     one, and a caller passing a single class could only ever restyle the
+     outer: listkit.css loads AFTER components/, so a rebuilt screen that kept
+     `.lk-room` on the children would silently get listkit's type back. */
+  const c = ui ? 'ui-room' : 'lk-room';
+  return '<span class="' + c + '">'
+       + '<span class="' + c + '__n">' + shown + '</span>'
+       + (f ? '<span class="' + c + '__t">' + escHtml(f) + '</span>' : '')
        + '</span>';
 }
 

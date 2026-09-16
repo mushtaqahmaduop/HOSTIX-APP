@@ -637,7 +637,7 @@ function renderPayments() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
         ${''/* The receipt number is still searchable (owner, 2026-09-10); the
                placeholder is the reference's. */}
-        <input id="search-payments" class="lk-sin" aria-label="Search payments" placeholder="Search by name, room…" value="${escHtml(payFilter.search)}"
+        <input id="search-payments" class="ui-search__i" aria-label="Search payments" placeholder="Search by name, room…" value="${escHtml(payFilter.search)}"
           oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments()">
         ${lkSearchX('search-payments', 'payFilter', 'payments')}
       </div>

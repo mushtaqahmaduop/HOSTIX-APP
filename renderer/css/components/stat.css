@@ -1,0 +1,78 @@
+/* ============================================================
+   Stat tile — HOSTYLLO_DESIGN_SPEC Part 4.
+
+   The strip of figures above a register: an icon, a label, the
+   number, and a line of context under it. Five screens draw it
+   (cancellations, former, issues/maintenance/complaints) and
+   payments drew its own first, so it lives here rather than a
+   sixth time in a screen file.
+
+   COMPOSITION, NOT INHERITANCE. The tile has no surface of its
+   own — it is placed inside a `.ui-card`, exactly as `.pay-kpi`
+   is, so the card owns the background, the border and the
+   radius and there is one answer to what a panel looks like:
+
+     <div class="ui-card ui-stat"> … </div>
+     <button class="ui-card ui-stat ui-stat--click"> … </button>
+
+   IT WAS `.lk-stat`, which carried a `dh-*` hue per tile —
+   violet for the count, green for rooms free, blue for
+   returned, red for dues. The hue is gone: colour is state, and
+   "how many students have left" is not a state. The icon chip
+   is neutral on every tile, and the accent appears only on the
+   one tile you are actually filtered to.
+   ============================================================ */
+
+.ui-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(206px, 1fr));
+  gap: var(--space-3); margin-bottom: var(--space-3);
+}
+
+.ui-stat {
+  position: relative; display: flex; align-items: flex-start; gap: var(--space-3);
+  min-width: 0; text-align: left; font: inherit; color: inherit;
+}
+
+/* A tile that sets a filter is a <button>, so it is reachable by Tab and
+   states which one is active through aria-pressed. Elevation is the border:
+   no lift, no shadow — the spec keeps shadows for floating things. */
+.ui-stat--click { cursor: pointer; transition: border-color var(--dur-fast) var(--ease); }
+.ui-stat--click:hover, .ui-stat--click.is-on { border-color: var(--accent); }
+
+.ui-stat__ico {
+  width: var(--h-sm); height: var(--h-sm); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg); color: var(--text-secondary);
+}
+.ui-stat--click.is-on .ui-stat__ico { background: var(--accent-bg); color: var(--accent-fg); }
+
+/* The tile is built from <span>s, not <div>s, because a clickable tile is a
+   <button> and a <button> may not contain block-level flow content. So the
+   three lines are told to stack here rather than relying on the tag. */
+.ui-stat__body { flex: 1 1 auto; min-width: 0; display: block; }
+.ui-stat__l, .ui-stat__v, .ui-stat__s { display: block; }
+
+.ui-stat__l {
+  font-size: var(--text-sm); font-weight: var(--weight-medium);
+  color: var(--text-secondary); line-height: var(--leading-tight);
+}
+.ui-stat--click.is-on .ui-stat__l { color: var(--accent-fg); }
+
+.ui-stat__v {
+  margin: var(--space-1) 0;
+  font-size: var(--text-xl); font-weight: var(--weight-strong);
+  line-height: var(--leading-tight); letter-spacing: var(--track-tight);
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* "6 / 12" — the denominator is context, not the figure. */
+.ui-stat__v small {
+  font-size: var(--text-base); font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.ui-stat__s {
+  font-size: var(--text-sm); color: var(--text-tertiary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

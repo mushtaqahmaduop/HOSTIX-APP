@@ -69,3 +69,31 @@
   font-family: var(--font); font-size: var(--text-base);
 }
 .ui-search input::placeholder { color: var(--text-tertiary); }
+
+/* The search field's own two parts. The input was `.lk-sin` and the clear
+   button `.lk-sx`, both styled in listkit.css — but `lkSearchX()` in toolbar.js
+   emits that button for EVERY register, rebuilt or not, so the pair has to
+   exist on this layer before any of them can leave listkit behind. The helper
+   emits both class names during the changeover; `lk-*` drops when the last
+   screen is rebuilt, with the rest of the legacy bridge. */
+.ui-search .ui-search__i {
+  flex: 1; min-width: 0; height: 100%;
+  border: none; background: none; outline: none; color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-base);
+}
+.ui-search .ui-search__i::placeholder { color: var(--text-tertiary); }
+
+/* SCOPED UNDER `.ui-search` DELIBERATELY. listkit.css loads after this file, so
+   its `.lk-sx` would win the cascade on the element that carries both class
+   names. Two classes beat one, so the component keeps the button it drew. */
+.ui-search .ui-search__x {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 18px; height: 18px; padding: 0;
+  border: none; border-radius: var(--radius-full);
+  background: none; color: var(--text-tertiary); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.ui-search .ui-search__x:hover { background: var(--neutral-bg); color: var(--text-primary); }
+.ui-search .ui-search__x svg { width: 11px; height: 11px; }
+/* Nothing typed, nothing to clear. */
+.ui-search input:placeholder-shown + .ui-search__x { display: none; }

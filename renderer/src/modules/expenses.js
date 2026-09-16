@@ -458,7 +458,7 @@ function renderExpenses() {
   <div class="ui-card exp-tools">
     <div class="ui-search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search-expenses" class="lk-sin" aria-label="Search expenses" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
+      <input id="search-expenses" class="ui-search__i" aria-label="Search expenses" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
              oninput="capFirstChar(this);expFilter.search=this.value;expFilter.page=1;_dExpenses()">
       ${lkSearchX('search-expenses','expFilter','expenses')}
     </div>

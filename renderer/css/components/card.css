@@ -16,3 +16,20 @@
 
 /* For a card whose content owns the edge — a table, a list. */
 .ui-card--flush { padding: 0; overflow: hidden; }
+
+/* ── Room pill ──────────────────────────────────────────────────────────────
+   "#12" over "G-Floor", the way every register names a room in a cell of its
+   own. It was `.lk-room` in listkit.css, drawn by roomLabel() in utils.js for
+   the whole app; the helper takes a class override now, so a rebuilt screen
+   asks for this and one still on listkit keeps its own. */
+.ui-room {
+  display: inline-flex; flex-direction: column; align-items: flex-start;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ui-room__n {
+  font-size: var(--text-base); font-weight: var(--weight-medium);
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.ui-room__t { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }

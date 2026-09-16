@@ -96,6 +96,15 @@ function formerFiltered() {
   return list;
 }
 
+/* The sort arrows, as SVG rather than the ▲ ▼ ⇅ glyphs the header used to
+   print: those three render at different weights in different fonts and the
+   ⇅ is missing from several, so an unsorted column showed a tofu box. */
+const FM_SORT = {
+  asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>',
+  desc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>',
+  none: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>',
+};
+
 function renderFormerStudents() {
   const all = _formerAll();
 
@@ -119,21 +128,34 @@ function renderFormerStudents() {
   const nActive = [formerFilter.month !== 'All', formerFilter.reason !== 'All',
                    formerFilter.room !== 'All', formerFilter.dues !== 'All'].filter(Boolean).length;
 
-  const card = (hue, label, value, sub, svg, onclick) => `
-    <div class="lk-stat ${hue}${onclick ? ' lk-stat--click' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
-      <div class="lk-stat__top">
-        <div class="lk-stat__chip"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
-        <div class="lk-stat__label">${label}</div>
-      </div>
-      <div class="lk-stat__val">${value}</div>
-      <div class="lk-stat__sub">${sub}</div>
-    </div>`;
+  /* A tile that only states a figure is a <div>; a tile that SETS A FILTER is a
+     <button>, so it can be tabbed to and says which one is active through
+     aria-pressed. The hue argument is gone with `.lk-stat`: colour is state, and
+     "how many students have left" is not a state. */
+  const card = (label, value, sub, svg, onclick, on) => {
+    const body = `
+      <span class="ui-stat__ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></span>
+      <span class="ui-stat__body">
+        <span class="ui-stat__l">${label}</span>
+        <span class="ui-stat__v">${value}</span>
+        <span class="ui-stat__s">${sub}</span>
+      </span>`;
+    return onclick
+      ? `<button type="button" class="ui-card ui-stat ui-stat--click${on ? ' is-on' : ''}" onclick="${onclick}" aria-pressed="${on ? 'true' : 'false'}">${body}</button>`
+      : `<div class="ui-card ui-stat">${body}</div>`;
+  };
 
+  /* The sort control is a BUTTON inside the th, and the direction is `aria-sort`
+     on the cell. It was an onclick on the th itself with a text arrow glyph:
+     a th cannot be focused or pressed with a keyboard, so the whole register
+     was unsortable without a mouse. */
   const th = (key, label, extra) => {
-    const on = formerFilter.sortKey === key;
-    const arw = on ? (formerFilter.sortDir === 'asc' ? '▲' : '▼') : '⇅';
-    return `<th class="is-sortable${on ? ' is-sorted' : ''}" ${extra || ''}
-      onclick="toggleSort(formerFilter,'former','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+    const on  = formerFilter.sortKey === key;
+    const dir = on ? (formerFilter.sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+    const ico = on ? (formerFilter.sortDir === 'asc' ? FM_SORT.asc : FM_SORT.desc) : FM_SORT.none;
+    return `<th aria-sort="${dir}" ${extra || ''}>`
+         + `<button type="button" class="ui-th-sort" onclick="toggleSort(formerFilter,'former','${key}')" title="Sort by ${label}">`
+         + `<span>${label}</span>${ico}</button></th>`;
   };
 
   const mkRow = (s) => {
@@ -142,24 +164,24 @@ function renderFormerStudents() {
     const room = _formerRoom(s);
     return `<tr>
       <td>
-        <div class="lk-who dh-violet">
-          <div class="lk-who__av">${escHtml(_fmInitials(s.name))}</div>
-          <div style="min-width:0">
-            <div class="lk-who__n">${escHtml(s.name || '—')}</div>
-            <div class="lk-who__id">ID: #${escHtml(String(s.id))}</div>
+        <div class="fm-who">
+          <span class="ui-avatar">${escHtml(_fmInitials(s.name))}</span>
+          <div class="fm-who__b">
+            <div class="fm-who__n">${escHtml(s.name || '—')}</div>
+            <div class="fm-who__id">ID: #${escHtml(String(s.id))}</div>
           </div>
         </div>
       </td>
       <td>
         ${s.phone ? `<div class="fm-c">${icon('phone','xs')}${escHtml(s.phone)}</div>` : ''}
         ${s.email ? `<div class="fm-c fm-c--2">${icon('mail','xs')}${escHtml(s.email)}</div>` : ''}
-        ${!s.phone && !s.email ? '<span class="lk-dash">—</span>' : ''}
+        ${!s.phone && !s.email ? '<span class="fm-dash">—</span>' : ''}
       </td>
-      <td class="fm-occ">${s.occupation ? escHtml(s.occupation) : '<span class="lk-dash">—</span>'}</td>
-      <td>${room ? roomLabel(room, (DB.rooms.find(r => String(r.number) === room) || {}).floor)
-                 : '<span class="lk-dash">—</span>'}</td>
-      <td><div class="lk-when">${icon('calendar','xs')}${s.leftDate ? escHtml(fmtDate(s.leftDate)) : '—'}</div></td>
-      <td class="fm-reason">${reason ? escHtml(reason) : '<span class="lk-dash">—</span>'}</td>
+      <td class="fm-occ">${s.occupation ? escHtml(s.occupation) : '<span class="fm-dash">—</span>'}</td>
+      <td>${room ? roomLabel(room, (DB.rooms.find(r => String(r.number) === room) || {}).floor, true)
+                 : '<span class="fm-dash">—</span>'}</td>
+      <td><div class="fm-when">${icon('calendar','xs')}${s.leftDate ? escHtml(fmtDate(s.leftDate)) : '—'}</div></td>
+      <td class="fm-reason">${reason ? escHtml(reason) : '<span class="fm-dash">—</span>'}</td>
       ${''/* PAID ON TOP, WHAT IS STILL OWED UNDER IT. The reference draws one
              figure and a chip; the figure it draws is the money that came in,
              and the chip is about the money that did not. Both are named,
@@ -168,93 +190,103 @@ function renderFormerStudents() {
       <td>
         <div class="fm-money">${escHtml(fmtPKR(m.paid))}</div>
         ${m.owed > 0
-          ? `<span class="lk-chip dh-red" title="${escHtml(fmtPKR(m.owed))} still owed across ${m.records} record${m.records === 1 ? '' : 's'}">${escHtml(fmtPKR(m.owed))} due</span>`
+          ? `<span class="ui-chip ui-chip--danger" title="${escHtml(fmtPKR(m.owed))} still owed across ${m.records} record${m.records === 1 ? '' : 's'}">${escHtml(fmtPKR(m.owed))} due</span>`
           : m.records
-            ? '<span class="lk-chip dh-green">All clear</span>'
-            : '<span class="lk-chip dh-slate">No records</span>'}
+            ? '<span class="ui-chip ui-chip--success">All clear</span>'
+            : '<span class="ui-chip ui-chip--neutral">No records</span>'}
       </td>
       <td>
-        <span class="lk-chip dh-slate"><i class="fm-dot"></i>Left</span>
-        ${s.leftDate ? `<div class="lk-statdate">Left ${escHtml(fmtDateShort(s.leftDate))}</div>` : ''}
+        ${''/* The dot was a hand-drawn `<i class="fm-dot">`, coloured off a hue
+               class. A chip role already carries its own colour, so the dot was
+               a second mark saying the same thing. */}
+        <span class="ui-chip ui-chip--neutral">Left</span>
+        ${s.leftDate ? `<div class="fm-statdate">Left ${escHtml(fmtDateShort(s.leftDate))}</div>` : ''}
       </td>
       <td>
-        <div class="lk-acts lk-acts--widget">
-          <button class="lk-act lk-act--hue dh-green" onclick="openRestoreStudentForm('${escHtml(String(s.id))}')"
+        <div class="fm-acts">
+          ${''/* Restore was `.lk-act--hue dh-green` — a green action button. Green
+                 is a STATUS role here, not an action one, and this is the only
+                 thing a warden does from the row, so it is the secondary button
+                 every other register uses for the same job. */}
+          <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="openRestoreStudentForm('${escHtml(String(s.id))}')"
                   title="Re-admit this student — their details are pre-filled">
             ${icon('refreshCw','xs')}Restore</button>
-          ${lkKebab("event.stopPropagation();formerRowMenu('" + escHtml(String(s.id)) + "',this)", 'Actions for this former student')}
+          ${lkKebab("event.stopPropagation();formerRowMenu('" + escHtml(String(s.id)) + "',this)", 'Actions for this former student', 'ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm')}
         </div>
       </td>
     </tr>`;
   };
 
   return `
-  <div class="lk-stats">
-    ${card('dh-violet', 'Former Students', String(all.length),
+  <div class="ui-stats">
+    ${card('Former students', String(all.length),
         all.length ? 'Students who have left' : 'Nobody has left yet',
         '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 11 2 2 4-4"/>')}
-    ${card('dh-green', 'Rooms Available', String(roomsFree), 'Rooms with a free bed',
+    ${card('Rooms available', String(roomsFree), 'Rooms with a free bed',
         '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
         "navigate('rooms')")}
-    ${card('dh-blue', 'Returned Students', String(returned), 'Re-admitted in ' + thisYear(),
+    ${card('Returned students', String(returned), 'Re-admitted in ' + thisYear(),
         '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>')}
-    ${card('dh-red', 'Pending Dues', String(owingList.length),
+    ${''/* This one is a FILTER, so it reports whether it is the active one —
+           clicking it again clears it, the way the payments status tiles do. */}
+    ${card('Pending dues', String(owingList.length),
         owingSum > 0 ? fmtPKR(owingSum) + ' still owed' : 'Nothing outstanding',
         '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
-        "formerFilter.dues='Owing';formerFilter.page=1;renderPage('former')")}
+        "formerToggleOwing()", formerFilter.dues === 'Owing')}
   </div>
 
-  <div class="lk-panel">
-    <div class="lk-tools">
-      <div class="lk-search">
+  <div class="ui-card ui-card--flush">
+    <div class="fm-tools">
+      <div class="ui-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-former" class="lk-sin" placeholder="Search by name, ID, CNIC, father, phone, occupation, reason or former room…"
+        <input id="search-former" class="ui-search__i" aria-label="Search former students"
+          placeholder="Search by name, ID, CNIC, father, phone, occupation, reason or former room…"
           value="${escHtml(formerFilter.search)}"
           oninput="capFirstChar(this);formerFilter.search=this.value;formerFilter.page=1;_dFormer()">
         ${lkSearchX('search-former','formerFilter','former')}
       </div>
 
-      <select class="lk-select${formerFilter.month !== 'All' ? ' is-set' : ''}"
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${formerFilter.month !== 'All' ? ' is-set' : ''}" aria-label="Month left"
               onchange="formerFilter.month=this.value;formerFilter.page=1;renderPage('former')" title="Filter by the month they left">
         <option value="All">All months</option>
         ${months.map(m => `<option value="${escHtml(m)}" ${formerFilter.month === m ? 'selected' : ''}>${escHtml(monthLabel(m))}</option>`).join('')}
-      </select>
+      </select></span>
 
-      <select class="lk-select${formerFilter.reason !== 'All' ? ' is-set' : ''}"
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${formerFilter.reason !== 'All' ? ' is-set' : ''}" aria-label="Reason"
               onchange="formerFilter.reason=this.value;formerFilter.page=1;renderPage('former')" title="Filter by why they left">
         <option value="All">All reasons</option>
         ${reasons.map(r => `<option value="${escHtml(r)}" ${formerFilter.reason === r ? 'selected' : ''}>${escHtml(r)}</option>`).join('')}
-      </select>
+      </select></span>
 
-      <select class="lk-select${formerFilter.room !== 'All' ? ' is-set' : ''}"
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${formerFilter.room !== 'All' ? ' is-set' : ''}" aria-label="Former room"
               onchange="formerFilter.room=this.value;formerFilter.page=1;renderPage('former')" title="Filter by the room they had">
         <option value="All">All rooms</option>
         ${/* The floor rides with the number (owner, 2026-09-10) — the VALUE is
               still the bare number the filter matches on; only the label
               gains it, so an existing saved filter keeps working. */''}
         ${rooms.map(r => `<option value="${escHtml(r)}" ${formerFilter.room === r ? 'selected' : ''}>Room ${escHtml(roomText(r, ((DB.rooms||[]).find(x => String(x.number) === String(r)) || {}).floor))}</option>`).join('')}
-      </select>
+      </select></span>
 
-      <select class="lk-select${formerFilter.dues !== 'All' ? ' is-set' : ''}"
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${formerFilter.dues !== 'All' ? ' is-set' : ''}" aria-label="Balance"
               onchange="formerFilter.dues=this.value;formerFilter.page=1;renderPage('former')" title="Filter by what they still owe">
         <option value="All">All balances</option>
         <option value="Owing" ${formerFilter.dues === 'Owing' ? 'selected' : ''}>Still owing</option>
         <option value="Clear" ${formerFilter.dues === 'Clear' ? 'selected' : ''}>All clear</option>
-      </select>
+      </select></span>
 
-      <div class="lk-tools__end">
-        ${nActive ? `<button class="lk-btn" onclick="tbClearAll('former')" title="Clear every filter on this page">${icon('refreshCw','xs')} Reset (${nActive})</button>` : ''}
-        ${tbExport({ id:'former-export', excel:'exportFormerExcel()', pdf:'exportFormerPDF()' })}
+      <div class="fm-tools__end">
+        ${nActive ? `<button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="tbClearAll('former')" title="Clear every filter on this page">${icon('refreshCw','xs')} Reset <span class="ui-chip ui-chip--accent ui-chip--count">${nActive}</span></button>` : ''}
+        ${tbExport({ id:'former-export', cls:'ui-btn ui-btn--secondary ui-btn--sm', excel:'exportFormerExcel()', pdf:'exportFormerPDF()' })}
       </div>
     </div>
 
-    <div class="lk-head">
-      <span class="lk-head__t">${icon('list','sm')} Former students</span>
-      <span class="lk-head__n">${_pg.total} record${_pg.total === 1 ? '' : 's'}</span>
+    <div class="fm-head">
+      <span class="fm-head__t">${icon('list','sm')} Former students</span>
+      <span class="fm-head__n">${_pg.total} record${_pg.total === 1 ? '' : 's'}</span>
     </div>
 
-    <div class="lk-table-wrap">
-      <table class="lk-table">
+    <div class="ui-table-wrap">
+      <table class="ui-table">
         <thead><tr>
           ${th('name','Student')}
           <th>Contact</th>
@@ -268,10 +300,10 @@ function renderFormerStudents() {
         </tr></thead>
         <tbody>
           ${_pg.total === 0
-            ? `<tr><td colspan="9"><div class="lk-empty">
+            ? `<tr><td colspan="9"><div class="ui-empty">
                  ${icon('users','lg')}
-                 <div class="lk-empty__t">${all.length ? 'No former student matches these filters' : 'Nobody has left yet'}</div>
-                 <div class="lk-empty__s">${all.length
+                 <div class="ui-empty__t">${all.length ? 'No former student matches these filters' : 'Nobody has left yet'}</div>
+                 <div>${all.length
                     ? 'Clear a filter to widen the search.'
                     : 'A student appears here once their cancellation is confirmed.'}</div>
                </div></td></tr>`
@@ -288,6 +320,16 @@ function _fmInitials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '—';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+/* The Pending Dues tile is a toggle, not a one-way filter: pressing it again
+   clears it. A tile that can only ever be switched ON leaves a warden with no
+   way back to the whole list except the Reset button, which is at the other end
+   of the toolbar. Payments' status tiles behave this way already. */
+function formerToggleOwing() {
+  formerFilter.dues = (formerFilter.dues === 'Owing') ? 'All' : 'Owing';
+  formerFilter.page = 1;
+  renderPage('former');
 }
 
 /** Re-render the table without losing what is being typed into the search. */
@@ -320,33 +362,44 @@ function formerRowMenu(id, btn) {
 function formerPager(pg) {
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return '<button disabled>' + label + '</button>';
-    if (o.active)   return '<button class="is-on">' + label + '</button>';
-    return '<button onclick="gotoPage(formerFilter,\'former\',' + target + ')">' + label + '</button>';
+    const C = 'ui-btn ui-btn--secondary ui-btn--sm';
+    const aria = o.aria || label;
+    if (o.disabled) return `<button class="${C}" disabled aria-label="${aria}">${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}" onclick="gotoPage(formerFilter,'former',${target})" aria-label="${aria}">${label}</button>`;
   };
   const page = pg.page, pages = pg.pages;
   let lo = Math.max(1, page - 2), hi = Math.min(pages, lo + 4);
   lo = Math.max(1, hi - 4);
   let nums = '';
-  if (lo > 1) nums += btn('1', 1) + (lo > 2 ? '<span class="lk-pager__gap">…</span>' : '');
-  for (let i = lo; i <= hi; i++) nums += btn(String(i), i, { active: i === page });
-  if (hi < pages) nums += (hi < pages - 1 ? '<span class="lk-pager__gap">…</span>' : '') + btn(String(pages), pages);
+  if (lo > 1) nums += btn('1', 1, { aria: 'Page 1' }) + (lo > 2 ? '<span class="ui-pager__gap">…</span>' : '');
+  for (let i = lo; i <= hi; i++) nums += btn(String(i), i, { active: i === page, aria: 'Page ' + i });
+  if (hi < pages) nums += (hi < pages - 1 ? '<span class="ui-pager__gap">…</span>' : '') + btn(String(pages), pages, { aria: 'Page ' + pages });
 
-  return '<div class="lk-foot">' +
-    '<div class="lk-foot__size">Show ' +
-      '<select onchange="formerFilter.pageSize=Number(this.value);formerFilter.page=1;renderPage(\'former\')">' +
-        [10, 30, 50, 100].map(n =>
-          '<option value="' + n + '" ' + (formerFilter.pageSize === n ? 'selected' : '') + '>' + n + '</option>').join('') +
-      '</select> entries</div>' +
-    '<div class="lk-foot__info">Showing ' + pg.from + ' to ' + pg.to + ' of ' + pg.total +
-      ' record' + (pg.total !== 1 ? 's' : '') + '</div>' +
-    '<div class="lk-pager">' +
-      btn('«', 1, { disabled: page <= 1 }) +
-      btn('‹', page - 1, { disabled: page <= 1 }) +
-      nums +
-      btn('›', page + 1, { disabled: page >= pages }) +
-      btn('»', pages, { disabled: page >= pages }) +
-    '</div></div>';
+  /* The shared bar, in the order every rebuilt register draws it: the sentence,
+     the page size, then the pager. The « and » jump buttons are gone — the
+     numbered buttons already reach the first and last page, and four arrow
+     glyphs beside five numbers made the widest part of a footer whose whole job
+     is to stay quiet. */
+  return `<div class="ui-pagebar">
+    <div class="ui-pagebar__info">${pg.total
+      ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total !== 1 ? 's' : ''}`
+      : 'No records'}</div>
+    <div class="fm-foot__size">
+      <span>Rows per page</span>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm" aria-label="Rows per page"
+                onchange="formerFilter.pageSize=Number(this.value);formerFilter.page=1;renderPage('former')">
+          ${[10, 30, 50, 100].map(n => `<option value="${n}" ${formerFilter.pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </span>
+    </div>
+    <div class="ui-pager">
+      ${btn('‹', page - 1, { disabled: page <= 1, aria: 'Previous page' })}
+      ${nums}
+      ${btn('›', page + 1, { disabled: page >= pages, aria: 'Next page' })}
+    </div>
+  </div>`;
 }
 
 /* ── Export ─────────────────────────────────────────────────────────────────

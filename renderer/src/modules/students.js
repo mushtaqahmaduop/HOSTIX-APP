@@ -343,7 +343,7 @@ function renderStudents() {
     <div class="stu-tools">
       <div class="ui-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-students" class="lk-sin" aria-label="Search students" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
+        <input id="search-students" class="ui-search__i" aria-label="Search students" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
           value="${escHtml(studentFilter.search)}"
           oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents()">
         ${lkSearchX('search-students','studentFilter','students')}

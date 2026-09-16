@@ -168,7 +168,11 @@ function tbClearAll(page) {
    every one of the six has a placeholder — a search box without one would show
    a × over an empty field, so keep the placeholders.                         */
 function lkSearchX(inputId, filterVar, page) {
-  return `<button type="button" class="lk-sx" tabindex="-1" title="Clear search"
+  /* BOTH class names on purpose. Every register calls this helper, rebuilt or
+     not: `.ui-search__x` is the component layer the rebuilt ones read, `.lk-sx`
+     is listkit's copy the rest still read. The `lk-` half drops with the legacy
+     bridge, once the last screen is on the component layer. */
+  return `<button type="button" class="lk-sx ui-search__x" tabindex="-1" title="Clear search"
     aria-label="Clear search"
     onclick="lkClearSearch('${inputId}',${filterVar},'${page}')">${icon('close','xs')}</button>`;
 }
@@ -203,8 +207,12 @@ let _lkMenuBtn = null;
    which is where someone who opens it needs them; the word on the button cost
    ~46px on every row of every table that uses this. The accessible name still
    carries the whole sentence, so a screen reader is not reading "button". */
-function lkKebab(onclick, label) {
-  return `<button class="lk-kebab" onclick="${onclick}" aria-haspopup="menu"
+/* `cls` overrides the class entirely, the way tbExport()'s does: a rebuilt
+   screen passes the button component, one still on listkit passes nothing and
+   keeps `.lk-kebab`. One helper, so the menu behaviour cannot drift between the
+   two halves of the changeover. */
+function lkKebab(onclick, label, cls) {
+  return `<button class="${cls || 'lk-kebab'}" onclick="${onclick}" aria-haspopup="menu"
       title="Actions" aria-label="${escHtml(label || 'Actions')}">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
       </button>`;
