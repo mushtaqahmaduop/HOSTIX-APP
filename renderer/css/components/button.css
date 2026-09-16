@@ -18,6 +18,11 @@
               color var(--dur-fast) var(--ease);
 }
 .ui-btn svg { flex-shrink: 0; }
+/* An SVG that states its own size keeps it; one that does not gets a size here
+   rather than filling the button. Icons drawn by icon() carry width/height, but
+   plenty of hand-written ones in the modules do not, and an unsized SVG in a
+   flex row is as tall as the row lets it be. */
+.ui-btn svg:not([width]) { width: 16px; height: 16px; }
 
 /* One overlay serves every tier pressed state, so a tier cannot be added later
    without one. */

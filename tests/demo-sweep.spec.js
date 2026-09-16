@@ -76,9 +76,9 @@ test('the students register reads the way the owner asked for', async () => {
       waFirst: !!row.querySelector('.stu-contact .stu-wa'),
       phoneSecond: !!row.querySelector('.stu-contact__em .stu-ph'),
       floor: (row.querySelector('.stu-room__t') || {}).textContent || '',
-      actionWords: (row.querySelector('.stu-kebab') || {}).textContent || '',
-      actionName: (row.querySelector('.stu-kebab') || {}).getAttribute
-        ? row.querySelector('.stu-kebab').getAttribute('aria-label') : '',
+      actionWords: (row.querySelector('.stu-actc .ui-btn') || {}).textContent || '',
+      actionName: (row.querySelector('.stu-actc .ui-btn') || {}).getAttribute
+        ? row.querySelector('.stu-actc .ui-btn').getAttribute('aria-label') : '',
     };
   });
 

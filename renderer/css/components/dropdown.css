@@ -1,0 +1,41 @@
+/* ============================================================
+   Menu / popover — HOSTYLLO_DESIGN_SPEC Part 4/5.
+   A floating surface: one of the three things allowed a shadow.
+   The caller positions it (a screen file may place a component);
+   everything inside it is defined once, here.
+   ============================================================ */
+
+.ui-menu {
+  min-width: 250px; padding: var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-menu);
+  z-index: var(--z-dropdown);
+}
+
+/* Section label inside a menu. Sentence case, like a table header. */
+.ui-menu__t {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary);
+}
+
+.ui-menu__item {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: var(--space-2); border: none; border-radius: var(--radius-sm);
+  background: none; color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-base); font-weight: var(--weight-normal);
+  text-align: left; cursor: pointer;
+}
+.ui-menu__item:hover { background: var(--surface-hover); }
+.ui-menu__item svg { flex-shrink: 0; color: var(--text-secondary); }
+
+/* A line the menu STATES rather than offers — no hover, no pointer. */
+.ui-menu__read {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2);
+  font-size: var(--text-base); color: var(--text-secondary);
+}
+.ui-menu__read b { font-weight: var(--weight-medium); color: var(--text-primary); }
+
+.ui-menu__sep { height: 1px; margin: var(--space-2) 0; background: var(--border); }

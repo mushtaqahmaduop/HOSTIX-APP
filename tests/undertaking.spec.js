@@ -99,7 +99,7 @@ test('admission form: rules versions, the original once, reprints watermarked, p
     // ── The first Admission Form asks, then records the original ───────────
     await win.evaluate(() => showStudentPanel('stuU'));
     await win.waitForSelector('#stu-panel', { timeout: 15000 });
-    await win.click('#stu-panel .stu-pan__act:has-text("Admission Form")');
+    await win.click('#stu-panel .stu-pan__tile:has-text("Admission Form")');
     await win.waitForSelector('.modal-footer .btn-danger', { timeout: 10000 });
     await win.click('.modal-footer .btn-danger');
     await win.waitForFunction(() => window.__printed.length === 1, null, { timeout: 15000 });

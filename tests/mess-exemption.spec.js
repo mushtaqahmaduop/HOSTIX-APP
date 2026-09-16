@@ -76,9 +76,9 @@ test('a warden asks, an admin approves, and the bill drops the mess', async () =
     // ── The warden asks from the student panel ───────────────────────────────
     await actAs(win, 'w_sara');
     await win.evaluate(() => showStudentPanel('stuM'));
-    await win.waitForSelector('#stu-panel .stu-pan__act');
+    await win.waitForSelector('#stu-panel .stu-pan__tile');
     const actLabel = await win.evaluate(() =>
-      [...document.querySelectorAll('#stu-panel .stu-pan__act span')].map(s => s.textContent));
+      [...document.querySelectorAll('#stu-panel .stu-pan__tile span')].map(s => s.textContent));
     expect(actLabel).toContain('Mess Exemption');
 
     await win.evaluate(() => stuMeShowRequest('stuM', 'start'));
@@ -87,7 +87,7 @@ test('a warden asks, an admin approves, and the bill drops the mess', async () =
       document.getElementById('me-req-reason').value = 'Medical — diet plan';
       await stuMeDoRequest('stuM', 'start');
     });
-    await win.waitForFunction(() => !!document.querySelector('#stu-panel .stu-pan__mechip.is-wait'));
+    await win.waitForFunction(() => !!document.querySelector('#stu-panel .ui-chip--warning'));
     const waiting = await win.evaluate(pid => ({
       exempt: DB.students[0].messExempt === true,
       mess: DB.payments.find(p => p.id === pid).messIncluded,

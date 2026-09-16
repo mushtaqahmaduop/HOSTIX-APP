@@ -119,7 +119,7 @@ test('the students table states the whole agreement, not the rent half', async (
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
     title:  (tr.querySelector('.stu-charge') || {}).getAttribute('title') || '',
-    cover:  (tr.querySelector('.stu-cov') || {}).textContent || '',
+    cover:  (tr.querySelector('.ui-chip') || {}).textContent || '',
   })));
 
   const by = n => rows.find(r => r.name.trim() === n);

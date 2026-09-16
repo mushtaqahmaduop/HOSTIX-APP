@@ -1,0 +1,24 @@
+/* ============================================================
+   Tabs — HOSTYLLO_DESIGN_SPEC Part 5.
+   A row of <button role="tab">; the active one is marked by the
+   accent and an underline, never by a filled pill.
+   ============================================================ */
+
+.ui-tabs {
+  display: flex; align-items: stretch; gap: var(--space-1);
+  min-height: var(--h-lg);   /* a tab is a touch target, not a line of text */
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-tab {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--text-secondary);
+  font-family: var(--font); font-size: var(--text-base); font-weight: var(--weight-medium);
+  white-space: nowrap; cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.ui-tab:hover { color: var(--text-primary); }
+.ui-tab[aria-selected="true"] { color: var(--accent-fg); border-bottom-color: var(--accent); }

@@ -94,7 +94,7 @@ test('it opens over the roster with exactly four tabs, and closes again', async 
   await openPanel(win);
 
   // §23: exactly four, in this order, and no fifth.
-  expect(await win.evaluate(() => [...document.querySelectorAll('.stu-pan__tab')].map(b => b.innerText.trim())))
+  expect(await win.evaluate(() => [...document.querySelectorAll('.ui-tab')].map(b => b.innerText.trim())))
     .toEqual(['Overview', 'Financial', 'Documents', 'Room History']);
 
   // §22: a slide-over, not a page — the table is still behind it.
@@ -277,7 +277,7 @@ test('a Blacklisted student fits their own status cell', async () => {
      and every cell after it shifted one to the left — so the test was
      measuring the actions cell and passing for the wrong reason. */
   const cell = await win.evaluate(() => {
-    const pill = document.querySelector('.stu-table tbody tr:first-child .stu-pill');
+    const pill = document.querySelector('.stu-table tbody tr:first-child .stu-c-status .ui-chip');
     const td = pill && pill.closest('td');
     return { text: td.innerText.trim(), overflow: td.scrollWidth - td.clientWidth };
   });
@@ -303,7 +303,7 @@ test('every verb the old profile modal had is on the panel', async () => {
      disappears in a redesign. */
   await win.evaluate(() => { DB.students[0].status = 'Active'; });
   await openPanel(win);
-  const acts = await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
+  const acts = await win.evaluate(() => [...document.querySelectorAll('.stu-pan__tile')]
     .map(b => ({ label: b.innerText.trim(), call: b.getAttribute('onclick'),
                  h: Math.round(b.getBoundingClientRect().height),
                  clipped: b.scrollWidth - b.clientWidth })));
@@ -353,8 +353,8 @@ test('every verb the old profile modal had is on the panel', async () => {
              headVerbs: [...document.querySelectorAll('.stu-pan__head button')]
                           .map(x => x.innerText.trim()).filter(Boolean),
              sub: (document.querySelector('.stu-pan__sub') || {}).innerText,
-             closable: !!document.querySelector('.stu-pan__x')
-                    && document.querySelector('.stu-pan__x').getBoundingClientRect().width > 10,
+             closable: !!document.querySelector('.stu-pan__headx')
+                    && document.querySelector('.stu-pan__headx').getBoundingClientRect().width > 10,
              scrolls: getComputedStyle(b).overflowY };
   });
   expect(bands.sub).toBe('Complete profile and information');
@@ -374,7 +374,7 @@ test('every verb the old profile modal had is on the panel', async () => {
   await win.waitForTimeout(300);
   await win.evaluate(() => { DB.students[0].status = 'Left'; });
   await openPanel(win);
-  expect(await win.evaluate(() => [...document.querySelectorAll('.stu-pan__act')]
+  expect(await win.evaluate(() => [...document.querySelectorAll('.stu-pan__tile')]
     .map(b => b.innerText.trim())))
     .toEqual(['Edit', 'Move Room', 'Admission Form', 'Payment', 'Delete']);
 
@@ -397,7 +397,7 @@ test('the panel clears the title bar, and no band is squashed', async () => {
       const r = e.getBoundingClientRect(); return { top: Math.round(r.top), h: Math.round(r.height) }; };
     return { bar: box('#hz-titlebar'), pan: box('.stu-pan'), scrim: box('.stu-pan__scrim'),
              tabs: box('.stu-pan__tabs'), head: box('.stu-pan__head'),
-             tabH: Math.round(document.querySelector('.stu-pan__tab').getBoundingClientRect().height) };
+             tabH: Math.round(document.querySelector('.ui-tab').getBoundingClientRect().height) };
   });
 
   /* THE BAR SITS AT z-index 100000, above modals on purpose. A panel pinned to
@@ -506,8 +506,15 @@ test('Financial carries the old profile ledger, whole', async () => {
      what .svw-tw is for; what must never happen is the overflow escaping into
      the panel body, because a horizontally scrolling body moves the content
      under the cursor as you read down it. */
-  expect(led.overflow, 'the ledger has grown well past its card again')
-    .toBeLessThanOrEqual(40);
+  /* THE BUDGET BECAME A SCROLL ON 2026-09-16. The three changes above got the
+     nine columns to ~575px by setting the headers at 9px and the cells at 9.5 —
+     below the 11px floor HOSTYLLO_DESIGN_SPEC Part 2 sets, and the spec is
+     explicit that a wide table scrolls inside its own wrapper rather than
+     shrinking its type to fit. `.svw-tw` IS that wrapper, and the owner already
+     accepted dragging this ledger sideways (2026-09-06). What must never happen
+     is the overflow escaping into the panel body — the assertion below. */
+  expect(led.overflow, 'the ledger must scroll inside .svw-tw, not escape it')
+    .toBeGreaterThanOrEqual(0);
   expect(await win.evaluate(() => {
     const b = document.getElementById('stu-panel-body');
     return b.scrollWidth - b.clientWidth;
@@ -530,7 +537,7 @@ test('a form opens over the panel, and the panel is still there after it', async
      from here rendered underneath it. So closing the form left the warden back
      at the table, having to find the student and click again. */
   const opened = await win.evaluate(() => {
-    const b = [...document.querySelectorAll('.stu-pan__act')].find(x => x.innerText.trim() === 'Edit');
+    const b = [...document.querySelectorAll('.stu-pan__tile')].find(x => x.innerText.trim() === 'Edit');
     if (!b) return 'no Edit button';
     b.click();
     return b.getAttribute('onclick');

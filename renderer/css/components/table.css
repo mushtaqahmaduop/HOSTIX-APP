@@ -46,3 +46,11 @@
 .ui-table th[aria-sort="descending"] .ui-th-sort svg { opacity: 1; }
 
 .ui-td-num { text-align: right; }
+
+/* DENSE — for a register with ten or more columns (the students roster is 11).
+   The spec says a wide table scrolls rather than shrinking its type, and the
+   type is untouched here: this takes the horizontal air out of the cells and
+   nothing else, which is what lets the roster hold its columns at the 1366
+   floor the owner measures against. One variant, defined once, instead of each
+   wide screen re-padding the table for itself. */
+.ui-table--dense th, .ui-table--dense td { padding: var(--space-2); }

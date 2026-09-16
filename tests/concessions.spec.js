@@ -75,9 +75,9 @@ test('a warden asks, an admin approves with one tap, and the month carries it', 
     // ── The warden asks from the student panel ───────────────────────────────
     await actAs(win, 'w_sara');
     await win.evaluate(() => showStudentPanel('stuC'));
-    await win.waitForSelector('#stu-panel .stu-pan__act');
+    await win.waitForSelector('#stu-panel .stu-pan__tile');
     expect(await win.evaluate(() =>
-      [...document.querySelectorAll('#stu-panel .stu-pan__act span')].map(s => s.textContent))).toContain('Concession');
+      [...document.querySelectorAll('#stu-panel .stu-pan__tile span')].map(s => s.textContent))).toContain('Concession');
     await win.evaluate(() => stuCnShowRequest('stuC'));
     await win.waitForSelector('#cn-value');
     await win.evaluate(async () => {

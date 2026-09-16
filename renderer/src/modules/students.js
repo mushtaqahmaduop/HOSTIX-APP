@@ -175,8 +175,8 @@ function stuAvatarHue(name) {
    Deliberately NOT the same palette call as stuStatusHue() below — the two
    badges sit side by side in every row and mean different things, so they are
    allowed to look alike only by coincidence, never by sharing a function. */
-function stuFeeHue(status) {
-  return status === 'Paid' ? 'dh-green' : status === 'Overdue' ? 'dh-red' : 'dh-amber';
+function stuFeeRole(status) {
+  return status === 'Paid' ? 'ui-chip--success' : status === 'Overdue' ? 'ui-chip--danger' : 'ui-chip--warning';
 }
 
 /* The hover text. A badge reading "Overdue" with no figure sends the warden to
@@ -199,26 +199,43 @@ function stuStatusHue(s) {
        : s === 'Blacklisted' ? 'dh-red' : 'dh-slate';
 }
 
+/* The same four states as chip roles (design spec Part 4, 2026-09-16). The
+   reasoning above is unchanged — amber is the live signal and belongs to
+   'Cancelling', not to 'Left' — it is just said in roles now rather than in
+   hues. stuStatusHue() stays for the Former Students modal, which is rebuilt
+   with the cancellations group (spec Part 6, stage 4). */
+function stuStatusRole(s) {
+  return s === 'Active' ? 'ui-chip--success' : s === 'Cancelling' ? 'ui-chip--warning'
+       : s === 'Blacklisted' ? 'ui-chip--danger' : 'ui-chip--neutral';
+}
+
+/* The three sort marks, as SVG. They were the characters ▲ ▼ ⇅. */
+const STU_SORT_ICO = {
+  asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>',
+  desc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  none: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5"/><path d="m7 15 5 5 5-5"/></svg>',
+};
+
 function renderStudents() {
   _stuFeeReset();                       // this render's data, not the last one's
   const _roomById = _stuRoomMap();
 
   if (DB.students.length === 0) return `
-    <div class="empty-state">
-      <div class="icon">${icon('student','sm')}</div>
-      <h3>No Students Yet</h3>
-      <p style="margin-bottom:16px">Add your first student to get started</p>
-      <button class="btn btn-primary" onclick="showAddStudentModal()">+ Add Student</button>
+    <div class="ui-card ui-empty">
+      ${icon('student','sm')}
+      <div class="ui-empty__t">No students yet</div>
+      <div>Add your first student to get started</div>
+      <button class="ui-btn ui-btn--primary" onclick="showAddStudentModal()">Add student</button>
     </div>`;
 
   // There ARE students — just none in the month being looked at. Saying "No
   // Students Yet" here would tell a warden their roster had been wiped.
   if (studentFilter.month && !DB.students.some(_stuInMonth)) return `
-    <div class="empty-state">
-      <div class="icon">${icon('student','sm')}</div>
-      <h3>Nobody was here in ${escHtml(_stuMonthLabel(studentFilter.month))}</h3>
-      <p style="margin-bottom:16px">${DB.students.length} student${DB.students.length===1?'':'s'} on record in other months.</p>
-      <button class="btn btn-primary" onclick="stuSetMonth('')">Show every month</button>
+    <div class="ui-card ui-empty">
+      ${icon('student','sm')}
+      <div class="ui-empty__t">Nobody was here in ${escHtml(_stuMonthLabel(studentFilter.month))}</div>
+      <div>${DB.students.length} student${DB.students.length===1?'':'s'} on record in other months.</div>
+      <button class="ui-btn ui-btn--secondary" onclick="stuSetMonth('')">Show every month</button>
     </div>`;
 
   const students = studentsFiltered();
@@ -257,10 +274,15 @@ function renderStudents() {
   const activeFilters = [studentFilter.room!=='All', (studentFilter.plan||'All')!=='All',
                          studentFilter.fee!=='All', (studentFilter.und||'All')!=='All'].filter(Boolean).length;
 
+  /* A BUTTON INSIDE THE HEADER CELL, not an onclick on the `th`. A `th` takes
+     no focus and answers no key press, and `aria-sort` on the cell is what says
+     which way the column runs. Same pattern as the expenses register. */
   const th = (key,label,extra) => {
-    const on = studentFilter.sortKey===key;
-    const arw = on ? (studentFilter.sortDir==='asc'?'▲':'▼') : '⇅';
-    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(studentFilter,'students','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+    const on  = studentFilter.sortKey===key;
+    const dir = on ? (studentFilter.sortDir==='asc'?'ascending':'descending') : 'none';
+    const ico = on ? (studentFilter.sortDir==='asc'?STU_SORT_ICO.asc:STU_SORT_ICO.desc) : STU_SORT_ICO.none;
+    return `<th aria-sort="${dir}" ${extra||''}><button type="button" class="ui-th-sort"
+              onclick="toggleSort(studentFilter,'students','${key}')" title="Sort by ${label}">${label}${ico}</button></th>`;
   };
   /* THE OFFICIAL MARK, drawn neutral (owner, 2026-09-09: "use official neutral
      whatsapp logo"). The old one was a hand-approximated speech bubble with no
@@ -279,63 +301,67 @@ function renderStudents() {
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="stu-stats">
-    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('All')" title="Show every student">
-      <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total Students'}</div>
+    <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('All')" title="Show every student">
+      <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total students'}</div>
       <div class="stu-stat__val">${nTotal}</div>
       <div class="stu-stat__sub">${studentFilter.month?'On the roster that month':'Registered, all time'}</div>
-    </div>
+    </button>
 
-    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Active')" title="Show only active students">
+    <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Active')" title="Show only active students">
       <div class="stu-stat__label">Active</div>
       <div class="stu-stat__val is-good">${nActive}</div>
       <div class="stu-stat__sub">Students</div>
-    </div>
+    </button>
 
-    ${nCanc?`<div class="stu-stat stu-stat--click" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
-      <div class="stu-stat__label">On Notice</div>
+    ${nCanc?`<button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
+      <div class="stu-stat__label">On notice</div>
       <div class="stu-stat__val">${nCanc}</div>
       <div class="stu-stat__sub">Bed held till vacate date</div>
-    </div>`:''}
+    </button>`:''}
 
-    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Left')" title="Show only students who have left">
+    <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Left')" title="Show only students who have left">
       <div class="stu-stat__label">Left</div>
       <div class="stu-stat__val">${nLeft}</div>
       <div class="stu-stat__sub">Students</div>
-    </div>
+    </button>
 
-    <div class="stu-stat stu-stat--click" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
+    <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
       <div class="stu-stat__label">Blacklisted</div>
       <div class="stu-stat__val is-bad">${nBlack}</div>
       <div class="stu-stat__sub">Students</div>
-    </div>
+    </button>
 
-    <div class="stu-stat stu-stat--click" onclick="navigate('rooms')" title="Go to Rooms">
-      <div class="stu-stat__label">Occupied Rooms</div>
+    <button type="button" class="ui-card stu-stat" onclick="navigate('rooms')" title="Go to Rooms">
+      <div class="stu-stat__label">Occupied rooms</div>
       <div class="stu-stat__val">${occRooms}<small> / ${DB.rooms.length}</small></div>
       <div class="stu-stat__sub">${occPct}% occupied</div>
-    </div>
+    </button>
   </div>
 
   <!-- ══ TOOLBAR ══ -->
-  <div class="stu-panel">
+  <div class="ui-card">
     <div class="stu-tools">
-      <div class="stu-search">
+      <div class="ui-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="search-students" class="lk-sin" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
+        <input id="search-students" class="lk-sin" aria-label="Search students" placeholder="Search by name, father, ID, CNIC, phone, email, room, course…"
           value="${escHtml(studentFilter.search)}"
           oninput="capFirstChar(this);studentFilter.search=this.value;studentFilter.page=1;_dStudents()">
         ${lkSearchX('search-students','studentFilter','students')}
       </div>
 
-      <select class="stu-select${studentFilter.month?' is-set':''}" onchange="stuSetMonth(this.value)" title="Show the roster for one month">
-        <option value="" ${!studentFilter.month?'selected':''}>All months</option>
-        ${_stuMonthOptions().map(k=>`<option value="${escHtml(k)}" ${studentFilter.month===k?'selected':''}>${escHtml(_stuMonthLabel(k))}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${studentFilter.month?' is-set':''}" aria-label="Show the roster for one month" onchange="stuSetMonth(this.value)">
+          <option value="" ${!studentFilter.month?'selected':''}>All months</option>
+          ${_stuMonthOptions().map(k=>`<option value="${escHtml(k)}" ${studentFilter.month===k?'selected':''}>${escHtml(_stuMonthLabel(k))}</option>`).join('')}
+        </select>
+      </span>
 
-      <select class="stu-select${studentFilter.room!=='All'?' is-set':''}" onchange="studentFilter.room=this.value;studentFilter.page=1;renderPage('students')" title="Filter by room">
-        <option value="All">All Rooms</option>
-        ${roomNums.map(r=>`<option value="${escHtml(r)}" ${studentFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${studentFilter.room!=='All'?' is-set':''}" aria-label="Filter by room" onchange="studentFilter.room=this.value;studentFilter.page=1;renderPage('students')">
+          <option value="All">All rooms</option>
+          ${roomNums.map(r=>`<option value="${escHtml(r)}" ${studentFilter.room===r?'selected':''}>Room ${escHtml(r)}</option>`).join('')}
+        </select>
+      </span>
 
       ${''/* COURSES OUT, CHARGE PLAN IN (owner, 2026-09-09). The course is on
              every row already and a hostel's list of them is long and
@@ -344,21 +370,26 @@ function renderStudents() {
              until now: the plan is resolved per student by resolveCharges(),
              the same call the Charges column prints, so the filter and the
              column can never disagree. */}
-      <select class="stu-select${studentFilter.plan&&studentFilter.plan!=='All'?' is-set':''}" onchange="studentFilter.plan=this.value;studentFilter.page=1;renderPage('students')" title="Filter by what the student is charged for">
-        <option value="All">Rent &amp; mess: all</option>
-        <option value="both" ${studentFilter.plan==='both'?'selected':''}>Rent + mess</option>
-        <option value="rent" ${studentFilter.plan==='rent'?'selected':''}>Rent only</option>
-        <option value="mess" ${studentFilter.plan==='mess'?'selected':''}>Mess only</option>
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${studentFilter.plan&&studentFilter.plan!=='All'?' is-set':''}" aria-label="Filter by what the student is charged for" onchange="studentFilter.plan=this.value;studentFilter.page=1;renderPage('students')">
+          <option value="All">Rent &amp; mess: all</option>
+          <option value="both" ${studentFilter.plan==='both'?'selected':''}>Rent + mess</option>
+          <option value="rent" ${studentFilter.plan==='rent'?'selected':''}>Rent only</option>
+          <option value="mess" ${studentFilter.plan==='mess'?'selected':''}>Mess only</option>
+        </select>
+      </span>
 
       ${''/* Step 11 (spec §3.8): students without a signed undertaking on file. */}
-      <select class="stu-select${studentFilter.und&&studentFilter.und!=='All'?' is-set':''}" id="stu-und-filter" aria-label="Undertaking" onchange="studentFilter.und=this.value;studentFilter.page=1;renderPage('students')" title="Filter by a signed undertaking on file">
-        <option value="All">Undertaking: all</option>
-        <option value="scan" ${studentFilter.und==='scan'?'selected':''}>Signed scan on file</option>
-        <option value="noscan" ${studentFilter.und==='noscan'?'selected':''}>No signed scan</option>
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${studentFilter.und&&studentFilter.und!=='All'?' is-set':''}" id="stu-und-filter" aria-label="Filter by a signed undertaking on file" onchange="studentFilter.und=this.value;studentFilter.page=1;renderPage('students')">
+          <option value="All">Undertaking: all</option>
+          <option value="scan" ${studentFilter.und==='scan'?'selected':''}>Signed scan on file</option>
+          <option value="noscan" ${studentFilter.und==='noscan'?'selected':''}>No signed scan</option>
+        </select>
+      </span>
 
-      <select class="stu-select${studentFilter.status!=='All'?' is-set':''}" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')" title="Filter by status">
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${studentFilter.status!=='All'?' is-set':''}" aria-label="Filter by status" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')">
         ${(() => {
           // 'Cancelling' only appears once somebody is on notice — an empty
           // status in the list is a dead end, but a resident the filter cannot
@@ -366,9 +397,10 @@ function renderStudents() {
           const opts = ['All','Active','Left','Blacklisted'];
           if (DB.students.some(t=>t.status==='Cancelling')) opts.splice(2,0,'Cancelling');
           if (studentFilter.status!=='All' && opts.indexOf(studentFilter.status)===-1) opts.push(studentFilter.status);
-          return opts.map(s=>`<option value="${escHtml(s)}" ${studentFilter.status===s?'selected':''}>${s==='All'?'All Status':escHtml(s)}</option>`).join('');
+          return opts.map(s=>`<option value="${escHtml(s)}" ${studentFilter.status===s?'selected':''}>${s==='All'?'All statuses':escHtml(s)}</option>`).join('');
         })()}
-      </select>
+        </select>
+      </span>
 
       ${''/* FEE STATUS IS IN ADVANCED FILTERS, NOT HERE, and that is the spec's
              own instruction rather than a space-saving compromise. §17: keep
@@ -378,37 +410,39 @@ function renderStudents() {
              at, the eighth control pushed the bar onto a second row and cost
              the table 44px. student22.png shows eight controls on one line and
              this is not one of them. */}
-      <div style="position:relative">
-        <button class="stu-btn${activeFilters?' stu-btn--hue dh-blue':''}" onclick="stuTogglePop(event)" title="Secondary filters">
+      <div class="stu-popw">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="stuTogglePop(event)" title="Secondary filters"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="stu-pop" id="stu-pop-btn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-          Advanced Filters${activeFilters?`<span class="stu-btn__count">${activeFilters}</span>`:''}
+          Advanced filters${activeFilters?`<span class="ui-chip ui-chip--accent ui-chip--count">${activeFilters}</span>`:''}
         </button>
-        <div class="stu-pop" id="stu-pop" style="display:none">
+        <div class="ui-menu stu-pop" id="stu-pop" role="menu" hidden>
           ${''/* It was a READOUT — four rows restating what the selects above
                  already showed, and nothing to act on. §17 asks this to hold
                  "secondary filters", so the one filter the primary bar has no
                  room for now lives here as a real control, and the rest stay as
                  the summary they were. */}
-          <div class="stu-pop__t">Fee status</div>
+          <div class="ui-menu__t">Fee status</div>
           <div class="stu-pop__fee">
             ${['All','Paid','Pending','Overdue'].map(f=>`
-              <button class="stu-pop__chip${studentFilter.fee===f?' is-on':''}"
+              <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm${studentFilter.fee===f?' is-on':''}"
+                      aria-pressed="${studentFilter.fee===f}"
                       onclick="stuSetFee('${f}')">${f==='All'?'Any':f}</button>`).join('')}
           </div>
-          <div class="stu-pop__sep"></div>
-          <div class="stu-pop__t">Active filters</div>
-          <div class="stu-pop__row" style="cursor:default">Room: <b style="color:var(--text)">${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
-          <div class="stu-pop__row" style="cursor:default">Charged for: <b style="color:var(--text)">${(studentFilter.plan||'All')==='All'?'Any':(studentFilter.plan==='both'?'Rent + mess':studentFilter.plan==='rent'?'Rent only':'Mess only')}</b></div>
-          <div class="stu-pop__row" style="cursor:default">Status: <b style="color:var(--text)">${studentFilter.status}</b></div>
-          <div class="stu-pop__sep"></div>
-          <div class="stu-pop__row" onclick="stuResetFilters()">
+          <div class="ui-menu__sep"></div>
+          <div class="ui-menu__t">Active filters</div>
+          <div class="ui-menu__read">Room: <b>${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
+          <div class="ui-menu__read">Charged for: <b>${(studentFilter.plan||'All')==='All'?'Any':(studentFilter.plan==='both'?'Rent + mess':studentFilter.plan==='rent'?'Rent only':'Mess only')}</b></div>
+          <div class="ui-menu__read">Status: <b>${escHtml(studentFilter.status)}</b></div>
+          <div class="ui-menu__sep"></div>
+          <button type="button" class="ui-menu__item" role="menuitem" onclick="stuResetFilters()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
             Reset all filters
-          </div>
-          <div class="stu-pop__row" onclick="closeStuPop();downloadAllStudentsPDF()">
+          </button>
+          <button type="button" class="ui-menu__item" role="menuitem" onclick="closeStuPop();downloadAllStudentsPDF()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
             Download PDF report
-          </div>
+          </button>
         </div>
       </div>
 
@@ -416,23 +450,24 @@ function renderStudents() {
             Clear all sits beside it and appears only when something is set —
             both come from src/toolbar.js, so all six list screens behave the
             same way. */''}
-      <span style="margin-left:auto"></span>
-      ${tbExport({ id:'stu-export', cls:'stu-btn stu-btn--primary',
+      <span class="stu-tools__gap"></span>
+      ${tbExport({ id:'stu-export', cls:'ui-btn ui-btn--secondary ui-btn--sm',
                    excel:'exportStudentsExcel()', pdf:'exportStudentsPDF()' })}
     </div>
 
     ${stuSelected.size>0?`
-    <div class="stu-bulk dh-blue">
+    <div class="stu-bulk">
       <span class="stu-bulk__n">${stuSelected.size} selected</span>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="stu-btn" onclick="stuBulkExport()">Export selected</button>
-        <button class="stu-btn" onclick="stuSelected.clear();renderPage('students')">Clear</button>
+      <div class="stu-bulk__acts">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="stuBulkExport()">Export selected</button>
+        <button class="ui-btn ui-btn--ghost ui-btn--sm" onclick="stuSelected.clear();renderPage('students')">Clear</button>
       </div>
     </div>`:''}
 
     <!-- ══ TABLE ══ -->
-    <div class="stu-table-wrap">
-      <table class="stu-table">
+    <div class="ui-card ui-card--flush stu-tablecard">
+      <div class="ui-table-wrap">
+      <table class="ui-table ui-table--dense stu-table">
         ${''/* ONE COLGROUP IS THE COLUMN WIDTHS, and nothing else sets them.
 
                They were per-cell `th:nth-child(n)` percentages, and the header
@@ -480,28 +515,28 @@ function renderStudents() {
 
                  Sums to 99.5, which is what this colgroup has always summed to;
                  the browser gives the remainder to the last column. */}
-          <col style="width:2.6%">   <!-- select      -->
-          <col style="width:3.6%">   <!-- ID          -->
-          <col style="width:15.3%">  <!-- student     -->
-          <col style="width:9%">     <!-- room        -->
-          <col style="width:11.5%">  <!-- contact     -->
+          <col class="stu-col-sel">     <!-- select   -->
+          <col class="stu-col-id">      <!-- ID       -->
+          <col class="stu-col-who">     <!-- student  -->
+          <col class="stu-col-room">    <!-- room     -->
+          <col class="stu-col-contact"> <!-- contact  -->
           ${''/* NATIONALITY IS GONE (owner, 2026-09-15: "remove nationality
                  column from students page so that the CNIC, course and address
                  should relax a little"). Its 7% went to them: CNIC +1, course +2,
                  address +4. The field stays on the form, the profile and the PDF. */}
-          <col style="width:12.4%">  <!-- CNIC        -->
-          <col style="width:9.6%">   <!-- course      -->
-          <col style="width:11.5%">  <!-- address     -->
-          <col style="width:10%">    <!-- charges     -->
-          <col style="width:8.8%">   <!-- status      -->
-          <col style="width:5.2%">   <!-- actions     -->
+          <col class="stu-col-cnic">    <!-- CNIC     -->
+          <col class="stu-col-course">  <!-- course   -->
+          <col class="stu-col-addr">    <!-- address  -->
+          <col class="stu-col-charge">  <!-- charges  -->
+          <col class="stu-col-status">  <!-- status   -->
+          <col class="stu-col-acts">    <!-- actions  -->
         </colgroup>
         <thead><tr>
-          <th><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" title="Select all on this page"></th>
+          <th><input type="checkbox" ${_pg.slice.length>0&&_pg.slice.every(t=>stuSelected.has(t.id))?'checked':''} onclick="stuToggleAll(this.checked)" aria-label="Select every student on this page" title="Select all on this page"></th>
           ${th('id','ID')}
           ${th('name','Student')}
           ${th('room','Room')}
-          <th>Contact / Emergency</th>
+          <th>Contact / emergency</th>
           <th>CNIC</th>
           ${th('course','Course')}
           <th>Address</th>
@@ -523,24 +558,27 @@ function renderStudents() {
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="stu-empty">No students match these filters.</div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="ui-empty"><div class="ui-empty__t">No students match these filters.</div></div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
           const picked= stuSelected.has(t.id);
           const nm    = String(t.name||'?');
           const status= t.status||'Active';
-          return `<tr class="${picked?'is-picked dh-blue':''}">
-            <td onclick="event.stopPropagation()"><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')"></td>
+          return `<tr class="${picked?'is-picked':''}">
+            <td><input type="checkbox" ${picked?'checked':''} onclick="stuToggleRow('${t.id}')" aria-label="Select ${escHtml(nm)}"></td>
             ${''/* Plain text, not a pill. student22.png draws "#052" as type;
                    the pill cost 30px of a table that was overflowing its
                    container by 444px, and a badge around a number that is
                    already prefixed with # was decorating an identifier. */}
             <td class="stu-idc">#${escHtml(t.id)}</td>
-            <td onclick="showStudentPanel('${t.id}')" style="cursor:pointer" title="Open student details">
-              <div class="stu-who">
-                ${studentAvatar(t, 32, stuAvatarHue(nm))}
-                <div style="min-width:0">
+            <td>
+              ${''/* The cell used to carry the onclick and a cursor style. A td
+                     is not a control: this is the same click, on a button that
+                     Tab can reach and Enter can press. */}
+              <button type="button" class="stu-who" onclick="showStudentPanel('${t.id}')" title="Open student details">
+                ${studentAvatar(t, 32)}
+                <div class="stu-who__b">
                   <div class="stu-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
                   ${''/* S/O or D/O BEFORE THE FATHER'S NAME (owner, 2026-09-15). From
                          the record's gender, or the hostel's default when it has
@@ -549,7 +587,7 @@ function renderStudents() {
                     const _rel=_g==='female'?'D/O':_g==='male'?'S/O':'';
                     return `<div class="stu-who__sub" title="${escHtml((_rel?_rel+' ':'')+t.fatherName)}">${_rel?`<span class="stu-who__rel">${_rel}</span> `:''}${escHtml(t.fatherName)}</div>`;})():''}
                 </div>
-              </div>
+              </button>
             </td>
             ${''/* ONE LIGHT LABEL, not two loose lines (owner, 2026-09-09 —
                    `students red.png`). The wrapper is what the pale ground and
@@ -605,14 +643,17 @@ function renderStudents() {
                        Total plus badge; the split is on the student's profile
                        and in the Rent & Mess settings that produced it. */}
                 <div class="stu-charge" title="${c.configured?escHtml(cov.label):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
-                <span class="stu-cov ${cov.hue}">${escHtml(cov.label)}</span>
+                ${''/* WHAT the month covers is a category, so the chip is
+                       neutral — except "Not set", which is a charge nobody has
+                       configured and therefore something to act on. */}
+                <span class="ui-chip ${cov.key==='none'?'ui-chip--warning':'ui-chip--neutral'}">${escHtml(cov.label)}</span>
               </td>`;})()}
             ${''/* THE STATUS NAMES A DATE, SO THE CELL PRINTS IT (owner,
                    2026-09-10). "Left" answers nothing a warden asks next, and
                    "On Notice" is worse — the bed is still occupied and the only
                    useful fact is the day it frees. statusDateNote() is shared,
                    so the same line appears wherever this status does. */}
-            <td><span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(status)}"><i></i>${escHtml(status)}</span>
+            <td class="stu-c-status"><span class="ui-chip ${stuStatusRole(status)}" title="${escHtml(status)}">${escHtml(status)}</span>
                 ${statusDateNote(t)}</td>
             ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
                    Three always-visible icons were 124px — the widest ornament
@@ -629,7 +670,7 @@ function renderStudents() {
                      a reader who opens the menu actually needs the words. The
                      word on the button itself cost 46px of a table that is
                      short of width, on every row. */}
-              <button class="stu-kebab" onclick="event.stopPropagation();stuRowMenu('${t.id}',this)"
+              <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="event.stopPropagation();stuRowMenu('${t.id}',this)"
                       aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
               </button>
@@ -638,43 +679,48 @@ function renderStudents() {
         }).join('')}
         </tbody>
       </table>
+      </div>
+      ${stuPager(_pg)}
     </div>
-
-    ${stuPager(_pg)}
   </div>`;
 }
 
 // Footer: page-size picker, range readout and the numbered pager.
 function stuPager(pg) {
+  const C = 'ui-btn ui-btn--secondary ui-btn--sm';
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled>${label}</button>`;
-    if (o.active)   return `<button class="is-on">${label}</button>`;
-    return `<button onclick="gotoPage(studentFilter,'students',${target})">${label}</button>`;
+    const lbl = o.aria ? ` aria-label="${o.aria}"` : '';
+    if (o.disabled) return `<button class="${C}" disabled${lbl}>${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}"${lbl} onclick="gotoPage(studentFilter,'students',${target})">${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
   lo = Math.max(1, hi-4);
   let nums = '';
-  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="stu-pager__gap">…</span>':'');
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="ui-pager__gap">…</span>':'');
   for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
-  if (hi < pages) nums += (hi<pages-1?'<span class="stu-pager__gap">…</span>':'') + btn(String(pages), pages);
+  if (hi < pages) nums += (hi<pages-1?'<span class="ui-pager__gap">…</span>':'') + btn(String(pages), pages);
 
-  return `<div class="stu-foot">
+  return `<div class="ui-pagebar">
     <div class="stu-foot__size">
       Show
-      <select onchange="studentFilter.pageSize=Number(this.value);studentFilter.page=1;renderPage('students')">
-        ${[10,30,50,100].map(n=>`<option value="${n}" ${studentFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm" aria-label="Rows per page"
+                onchange="studentFilter.pageSize=Number(this.value);studentFilter.page=1;renderPage('students')">
+          ${[10,30,50,100].map(n=>`<option value="${n}" ${studentFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        </select>
+      </span>
       entries
     </div>
-    <div class="stu-foot__info">${pg.total?`Showing ${pg.from} to ${pg.to} of ${pg.total} students`:'No students'}</div>
-    <div class="stu-pager">
-      ${btn('«',1,{disabled:page<=1})}
-      ${btn('‹',page-1,{disabled:page<=1})}
+    <div class="ui-pagebar__info">${pg.total?`Showing ${pg.from} to ${pg.to} of ${pg.total} students`:'No students'}</div>
+    <div class="ui-pager">
+      ${btn('«',1,{disabled:page<=1, aria:'First page'})}
+      ${btn('‹',page-1,{disabled:page<=1, aria:'Previous page'})}
       ${nums}
-      ${btn('›',page+1,{disabled:page>=pages})}
-      ${btn('»',pages,{disabled:page>=pages})}
+      ${btn('›',page+1,{disabled:page>=pages, aria:'Next page'})}
+      ${btn('»',pages,{disabled:page>=pages, aria:'Last page'})}
     </div>
   </div>`;
 }
@@ -687,7 +733,17 @@ function stuSetFee(f) {
   studentFilter.fee = f;
   studentFilter.page = 1;
   renderPage('students');
-  setTimeout(() => { const p = document.getElementById('stu-pop'); if (p) p.style.display = 'block'; }, 0);
+  setTimeout(() => _stuPopSet(true), 0);
+}
+
+/* The popover is opened and closed with the `hidden` attribute rather than an
+   inline display, so the markup carries no style= and the button's
+   aria-expanded stays true to what is on screen. */
+function _stuPopSet(open) {
+  const p = document.getElementById('stu-pop');
+  if (p) p.hidden = !open;
+  const b = document.getElementById('stu-pop-btn');
+  if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 function stuSetStatus(s) {
@@ -702,15 +758,15 @@ function stuResetFilters() {
   stuSelected.clear();
   renderPage('students');
 }
-function closeStuPop() { const p=document.getElementById('stu-pop'); if(p) p.style.display='none'; }
+function closeStuPop() { _stuPopSet(false); }
 function stuTogglePop(ev) {
   if (ev) ev.stopPropagation();
   const p = document.getElementById('stu-pop'); if (!p) return;
-  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+  _stuPopSet(p.hidden);
 }
 document.addEventListener('click', function (e) {
   const p = document.getElementById('stu-pop');
-  if (p && p.style.display === 'block' && e.target.closest && !e.target.closest('#stu-pop')) p.style.display = 'none';
+  if (p && !p.hidden && e.target.closest && !e.target.closest('#stu-pop') && !e.target.closest('#stu-pop-btn')) _stuPopSet(false);
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -832,11 +888,11 @@ function _stuMeChip(t) {
   if (typeof meApplies !== 'function' || !meApplies()) return '';
   const r = t.messExemptRequest;
   if (r) {
-    return '<span class="stu-pan__roombadge stu-pan__mechip is-wait" title="' + escHtml(r.reason || '') + '">'
+    return '<span class="ui-chip ui-chip--warning" title="' + escHtml(r.reason || '') + '">'
       + (r.kind === 'start' ? 'Exemption requested' : 'End of exemption requested') + '</span>';
   }
   if (t.messExempt === true) {
-    return '<span class="stu-pan__roombadge stu-pan__mechip" title="' + escHtml(t.messExemptReason || '') + '">Mess exempt</span>';
+    return '<span class="ui-chip ui-chip--neutral" title="' + escHtml(t.messExemptReason || '') + '">Mess exempt</span>';
   }
   return '';
 }
@@ -847,7 +903,7 @@ function _stuMeAction(t) {
   const kind  = t.messExempt === true ? 'end' : 'start';
   const label = kind === 'start' ? 'Mess Exemption' : 'End Exemption';
   return `
-      <button class="stu-pan__act" onclick="stuMeShowRequest('${escHtml(t.id)}','${kind}')" title="${
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="stuMeShowRequest('${escHtml(t.id)}','${kind}')" title="${
         meIsAdmin() ? (kind === 'start' ? 'Exempt this student from the mess' : 'End this exemption')
                     : (kind === 'start' ? 'Ask an admin to exempt this student from the mess' : 'Ask an admin to end this exemption')}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg><span>${label}</span></button>`;
@@ -901,7 +957,7 @@ function _stuCnAction(t) {
   if (typeof cnRequest !== 'function') return '';
   if (t.status && t.status !== 'Active' && t.status !== 'Cancelling') return '';
   return `
-      <button class="stu-pan__act" onclick="stuCnShowRequest('${escHtml(t.id)}')" title="${
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="stuCnShowRequest('${escHtml(t.id)}')" title="${
         cnIsAdmin() ? 'Add a standing concession' : 'Ask an admin for a standing concession'}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg><span>Concession</span></button>`;
 }
@@ -963,25 +1019,25 @@ function _stuCnCard(t) {
   const list = cnForStudent(t.id);
   if (!list.length) return '';
   const admin = cnIsAdmin();
-  const state = c => c.status === 'pending' ? ['dh-amber', 'Waiting']
-    : c.status === 'approved' ? (c.endRequest ? ['dh-amber', 'End requested'] : ['dh-green', 'Active'])
-    : c.status === 'ended' ? ['dh-slate', 'Ended'] : ['dh-red', 'Declined'];
+  const state = c => c.status === 'pending' ? ['ui-chip--warning', 'Waiting']
+    : c.status === 'approved' ? (c.endRequest ? ['ui-chip--warning', 'End requested'] : ['ui-chip--success', 'Active'])
+    : c.status === 'ended' ? ['ui-chip--neutral', 'Ended'] : ['ui-chip--danger', 'Declined'];
   const rows = list.map(c => {
-    const [hue, label] = state(c);
+    const [role, label] = state(c);
     return `<div class="stu-cn-row" data-concession="${escHtml(c.id)}">
       <div class="stu-cn-main">
         <div><b>${fmtPKR(c.value)}/month</b> · ${escHtml(cnTypeLabel(c.type))} · ${escHtml(cnMonthsLabel(c))}</div>
         <div class="stu-cn-why">${escHtml(c.reason)}${c.approvedByName ? ' · approved by ' + escHtml(c.approvedByName) : ''}${
           c.status === 'declined' && c.decidedNote ? ' · declined: ' + escHtml(c.decidedNote) : ''}</div>
       </div>
-      <span class="lk-chip ${hue}">${label}</span>
+      <span class="ui-chip ${role}">${label}</span>
       ${c.status === 'approved' && !c.endRequest
         ? `<button class="set-btn" onclick="stuCnShowEnd('${escHtml(c.id)}')">${admin ? 'End' : 'Ask to end'}</button>` : ''}
     </div>`;
   }).join('');
   // The Financial tab's own card — the same shell as the payment history below it.
   return '<section class="stu-pan__sec"><div class="svw-card svw-card--flush stu-cn-card">'
-       + '<div class="svw-card__head dh-green svw-card__head--bar">'
+       + '<div class="svw-card__head svw-card__head--bar">'
        + '<span class="svw-card__ico">' + icon('tag', 'sm') + '</span>'
        + '<span>Concessions (' + list.length + ')</span></div>' + rows + '</div></section>';
 }
@@ -1020,8 +1076,10 @@ function stuPanelTab(tab) {
   const host = document.getElementById('stu-panel');
   if (!body || !host) return;
   body.innerHTML = _stuPanelTabHtml(t, tab);
-  host.querySelectorAll('.stu-pan__tab').forEach(b =>
-    b.classList.toggle('is-on', b.dataset.tab === tab));
+  /* aria-selected IS the state now — the tabs component reads it, and a screen
+     reader was being told nothing by the old `is-on` class. */
+  host.querySelectorAll('.ui-tab').forEach(b =>
+    b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
 }
 
 /* The card glyphs. Inline because they are one-offs at one size, and a sprite
@@ -1131,9 +1189,9 @@ function _stuPanelHtml(t) {
         <span class="stu-pan__title">Student Details</span>
         <span class="stu-pan__sub">Complete profile and information</span>
       </div>
-      <button class="stu-pan__print" onclick="printStudentCard('${id}')" title="Print the student profile — one page, no payment table">
+      <button class="ui-btn ui-btn--secondary ui-btn--sm stu-pan__headbtn" onclick="printStudentCard('${id}')" title="Print the student profile — one page, no payment table">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print Profile</button>
-      <button class="stu-pan__x" onclick="closeStudentPanel()" aria-label="Close">
+      <button class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon stu-pan__headx" onclick="closeStudentPanel()" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
     </header>
@@ -1145,10 +1203,10 @@ function _stuPanelHtml(t) {
            floor and the type and since when), which is the test §5 sets before
            anything may be said twice. */}
     <div class="stu-pan__id">
-      ${studentAvatar(t, 54, stuAvatarHue(String(t.name || '?')))}
+      ${studentAvatar(t, 54)}
       <div class="stu-pan__idtext">
         <div class="stu-pan__name">${escHtml(t.name || '—')}
-          <span class="stu-pill ${stuStatusHue(status)}" title="${escHtml(statusDateText(t) || status)}"><i></i>${escHtml(status)}</span>
+          <span class="ui-chip ${stuStatusRole(status)}" title="${escHtml(statusDateText(t) || status)}">${escHtml(status)}</span>
         </div>
         <div class="stu-pan__idmeta">
           <span class="stu-pan__idno">#${id}</span>
@@ -1156,10 +1214,10 @@ function _stuPanelHtml(t) {
                  (owner, 2026-09-10). A hostel with a #3 on three floors has
                  three of them, and the floor is the half that tells someone
                  where to walk. */}
-          ${room ? `<span class="stu-pan__roombadge">Room ${escHtml(roomText(room))}${
+          ${room ? `<span class="ui-chip ui-chip--neutral">Room ${escHtml(roomText(room))}${
               rtype ? ' · ' + escHtml(rtype.name) : ''}${
               t.bed ? ' · Bed ' + escHtml(String(t.bed)) : ''}</span>`
-                 : '<span class="stu-pan__roombadge is-none">No room assigned</span>'}
+                 : '<span class="ui-chip ui-chip--neutral">No room assigned</span>'}
           ${_stuMeChip(t)}
         </div>
         ${t.joinDate ? `<div class="stu-pan__meta">Joined ${escHtml(fmtDate(t.joinDate))}</div>` : ''}
@@ -1191,30 +1249,31 @@ function _stuPanelHtml(t) {
            which is what WRITES DB.roomShifts, so this button and the Room History
            tab are two ends of one record. */}
     <div class="stu-pan__acts">
-      <button class="stu-pan__act is-primary" onclick="showEditStudentModal('${id}')">
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="showEditStudentModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Edit</span></button>
-      <button class="stu-pan__act" onclick="showRoomShiftModal('${id}')">
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="showRoomShiftModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg><span>Move Room</span></button>
       ${''/* Step 11: Print Profile stays in the header; this tile prints the
              profile with the Rules & Undertaking back side — the first print is
              the signed original, every later one a reprint. */}
-      <button class="stu-pan__act" onclick="printAdmissionForm('${id}')" title="Profile plus Rules &amp; Undertaking. The first print is the signed original.">
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="printAdmissionForm('${id}')" title="Profile plus Rules &amp; Undertaking. The first print is the signed original.">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg><span>Admission Form</span></button>
-      <button class="stu-pan__act is-primary" onclick="openAddPayment('${id}')">
+      <button class="ui-btn ui-btn--primary stu-pan__tile" onclick="openAddPayment('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg><span>Payment</span></button>
-      <button class="stu-pan__act is-danger" onclick="confirmDeleteStudent('${id}')">
+      <button class="ui-btn ui-btn--danger stu-pan__tile" onclick="confirmDeleteStudent('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Delete</span></button>
       ${status === 'Active' ? `
-      <button class="stu-pan__act is-warn" onclick="showAddCancellationModal('${id}')">
+      <button class="ui-btn ui-btn--secondary stu-pan__tile" onclick="showAddCancellationModal('${id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><span>Cancel Seat</span></button>` : ''}
       ${_stuMeAction(t)}
       ${_stuCnAction(t)}
     </div>
 
-    <nav class="stu-pan__tabs" role="tablist">
+    <nav class="ui-tabs stu-pan__tabs" role="tablist">
       ${tabs.map(([k, label]) => `
-        <button class="stu-pan__tab${_stuPanelTab === k ? ' is-on' : ''}" data-tab="${k}"
-                role="tab" onclick="stuPanelTab('${k}')">${label}</button>`).join('')}
+        <button class="ui-tab" data-tab="${k}" role="tab"
+                aria-selected="${_stuPanelTab === k}"
+                onclick="stuPanelTab('${k}')">${label}</button>`).join('')}
     </nav>
 
     <div class="stu-pan__body" id="stu-panel-body">${_stuPanelTabHtml(t, _stuPanelTab)}</div>
@@ -1268,8 +1327,8 @@ function _stuPanelOverview(t) {
   const f = calculateFeeStatus(t.id);
   const status = t.status || 'Active';
   const pkr = v => fmtPKR(money(v));
-  const pill = (hue, text) =>
-    '<span class="stu-pill ' + hue + '"><i></i>' + escHtml(text) + '</span>';
+  const pill = (role, text) =>
+    '<span class="ui-chip ' + role + '">' + escHtml(text) + '</span>';
   const ed = { edit: t.id };
 
   const personal = _pcard('Personal Information', 'person', '',
@@ -1302,8 +1361,8 @@ function _stuPanelOverview(t) {
           '<b class="' + (f.outstanding > 0 ? 'is-due' : 'is-clear') + '">' + escHtml(pkr(f.outstanding)) + '</b>',
           { mono: true, html: true })
       + _pf('Last payment',   f.lastPaymentDate ? fmtDate(f.lastPaymentDate) : '')
-      + _pf('Fee status',     pill(stuFeeHue(f.status), f.status), { html: true })
-      + _pf('Student status', pill(stuStatusHue(status), status), { html: true }), ed);
+      + _pf('Fee status',     pill(stuFeeRole(f.status), f.status), { html: true })
+      + _pf('Student status', pill(stuStatusRole(status), status), { html: true }), ed);
 
   /* THERE IS NO BLOCK. The reference's room card opens with one; this app's
      rooms carry a number, a floor and a type and nothing else, so a Block row
@@ -1418,7 +1477,7 @@ function _stuPanelFinancial(t) {
     + _pf('Monthly total',  pkr(c.total), { mono: true })
     + _pf('Last payment',   f.lastPaymentDate ? fmtDate(f.lastPaymentDate) : '')
     + _pf('Fee status',
-        '<span class="stu-pill ' + stuFeeHue(f.status) + '"><i></i>' + f.status + '</span>',
+        '<span class="ui-chip ' + stuFeeRole(f.status) + '">' + escHtml(f.status) + '</span>',
         { html: true })
     + (f.credit > 0 ? _pf('Credit held', pkr(f.credit), { mono: true }) : ''),
     { wide: true });
@@ -1477,7 +1536,7 @@ function _stuPanelFinancial(t) {
   const n = payHistory.length;
   const ledger =
       '<div class="svw-card svw-card--flush stu-pan__ledger">'
-    + '<div class="svw-card__head dh-blue svw-card__head--bar">'
+    + '<div class="svw-card__head svw-card__head--bar">'
     + '<span class="svw-card__ico">' + icon('card', 'sm') + '</span>'
     + '<span>Full Payment History (' + n + ' record' + (n === 1 ? '' : 's') + ')</span>'
     + '<span class="svw-card__meta">Total paid: <b>' + pkr(totalPaid) + '</b>'
@@ -3168,9 +3227,9 @@ function showViewStudentModal(id) {
           <div class="svw-hero__no">#${escHtml(t.id)}</div>
           <div class="svw-hero__tags">
             ${statusBadge(t.status||'Active')}
-            ${statusDateText(t)?`<span class="badge badge-gray">${escHtml(statusDateText(t))}</span>`:''}
-            ${room?`<span class="badge badge-blue">Room ${escHtml(roomText(room))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="badge badge-gray">No Room Assigned</span>'}
-            <span class="badge badge-gray">${escHtml(t.paymentMethod||'Cash')}</span>
+            ${statusDateText(t)?`<span class="ui-chip ui-chip--neutral">${escHtml(statusDateText(t))}</span>`:''}
+            ${room?`<span class="ui-chip ui-chip--neutral">Room ${escHtml(roomText(room))} · ${escHtml(rtype?.name||'')}</span>`:'<span class="ui-chip ui-chip--neutral">No room assigned</span>'}
+            <span class="ui-chip ui-chip--neutral">${escHtml(t.paymentMethod||'Cash')}</span>
           </div>
         </div>
         <div class="svw-hero__rent">
@@ -3182,19 +3241,19 @@ function showViewStudentModal(id) {
 
       <!-- STATS ROW -->
       <div class="svw-stats">
-        <div class="svw-stat dh-green">
+        <div class="svw-stat">
           <span class="svw-stat__ico">${icon('wallet','sm')}</span>
           <span><span class="svw-stat__k">Total Paid</span><span class="svw-stat__v">${fmtPKR(totalPaid)}</span></span>
         </div>
-        <div class="svw-stat ${totalDue>0?'dh-red':'dh-green'}">
+        <div class="svw-stat">
           <span class="svw-stat__ico">${icon('receipt','sm')}</span>
-          <span><span class="svw-stat__k">Outstanding</span><span class="svw-stat__v">${fmtPKR(totalDue)}</span></span>
+          <span><span class="svw-stat__k">Outstanding</span><span class="svw-stat__v${totalDue>0?' is-due':''}">${fmtPKR(totalDue)}</span></span>
         </div>
-        <div class="svw-stat dh-blue">
+        <div class="svw-stat">
           <span class="svw-stat__ico">${icon('calendar','sm')}</span>
           <span><span class="svw-stat__k">Join Date</span><span class="svw-stat__v is-text">${fmtDate(t.joinDate)||'—'}</span></span>
         </div>
-        <div class="svw-stat dh-violet">
+        <div class="svw-stat">
           <span class="svw-stat__ico">${icon('card','sm')}</span>
           <span><span class="svw-stat__k">Payments Made</span><span class="svw-stat__v">${paidCount}</span></span>
         </div>
@@ -3203,7 +3262,7 @@ function showViewStudentModal(id) {
       <!-- PERSONAL INFO GRID -->
       <div class="svw-split">
         <div class="svw-card">
-          <div class="svw-card__head dh-violet"><span class="svw-card__ico">${icon('student','sm')}</span> Personal Information</div>
+          <div class="svw-card__head"><span class="svw-card__ico">${icon('student','sm')}</span> Personal Information</div>
           ${infoRow('Father / Guardian',t.fatherName)}
           ${infoRow('Occupation / Course',t.occupation)}
           ${infoRow('CNIC / ID',cnicHtml(t.cnic),null,true)}
@@ -3213,7 +3272,7 @@ function showViewStudentModal(id) {
           ${infoRow('Emergency Contact',t.emergencyContact,icon('phone','xs'))}
         </div>
         <div class="svw-card">
-          <div class="svw-card__head dh-blue"><span class="svw-card__ico">${icon('home','sm')}</span> Room &amp; Accommodation</div>
+          <div class="svw-card__head"><span class="svw-card__ico">${icon('home','sm')}</span> Room &amp; Accommodation</div>
           ${room?[
             infoRow('Room Number','#'+room.number),
             infoRow('Room Type',rtype?.name),
@@ -3232,7 +3291,7 @@ function showViewStudentModal(id) {
 
       <!-- PAYMENT HISTORY TABLE -->
       <div class="svw-card svw-card--flush">
-        <div class="svw-card__head dh-blue svw-card__head--bar">
+        <div class="svw-card__head svw-card__head--bar">
           <span class="svw-card__ico">${icon('card','sm')}</span>
           <span>Full Payment History (${payHistory.length} record${payHistory.length===1?'':'s'})</span>
           <span class="svw-card__meta">Total paid: <b>${fmtPKR(totalPaid)}</b>${totalDue>0?` · <b class="is-due">Due ${fmtPKR(totalDue)}</b>`:''}</span>
@@ -3283,7 +3342,7 @@ function showViewStudentModal(id) {
         const shifts = (DB.roomShifts||[]).filter(s=>s.studentId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
         if(!shifts.length) return '';
         return `<div class="svw-card svw-card--flush">
-          <div class="svw-card__head dh-amber svw-card__head--bar">
+          <div class="svw-card__head svw-card__head--bar">
             <span class="svw-card__ico">${icon('transfer','sm')}</span>
             <span>Room Shift History (${shifts.length})</span>
           </div>
@@ -4309,7 +4368,7 @@ function showRoomShiftModal(studentId) {
   const rail =
     '<aside class="msf-rail">' +
       '<div class="msf-rail__t">Student information</div>' +
-      '<div class="msf-who">' + studentAvatar(t, 54, stuAvatarHue(String(t.name || '?'))) +
+      '<div class="msf-who">' + studentAvatar(t, 54) +
         '<div style="min-width:0">' +
           '<div class="msf-who__n">' + escHtml(t.name || '—') + '</div>' +
           '<div class="msf-who__s">' + icon('graduation', 'xs') +
@@ -4324,7 +4383,7 @@ function showRoomShiftModal(studentId) {
         ? '<div class="msf-cur"><span class="msf-cur__i">' + icon('bed', 'sm') + '</span>' +
           '<div style="min-width:0;flex:1">' +
             '<div class="msf-cur__n">Room #' + escHtml(String(fromRoom.number)) +
-              '<span class="lk-chip ' + (fromFree > 0 ? 'dh-green' : 'dh-slate') + '">' +
+              '<span class="ui-chip ' + (fromFree > 0 ? 'ui-chip--success' : 'ui-chip--neutral') + '">' +
               (fromFree > 0 ? escHtml(fromFree + ' bed' + (fromFree === 1 ? '' : 's') + ' free') : 'Full') +
               '</span></div>' +
             '<div class="msf-cur__s">' + escHtml(fromType ? fromType.name : '—') +

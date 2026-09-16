@@ -278,9 +278,14 @@ except for the owner decisions under "Decided against the spec" below.
   `--danger`, plus `--icon` and `--sm`), `.ui-input` / `.ui-select` /
   `.ui-selectw` / `.ui-search` / `.ui-field` + `.ui-label`, `.ui-chip` and its
   five roles, `.ui-card` (+ `--flush`), `.ui-table` with `.ui-table-wrap`,
-  `.ui-th-sort` and `.ui-td-num`, `.ui-empty`, `.ui-pagebar` / `.ui-pager`,
-  `.ui-avatar`. Screen files live in `renderer/css/screens/`. Expenses is the
-  first screen on the layer (2026-09-16); each screen joins as it is rebuilt.
+  `.ui-th-sort`, `.ui-td-num` and `--dense` for a ten-column-plus register,
+  `.ui-empty`, `.ui-pagebar` / `.ui-pager`, `.ui-avatar`, `.ui-menu` (+ `__t`,
+  `__item`, `__read`, `__sep`) and `.ui-tabs` / `.ui-tab`. Screen files live in
+  `renderer/css/screens/`. Expenses and students are on the layer
+  (2026-09-16); each screen joins as it is rebuilt.
+- A tab is a `<button role="tab">` and its state is `aria-selected`, not a
+  class. A menu item is a `<button role="menuitem">`; a line a menu merely
+  states is a `.ui-menu__read`, with no handler and no pointer.
 - A sortable column header is a `<button class="ui-th-sort">` inside the `<th>`,
   and the `<th>` carries `aria-sort`. An `onclick` on the `th` itself is not
   reachable by keyboard.
@@ -314,6 +319,15 @@ except for the owner decisions under "Decided against the spec" below.
   carries this rule when `registers-center.css` is dissolved.
 - **Money on screen is 14,000.00 below a million and 1.25M above**, the exact
   figure in its title, through one formatter.
+- **No brand colour anywhere, including WhatsApp's** (owner, 2026-09-16): the
+  student's WhatsApp mark and the guardian's handset are both
+  `--text-tertiary`, and the two icons are what tell them apart. A green that
+  cannot follow the theme, on a mark that repeats on every row, marks nothing.
+- **A wide register may use `.ui-table--dense`** rather than scrolling: it
+  takes air out of the cells and never shrinks the type, which is how the
+  students roster holds eleven columns at the 1366 floor. Where even dense does
+  not fit — the drawer's nine-column ledger — the table scrolls inside its own
+  wrapper, as the spec says, and the type stays at the 11px floor.
 
 ### When to reach for the studio
 

@@ -191,7 +191,7 @@ test('the roster carries living students forward and leaves departed ones behind
     await win.evaluate(m => { studentFilter.month = m; renderPage('students'); }, monthKey);
     await win.waitForTimeout(700);
     return win.evaluate(() => {
-      const rows = [...document.querySelectorAll('.stu-table-wrap tbody tr')]
+      const rows = [...document.querySelectorAll('.ui-table-wrap tbody tr')]
         .map(r => r.textContent.replace(/\s+/g, ' ').trim());
       const has = n => rows.some(r => r.includes(n));
       const strip = document.querySelector('.stu-stat');
@@ -223,7 +223,7 @@ test('the roster carries living students forward and leaves departed ones behind
            departed: all.departed, onNotice: all.onNotice })
     .toEqual({ carried: true, newcomer: true, departed: true, onNotice: true });
   expect(all.total).toBe('4');
-  expect(all.label).toBe('Total Students');
+  expect(all.label).toBe('Total students');
 
   await app.close();
 });

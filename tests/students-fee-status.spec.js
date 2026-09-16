@@ -133,11 +133,12 @@ test('the three fee states are still computed, and the column really is gone', a
     .toBe(cellCount.heads);
 
   const states = await win.evaluate(() =>
-    DB.students.map(t => ({ id: t.id, fee: _stuFee(t.id).status, hue: stuFeeHue(_stuFee(t.id).status) })));
+    DB.students.map(t => ({ id: t.id, fee: _stuFee(t.id).status, role: stuFeeRole(_stuFee(t.id).status) })));
   expect(states).toEqual([
-    { id: '001', fee: 'Paid',    hue: 'dh-green' },
-    { id: '002', fee: 'Pending', hue: 'dh-amber' },
-    { id: '003', fee: 'Overdue', hue: 'dh-red'   },
+    // The five chip roles replaced the dh-* hues on 2026-09-16 (design spec Part 4).
+    { id: '001', fee: 'Paid',    role: 'ui-chip--success' },
+    { id: '002', fee: 'Pending', role: 'ui-chip--warning' },
+    { id: '003', fee: 'Overdue', role: 'ui-chip--danger'  },
   ]);
 
   // The hover text carries the figure — a badge reading "Overdue" with no
@@ -178,13 +179,13 @@ test('the fee filter narrows the table, and Reset clears it with the rest', asyn
      with no fee select among them. An inline ninth wrapped the bar onto a
      second line at 1054px and cost the table 44px. */
   const onBar = await win.evaluate(() =>
-    [...document.querySelectorAll('.stu-select')].some(s => /Fee Status/.test(s.options[0].text)));
+    [...document.querySelectorAll('.stu-tools .ui-select')].some(s => /Fee Status/i.test(s.options[0].text)));
   expect(onBar, 'fee status must not crowd the primary filter bar').toBe(false);
 
   await win.evaluate(() => stuTogglePop(new Event('click')));
-  await win.waitForSelector('.stu-pop__chip', { timeout: 6000 });
+  await win.waitForSelector('.stu-pop__fee .ui-btn', { timeout: 6000 });
   const chips = await win.evaluate(() =>
-    [...document.querySelectorAll('.stu-pop__chip')].map(b => b.innerText.trim()));
+    [...document.querySelectorAll('.stu-pop__fee .ui-btn')].map(b => b.innerText.trim()));
   expect(chips, 'the four fee states must be reachable from Advanced Filters')
     .toEqual(['Any', 'Paid', 'Pending', 'Overdue']);
 
