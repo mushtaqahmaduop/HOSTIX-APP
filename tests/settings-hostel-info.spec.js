@@ -181,7 +181,11 @@ test('every locked preference is really locked, and says why', async () => {
     };
   }));
 
-  expect(rows.length).toBe(12);            // six general, six operational
+  /* 13 since 0c01ab7 (2026-09-15) added Paper size to the operational half.
+     The count is asserted so a row cannot be added without someone checking it
+     against the loop below, which is the point of this test - not to pin the
+     number. */
+  expect(rows.length).toBe(13);            // six general, seven operational
 
   for (const r of rows) {
     if (!r.locked) continue;

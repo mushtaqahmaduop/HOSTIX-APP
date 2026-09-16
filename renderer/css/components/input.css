@@ -83,6 +83,24 @@
 }
 .ui-search .ui-search__i::placeholder { color: var(--text-tertiary); }
 
+/* THE WRAPPER OWNS THE FOCUS RING, AND THE INPUT MUST NOT DRAW A SECOND ONE.
+   style.css carries `body.light-theme input:focus { box-shadow: 0 0 0 3px }`
+   at (0,2,1), which out-specifies the rule above at (0,2,0) — so on the light
+   theme a focused search box grew a ring inside its own ring. `.lk-sin` used
+   to state exactly this, in exactly this shape, and the note there is worth
+   keeping: it beats the global rule on SPECIFICITY rather than on which
+   stylesheet happens to load later, because load order here is not ours to
+   rely on. The unscoped pair covers dark, where nothing competes. */
+.ui-search .ui-search__i:focus,
+body.light-theme .ui-search .ui-search__i,
+body.light-theme .ui-search .ui-search__i:focus {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+}
+
 /* SCOPED UNDER `.ui-search` DELIBERATELY. listkit.css loads after this file, so
    its `.lk-sx` would win the cascade on the element that carries both class
    names. Two classes beat one, so the component keeps the button it drew. */

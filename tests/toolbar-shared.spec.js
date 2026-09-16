@@ -301,9 +301,12 @@ test('Complaints filters by month, not by a room list and a date range', async (
 
   const bar = await win.evaluate(() => ({
     ranges: document.querySelectorAll('#content .lk-range').length,
-    chosen: [...document.querySelectorAll('#content .lk-tools select')]
+    /* `.iss-tools` since the stage-4 rebuild moved this register off listkit;
+       the old `.lk-tools` is kept in the selector so this still reads the
+       registers that have not been rebuilt yet. */
+    chosen: [...document.querySelectorAll('#content .iss-tools select, #content .lk-tools select')]
       .map(s => s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : ''),
-    everyOption: [...document.querySelectorAll('#content .lk-tools select option')]
+    everyOption: [...document.querySelectorAll('#content .iss-tools select option, #content .lk-tools select option')]
       .map(o => o.text),
     // Computed in the page, where the app's own helpers live.
     thisMonthLabel: tbMonthLabel(thisMonth()),

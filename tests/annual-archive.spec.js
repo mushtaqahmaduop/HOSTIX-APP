@@ -55,11 +55,23 @@ async function login(win) {
   await win.waitForTimeout(900);
 }
 
+/* The WHOLE-RUPEE figure on each card, as a string.
+
+   Stripping every non-digit used to be enough. It stopped being enough on
+   2026-09-15, when the owner's "amounts under a million read like 14,000.00"
+   rule went into fmtCompact() (0c01ab7) and these cards started rendering two
+   decimal places: "Rs. 54,000.00" stripped to 5400000, which reads as a
+   hundredfold error in a test that is not about formatting at all. The
+   fractional part is dropped rather than the point, so the assertions below
+   keep stating plain rupees. */
 const kpis = win => win.evaluate(() => {
   const out = {};
   document.querySelectorAll('.arc-kpi').forEach(k => {
-    out[k.querySelector('.arc-kpi__l').textContent.trim()] =
-      k.querySelector('.arc-kpi__v').textContent.replace(/[^0-9-]/g, '');
+    const raw = k.querySelector('.arc-kpi__v').textContent;
+    const neg = /-/.test(raw);
+    const digits = raw.replace(/[^0-9.]/g, '').replace(/^\.+/, '').replace(/\.$/, '');
+    const whole = digits.includes('.') ? digits.slice(0, digits.lastIndexOf('.')) : digits;
+    out[k.querySelector('.arc-kpi__l').textContent.trim()] = (neg ? '-' : '') + whole;
   });
   return out;
 });
@@ -72,6 +84,13 @@ test('annual archive: live + archived data, period scoping, sections, drill-down
   expect(await win.evaluate(() => canDo('reports'))).toBe(true);
 
   await win.evaluate(async () => {
+    /* A HOSTEL NAME, OR SECTION 6 BELOW NEVER RUNS. hostelNameGate() in
+       hostel-name.js sits in front of EXPORT.pdf(): with no name set it opens
+       the "name your hostel" dialog and returns without exporting, rather than
+       printing the literal words "Hostel Name" on the document. So printArchive()
+       silently opened no window and the print assertions timed out waiting for
+       one - a fixture gap, not a print bug. exports-pdf.spec.js sets it too. */
+    DB.settings.hostelName = 'Test Hostel';
     DB.rooms = []; DB.students = []; DB.payments = []; DB.expenses = [];
     DB.transfers = []; DB.cancellations = []; DB.archive = []; DB.fines = [];
     for (let i = 0; i < 5; i++) {

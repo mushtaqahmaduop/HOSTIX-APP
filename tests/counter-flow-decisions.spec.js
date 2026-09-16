@@ -139,11 +139,15 @@ test('a student on notice keeps their bed, the room says when it frees, and the 
       label: c.querySelector('.stu-stat__label')?.textContent.trim(),
       val:   Number(c.querySelector('.stu-stat__val')?.textContent.trim()),
     })));
-  const by = n => cards.find(c => c.label === n);
+  /* Matched case-insensitively: the design spec's stage-2 rebuild put the
+     strip's labels in sentence case ("On notice", "Total students"), and this
+     test is about which CARDS the strip carries, never about how they are
+     capitalised. */
+  const by = n => cards.find(c => (c.label || '').toLowerCase() === n.toLowerCase());
   // The first card names the month it is counting once the page is scoped to
-  // one ('Students in August'), and reverts to 'Total Students' on All months.
+  // one ('Students in August'), and reverts to 'Total students' on All months.
   // Either way it is the roster total the other three have to add up to.
-  const total = cards.find(c => /^(Total Students|Students in )/.test(c.label || ''));
+  const total = cards.find(c => /^(total students|students in )/i.test(c.label || ''));
 
   expect(by('On Notice'), 'the On Notice card must appear once somebody is on notice').toBeTruthy();
   expect(by('On Notice').val).toBe(1);
