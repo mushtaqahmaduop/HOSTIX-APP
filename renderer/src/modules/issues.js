@@ -323,8 +323,14 @@ function renderIssues() {
                     issueFilter.category!=='All', !!issueFilter.month, !!q]
                    .filter(Boolean).length;
 
-  const SH = { open:'dh-red', progress:'dh-amber', resolved:'dh-green' };
-  const PH = { High:'dh-red', Medium:'dh-amber', Low:'dh-blue' };
+  const SH = { open:'ui-chip--danger', progress:'ui-chip--warning', resolved:'ui-chip--success' };
+  /* Low was blue. Blue is the ACCENT in this system and the accent means "act",
+     so a low-priority ticket was the most action-coloured thing on its row.
+     Success, not neutral: neutral is what a CATEGORY chip wears, and a Low
+     chip in the same grey would be indistinguishable from the Plumbing chip
+     beside it — which is the invariant issues-register.spec.js protects.
+     Green is the honest reading of low urgency anyway: nothing to chase. */
+  const PH = { High:'ui-chip--danger', Medium:'ui-chip--warning', Low:'ui-chip--success' };
   /* No hue here. Which register a row belongs to is a CATEGORY — the same
      kind of fact as its category chip, and the header above argues at length
      that categories are neutral. The first pass gave Maintenance violet and
@@ -335,15 +341,19 @@ function renderIssues() {
     complaint:   { label:'Complaint',   ico:'helpCircle' },
   };
 
-  const card = (key, hue, label, sub, value, ico) => `
-    <div class="lk-stat lk-stat--click ${hue}${issueFilter.status===key?' is-on':''}" onclick="issSet('status','${issueFilter.status===key?'All':key}')" title="Show ${label.toLowerCase()} issues">
-      <div class="lk-stat__top">
-        <div class="lk-stat__chip">${icon(ico,'sm')}</div>
-        <div class="lk-stat__label">${label}</div>
-      </div>
-      <div class="lk-stat__val">${value}</div>
-      <div class="lk-stat__sub">${issueFilter.status===key?'Showing these':sub}</div>
-    </div>`;
+  /* Each of the three sets the status filter, so each is a <button> that says
+     whether it is the active one. The `hue` argument is gone with `.lk-stat`:
+     red/amber/green per tile made the STRIP look like a status legend when the
+     status is in the table, one column wide, on every row. */
+  const card = (key, label, sub, value, ico) => `
+    <button type="button" class="ui-card ui-stat ui-stat--click${issueFilter.status===key?' is-on':''}" onclick="issSet('status','${issueFilter.status===key?'All':key}')" title="Show ${label.toLowerCase()} issues" aria-pressed="${issueFilter.status===key?'true':'false'}">
+      <span class="ui-stat__ico">${icon(ico,'sm')}</span>
+      <span class="ui-stat__body">
+        <span class="ui-stat__l">${label}</span>
+        <span class="ui-stat__v">${value}</span>
+        <span class="ui-stat__s">${issueFilter.status===key?'Showing these':sub}</span>
+      </span>
+    </button>`;
 
   /* One row of the register. Every cell is either a field the record holds or
      a dash — nothing here is computed to fill a column. */
@@ -377,14 +387,14 @@ function renderIssues() {
         ${i.location?`<div class="iss-d">${icon('pin','xs')} ${escHtml(i.location)}</div>`:''}
       </td>
       <td class="iss-c-by">
-        ${i.student ? `<div class="lk-who">
-            <div class="lk-who__av dh-violet">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</div>
-            <div style="min-width:0">
-              <div class="lk-who__n">${escHtml(i.by)}</div>
+        ${i.student ? `<div class="iss-who">
+            <span class="ui-avatar">${escHtml((i.by||'?').trim().charAt(0).toUpperCase()||'?')}</span>
+            <div class="iss-who__b">
+              <div class="iss-who__n">${escHtml(i.by)}</div>
               ${/* THE PHONE, NEVER THE CNIC (owner, 2026-09-14: "remove cnic
                     from complaints page"). A complaint needs a number a warden
                     can dial; the identity number is on the student's record. */''}
-              <div class="lk-who__s">${escHtml(i.student.phone || '')}</div>
+              <div class="iss-who__s">${escHtml(i.student.phone || '')}</div>
             </div>
           </div>`
         : i.by ? `${/* A maintenance ticket now records who reported it (owner,
@@ -392,37 +402,47 @@ function renderIssues() {
                        a warden, the cook, a contractor. So: the name, with no
                        contact sub-line, because there is no record behind it
                        to read one from. */''}
-            <div class="lk-who">
-              <div class="lk-who__av dh-slate">${escHtml(i.by.trim().charAt(0).toUpperCase()||'?')}</div>
-              <div style="min-width:0"><div class="lk-who__n">${escHtml(i.by)}</div>
-                <div class="lk-who__s">Reported by</div></div>
+            <div class="iss-who">
+              <span class="ui-avatar">${escHtml(i.by.trim().charAt(0).toUpperCase()||'?')}</span>
+              <div class="iss-who__b"><div class="iss-who__n">${escHtml(i.by)}</div>
+                <div class="iss-who__s">Reported by</div></div>
             </div>`
-        : `<span class="lk-dash" title="Nobody was recorded as having reported this">—</span>`}
+        : `<span class="iss-dash" title="Nobody was recorded as having reported this">—</span>`}
       </td>
       <td>
-        ${i.roomNo ? roomLabel(i.roomNo, rm && rm.floor)
-                   : '<span class="lk-dash">—</span>'}
+        ${i.roomNo ? roomLabel(i.roomNo, rm && rm.floor, true)
+                   : '<span class="iss-dash">—</span>'}
       </td>
+      ${''/* CATEGORY IS NEUTRAL. It is a kind of thing, not a state — the rule
+             this file's own comment states and the first pass broke. Priority
+             and status are states and keep their roles. */}
       <td>${i.category
-            ? `<span class="lk-chip lk-chip--flat">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
-            : '<span class="lk-dash">—</span>'}</td>
+            ? `<span class="ui-chip ui-chip--neutral">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
+            : '<span class="iss-dash">—</span>'}</td>
       <td>${i.priority
-            ? `<span class="lk-chip ${PH[i.priority]||'dh-amber'}">${escHtml(i.priority)}</span>`
-            : '<span class="lk-dash">—</span>'}</td>
-      <td><span class="lk-chip ${SH[bk]}">${icon(bk==='resolved'?'check':bk==='progress'?'clock':'warning','xs')}${escHtml(_issStatusLabel(i.status))}</span></td>
+            ? `<span class="ui-chip ${PH[i.priority]||'ui-chip--warning'}">${escHtml(i.priority)}</span>`
+            : '<span class="iss-dash">—</span>'}</td>
+      <td><span class="ui-chip ${SH[bk]}">${icon(bk==='resolved'?'check':bk==='progress'?'clock':'warning','xs')}${escHtml(_issStatusLabel(i.status))}</span></td>
       <td>
-        <div class="lk-when">${icon('calendar','xs')}${fmtDate(i.date)}</div>
-        ${age?`<div class="lk-sub${overdue?' iss-late':''}">${escHtml(age)}</div>`:''}
+        <div class="iss-when">${icon('calendar','xs')}${fmtDate(i.date)}</div>
+        ${age?`<div class="iss-sub${overdue?' iss-late':''}">${escHtml(age)}</div>`:''}
       </td>
       <td>${i.assigned
             ? `<div class="iss-asg">${icon('person','xs')}${escHtml(i.assigned)}</div>`
-            : '<span class="lk-dash" title="Nobody has been assigned to this yet">—</span>'}</td>
+            : '<span class="iss-dash" title="Nobody has been assigned to this yet">—</span>'}</td>
       <td>
-        <div class="lk-acts">
-          ${i.status!=='Resolved'?`<button class="lk-act lk-act--icon lk-act--hue dh-green" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved">${icon('check','xs')}</button>`:''}
-          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="lk-act lk-act--icon lk-act--hue dh-amber" onclick="progressMaint('${i.id}')" title="Mark in progress">${icon('clock','xs')}</button>`:''}
-          <button class="lk-act lk-act--icon" onclick="showIssueModal('${i.id}')" title="Edit this issue">${icon('edit','xs')}</button>
-          <button class="lk-act lk-act--icon lk-act--hue dh-red" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete">${icon('trash','xs')}</button>
+      ${''/* FOUR ICON BUTTONS, AND ONLY ONE OF THEM IS COLOURED. They were green,
+             amber, plain and red — a row of traffic lights per row, which on a
+             full page is forty coloured marks that all mean "you may press
+             this". Delete keeps the danger INK because it is the one that
+             cannot be undone, but not the fill: a filled red button once per
+             row is forty red marks on a full page. It fills on hover. Each has an aria-label:
+             a title alone is not an accessible name for an icon button. */}
+        <div class="iss-acts">
+          ${i.status!=='Resolved'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="${i.kind==='maintenance'?`resolveMaint('${i.id}')`:`resolveComp('${i.id}')`}" title="Mark resolved" aria-label="Mark resolved">${icon('check','xs')}</button>`:''}
+          ${i.kind==='maintenance'&&i.status==='Open'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="progressMaint('${i.id}')" title="Mark in progress" aria-label="Mark in progress">${icon('clock','xs')}</button>`:''}
+          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="showIssueModal('${i.id}')" title="Edit this issue" aria-label="Edit this issue">${icon('edit','xs')}</button>
+          <button class="ui-btn ui-btn--ghost-danger ui-btn--icon ui-btn--sm" onclick="${i.kind==='maintenance'?`delMaint('${i.id}')`:`delComp('${i.id}')`}" title="Delete" aria-label="Delete this issue">${icon('trash','xs')}</button>
         </div>
       </td>
     </tr>`;
@@ -430,66 +450,72 @@ function renderIssues() {
 
   return `
   <!-- ══ STAT STRIP ══ -->
-  <div class="lk-stats">
-    ${card('open','dh-red','Open','Needs attention',nOpen,'warning')}
-    ${card('progress','dh-amber','In Progress','Being worked on',nProg,'clock')}
-    ${card('resolved','dh-green','Resolved','Completed',nDone,'check')}
-    <div class="lk-stat dh-violet" title="Every complaint and maintenance request on record">
-      <div class="lk-stat__top">
-        <div class="lk-stat__chip">${icon('list','sm')}</div>
-        <div class="lk-stat__label">Total Issues</div>
-      </div>
-      <div class="lk-stat__val">${all.length}</div>
-      <div class="lk-stat__sub">All issues on record</div>
+  <div class="ui-stats">
+    ${card('open','Open','Needs attention',nOpen,'warning')}
+    ${card('progress','In progress','Being worked on',nProg,'clock')}
+    ${card('resolved','Resolved','Completed',nDone,'check')}
+    ${''/* The fourth is a total, not a filter, so it stays a <div>. */}
+    <div class="ui-card ui-stat" title="Every complaint and maintenance request on record">
+      <span class="ui-stat__ico">${icon('list','sm')}</span>
+      <span class="ui-stat__body">
+        <span class="ui-stat__l">Total issues</span>
+        <span class="ui-stat__v">${all.length}</span>
+        <span class="ui-stat__s">All issues on record</span>
+      </span>
     </div>
   </div>
 
   <!-- ══ TABS ══ -->
-  <div class="iss-tabs">
-    <button class="iss-tab${tab==='all'?' is-on':''}" onclick="issSetTab('all')">
-      ${icon('list','sm')} All Issues (${all.length})
+  ${''/* A tab is a <button role="tab"> in a <div role="tablist">, and which one
+         is current is `aria-selected`, not a class. It was three buttons in a
+         segmented box with `.is-on` filling the active one in the accent — a
+         filled pill reads as a primary action, which a tab is not. */}
+  <div class="ui-tabs iss-tabs" role="tablist" aria-label="Issue type">
+    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='all'}" onclick="issSetTab('all')">
+      ${icon('list','sm')} All issues (${all.length})
     </button>
-    <button class="iss-tab${tab==='maintenance'?' is-on':''}" onclick="issSetTab('maintenance')">
+    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='maintenance'}" onclick="issSetTab('maintenance')">
       ${icon('tool','sm')} Maintenance (${mActive} active)
     </button>
-    <button class="iss-tab${tab==='complaints'?' is-on':''}" onclick="issSetTab('complaints')">
+    <button type="button" role="tab" class="ui-tab" aria-selected="${tab==='complaints'}" onclick="issSetTab('complaints')">
       ${icon('helpCircle','sm')} Complaints (${cOpen} open)
     </button>
   </div>
 
   <!-- ══ TOOLBAR + REGISTER ══ -->
-  <div class="lk-panel">
-    <div class="lk-tools">
-      <div class="lk-search">
+  <div class="ui-card ui-card--flush">
+    <div class="iss-tools">
+      <div class="ui-search">
         ${icon('search','xs')}
-        <input id="iss-search" class="lk-sin" placeholder="Search issues, rooms, students, staff, issue ID…"
+        <input id="iss-search" class="ui-search__i" aria-label="Search issues"
+               placeholder="Search issues, rooms, students, staff, issue ID…"
                value="${escHtml(issueFilter.search)}" oninput="issSearch(this.value)">
         ${lkSearchX('iss-search','issueFilter','issues')}
       </div>
 
-      <select class="lk-select${issueFilter.status!=='All'?' is-set':''}" onchange="issSet('status',this.value)" title="Filter by status">
-        <option value="All">All Status</option>
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${issueFilter.status!=='All'?' is-set':''}" aria-label="Status" onchange="issSet('status',this.value)" title="Filter by status">
+        <option value="All">All statuses</option>
         <option value="open"     ${issueFilter.status==='open'?'selected':''}>Open</option>
         <option value="progress" ${issueFilter.status==='progress'?'selected':''}>In Progress</option>
         <option value="resolved" ${issueFilter.status==='resolved'?'selected':''}>Resolved</option>
-      </select>
+      </select></span>
 
-      <select class="lk-select${issueFilter.priority!=='All'?' is-set':''}" onchange="issSet('priority',this.value)" title="Filter by priority">
-        <option value="All">All Priority</option>
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${issueFilter.priority!=='All'?' is-set':''}" aria-label="Priority" onchange="issSet('priority',this.value)" title="Filter by priority">
+        <option value="All">All priorities</option>
         ${['High','Medium','Low'].map(p=>`<option value="${p}" ${issueFilter.priority===p?'selected':''}>${p}</option>`).join('')}
-      </select>
+      </select></span>
 
-      <select class="lk-select${issueFilter.category!=='All'?' is-set':''}" onchange="issSet('category',this.value)" title="Filter by category">
-        <option value="All">All Categories</option>
+      <span class="ui-selectw"><select class="ui-select ui-select--sm${issueFilter.category!=='All'?' is-set':''}" aria-label="Category" onchange="issSet('category',this.value)" title="Filter by category">
+        <option value="All">All categories</option>
         ${ISS_CATS.map(c=>`<option value="${escHtml(c.key)}" ${issueFilter.category===c.key?'selected':''}>${escHtml(c.key)}</option>`).join('')}
-      </select>
+      </select></span>
 
       ${/* One month picker where a room dropdown and a From/To range used to
             be (owner, 2026-09-08). Month and year are one control: the list
             carries every month the register touches plus a whole-year entry
             per year, and both match as a string prefix. */''}
       ${tbMonth(all.map(i=>i.date), {
-        value: issueFilter.month, all: true,
+        value: issueFilter.month, all: true, aria: 'Month',
         onchange: "issSet('month',this.value)" })}
 
       <!-- No Add button here on purpose: the page header already carries one
@@ -497,21 +523,21 @@ function renderIssues() {
            identical thing on one screen is the "one primary action" rule
            broken twice over. The empty state keeps its own, because there is
            no table under it to act on. -->
-      <div class="lk-tools__end">
-        <select class="lk-select" onchange="issSet('sort',this.value)" title="Sort the register">
-          <option value="newest"   ${issueFilter.sort==='newest'?'selected':''}>Newest First</option>
-          <option value="oldest"   ${issueFilter.sort==='oldest'?'selected':''}>Oldest First</option>
+      <div class="iss-tools__end">
+        <span class="ui-selectw"><select class="ui-select ui-select--sm" aria-label="Sort the register" onchange="issSet('sort',this.value)" title="Sort the register">
+          <option value="newest"   ${issueFilter.sort==='newest'?'selected':''}>Newest first</option>
+          <option value="oldest"   ${issueFilter.sort==='oldest'?'selected':''}>Oldest first</option>
           <option value="priority" ${issueFilter.sort==='priority'?'selected':''}>Priority</option>
-        </select>
-        ${tbExport({ id:'iss-export', excel:'exportIssuesExcel()', pdf:'exportIssuesPDF()' })}
+        </select></span>
+        ${tbExport({ id:'iss-export', cls:'ui-btn ui-btn--secondary ui-btn--sm', excel:'exportIssuesExcel()', pdf:'exportIssuesPDF()' })}
       </div>
     </div>
 
     ${_pg.total===0?`
-      <div class="lk-empty">
-        <div class="lk-empty__i">${icon('tool')}</div>
-        <div class="lk-empty__t">${all.length===0?'No issues logged yet':nActive?'Nothing matches those filters':'Nothing here'}</div>
-        <div class="lk-empty__s">${all.length===0?'Complaints and maintenance requests will appear here.':nActive?'Try clearing a filter or widening the search.':'This tab has no records.'}</div>
+      <div class="ui-empty">
+        ${icon('tool')}
+        <div class="ui-empty__t">${all.length===0?'No issues logged yet':nActive?'Nothing matches those filters':'Nothing here'}</div>
+        <div>${all.length===0?'Complaints and maintenance requests will appear here.':nActive?'Try clearing a filter or widening the search.':'This tab has no records.'}</div>
         ${all.length===0
           /* NOT lk-btn--go. The page header's own Add Issue button is shown on
              permission, not on whether the register has rows, so on an empty
@@ -519,18 +545,18 @@ function renderIssues() {
              that two primary actions, the rule this file already removed the
              toolbar's button for. The header keeps the accent; this one is the
              same action, stated again where the reader is looking. */
-          ? `<button class="lk-btn" onclick="showIssueModal()">${icon('plus','xs')} Add Issue</button>`
-          : nActive?`<button class="lk-btn" onclick="tbClearAll('issues')">Clear all filters</button>`:''}
+          ? `<button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="showIssueModal()">${icon('plus','xs')} Add issue</button>`
+          : nActive?`<button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="tbClearAll('issues')">Clear all filters</button>`:''}
       </div>`
-    : `<div class="lk-table-wrap iss-wrap">
-        <table class="lk-table iss-table">
+    : `<div class="ui-table-wrap iss-wrap">
+        <table class="ui-table ui-table--dense iss-table">
           <thead><tr>
             ${''/* "Raised by", not "Student": the column has always held who
                    reported the record, and since 2026-09-10 a maintenance
                    ticket has one too — often a warden or a contractor rather
                    than a resident. */}
             <th>#</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
-            <th>Priority</th><th>Status</th><th>Reported On</th><th>Assigned To</th><th>Actions</th>
+            <th>Priority</th><th>Status</th><th>Reported on</th><th>Assigned to</th><th>Actions</th>
           </tr></thead>
           <tbody>${_pg.slice.map(mkRow).join('')}</tbody>
         </table>
@@ -554,33 +580,35 @@ function issClearFilters() { tbClearAll('issues'); }
 function issPager(pg) {
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled>${label}</button>`;
-    if (o.active)   return `<button class="is-on">${label}</button>`;
-    return `<button onclick="gotoPage(issueFilter,'issues',${target})">${label}</button>`;
+    const C = 'ui-btn ui-btn--secondary ui-btn--sm';
+    const aria = o.aria || label;
+    if (o.disabled) return `<button class="${C}" disabled aria-label="${aria}">${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}" onclick="gotoPage(issueFilter,'issues',${target})" aria-label="${aria}">${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
   lo = Math.max(1, hi-4);
   let nums = '';
-  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="lk-pager__gap">…</span>':'');
-  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
-  if (hi < pages) nums += (hi<pages-1?'<span class="lk-pager__gap">…</span>':'') + btn(String(pages), pages);
+  if (lo > 1) nums += btn('1',1,{aria:'Page 1'}) + (lo>2?'<span class="ui-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page, aria:'Page '+i});
+  if (hi < pages) nums += (hi<pages-1?'<span class="ui-pager__gap">…</span>':'') + btn(String(pages), pages, {aria:'Page '+pages});
 
-  return `<div class="lk-foot">
-    <div class="lk-foot__size">
-      Show
-      <select onchange="issueFilter.pageSize=Number(this.value);issueFilter.page=1;renderPage('issues')">
-        ${[10,30,50,100].map(n=>`<option value="${n}" ${issueFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
-      </select>
-      entries
+  return `<div class="ui-pagebar">
+    <div class="ui-pagebar__info">Showing ${pg.from}–${pg.to} of ${pg.total} issue${pg.total!==1?'s':''}</div>
+    <div class="iss-foot__size">
+      <span>Rows per page</span>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm" aria-label="Rows per page"
+                onchange="issueFilter.pageSize=Number(this.value);issueFilter.page=1;renderPage('issues')">
+          ${[10,30,50,100].map(n=>`<option value="${n}" ${issueFilter.pageSize===n?'selected':''}>${n}</option>`).join('')}
+        </select>
+      </span>
     </div>
-    <div class="lk-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} issue${pg.total!==1?'s':''}</div>
-    <div class="lk-pager">
-      ${btn('«',1,{disabled:page<=1})}
-      ${btn('‹',page-1,{disabled:page<=1})}
+    <div class="ui-pager">
+      ${btn('‹',page-1,{disabled:page<=1, aria:'Previous page'})}
       ${nums}
-      ${btn('›',page+1,{disabled:page>=pages})}
-      ${btn('»',pages,{disabled:page>=pages})}
+      ${btn('›',page+1,{disabled:page>=pages, aria:'Next page'})}
     </div>
   </div>`;
 }

@@ -46,6 +46,14 @@
 .ui-btn--danger { background: var(--danger-bg); color: var(--danger-fg); }
 .ui-btn--danger:hover:not(:disabled) { border-color: var(--danger-fg); }
 
+/* A DESTRUCTIVE ACTION THAT REPEATS DOWN A REGISTER. `--danger` is right for a
+   delete a reader is looking at — a modal footer, a detail panel. It is wrong
+   once per row: ten rows of it is ten red marks on a surface whose job is to be
+   scanned, and the colour stops meaning "careful" when it is everywhere. This
+   carries the danger ink only, and fills at the moment of intent. */
+.ui-btn--ghost-danger { color: var(--danger-fg); }
+.ui-btn--ghost-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger-fg); }
+
 /* Square. Requires aria-label: an icon button with no name is unusable by
    anything that is not a pair of eyes. */
 .ui-btn--icon { width: var(--h-md); padding: 0; }

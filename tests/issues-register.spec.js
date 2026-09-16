@@ -117,8 +117,12 @@ test('the register is a ten-column table, and a legacy record still renders in i
      record; now that a maintenance ticket records one too, and it is often a
      warden or a contractor rather than a resident, the old heading was naming
      the wrong half of what the column holds. */
+  /* Sentence case since the stage-4 rebuild: the spec's table rule is
+     sentence-case headers, and "Reported On" / "Assigned To" were the last two
+     Title Case ones on the register. The COLUMNS are what this asserts, and
+     they are unchanged. */
   expect(heads).toEqual(['#', 'Issue', 'Raised by', 'Room', 'Category', 'Priority',
-                         'Status', 'Reported On', 'Assigned To', 'Actions']);
+                         'Status', 'Reported on', 'Assigned to', 'Actions']);
 
   const rows = await win.evaluate(() =>
     document.querySelectorAll('#content .iss-table tbody tr').length);
@@ -129,15 +133,15 @@ test('the register is a ten-column table, and a legacy record still renders in i
   // is missing either.
   const gaps = await win.evaluate(() => ({
     category: [...document.querySelectorAll('#content .iss-table tbody tr')]
-      .filter(r => r.children[4].querySelector('.lk-dash')).length,
+      .filter(r => r.children[4].querySelector('.iss-dash')).length,
     assigned: [...document.querySelectorAll('#content .iss-table tbody tr')]
-      .filter(r => r.children[8].querySelector('.lk-dash')).length,
+      .filter(r => r.children[8].querySelector('.iss-dash')).length,
     /* A record with nobody recorded as having reported it is a dash. These
        seeded maintenance tickets predate the "Raised by" field, so they still
        have nothing to show — and show nothing rather than a guess. A ticket
        written through the form from now on carries a name here. */
     student: [...document.querySelectorAll('#content .iss-table tbody tr')]
-      .filter(r => r.children[2].querySelector('.lk-dash')).length,
+      .filter(r => r.children[2].querySelector('.iss-dash')).length,
   }));
   expect(gaps.category).toBe(2);
   expect(gaps.assigned).toBe(2);
@@ -160,7 +164,7 @@ test('category chips are neutral; priority and status keep their hue', async () 
 
   const paint = await win.evaluate(() => {
     const grab = (n) => [...document.querySelectorAll(
-      `#content .iss-table tbody tr td:nth-child(${n}) .lk-chip`)]
+      `#content .iss-table tbody tr td:nth-child(${n}) .ui-chip`)]
       .map(c => getComputedStyle(c).backgroundColor + '|' + getComputedStyle(c).color);
     return {
       cat: grab(5), prio: grab(6), status: grab(7),
@@ -356,7 +360,7 @@ test('the register opens on the current month, and can be widened off it', async
     // The stat strip counts the WHOLE register, not the month on screen. That
     // is what stops the month default from hiding an August complaint nobody
     // has answered: the Open card still says it is there.
-    stats: [...document.querySelectorAll('#content .lk-stat__val')].map(e => e.textContent.trim()),
+    stats: [...document.querySelectorAll('#content .ui-stat__v')].map(e => e.textContent.trim()),
   }));
   expect(opened.month).toBe(opened.now);
   expect(opened.rows).toBe(3);            // the September fixtures

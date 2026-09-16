@@ -120,15 +120,21 @@ function tbMonthLabel(key) {
 
 function tbMonth(keys, o) {
   o = o || {};
-  const cls = o.cls || 'lk-select';
+  /* The component layer is the default now, not `.lk-select`: the issues
+     register is the only caller, and it is rebuilt. The select comes back
+     inside its own `.ui-selectw` so the caller gets one control rather than a
+     bare <select> it has to remember to wrap — the wrapper is what draws the
+     chevron, so an unwrapped one silently loses it. */
+  const cls = o.cls || 'ui-select ui-select--sm';
   const cur = o.value == null ? thisMonth() : o.value;
   const opts = tbMonthOptions(keys);
   const isDefault = String(cur) === thisMonth();
-  return `<select class="${cls}${isDefault ? '' : ' is-set'}" title="Show one month, or a whole year"
+  return `<span class="ui-selectw"><select class="${cls}${isDefault ? '' : ' is-set'}"
+                  aria-label="${escHtml(o.aria || 'Month')}" title="Show one month, or a whole year"
                   onchange="${o.onchange}">
     ${o.all ? `<option value="" ${!cur ? 'selected' : ''}>All months</option>` : ''}
     ${opts.map(k => `<option value="${escHtml(k)}" ${String(cur) === k ? 'selected' : ''}>${escHtml(tbMonthLabel(k))}</option>`).join('')}
-  </select>`;
+  </select></span>`;
 }
 
 /* ══ CLEAR ═════════════════════════════════════════════════════════════════

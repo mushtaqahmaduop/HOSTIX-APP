@@ -1,0 +1,195 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOSTYLLO — COMPLAINTS & MAINTENANCE  (owner ref: complaints2.png)
+
+   Rebuilt 2026-09-16 against css/tokens.css, css/base.css and css/components/
+   (HOSTYLLO_DESIGN_SPEC Parts 4-7), as stage 4 with former and cancellations.
+   This file may PLACE components — grid, position, width, order — and may not
+   restyle one.
+
+   The stat strip, tabs, table, chips, buttons, empty state and pager are the
+   component layer now, where they were listkit.css. What is left here is the
+   column geometry — which is almost all of it, and all of it is measured:
+   every width below was arrived at against a real register at the 1366 floor,
+   and the reasoning is kept with each one.
+
+   `.hf-switch--in` at the bottom belongs to the maintenance FORM, which the
+   spec schedules for stage 8, and is untouched.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tabs ───────────────────────────────────────────────────────────────────
+   The three-up segmented box is gone: it is a `.ui-tabs` tablist now, marked
+   by the accent underline rather than by filling the active tab. A filled pill
+   reads as a primary action, and a tab is not one. Only the spacing is here. */
+.iss-tabs { margin-bottom: var(--space-3); }
+
+/* ── Toolbar and footer ─────────────────────────────────────────────────── */
+.iss-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }
+.iss-tools .ui-search  { flex:1 1 200px; min-width:170px; max-width:340px; }
+.iss-tools .ui-selectw { min-width:128px; }
+.iss-tools__end { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+.iss-foot__size { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-secondary); }
+.iss-foot__size span { white-space:nowrap; }
+
+/* ── THE REGISTER ───────────────────────────────────────────────────────────
+   Ten columns, measured 2026-09-08:
+
+     #72 · Issue 230 · Student 174 · Room 57 · Category 126 · Priority 84 ·
+     Status 133 · Reported 116 · Assigned 129 · Actions 144   =  1265px
+
+   The content box is ~1065px at 1440 and ~1000 at the 1366 QA floor, so the
+   table scrolls horizontally inside `.ui-table-wrap` — the same answer
+   Payments reached for the same reason, and the one export spec §41 allows
+   below 1280. Nothing is hidden; the min-widths below stop the browser solving
+   the overflow by squeezing the Issue column to nothing instead.
+
+   THE REMAINING ~200px IS STILL THE OWNER'S CALL, and there is one obvious
+   place to take it from: fold the Category chip under the issue title, where
+   the description already sits, and drop the column. That is 126px and costs
+   the ability to scan categories down a column — which the toolbar's category
+   filter and the stat strip mostly already answer. Built with the column
+   because `complaints2.png` draws one, and because the Payments ruling on the
+   identical conflict was to keep every column and let the table pan.
+
+   THE CELL PADDING IS NOW `.ui-table--dense`, not a per-screen override. This
+   file used to re-declare `.iss-table tbody td { padding:10px 12px }` and then
+   cut the sides to 7px, beating the shared rule on load order — with a long
+   comment admitting that was the failure this repo keeps finding and asking
+   for it not to be fixed in isolation. The spec supplies the variant for
+   exactly this case (a register of ten columns or more), so the register asks
+   for it by name and the override is gone. */
+.iss-wrap  { margin-top: var(--space-3); }
+/* 1150 → 1000 (owner, 2026-09-14: "the title space should be reduced to have
+   full content viewport"). 1150 was wider than the register's own card at
+   1366 (1070px), so the table panned even with every column at its minimum.
+   Below ~1000 it still pans, as the Payments ruling above says. */
+.iss-table { min-width: 1000px; }
+
+.iss-table thead th:nth-child(1),
+.iss-table tbody td:nth-child(1)  { width: 72px; }
+/* 230 → 140, with .iss-c-title's floor below (owner, 2026-09-14). This header
+   floor was what kept the Issue column at 230px after the cell's own floor
+   came down. */
+.iss-table thead th:nth-child(2)  { min-width: 140px; }
+.iss-table thead th:nth-child(4),
+.iss-table tbody td:nth-child(4)  { width: 84px; }
+/* Actions. The action bar wrapped by default, and at 132px the four icon
+   buttons wrapped into THREE rows — a 102px cell that then set the height of
+   every row in the register: 127px against a 77px content maximum. The column
+   is sized for the widest case (resolve + in-progress + edit + delete) and
+   told not to wrap, which is what an action bar pinned to a row's right
+   wants. */
+.iss-table thead th:nth-child(10),
+.iss-table tbody td:nth-child(10) { width: 144px; }
+
+/* ── ACTIONS STAYS ON SCREEN ─────────────────────────────────────────────────
+   Reported by the owner, 2026-09-08: "the action buttons are misaligned with
+   their heading, and hidden by the right sidebar, and it takes a drag".
+
+   Both halves were the same fact. The register is 1265px inside a ~1065px box
+   (see the measurement above), so the last column started life off the right
+   edge and had to be dragged into view — and while it was out there the HEADER
+   cell scrolled independently of nothing, so "Actions" and the buttons under
+   it were never on screen together.
+
+   Pinned instead, the way Payments pins its own action column. `position:
+   sticky` on both the th and the td, an explicit background so rows do not
+   show through it, and a hairline on the leading edge so it reads as a pinned
+   column rather than a cell that has come loose. The hover ground has to be
+   restated for the same reason: a transparent sticky cell is the one cell in
+   the row that shows the table sliding beneath it. */
+.iss-table thead th:nth-child(10),
+.iss-table tbody td:nth-child(10) {
+    position: sticky; right: 0; z-index: 2;
+    background: var(--surface-1);
+    border-left: 1px solid var(--border);
+}
+.iss-table thead th:nth-child(10) { z-index: 3; background: var(--surface-2); }
+.iss-table tbody tr:hover td:nth-child(10) { background: var(--surface-hover); }
+
+.iss-acts { display:flex; align-items:center; justify-content:flex-end; gap:var(--space-1); flex-wrap:nowrap; }
+
+/* ── Raised by ──────────────────────────────────────────────────────────────
+   Both lines truncate: a long name or a full phone number would otherwise set
+   this column's width for the whole table. Capped at 100px, measured at 1366
+   with a student, a room and an assignee on the rows.
+
+   RAISED BY STARTS ON ONE LEFT EDGE (owner, 2026-09-15: "aligned data in other
+   pages also if not aligned"). The avatar-and-name block used to be centred
+   row by row, so each avatar sat wherever its name's length left it — a 65px
+   spread — and a ticket with no reporter centred its dash. (0,2,1) beats
+   registers-center.css. */
+.iss-who { display:flex; align-items:center; gap:var(--space-2); min-width:0; }
+.iss-who__b { min-width:0; flex:1; }
+.iss-who__n { font-weight:var(--weight-medium); color:var(--text-primary); }
+.iss-who__s { font-size:var(--text-sm); color:var(--text-tertiary); }
+.iss-who__n, .iss-who__s { max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ui-table.iss-table td.iss-c-by { text-align:left; }
+.ui-table.iss-table td.iss-c-by .iss-who { width:100%; justify-content:flex-start; }
+
+/* The room label stays on one line — "#A 01" broke to "#A" over "01". */
+.iss-table .ui-room__n { white-space:nowrap; }
+
+/* ── Reference + kind, stacked ──────────────────────────────────────────────
+   The reference number is the thing a warden reads out on the phone, so it is
+   the stronger of the two.
+
+   The kind mark is NEUTRAL. It says which register a row is in, which is a
+   category, and this screen reserves hue for state — the same argument the
+   category chip beside it settles. It had `dh-violet` / `dh-blue` until
+   `design-governance` pointed out that the one file arguing the rule was also
+   the one breaking it. `MA-` versus `CO-` and the glyph carry it instead. */
+.iss-c-ref .iss-ref {
+    font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.iss-kind {
+    display: inline-flex; align-items: center; gap: var(--space-1); margin-top: var(--space-1);
+    font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
+}
+.iss-kind svg { flex-shrink: 0; }
+
+/* ── Title and description ──────────────────────────────────────────────────
+   The description is clamped to two lines with the whole of it on the cell's
+   title attribute — a complaint can run to a paragraph, and a row that grows
+   to fit one takes the register apart.
+
+   THE ISSUE COLUMN TAKES THE SLACK (owner, 2026-09-10), then gives it back
+   when the register is full (owner, 2026-09-14). The cap was 340px, which was
+   right when the table had to fit eleven columns of content; with the
+   register's usual shape — most rows carrying no student, no room and no
+   assignee — that left the title clamped while the columns beside it held a
+   dash each. The floor is 140px and the width is auto: `width:100%` made the
+   column greedy in an overflowing auto-layout table (241px against its own
+   floor). */
+.iss-c-title { max-width: none; width: auto; min-width: 140px; }
+.iss-t { font-weight: var(--weight-medium); color: var(--text-primary); }
+.iss-d {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: var(--space-1); font-size: var(--text-sm);
+    line-height: var(--leading-normal); color: var(--text-tertiary);
+}
+.iss-d svg { vertical-align: -2px; }
+
+/* ── The remaining cells ────────────────────────────────────────────────── */
+.iss-when { display:flex; align-items:center; gap:var(--space-2); white-space:nowrap; }
+.iss-when svg { flex-shrink:0; color:var(--text-tertiary); }
+.iss-sub  { margin-top:var(--space-1); font-size:var(--text-sm); color:var(--text-tertiary); }
+.iss-dash { color: var(--text-tertiary); }
+
+.iss-asg {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    font-size: var(--text-base); color: var(--text-secondary); white-space: nowrap;
+}
+.iss-asg svg { color: var(--text-tertiary); flex-shrink: 0; }
+
+/* An open ticket past its expected date. This is the one colour on the row
+   that looks decorative and is not — it is the only cell that says a warden is
+   late, so it keeps the danger ink while the four action buttons give theirs
+   up. */
+.iss-late { color: var(--danger-fg); font-weight: var(--weight-medium); }
+
+/* ── The maintenance form's kind switch (spec stage 8 — untouched) ───────────
+   The Student / Staff switch on "Raised by": the form's kind switch at field
+   size, sitting directly above the control it chooses. */
+.hf-switch--in { margin-bottom:6px; border-radius:9px; }
+.hf-switch--in .hf-switch__b { padding:6px 10px; font-size:12px; }
