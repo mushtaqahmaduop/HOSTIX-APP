@@ -102,9 +102,9 @@ test('a month shows its own departures, and its total does not shrink as they le
            2026-09-15); the same two facts are the Leaving card now — its
            figure is the month total, its sub-line the breakdown. Written in
            the banner's words so the assertions below keep reading the same. */
-        headline: txt(document.querySelector('.lk-kpis .lk-kpi:first-child .lk-kpi__v')) + ' leaving — ' +
-                  txt(document.querySelector('.lk-kpis .lk-kpi:first-child .lk-kpi__s')),
-        rows: [...document.querySelectorAll('.lk-panel tbody tr')]
+        headline: txt(document.querySelector('.ui-stats .ui-stat:first-child .ui-stat__v')) + ' leaving — ' +
+                  txt(document.querySelector('.ui-stats .ui-stat:first-child .ui-stat__s')),
+        rows: [...document.querySelectorAll('.canc-table tbody tr')]
           .map(r => r.textContent.replace(/\s+/g, ' ').trim()),
         month: cancelFilter.month,
       };
@@ -146,9 +146,9 @@ test('a month shows its own departures, and its total does not shrink as they le
   await win.evaluate(() => canSetMonth(window.__PREV));
   await win.waitForTimeout(600);
   const prev = await win.evaluate(() => ({
-    headline: document.querySelector('.lk-kpis .lk-kpi:first-child .lk-kpi__v').textContent.replace(/\s+/g, ' ').trim() +
-              ' leaving — ' + document.querySelector('.lk-kpis .lk-kpi:first-child .lk-kpi__s').textContent.replace(/\s+/g, ' ').trim(),
-    rows: [...document.querySelectorAll('.lk-panel tbody tr')]
+    headline: document.querySelector('.ui-stats .ui-stat:first-child .ui-stat__v').textContent.replace(/\s+/g, ' ').trim() +
+              ' leaving — ' + document.querySelector('.ui-stats .ui-stat:first-child .ui-stat__s').textContent.replace(/\s+/g, ' ').trim(),
+    rows: [...document.querySelectorAll('.canc-table tbody tr')]
       .map(r => r.textContent.replace(/\s+/g, ' ').trim()),
   }));
   expect(prev.headline).toContain('1 leaving');

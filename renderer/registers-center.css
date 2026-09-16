@@ -38,7 +38,19 @@
    wins by source order, and reverting the whole decision is deleting it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── The cells ───────────────────────────────────────────────────────────── */
+/* ── The cells ───────────────────────────────────────────────────────────────
+   STAGE 4 OF THE DESIGN SPEC MOVED THREE REGISTERS OFF `.lk-table` and onto the
+   shared `.ui-table`, and this file selects by table class — so former, issues
+   and cancellations each have to be named here or they silently lose the
+   centring, which is an owner decision and not a styling default. They are
+   named by their own screen class rather than by `.ui-table`, because this
+   file is deliberately a list of the REGISTERS: a blanket `.ui-table` rule
+   would reach every table the component layer draws, including ones inside
+   panels and modals that the carve-out above says to leave alone. Each screen
+   still to be rebuilt joins this list as it goes. */
+.fm-table  thead th, .fm-table  tbody td,
+.iss-table thead th, .iss-table tbody td,
+.canc-table thead th, .canc-table tbody td,
 .lk-table  thead th, .lk-table  tbody td,
 .stu-table thead th, .stu-table tbody td,
 .pay-table thead th, .pay-table tbody td,
@@ -59,7 +71,10 @@
 .lk-table  .lk-who,  .lk-table  .lk-when,  .lk-table  .lk-acts,
 .stu-table .stu-who, .stu-table .lk-when,  .stu-table .lk-acts,
 .pay-table .pay-who, .pay-table .lk-when,  .pay-table .lk-acts,
-.exp-table .lk-who,  .exp-table .lk-when,  .exp-table .lk-acts {
+.exp-table .lk-who,  .exp-table .lk-when,  .exp-table .lk-acts,
+.fm-table  .fm-who,  .fm-table  .fm-when,  .fm-table  .fm-acts,
+.iss-table .iss-when,
+.canc-table .canc-when, .canc-table .canc-acts {
     justify-content: center;
 }
 
@@ -67,6 +82,15 @@
    block to centre when the name is ellipsised. */
 .lk-table  .lk-who  > div, .stu-table .stu-who > div,
 .pay-table .pay-who > div, .exp-table .lk-who  > div { text-align: center; }
+
+/* The three rebuilt registers each pin their own name block to one left edge
+   and one width — the rule the note below describes, applied in their own
+   stylesheets because each has a different block. `.iss-who` is exempt from
+   the centring above for the same reason (owner, 2026-09-15: "aligned data in
+   other pages also if not aligned"). */
+.fm-table  .fm-who,
+.iss-table .iss-who,
+.canc-table .canc-who { justify-content: flex-start; text-align: left; }
 
 /* ── THE STUDENT NAME BLOCK: CENTRED, AVATARS IN ONE LINE ───────────────────
    Owner, 2026-09-14: "align the student names and emoji/svg in payments and
@@ -89,6 +113,10 @@
 /* ── Prose columns stay flush left ───────────────────────────────────────── */
 .lk-prose,
 .lk-table  td.lk-prose,
+.fm-table  th.fm-reason,  .fm-table  td.fm-reason,
+.iss-table th.iss-c-title, .iss-table td.iss-c-title,
+.iss-table th.iss-c-by,    .iss-table td.iss-c-by,
+.canc-table th.canc-reason, .canc-table td.canc-reason,
 .lk-table  th.fm-reason,  .lk-table  td.fm-reason,
 .lk-table  th.iss-c-title, .lk-table td.iss-c-title,
 .exp-table th.exp-desc,   .exp-table td.exp-desc,

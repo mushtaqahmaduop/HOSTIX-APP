@@ -147,17 +147,26 @@ function renderCancellations(filterStatus='All') {
   const types   = [...new Set(list.map(c=>String(c.roomType||'')).filter(Boolean))].sort();
   const nActive = [cancelFilter.type!=='All', cancelFilter.month!==thisMonth(), !!q].filter(Boolean).length;
 
+  /* Restored was blue, which is the accent — and the accent means "act". A
+     restored record is the one status on this register that needs nothing done
+     to it, so it wears the neutral every other terminal state wears. */
   const SV = {
-    Pending:   { hue:'dh-amber', svg:'<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>' },
-    Confirmed: { hue:'dh-green', svg:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
-    Restored:  { hue:'dh-blue',  svg:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>' }
+    Pending:   { hue:'ui-chip--warning', svg:'<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>' },
+    Confirmed: { hue:'ui-chip--success', svg:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    Restored:  { hue:'ui-chip--neutral', svg:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>' }
   };
   const calSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>';
 
-  /* Icon buttons, each with its full sentence on title and aria-label. Confirm
-     and Restore keep their hue — they are the two that change a student's life. */
-  const _ic = (hue, onclick, label, path) =>
-    `<button class="lk-act lk-act--icon canc-act${hue ? ' lk-act--hue ' + hue : ''}" onclick="${onclick}"
+  /* Icon buttons, each with its full sentence on title and aria-label.
+     THE HUES ARE GONE, and the argument is the same one the issues register
+     settled: Confirm was green, Restore blue, Delete red, Edit plain — four
+     coloured marks per row, which on a full page is colour everywhere and so
+     colour nowhere. `role` now names a BUTTON role rather than a hue, and only
+     Delete takes one: the danger ink, without the fill, filling on hover.
+     Confirm and Restore do change a student's life, and the confirmation each
+     one opens is where that weight belongs. */
+  const _ic = (role, onclick, label, path) =>
+    `<button class="ui-btn ${role || 'ui-btn--ghost'} ui-btn--icon ui-btn--sm canc-act" onclick="${onclick}"
              title="${escHtml(label)}" aria-label="${escHtml(label)}">
        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${path}</svg>
      </button>`;
@@ -184,18 +193,22 @@ function renderCancellations(filterStatus='All') {
     })();
     // Pending can be confirmed or restored; Confirmed can still be restored; Restored is terminal.
     const acts = c.status==='Pending'
-      ? _ic('dh-green', `confirmCancellation('${c.id}')`, 'Confirm — marks the student Left', P_CONFIRM)
-        + _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
+      ? _ic('', `confirmCancellation('${c.id}')`, 'Confirm — marks the student Left', P_CONFIRM)
+        + _ic('', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
       : c.status==='Confirmed'
-        ? _ic('dh-blue', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
+        ? _ic('', `restoreFromCancellation('${c.id}')`, 'Restore the student to Active', P_RESTORE)
         : '';
     return `<tr>
       <td class="canc-col-no">${_pg.from + i}</td>
       <td>
-        <div class="lk-who ${hue}">
-          <div class="lk-who__av">${escHtml(_cancInitials(c.studentName))}</div>
-          <div style="min-width:0">
-            <div class="lk-who__n" title="${escHtml(nm)} · ${_cancSeq(c, list)}">${escHtml(nm)}</div>
+        ${''/* The avatar used to take a hue PER NAME, so the register was a
+               scatter of violet, blue, green and amber discs that meant
+               nothing — payAvatarHue() hashed the name. One avatar, one
+               colour: it is an initial, not a status. */}
+        <div class="canc-who">
+          <span class="ui-avatar">${escHtml(_cancInitials(c.studentName))}</span>
+          <div class="canc-who__b">
+            <div class="canc-who__n" title="${escHtml(nm)} · ${_cancSeq(c, list)}">${escHtml(nm)}</div>
             ${cov}
           </div>
         </div>
@@ -207,37 +220,37 @@ function renderCancellations(filterStatus='All') {
         </div>
       </td>
       <td>${cancSettlePill(c)}</td>
-      <td><div class="lk-when">${calSvg}${fmtDate(c.requestDate)}</div></td>
+      <td><div class="canc-when">${calSvg}${fmtDate(c.requestDate)}</div></td>
       <td>${c.vacateDate
-            ? `<div class="lk-when">${calSvg}${fmtDate(c.vacateDate)}</div>`
-            : '<span class="lk-dash">End of month</span>'}</td>
-      <td><span class="lk-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span></td>
-      ${/* lk-prose keeps the reason flush left — a sentence, not a value. */''}
-      <td class="lk-prose canc-reason">${c.reason?escHtml(c.reason):'<span class="lk-dash">—</span>'}</td>
+            ? `<div class="canc-when">${calSvg}${fmtDate(c.vacateDate)}</div>`
+            : '<span class="canc-dash">End of month</span>'}</td>
+      <td><span class="ui-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span></td>
+      ${/* canc-reason keeps the reason flush left — a sentence, not a value. */''}
+      <td class="canc-reason">${c.reason?escHtml(c.reason):'<span class="canc-dash">—</span>'}</td>
       <td>
-        <div class="lk-acts canc-acts">
+        <div class="canc-acts">
           ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', P_EDIT)}
           ${acts}
-          ${_ic('dh-red', `deleteCancellationRecord('${c.id}')`, 'Delete this record', P_DELETE)}
+          ${_ic('ui-btn--ghost-danger', `deleteCancellationRecord('${c.id}')`, 'Delete this record', P_DELETE)}
         </div>
       </td>
     </tr>`;
   };
 
   /* A card filters the register to its status; pressed again, it clears. */
-  const kpi = (status, hue, label, value, sub, svg) => `
-    <div class="lk-kpi lk-kpi--click ${hue}${filterStatus===status?' is-on':''}" onclick="renderPage('cancellations_${filterStatus===status?'All':status}')"
-         title="${filterStatus===status?'Show every record':'Show ' + escHtml(label.toLowerCase())}">
-      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></div>
-      <div class="lk-kpi__body">
-        <div class="lk-kpi__l">${escHtml(label)}</div>
-        <div class="lk-kpi__v">${value}</div>
-        <div class="lk-kpi__s"><span>${filterStatus===status?'Showing these':escHtml(sub)}</span></div>
-      </div>
-    </div>`;
+  const kpi = (status, label, value, sub, svg) => `
+    <button type="button" class="ui-card ui-stat ui-stat--click${filterStatus===status?' is-on':''}" onclick="renderPage('cancellations_${filterStatus===status?'All':status}')"
+         title="${filterStatus===status?'Show every record':'Show ' + escHtml(label.toLowerCase())}" aria-pressed="${filterStatus===status?'true':'false'}">
+      <span class="ui-stat__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${svg}</svg></span>
+      <span class="ui-stat__body">
+        <span class="ui-stat__l">${escHtml(label)}</span>
+        <span class="ui-stat__v">${value}</span>
+        <span class="ui-stat__s">${filterStatus===status?'Showing these':escHtml(sub)}</span>
+      </span>
+    </button>`;
 
   const m = cancelFilter.month;
-  const leavingLabel = m ? 'Leaving (' + (/^\d{4}$/.test(m) ? m : _cancMonthLabel(m).split(' ')[0]) + ')' : 'Leaving (All Months)';
+  const leavingLabel = m ? 'Leaving (' + (/^\d{4}$/.test(m) ? m : _cancMonthLabel(m).split(' ')[0]) + ')' : 'Leaving (all months)';
   const headTitle = filterStatus==='All' ? 'All Cancellations'
                   : filterStatus==='Freed' ? 'Leaving (Pending + Confirmed)'
                   : filterStatus + ' Cancellations';
@@ -248,55 +261,56 @@ function renderCancellations(filterStatus='All') {
         Pending plus Confirmed — which only moves when a departure is added,
         cancelled or restored, never when one merely goes from Pending to
         Confirmed. */''}
-  <div class="lk-kpis">
-    ${kpi('Freed', 'dh-blue', leavingLabel, freed.length,
+  <div class="ui-stats">
+    ${kpi('Freed', leavingLabel, freed.length,
           `${confirmed.length} already left • ${pending.length} still in hostel`,
           '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>')}
-    ${kpi('Pending', 'dh-amber', 'Still in Hostel', pending.length, 'Notice given, not gone yet',
+    ${kpi('Pending', 'Still in hostel', pending.length, 'Notice given, not gone yet',
           '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>')}
-    ${kpi('Confirmed', 'dh-green', 'Already Left', confirmed.length, 'Seat is free now',
+    ${kpi('Confirmed', 'Already left', confirmed.length, 'Seat is free now',
           '<path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M5 18v2"/><path d="M19 18v2"/>')}
-    ${kpi('Restored', 'dh-violet', 'Restored', restored.length, 'Notice withdrawn',
+    ${kpi('Restored', 'Restored', restored.length, 'Notice withdrawn',
           '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>')}
   </div>
 
   <!-- ══ TOOLBAR + TABLE ══ -->
-  <div class="lk-panel">
-    <div class="lk-tools">
-      <div class="lk-search">
+  <div class="ui-card ui-card--flush">
+    <div class="canc-tools">
+      <div class="ui-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-        <input id="canc-search" class="lk-sin" placeholder="Search by name, room, reason, request ID…"
+        <input id="canc-search" class="ui-search__i" aria-label="Search cancellations" placeholder="Search by name, room, reason, request ID…"
                value="${escHtml(cancelFilter.search)}" oninput="canSearch(this.value)">
         ${lkSearchX('canc-search','cancelFilter','cancellations')}
       </div>
 
       ${/* The month governs every number above it, so it comes first. */''}
-      <label class="canc-selwrap" title="Show one month only">
-        <span class="canc-selwrap__i">${icon('calendar', 'xs')}</span>
-        <select class="lk-select canc-select--ico${cancelFilter.month?' is-set':''}" onchange="canSetMonth(this.value)">
+      <span class="ui-selectw ui-selectw--ico" title="Show one month only">
+        <span class="ui-selectw__i">${icon('calendar', 'xs')}</span>
+        <select class="ui-select ui-select--sm${cancelFilter.month?' is-set':''}" aria-label="Month" onchange="canSetMonth(this.value)">
           <option value="" ${!cancelFilter.month?'selected':''}>All months</option>
           ${_cancMonthOptions().map(k=>`<option value="${escHtml(k)}" ${cancelFilter.month===k?'selected':''}>${escHtml(_cancMonthLabel(k))}</option>`).join('')}
         </select>
-      </label>
+      </span>
 
-      <label class="canc-selwrap" title="Filter by status">
-        <span class="canc-selwrap__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
-        <select class="lk-select canc-select--ico${filterStatus!=='All'?' is-set':''}" onchange="renderPage('cancellations_'+this.value)">
+      <span class="ui-selectw ui-selectw--ico" title="Filter by status">
+        <span class="ui-selectw__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
+        <select class="ui-select ui-select--sm${filterStatus!=='All'?' is-set':''}" aria-label="Status" onchange="renderPage('cancellations_'+this.value)">
           ${['All','Pending','Confirmed','Restored','Freed'].map(s=>
-            `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All Status':s==='Freed'?'All Leaving':s}</option>`).join('')}
+            `<option value="${s}" ${filterStatus===s?'selected':''}>${s==='All'?'All statuses':s==='Freed'?'All leaving':s}</option>`).join('')}
         </select>
-      </label>
+      </span>
 
-      <label class="canc-selwrap" title="Filter by room type">
-        <span class="canc-selwrap__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
-        <select class="lk-select canc-select--ico${cancelFilter.type!=='All'?' is-set':''}" onchange="canSet('type',this.value)">
-          <option value="All">All Types</option>
+      <span class="ui-selectw ui-selectw--ico" title="Filter by room type">
+        <span class="ui-selectw__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
+        <select class="ui-select ui-select--sm${cancelFilter.type!=='All'?' is-set':''}" aria-label="Room type" onchange="canSet('type',this.value)">
+          <option value="All">All types</option>
           ${types.map(t=>`<option value="${escHtml(t)}" ${cancelFilter.type===t?'selected':''}>${escHtml(t)}</option>`).join('')}
         </select>
-      </label>
+      </span>
 
-      <div class="lk-tools__end">
-        ${tbExport({ id:'canc-export', excel:'exportCancellationsExcel()',
+      <div class="canc-tools__end">
+        ${tbExport({ id:'canc-export', cls:'ui-btn ui-btn--secondary ui-btn--sm',
+                     excel:'exportCancellationsExcel()',
                      pdf:'exportCancellationsPDF()' })}
       </div>
     </div>
@@ -310,20 +324,20 @@ function renderCancellations(filterStatus='All') {
     </div>
 
     ${_pg.total===0?`
-      <div class="lk-empty">
-        <div class="lk-empty__i"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
-        <div class="lk-empty__t">${list.length===0?'No cancellations yet':nActive?'Nothing matches those filters':'No '+filterStatus.toLowerCase()+' cancellations'}</div>
-        <div class="lk-empty__s">${list.length===0?'Cancellation requests will appear here once you add one.':nActive?'Try widening the search or date range.':'Nothing to action here.'}</div>
+      <div class="ui-empty">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+        <div class="ui-empty__t">${list.length===0?'No cancellations yet':nActive?'Nothing matches those filters':'No '+filterStatus.toLowerCase()+' cancellations'}</div>
+        <div>${list.length===0?'Cancellation requests will appear here once you add one.':nActive?'Try widening the search or date range.':'Nothing to action here.'}</div>
         ${list.length===0
-          ? `<button class="lk-btn lk-btn--go" onclick="showAddCancellationModal()">+ Add Cancellation</button>`
-          : nActive?`<button class="lk-btn" onclick="canClearFilters()">Clear filters</button>`:''}
+          ? `<button class="ui-btn ui-btn--primary ui-btn--sm" onclick="showAddCancellationModal()">${icon('plus','xs')} Add cancellation</button>`
+          : nActive?`<button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="canClearFilters()">Clear filters</button>`:''}
       </div>`
-    : `<div class="lk-table-wrap">
-        <table class="lk-table canc-table">
+    : `<div class="ui-table-wrap">
+        <table class="ui-table canc-table">
           <thead><tr>
             <th class="canc-col-no">#</th>
             ${th('student','Student')}${th('room','Room')}<th>Settlement</th>
-            ${th('request','Request Date')}${th('vacate','Vacate By')}
+            ${th('request','Request date')}${th('vacate','Vacate by')}
             ${th('status','Status')}${th('reason','Reason')}
             <th>Actions</th>
           </tr></thead>
@@ -333,10 +347,19 @@ function renderCancellations(filterStatus='All') {
       ${canPager(_pg, filterStatus)}`}
   </div>`;
 
+  /* The sort control is a BUTTON inside the th, and the direction is
+     `aria-sort` on the cell. It was an onclick on the th itself, which cannot
+     be focused or pressed with a keyboard — the register was unsortable
+     without a mouse — and the arrow was one of the ▲ ▼ ⇅ glyphs, which
+     render at different weights in different fonts and rammed straight against
+     the label with no space. */
   function th(key, label) {
     const on  = cancelFilter.sortKey===key;
-    const arw = on ? (cancelFilter.sortDir==='asc'?'▲':'▼') : '⇅';
-    return `<th class="is-sortable${on?' is-sorted':''}" onclick="toggleSort(cancelFilter,'cancellations_${filterStatus}','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+    const dir = on ? (cancelFilter.sortDir==='asc'?'ascending':'descending') : 'none';
+    const ico = on ? (cancelFilter.sortDir==='asc'?CANC_SORT.asc:CANC_SORT.desc) : CANC_SORT.none;
+    return `<th aria-sort="${dir}">`
+         + `<button type="button" class="ui-th-sort" onclick="toggleSort(cancelFilter,'cancellations_${filterStatus}','${key}')" title="Sort by ${label}">`
+         + `<span>${label}</span>${ico}</button></th>`;
   }
 }
 
@@ -349,24 +372,36 @@ function _cancCash(n) {
    money moved, the amount under it. The same states cancSettleCell() reads —
    `settlement` is frozen onto the record at checkout, so this is what was true
    on the day the student left. cancSettleCell() stays for its other callers. */
+/* The sort arrows, shared by every header on this register. */
+const CANC_SORT = {
+  asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>',
+  desc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>',
+  none: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>',
+};
+
 function cancSettlePill(c) {
   const s = c && c.settlement;
   const X  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
   const OK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-  const pill = (hue, ico, word, amt) =>
-    `<span class="canc-settle ${hue}">${ico}<span class="canc-settle__b"><b>${escHtml(word)}</b>${amt ? `<i>${escHtml(amt)}</i>` : ''}</span></span>`;
-  if (!s) return c && c.status === 'Pending' ? pill('dh-red', X, 'Not settled') : '<span class="lk-dash">—</span>';
+  /* `role` is one of the chip roles by name, not a `dh-*` hue: the pill is a
+     two-part mark (the word and the amount under it) so it cannot BE a
+     `.ui-chip`, but it must not disagree with one about what "owed" looks
+     like. The three roles are defined against the same status tokens in this
+     screen's stylesheet. */
+  const pill = (role, ico, word, amt) =>
+    `<span class="canc-settle canc-settle--${role}">${ico}<span class="canc-settle__b"><b>${escHtml(word)}</b>${amt ? `<i>${escHtml(amt)}</i>` : ''}</span></span>`;
+  if (!s) return c && c.status === 'Pending' ? pill('danger', X, 'Not settled') : '<span class="canc-dash">—</span>';
   const moved = Number(s.settledNow || 0);
   if (s.action === 'refund') {
-    return pill('dh-amber', OK, 'Refunded', _cancCash(moved > 0 ? moved : Number(s.credit || 0)) + (moved > 0 ? '' : ' credit left'));
+    return pill('warning', OK, 'Refunded', _cancCash(moved > 0 ? moved : Number(s.credit || 0)) + (moved > 0 ? '' : ' credit left'));
   }
   if (s.action === 'collect') {
     const left = Number(s.outstanding || 0) - moved;
     return left > 0
-      ? pill('dh-red', X, 'Part collected', _cancCash(moved) + ' of ' + _cancCash(Number(s.outstanding || 0)))
-      : pill('dh-green', OK, 'Collected', _cancCash(moved));
+      ? pill('danger', X, 'Part collected', _cancCash(moved) + ' of ' + _cancCash(Number(s.outstanding || 0)))
+      : pill('success', OK, 'Collected', _cancCash(moved));
   }
-  return pill('dh-green', OK, 'Settled', 'Nothing owed');
+  return pill('success', OK, 'Settled', 'Nothing owed');
 }
 
 /* ── Cancellations v5 — toolbar behaviour ────────────────────────────────── */
@@ -385,27 +420,32 @@ function canPager(pg, status) {
      "Rows per page", then ‹ pages ›. */
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
-    if (o.active)   return `<button class="is-on" aria-current="page">${label}</button>`;
-    return `<button onclick="gotoPage(cancelFilter,'cancellations_${status}',${target})"${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
+    const C = 'ui-btn ui-btn--secondary ui-btn--sm';
+    const aria = o.aria || label;
+    if (o.disabled) return `<button class="${C}" disabled aria-label="${aria}">${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}" onclick="gotoPage(cancelFilter,'cancellations_${status}',${target})" aria-label="${aria}">${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
   lo = Math.max(1, hi-4);
   let nums = '';
-  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="lk-pager__gap">…</span>':'');
-  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
-  if (hi < pages) nums += (hi<pages-1?'<span class="lk-pager__gap">…</span>':'') + btn(String(pages), pages);
+  if (lo > 1) nums += btn('1',1,{aria:'Page 1'}) + (lo>2?'<span class="ui-pager__gap">…</span>':'');
+  for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page, aria:'Page '+i});
+  if (hi < pages) nums += (hi<pages-1?'<span class="ui-pager__gap">…</span>':'') + btn(String(pages), pages, {aria:'Page '+pages});
 
-  return `<div class="lk-foot canc-foot">
-    <div class="lk-foot__info">${pg.total ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total!==1?'s':''}` : 'No records'}</div>
-    <div class="lk-foot__size">
+  return `<div class="ui-pagebar canc-foot">
+    <div class="ui-pagebar__info">${pg.total ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total!==1?'s':''}` : 'No records'}</div>
+    <div class="canc-foot__size">
       <span>Rows per page</span>
-      <select onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')" aria-label="Rows per page">
-        ${[10,30,50,100].map(n=>`<option value="${n}" ${Number(cancelFilter.pageSize)===n?'selected':''}>${n}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm" aria-label="Rows per page"
+                onchange="cancelFilter.pageSize=Number(this.value);cancelFilter.page=1;renderPage('cancellations_${status}')">
+          ${[10,30,50,100].map(n=>`<option value="${n}" ${Number(cancelFilter.pageSize)===n?'selected':''}>${n}</option>`).join('')}
+        </select>
+      </span>
     </div>
-    <div class="lk-pager">
+    <div class="ui-pager">
       ${btn('‹',page-1,{disabled:page<=1, aria:'Previous page'})}
       ${nums}
       ${btn('›',page+1,{disabled:page>=pages, aria:'Next page'})}

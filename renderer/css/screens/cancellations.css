@@ -224,104 +224,126 @@
               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .caf-opt__empty { padding: 13px; text-align: center; font-size: 12px; color: var(--text3); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CANCELLATIONS REGISTER, to `cancellations2.png` (owner, 2026-09-15)
 
-/* ══ THE ROW ACTIONS ARE A WIDGET (owner, 2026-09-10) ══════════════════════
-   One row of icon buttons in a single bordered group, rather than four
-   labelled buttons that wrapped to two lines. The group is what makes them read
-   as one control with four faces instead of four loose chips — and it is why
-   the buttons themselves lose their own borders. */
-.lk-acts--widget {
-    display:inline-flex; align-items:center; gap:2px; flex-wrap:nowrap;
-    padding:2px; border-radius:9px;
-    background:var(--card); border:1px solid var(--border);
+   Rebuilt 2026-09-16 against css/tokens.css, css/base.css and css/components/
+   (HOSTYLLO_DESIGN_SPEC Parts 4-7), as stage 4 with former and issues. The
+   stat cards, table, chips, buttons, empty state and pager are the component
+   layer now, where they were listkit.css. What stays here is what this page
+   has and the others do not: the counted heading, the # column, the inline
+   room label, the coverage tag and the settlement pill.
+
+   THE GROUPED ACTION WIDGET IS GONE. `.lk-acts--widget` drew one bordered
+   group holding four borderless icon buttons, so they read as one control with
+   four faces. It was built when the buttons were four different hues and
+   needed something to hold them together; they are three ghosts and a delete
+   now, which is the shared button component's own answer, and a second border
+   around the shared one is exactly the "screen file restyles a component" the
+   spec forbids.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────
+   The glyph inside each select is `.ui-selectw--ico`, which payments added to
+   the component layer for the same three-filter toolbar. `.canc-selwrap` and
+   `.canc-select--ico` are gone with it. */
+.canc-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }
+.canc-tools .ui-search  { flex:1 1 200px; min-width:170px; max-width:340px; }
+.canc-tools .ui-selectw { min-width:140px; }
+.canc-tools__end { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+
+/* ── "All cancellations", and what the register holds ── */
+.canc-head {
+    display:flex; align-items:flex-start; gap:var(--space-3);
+    padding:var(--space-3) var(--space-4);
+    border-top:1px solid var(--border); border-bottom:1px solid var(--border);
 }
-.lk-acts--widget .lk-act {
-    border-color:transparent; background:none; padding:0;
-    width:26px; height:26px; border-radius:7px;
-}
-.lk-acts--widget .lk-act:hover { background:var(--bg3); border-color:var(--border2); }
-
-
-/* ══ THE CANCELLATIONS PAGE, TO `cancellations2.png` (owner, 2026-09-15) ═════
-   The cards are the shared `.lk-kpi` (listkit.css). Everything page-specific
-   is here: the glyph in each select, the counted heading, the # column, the
-   inline room label, the coverage tag, the settlement pill, the three action
-   buttons and the footer's order. Tokens only. */
-
-/* ── Toolbar: a glyph inside the month, status and type selects ── */
-.canc-selwrap   { position:relative; display:inline-flex; align-items:center; margin:0; }
-.canc-selwrap__i {
-    position:absolute; left:12px; top:50%; transform:translateY(-50%);
-    display:flex; color:var(--text3); pointer-events:none;
-}
-.lk-select.canc-select--ico { padding-left:34px; }
-
-/* ── "All Cancellations", and what the register holds ── */
-.canc-head { display:flex; align-items:flex-start; gap:10px; padding:14px 2px 10px; }
-.canc-head > svg { flex-shrink:0; margin-top:2px; color:var(--text2); }
-.canc-head__t { font-size:15px; font-weight:700; color:var(--text); }
-.canc-head__n { margin-top:2px; font-size:12px; color:var(--text3); }
+.canc-head > svg { flex-shrink:0; margin-top:2px; color:var(--text-secondary); }
+.canc-head__t { font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-primary); }
+.canc-head__n { margin-top:2px; font-size:var(--text-sm); color:var(--text-tertiary); }
 
 /* ── Register ── */
 .canc-table th.canc-col-no,
-.canc-table td.canc-col-no { width:1%; text-align:center; color:var(--text3); font-variant-numeric:tabular-nums; }
-.canc-table tbody td { padding-top:7px; padding-bottom:7px; }
-.canc-table .lk-who__av { width:34px; height:34px; font-size:12px; background:var(--dh-bg); color:var(--dh); }
+.canc-table td.canc-col-no {
+    width:1%; text-align:center; color:var(--text-tertiary);
+    font-variant-numeric:tabular-nums;
+}
+
 /* THE NAME AND ITS AVATAR IN ONE LINE (owner, 2026-09-15: "aligned the student
    name and emoji in cancellations"). registers-center.css centred each row's
    avatar-plus-name on its own, so the avatar sat wherever that name's length
    left it and the name centred over its tag. One block width on every row,
    centred in the column: avatars share an x-position, names and tags a left
    edge — the rule Students and Payments already follow. */
-.lk-table.canc-table .lk-who { width:100%; max-width:230px; margin:0 auto; justify-content:flex-start; }
-.lk-table.canc-table .lk-who > div:last-child { flex:1; min-width:0; text-align:left; }
-.lk-table.canc-table .lk-who__n { overflow:hidden; text-overflow:ellipsis; }
+.canc-who { display:flex; align-items:center; gap:var(--space-2); min-width:0; }
+.canc-who__b { flex:1; min-width:0; text-align:left; }
+.canc-who__n { font-weight:var(--weight-medium); color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; }
+.ui-table.canc-table .canc-who { width:100%; max-width:230px; margin:0 auto; justify-content:flex-start; }
 
-/* The coverage tag: blue Rent + Mess, green Rent Only (the reference's colours). */
+/* The coverage tag. It was blue for Rent + Mess and green for Rent Only — the
+   reference's colours, and two status roles spent on a CATEGORY: what a
+   month's charge covers is a kind of charge, not a state of one. Both are the
+   neutral the chip layer gives every category, and the words carry the
+   difference. */
 .canc-cov {
-    display:block; width:fit-content; margin-top:2px; padding:1px 8px; border-radius:6px;
-    font-size:10.5px; font-weight:600; white-space:nowrap;
+    display:block; width:fit-content; margin-top:2px;
+    padding:1px var(--space-2); border-radius:var(--radius-sm);
+    font-size:var(--text-xs); font-weight:var(--weight-medium); white-space:nowrap;
+    background:var(--neutral-bg); color:var(--neutral-fg);
 }
-.canc-cov--mess { background:var(--accent-dim); color:var(--accent-strong); }
-.canc-cov--rent { background:var(--ant-success-bg); color:var(--ant-success-fg); }
 
-/* The room: a boxed number with its floor and type beside it, not under it. */
-.canc-room    { display:inline-flex; align-items:center; gap:8px; }
+/* The room: a boxed number with its floor and type beside it, not under it.
+   This is NOT `.ui-room`, which stacks them — the reference draws this one
+   wide because the type ("2-Seater") does not fit under a room number. */
+.canc-room    { display:inline-flex; align-items:center; gap:var(--space-2); }
 .canc-room__n {
-    padding:5px 8px; border-radius:7px; background:var(--bg3); border:1px solid var(--border);
-    font-size:13px; font-weight:800; color:var(--text); white-space:nowrap;
-    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+    padding:var(--space-1) var(--space-2); border-radius:var(--radius-sm);
+    background:var(--surface-2); border:1px solid var(--border);
+    font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-primary);
+    white-space:nowrap; font-variant-numeric:tabular-nums;
 }
-.canc-room__m { display:flex; flex-direction:column; font-size:11px; line-height:1.3; color:var(--text3); white-space:nowrap; text-align:left; }
+.canc-room__m {
+    display:flex; flex-direction:column; line-height:var(--leading-tight);
+    font-size:var(--text-xs); color:var(--text-tertiary); white-space:nowrap; text-align:left;
+}
 
-/* The settlement: the word and, when money moved, the amount under it. */
+/* ── The settlement pill ─────────────────────────────────────────────────
+   The word and, when money moved, the amount under it. Two stacked lines, so
+   it cannot be a `.ui-chip` — but it must not disagree with one about what
+   "owed" looks like, so its three roles are the chip roles' own tokens under
+   this screen's names. */
 .canc-settle {
-    display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px;
-    background:var(--dh-bg); color:var(--dh); white-space:nowrap;
+    display:inline-flex; align-items:center; gap:var(--space-2);
+    padding:var(--space-1) var(--space-3); border-radius:var(--radius-sm);
+    white-space:nowrap;
 }
+.canc-settle--success { background:var(--success-bg); color:var(--success-fg); }
+.canc-settle--warning { background:var(--warning-bg); color:var(--warning-fg); }
+.canc-settle--danger  { background:var(--danger-bg);  color:var(--danger-fg); }
 .canc-settle svg { flex-shrink:0; }
-.canc-settle__b   { display:flex; flex-direction:column; line-height:1.2; text-align:left; }
-.canc-settle__b b { font-size:11.5px; font-weight:700; }
+.canc-settle__b   { display:flex; flex-direction:column; line-height:var(--leading-tight); text-align:left; }
+.canc-settle__b b { font-size:var(--text-sm); font-weight:var(--weight-medium); }
 .canc-settle__b i {
-    font-style:normal; font-size:11.5px; font-weight:700; color:inherit;
-    font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
+    font-style:normal; font-size:var(--text-sm); font-weight:var(--weight-medium);
+    color:inherit; font-variant-numeric:tabular-nums;
 }
 
 .canc-reason { max-width:190px; white-space:normal; }
+.canc-dash   { color:var(--text-tertiary); }
 
-/* Three separate bordered buttons, as drawn — not the grouped widget. */
-.canc-acts { flex-wrap:nowrap; gap:6px; justify-content:center; }
-.canc-act  { width:32px; height:32px; border:1px solid var(--border2); background:var(--card); }
+/* ── Row actions ── */
+.canc-acts { display:flex; align-items:center; justify-content:center; gap:var(--space-2); flex-wrap:nowrap; }
 
-/* ── Footer: sentence left, then Rows per page and the pager ── */
-.canc-foot .lk-foot__info { text-align:left; }
-.canc-foot .lk-foot__size span { white-space:nowrap; }
+/* ── Footer ── */
+.canc-foot__size { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-secondary); }
+.canc-foot__size span { white-space:nowrap; }
 
-/* At the 1366 floor the register measured 22px wider than its panel (2026-09-15).
-   The air comes out of the cell padding, the reason column and the buttons. */
+/* At the 1366 floor the register measured 22px wider than its panel
+   (2026-09-15). The air comes out of the cell padding and the reason column;
+   the buttons keep their size, because the shared control height is a token
+   and a screen file may not shrink one. */
 @media (max-width:1400px) {
-    .canc-table thead th, .canc-table tbody td { padding-left:8px; padding-right:8px; }
+    .canc-table thead th, .canc-table tbody td { padding-left:var(--space-2); padding-right:var(--space-2); }
     .canc-reason { max-width:140px; }
-    .canc-acts   { gap:4px; }
-    .canc-act    { width:28px; height:28px; }
+    .canc-acts   { gap:var(--space-1); }
 }

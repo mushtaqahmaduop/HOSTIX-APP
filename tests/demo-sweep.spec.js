@@ -144,7 +144,7 @@ test('a payment row opens a named menu, with delete set apart', async () => {
   await win.evaluate(() => navigate('payments'));
   await win.waitForTimeout(700);
 
-  await win.click('.pay-col-act .lk-kebab');
+  await win.click('.pay-col-act button[aria-haspopup="menu"]');
   await win.waitForTimeout(300);
   const menu = await win.evaluate(() => {
     const m = document.getElementById('lk-rmenu');
@@ -217,7 +217,7 @@ test('a cancellation shows its refund, and both its dates can be corrected', asy
   await win.waitForTimeout(700);
 
   // The register names it, in the column the room type used to occupy.
-  const cell = await win.evaluate(() => document.querySelector('.lk-table tbody tr').textContent);
+  const cell = await win.evaluate(() => document.querySelector('.canc-table tbody tr').textContent);
   expect(cell).toMatch(/Refunded/);
 
   await win.evaluate(() => showEditCancellationModal('c1'));

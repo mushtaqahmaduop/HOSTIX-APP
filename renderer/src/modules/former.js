@@ -286,7 +286,7 @@ function renderFormerStudents() {
     </div>
 
     <div class="ui-table-wrap">
-      <table class="ui-table">
+      <table class="ui-table fm-table">
         <thead><tr>
           ${th('name','Student')}
           <th>Contact</th>
