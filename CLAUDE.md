@@ -280,9 +280,35 @@ except for the owner decisions under "Decided against the spec" below.
   five roles, `.ui-card` (+ `--flush`), `.ui-table` with `.ui-table-wrap`,
   `.ui-th-sort`, `.ui-td-num` and `--dense` for a ten-column-plus register,
   `.ui-empty`, `.ui-pagebar` / `.ui-pager`, `.ui-avatar`, `.ui-menu` (+ `__t`,
-  `__item`, `__read`, `__sep`) and `.ui-tabs` / `.ui-tab`. Screen files live in
-  `renderer/css/screens/`. Expenses and students are on the layer
-  (2026-09-16); each screen joins as it is rebuilt.
+  `__item`, `__read`, `__sep`), `.ui-tabs` / `.ui-tab`, `.ui-stats` /
+  `.ui-stat` (+ `__ico`, `__body`, `__l`, `__v`, `__s`, `--click`), `.ui-room`
+  (+ `__n`, `__t`) and `.ui-search__i` / `.ui-search__x`. Screen files live in
+  `renderer/css/screens/`. Stages 1-4 are on the layer as of 2026-09-16 —
+  expenses, students, payments, former students, the issues register
+  (maintenance + complaints) and cancellations; each remaining screen joins as
+  it is rebuilt.
+
+- **`listkit.css` LOADS AFTER `css/components/`.** A component rule and a
+  listkit rule at equal specificity means listkit wins, so an element carrying
+  both an `lk-*` and a `ui-*` class keeps the OLD styling and nothing looks
+  broken enough to notice. Where a shared helper has to emit both during the
+  changeover — `lkSearchX()` does — the component rule is stated one class
+  deeper (`.ui-search .ui-search__x`) so it wins on specificity. The same trap
+  cost a light-theme-only double focus ring on six screens; see
+  `components/input.css`.
+
+- **A shared helper that draws markup takes a class override, it does not
+  guess.** `tbExport()`, `lkKebab()` and `tbMonth()` take one; `roomLabel()`
+  takes a flag, because its pill is three nested elements and a single class
+  could only reach the outer one. A rebuilt screen asks for the component, a
+  screen still on listkit gets what it always had.
+
+- **`registers-center.css` selects the registers BY TABLE CLASS**, and it
+  carries the owner's "all the values should be centered" ruling (2026-09-10).
+  Moving a register from `.lk-table` to `.ui-table` silently drops that ruling
+  unless the screen's own table class is added to that file. It is deliberately
+  a list of registers rather than a blanket `.ui-table` rule, which would also
+  reach tables inside panels and modals the file's carve-out leaves alone.
 - A tab is a `<button role="tab">` and its state is `aria-selected`, not a
   class. A menu item is a `<button role="menuitem">`; a line a menu merely
   states is a `.ui-menu__read`, with no handler and no pointer.
