@@ -221,7 +221,9 @@ function _expExportDef(rows) {
                   (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
     { label: 'Method', type: 'text', width: 12,
       value: e => e._transfer ? '' : (e.method || '') },
-    { label: 'Added By', type: 'text', width: 16,
+    // The receiver, and the export heading has to say so too - a workbook
+    // column headed "Added By" is unreadable by anyone who did not enter it.
+    { label: 'Paid To', type: 'text', width: 16,
       value: e => e._transfer ? '' : (e.handedTo || '') },
     { label: 'Type', type: 'text', width: 14, pdf: false,
       value: e => e._transfer ? 'Funds transfer' : 'Expense' },
@@ -529,9 +531,17 @@ function renderExpenses() {
           ${th('date','Date')}
           ${th('category','Category')}
           ${th('description','Description')}
-          ${th('amount','Amount')}
+          ${th('amount','Amount','class="exp-amt"')}
           ${th('method','Payment method')}
-          ${th('handedTo','Added by')}
+          ${''/* "Paid to", not "Added by" (owner, 2026-09-16: the field
+                   "should say who took the amount for expenses or to whom the
+                   amount is given — only the receiver name"). The field has
+                   always been `handedTo` and has always held the receiver; the
+                   heading named the wrong person entirely, and a warden
+                   reading "Added by" would reasonably have typed their own
+                   name into it. Who ENTERED a record is on the activity log,
+                   which is where that question belongs. */}
+          ${th('handedTo','Paid to')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
@@ -911,11 +921,20 @@ function showExpenseModal(id) {
            <option value="">Not recorded</option>${methodOpts}</select>`,
         { for: 'f-emethod',
           note: 'How the money left the hostel. Blank is allowed and prints as a dash.' })}
-      ${_expField('Expense by / handed to', 'person',
+      ${''/* ONE PERSON, NOT TWO (owner, 2026-09-16). The label asked for
+             "Expense by / handed to" and the note offered "who spent it, or
+             who the cash was handed to" — two different people behind one
+             field, so a hostel that answered it one way in March and the other
+             way in June has a column that cannot be read or totalled by payee.
+             The owner settled it: the RECEIVER, and only the receiver.
+
+             Who entered the record is not lost — it is stamped on the activity
+             log, which is the place that question belongs. */}
+      ${_expField('Paid to', 'person',
         `<input class="form-control" id="f-ewho" list="exp-people" autocomplete="off"
-                placeholder="Select or enter name" value="${e ? escHtml(e.handedTo || '') : ''}">`,
+                placeholder="Name of the shop, person or office paid" value="${e ? escHtml(e.handedTo || '') : ''}">`,
         { req: reqWho, full: true, for: 'f-ewho',
-          note: 'Who spent it, or who the cash was handed to. Names already used are suggested.' })}
+          note: 'Who RECEIVED the money — the shop, the contractor, the office. Not whoever entered this record. Names already used are suggested.' })}
       ${_expField('Description', 'fileText',
         `<textarea class="form-control" id="f-edesc" rows="3" maxlength="250"
                    placeholder="e.g. Electricity bill for September 2026…"

@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // The expense form, and the two columns it exists to fill (owner, 2026-09-09).
 //
-// `expense.png` draws a Payment Method column and an Added By column. An
+// `expense.png` draws a Payment Method column and a Paid To column. An
 // expense record here was {id, category, amount, date, description} and had
 // neither, and spec §21 forbids inventing a creator — so the fields are
 // CAPTURED in the form rather than derived, and a record written before the
@@ -221,11 +221,15 @@ test('the export carries both columns, and leaves them blank rather than guessin
     const col = l => d.columns.find(c => c.label === l);
     return { labels,
              oldMethod: col('Method').value(row),
-             oldWho:    col('Added By').value(row) };
+             oldWho:    col('Paid To').value(row) };
   });
 
   expect(def.labels).toContain('Method');
-  expect(def.labels).toContain('Added By');
+  /* "Paid To" since 2026-09-16. The column has always held `handedTo`, the
+     RECEIVER; the heading said "Added By", which names whoever entered the
+     record — a different person, and one this column has never held. The
+     export heading moved with the on-screen one. */
+  expect(def.labels).toContain('Paid To');
   expect(def.oldMethod).toBe('');
   expect(def.oldWho).toBe('');
 

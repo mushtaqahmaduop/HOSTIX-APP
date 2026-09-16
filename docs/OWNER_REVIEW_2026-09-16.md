@@ -16,8 +16,8 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 7 | Payments | Concession and extra charges need their reason stated under the figure | done |
 | 8 | Payments | The +N% delta on Total Collected is hidden behind the trend bars | done |
 | 9 | Payments | Partial vs Pending — which does a half-paid student get? | done |
-| 10 | Expenses | Align the categories and the amounts | todo |
-| 11 | Expenses | "Handed by" should name the RECEIVER of the money | todo |
+| 10 | Expenses | Align the categories and the amounts | done |
+| 11 | Expenses | "Handed by" should name the RECEIVER of the money | done |
 | 12 | Rooms | KPI icons are coloured; every rebuilt screen is neutral | todo |
 | 13 | Rooms | The Bulk Add button needs to be more visible | todo |
 | 14 | All | KPI card heights should match the rooms page | todo |
@@ -40,6 +40,14 @@ Partial + Pending.** The row badge keeps the finer distinction.
 **#12 — KPI icons are NEUTRAL everywhere.** The spec reserves colour for state,
 and the six rebuilt screens already follow it. Rooms is changed now rather than
 waiting for its own stage.
+
+**#10 — The 2026-09-10 "centre every value" ruling is REVERSED for the
+registers.** Centring is what made the columns ragged: a column of chips of
+different widths shares no edge at all, and centred money loses the alignment
+that makes money scannable. Text, dates, chips and names read from the left;
+money and counts read from the right with tabular figures; every header follows
+its own column. The thousand-separator half of that ruling is untouched, and
+the exports already align by column type, so they need no change.
 
 **#14 — The rooms card height is the standard.** The other pages change to
 match it, which means the shared `.ui-stat` height moves and every rebuilt

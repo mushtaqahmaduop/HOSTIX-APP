@@ -1,139 +1,116 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   REGISTER CELL ALIGNMENT — every value centred
-   Added 2026-09-10.
+   REGISTER CELL ALIGNMENT — text reads from the left, money from the right
+   Added 2026-09-10 · REVERSED 2026-09-16
 
-   Owner: "use thousand separator and all the values should be centered vether
-   in pages or exports."
+   WHAT THIS FILE USED TO DO, AND WHY IT DOES NOT ANY MORE
+   -------------------------------------------------------
+   Owner, 2026-09-10: "use thousand separator and all the values should be
+   centered vether in pages or exports." So every register cell was centred.
 
-   WHAT THIS COVERS, AND WHAT IT DELIBERATELY DOES NOT
-   ---------------------------------------------------
-   It covers the REGISTERS — the row-and-column tables on Students, Payments,
-   Expenses, Complaints/Maintenance, Cancellations, Former Students and the
-   Archive — because those are the screens whose columns the exports mirror,
-   and a figure must not sit left on the screen and centred in the workbook.
+   Owner, 2026-09-16, looking at the expenses register: "aligned the categries
+   and amounts". Centring is what made them ragged. A column of category chips
+   of different widths, centred, shares no edge at all — neither the left nor
+   the right — so the eye has nothing to run down, and a column of money whose
+   figures differ in length loses the one alignment that makes money scannable:
+   the units under the units, the thousands under the thousands.
 
-   It does NOT touch the dashboard cards, the slide-over panels or the forms.
-   Their right-aligned figures are part of layouts the owner drew and approved
-   (arrears.png, the visit sheet, the payment forms); a blanket centre would
-   quietly undo those designs, and the owner's standing instruction is that
-   their design is never thrown away without being told. If they want those
-   centred too, it is one more block in this file.
+   The ruling is replaced, deliberately and with the owner's word for it:
 
-   THE ONE CARVE-OUT: PROSE
+     · TEXT, DATES, CHIPS, NAMES → flush left. One left edge per column.
+     · MONEY AND COUNTS          → flush right, tabular figures. The decimal
+                                    points line up, so a five-digit figure is
+                                    visibly larger than a four-digit one
+                                    without reading either.
+     · EVERY HEADER              → follows its own column, so the heading sits
+                                    over the thing it names.
+
+   The thousand separator half of the 2026-09-10 ruling is untouched — that was
+   never about alignment and fmtPKR() still applies it.
+
+   WHAT THIS DOES NOT TOUCH
    ------------------------
-   Address, remarks, complaint titles, cancellation reasons and expense
-   descriptions are sentences, not values. A centred sentence that wraps to
-   two lines produces a ragged both-edges block that is markedly harder to
-   read than a flush-left one, so they stay left — exactly as `wrap` columns
-   stay left in the export engine (see EX_TYPE in src/export/engine.js).
+   The exports. `EX_TYPE` in src/export/engine.js aligns a column by its
+   declared type — money right, wrap left — which is the rule above already.
+   Nothing here needs to reach them.
 
-   To opt a new sentence column out, give the cell `class="lk-prose"`.
+   Nor the dashboard cards, the slide-over panels or the forms: their layouts
+   were drawn and approved separately, and the owner's standing instruction is
+   that their design is not thrown away without being told.
 
-   WHY A SEPARATE FILE, LOADED LAST
-   --------------------------------
-   The six register stylesheets each define their own `thead th { text-align:
-   left }`, several of them more than once (see the CSS traps note in
-   dashboard.css). Editing six files in six places and hoping no later block
-   wins is how this becomes a bug report. One file, loaded after all of them,
-   wins by source order, and reverting the whole decision is deleting it.
+   WHY THE FILE SURVIVES ITS OWN REVERSAL
+   --------------------------------------
+   Because the reason it was written still holds. The six register stylesheets
+   each set their own alignment, several of them more than once, and editing
+   six files in six places and hoping no later block wins is how this becomes a
+   bug report. One file, loaded after all of them, wins by source order — and
+   reverting the whole decision is still just deleting it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── The cells ───────────────────────────────────────────────────────────────
-   STAGE 4 OF THE DESIGN SPEC MOVED THREE REGISTERS OFF `.lk-table` and onto the
-   shared `.ui-table`, and this file selects by table class — so former, issues
-   and cancellations each have to be named here or they silently lose the
-   centring, which is an owner decision and not a styling default. They are
-   named by their own screen class rather than by `.ui-table`, because this
-   file is deliberately a list of the REGISTERS: a blanket `.ui-table` rule
-   would reach every table the component layer draws, including ones inside
-   panels and modals that the carve-out above says to leave alone. Each screen
-   still to be rebuilt joins this list as it goes. */
-.fm-table  thead th, .fm-table  tbody td,
-.iss-table thead th, .iss-table tbody td,
+/* ── Text reads from the left ─────────────────────────────────────────────
+   The component table already defaults to this; it is restated here because
+   these six sheets each set their own, and this file is the one that settles
+   it for all of them. */
+.lk-table   thead th, .lk-table   tbody td,
+.stu-table  thead th, .stu-table  tbody td,
+.pay-table  thead th, .pay-table  tbody td,
+.exp-table  thead th, .exp-table  tbody td,
+.fm-table   thead th, .fm-table   tbody td,
+.iss-table  thead th, .iss-table  tbody td,
 .canc-table thead th, .canc-table tbody td,
-.lk-table  thead th, .lk-table  tbody td,
-.stu-table thead th, .stu-table tbody td,
-.pay-table thead th, .pay-table tbody td,
-.exp-table thead th, .exp-table tbody td,
-.arc-table thead th, .arc-table tbody td,
-.arc-table th,       .arc-table td {
-    text-align: center;
+.arc-table  thead th, .arc-table  tbody td,
+.arc-table  th,       .arc-table  td {
+    text-align: left;
 }
 
-/* `.arc-table .num` is (0,2,0) and would otherwise out-specify the rule above
-   at (0,1,2). It keeps its tabular figures; it loses its right edge. */
-.arc-table .num { text-align: center; }
-
-/* ── The furniture inside the cells ──────────────────────────────────────────
-   These are flex rows, so `text-align` does nothing to them — the main axis
-   has to be centred as well. Their block children (name over sub-line) do
-   inherit the centring from the cell. */
-.lk-table  .lk-who,  .lk-table  .lk-when,  .lk-table  .lk-acts,
-.stu-table .stu-who, .stu-table .lk-when,  .stu-table .lk-acts,
-.pay-table .pay-who, .pay-table .lk-when,  .pay-table .lk-acts,
-.exp-table .lk-who,  .exp-table .lk-when,  .exp-table .lk-acts,
-.fm-table  .fm-who,  .fm-table  .fm-when,  .fm-table  .fm-acts,
-.iss-table .iss-when,
-.canc-table .canc-when, .canc-table .canc-acts {
-    justify-content: center;
+/* ── Money and counts read from the right ─────────────────────────────────
+   Each register names its own money cells; they are listed together so the
+   rule is stated once. `.arc-table .num` is (0,2,0) and would out-specify a
+   single-class rule, so it is named at the same weight. */
+.pay-table th.pay-col-num, .pay-table td.pay-col-num,
+.exp-table th.exp-amt,     .exp-table td.exp-amt,
+.fm-table  th.fm-money,    .fm-table  td.fm-money,
+.arc-table .num {
+    text-align: right;
 }
 
-/* A `.lk-who` with `min-width:0` and a centred main axis still needs its text
-   block to centre when the name is ellipsised. */
-.lk-table  .lk-who  > div, .stu-table .stu-who > div,
-.pay-table .pay-who > div, .exp-table .lk-who  > div { text-align: center; }
+/* A sortable header is a BUTTON inside the th, and a button does not inherit
+   the cell's text-align — it has to be pushed. Without this the heading of a
+   money column sits on the left while its figures sit on the right, which is
+   the exact complaint that started this. */
+.pay-table th.pay-col-num .ui-th-sort,
+.exp-table th.exp-amt     .ui-th-sort,
+.fm-table  th.fm-money    .ui-th-sort {
+    margin-left: auto;
+}
 
-/* The three rebuilt registers each pin their own name block to one left edge
-   and one width — the rule the note below describes, applied in their own
-   stylesheets because each has a different block. `.iss-who` is exempt from
-   the centring above for the same reason (owner, 2026-09-15: "aligned data in
-   other pages also if not aligned"). */
-.fm-table  .fm-who,
-.iss-table .iss-who,
-.canc-table .canc-who { justify-content: flex-start; text-align: left; }
+/* ── The name blocks keep their own left edge ─────────────────────────────
+   Each of these pins the avatar and the name to one x-position across every
+   row, which is the rule the owner asked for on 2026-09-14 and 2026-09-15 and
+   which survives the reversal unchanged — it was always a LEFT alignment. */
+.fm-table   .fm-who,
+.iss-table  .iss-who,
+.canc-table .canc-who,
+.stu-table  .stu-who,
+.pay-table  .pay-who { justify-content: flex-start; text-align: left; }
 
-/* ── THE STUDENT NAME BLOCK: CENTRED, AVATARS IN ONE LINE ───────────────────
-   Owner, 2026-09-14: "align the student names and emoji/svg in payments and
-   students". Centring each row's avatar-plus-name on its own put the avatar
-   wherever that name's length left it — "AK" beside a short name sat far to
-   the right of "MU" beside a long one. The block is now one width on every
-   row and centred in the column, so the avatars share one x-position and the
-   names start on one left edge; a name longer than the block ellipsises, with
-   the whole name in its title. In a column narrower than the block it simply
-   fills the column. */
 .stu-table .stu-who, .pay-table .pay-who {
-    width: 100%; max-width: 240px; margin: 0 auto; justify-content: flex-start;
+    width: 100%; max-width: 240px; justify-content: flex-start;
 }
 /* :last-child — the text block. On Payments the avatar is a <div> too, and a
    bare `> div` stretched it into an oval as wide as the name. */
-.stu-table .stu-who > div:last-child, .pay-table .pay-who > div:last-child { text-align: left; flex: 1; min-width: 0; }
+.stu-table .stu-who > div:last-child,
+.pay-table .pay-who > div:last-child { text-align: left; flex: 1; min-width: 0; }
 .stu-table .stu-who__name, .stu-table .stu-who__sub,
 .pay-table .pay-who__name { overflow: hidden; text-overflow: ellipsis; }
-
-/* ── Prose columns stay flush left ───────────────────────────────────────── */
-.lk-prose,
-.lk-table  td.lk-prose,
-.fm-table  th.fm-reason,  .fm-table  td.fm-reason,
-.iss-table th.iss-c-title, .iss-table td.iss-c-title,
-.iss-table th.iss-c-by,    .iss-table td.iss-c-by,
-.canc-table th.canc-reason, .canc-table td.canc-reason,
-.lk-table  th.fm-reason,  .lk-table  td.fm-reason,
-.lk-table  th.iss-c-title, .lk-table td.iss-c-title,
-.exp-table th.exp-desc,   .exp-table td.exp-desc,
-.exp-table thead th:nth-child(3),
-.stu-table td .stu-addr,
-.stu-table td .stu-addr__t {
-    text-align: left;
-}
 
 
 /* ══ EVERY KPI CARD HAS THE STUDENTS CARD'S CORNERS (owner, 2026-09-15) ══════
    "in all pages the kpis design should be like the students page kpi design"
    — "copy only the design of the kpis, not the svgs and content, only the
-   square like edges". Each page keeps its own card content, icons and hues;
-   only the corner changes, to the Students card's var(--radius) (8px). Here,
-   in the sheet that loads last, because each page sheet sets its own radius
-   and one rule after all of them is the one that wins. */
+   square like edges". Each page keeps its own card content and icons; only the
+   corner changes, to the Students card's var(--radius). Here, in the sheet
+   that loads last, because each page sheet sets its own radius and one rule
+   after all of them is the one that wins. */
 .lk-kpi, .lk-stat, .exp-stat, .rms-stat, .rpt-stat,
 .dash-kpi-grid .dsh-card {
     border-radius: var(--radius);
