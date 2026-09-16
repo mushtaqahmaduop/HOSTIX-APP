@@ -134,7 +134,7 @@ test('the payments page and the dashboard draw the same chip', async () => {
   const { app, win } = await openApp();
   await seed(win);
 
-  // ── Payments page — was `.pay-pill dh-slate`, hand-written ────────────────
+  // ── Payments page — was `.pay-pill dh-slate`, hand-written; now `.ui-chip` ──
   await win.evaluate(() => renderPage('payments'));
   await win.waitForTimeout(800);
   const pay = await win.evaluate(() => {
@@ -143,9 +143,15 @@ test('the payments page and the dashboard draw the same chip', async () => {
       chips:   document.querySelectorAll('.pm-chip').length,
       glyphs:  document.querySelectorAll('.pm-chip svg').length,
       labels:  [...document.querySelectorAll('.pm-chip')].map(c => c.textContent.trim()),
-      // `.pay-pill` survives — it is the STATUS pill, and a hued pill still
-      // means state. It just no longer means "method" as well.
-      pills:   document.querySelectorAll('.pay-pill').length,
+      // The status pill survives — a hued pill still means state, it just no
+      // longer means "method" as well. It moved to the shared chip layer in the
+      // payments rebuild (HOSTYLLO_DESIGN_SPEC stage 3), so it is a `.ui-chip`
+      // in one of the four status roles rather than the screen-local
+      // `.pay-pill dh-*`. The assertion is about the pill existing, never about
+      // which file styles it.
+      pills:   document.querySelectorAll(
+                 '.pay-table .ui-chip--success, .pay-table .ui-chip--warning, '
+               + '.pay-table .ui-chip--danger, .pay-table .ui-chip--neutral').length,
       rows:    rows.length,
     };
   });

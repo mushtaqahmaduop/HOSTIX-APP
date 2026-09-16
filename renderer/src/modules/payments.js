@@ -203,9 +203,21 @@ function payMonthShort(m) {
   return bits[0].slice(0, 3) + ' ' + bits[1];
 }
 
-function payStatusHue(s) {
-  return s === 'Paid' ? 'dh-green' : s === 'Partial' ? 'dh-amber' : 'dh-slate';
+/* The four payment states as chip roles (design spec Part 4). Pending — nothing
+   received yet — is the reference's red pill, so the caller gives it the danger
+   role; Overdue takes it here. The shapes in payStatusIcon() below carry the
+   same meaning without the colour. */
+function payStatusRole(s) {
+  return s === 'Paid' ? 'ui-chip--success' : s === 'Partial' ? 'ui-chip--warning'
+       : s === 'Overdue' ? 'ui-chip--danger' : 'ui-chip--neutral';
 }
+
+/* The three sort marks, as SVG. They were the characters ▲ ▼ ⇅. */
+const PAY_SORT_ICO = {
+  asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>',
+  desc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  none: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5"/><path d="m7 15 5 5 5-5"/></svg>',
+};
 
 /* A GLYPH FOR EVERY STATUS, NOT JUST FOR PAID.
 
@@ -500,7 +512,7 @@ function payTrendBars(trend) {
   const max = Math.max(1, ...trend.map(t => t.sum));
   const bw = 8, gap = 5, h = 34, w = trend.length * (bw + gap) - gap;
   const said = trend.map(t => monthLabel(t.key) + ' ' + fmtPKR(t.sum)).join(', ');
-  return `<svg class="lk-kpi__bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Collected by month: ${escHtml(said)}">`
+  return `<svg class="pay-kpi__bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Collected by month: ${escHtml(said)}">`
     + trend.map((t, i) => {
         const bh = t.sum > 0 ? Math.max(3, Math.round(t.sum / max * h)) : 2;
         return `<rect x="${i * (bw + gap)}" y="${h - bh}" width="${bw}" height="${bh}" rx="1.5"${i === trend.length - 1 ? ' class="is-now"' : ''}>`
@@ -548,12 +560,17 @@ function renderPayments() {
   const monthOpts = payMonthOptions();
   const activeFilters = [payFilter.showAll, payFilter.unpaidOnly].filter(Boolean).length;
 
+  /* A BUTTON INSIDE THE HEADER CELL, not an onclick on the `th` — the same
+     pattern as the expenses and students registers, and the same reason: a `th`
+     takes no focus and answers no key press. */
   const th = (key, label, cls) => {
     const on  = payFilter.sortKey === key;
-    const arw = on ? (payFilter.sortDir === 'asc' ? '▲' : '▼') : '⇅';
+    const dir = on ? (payFilter.sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+    const ico = on ? (payFilter.sortDir === 'asc' ? PAY_SORT_ICO.asc : PAY_SORT_ICO.desc) : PAY_SORT_ICO.none;
     const plain = label.replace(/<br>/g, ' ');
-    return `<th class="is-sortable${on ? ' is-sorted' : ''}${cls ? ' ' + cls : ''}" onclick="toggleSort(payFilter,'payments','${key}')" title="Sort by ${plain}">`
-         + `<span class="pay-th"><span class="pay-th__l">${label}</span><span class="arw">${arw}</span></span></th>`;
+    return `<th aria-sort="${dir}"${cls ? ` class="${cls}"` : ''}>`
+         + `<button type="button" class="ui-th-sort" onclick="toggleSort(payFilter,'payments','${key}')" title="Sort by ${plain}">`
+         + `<span>${label}</span>${ico}</button></th>`;
   };
 
   const upArrow   = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
@@ -561,52 +578,52 @@ function renderPayments() {
 
   return `
   <!-- ══ KPI CARDS ══ -->
-  <div class="lk-kpis">
-    <div class="lk-kpi dh-green">
-      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M3 10h18"/></svg></div>
-      <div class="lk-kpi__body">
-        <div class="lk-kpi__l">Total Collected</div>
-        <div class="lk-kpi__v" title="${escHtml(fmtPKR(total))}">${payCash(total)}</div>
-        <div class="lk-kpi__s">
+  <div class="pay-kpis">
+    <div class="ui-card pay-kpi">
+      <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M3 10h18"/></svg></div>
+      <div class="pay-kpi__body">
+        <div class="pay-kpi__l">Total Collected</div>
+        <div class="pay-kpi__v" title="${escHtml(fmtPKR(total))}">${payCash(total)}</div>
+        <div class="pay-kpi__s">
           <span>${icon('calendar', 'xs')} ${_scopeKey ? escHtml(monthLabel(_scopeKey)) : 'All months'}</span>
-          ${deltaTxt ? `<span class="lk-kpi__delta ${delta >= 0 ? 'is-up' : 'is-down'}" title="Against ${escHtml(monthLabel(trend[4].key))}">${delta >= 0 ? upArrow : downArrow}${deltaTxt}</span>` : ''}
+          ${deltaTxt ? `<span class="pay-kpi__delta ${delta >= 0 ? 'is-up' : 'is-down'}" title="Against ${escHtml(monthLabel(trend[4].key))}">${delta >= 0 ? upArrow : downArrow}${deltaTxt}</span>` : ''}
         </div>
       </div>
       ${payTrendBars(trend)}
     </div>
 
-    <div class="lk-kpi lk-kpi--click dh-blue${payFilter.status === 'Paid' ? ' is-on' : ''}" onclick="paySetStatus('Paid')" title="Show only paid records">
-      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
-      <div class="lk-kpi__body">
-        <div class="lk-kpi__l">Paid Students</div>
-        <div class="lk-kpi__v">${share.paid} <small>/ ${share.total}</small></div>
-        <div class="lk-kpi__s">
+    <button type="button" class="ui-card pay-kpi pay-kpi--click${payFilter.status === 'Paid' ? ' is-on' : ''}" onclick="paySetStatus('Paid')" title="Show only paid records" aria-pressed="${payFilter.status === 'Paid'}">
+      <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <div class="pay-kpi__body">
+        <div class="pay-kpi__l">Paid Students</div>
+        <div class="pay-kpi__v">${share.paid} <small>/ ${share.total}</small></div>
+        <div class="pay-kpi__s">
           <span>${pct(share.paid)}% of total</span>
-          <span class="lk-kpi__track"><i style="width:${pct(share.paid)}%"></i></span>
+          <span class="pay-kpi__track"><i style="width:${pct(share.paid)}%"></i></span>
         </div>
       </div>
-    </div>
+    </button>
 
-    <div class="lk-kpi lk-kpi--click dh-amber${payFilter.status === 'Pending' ? ' is-on' : ''}" onclick="paySetStatus('Pending')" title="Show only unsettled records">
-      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-      <div class="lk-kpi__body">
-        <div class="lk-kpi__l">Pending Students</div>
-        <div class="lk-kpi__v">${share.pending} <small>/ ${share.total}</small></div>
-        <div class="lk-kpi__s">
+    <button type="button" class="ui-card pay-kpi pay-kpi--click${payFilter.status === 'Pending' ? ' is-on' : ''}" onclick="paySetStatus('Pending')" title="Show only unsettled records" aria-pressed="${payFilter.status === 'Pending'}">
+      <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+      <div class="pay-kpi__body">
+        <div class="pay-kpi__l">Pending Students</div>
+        <div class="pay-kpi__v">${share.pending} <small>/ ${share.total}</small></div>
+        <div class="pay-kpi__s">
           <span>${pct(share.pending)}% of total</span>
-          <span class="lk-kpi__track"><i style="width:${pct(share.pending)}%"></i></span>
+          <span class="pay-kpi__track"><i style="width:${pct(share.pending)}%"></i></span>
         </div>
       </div>
-    </div>
+    </button>
 
-    <div class="lk-kpi dh-red">
-      <div class="lk-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
-      <div class="lk-kpi__body">
-        <div class="lk-kpi__l">Unpaid Amount</div>
-        <div class="lk-kpi__v" title="${escHtml(fmtPKR(outstanding))}">${payCash(outstanding)}</div>
-        <div class="lk-kpi__s"><span>${arrearsAmt > 0 ? 'Incl. ' + payCash(arrearsAmt) + ' arrears' : 'Total outstanding'}</span></div>
+    <div class="ui-card pay-kpi">
+      <div class="pay-kpi__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+      <div class="pay-kpi__body">
+        <div class="pay-kpi__l">Unpaid Amount</div>
+        <div class="pay-kpi__v" title="${escHtml(fmtPKR(outstanding))}">${payCash(outstanding)}</div>
+        <div class="pay-kpi__s"><span>${arrearsAmt > 0 ? 'Incl. ' + payCash(arrearsAmt) + ' arrears' : 'Total outstanding'}</span></div>
       </div>
-      <button class="lk-kpi__go${payFilter.unpaidOnly ? ' is-on' : ''}" onclick="payUnpaidToggle()"
+      <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon pay-kpi__go${payFilter.unpaidOnly ? ' is-on' : ''}" onclick="payUnpaidToggle()"
         title="${payFilter.unpaidOnly ? 'Show every row again' : 'Show only rows with an unpaid balance'}" aria-pressed="${payFilter.unpaidOnly ? 'true' : 'false'}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </button>
@@ -614,68 +631,71 @@ function renderPayments() {
   </div>
 
   <!-- ══ TOOLBAR ══ -->
-  <div class="pay-panel">
+  <div class="ui-card">
     <div class="pay-tools">
-      <div class="pay-search">
+      <div class="ui-search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
         ${''/* The receipt number is still searchable (owner, 2026-09-10); the
                placeholder is the reference's. */}
-        <input id="search-payments" class="lk-sin" placeholder="Search by name, room…" value="${escHtml(payFilter.search)}"
+        <input id="search-payments" class="lk-sin" aria-label="Search payments" placeholder="Search by name, room…" value="${escHtml(payFilter.search)}"
           oninput="capFirstChar(this);payFilter.search=this.value;payFilter.page=1;_dPayments()">
         ${lkSearchX('search-payments', 'payFilter', 'payments')}
       </div>
 
-      <select class="pay-select${payFilter.room !== 'All' ? ' is-set' : ''}" onchange="payFilter.room=this.value;payFilter.page=1;renderPage('payments')" title="Filter by room">
-        <option value="All">All Rooms</option>
-        ${roomNums.map(r => `<option value="${escHtml(r)}" ${payFilter.room === r ? 'selected' : ''}>Room ${escHtml(r)}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm${payFilter.room !== 'All' ? ' is-set' : ''}" aria-label="Filter by room" onchange="payFilter.room=this.value;payFilter.page=1;renderPage('payments')">
+          <option value="All">All rooms</option>
+          ${roomNums.map(r => `<option value="${escHtml(r)}" ${payFilter.room === r ? 'selected' : ''}>Room ${escHtml(r)}</option>`).join('')}
+        </select>
+      </span>
 
-      <label class="pay-selwrap" title="Filter by month">
-        <span class="pay-selwrap__i">${icon('calendar', 'xs')}</span>
-        <select class="pay-select pay-select--mo pay-select--ico${payFilter.month !== thisMonth() ? ' is-set' : ''}" onchange="payFilter.month=this.value;payFilter.showAll=false;payFilter.page=1;renderPage('payments')">
+      <span class="ui-selectw ui-selectw--ico">
+        <span class="ui-selectw__i">${icon('calendar', 'xs')}</span>
+        <select class="ui-select ui-select--sm${payFilter.month !== thisMonth() ? ' is-set' : ''}" aria-label="Filter by month" onchange="payFilter.month=this.value;payFilter.showAll=false;payFilter.page=1;renderPage('payments')">
           ${monthOpts.map(m => `<option value="${escHtml(m)}" ${_scopeKey === m ? 'selected' : ''}>${escHtml(monthLabel(m))}</option>`).join('')}
-          <option value="All" ${!_scopeKey ? 'selected' : ''}>All Months</option>
+          <option value="All" ${!_scopeKey ? 'selected' : ''}>All months</option>
         </select>
-      </label>
+      </span>
 
-      <label class="pay-selwrap" title="Filter by status">
-        <span class="pay-selwrap__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
-        <select class="pay-select pay-select--st pay-select--ico${payFilter.status !== 'All' ? ' is-set' : ''}" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')">
-          ${['All', 'Paid', 'Partial', 'Pending'].map(s => `<option value="${s}" ${payFilter.status === s ? 'selected' : ''}>${s === 'All' ? 'All Status' : s}</option>`).join('')}
+      <span class="ui-selectw ui-selectw--ico">
+        <span class="ui-selectw__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
+        <select class="ui-select ui-select--sm${payFilter.status !== 'All' ? ' is-set' : ''}" aria-label="Filter by status" onchange="payFilter.status=this.value;payFilter.page=1;renderPage('payments')">
+          ${['All', 'Paid', 'Partial', 'Pending'].map(s => `<option value="${s}" ${payFilter.status === s ? 'selected' : ''}>${s === 'All' ? 'All statuses' : s}</option>`).join('')}
         </select>
-      </label>
+      </span>
 
-      <div style="position:relative">
-        <button class="pay-btn${activeFilters ? ' pay-btn--hue dh-blue' : ''}" onclick="payTogglePop(event)" title="More filters">
+      <div class="pay-popw">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="payTogglePop(event)" title="More filters"
+                id="pay-pop-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="pay-pop">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>
-          <span class="pay-lbl-x">More </span>Filters${activeFilters ? `<span class="pay-btn__count">${activeFilters}</span>` : ''}
+          <span class="pay-lbl-x">More </span>Filters${activeFilters ? `<span class="ui-chip ui-chip--accent ui-chip--count">${activeFilters}</span>` : ''}
         </button>
-        <div class="pay-pop" id="pay-pop" style="display:none">
-          <div class="pay-pop__t">Scope</div>
+        <div class="ui-menu pay-pop" id="pay-pop" role="menu" hidden>
+          <div class="ui-menu__t">Scope</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.showAll ? 'checked' : ''}
             onchange="payFilter.showAll=this.checked;payFilter.page=1;renderPage('payments')"> Include every month</label>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.arrears ? 'checked' : ''}
             onchange="payFilter.arrears=this.checked;payFilter.page=1;renderPage('payments')"
             title="Show unpaid balances from earlier months alongside this month, so they can be collected here"> Carry forward unpaid earlier months</label>
-          <div class="pay-pop__t" style="margin-top:10px">Balance</div>
+          <div class="ui-menu__t">Balance</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.unpaidOnly ? 'checked' : ''}
             onchange="payFilter.unpaidOnly=this.checked;payFilter.page=1;renderPage('payments')"> Only rows with an unpaid balance</label>
-          <div class="pay-pop__sep"></div>
-          <div class="pay-pop__row" onclick="payResetFilters()">
+          <div class="ui-menu__sep"></div>
+          <button type="button" class="ui-menu__item" role="menuitem" onclick="payResetFilters()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
             Reset all filters
-          </div>
+          </button>
         </div>
       </div>
 
       <div class="pay-tools__end">
-        ${tbExport({ id: 'pay-export', cls: 'pay-btn',
+        ${tbExport({ id: 'pay-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
                      excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
-        <button class="pay-btn pay-btn--hue dh-blue" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           Generate Month
         </button>
-        <button class="pay-btn pay-btn--hue dh-green" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="showRentReminderModal()" title="Send WhatsApp reminders to everyone with rent outstanding">
           ${waMark(15)}
           ${''/* "More" and "Send" drop below 1440px so the strip stays one line
                  at the 1366 floor (owner, 2026-09-10: all options in one row). */}
@@ -685,20 +705,21 @@ function renderPayments() {
     </div>
 
     ${paySelected.size > 0 ? `
-    <div class="pay-bulk dh-blue">
+    <div class="pay-bulk">
       <span class="pay-bulk__n">${paySelected.size} selected</span>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="pay-btn" onclick="payBulkExport()">Export selected</button>
-        <button class="pay-btn pay-btn--hue dh-green" onclick="payBulkMarkPaid()">Mark ${paySelected.size} paid</button>
-        <button class="pay-btn" onclick="paySelected.clear();renderPage('payments')">Clear</button>
+      <div class="pay-bulk__acts">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="payBulkExport()">Export selected</button>
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="payBulkMarkPaid()">Mark ${paySelected.size} paid</button>
+        <button class="ui-btn ui-btn--ghost ui-btn--sm" onclick="paySelected.clear();renderPage('payments')">Clear</button>
       </div>
     </div>` : ''}
 
     <!-- ══ TABLE ══ -->
-    <div class="pay-table-wrap">
-      <table class="pay-table">
+    <div class="ui-card ui-card--flush pay-tablecard">
+      <div class="ui-table-wrap pay-table-wrap">
+      <table class="ui-table ui-table--dense pay-table">
         <thead><tr>
-          <th style="width:36px"><input type="checkbox" ${_pg.slice.length > 0 && _pg.slice.every(p => paySelected.has(p.id)) ? 'checked' : ''} onclick="payToggleAll(this.checked)" title="Select all on this page"></th>
+          <th class="pay-col-sel"><input type="checkbox" ${_pg.slice.length > 0 && _pg.slice.every(p => paySelected.has(p.id)) ? 'checked' : ''} onclick="payToggleAll(this.checked)" aria-label="Select every record on this page" title="Select all on this page"></th>
           <th class="pay-col-no">#</th>
           ${th('student', 'Student')}
           ${th('room', 'Room', 'pay-col-room')}
@@ -717,7 +738,7 @@ function renderPayments() {
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length === 0 ? `<tr><td colspan="14"><div class="pay-empty">No payment records match these filters.</div></td></tr>` :
+        ${_pg.slice.length === 0 ? `<tr><td colspan="14"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
         _pg.slice.map((p, i) => {
           const st     = DB.students.find(s => s.id === p.studentId);
           const room   = DB.rooms.find(r => String(r.number) === String(p.roomNumber));
@@ -740,17 +761,17 @@ function renderPayments() {
           const covCls = (chg.messIncluded && Number(chg.mess) > 0) ? ' pay-cov--mess'
                        : (Number(chg.rent) > 0 ? ' pay-cov--rent' : '');
           /* Pending — nothing received yet — is the reference's red pill. */
-          const sCls   = sLabel === 'Pending' ? 'pay-pill--none' : payStatusHue(sLabel);
-          return `<tr class="${picked ? 'is-picked dh-blue' : ''}${arrear ? ' is-arrear' : ''}">
-            <td onclick="event.stopPropagation()"><input type="checkbox" ${picked ? 'checked' : ''} onclick="payToggleRow('${p.id}')"></td>
+          const sCls   = sLabel === 'Pending' ? 'ui-chip--danger' : payStatusRole(sLabel);
+          return `<tr class="${picked ? 'is-picked' : ''}${arrear ? ' is-arrear' : ''}">
+            <td><input type="checkbox" ${picked ? 'checked' : ''} onclick="payToggleRow('${p.id}')" aria-label="Select the record for ${escHtml(nm)}"></td>
             <td class="pay-col-no">${_pg.from + i}</td>
             <td>
               <div class="pay-who">
-                <div class="pay-who__av ${payAvatarHue(nm)}">${escHtml(ini)}</div>
-                <div style="min-width:0">
+                <i class="ui-avatar">${escHtml(ini)}</i>
+                <div class="pay-who__b">
                   <div class="pay-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
-                  ${p.studentRemoved ? `<div class="pay-who__meta" style="color:var(--amber)" title="This student was removed from the roster${p.studentRemovedOn ? ' on ' + escHtml(fmtDate(p.studentRemovedOn)) : ''}. The payment stays in the books.">No longer on the roster</div>` : ''}
-                  <span class="pay-cov ${cov.hue}${covCls}">${escHtml(cov.label)}</span>
+                  ${p.studentRemoved ? `<div class="pay-who__meta is-off" title="This student was removed from the roster${p.studentRemovedOn ? ' on ' + escHtml(fmtDate(p.studentRemovedOn)) : ''}. The payment stays in the books.">No longer on the roster</div>` : ''}
+                  <span class="ui-chip ui-chip--neutral">${escHtml(cov.label)}</span>
                 </div>
               </div>
             </td>
@@ -760,7 +781,7 @@ function renderPayments() {
             <td class="pay-col-room">${roomLabel(p.roomNumber, room && room.floor)}</td>
             <td class="pay-col-mo">
               <span title="${escHtml(monthLabel(p.month) || '')}">${escHtml(payMonthTick(p))}</span>
-              ${arrear ? '<div class="pay-arrear-tag" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</div>' : ''}
+              ${arrear ? '<div><span class="ui-chip ui-chip--warning" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</span></div>' : ''}
             </td>
             <td class="pay-col-num"><span class="pay-num pay-num--strong" title="${escHtml(payChargeTitle(chg))}">${payCash(chg.monthly || p.amount)}</span></td>
             <td class="pay-col-num"><span class="pay-num${paid > 0 ? ' pay-num--in' : ''}">${payCash(paid)}</span></td>
@@ -769,17 +790,20 @@ function renderPayments() {
             <td class="pay-col-num pay-col-x"><span class="pay-num"${extras.length ? ` title="${escHtml(extras.map(c => (c.label ? c.label + ': ' : '') + fmtPKR(c.amount)).join(' · '))}"` : ''}>${payCash(extraT)}</span></td>
             <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span></td>
             <td>${paid > 0 ? pmBadge(p.method) : '<span class="pay-dash">—</span>'}</td>
-            <td><span class="pay-pill ${sCls}">${payStatusIcon(sLabel)}${sLabel}</span></td>
+            <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
             <td class="pay-col-act">
-              ${lkKebab("event.stopPropagation();payRowMenu('" + p.id + "',this)", 'Actions for this payment')}
+              <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="event.stopPropagation();payRowMenu('${p.id}',this)"
+                      aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+              </button>
             </td>
           </tr>`;
         }).join('')}
         </tbody>
       </table>
+      </div>
+      ${payPager(_pg)}
     </div>
-
-    ${payPager(_pg)}
   </div>`;
 }
 
@@ -787,27 +811,30 @@ function renderPayments() {
 function payPager(pg) {
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled aria-label="${o.aria || label}">${label}</button>`;
-    if (o.active)   return `<button class="is-on" aria-current="page">${label}</button>`;
-    return `<button onclick="gotoPage(payFilter,'payments',${target})"${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
+    const C = 'ui-btn ui-btn--secondary ui-btn--sm';
+    if (o.disabled) return `<button class="${C}" disabled aria-label="${o.aria || label}">${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}" onclick="gotoPage(payFilter,'payments',${target})"${o.aria ? ` aria-label="${o.aria}"` : ''}>${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page - 2), hi = Math.min(pages, lo + 4);
   lo = Math.max(1, hi - 4);
   let nums = '';
-  if (lo > 1) nums += btn('1', 1) + (lo > 2 ? '<span class="pay-pager__gap">…</span>' : '');
+  if (lo > 1) nums += btn('1', 1) + (lo > 2 ? '<span class="ui-pager__gap">…</span>' : '');
   for (let i = lo; i <= hi; i++) nums += btn(String(i), i, { active: i === page });
-  if (hi < pages) nums += (hi < pages - 1 ? '<span class="pay-pager__gap">…</span>' : '') + btn(String(pages), pages);
+  if (hi < pages) nums += (hi < pages - 1 ? '<span class="ui-pager__gap">…</span>' : '') + btn(String(pages), pages);
 
-  return `<div class="pay-foot">
-    <div class="pay-foot__info">${pg.total ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total === 1 ? '' : 's'}` : 'No records'}</div>
+  return `<div class="ui-pagebar">
+    <div class="ui-pagebar__info">${pg.total ? `Showing ${pg.from}–${pg.to} of ${pg.total} record${pg.total === 1 ? '' : 's'}` : 'No records'}</div>
     <div class="pay-foot__size">
       <span>Rows per page</span>
-      <select onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')" aria-label="Rows per page">
-        ${[10, 30, 50, 100].map(n => `<option value="${n}" ${Number(payFilter.pageSize) === n ? 'selected' : ''}>${n}</option>`).join('')}
-      </select>
+      <span class="ui-selectw">
+        <select class="ui-select ui-select--sm" onchange="payFilter.pageSize=Number(this.value);payFilter.page=1;renderPage('payments')" aria-label="Rows per page">
+          ${[10, 30, 50, 100].map(n => `<option value="${n}" ${Number(payFilter.pageSize) === n ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </span>
     </div>
-    <div class="pay-pager">
+    <div class="ui-pager">
       ${btn('‹', page - 1, { disabled: page <= 1, aria: 'Previous page' })}
       ${nums}
       ${btn('›', page + 1, { disabled: page >= pages, aria: 'Next page' })}

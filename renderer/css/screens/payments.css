@@ -1,268 +1,155 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   HOSTYLLO — PAYMENTS v5
-   Owner reference design: docs/design/payments.png
+   HOSTYLLO — PAYMENTS  (register + the payment modals)
+   Owner reference designs: docs/design/pay page.png, payment-form.png
 
-   Loaded after ui-kit.css (which supplies the `dh-*` hue palette) and scoped
-   to `pay-*` class names. It defines no existing selector, so no other screen
-   is affected (CLAUDE.md rule 7).
+   Rebuilt 2026-09-16 against css/tokens.css, css/base.css and css/components/
+   (HOSTYLLO_DESIGN_SPEC Parts 4-7). This file may PLACE components — grid,
+   position, width, order — and may not restyle one.
+
+   The `.pf-*` / `.ap-*` / `.ws*` block further down is the ADD PAYMENT form
+   (spec stage 8, with addstudent) and is left exactly as it is.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Stat strip ──────────────────────────────────────────────────────────── */
-/* One row, always. grid-auto-flow:column lays every card on a single track row
-   whatever the count, and grid-auto-columns:minmax(0,1fr) lets them share the
-   width evenly. The minmax(0,…) is load-bearing: a grid item defaults to
-   min-width:auto, so without it the cards refuse to shrink past their content
-   and the strip overflows sideways instead of fitting. */
-.pay-stats { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:12px; margin-bottom:12px; }
-.pay-stat {
-    min-width:0;
-    container-type:inline-size;   /* the figure sizes off the card, not the viewport */
-    position:relative; overflow:hidden; background:var(--card); border:1px solid var(--border);
-    border-radius:16px; padding:9px 16px;
-    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+/* ── KPI strip ───────────────────────────────────────────────────────────────
+   These were `.lk-kpi` with a hue class each — green, blue, amber, red — from
+   listkit.css, which four other registers still use. Payments has its own now:
+   the internals are the same shape, the hues are gone (colour is status only),
+   and listkit's copy is untouched until those screens are rebuilt (stage 4). */
+.pay-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--space-3); margin-bottom:var(--space-3); }
+@media (max-width:1100px) { .pay-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
+.pay-kpi {
+    position:relative; display:flex; align-items:flex-start; gap:var(--space-3);
+    min-width:0; text-align:left; font:inherit; color:inherit;
 }
-.pay-stat--click { cursor:pointer; }
-.pay-stat--click:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
-.pay-stat__top   { display:flex; align-items:center; gap:11px; margin-bottom:6px; }
-.pay-stat__chip  {
-    width:32px; height:32px; border-radius:10px; flex-shrink:0;
+/* Two of the four set a filter, so those two are <button>s. */
+.pay-kpi--click { cursor:pointer; transition:border-color var(--dur-fast) var(--ease); }
+.pay-kpi--click:hover, .pay-kpi--click.is-on { border-color:var(--accent); }
+
+.pay-kpi__ico {
+    width:var(--h-sm); height:var(--h-sm); flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
-    background:var(--dh-bg); color:var(--dh);
+    border-radius:var(--radius-sm);
+    background:var(--neutral-bg); color:var(--text-secondary);
 }
-.pay-stat__label { min-width:0; font-size:12px; font-weight:600; color:var(--text2); line-height:1.3; overflow-wrap:anywhere; }
-/* Base size fits an 11-character figure in the narrowest card the five-across
-   row produces; @container scales it up when there is genuinely room. The
-   ellipsis is the backstop so the money can never spill past the card edge.
-
-   RE-MEASURED each time the numeral face has changed, because this is where a
-   face that is a few percent wider first shows up as an ellipsis:
-
-     Inter (tabular)   120.6px @19  ·  165.0px @26  ->  24px slack
-     Roboto Mono       125.4px @19  ·  171.6px @26  ->  17px slack
-     Barlow (tabular)  104.3px @19  ·  142.7px @26  ->  48px slack   <- current
-
-   Slack is measured in the tightest tier: 26px type in a 220px container,
-   against an 11-character figure plus the 28.8px "PKR" prefix. Barlow is
-   narrower than either face before it, so the budget is healthier now than it
-   has ever been -- but it is still a budget. Anything that grows the figure --
-   a wider face, a longer prefix, a 13-digit total -- spends it, and the
-   ellipsis is what you will see first. */
-.pay-stat__val   { font-size:19px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--text); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-@container (min-width:190px) { .pay-stat__val { font-size:22px; } }
-@container (min-width:220px) { .pay-stat__val { font-size:26px; } }
-.pay-stat__val .cur { font-size:13px; font-weight:600; color:var(--text3); font-family:var(--font); margin-right:5px; }
-.pay-stat__foot  { display:flex; align-items:flex-end; justify-content:space-between; gap:8px; margin-top:4px; flex-wrap:wrap; }
-.pay-stat__sub   { font-size:11px; color:var(--text3); }
-.pay-stat__delta { font-size:11px; font-weight:700; color:var(--dh); display:inline-flex; align-items:center; gap:3px; white-space:nowrap; }
-
-/* Below this the row would crush the cards past reading — fall back to wrapping. */
-@media (max-width:900px) {
-    .pay-stats { grid-auto-flow:row; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+.pay-kpi__body { flex:1 1 auto; min-width:0; }
+.pay-kpi__l { font-size:var(--text-sm); font-weight:var(--weight-medium); color:var(--text-secondary); line-height:var(--leading-tight); }
+.pay-kpi__v {
+    margin:var(--space-1) 0;
+    font-size:var(--text-xl); font-weight:var(--weight-strong); line-height:var(--leading-tight);
+    letter-spacing:var(--track-tight); color:var(--text-primary);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-
-/* ── Toolbar card ────────────────────────────────────────────────────────── */
-.pay-panel { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px 16px; }
-
-.pay-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-/* NARROWER, SO THE BAR IS ONE LINE (owner, 2026-09-09: "reduce its searchbar
-   so that all the option align in one heading"). It was 240–320px and the
-   controls beside it wrapped onto a second row at the 1366 floor; the search is
-   the one thing on the bar that can give width back without losing a control. */
-.pay-search {
-    display:flex; align-items:center; gap:8px; flex:0 1 210px; min-width:150px; max-width:240px;
-    height:40px; padding:0 12px; border-radius:11px;
-    background:var(--card); border:1px solid var(--border2);
-    transition:border-color .15s ease, box-shadow .15s ease;
+.pay-kpi__v small { font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-secondary); }
+.pay-kpi__s {
+    display:flex; align-items:center; gap:var(--space-2); min-width:0;
+    font-size:var(--text-sm); color:var(--text-tertiary); white-space:nowrap;
 }
-.pay-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
-.pay-search svg   { color:var(--text3); flex-shrink:0; }
-.pay-search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font-family:var(--font); font-size:13px; }
-.pay-search input::placeholder { color:var(--text3); }
-
-.pay-select {
-    height:40px; min-width:132px; padding:0 32px 0 13px; border-radius:11px; cursor:pointer;
-    background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:13px; font-weight:500;
-    appearance:none; -webkit-appearance:none;
-    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat; background-position:right 12px center;
+.pay-kpi__s > span:first-child { display:inline-flex; align-items:center; gap:var(--space-1); }
+/* Collection rising is the good outcome here — the opposite of the expenses
+   register, where a rise is the thing worth noticing. */
+.pay-kpi__delta { display:inline-flex; align-items:center; gap:2px; font-weight:var(--weight-medium); }
+.pay-kpi__delta.is-up   { color:var(--success-fg); }
+.pay-kpi__delta.is-down { color:var(--danger-fg); }
+.pay-kpi__track {
+    flex:1 1 auto; min-width:40px; height:6px; border-radius:var(--radius-full); overflow:hidden;
+    background:var(--neutral-bg);
 }
-.pay-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
-.pay-select.is-set { border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
+.pay-kpi__track > i { display:block; height:100%; border-radius:var(--radius-full); background:var(--accent); transition:width .5s ease; }
+@media (prefers-reduced-motion: reduce) { .pay-kpi__track > i { transition:none; } }
+/* Six months of collection. Data, not status: the bars are the muted ink and
+   only the month in view carries the accent. */
+.pay-kpi__bars { flex-shrink:0; align-self:flex-end; color:var(--text-tertiary); }
+.pay-kpi__bars rect { fill:currentColor; opacity:.55; }
+.pay-kpi__bars rect.is-now { fill:var(--accent); opacity:1; }
+@media (max-width:1320px) { .pay-kpi__bars { display:none; } }
+.pay-kpi__go { align-self:center; flex-shrink:0; }
+.pay-kpi__go.is-on { background:var(--accent-bg); color:var(--accent-fg); border-color:transparent; }
 
-.pay-btn {
-    height:40px; padding:0 14px; border-radius:11px; cursor:pointer; white-space:nowrap;
-    display:inline-flex; align-items:center; gap:7px;
-    background:var(--card); border:1px solid var(--border2); color:var(--text2);
-    font-family:var(--font); font-size:13px; font-weight:600; transition:var(--transition);
-}
-.pay-btn:hover  { background:var(--dash-sunk); color:var(--text); }
-.pay-btn--hue   { color:var(--dh); border-color:var(--dh); background:var(--dh-bg); }
-.pay-btn--hue:hover { background:var(--dh-bg); filter:brightness(1.06); color:var(--dh); }
-.pay-btn__count { min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:var(--text-on-accent); font-size:10px; font-weight:800; line-height:18px; text-align:center; }
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.pay-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+.pay-tools .ui-search  { flex:1 1 200px; min-width:170px; max-width:380px; }
+.pay-tools .ui-selectw { min-width:132px; }
+.pay-tools__end { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
 
-/* Filters popover */
-.pay-pop {
-    position:absolute; top:calc(100% + 8px); right:0; z-index:900; min-width:262px; padding:12px;
-    background:var(--card); border:1px solid var(--border2); border-radius:13px; box-shadow:var(--shadow);
+/* The More Filters popover is a .ui-menu; this says where it hangs. */
+.pay-popw { position:relative; }
+.pay-pop  { position:absolute; top:calc(100% + var(--space-2)); right:0; }
+/* A checkbox row inside the menu: a label, not a button, because the control
+   is the checkbox itself. */
+.pay-pop__row {
+    display:flex; align-items:center; gap:var(--space-2);
+    padding:var(--space-2); border-radius:var(--radius-sm); cursor:pointer;
+    font-size:var(--text-base); color:var(--text-secondary);
 }
-.pay-pop__t   { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text3); margin:2px 0 7px; }
-.pay-pop__row { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px; cursor:pointer; font-size:13px; color:var(--text2); }
-.pay-pop__row:hover { background:var(--dash-sunk); color:var(--text); }
+.pay-pop__row:hover { background:var(--surface-hover); color:var(--text-primary); }
 .pay-pop__row input { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
-.pay-pop__sep { height:1px; background:var(--border); margin:9px 2px; }
 
-/* ── Meta row ────────────────────────────────────────────────────────────── */
-.pay-meta      { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:13px 0 4px; }
-.pay-meta__txt { font-size:12.5px; color:var(--text3); }
-.pay-meta__txt b { color:var(--text); font-weight:700; }
-.pay-meta__acts{ margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-
-/* Bulk-selection bar — only rendered when rows are actually selected */
 .pay-bulk {
-    display:flex; align-items:center; gap:10px; margin:12px 0 0;
-    padding:10px 14px; border-radius:12px;
-    background:var(--dh-bg); border:1px solid var(--dh);
+    display:flex; align-items:center; gap:var(--space-3);
+    margin-top:var(--space-3); padding:var(--space-2) var(--space-3);
+    border-radius:var(--radius-sm); background:var(--accent-bg);
 }
-.pay-bulk__n { font-size:13px; font-weight:700; color:var(--dh); }
+.pay-bulk__n    { font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--accent-fg); }
+.pay-bulk__acts { margin-left:auto; display:flex; gap:var(--space-2); flex-wrap:wrap; }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
-.pay-table-wrap { margin-top:12px; overflow-x:auto; border-radius:12px; border:1px solid var(--border); }
-.pay-table { width:100%; border-collapse:separate; border-spacing:0; }
-.pay-table thead th {
-    position:sticky; top:0; z-index:2;
-    background:var(--dash-sunk); border-bottom:1px solid var(--border);
-    padding:11px 12px; text-align:left; white-space:nowrap;
-    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--text3);
-}
-.pay-table thead th.is-sortable { cursor:pointer; user-select:none; }
-.pay-table thead th.is-sortable:hover { color:var(--text); }
-.pay-table thead th .arw { opacity:.5; margin-left:4px; font-size:9px; }
-.pay-table thead th.is-sorted { color:var(--accent-strong); }
-.pay-table thead th.is-sorted .arw { opacity:1; }
-
-.pay-table tbody td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:12.5px; color:var(--text2); }
-.pay-table tbody tr:last-child td { border-bottom:none; }
-.pay-table tbody tr { transition:background .12s ease; }
-.pay-table tbody tr:hover    { background:var(--dash-sunk); }
-.pay-table tbody tr.is-picked{ background:var(--dh-bg); }
+.pay-tablecard { margin-top:var(--space-3); }
 .pay-table input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
+
+/* Fourteen columns. The header labels break where the markup says so; the
+   component keeps them at --text-sm and the wrapper scrolls. */
+.pay-table thead th { white-space:normal; vertical-align:bottom; }
+.pay-table .pay-col-no  { width:1%; color:var(--text-tertiary); white-space:nowrap; }
+.pay-table .pay-col-num { white-space:nowrap; }
+.pay-table .pay-col-room,
+.pay-table .pay-col-mo  { white-space:nowrap; }
 
 /* Arrears — a still-unpaid record from an earlier month, shown alongside the
    current one so the balance can be collected here. The left rule marks it as
    belonging to a different period without recolouring the whole row, which
-   would fight the selection and hover states above. */
-.pay-table tbody tr.is-arrear td:first-child { box-shadow:inset 3px 0 0 var(--amber); }
-.pay-arrear-tag {
-  display:inline-block; margin-top:3px; padding:1px 7px; border-radius:20px;
-  font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
-  color:var(--amber); background:var(--amber-dim); border:1px solid rgba(240,160,48,.35);
-}
+   would fight the selection and hover states. */
+.pay-table tbody tr.is-arrear td:first-child { box-shadow:inset 3px 0 0 var(--warning-fg); }
+.pay-table tbody tr.is-picked td { background:var(--accent-bg); }
 
-.pay-who       { display:flex; align-items:center; gap:10px; min-width:0; }
-.pay-who__av   { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
-                 font-size:11.5px; font-weight:800; background:var(--dh-bg); color:var(--dh); }
-.pay-who__name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; }
-.pay-who__meta { font-size:10.5px; color:var(--text3); margin-top:2px; display:flex; align-items:center; gap:4px; white-space:nowrap; }
-.pay-who__meta svg { opacity:.7; flex-shrink:0; }
+.pay-who       { display:flex; align-items:center; gap:var(--space-2); min-width:0; }
+.pay-who__b    { min-width:0; }
+.pay-who__name { font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-primary);
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pay-who__meta { display:flex; align-items:center; gap:var(--space-1); margin-top:2px;
+                 font-size:var(--text-sm); color:var(--text-tertiary); white-space:nowrap; }
+.pay-who__meta.is-off { color:var(--warning-fg); }
+.pay-who__meta svg { flex-shrink:0; }
 
-/* `.pay-room__n` is gone with the loose three-line room cell it styled — the
-   number and the floor are `roomLabel()`'s boxed `.lk-room` now (listkit.css).
-   The type sub-line under the box keeps this. */
-.pay-room__t  { font-size:10.5px; color:var(--text3); margin-top:3px; }
+.pay-num        { white-space:nowrap; }
+.pay-num--strong{ font-weight:var(--weight-strong); color:var(--text-primary); }
+/* The two figures that are a state rather than a number: money in, money owed. */
+.pay-num--in    { color:var(--success-fg); font-weight:var(--weight-medium); }
+.pay-num--due   { color:var(--danger-fg); font-weight:var(--weight-strong); }
+.pay-dash       { color:var(--text-tertiary); }
 
-.pay-money      { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.pay-money--in  { color:var(--green); }
-.pay-money--due { color:var(--red); }
-.pay-money--nil { color:var(--text3); font-weight:600; }
-.pay-dash       { color:var(--text3); }
-.pay-extra      { font-size:10.5px; color:var(--text3); line-height:1.5; }
-.pay-extra b    { display:block; color:var(--text2); font-weight:700; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-
-.pay-pill   { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px;
-              font-size:10.5px; font-weight:700; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
-.pay-pill svg { flex-shrink:0; }
-
-/* NOT PINNED (owner, 2026-09-09: "not as a second layer", Students and Payments
-   both). It was `position:sticky; right:0` with its own background and a left
-   border, which is what made it read as a strip laid over the table rather than
-   its last column.
-
-   THE COST IS REAL HERE AND IS THE OWNER'S CALL: this table carries 13 columns
-   and pans by dragging, and the pin existed because the row actions used to end
-   up off-screen entirely. They can again on a narrow window — the kebab is
-   reached by panning to it, like every other column past the fold. */
+.pay-acts { display:flex; align-items:center; justify-content:center; gap:var(--space-1); }
 .pay-table thead th.pay-col-act,
-.pay-table tbody td.pay-col-act { white-space:nowrap; }
-/* AS WIDE AS ITS BUTTON, AND NO WIDER (owner, 2026-09-10: put it "on the same
-   layer as other headings just like in students page"). `width:1%` is what the
-   students table uses: it shrinks the column to the control instead of letting
-   it take a share of the free space, which is what left the kebab sitting
-   eleven pixels left of its own heading. */
-.pay-table thead th.pay-col-act,
-.pay-table tbody td.pay-col-act { width:1%; text-align:center; }
+.pay-table tbody td.pay-col-act { width:1%; text-align:center; white-space:nowrap; }
 
-/* Secondary money columns (Adm. Fee, Extra Chrgs, Concession) sit past the
-   right edge rather than being display:none — a hidden column cannot be
-   scrolled to, and the table is drag-pannable now. At rest the view starts at
-   scrollLeft 0, so everything through Status is what you see; drag left, use
-   the wheel, or collapse the sidebar to bring the rest in.
-
-   `.is-pannable` is added on hover only when the content actually overflows,
-   so the grab cursor never appears on a table that cannot move. */
+/* Secondary money columns (Adm. Fee, Extra, Concession) sit past the right edge
+   rather than being display:none — a hidden column cannot be scrolled to, and
+   the table is drag-pannable. `.is-pannable` is added on hover only when the
+   content actually overflows, so the grab cursor never appears on a table that
+   cannot move. */
 .pay-table-wrap.is-pannable  { cursor:grab; }
 .pay-table-wrap.is-dragging  { cursor:grabbing; user-select:none; scroll-behavior:auto; }
-/* Kill the drag-image/selection flicker while panning. */
 .pay-table-wrap.is-dragging .pay-table { pointer-events:none; }
 
-/* THE OPAQUE-CELL RULES ARE GONE, AND THAT IS THE WHOLE OF THE FIX (owner,
-   2026-09-10). Six rules painted this one cell's background for every row state
-   — rest, hover, picked, and three more for arrears further down — and they
-   existed for one reason: the column used to be `position:sticky; right:0`, so
-   it had to be OPAQUE or the columns scrolling under it showed through. It
-   stopped being pinned on 2026-09-09 and the paint stayed.
-
-   An ordinary cell that repaints its own background is a cell that cannot match
-   the row it is in. Each of those rules layered a translucent tint over
-   `var(--card)`, not over whatever the row itself was wearing, so the ACTIONS
-   column sat at a slightly different tone from the rest of every row — the
-   seam that reads as a second layer laid over the table. It inherits the row
-   now, like the twelve columns to its left. */
-
-.pay-acts     { display:flex; align-items:center; gap:5px; }
-.pay-act {
-    width:28px; height:28px; border-radius:8px; flex-shrink:0; cursor:pointer;
-    display:inline-flex; align-items:center; justify-content:center;
-    background:var(--dh-bg); color:var(--dh); border:1px solid transparent; transition:var(--transition);
-}
-.pay-act:hover { border-color:var(--dh); }
-
-.pay-empty { padding:44px 20px; text-align:center; color:var(--text3); font-size:13px; }
-
 /* ── Footer / pager ──────────────────────────────────────────────────────── */
-.pay-foot { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:13px 2px 2px; }
-.pay-foot__size { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text3); }
-.pay-foot__size select {
-    height:32px; padding:0 26px 0 10px; border-radius:9px; cursor:pointer;
-    background:var(--card); border:1px solid var(--border2); color:var(--text);
-    font-family:var(--font); font-size:12.5px; font-weight:600;
-    appearance:none; -webkit-appearance:none;
-    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23909090' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat; background-position:right 9px center;
+/* The bar is .ui-pagebar; this is the "Rows per page" wording beside its
+   control, in the reference's order: sentence, rows-per-page, pager. */
+.pay-foot__size {
+    display:flex; align-items:center; gap:var(--space-2);
+    font-size:var(--text-sm); color:var(--text-secondary);
 }
-.pay-foot__info { flex:1; text-align:center; font-size:12.5px; color:var(--text3); }
-.pay-pager      { display:flex; align-items:center; gap:5px; }
-.pay-pager button {
-    min-width:34px; height:34px; padding:0 9px; border-radius:9px; cursor:pointer;
-    background:var(--card); border:1px solid var(--border2); color:var(--text2);
-    font-family:var(--font); font-size:12.5px; font-weight:600; transition:var(--transition);
-}
-.pay-pager button:hover:not(:disabled):not(.is-on) { background:var(--dash-sunk); color:var(--text); }
-.pay-pager button:disabled { opacity:.4; cursor:not-allowed; }
-.pay-pager button.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); }
-.pay-pager__gap { color:var(--text3); padding:0 3px; }
+.pay-foot__size .ui-selectw { min-width:0; }
 
-@media (max-width:900px) { .pay-foot__info { order:3; flex-basis:100%; text-align:left; } }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ADD / EDIT PAYMENT MODAL  (docs/design/payment-form.png)
@@ -962,19 +849,6 @@ input.ws__amt {
   letter-spacing:var(--ant-num-track);
 }
 
-/* Status pills on the Anthropic semantic palette — warmer and less saturated
-   than the emerald/amber this app ships. Radius is left alone on purpose: the
-   teardown specifies 0px for badges, which reads as correct in an editorial
-   layout and as unfinished next to this app's pill language. Colour only. */
-.pay-table .pay-pill.dh-green { background: var(--ant-success-bg); color: var(--ant-success-fg); }
-.pay-table .pay-pill.dh-amber { background: var(--ant-warning-bg); color: var(--ant-warning-fg); }
-.pay-table .pay-pill.dh-slate { background: var(--ant-neutral-bg); color: var(--ant-neutral-fg); }
-
-/* Money hues follow the same retune, so a figure and its status badge do not
-   disagree about what "paid" and "owed" look like. */
-.pay-table .pay-money--in  { color: var(--ant-success-fg); }
-.pay-table .pay-money--due { color: var(--ant-danger-fg); }
-
 /* ── Reverse a collection (§14) ───────────────────────────────────────────────
    This modal sits one button away from Delete, so it is styled to read as a
    correction rather than a destruction: the record's current figures are shown
@@ -1018,7 +892,7 @@ input.ws__amt {
    numbers whose sum was printed directly above it; the badge says the same
    thing categorically and the exact split moved to the cell's title.
 
-   Sized between .pay-arrear-tag and .pay-pill: it is a property of the figure
+   Sized between .pay-arrear-tag and the status chip: it is a property of the figure
    above it, not a state a warden acts on, so it must not compete with the
    Status pill two columns to the right. Same hue vocabulary as every other
    badge in the app (chargeCoverage() picks it), so Students and Payments say
@@ -1297,17 +1171,6 @@ input.ws__amt {
 .pef-none { padding:12px 13px; font-size:11.5px; color:var(--text3); }
 /* Delete sits on the left of the footer, apart from Cancel and Save. */
 .pef-modal .modal-footer .pef-foot-del { margin-right:auto; }
-
-
-/* Overdue was bare red text under the status pill — the one mark on the row
-   that said its meaning in colour alone. It becomes a pill like the others
-   (dark-mode brief §6, badge sheet §1), sitting under the status rather than
-   replacing it, because a record can be Partial AND overdue. */
-.pay-pill--od {
-    margin-top:3px;
-    background:color-mix(in srgb, var(--red) 14%, transparent);
-    color:var(--red);
-}
 
 
 /* ══ THE PAGE, AGAINST payment page.png ════════════════════════════════════
@@ -1706,8 +1569,6 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 .pay-table .pay-cov { text-transform:none; letter-spacing:0; font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:6px; }
 .pay-table .pay-cov.pay-cov--mess { background:var(--accent-dim); color:var(--accent-strong); }
 .pay-table .pay-cov.pay-cov--rent { background:var(--ant-success-bg); color:var(--ant-success-fg); }
-.pay-table .pay-pill { border-radius:7px; }
-.pay-table .pay-pill.pay-pill--none { background:var(--ant-danger-bg); color:var(--ant-danger-fg); }
 
 /* ── Footer: sentence, Rows per page, pager ── */
 .pay-foot__size span { white-space:nowrap; }

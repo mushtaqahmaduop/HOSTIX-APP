@@ -44,6 +44,15 @@
 }
 .ui-selectw:focus-within::after { border-color: var(--accent); }
 
+/* A select that carries a leading icon — a calendar on a month filter, a funnel
+   on a status one. The icon is inert; the select keeps the whole hit area. */
+.ui-selectw--ico > .ui-select { padding-left: var(--space-6); }
+.ui-selectw__i {
+  position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%);
+  display: flex; pointer-events: none; color: var(--text-tertiary);
+}
+.ui-selectw--ico:focus-within .ui-selectw__i { color: var(--accent); }
+
 /* Search: the wrapper is the control, the input is a hole in it. */
 .ui-search {
   display: flex; align-items: center; gap: var(--space-2);

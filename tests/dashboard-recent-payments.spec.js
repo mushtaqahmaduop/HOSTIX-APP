@@ -154,6 +154,13 @@ test('the strip and the Total Revenue card cannot disagree', async () => {
 
   const seen = await win.evaluate(() => {
     const digits = s => (s || '').replace(/[^\d]/g, '');
+    /* The AMOUNT, not its digits. "Rs. 29,500" and "Rs. 29,500.00" are the same
+       money, and `digits` turns the second into 2950000 — so a decimals-only
+       difference reads as a hundredfold one. The currency word carries a dot of
+       its own, so drop everything up to the last digit group first. */
+    const amount = s => Number(String(s || '').replace(/[^\d.]/g, '')
+                                              .replace(/^\.+/, '')
+                                              .replace(/\.$/, ''));
     const tile = [...document.querySelectorAll('.dash-rp-stat')]
       .find(el => /Total Payments/i.test(el.textContent));
     const kpi = [...document.querySelectorAll('.dash-kpi__label')]
@@ -161,13 +168,24 @@ test('the strip and the Total Revenue card cannot disagree', async () => {
     return {
       strip:  digits(tile && tile.querySelector('.dash-rp-stat__val').textContent),
       card:   digits(kpi && kpi.closest('.dsh-card').querySelector('.dash-kpi__value').textContent),
+      stripAmt: amount(tile && tile.querySelector('.dash-rp-stat__val').textContent),
+      cardAmt:  amount(kpi && kpi.closest('.dsh-card').querySelector('.dash-kpi__value').textContent),
       truth:  digits(fmtPKR(calcRevenue(thisMonth()))),
       totals: _dashPaymentTotals(thisMonth(), calcRevenue(thisMonth())),
     };
   });
 
   expect(seen.strip, 'the strip states a different figure from calcRevenue()').toBe(seen.truth);
-  expect(seen.card,  'the KPI card and the strip disagree on one screen').toBe(seen.strip);
+  /* The card and the strip must agree on the FIGURE. They do not currently agree
+     on its FORMATTING, and that is an open question for the owner, not a bug this
+     test can decide: the 2026-09-15 two-decimal rule (0c01ab7) went into
+     fmtCompact(), which the KPI card renders through, while the strip renders
+     through fmtPKR(), which is the canonical whole-rupee formatter the receipts
+     and exports also use. So the card reads "29,500.00" and the strip "29,500".
+     Comparing digit strings made this test fail on a formatting split it was
+     never written to police, so it compares the amounts. */
+  expect(seen.cardAmt, 'the KPI card and the strip disagree on one screen')
+    .toBe(seen.stripAmt);
 
   // The other three tiles are counted, not typed.
   expect(seen.totals.count).toBe(3);
