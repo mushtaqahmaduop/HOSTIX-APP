@@ -39,7 +39,7 @@
     /* Measured by its own width, not the viewport's — see __val below. */
     container-type:inline-size;
     position:relative; overflow:hidden; cursor:pointer;
-    background:var(--card); border:1px solid var(--border); border-radius:15px; padding:13px 13px;
+    background:var(--card); border:1px solid var(--border); border-radius:15px; padding:10px 13px;
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .rpt-stat:hover  { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--border2); }
@@ -411,7 +411,11 @@
    padding. Each page keeps its own content — its chips, its hues, its
    sparkline — at the students card's height.
    ═══════════════════════════════════════════════════════════════════════════ */
-.rpt-stats .rpt-stat       { padding: 13px; }
+/* 13px -> 10px top and bottom, for the 94px the whole app's strips share
+   (owner, 2026-09-16). This rule is (0,2,0) and out-specifies the padding on
+   `.rpt-stat` itself, which is why the height did not move when that one was
+   trimmed — the trap this repo keeps finding. The sides are unchanged. */
+.rpt-stats .rpt-stat       { padding: 10px 13px; }
 .rpt-stats .rpt-stat__top  { margin-bottom: 5px; }
 .rpt-stats .rpt-stat__chip { width: 24px; height: 24px; border-radius: 8px; }
 .rpt-stats .rpt-stat__chip svg { width: 14px; height: 14px; }
@@ -462,7 +466,12 @@
 
    It occupies the right half only. Across the whole card it ran under "vs last
    month", and a line through a sentence is noise in both directions. */
-.rpt-stat { display: flex; flex-direction: column; }
+/* 94px, the height every strip in the app shares (owner, 2026-09-16, and
+   settled once already on 2026-09-10). Stated rather than left to the content,
+   because this card's sparkline is absolutely placed precisely so a graphic
+   cannot push the row taller — and a min-height is what makes that promise
+   hold from the other direction too. */
+.rpt-stat { display: flex; flex-direction: column; box-sizing: border-box; min-height: 94px; }
 .rpt-stat__spark {
     position: absolute; left: 42%; right: 0; bottom: 0; height: 30px;
     opacity: .5; line-height: 0; pointer-events: none;

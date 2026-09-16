@@ -228,7 +228,7 @@ function renderRooms() {
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="rms-stats">
-    <div class="rms-stat dh-violet">
+    <div class="rms-stat">
       <div class="rms-stat__top">
         <div class="rms-stat__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 7h.01"/><path d="M9 11h.01"/><path d="M9 15h.01"/><path d="M15 7h.01"/><path d="M15 11h.01"/><path d="M15 15h.01"/></svg></div>
         <div>
@@ -239,19 +239,28 @@ function renderRooms() {
       </div>
     </div>
 
-    <div class="rms-stat dh-green">
+    <div class="rms-stat">
       <div class="rms-stat__top">
         <div class="rms-stat__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m9 12 2 2 4-4"/></svg></div>
         <div>
           <div class="rms-stat__label">Occupied</div>
           <div class="rms-stat__val">${occRooms}<small> / ${totalRooms}</small></div>
-          <div class="rms-stat__sub">${occPct}% occupancy</div>
+          ${''/* THE SEATS STILL FREE, on the card about seats being taken
+                 (owner, 2026-09-16). "18 / 20 rooms occupied" does not answer
+                 "can I admit anybody today" — a room counts as occupied with
+                 one student in a four-bed room. The bed count is the answer,
+                 and it was two cards away under Total Beds as "N occupied",
+                 which is the same number said backwards. */}
+          <div class="rms-stat__sub">${occPct}% occupancy${
+            totalBeds - filledBeds > 0
+              ? ` · <span class="rms-stat__free">${totalBeds - filledBeds} bed${totalBeds - filledBeds === 1 ? '' : 's'} free</span>`
+              : ' · <span class="rms-stat__free is-none">no free beds</span>'}</div>
         </div>
       </div>
       <div class="rms-stat__bar"><i style="width:${occPct}%"></i></div>
     </div>
 
-    <div class="rms-stat dh-amber">
+    <div class="rms-stat">
       <div class="rms-stat__top">
         <div class="rms-stat__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.41 8.59 15.41 2.59a2 2 0 0 0-2.82 0L11 4.18a1 1 0 0 0 0 1.42l7.4 7.4a1 1 0 0 0 1.42 0l1.59-1.59a2 2 0 0 0 0-2.82Z"/><path d="M9.5 11.5a4 4 0 0 0-4 .89l-3.21 3.2a1 1 0 0 0-.29.7v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1"/></svg></div>
         <div>
@@ -263,7 +272,7 @@ function renderRooms() {
       <div class="rms-stat__bar"><i style="width:${vacPct}%"></i></div>
     </div>
 
-    <div class="rms-stat dh-violet">
+    <div class="rms-stat">
       <div class="rms-stat__top">
         <div class="rms-stat__chip"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/></svg></div>
         <div>

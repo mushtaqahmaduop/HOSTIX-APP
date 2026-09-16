@@ -26,10 +26,15 @@
              padding:14px 16px; }
 .rms-stat__top   { display:flex; align-items:flex-start; gap:12px; }
 .rms-stat__top > div:last-child { flex:1; min-width:0; }
+/* NEUTRAL, like every rebuilt screen's KPI icon (owner, 2026-09-16: the rooms
+   icons were the only coloured ones left). The four cards carried dh-violet,
+   dh-green, dh-amber and dh-violet — a palette that said nothing, on a strip
+   where nothing is a state. The `dh-*` classes are gone from the markup, so
+   these no longer resolve var(--dh) and have to state their own colour. */
 .rms-stat__chip  {
     width:36px; height:36px; border-radius:8px; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
-    background:var(--dh-bg); color:var(--dh);
+    background:var(--neutral-bg); color:var(--text-secondary);
 }
 .rms-stat__label { font-size:11px; font-weight:600; color:var(--text3); margin-bottom:3px; }
 .rms-stat__val   { font-size:20px; font-weight:700; letter-spacing:var(--ant-num-track); color:var(--text);
@@ -40,8 +45,16 @@
 .rms-stat__bar   { height:4px; border-radius:3px; background:var(--dash-track); overflow:hidden; margin-top:8px; }
 /* Flat fill, not a gradient. A 4px bar is too thin to read a ramp, and the
    gradient only made one value look like two. */
+/* The fill is the accent, not a per-card hue: a progress bar is data about one
+   figure, and three bars in three colours invited the reader to compare
+   colours that mean nothing. Matches .pay-kpi__track. */
 .rms-stat__bar > i { display:block; height:100%; border-radius:3px;
-                    background:var(--dh); transition:width .4s ease; }
+                    background:var(--accent); transition:width .4s ease; }
+@media (prefers-reduced-motion: reduce) { .rms-stat__bar > i { transition:none; } }
+
+/* #15 — the seats still free, beside the occupancy percentage. */
+.rms-stat__free { color:var(--text-secondary); font-weight:600; }
+.rms-stat__free.is-none { color:var(--danger-fg); }
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .rms-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:11px 12px; margin-bottom:12px; }
@@ -375,9 +388,23 @@
 
 /* ── Bulk Add ────────────────────────────────────────────────────────────────
    The one button on this toolbar that creates data rather than reading it, so
-   it carries the accent while CSV and Print stay quiet. */
+   it carries the accent while CSV and Print stay quiet.
+
+   LOUDER, BUT NOT A SECOND PRIMARY (owner, 2026-09-16: "the bulk add button
+   should be more visible"). It was an outline in the accent, which at a glance
+   read the same as the two quiet buttons beside it. It is filled with the
+   accent TINT now — the accent ground at chip strength, with accent ink and an
+   accent edge — so it is plainly the loudest thing on the toolbar.
+
+   It is not filled SOLID, because the page header already carries a solid
+   accent "Add Room" (nav.js, rooms.action). Two solid accent buttons on one
+   screen is the "one primary action" rule broken, and this app has removed a
+   button for exactly that reason before — see the note in the issues register's
+   empty state. Tint is the step between quiet and primary, and it is the step
+   this button wants. */
 .rms-btn--go {
-    border-color:var(--accent); color:var(--accent);
+    background:var(--accent-bg); border-color:var(--accent); color:var(--accent-fg);
+    font-weight:600;
 }
 .rms-btn--go:hover {
     background:var(--accent); border-color:var(--accent); color:var(--text-on-accent);

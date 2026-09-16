@@ -30,7 +30,11 @@
     display:block; text-align:left; min-width:0; cursor:pointer;
     font:inherit; color:inherit;
     transition:border-color var(--dur-fast) var(--ease);
+    /* The rooms page's card height, which every strip shares since 2026-09-16
+       — see components/stat.css for the measurement and the reason. */
+    box-sizing:border-box; min-height:94px;
 }
+.ui-card.stu-stat { padding-top:13px; padding-bottom:13px; }
 .stu-stat:hover { border-color:var(--accent); }
 .stu-stat__label {
     font-size:var(--text-sm); font-weight:var(--weight-medium); color:var(--text-secondary);

@@ -18,10 +18,14 @@
 .pay-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--space-3); margin-bottom:var(--space-3); }
 @media (max-width:1100px) { .pay-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 
+/* The rooms page's card height, which is the one every strip uses since
+   2026-09-16 — see components/stat.css for the measurement and the reason. */
 .pay-kpi {
     position:relative; display:flex; align-items:flex-start; gap:var(--space-3);
     min-width:0; text-align:left; font:inherit; color:inherit;
+    box-sizing:border-box; min-height:94px;
 }
+.ui-card.pay-kpi { padding-top:13px; padding-bottom:13px; }
 /* Two of the four set a filter, so those two are <button>s. */
 .pay-kpi--click { cursor:pointer; transition:border-color var(--dur-fast) var(--ease); }
 .pay-kpi--click:hover, .pay-kpi--click.is-on { border-color:var(--accent); }

@@ -28,10 +28,24 @@
   gap: var(--space-3); margin-bottom: var(--space-3);
 }
 
+/* ONE HEIGHT, AND IT IS THE ROOMS PAGE'S (owner, 2026-09-16: "resize the kpis
+   sizes in heights to the height of the rooms page kpi height"). Measured at
+   1670: rooms 94, expenses 97, and every `.ui-stat` card 100 — close enough
+   that no single screen looked wrong and far enough apart that moving between
+   two of them did. Rooms is the shortest and the owner picked it.
+
+   Stated as a min-height with the padding trimmed to reach it, not as a fixed
+   height: a card whose figure wraps at a narrow width must be allowed to grow
+   rather than clip the number, which is the one thing this strip exists to
+   show. */
 .ui-stat {
   position: relative; display: flex; align-items: flex-start; gap: var(--space-3);
   min-width: 0; text-align: left; font: inherit; color: inherit;
+  box-sizing: border-box; min-height: 94px;
 }
+/* --space-4 all round gives 100px. The 6px comes off the top and bottom only:
+   the side padding is what keeps the icon off the card edge. */
+.ui-card.ui-stat { padding-top: 13px; padding-bottom: 13px; }
 
 /* A tile that sets a filter is a <button>, so it is reachable by Tab and
    states which one is active through aria-pressed. Elevation is the border:

@@ -21,7 +21,12 @@
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3); margin-bottom: var(--space-4);
 }
-.exp-stat { display: flex; align-items: center; gap: var(--space-3); overflow: hidden; }
+/* The rooms page's card height, like every other strip (owner, 2026-09-16). */
+.exp-stat {
+  display: flex; align-items: center; gap: var(--space-3); overflow: hidden;
+  box-sizing: border-box; min-height: 94px;
+}
+.ui-card.exp-stat { padding-top: 13px; padding-bottom: 13px; }
 
 /* Neutral, not hued. The four cards used to carry dh-violet / dh-blue /
    dh-green / dh-amber icon chips; colour is reserved for status now, and
