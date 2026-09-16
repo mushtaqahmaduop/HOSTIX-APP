@@ -160,7 +160,7 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
     return {
       renderError: document.body.innerText.includes('Render Error'),
       rowCount: rows.length,
-      cats: rows.map(r => r.querySelector('.exp-cat')?.textContent.trim()),
+      cats: rows.map(r => r.children[1].querySelector('.ui-chip')?.textContent.trim()),
       total,
       totalShown,
       // Last month's record must not be on this month's page.

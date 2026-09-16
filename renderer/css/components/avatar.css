@@ -1,0 +1,12 @@
+/* ============================================================
+   Initials avatar — added for the expenses screen (2026-09-16).
+   Students, payments and cancellations draw the same thing.
+   ============================================================ */
+
+.ui-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: var(--h-sm); height: var(--h-sm); border-radius: var(--radius-full);
+  background: var(--accent-bg); color: var(--accent-fg);
+  font-family: var(--font); font-style: normal;
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
+}

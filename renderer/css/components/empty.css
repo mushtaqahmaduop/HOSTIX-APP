@@ -1,0 +1,11 @@
+/* ============================================================
+   Empty state — HOSTYLLO_DESIGN_SPEC Part 4/5.
+   ============================================================ */
+
+.ui-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-3); padding: var(--space-7) var(--space-5);
+  text-align: center; color: var(--text-secondary); font-size: var(--text-base);
+}
+.ui-empty svg { color: var(--text-tertiary); }
+.ui-empty__t { font-weight: var(--weight-medium); color: var(--text-primary); }

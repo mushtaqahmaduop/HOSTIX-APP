@@ -1,0 +1,169 @@
+/* ============================================================
+   EXPENSES — screen file (HOSTYLLO_DESIGN_SPEC Part 5).
+   This file may PLACE components: grid, position, width, order.
+   It may not restyle one — no font-size, colour, radius or padding
+   on .ui-card, .ui-btn, .ui-chip, .ui-table or .ui-input.
+   Everything below is either placement, or an element that belongs
+   to this screen alone (the stat card internals, the expense form).
+
+   Rebuilt 2026-09-16 from renderer/expenses.css: every size, space and
+   radius now comes from tokens.css, the per-category hues are gone
+   (a category is not a state — spec Part 4) and the chips, table,
+   buttons, inputs, empty state and pager are the shared components.
+   ============================================================ */
+
+/* ── Stat strip ──────────────────────────────────────────────────────────── */
+/* minmax(0,1fr), NOT 1fr. A grid item will not shrink below its own content,
+   and the figure is white-space:nowrap holding a full PKR amount — with 1fr the
+   four tracks stopped being equal and the last card was pushed off the right
+   edge, half-drawn. */
+.exp-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3); margin-bottom: var(--space-4);
+}
+.exp-stat { display: flex; align-items: center; gap: var(--space-3); overflow: hidden; }
+
+/* Neutral, not hued. The four cards used to carry dh-violet / dh-blue /
+   dh-green / dh-amber icon chips; colour is reserved for status now, and
+   "Average Daily" is not a status. */
+.exp-stat__ic {
+  width: var(--h-sm); height: var(--h-sm); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg); color: var(--neutral-fg);
+}
+.exp-stat__ic svg { width: 18px; height: 18px; }
+.exp-stat__c { flex: 1; min-width: 0; }
+/* Tight leading on all three lines, and none of them carries a margin: this
+   strip has to stand at the height of the Students KPI card (owner, 2026-09-15
+   — "in all pages the kpis design should be like the students page kpi"), and
+   at --leading-normal the three lines alone spend 20px more than the card has
+   to give. */
+.exp-stat__l {
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary);
+  line-height: var(--leading-tight);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.exp-stat__v {
+  font-size: var(--text-xl); font-weight: var(--weight-strong);
+  line-height: var(--leading-tight); letter-spacing: var(--track-tight);
+  color: var(--text-primary); white-space: nowrap;
+}
+.exp-stat__s {
+  font-size: var(--text-sm); color: var(--text-tertiary);
+  line-height: var(--leading-tight);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The figure and its movement sit on one baseline but in two elements — see the
+   comment on stat() in expenses.js for why they must not be nested. The row
+   wraps because with the exact figure ("Rs. 16,700.00", the owner money rule)
+   a one-line row clipped the comparison chip to "No compa…". */
+.exp-stat__vrow {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  flex-wrap: wrap; row-gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+@media (max-width: 1180px) { .exp-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.exp-tools {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.exp-tools .ui-search { flex: 1 1 200px; max-width: 380px; }
+.exp-tools .ui-selectw { min-width: 150px; }
+.exp-count {
+  margin-left: auto; font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap;
+}
+.exp-count b { color: var(--text-primary); font-weight: var(--weight-medium); }
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+/* Seven columns, five of them a fixed-width figure, so on a 1366 laptop the
+   table finishes with a few hundred pixels of nothing — which auto layout
+   spreads across every column, including the two that cannot use it, leaving
+   the one free-text column truncating. width:100% on a single cell is the
+   standard way to say "this one takes what is left".
+   Description WRAPS rather than ellipsising: what a warden wrote about a bill
+   is the reason the row exists. Amount stays LEFT, not right-aligned — the
+   owner ruling of 2026-09-16 (CLAUDE.md, "Decided against the spec") keeps
+   today alignment across the registers. */
+.exp-table thead th:nth-child(3),
+.exp-table tbody td.exp-desc { width: 100%; }
+.exp-desc { white-space: normal; line-height: var(--leading-normal); }
+
+.exp-date { color: var(--text-secondary); white-space: nowrap; }
+.exp-amt  { font-weight: var(--weight-strong); white-space: nowrap; }
+.exp-dash { color: var(--text-tertiary); }
+
+.exp-who  { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; white-space: nowrap; }
+.exp-acts { display: flex; align-items: center; gap: var(--space-1); }
+
+/* ══ THE EXPENSE FORM (add and edit expense.png) ══════════════════════════ */
+
+.exf-note, .exf-rec {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3); border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4); border: 1px solid var(--border);
+}
+.exf-note {
+  background: var(--accent-bg);
+  font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--text-secondary);
+}
+.exf-note svg { flex-shrink: 0; color: var(--accent-fg); }
+
+.exf-rec { background: var(--surface-2); }
+.exf-rec__i {
+  width: var(--h-md); height: var(--h-md); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg); color: var(--accent-fg);
+}
+.exf-rec__b { flex: 1; min-width: 0; }
+.exf-rec__t { font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--text-primary); }
+.exf-rec__s { font-size: var(--text-sm); color: var(--text-tertiary); }
+/* The figure is the reason the panel is there, so it is the largest thing in
+   it — and it is the STORED amount, not the value in the box above, which would
+   disagree with it the moment a correction is half-typed. */
+.exf-rec__amt { text-align: right; flex-shrink: 0; }
+.exf-rec__amt b {
+  display: block; font-size: var(--text-lg); font-weight: var(--weight-strong);
+  color: var(--success-fg);
+}
+.exf-rec__amt span { display: block; font-size: var(--text-sm); color: var(--text-tertiary); }
+
+.exf-count { text-align: right; margin: 0 0 var(--space-3); }
+
+/* The note under the Add Category field. Was a style= attribute. */
+.exf-hint {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--text-tertiary);
+}
+
+/* ── the receipt ─────────────────────────────────────────────────────────── */
+.exf-rcpt {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-3); border-radius: var(--radius-sm);
+  background: var(--accent-bg); border: 1px solid var(--border);
+}
+.exf-rcpt.is-set { background: var(--surface-2); }
+.exf-rcpt__i { flex-shrink: 0; display: flex; color: var(--accent-fg); }
+.exf-rcpt__b { flex: 1; min-width: 140px; }
+.exf-rcpt__t { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); }
+.exf-rcpt__t span { font-weight: var(--weight-normal); color: var(--text-tertiary); }
+.exf-rcpt__n {
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.exf-rcpt__s { font-size: var(--text-sm); color: var(--text-tertiary); }
+.exf-rcpt .set-btn { flex-shrink: 0; }
+
+/* Contained, not full-bleed: a photographed bill is usually portrait, and left
+   to itself it pushes the Close button off a 768px-tall screen. 62vh is a
+   viewport cap rather than a spacing value, so it has no token. */
+.exf-rcpt__view {
+  display: flex; align-items: center; justify-content: center;
+  max-height: 62vh; overflow: auto; padding: var(--space-2);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.exf-rcpt__view img { max-width: 100%; border-radius: var(--radius-sm); }

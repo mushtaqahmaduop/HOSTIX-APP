@@ -79,8 +79,8 @@ test('a captured method and payee render as chips; a record without them prints 
       if (!tr) return null;
       const td = [...tr.children];
       return { method: td[4].textContent.trim(), who: td[5].textContent.trim(),
-               methodChip: !!td[4].querySelector('.exp-meth'),
-               avatar: (td[5].querySelector('.exp-who i') || {}).textContent };
+               methodChip: !!td[4].querySelector('.ui-chip'),
+               avatar: (td[5].querySelector('.exp-who .ui-avatar') || {}).textContent };
     };
     return { withFields: read('Tanker'), without: read('Bill') };
   });

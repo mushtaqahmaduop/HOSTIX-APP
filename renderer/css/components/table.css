@@ -1,0 +1,48 @@
+/* ============================================================
+   Table — HOSTYLLO_DESIGN_SPEC Part 4. One table, every screen.
+   48px rows, sentence-case 12px/500 headers, no stripe, no shadow.
+   ============================================================ */
+
+.ui-table-wrap { overflow-x: auto; }
+
+.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+
+.ui-table th, .ui-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left; vertical-align: middle;
+}
+.ui-table thead th {
+  height: var(--row-h);
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm); font-weight: var(--weight-medium);
+  color: var(--text-secondary); white-space: nowrap;
+  /* Sentence case, stated: a bare `th` rule in style.css still shouts every
+     header it can reach in uppercase with a letterspace. */
+  text-transform: none; letter-spacing: 0;
+}
+.ui-table tbody td {
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-base); font-weight: var(--weight-normal);
+  color: var(--text-primary);
+}
+.ui-table tbody tr:last-child td { border-bottom: none; }
+.ui-table tbody tr { transition: background var(--dur-fast) var(--ease); }
+.ui-table tbody tr:hover td { background: var(--surface-hover); }
+
+/* A sortable header is a BUTTON inside the th, not a click handler on the th:
+   a th cannot be focused or pressed with a keyboard, and aria-sort on the cell
+   is what tells a screen reader which way the column runs. */
+.ui-th-sort {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 0; border: none; background: none; cursor: pointer;
+  font: inherit; color: inherit;
+}
+.ui-th-sort svg { opacity: .45; }
+.ui-th-sort:hover { color: var(--text-primary); }
+.ui-table th[aria-sort="ascending"] .ui-th-sort,
+.ui-table th[aria-sort="descending"] .ui-th-sort { color: var(--accent-fg); }
+.ui-table th[aria-sort="ascending"] .ui-th-sort svg,
+.ui-table th[aria-sort="descending"] .ui-th-sort svg { opacity: 1; }
+
+.ui-td-num { text-align: right; }

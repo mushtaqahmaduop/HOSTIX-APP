@@ -273,6 +273,17 @@ except for the owner decisions under "Decided against the spec" below.
 - A screen stylesheet may PLACE components (grid, position, width, order). It
   may not RESTYLE them (font-size, colour, radius, padding on a component's own
   class). A missing component is built in `renderer/css/components/`.
+- The component layer lives in `renderer/css/components/` and every class in it
+  is `ui-` prefixed: `.ui-btn` (`--primary` / `--secondary` / `--ghost` /
+  `--danger`, plus `--icon` and `--sm`), `.ui-input` / `.ui-select` /
+  `.ui-selectw` / `.ui-search` / `.ui-field` + `.ui-label`, `.ui-chip` and its
+  five roles, `.ui-card` (+ `--flush`), `.ui-table` with `.ui-table-wrap`,
+  `.ui-th-sort` and `.ui-td-num`, `.ui-empty`, `.ui-pagebar` / `.ui-pager`,
+  `.ui-avatar`. Screen files live in `renderer/css/screens/`. Expenses is the
+  first screen on the layer (2026-09-16); each screen joins as it is rebuilt.
+- A sortable column header is a `<button class="ui-th-sort">` inside the `<th>`,
+  and the `<th>` carries `aria-sort`. An `onclick` on the `th` itself is not
+  reachable by keyboard.
 - The old names (`--card`, `--text`, `--text2`, `--text3`, `--border2`, `--bg3`,
   `--green` …) are aliases in the LEGACY BRIDGE of tokens.css, so screens not yet
   rebuilt paint the new palette. Nothing new is written against them; the bridge

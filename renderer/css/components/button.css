@@ -1,0 +1,50 @@
+/* ============================================================
+   Button — HOSTYLLO_DESIGN_SPEC Part 4.
+   Four tiers, one height, every state. Screens PLACE these;
+   a screen file may not restyle .ui-btn.
+   ============================================================ */
+
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--space-2);
+  height: var(--h-md); padding: 0 var(--space-4);
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-base);
+  font-weight: var(--weight-medium); line-height: 1; white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.ui-btn svg { flex-shrink: 0; }
+
+/* One overlay serves every tier pressed state, so a tier cannot be added later
+   without one. */
+.ui-btn:active:not(:disabled) {
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+.ui-btn:disabled { opacity: .5; cursor: default; }
+
+/* primary — one per screen, maximum */
+.ui-btn--primary { background: var(--accent); color: var(--on-accent); }
+.ui-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.ui-btn--secondary { border-color: var(--border-strong); color: var(--text-primary); }
+.ui-btn--secondary:hover:not(:disabled) {
+  background: var(--surface-hover); border-color: var(--accent); color: var(--accent-fg);
+}
+
+.ui-btn--ghost { color: var(--text-secondary); }
+.ui-btn--ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+
+.ui-btn--danger { background: var(--danger-bg); color: var(--danger-fg); }
+.ui-btn--danger:hover:not(:disabled) { border-color: var(--danger-fg); }
+
+/* Square. Requires aria-label: an icon button with no name is unusable by
+   anything that is not a pair of eyes. */
+.ui-btn--icon { width: var(--h-md); padding: 0; }
+
+/* Toolbar height, so a button sits level with a --h-sm filter. */
+.ui-btn--sm { height: var(--h-sm); padding: 0 var(--space-3); }
+.ui-btn--sm.ui-btn--icon { width: var(--h-sm); }

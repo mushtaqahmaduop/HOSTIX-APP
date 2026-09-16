@@ -1,0 +1,23 @@
+/* ============================================================
+   Chip / badge / pill — HOSTYLLO_DESIGN_SPEC Part 4.
+   Five roles. Never smaller than --text-sm, never heavier than
+   --weight-medium, background and text always from one role.
+   A CATEGORY is not a state: it wears --neutral.
+   ============================================================ */
+
+.ui-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 3px var(--space-2); border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: var(--weight-medium);
+  line-height: var(--leading-tight); white-space: nowrap;
+}
+.ui-chip svg { flex-shrink: 0; }
+
+.ui-chip--success { background: var(--success-bg); color: var(--success-fg); }
+.ui-chip--warning { background: var(--warning-bg); color: var(--warning-fg); }
+.ui-chip--danger  { background: var(--danger-bg);  color: var(--danger-fg); }
+.ui-chip--accent  { background: var(--accent-bg);  color: var(--accent-fg); }
+.ui-chip--neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+
+/* Counts only. */
+.ui-chip--count { border-radius: var(--radius-full); }

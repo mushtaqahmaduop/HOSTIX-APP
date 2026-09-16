@@ -8,23 +8,27 @@
 // EXPENSES v5 — rebuilt to the owner's reference design
 // ════════════════════════════════════════════════════════════════════════════
 
-// Categories are owner-configurable, so both the icon and the colour are matched
-// on keywords rather than a fixed list — a hostel that renames "Meals" to
-// "Staff Nashta" still gets the food icon. One table so the two can never drift.
-// `hue` is null where no colour is semantically obvious; those fall through to
-// the hash below, which is what keeps two food categories visually distinct.
+// Categories are owner-configurable, so the icon is matched on keywords rather
+// than against a fixed list — a hostel that renames "Meals" to "Staff Nashta"
+// still gets the food icon.
+//
+// The second column used to be a hue (dh-amber, dh-blue, dh-violet…), and a
+// hash picked one for the categories where no colour was obvious. Both are gone
+// (design spec Part 4, 2026-09-16): colour is reserved for status, a category
+// is not a status, and five chip roles replace the 83 badge variants. The
+// category chip is neutral and the icon is what tells two of them apart.
 const _EXP_CATS = [
-  [/electric|light|wapda|bulb/i, 'dh-amber',  '<path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/>'],
-  [/water|tank|plumb|pipe|tap/i, 'dh-blue',   '<path d="M12 2s6 7.5 6 11.5A6 6 0 0 1 6 13.5C6 9.5 12 2 12 2Z"/>'],
-  [/gas|fuel|cylinder/i,         'dh-red',    '<path d="M12 2c1 4 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 .5 2 2 2 2 0 0-2-1-3 1-5Z"/>'],
-  [/maint|repair|fix|tool/i,     'dh-green',  '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-1.4-1.4 2.6-2.6Z"/>'],
-  [/clean|wash|soap|sweep/i,     'dh-green',  '<path d="M9 3h6v5H9z"/><path d="M8 8h8l1 13H7L8 8Z"/>'],
-  [/secur|guard|chowkidar/i,     'dh-violet', '<path d="M12 2 4 5v6c0 5 3.4 9.2 8 11 4.6-1.8 8-6 8-11V5l-8-3Z"/>'],
-  [/internet|wifi|net|ptcl/i,    'dh-blue',   '<path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1.2"/>'],
-  [/furnit|bed|chair|table/i,    'dh-violet', '<path d="M3 10V6h18v4"/><path d="M3 10h18v6H3z"/><path d="M5 16v3M19 16v3"/>'],
+  [/electric|light|wapda|bulb/i, '<path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/>'],
+  [/water|tank|plumb|pipe|tap/i, '<path d="M12 2s6 7.5 6 11.5A6 6 0 0 1 6 13.5C6 9.5 12 2 12 2Z"/>'],
+  [/gas|fuel|cylinder/i,         '<path d="M12 2c1 4 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 .5 2 2 2 2 0 0-2-1-3 1-5Z"/>'],
+  [/maint|repair|fix|tool/i,     '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-1.4-1.4 2.6-2.6Z"/>'],
+  [/clean|wash|soap|sweep/i,     '<path d="M9 3h6v5H9z"/><path d="M8 8h8l1 13H7L8 8Z"/>'],
+  [/secur|guard|chowkidar/i,     '<path d="M12 2 4 5v6c0 5 3.4 9.2 8 11 4.6-1.8 8-6 8-11V5l-8-3Z"/>'],
+  [/internet|wifi|net|ptcl/i,    '<path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1.2"/>'],
+  [/furnit|bed|chair|table/i,    '<path d="M3 10V6h18v4"/><path d="M3 10h18v6H3z"/><path d="M5 16v3M19 16v3"/>'],
   [/meal|nashta|food|lunch|dinner|chai|tea|breakfast|kitchen|rashan/i,
-                                 null,        '<path d="M7 2v9M4 2v6a3 3 0 0 0 3 3M17 2c-1.5 0-2.5 1.5-2.5 4s1 4 2.5 4"/><path d="M7 11v11M17 10v12"/>'],
-  [/rent|salary|staff|wage|pay/i, null,       '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 1.6c-3.2 0-6.4 1.6-6.4 4V19a1 1 0 0 0 1 1h10.8a1 1 0 0 0 1-1v-1.4c0-2.4-3.2-4-6.4-4Z"/>'],
+                                 '<path d="M7 2v9M4 2v6a3 3 0 0 0 3 3M17 2c-1.5 0-2.5 1.5-2.5 4s1 4 2.5 4"/><path d="M7 11v11M17 10v12"/>'],
+  [/rent|salary|staff|wage|pay/i, '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 1.6c-3.2 0-6.4 1.6-6.4 4V19a1 1 0 0 0 1 1h10.8a1 1 0 0 0 1-1v-1.4c0-2.4-3.2-4-6.4-4Z"/>'],
 ];
 const _EXP_ICON_FALLBACK = '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>';
 
@@ -57,14 +61,14 @@ function expInitials(name) {
 function expMethodChip(m) {
   const v = String(m || '').trim();
   if (!v) return '<span class="exp-dash">—</span>';
-  return `<span class="exp-meth">${escHtml(v)}</span>`;
+  return `<span class="ui-chip ui-chip--neutral">${escHtml(v)}</span>`;
 }
 
 /** Initials avatar + name, or an honest dash. @see spec §21 */
 function expWhoChip(who) {
   const v = String(who || '').trim();
   if (!v) return '<span class="exp-dash">—</span>';
-  return `<span class="exp-who"><i>${escHtml(expInitials(v))}</i>${escHtml(v)}</span>`;
+  return `<span class="exp-who"><i class="ui-avatar">${escHtml(expInitials(v))}</i>${escHtml(v)}</span>`;
 }
 
 /* Everyone this hostel has ever handed money to, offered as suggestions. Built
@@ -86,22 +90,11 @@ function _expCatMatch(cat) {
 
 function expCatIcon(cat) {
   const hit = _expCatMatch(cat);
-  return hit ? hit[2] : _EXP_ICON_FALLBACK;
+  return hit ? hit[1] : _EXP_ICON_FALLBACK;
 }
 
-// Semantic hue where there is one, otherwise a stable hash of the name — so a
-// category keeps the same pill colour between renders and across machines.
-// Mirrors payAvatarHue()'s hashing.
-function expCatHue(cat) {
-  const name = String(cat || '');
-  if (/^other$/i.test(name)) return 'dh-slate';   // the catch-all reads as neutral
-  const hit = _expCatMatch(name);
-  if (hit && hit[1]) return hit[1];
-  const hues = ['dh-amber','dh-violet','dh-green','dh-blue','dh-red'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return hues[h % hues.length];
-}
+/* expCatHue() lived here and coloured the category pill. Deleted 2026-09-16
+   with the dh-* classes it returned — see the note on _EXP_CATS. */
 
 /* The card sparklines are gone (owner, 2026-09-15: "remove all the zig zag
    lines from expenses kpis"). expSpark() drew them and nothing else did. */
@@ -369,15 +362,25 @@ function renderExpenses() {
                    : fmtMonthLabel(scope);
 
   /* §6.1 wants the movement against the previous comparable period on the
-     headline card. It is a span rather than a second stat line because §7 asks
-     for "a simple indicator", and because the card already carries a sparkline
-     of the same series — two large trend graphics on one card is what §7's
-     warning about decoration reducing readability is about. */
+     headline card, and §7 asks for "a simple indicator" rather than a second
+     graphic — so it is a chip beside the figure.
+
+     UP IS NOT GOOD HERE, which is why the roles look inverted. On a spending
+     register a rise is the thing worth noticing, so it takes the WARNING role
+     and a fall takes SUCCESS — the opposite of the same indicator on Payments,
+     where collection rising is the good outcome. "No comparison" is a
+     first-class state and wears the neutral role: §7 forbids fabricating a
+     percentage when there is no previous period. */
   const _d = expPrevDelta(scope);
   const _expTrend = _d === null
-    ? `<span class="exp-stat__trend is-none" title="No previous period to compare against">No comparison</span>`
-    : `<span class="exp-stat__trend ${_d.pct >= 0 ? 'is-up' : 'is-down'}" title="vs ${escHtml(_d.prev)}">`
-      + `${_d.pct >= 0 ? '\u2197' : '\u2198'} `
+    ? `<span class="ui-chip ui-chip--neutral" title="No previous period to compare against">No comparison</span>`
+    : `<span class="ui-chip ${_d.pct >= 0 ? 'ui-chip--warning' : 'ui-chip--success'}" title="vs ${escHtml(_d.prev)}">`
+      /* SVG, not the \u2197 / \u2198 characters: they were text standing in for an icon,
+         they sat off the chip baseline, and the glyph is wider than the arrow
+         it draws \u2014 which is what pushed this chip onto a line of its own. */
+      + `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
+      + (_d.pct >= 0 ? `<path d="M7 17 17 7"/><path d="M9 7h8v8"/>` : `<path d="M7 7l10 10"/><path d="M17 9v8H9"/>`)
+      + `</svg>`
       /* Past ten-fold, a ratio stops being a percentage anyone reads and becomes
          a shape, so it is said as one. A month that spent PKR 8,000 followed by
          one that spent 76,000 is "850.0%" \u2014 true and useless, and the exact kind
@@ -388,8 +391,8 @@ function renderExpenses() {
      element made .exp-stat__v read "PKR 16.7K \u2197 83.3%" — one node holding two
      different numbers, which is wrong for a screen reader and broke a spec that
      reads the headline figure to check it equals the sum of the rows. */
-  const stat = (hue, icon, label, value, sub, trend) => `
-    <div class="exp-stat ${hue}">
+  const stat = (icon, label, value, sub, trend) => `
+    <div class="ui-card exp-stat">
       <span class="exp-stat__ic">${icon}</span>
       <div class="exp-stat__c">
         <div class="exp-stat__l">${label}</div>
@@ -403,16 +406,16 @@ function renderExpenses() {
 
   const stats = `
   <div class="exp-stats">
-    ${stat('dh-violet','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
+    ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
           'Total Expenses', `<span title="${fmtPKR(scopedTotal)}" data-exact="${scopedTotal}">${expMoney(scopedTotal)}</span>`,
           scopedTrf > 0 ? `${scopeLabel} · incl. ${fmtPKR(scopedTrf)} funds transfer` : scopeLabel,
           _expTrend)}
-    ${stat('dh-blue','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
+    ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 15 6-6"/><path d="M15 9h-4"/><path d="M15 9v4"/></svg>',
           'Average Daily', expMoney(avgDaily),
           `Avg per day · ${daysElapsed} day${daysElapsed===1?'':'s'}`)}
-    ${stat('dh-green','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
+    ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
           'Total Records', String(scoped.length), scopeLabel)}
-    ${stat('dh-amber','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    ${stat('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
           'Categories', String(activeCat), 'Active')}
   </div>`;
 
@@ -430,56 +433,75 @@ function renderExpenses() {
   const monthOpts = monthsPresent
     .map(m => `<option value="${escHtml(m)}" ${scope===m?'selected':''}>${fmtMonthLabel(m)}</option>`).join('');
 
+  /* The sort control is a BUTTON inside the header cell, not an onclick on the
+     `th` itself: a `th` cannot be focused or pressed from the keyboard, and
+     `aria-sort` on the cell is what tells a screen reader which way the column
+     runs. The ▲ ▼ ⇅ glyphs are SVG now — they were three of the last text
+     characters in the app standing in for icons. */
+  const SORT_ICO = {
+    asc:  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>',
+    desc: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    none: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5"/><path d="m7 15 5 5 5-5"/></svg>',
+  };
   const th = (key, label, extra) => {
     const on  = expFilter.sortKey === key;
-    const arw = on ? (expFilter.sortDir === 'asc' ? '▲' : '▼') : '⇅';
-    return `<th class="is-sortable${on?' is-sorted':''}" ${extra||''} onclick="toggleSort(expFilter,'expenses','${key}')" title="Sort by ${label}">${label}<span class="arw">${arw}</span></th>`;
+    const dir = on ? (expFilter.sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+    const ico = on ? (expFilter.sortDir === 'asc' ? SORT_ICO.asc : SORT_ICO.desc) : SORT_ICO.none;
+    return `<th aria-sort="${dir}" ${extra||''}><button type="button" class="ui-th-sort"
+              onclick="toggleSort(expFilter,'expenses','${key}')" title="Sort by ${label}">${label}${ico}</button></th>`;
   };
 
+  /* Toolbar controls are --h-sm and carry an aria-label rather than a visible
+     one (design spec Part 4): the placeholder and the first option say what
+     each does, and a row of six labels above a filter bar is noise. */
   const toolbar = `
-  <div class="exp-tools">
-    <div class="exp-search">
+  <div class="ui-card exp-tools">
+    <div class="ui-search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search-expenses" class="lk-sin" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
+      <input id="search-expenses" class="lk-sin" aria-label="Search expenses" placeholder="Search expenses..." value="${escHtml(expFilter.search)}"
              oninput="capFirstChar(this);expFilter.search=this.value;expFilter.page=1;_dExpenses()">
       ${lkSearchX('search-expenses','expFilter','expenses')}
     </div>
-    <select class="exp-select${expFilter.cat!=='All'?' is-set':''}" onchange="expFilter.cat=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by category">
-      <option value="All">All Categories</option>${catOpts}
-    </select>
+    <span class="ui-selectw">
+      <select class="ui-select ui-select--sm${expFilter.cat!=='All'?' is-set':''}" aria-label="Filter by category"
+              onchange="expFilter.cat=this.value;expFilter.page=1;renderPage('expenses')">
+        <option value="All">All categories</option>${catOpts}
+      </select>
+    </span>
     ${/* Adding a category used to mean leaving the page, finding it in Settings,
          adding it, and coming back — in the middle of entering an expense that
          needed it. */''}
-    <select class="exp-select${expFilter.method!=='All'?' is-set':''}" onchange="expFilter.method=this.value;expFilter.page=1;renderPage('expenses')" title="Filter by payment method">
-      <option value="All">All Payment Methods</option>
-      ${EXP_METHODS.map(m => `<option value="${escHtml(m)}" ${expFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('')}
-      ${/* The records written before the method was captured. Reachable, so
-            they can be completed rather than merely noticed. */''}
-      <option value="None" ${expFilter.method==='None'?'selected':''}>Not recorded</option>
-    </select>
-    <button class="exp-catadd" onclick="showAddExpenseCategoryModal()" title="Add a new expense category">
+    <span class="ui-selectw">
+      <select class="ui-select ui-select--sm${expFilter.method!=='All'?' is-set':''}" aria-label="Filter by payment method"
+              onchange="expFilter.method=this.value;expFilter.page=1;renderPage('expenses')">
+        <option value="All">All payment methods</option>
+        ${EXP_METHODS.map(m => `<option value="${escHtml(m)}" ${expFilter.method===m?'selected':''}>${escHtml(m)}</option>`).join('')}
+        ${/* The records written before the method was captured. Reachable, so
+              they can be completed rather than merely noticed. */''}
+        <option value="None" ${expFilter.method==='None'?'selected':''}>Not recorded</option>
+      </select>
+    </span>
+    <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="showAddExpenseCategoryModal()" title="Add a new expense category">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
       Category
     </button>
-    <div class="exp-month">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>
-      <select onchange="expSetMonth(this.value)" title="Filter by month">
-        <option value="All" ${scope==='All'?'selected':''}>All Months</option>
+    <span class="ui-selectw">
+      <select class="ui-select ui-select--sm" aria-label="Filter by month" onchange="expSetMonth(this.value)">
+        <option value="All" ${scope==='All'?'selected':''}>All months</option>
         ${monthOpts}
       </select>
-    </div>
-    ${tbExport({ id:'exp-export', cls:'exp-catadd',
+    </span>
+    ${tbExport({ id:'exp-export', cls:'ui-btn ui-btn--secondary ui-btn--sm',
                  excel:'exportExpensesExcel()', pdf:'exportExpensesPDF()' })}
     <div class="exp-count">${_pg.total} record${_pg.total!==1?'s':''} &middot; <b>${fmtPKR(total)}</b></div>
   </div>`;
 
   // ── Table ─────────────────────────────────────────────────────────────────
   const rows = _pg.slice.map(e => {
-    const hue = expCatHue(e.category);
     return `<tr>
       <td class="exp-date">${escHtml(fmtDate(e.date))}</td>
       <td>
-        <span class="exp-cat ${hue}">
+        <span class="ui-chip ui-chip--neutral">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">${expCatIcon(e.category)}</svg>
           ${escHtml(e.category || 'Other')}
         </span>
@@ -492,31 +514,31 @@ function renderExpenses() {
       <td>${e._transfer ? '<span class="exp-dash">—</span>' : expWhoChip(e.handedTo)}</td>
       <td>
         <div class="exp-acts">
-          <button class="exp-act dh-blue" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-          <button class="exp-act dh-red" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+          <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
       </td>
     </tr>`;
   }).join('');
 
   const table = `
-  <div class="exp-shell">
-    <div class="exp-table-wrap">
-      <table class="exp-table">
+  <div class="ui-card ui-card--flush">
+    <div class="ui-table-wrap">
+      <table class="ui-table exp-table">
         <thead><tr>
           ${th('date','Date')}
           ${th('category','Category')}
           ${th('description','Description')}
           ${th('amount','Amount')}
-          ${th('method','Payment Method')}
-          ${th('handedTo','Added By')}
+          ${th('method','Payment method')}
+          ${th('handedTo','Added by')}
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="7"><div class="exp-empty">
+            ? `<tr><td colspan="7"><div class="ui-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
-                 <div>No expenses match these filters.</div></div></td></tr>`
+                 <div class="ui-empty__t">No expenses match these filters.</div></div></td></tr>`
             : rows}
         </tbody>
       </table>
@@ -544,34 +566,37 @@ function fmtMonthLabel(ym) {
 }
 
 function expPager(pg) {
+  const C = 'ui-btn ui-btn--secondary ui-btn--sm';
   const btn = (label, target, o) => {
     o = o || {};
-    if (o.disabled) return `<button disabled>${label}</button>`;
-    if (o.active)   return `<button class="is-on">${label}</button>`;
-    return `<button onclick="gotoPage(expFilter,'expenses',${target})">${label}</button>`;
+    const lbl = o.aria ? ` aria-label="${o.aria}"` : '';
+    if (o.disabled) return `<button class="${C}" disabled${lbl}>${label}</button>`;
+    if (o.active)   return `<button class="${C} is-on" aria-current="page">${label}</button>`;
+    return `<button class="${C}"${lbl} onclick="gotoPage(expFilter,'expenses',${target})">${label}</button>`;
   };
   const { page, pages } = pg;
   let lo = Math.max(1, page-2), hi = Math.min(pages, lo+4);
   lo = Math.max(1, hi-4);
   let nums = '';
-  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="exp-pager__gap">…</span>':'');
+  if (lo > 1) nums += btn('1',1) + (lo>2?'<span class="ui-pager__gap">…</span>':'');
   for (let i=lo;i<=hi;i++) nums += btn(String(i), i, {active:i===page});
-  if (hi < pages) nums += (hi<pages-1?'<span class="exp-pager__gap">…</span>':'') + btn(String(pages), pages);
+  if (hi < pages) nums += (hi<pages-1?'<span class="ui-pager__gap">…</span>':'') + btn(String(pages), pages);
 
-  return `<div class="exp-foot">
-    <div class="exp-foot__info">Showing ${pg.from} to ${pg.to} of ${pg.total} record${pg.total!==1?'s':''}</div>
-    <div class="exp-pager">
-      ${btn('«',1,{disabled:page<=1})}
-      ${btn('‹',page-1,{disabled:page<=1})}
+  return `<div class="ui-pagebar">
+    <div class="ui-pagebar__info">Showing ${pg.from} to ${pg.to} of ${pg.total} record${pg.total!==1?'s':''}</div>
+    <div class="ui-pager">
+      ${btn('«',1,{disabled:page<=1, aria:'First page'})}
+      ${btn('‹',page-1,{disabled:page<=1, aria:'Previous page'})}
       ${nums}
-      ${btn('›',page+1,{disabled:page>=pages})}
-      ${btn('»',pages,{disabled:page>=pages})}
+      ${btn('›',page+1,{disabled:page>=pages, aria:'Next page'})}
+      ${btn('»',pages,{disabled:page>=pages, aria:'Last page'})}
     </div>
-    <div class="exp-foot__size">
-      <select onchange="expFilter.pageSize=Number(this.value);expFilter.page=1;renderPage('expenses')" title="Rows per page">
+    <span class="ui-selectw ui-pagebar__end">
+      <select class="ui-select ui-select--sm" aria-label="Rows per page"
+              onchange="expFilter.pageSize=Number(this.value);expFilter.page=1;renderPage('expenses')">
         ${[10,30,50,100].map(n=>`<option value="${n}" ${expFilter.pageSize===n?'selected':''}>${n} / page</option>`).join('')}
       </select>
-    </div>
+    </span>
   </div>`;
 }
 // Where an expense write should re-render to. Expenses are now editable from
@@ -602,9 +627,9 @@ function showAddExpenseCategoryModal() {
              placeholder="e.g. Generator Fuel"
              oninput="capFirstChar(this);_expCatValidate()"
              onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddExpenseCategory();}">
-      <div id="new-exp-cat-err" class="field-err" style="display:none"></div>
+      <div id="new-exp-cat-err" class="field-err" hidden></div>
     </div>
-    <p style="font-size:12px;color:var(--text3);line-height:1.6;margin:10px 0 0">
+    <p class="exf-hint">
       It becomes available immediately on the Add Expense form and in the filter
       above. Categories can be removed in Settings, but only while nothing is
       filed under them.
@@ -630,9 +655,13 @@ function _expCatValidate() {
   else if (!/[A-Za-z؀-ۿ]/.test(v))                msg = 'A category needs at least one letter.';
   const ok = !msg && v.length >= 2;
   err.textContent = msg;
-  err.style.display = msg ? 'block' : 'none';
+  /* `hidden`, not an inline display — .field-err sets no display of its own, so
+     the attribute is enough and the markup keeps no style= attribute. */
+  err.hidden = !msg;
   inp.classList.toggle('is-invalid', !!msg);
-  if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '' : '.55'; btn.style.cursor = ok ? '' : 'not-allowed'; }
+  /* The disabled look belongs to .btn:disabled (forms.css), not to two inline
+     properties written from here. */
+  if (btn) btn.disabled = !ok;
   return ok;
 }
 

@@ -1,0 +1,20 @@
+/* ============================================================
+   Pager — added for the expenses screen (2026-09-16).
+   Every register repeats this bar, so it belongs to components/
+   rather than to each screen file.
+   ============================================================ */
+
+.ui-pagebar {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.ui-pagebar__info { font-size: var(--text-sm); color: var(--text-secondary); }
+.ui-pagebar__end  { margin-left: auto; }
+
+.ui-pager { display: flex; align-items: center; gap: var(--space-1); margin: 0 auto; }
+.ui-pager .ui-btn { min-width: var(--h-sm); }
+/* The current page is marked, not promoted: the one primary button this screen
+   is allowed is spent elsewhere. */
+.ui-pager .is-on { background: var(--accent-bg); color: var(--accent-fg); }
+.ui-pager__gap { padding: 0 var(--space-1); font-size: var(--text-sm); color: var(--text-tertiary); }

@@ -1,0 +1,18 @@
+/* ============================================================
+   Card / panel — HOSTYLLO_DESIGN_SPEC Part 4.
+   One card. No shadow: cards do not float.
+   ============================================================ */
+
+.ui-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  min-width: 0;
+}
+.ui-card__title {
+  font-size: var(--text-lg); font-weight: var(--weight-medium); color: var(--text-primary);
+}
+
+/* For a card whose content owns the edge — a table, a list. */
+.ui-card--flush { padding: 0; overflow: hidden; }

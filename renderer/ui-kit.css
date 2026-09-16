@@ -112,14 +112,7 @@ input.is-invalid:focus {
 /* A disabled primary action must not still look pressable. */
 .btn[disabled] { pointer-events: none; }
 
-/* Toolbar button that sits beside a filter and adds to what the filter lists. */
-.exp-catadd {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 34px; padding: 0 13px; border-radius: 9px;
-    background: var(--card); border: 1px solid var(--border);
-    color: var(--text2); font-size: 12.5px; font-weight: 650;
-    cursor: pointer; white-space: nowrap; flex-shrink: 0;
-    transition: border-color .16s ease, color .16s ease, background .16s ease;
-}
-.exp-catadd:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-dim); }
-.exp-catadd svg   { flex-shrink: 0; }
+/* .exp-catadd lived here — the toolbar button that sat beside a filter and
+   added to what the filter listed. Only the Expenses screen used it, and that
+   screen now uses .ui-btn--secondary --sm (design spec Part 4). Deleted
+   2026-09-16 with the screen it belonged to. */

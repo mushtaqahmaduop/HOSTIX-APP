@@ -1,0 +1,62 @@
+/* ============================================================
+   Input / select / search — HOSTYLLO_DESIGN_SPEC Part 4.
+   Two sizes: --h-sm in toolbars, --h-lg in data-entry forms.
+   Every data-entry field carries a visible <label for>; a toolbar
+   control carries aria-label instead.
+   ============================================================ */
+
+.ui-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.ui-label {
+  font-size: var(--text-sm); font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.ui-input, .ui-select, .ui-textarea {
+  width: 100%; height: var(--h-md); padding: 0 var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-base); font-weight: var(--weight-normal);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.ui-textarea { height: auto; padding: var(--space-2) var(--space-3); line-height: var(--leading-normal); }
+.ui-input::placeholder { color: var(--text-tertiary); }
+.ui-input:focus, .ui-select:focus, .ui-textarea:focus { border-color: var(--accent); }
+.ui-input:disabled, .ui-select:disabled { opacity: .6; cursor: default; }
+
+/* A filter that is actually filtering says so — otherwise a narrowed list and a
+   whole list look identical. */
+.ui-select.is-set { border-color: var(--accent); color: var(--accent-fg); }
+
+.ui-input--sm, .ui-select--sm { height: var(--h-sm); }
+.ui-input--lg, .ui-select--lg { height: var(--h-lg); }
+
+/* The chevron is drawn, not fetched: a data-URI arrow has to hard-code its
+   stroke colour, which is a colour literal that cannot follow the theme. */
+.ui-select { appearance: none; -webkit-appearance: none; padding-right: var(--space-6); cursor: pointer; }
+.ui-selectw { position: relative; display: inline-flex; min-width: 0; }
+.ui-selectw > .ui-select { width: 100%; }
+.ui-selectw::after {
+  content: ''; position: absolute; right: var(--space-3); top: 50%;
+  width: 7px; height: 7px; margin-top: -5px; pointer-events: none;
+  border-right: 1.5px solid var(--text-tertiary);
+  border-bottom: 1.5px solid var(--text-tertiary);
+  transform: rotate(45deg);
+}
+.ui-selectw:focus-within::after { border-color: var(--accent); }
+
+/* Search: the wrapper is the control, the input is a hole in it. */
+.ui-search {
+  display: flex; align-items: center; gap: var(--space-2);
+  height: var(--h-sm); padding: 0 var(--space-3); min-width: 0;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.ui-search:focus-within { border-color: var(--accent); }
+.ui-search > svg { color: var(--text-tertiary); flex-shrink: 0; }
+.ui-search input {
+  flex: 1; min-width: 0; height: 100%;
+  border: none; background: none; color: var(--text-primary);
+  font-family: var(--font); font-size: var(--text-base);
+}
+.ui-search input::placeholder { color: var(--text-tertiary); }
