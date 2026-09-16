@@ -95,3 +95,54 @@ Three gaps that only bite together:
 Fixing #2 fixes this going forward. Making `hostelGender` editable in Settings
 fixes the whole existing roster at once, which is why both are in the same
 commit.
+
+
+---
+
+## Things found while working the list, that the owner did not report
+
+Each of these was a real defect sitting behind an item on the list. They are
+recorded because none of them is visible from the screen that reported them.
+
+1. **The payments toolbar wrap was self-inflicted.** The `@media` block that
+   keeps that strip on one line still named `.pay-select--mo` and friends —
+   classes the stage-3 rebuild had replaced hours earlier. The selectors matched
+   nothing and every width in the block stopped applying. A rebuild that renames
+   a class has to grep the media queries too.
+
+2. **`registers-center.css` selects registers by TABLE CLASS.** Moving a
+   register onto `.ui-table` silently drops whatever ruling that file carries.
+   It cost the centring on three registers at stage 4 and would have cost the
+   new alignment as well.
+
+3. **KPI card height had already been settled at 94px** on 2026-09-10, and
+   `reports-page.spec.js` has asserted it ever since. Stages 1–4 drifted every
+   rebuilt strip to 100 and only rooms — the page nobody had rebuilt — still
+   had it. The owner caught by eye a number the test suite was already holding.
+
+4. **Reports needed the same padding trim in two places.** `.rpt-stats
+   .rpt-stat` is (0,2,0) and out-specifies `.rpt-stat`, so the obvious fix did
+   nothing. Same trap as note 2, one file over.
+
+5. **Indentation is not scope.** The student-picker helpers were written at
+   column 0 inside `showIssueModal()`. They read as top-level; the braces said
+   otherwise. Inline `onclick` resolves against the global scope, so every
+   handler on the new control was a ReferenceError that would not have surfaced
+   until somebody clicked it.
+
+6. **Five stale tests, none caused by this list** — two money assertions broken
+   by the 2026-09-15 two-decimal rule, a missing hostel name that made
+   `printArchive()` silently do nothing, a case-sensitive label match, and a
+   settings row count that missed Paper size.
+
+## Still open
+
+- **The two money formatters disagree on screen.** `fmtPKR()` is whole-rupee
+  and `fmtCompact()` carries the 2026-09-15 two-decimal rule, so a KPI card can
+  read `29,500.00` beside a strip reading `29,500`. Raised, not fixed — which
+  rule wins is the owner's call and it reaches every receipt and export.
+- **The Reverse modal does not say what Reverse is for.** #5 turned out to be a
+  question the UI should have answered. Worth a line in the dialog.
+- **The issues register's row actions are ghosts**, while cancellations' are
+  bordered after #3. They are the same control on sibling registers and should
+  probably match.
