@@ -1691,6 +1691,27 @@ function renderHostelInfoPanel() {
               note: 'Used for reminders when a student’s own number is missing.' })}
           ${F('Students it can hold', 'users', ID_IN('hi-cap', 'capacity', s.capacity ? String(Number(s.capacity)) : '', 'type="number" min="0" max="9999" placeholder="Optional"'), { for: 'hi-cap', opt: true,
               note: 'A statement, not a limit — nothing is blocked by it. Beds come from the rooms you have created.' })}
+          ${''/* WHO THE HOSTEL IS FOR (owner, 2026-09-16). Asked on the
+                 onboarding's first step and, until now, nowhere else — so an
+                 install that skipped the wizard, or one older than the field,
+                 had it unset with no way to set it.
+
+                 It is not decoration. _stuDefaultGender() in students.js reads
+                 it to decide whether a student with no gender of their own is
+                 addressed as S/O or D/O before their father's name; unset, it
+                 declines to guess and prints the bare name. That is the owner's
+                 report of the prefix "not showing for some students": a boys'
+                 hostel whose setting was never written had no default to fall
+                 back on. Mixed stays blank on purpose — there a guess would be
+                 wrong for half the roster, and the per-student field is the
+                 only honest answer. */}
+          ${F('Who it is for', 'users',
+              `<select class="form-control" id="hi-gender" onchange="liveUpdateSetting('hostelGender',this.value)">`
+              + [['', 'Not stated'], ['boys', 'Boys hostel'], ['girls', 'Girls hostel'], ['mixed', 'Both — mixed hostel']]
+                  .map(o => `<option value="${o[0]}" ${String(s.hostelGender || '') === o[0] ? 'selected' : ''}>${escHtml(o[1])}</option>`).join('')
+              + `</select>`,
+              { for: 'hi-gender',
+                note: 'Fills in S/O or D/O before a father’s name when a student record does not state a gender. A mixed hostel states none.' })}
         </div>
       </div>
 

@@ -54,6 +54,18 @@
 .ui-btn--ghost-danger { color: var(--danger-fg); }
 .ui-btn--ghost-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger-fg); }
 
+/* SECONDARY'S BORDER, DANGER'S INK (owner, 2026-09-16). A register whose row
+   actions are a set — edit, confirm, restore, delete — reads as a set only if
+   they share an outline; the odd one out looks disabled rather than dangerous.
+   So the destructive member of a bordered group takes the border too, and says
+   what it is in the ink. It is not `--ghost-danger`: a ghost is borderless by
+   definition, and a bordered ghost would be a contradiction other screens
+   would then copy. */
+.ui-btn--outline-danger { border-color: var(--border-strong); color: var(--danger-fg); }
+.ui-btn--outline-danger:hover:not(:disabled) {
+  background: var(--danger-bg); border-color: var(--danger-fg);
+}
+
 /* Square. Requires aria-label: an icon button with no name is unusable by
    anything that is not a pair of eyes. */
 .ui-btn--icon { width: var(--h-md); padding: 0; }

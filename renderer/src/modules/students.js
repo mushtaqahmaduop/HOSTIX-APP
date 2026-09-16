@@ -1705,12 +1705,93 @@ function stuDocAdd(studentId, kind) {
       logActivity('Document Attached', doc.label + ' attached to ' + (s.name || s.id), 'Student');
       await saveDB();
       done();
-      if (typeof showStudentPanel === 'function') showStudentPanel(studentId);
+      _stuDocsRefresh(studentId);
       toast(doc.label + ' attached', 'success');
     };
     reader.readAsDataURL(file);
   };
   input.click();
+}
+
+/* WHICH SURFACE ASKED. stuDocAdd() and stuDocRemove() both used to finish by
+   calling showStudentPanel(), which is right when the drawer asked and wrong
+   when the EDIT FORM did — attaching a document would have closed the half
+   finished form and opened the drawer over it, losing every unsaved field.
+   The edit form's list is re-rendered in place instead. */
+function _stuDocsRefresh(studentId) {
+  const box = document.getElementById('esf-docs');
+  if (box) {
+    const t = (DB.students || []).find(x => String(x.id) === String(studentId));
+    if (t) { box.innerHTML = esfDocsList(t); return; }
+  }
+  if (typeof showStudentPanel === 'function') showStudentPanel(studentId);
+}
+
+/* The documents list on the EDIT form. Same named slots as the drawer and the
+   add form, driven straight off the live record. */
+/* The confirm step lives INLINE, not in a dialog. showConfirm() routes through
+   showModal(), which replaces the whole of #modal-container - and the edit form
+   IS that container's contents, so a confirm dialog would wipe the half-filled
+   form behind it and every unsaved field with it. The drawer can use the dialog
+   because it has nothing unsaved to lose; this cannot. */
+let _esfDocPending = null;
+
+function _esfDocActs(sid, d, pending) {
+  const view = `<button type="button" class="stu-pan__mini" onclick="stuViewDoc('${sid}','${escHtml(d.id)}')">View</button>`;
+  if (pending === d.id) {
+    return `<span class="esf-doc__ask">Remove?</span>`
+      + `<button type="button" class="stu-pan__mini" style="color:var(--danger-fg)" onclick="esfDocRemove('${sid}','${escHtml(d.id)}')">Yes</button>`
+      + `<button type="button" class="stu-pan__mini" onclick="esfDocAsk('${sid}',null)">No</button>`;
+  }
+  return view + `<button type="button" class="stu-pan__mini" style="color:var(--danger-fg)" onclick="esfDocAsk('${sid}','${escHtml(d.id)}')">Remove</button>`;
+}
+
+/* Arm or disarm the inline confirm. */
+function esfDocAsk(studentId, docId) {
+  _esfDocPending = docId || null;
+  _stuDocsRefresh(studentId);
+}
+
+async function esfDocRemove(studentId, docId) {
+  if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
+  const t = (DB.students || []).find(x => String(x.id) === String(studentId));
+  const d = t && stuDocsOf(t).find(x => x.id === docId);
+  if (!t || !d) { toast('That document is already gone', 'info'); _esfDocPending = null; return; }
+  t.docs.files = stuDocsOf(t).filter(x => x.id !== docId);
+  logActivity('Document Removed', (d.label || 'A document') + ' removed from ' + (t.name || t.id), 'Student');
+  await saveDB();
+  _esfDocPending = null;
+  _stuDocsRefresh(studentId);
+  toast('Document removed', 'info');
+}
+
+function esfDocsList(t) {
+  const sid     = escHtml(String(t.id));
+  const files   = stuDocsOf(t);
+  const pending = _esfDocPending;
+  const row = (label, has, acts) =>
+    `<div class="esf-doc${has ? ' is-on' : ''}">`
+    + `<span class="esf-doc__l">${escHtml(label)}</span>`
+    + `<span class="esf-doc__a">${acts}</span></div>`;
+
+  const named = STU_DOC_KINDS.map(k => {
+    const d = files.find(f => f.kind === k.key);
+    return d
+      ? row(k.label + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
+            _esfDocActs(sid, d, pending))
+      : row(k.label, false,
+            `<button type="button" class="stu-pan__mini" onclick="stuDocAdd('${sid}','${escHtml(k.key)}')">Attach</button>`);
+  }).join('');
+
+  const extra = files.filter(f => f.kind === 'other').map(d =>
+    row((d.label || d.name || 'Other document') + ' · ' + stuDocExt(d.type) + ' · ' + stuDocSize(d.size), true,
+        _esfDocActs(sid, d, pending))).join('');
+
+  return named + extra
+    + (files.length < STU_DOC_MAX_FILES
+        ? `<button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" style="margin-top:9px" onclick="stuDocAdd('${sid}','other')">Attach another document</button>`
+        : `<p class="esf-doc__note">Five documents is the limit for one record. Remove one to attach another.</p>`)
+    + `<p class="esf-doc__note">Documents are saved to the record as soon as they are attached — Cancel does not undo them.</p>`;
 }
 
 function stuDocRemove(studentId, docId) {
@@ -3952,6 +4033,9 @@ function stuUndReprintScan(id) {
 function showEditStudentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
+  /* Module state, so a Remove left armed on the last visit would come back
+     armed on this one - against whichever document now sits at that id. */
+  _esfDocPending = null;
   const allRooms=roomsByNumber(DB.rooms.filter(r=>r.id===t.roomId||roomFreeBeds(r)>0));
   const pmOpts = pmOptions(t.paymentMethod);
   // The student's own status is always in the list. It used to be built from
@@ -4053,6 +4137,39 @@ function showEditStudentModal(id) {
         <div class="sf-f"><label for="f-tcnic">CNIC</label>
           <input class="sf-in" id="f-tcnic" value="${escHtml(t.cnic||'')}" placeholder="35202-1234567-1" maxlength="15" oninput="fmtCnic(this)"></div>
       </div>
+      ${''/* THE FOUR FIELDS THIS FORM COULD NOT SET (owner, 2026-09-16).
+
+             The add form has asked for date of birth, gender, marital status
+             and nationality since 2026-09-10; edit never did, so a record that
+             arrived without them could never be given them. Gender is the one
+             that showed: students.js prints "S/O" or "D/O" before the father's
+             name FROM the gender, and with neither a gender on the record nor
+             a hostel default it prints the bare name instead of guessing. The
+             owner reported the prefix missing "for some students" — it was
+             missing for every student nobody could set a gender on.
+
+             Same ids as the add form on purpose: the ASF_TRACKED list, the
+             completion meter and _stuDefaultGender() all already know them. */}
+      <div class="sf-grid" style="margin-top:14px;grid-template-columns:repeat(4,1fr)">
+        <div class="sf-f"><label for="f-tdob">Date of birth</label>
+          <input class="sf-in" id="f-tdob" type="date" value="${escHtml(t.dob||'')}"></div>
+        <div class="sf-f"><label for="f-tgender">Gender</label>
+          <select class="sf-sel" id="f-tgender">${
+            ['','Male','Female','Other'].map(g => `<option value="${g}" ${
+              String(t.gender||'') === g ? 'selected' : ''}>${g || '—'}</option>`).join('')
+          }</select></div>
+        <div class="sf-f"><label for="f-tmarital">Marital status</label>
+          <select class="sf-sel" id="f-tmarital">${
+            ['','Single','Married'].map(g => `<option value="${g}" ${
+              String(t.maritalStatus||'') === g ? 'selected' : ''}>${g || '—'}</option>`).join('')
+          }</select></div>
+        <div class="sf-f"><label for="f-tnationality">Nationality</label>
+          <select class="sf-sel" id="f-tnationality">${
+            ['','Pakistani','Afghan','Other'].map(g => `<option value="${g}" ${
+              String(t.nationality||'') === g ? 'selected' : ''}>${g || '—'}</option>`).join('')
+          }</select></div>
+      </div>
+
       <div class="sf-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr 1fr">
         <div class="sf-f"><label for="f-tocc">Course / study field</label>
           <input class="sf-in" id="f-tocc" value="${escHtml(t.occupation||t.course||'')}" placeholder="BS Computer Science"></div>
@@ -4129,11 +4246,33 @@ function showEditStudentModal(id) {
       </div>
     </div>
 
+    ${''/* ══ DOCUMENTS (owner, 2026-09-16) ══════════════════════════════════
+           The add form has had named document slots since 2026-09-10 and the
+           profile drawer can attach to a saved record; the EDIT form could do
+           neither, so the one screen a warden opens to correct a record was
+           the one place documents were invisible.
+
+           IT DRIVES THE LIVE RECORD, not a staging array. The add form stages
+           into `_asfDocs` because its student does not exist yet. This one
+           does exist, so it calls the same stuDocAdd/stuDocRemove the drawer
+           calls, which write and save immediately — a document is a file that
+           either is or is not on the record, not a draft edit waiting on Save
+           Changes, and staging it would have meant a second code path that
+           could disagree with the drawer about what is attached. Cancel
+           therefore does not un-attach; the note under the list says so. */}
+    <div class="sf-sec">
+      <div class="sf-sec__h">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        <span class="asf-n">04</span> Documents
+      </div>
+      <div id="esf-docs">${esfDocsList(t)}</div>
+    </div>
+
     <!-- ══ NOTES ══ -->
     <div class="sf-sec">
       <div class="sf-sec__h">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-        <span class="asf-n">04</span> Notes
+        <span class="asf-n">05</span> Notes
       </div>
       <div class="sf-grid">
         <div class="sf-f sf-f--wide">
@@ -4158,6 +4297,14 @@ async function submitEditStudent(id) {
   // validation left t in a corrupted in-memory state that could be saved later.
   const _newName   = document.getElementById('f-tname')?.value.trim()  || t.name;
   const _newFather = document.getElementById('f-tfname')?.value.trim() || '';
+  /* The four the form could not set until 2026-09-16. Read as '' rather than
+     falling back to the record, so clearing one back to the blank option
+     actually clears it — a warden who picks the dash means "we do not know",
+     which is a different fact from the value that was there before. */
+  const _newDob      = document.getElementById('f-tdob')?.value || '';
+  const _newGender   = document.getElementById('f-tgender')?.value || '';
+  const _newMarital  = document.getElementById('f-tmarital')?.value || '';
+  const _newNation   = document.getElementById('f-tnationality')?.value || '';
   const _newCnic   = document.getElementById('f-tcnic')?.value.trim()  || '';
   const _newPhone  = document.getElementById('f-tphone')?.value.trim() || '';
   const _newEmail  = document.getElementById('f-temail')?.value.trim() || '';
@@ -4186,6 +4333,10 @@ async function submitEditStudent(id) {
   // All checks passed — now apply changes
   t.name            = _newName;
   t.fatherName      = _newFather;
+  t.dob             = _newDob;
+  t.gender          = _newGender;
+  t.maritalStatus   = _newMarital;
+  t.nationality     = _newNation;
   t.cnic            = _newCnic;
   t.phone           = _newPhone;
   t.email           = _newEmail;

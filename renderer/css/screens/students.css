@@ -1852,3 +1852,20 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -4px 14px rgba(0,0,0,.30); }
    2026-09-09 — and so are the two rules that widened it for a <span> the markup
    no longer emits. Left in place they made a square button 30-odd pixels wide
    with nothing in the extra space. */
+
+/* ── Documents on the EDIT form (owner, 2026-09-16) ────────────────────────
+   The add form stages documents into a rail card; the edit form drives the
+   live record, so its list is a plain stack of named slots in the form's own
+   fourth section. The confirm step is inline — see esfDocsList() for why a
+   dialog cannot be used here. */
+.esf-doc {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+}
+.esf-doc:last-of-type { border-bottom: none; }
+.esf-doc__l { flex: 1; min-width: 0; font-size: var(--text-base); color: var(--text-secondary); }
+.esf-doc.is-on .esf-doc__l { color: var(--text-primary); }
+.esf-doc__a { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.esf-doc__ask { font-size: var(--text-sm); color: var(--danger-fg); }
+.esf-doc__note { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--text-tertiary); }

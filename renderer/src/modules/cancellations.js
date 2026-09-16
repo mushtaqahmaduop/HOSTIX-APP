@@ -166,12 +166,18 @@ function renderCancellations(filterStatus='All') {
      Confirm and Restore do change a student's life, and the confirmation each
      one opens is where that weight belongs. */
   const _ic = (role, onclick, label, path) =>
-    `<button class="ui-btn ${role || 'ui-btn--ghost'} ui-btn--icon ui-btn--sm canc-act" onclick="${onclick}"
+    `<button class="ui-btn ${role || 'ui-btn--secondary'} ui-btn--icon ui-btn--sm canc-act" onclick="${onclick}"
              title="${escHtml(label)}" aria-label="${escHtml(label)}">
        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${path}</svg>
      </button>`;
   const P_EDIT    = '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>';
-  const P_CONFIRM = '<polyline points="20 6 9 17 4 12"/>';
+  /* A FILLED, CENTRED MARK (owner, 2026-09-16). Confirm was a bare tick stroke
+     — the same weight as Edit's pencil and Restore's arrow, in a row where it
+     is the only button that ends a tenancy. It is a solid disc with the tick
+     knocked out of it now, which is the shape the Paid status chip already
+     uses for "this is settled", so the two agree. */
+  const P_CONFIRM = '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/>'
+                  + '<path d="m8.5 12.2 2.4 2.4 4.6-4.8" fill="none" stroke="var(--surface-1)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
   const P_RESTORE = '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>';
   const P_DELETE  = '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>';
 
@@ -231,7 +237,7 @@ function renderCancellations(filterStatus='All') {
         <div class="canc-acts">
           ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', P_EDIT)}
           ${acts}
-          ${_ic('ui-btn--ghost-danger', `deleteCancellationRecord('${c.id}')`, 'Delete this record', P_DELETE)}
+          ${_ic('ui-btn--outline-danger', `deleteCancellationRecord('${c.id}')`, 'Delete this record', P_DELETE)}
         </div>
       </td>
     </tr>`;
