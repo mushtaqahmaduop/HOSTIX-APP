@@ -880,22 +880,32 @@ function renderDashboard() {
   const _rtBed = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M19 7h-7a3 3 0 0 0-3 3v3H5V8a1 1 0 0 0-2 0v9a1 1 0 0 0 2 0v-2h14v2a1 1 0 0 0 2 0v-6a4 4 0 0 0-4-4ZM7 9a2 2 0 1 1 2 2 2 2 0 0 1-2-2Z"/></svg>`;
 
   let seatBreakdown = '';
-  DB.settings.roomTypes.forEach(type => {
+  DB.settings.roomTypes.forEach((type, i) => {
     const tRooms = DB.rooms.filter(r=>r.typeId===type.id);
     const typeTotalSeats = tRooms.length * type.capacity;
     const typeFilledSeats = DB.students.filter(t=>t.status==='Active'&&!t.isForced&&tRooms.some(r=>r.id===t.roomId)).length;
     const typeAvail = typeTotalSeats - typeFilledSeats;
     const typePct = typeTotalSeats>0?Math.round(typeFilledSeats/typeTotalSeats*100):0;
     seatBreakdown += `
-      <div class="rt-row" title="${escHtml(type.name)} — ${typeFilledSeats}/${typeTotalSeats} seats filled, ${typeAvail} free">
-        <span class="rt-row__ic" style="background:${escHtml(_rtTint(type.color))};color:${escHtml(type.color)}">${_rtBed}</span>
+      <div class="rt-row" style="--rt-c:var(--rt-${(i % 6) + 1})" title="${escHtml(type.name)} — ${typeFilledSeats} of ${typeTotalSeats} seats filled, ${typeAvail} free">
+        <span class="rt-row__sw"></span>
         <span class="rt-row__name">${escHtml(type.name)}</span>
-        <span class="rt-row__rooms">${tRooms.length} room${tRooms.length===1?'':'s'}</span>
-        <span class="rt-row__bar"><i style="width:${typePct}%;background:${escHtml(type.color)}"></i></span>
-        <span class="rt-row__pct" style="color:${typePct>0?escHtml(type.color):'var(--text)'}">${typePct}%</span>
+        <span class="rt-row__meter">
+          <span class="rt-row__free">${typeAvail} of ${typeTotalSeats} free</span>
+          <span class="rt-row__bar"><i style="width:${typePct}%"></i></span>
+        </span>
+        <span class="rt-row__pct">${typePct}%</span>
       </div>`;
   });
 
+  // Rooms with at least one student in them, over every room on the books.
+  // OWNER'S CHOICE, 2026-09-17, asked before it was built: "rooms filled" is
+  // in-use, not full. It is also the figure roomTypeSummary already computes,
+  // so the dashboard gains no second definition of an occupied room - which is
+  // the trap CLAUDE.md names, a bed having three numbers that are not
+  // interchangeable.
+  const roomsInUse = DB.rooms.filter(r => getRoomOccupancy(r) > 0).length;
+  const roomsTotal = DB.rooms.length;
   const recentPay = [...DB.payments].filter(p=>_payMatchesMonth(p,mo)).sort((a,b)=>new Date(b.date||b.dueDate)-new Date(a.date||a.dueDate)).slice(0,10);
 
   // Room type summary
@@ -1338,7 +1348,7 @@ function renderDashboard() {
        scrolling. Recent Payments is the first thing below it, deliberately:
        it is a log, and a log is what you scroll TO. -->
   <div class="dash-row-c">
-  <div class="dash-sec">
+  <div class="dash-sec rt-card">
     ${''/* THE TAGLINE IS OFF AND THE CHIP IS 26 (owner, 2026-09-10).
            "Overview of seat occupancy by room type" restated the title beside
            it word for word, and the head it sat in was 33px against the 26px
@@ -1346,15 +1356,13 @@ function renderDashboard() {
            not cosmetic: they are part of the 25 this card needed before its
            list could show a FOURTH room type instead of eight pixels of one.
            See the ceiling note in dashboard.css. */}
-    <div class="dash-sec__head" style="margin-bottom:4px">
+    <div class="dash-sec__head">
       ${dashEmojiChip('building', 26)}
-      <div style="min-width:0">
+      <div class="rt-hd">
         <div class="dash-sec__title">Occupancy by Room Type</div>
+        <div class="rt-hd__s">Seats filled per capacity</div>
       </div>
-      <span class="rt-full ${seatPct>=90?'is-high':''}" style="margin-left:auto">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
-        ${seatPct}% Full
-      </span>
+<span class="rt-tot">${fmtNum(filledSeats)} / ${fmtNum(totalSeats)} <span class="rt-tot__d">·</span> ${seatPct}%</span>
     </div>
 
     <div class="rt-body">
@@ -1373,40 +1381,28 @@ function renderDashboard() {
                The slice is a room TYPE, so it opens Rooms rather than
                Payments. */}
         ${_dashDonut(
-            (DB.settings.roomTypes||[]).map(t => {
+            (DB.settings.roomTypes||[]).map((t, i) => {
               const tR = DB.rooms.filter(r => r.typeId === t.id);
               const filled = DB.students.filter(s => s.status==='Active' && !s.isForced
                                 && tR.some(r => r.id === s.roomId)).length;
-              return { value: filled, color: t.color || 'var(--accent)', name: t.name,
+              return { value: filled, color: 'var(--rt-' + ((i % 6) + 1) + ')', name: t.name,
                        amount: filled,
                        label: t.name + ' — ' + filled + ' of ' + (tR.length * t.capacity) + ' seats filled',
                        onclick: "navigate('rooms')" };
             }).filter(x => x.value > 0),
-            '<span class="dnut__fig">' + fmtNum(filledSeats) + '<span class="rt-of">/' + fmtNum(totalSeats) + '</span></span>',
-            'Seats Occupied',
+            '<span class="dnut__fig">' + fmtNum(roomsInUse) + '<span class="rt-of">/' + fmtNum(roomsTotal) + '</span></span>',
+            'Rooms In Use',
             { aria: 'Occupied seats by room type', money: false })}
-        <div class="rt-stat">
-          <span class="rt-stat__ic dh-blue"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3-4-5-8-5Z"/></svg></span>
-          <div class="rt-stat__c"><b>${filledSeats}</b><span>Occupied</span></div>
-          <div class="rt-stat__sep"></div>
-          <div class="rt-stat__c"><b>${totalSeats}</b><span>Total Seats</span></div>
-        </div>
-        <div class="rt-avail"><i></i><b>${availSeats}</b> Seats Available</div>
       </div>
 
       <div class="rt-right">
-        <div class="rt-list__hd">
-          <span>Room Type</span>
-          <span class="rt-list__hd-rooms">Rooms</span>
-          <span class="rt-list__hd-occ">Occupancy</span>
-        </div>
         ${seatBreakdown}
       </div>
     </div>
 
     <div class="rt-note">
       <span class="rt-note__ic"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 5a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7Zm1.5 10h-3a1 1 0 0 1 0-2h.5v-3h-.5a1 1 0 0 1 0-2H12a1 1 0 0 1 1 1v4h.5a1 1 0 0 1 0 2Z"/></svg></span>
-      Occupancy percentage is calculated based on available seats in each room type.
+      Occupancy is calculated on available seats in each room type, not on rooms.
     </div>
   </div>
   ${P.needs}

@@ -560,6 +560,259 @@
     .dash-row-b > *:nth-child(3) { grid-column: auto; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROW C — Occupancy by Room Type · Needs Action · Quick Actions.
+
+   Rebuilt 2026-09-17 (spec stage 5, third of three rows).
+
+   THE OCCUPANCY CARD IS BUILT TO methods.png (owner, 2026-09-17). Four things
+   changed in it and each is the reference's:
+
+   · ONE BLUE LADDER instead of a colour per room type. type.color is
+     owner-configured DATA and this card used it for the icon tile, the bar
+     fill and the percentage - five unrelated hues on five rows of one ordered
+     series. The reference draws a single accent stepped light to dark, which
+     is what a ranked scale should be, and it frees colour to mean state again.
+     The ladder is --rt-1..--rt-6 below.
+
+   · THE SWATCH IS THE DONUT'S LEGEND, so the slices read the SAME ladder.
+     They did not before: the ring took type.color while the rows took a tint
+     of it, so a row and its slice were never quite the same colour. A legend
+     that does not match what it labels is worse than no legend.
+
+   · THE BAR IS THE ROW, not a 28px stub in a column. It spans the width with
+     "N of M free" sitting over it, which is the reference's layout and the
+     reason the Rooms column could go: "9 rooms" was the least-asked figure on
+     a card about seats, and the title attribute still carries it.
+
+   · THE DONUT CENTRE COUNTS ROOMS, NOT SEATS (owner, asked before building).
+     Rooms with at least one student in them, over every room on the books -
+     the same expression roomTypeSummary already uses, so the dashboard gains
+     no second definition of an occupied room. The bars stay seat-based and the
+     footnote says so, which is the reference's footnote too.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dash-row-c {
+    display: grid; align-items: stretch;
+    grid-template-columns: 1.9fr 1.15fr var(--dash-right-col);
+    gap: var(--space-2); margin-bottom: var(--space-2);
+}
+.dash-row-c > .dash-sec { display: flex; flex-direction: column; min-width: 0; }
+
+/* ── The accent ladder ──────────────────────────────────────────────────── */
+/* Six steps, because six is the most room types any install has. A seventh
+   cycles back to the first rather than inventing a step - the rows are also
+   labelled, and two identical swatches eight rows apart is a smaller lie than
+   a colour the ladder does not contain. */
+.dash-row-c .rt-card {
+    --rt-1: var(--accent);
+    --rt-2: color-mix(in srgb, var(--accent) 80%, var(--surface-1));
+    --rt-3: color-mix(in srgb, var(--accent) 62%, var(--surface-1));
+    --rt-4: color-mix(in srgb, var(--accent) 46%, var(--surface-1));
+    --rt-5: color-mix(in srgb, var(--accent) 32%, var(--surface-1));
+    --rt-6: color-mix(in srgb, var(--accent) 22%, var(--surface-1));
+}
+
+/* ── Occupancy card: head ───────────────────────────────────────────────── */
+.rt-hd { min-width: 0; }
+.rt-hd__s {
+    font-size: var(--text-xs); color: var(--text-tertiary);
+    line-height: var(--leading-tight); margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* "252 / 300 · 84%". It was a green "84% Full" pill, which spent a status
+   colour on a reading: a full hostel is the goal, not a warning. Plain
+   figures, tabular, so the two halves line up as the month moves. */
+.rt-tot {
+    margin-left: auto; flex-shrink: 0; white-space: nowrap;
+    font-size: var(--text-sm); font-weight: var(--weight-medium);
+    color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.rt-tot__d { color: var(--text-tertiary); margin: 0 2px; }
+
+/* ── Occupancy card: body ───────────────────────────────────────────────── */
+.rt-body {
+    display: grid; grid-template-columns: 118px minmax(0, 1fr);
+    gap: var(--space-3); align-items: start; padding: var(--space-1) 0 0;
+}
+.rt-left { display: block; }
+.dash-row-c .rt-donut { width: 118px; height: 118px; max-width: 118px; margin: 0 auto; }
+.dash-row-c .rt-donut__n { font-size: var(--text-lg); }
+.dash-row-c .rt-donut__n span { font-size: var(--text-xs); }
+.dash-row-c .rt-donut__l { font-size: var(--text-xs); margin-top: 2px; }
+/* THE LIST SCROLLS INSIDE THE DONUT'S OWN HEIGHT. The reference's row is two
+   lines - a free count over its bar - where the old one was one, so five room
+   types are 170px where they used to be 120. Left to grow, the card took row
+   C from 202px to 252 and pushed its own footer 24px past the 738px fold that
+   three earlier passes spent their time on. Bounded to the donut beside it,
+   the row lands back on 738 and the list scrolls, which it always could. */
+.rt-right { min-width: 0; max-height: 118px; overflow-y: auto; padding-right: 2px; }
+
+/* ── Occupancy card: one room type ──────────────────────────────────────── */
+.rt-row {
+    display: grid; grid-template-columns: 10px minmax(56px, auto) minmax(0, 1fr) 34px;
+    align-items: center; gap: var(--space-2);
+    padding: var(--space-1) 0;
+}
+.rt-row__sw {
+    width: 10px; height: 10px; border-radius: 3px;
+    background: var(--rt-c, var(--accent));
+}
+.rt-row__name {
+    font-size: var(--text-sm); font-weight: var(--weight-medium);
+    color: var(--text-primary); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+/* THE BAR IS CAPPED, NOT STRETCHED (owner, 2026-09-17: "reduce the length of
+   the bars to fit in the card beside the pie chart"). The reference draws a
+   narrow single-column card where a full-width bar is right; here the same
+   list sits beside a 118px donut in a much wider card, and a 1fr bar ran the
+   whole way across with the percentage stranded at the far edge. Capped and
+   pushed right, the swatch, the name, the meter and the figure read as one
+   row again. */
+.rt-row__meter {
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 0; max-width: 168px; width: 100%; margin-left: auto;
+}
+/* The free count sits OVER the bar and right-aligned, so it ends where the bar
+   ends and reads as a caption of it rather than as another column. */
+.rt-row__free {
+    text-align: right; font-size: var(--text-xs);
+    color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+    line-height: var(--leading-tight);
+}
+.rt-row__bar {
+    display: block; height: 8px; border-radius: var(--radius-full);
+    background: var(--neutral-bg); overflow: hidden;
+}
+.rt-row__bar > i {
+    display: block; height: 100%; border-radius: var(--radius-full);
+    background: var(--rt-c, var(--accent));
+    transition: width .5s ease;
+}
+@media (prefers-reduced-motion: reduce) { .rt-row__bar > i { transition: none; } }
+/* One ink for every percentage. It used to take the room type's own colour,
+   which made a column of figures that could not be compared down the page. */
+.rt-row__pct {
+    text-align: right; font-size: var(--text-sm); font-weight: var(--weight-strong);
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+
+/* ── Occupancy card: the footnote ───────────────────────────────────────── */
+.rt-note {
+    display: flex; align-items: flex-start; gap: var(--space-1);
+    margin-top: auto; padding-top: var(--space-2);
+    font-size: var(--text-xs); line-height: var(--leading-tight);
+    color: var(--warning-fg);
+}
+.rt-note__ic { flex-shrink: 0; display: flex; margin-top: 1px; }
+
+/* ── Needs Action ───────────────────────────────────────────────────────── */
+.dl-needs {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 2px 0 var(--space-1);
+}
+/* A row that reports a queue with something in it carries its own tone; a
+   cleared one goes quiet and keeps its place. Dropping cleared rows made the
+   panel a different shape every render (owner, reversing 2026-09-05), and an
+   absent row reads as missing rather than as clear. */
+.dl-need {
+    display: grid; grid-template-columns: auto auto 1fr auto;
+    align-items: center; gap: var(--space-2); width: 100%;
+    padding: 2px var(--space-2);
+    border: 0; border-radius: var(--radius-sm);
+    background: var(--dh-bg); color: var(--text-secondary);
+    font-family: inherit; text-align: left; cursor: pointer;
+    transition: background var(--dur-fast) var(--ease);
+}
+.dl-need:hover { filter: brightness(.985); }
+.dl-need:hover .dl-need__verb { text-decoration: underline; }
+.dl-need__ic {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: var(--radius-sm);
+    background: var(--surface-1); color: var(--dh);
+}
+.dl-need__ic .dl-ico { width: 12px; height: 12px; }
+.dl-need__n {
+    font-size: var(--text-base); font-weight: var(--weight-strong);
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.dl-need__label {
+    font-size: var(--text-sm); color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dl-need__verb {
+    font-size: var(--text-xs); font-weight: var(--weight-medium);
+    color: var(--dh); white-space: nowrap;
+}
+.dl-need.is-clear { background: transparent; color: var(--text-tertiary); }
+.dl-need.is-clear .dl-need__ic    { background: var(--surface-2); color: var(--text-tertiary); }
+.dl-need.is-clear .dl-need__label,
+.dl-need.is-clear .dl-need__n,
+.dl-need.is-clear .dl-need__verb  { color: var(--text-tertiary); }
+.dl-need.is-clear .dl-need__n     { font-weight: var(--weight-strong); }
+.dl-need.is-clear:hover { background: var(--surface-2); filter: none; }
+
+/* ── Quick Actions ──────────────────────────────────────────────────────── */
+.dl-acts {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1); padding: 2px 0 var(--space-1);
+}
+.dl-acts--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dl-act {
+    position: relative; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    background: var(--dh-bg); color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.dl-act:hover { border-color: var(--dh); color: var(--text-primary); }
+.dl-act:hover .dl-act__go { opacity: 1; }
+.dl-act__ic { display: flex; color: var(--dh); }
+.dl-act__go {
+    position: absolute; top: var(--space-1); right: var(--space-1);
+    display: flex; color: var(--dh); opacity: .75;
+}
+.dl-act__go svg { width: 11px; height: 11px; }
+.dl-act__label {
+    font-size: var(--text-xs); font-weight: var(--weight-medium);
+    color: var(--text-primary); text-align: center;
+    line-height: var(--leading-tight);
+}
+.dash-row-c .dl-acts--4 > * .dl-ico,
+.dash-row-c .dl-acts--4 > * svg { flex: 0 0 auto; }
+
+/* ── The three-part card head both panels share ─────────────────────────── */
+.dl-head3 { display: flex; align-items: center; gap: var(--space-2); flex-wrap: nowrap; }
+.dl-head3__b { display: flex; flex-direction: column; min-width: 0; }
+.dl-head3__ico {
+    flex: 0 0 auto; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--dh-bg); color: var(--dh);
+}
+.dl-head3__ico svg { width: 14px; height: 14px; }
+.dl-head3 .dash-pill { margin-left: auto; flex-shrink: 0; }
+
+/* ── Height tiers ───────────────────────────────────────────────────────── */
+/* Four became two. The old ladder stepped .dl-need__ic and .dl-ico at 900,
+   700 and 640 - three steps to take 5px off an icon - and hid .rt-note, which
+   is the one line on the card that says what the percentages are OF. */
+@media (max-height: 720px) {
+    .rt-right { max-height: 108px; }
+}
+@media (max-height: 665px) {
+    .rt-right { max-height: 96px; }
+    .rt-hd__s { display: none; }
+    .rt-body  { gap: var(--space-2); }
+}
+@media (max-width: 1200px) {
+    .rt-body { grid-template-columns: minmax(0, 1fr); }
+    .rt-left { display: none; }
+}
+
 /* ── Section cards ───────────────────────────────────────────────────────── */
 /* --sec-pad-x IS THE CARD'S OWN HORIZONTAL PADDING, published as a variable so
    the one thing that has to match it can read it instead of guessing: the
@@ -584,75 +837,6 @@
 }
 .dash-icon-btn:hover  { border-color:var(--dh); }
 .dash-icon-btn .icon  { width:13px; height:13px; }
-
-/* ── Occupancy by Room Type ──────────────────────────────────────────────── */
-.rt-full {
-    display:inline-flex; align-items:center; gap:6px; flex-shrink:0;
-    padding:7px 12px; border-radius:999px;
-    background:var(--dh-bg, rgba(46,201,138,.12)); color:var(--green);
-    font-size:12.5px; font-weight:700; white-space:nowrap;
-}
-.rt-full.is-high { color:var(--red); }
-
-.rt-body { display:grid; grid-template-columns:190px 1fr; gap:20px; padding:6px 0 2px; align-items:start; }
-
-.rt-stat {
-    display:flex; align-items:center; gap:10px; margin-top:14px;
-    padding:10px 12px; border-radius:12px;
-    background:var(--card); border:1px solid var(--border);
-}
-.rt-stat__ic { width:30px; height:30px; border-radius:50%; flex-shrink:0;
-               display:flex; align-items:center; justify-content:center; }
-.rt-stat__c    { min-width:0; line-height:1.25; }
-.rt-stat__c b  { display:block; font-size:15px; font-weight:800; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-.rt-stat__c span { font-size:10.5px; color:var(--text3); white-space:nowrap; }
-.rt-stat__sep  { width:1px; align-self:stretch; background:var(--border); margin:0 2px; }
-
-.rt-avail { display:flex; align-items:center; gap:7px; margin-top:11px; padding-left:2px;
-            font-size:12px; color:var(--text3); }
-.rt-avail i { width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
-.rt-avail b { color:var(--green); font-weight:800; font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-
-.rt-list__hd {
-    display:flex; align-items:center; gap:11px; padding:0 13px 8px;
-    font-size:11px; font-weight:600; color:var(--text3);
-}
-.rt-list__hd > span:first-child { flex:1; min-width:0; }
-.rt-list__hd-rooms { flex-shrink:0; width:70px; text-align:right; }
-.rt-list__hd-occ   { flex-shrink:0; width:140px; text-align:right; }
-
-.rt-row {
-    display:flex; align-items:center; gap:11px;
-    padding:10px 13px; margin-bottom:8px;
-    border-radius:12px; background:var(--card); border:1px solid var(--border);
-    transition:border-color .15s ease;
-}
-.rt-row:last-child  { margin-bottom:0; }
-.rt-row:hover       { border-color:var(--border2); }
-.rt-row__ic {
-    width:32px; height:32px; border-radius:10px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-}
-.rt-row__name  { flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--text);
-                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rt-row__rooms { flex-shrink:0; width:70px; text-align:right; font-size:12px; color:var(--text3);
-                 font-family:var(--ant-num-font);
-                 letter-spacing:var(--ant-num-track);
-                 font-variant-numeric:tabular-nums; }
-.rt-row__bar   { flex-shrink:0; width:86px; height:7px; border-radius:999px;
-                 background:var(--dash-track); overflow:hidden; }
-.rt-row__bar > i { display:block; height:100%; border-radius:999px; transition:width .5s ease; }
-.rt-row__pct   { flex-shrink:0; width:44px; text-align:right; font-size:13px; font-weight:800;
-                 font-family:var(--ant-num-font);
-                 letter-spacing:var(--ant-num-track);
-                 font-variant-numeric:tabular-nums; }
-
-.rt-note {
-    display:flex; align-items:center; gap:9px; margin-top:14px;
-    padding:10px 13px; border-radius:11px;
-    background:var(--dash-sunk); color:var(--text3); font-size:11.5px; line-height:1.5;
-}
-.rt-note__ic { color:var(--accent); flex-shrink:0; display:flex; }
 
 /* ── Pending payment rows ────────────────────────────────────────────────── */
 .dash-pay            { display:flex; align-items:center; border-bottom:1px solid var(--border); }
@@ -811,28 +995,6 @@
 .dl-glance__row--static:hover,
 .dl-rem__row--static:hover { background:none; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   THE SKETCH LAYOUT — rows B and C
-   ═══════════════════════════════════════════════════════════════════════════
-   Row B is the trend, the seat grid and Today at a Glance. Row C is occupancy
-   by type, occupancy overall, what needs doing and what you can do about it.
-
-   Row C IS THE FOLD. The brief is that Needs Action and Quick Actions are on
-   screen without scrolling, so the widths below are chosen to keep row C on
-   one line for as long as possible — the moment it wraps to two lines, the
-   fold is lost. That is also why the duplicate stat-tile row was removed from
-   the markup rather than restyled: no amount of CSS buys back a whole row.
-
-   The columns are uneven on purpose. The trend needs the most width to keep
-   twelve months legible; Glance is a list of six short rows and needs the
-   least. In row C the room-type breakdown carries the longest labels and the
-   quick actions are a fixed 2×2 of square buttons, so the space goes to the
-   left. */
-.dash-row-b,
-.dash-row-c { display:grid; gap:10px; margin-bottom:10px; align-items:stretch; }
-.dash-row-b > .dash-sec,
-.dash-row-c > .dash-sec { display:flex; flex-direction:column; min-width:0; }
-
 /* Below ~1400 the four-across row cannot hold its content without the method
    and need rows truncating, so it folds to 2×2 rather than shrinking. The fold
    promise is for the sizes the app is actually used at; past that, legibility
@@ -841,10 +1003,6 @@
    of this file is tuned against. Holding three across in row B and four in row
    C down to 1200 is what keeps the fold promise there; at 1400 the rows folded
    to two and pushed Needs Action a full screen down. */
-@media (max-width:1200px) {
-  .dash-row-c { grid-template-columns:repeat(2,minmax(0,1fr)); }
-}
-@media (max-width:720px) { .dash-row-c { grid-template-columns:minmax(0,1fr); } }
 
 /* ── NEEDS ACTION ────────────────────────────────────────────────────────────
    Four columns: hue dot, count, what it is, what to do. The verb is the point
@@ -877,38 +1035,6 @@
 .dl-occ__sw--fill  { background:var(--accent); }
 .dl-occ__sw--free  { background:var(--amber); }
 
-/* ── OCCUPANCY BY ROOM TYPE, RESIZED FOR ROW C ───────────────────────────────
-   The card was authored for a half-width slot: `.rt-body` is `190px 1fr`, so
-   in row C's ~390px column the right-hand list was squeezed to ~160px and its
-   room/percentage columns were clipped. The sketch is the layout, so the card
-   fits the slot rather than the slot bending to the card.
-
-   What goes, and why it is not a loss:
-
-   · `.rt-stat` and `.rt-avail` state Occupied, Total Seats and Seats Available.
-     Occupancy Overview is now the card immediately to its right and those are
-     its three legend rows. Printing them twice, side by side, is what made this
-     card tall — and if the two ever disagreed the reader would have no way to
-     tell which was right.
-   · `.rt-note` explains that the percentage counts seats rather than rooms.
-     True and worth saying, but it is a sentence of small print in a card whose
-     job here is the breakdown; it survives as the title attribute on each row.
-
-   The donut stays, smaller. It is the one thing in the card that Occupancy
-   Overview does NOT duplicate — the split BETWEEN types — and the sketch draws
-   it. The list scrolls past four types instead of growing the card, which is
-   what holds the fold on a hostel with many room types. */
-/* Superseded by the wide-card rules further down this file (7 Sep). */
-.dash-row-c .rt-donut__n { font-size:15px; }
-.dash-row-c .rt-donut__n span { font-size:11px; }
-.dash-row-c .rt-donut__l { font-size:8px; margin-top:2px; }
-.dash-row-c .rt-stat,
-.dash-row-c .rt-avail,
-.dash-row-c .rt-note { display:none; }
-.dash-row-c .rt-right { max-height:158px; overflow-y:auto; padding-right:2px; }
-.dash-row-c .rt-row { margin-bottom:5px; }
-.dash-row-c .dash-sec__sub { display:none; }
-
 /* ── THE LAST 90 PIXELS ──────────────────────────────────────────────────────
    At 1366x768 — the size this file is tuned against — everything above row C
    came to 631px, leaving 137 for a row whose cards were 165. Quick Actions and
@@ -928,77 +1054,6 @@
 
    Applied only where height is actually scarce. On a tall window the cards keep
    the reference proportions. */
-@media (max-height:900px) {
-  /* The chart's fixed height was set here at 138px. It is now `height:auto`
-     and flexed to fill the card (see ROW B CARDS FILL THEIR OWN HEIGHT at the
-     end of this file), so there is nothing to pin — the row's height decides,
-     and on a short window that is what makes the chart smaller. */
-  .dash-row-c .dl-acts { padding:10px 12px 12px; gap:7px; }
-  .dash-row-c .dl-act { padding:9px 6px; gap:5px; }
-  .dash-row-c .dl-occ { gap:9px; padding:12px 14px; }
-  .dash-row-c .dl-occ__pct { font-size:26px; }
-  .dash-row-c .dl-occ__legend { gap:5px; }
-  .dash-row-c .rt-right { max-height:132px; }
-  /* FOUR ROWS NOW, ALWAYS (see dashboard.js). Two more rows than this card used
-     to draw is ~70px, and it is the tallest card in row C — enough on its own to
-     push the row past the fold. The height comes back out of DECORATION, which
-     is the same rule the KPI tiles follow above: the icon tile shrinks and the
-     padding tightens, and every figure and every label is untouched. */
-  .dash-row-c .dl-needs { gap:1px; padding:4px 8px 8px; }
-  .dash-row-c .dl-need { padding:5px 8px; gap:8px; }
-  .dash-row-c .dl-need__ic { width:22px; height:22px; border-radius:7px; }
-  .dash-row-c .dl-need__ic .dl-ico { width:12px; height:12px; }
-}
-
-/* ── SIX ACROSS, WITHOUT CLIPPING THE LABELS ─────────────────────────────────
-   At 1366 six tiles are ~190px each, and "EXPENSES" was arriving as "EXPENS":
-   the label competes with a fixed-width pill stack and a 34px chip for the top
-   row, and it is the only one of the three that shrinks.
-
-   The label is the part that says what the number IS, so it wins. The pill and
-   the chip give back the ~25px it needs — the pill is a secondary count and
-   the chip is decoration. Only in the band where six tiles are actually tight;
-   past ~1600 the reference sizes return. */
-
-/* ── ROOM TYPE: ONE COLUMN IN ROW C ──────────────────────────────────────────
-   The 100px donut left ~210px for a list whose row is icon + name + room count
-   + bar + percentage, and the bar and percentage were being cut off the right
-   edge. Something had to go, and it is the donut.
-
-   The donut and the bar list say the SAME thing — how the beds divide between
-   room types — and of the two only the list also names the types and gives
-   each one a number. A ring with no labels beside a labelled list is the
-   decorative half of a duplicate. Removing it gives the list the full width
-   and drops the card's height at the same time, which is the other thing row C
-   needed. The overall occupancy figure it carried in the middle is the
-   headline of the card immediately to its right. */
-/* THE RING IS BACK (owner, 7 Sep: "that width should be used by occupancy by
-   room type and its pie chart"). Both reasons it was hidden have gone: the
-   card held 322px and now holds ~540 of the width Occupancy Overview used
-   to take, and the neighbour that carried the headline percentage was
-   removed the same day - so the ring is no longer the decorative half of a
-   duplicate, it is the only place the split is drawn. */
-.dash-row-c .rt-body { padding:4px 0 2px; }
-.dash-row-c .rt-left { display:block; }
-.dash-row-c .rt-donut { margin:0 auto; }
-
-/* The row is a flex line of fixed parts — a 32px icon, a 70px room count, an
-   86px bar and a 44px percentage, plus 11px gaps and 13px padding. That is
-   302px of committed width before the NAME, which is the only flexible part,
-   so in row C's 322px card the name was squeezed to nothing: the rows rendered
-   as an icon, a blank, "9 rooms" and a percentage hard against the edge.
-
-   Everything fixed gives a little back so the name always has room. It is the
-   one column that cannot be inferred from the others. */
-.dash-row-c .rt-row { gap:8px; padding:8px 10px; }
-.dash-row-c .rt-row__ic { width:24px; height:24px; border-radius:8px; }
-.dash-row-c .rt-row__ic svg { width:13px; height:13px; }
-.dash-row-c .rt-row__name { font-size:12px; }
-.dash-row-c .rt-row__rooms { width:50px; font-size:11px; }
-.dash-row-c .rt-row__pct { width:32px; font-size:12px; }
-.dash-row-c .rt-list__hd { gap:8px; padding:0 10px 6px; font-size:10px; }
-.dash-row-c .rt-list__hd-rooms { width:50px; }
-.dash-row-c .rt-list__hd-occ { width:90px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SHORT AND NARROW VIEWPORTS — 1366@125% (1093x614) and 1920@150% (1280x660)
@@ -1015,15 +1070,6 @@
    6/3/4 shape down to 1000px costs width per card but saves far more height
    than it costs. Below 1000 it still collapses; at that point the cards really
    are too narrow to read and stacking is the honest answer. */
-@media (min-width: 1000px) and (max-width: 1200px) {
-  .dash-row-c { grid-template-columns: 1.25fr .95fr 1.05fr .95fr; }
-
-  /* Room count drops out of the room-type rows. At ~210px per card the name,
-     the bar and the percentage all have to fit, and of the four the room count
-     is the one the card is not about — the header says "Occupancy". */
-  .dash-row-c .rt-row__rooms,
-  .dash-row-c .rt-list__hd-rooms { display: none; }
-}
 
 /* SHORT (under ~700px tall): the KPI tiles lose their supporting detail.
    A tile is a chip, a label, a pill, the VALUE, a progress track, a sub-line
@@ -1035,20 +1081,6 @@
 
    Nothing here changes a number or a label. */
 @media (max-height: 700px) {
-  .dash-row-b .dash-sec__head,
-  .dash-row-c .dash-sec__head { margin-bottom: 4px; }
-
-  .dash-row-c .dl-needs { gap: 0; padding: 3px 8px 6px; }
-  .dash-row-c .dl-need { padding: 3px 8px; gap: 7px; }
-  .dash-row-c .dl-need__ic { width: 20px; height: 20px; border-radius: 6px; }
-  .dash-row-c .dl-need__ic .dl-ico { width: 11px; height: 11px; }
-  .dash-row-c .dl-need__n { font-size: 14px; }
-
-  .dash-row-c .dl-acts { padding: 8px 10px 10px; gap: 6px; }
-  .dash-row-c .dl-act { padding: 7px 5px; gap: 4px; }
-  .dash-row-c .dl-occ { gap: 7px; padding: 10px 12px; }
-  .dash-row-c .dl-occ__pct { font-size: 22px; }
-  .dash-row-c .rt-right { max-height: 108px; }
   .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 8px; }
 }
 
@@ -1058,18 +1090,6 @@
    figure: the chart shrinks to a shape rather than a plot, and the room grid
    shows one row of chips and scrolls. Both still answer their question; they
    just answer it smaller. */
-@media (max-height: 640px) {
-  .dash-row-c .rt-right { max-height: 82px; }
-  .dash-row-c .dl-need { padding: 2px 8px; gap: 6px; }
-  .dash-row-c .dl-need__ic { width: 18px; height: 18px; }
-  .dash-row-c .dl-need__ic .dl-ico { width: 10px; height: 10px; }
-  .dash-row-c .dl-need__n { font-size: 13px; }
-  .dash-row-c .dl-need__label,
-  .dash-row-c .dl-need__verb { font-size: 10.5px; }
-  .dash-row-c .dl-act { padding: 5px 4px; }
-  .dash-row-c .dl-occ { gap: 5px; padding: 8px 12px; }
-  .dash-row-c .dl-occ__pct { font-size: 19px; }
-}
 
 /* == THE GREETING, ON THE HEADER ROW =======================================
    Injected into #header .hdr-left by applyHeaderChrome(), dashboard only. It
@@ -1478,16 +1498,6 @@ body:not(.light-theme) .dl-pending {
    the card is ~540px wide in the three-across layout; at two-across it is back
    to the ~322px slot it was hidden from in the first place, where a ring with
    no labels sits beside a labelled list saying the same thing. */
-@media (max-width:1200px) {
-  .dash-row-c .rt-body { grid-template-columns:minmax(0,1fr); gap:0; }
-  .dash-row-c .rt-left { display:none; }
-}
-
-@media (max-height:720px) {
-
-  .dash-row-c .rt-donut { width:118px; height:118px; max-width:118px; }
-  .dash-row-c .rt-body { grid-template-columns:118px minmax(0,1fr); gap:12px; }
-}
 
 /* ══ THE LAST 60px, AT THE TWO ZOOMED SIZES ════════════════════════════════
    Under 665px of content height the split rows fold onto ONE line and drop
@@ -1498,7 +1508,6 @@ body:not(.light-theme) .dl-pending {
 @media (max-height:665px) {
 
   .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom:4px; }
-  .dash-row-c > .dash-sec { --sec-pad-x:12px; padding:10px var(--sec-pad-x); }
 }
 
 /* The last 30px, at 1366x768 @125% — the one size still over. `.rt-note` is a
@@ -1506,47 +1515,13 @@ body:not(.light-theme) .dl-pending {
    once, and read never again. It is the only element left in rows A-C that is
    neither a figure nor a control, so it is the right thing to lose before
    anything that is. */
-@media (max-height:665px) {
-  .dash-row-c .rt-note { display:none; }
-}
-
-/* ══ THE ROOM-TYPE RING, now the shared SVG donut ══════════════════════════ */
-.rt-left .dnut { aspect-ratio: 1; margin: 0 auto; }
-.rt-left .dnut__top { font-size: inherit; }
-.rt-left .dnut__fig { display: block; font-size: 21px; font-weight: 800; color: var(--text);
-                      letter-spacing: -.3px; }
-.rt-left .rt-of { font-size: 12px; font-weight: 700; color: var(--text3); }
-.rt-left .dnut__sub { font-size: 9.5px; }
-
-/* ══ QUICK ACTIONS: narrower buttons (owner, 7 Sep) ════════════════════════
-   The tiles were sized to fill the card, so four of them made four wide slabs
-   for four short verbs. Capped and centred, they read as buttons. */
-/* TWO COLUMNS STILL, in a card ~175px wide: the tiles lose their max-width and
-   their side padding instead, because a 2x2 block of verbs is what makes this
-   card readable at a glance and one column of four would make it a list
-   competing with Needs Action beside it. The labels already wrap to two lines
-   ("Add Cancellation"), which is why the tile is sized by its icon, not its
-   text. */
-.dash-row-c .dl-acts--4 { gap: 6px; }
-.dash-row-c .dl-acts--4 > * { padding-left: 4px; padding-right: 4px; font-size: 10.5px; }
-.dash-row-c .dl-acts--4 > * .dl-ico,
-.dash-row-c .dl-acts--4 > * svg { flex: 0 0 auto; }
 
 /* The zoomed sizes give the plot back what they must — it still clears the
    120px it had before 7 Sep, so it is larger everywhere, just not equally. */
-@media (max-height:665px) {
-  .rt-left .dnut { max-width: 118px; }
-}
 
 /* 1366x768 @125% is the one size where row C folds to 2x2, so its cards stack
    and every pixel counts twice. The quick-action tiles are the tallest thing
    left that is chrome rather than a reading. */
-@media (max-height:665px) {
-  .dash-row-c .dl-acts--4 > * { padding-top: 4px; padding-bottom: 4px; max-width: 116px; }
-  .dash-row-c .dash-sec__head { margin-bottom: 2px; }
-  .dash-row-c .dash-sec__sub { display: none; }
-  .dash-row-c .rt-list__hd { display: none; }
-}
 
 /* ══ §4 — THE RIGHT COLUMN IS ONE COLUMN ══════════════════════════════════
    This Month at a Glance and Quick Actions are in different rows, so nothing
@@ -1558,25 +1533,6 @@ body:not(.light-theme) .dl-pending {
    Both now take one KPI-card width - 5 cards, 4 gaps of 12 - so the right
    column lines up with the card above it as well as with itself. */
 :root, .dash-row-b, .dash-row-c { --dash-right-col: calc((100% - 48px) / 5); }
-.dash-row-c { grid-template-columns: 1.9fr 1.15fr var(--dash-right-col); }
-
-.dash-row-c .dl-need    { padding: 2px 9px; }
-.dash-row-c .dl-need__ic { width: 20px; height: 20px; }
-.dash-row-c .dl-acts--4 > * { padding-top: 5px; padding-bottom: 5px; }
-.dash-row-c .dash-sec   { padding-top: 10px; padding-bottom: 10px; }
-
-/* The last 8px. `.rt-note` is a sentence explaining how the percentage beside
-   it is calculated - true, useful once, read never again - and the row-type
-   list rows carry 2px of padding each that no figure depends on. Between them
-   they are the eight pixels rows A-C were over at 1366x768. */
-.dash-row-c .rt-note { display: none; }
-.dash-row-c .rt-row  { padding-top: 3px; padding-bottom: 3px; }
-
-/* THE RING SETS ROW C'S HEIGHT, not the list beside it - which is why trimming
-   the list rows and the note bought nothing. 150 -> 130 is the eight pixels
-   rows A-C were over, and the ring is still the largest thing in the card. */
-.dash-row-c .rt-donut,
-.rt-left .dnut { width: 130px; height: 130px; max-width: 130px; }
 
 /* AND RE-ASSERTED, for the third time in this file and for the same reason:
    an unconditional `#trend-chart-wrap { min-height }` added later beats the
@@ -1674,50 +1630,12 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
    symptom was a card that could not answer the question in its own title.
 
    THREE RULES COMPETE FOR .rt-body AND ALL THREE ARE (0,2,0):
-     :1629  @media (max-width:1200px)   minmax(0,1fr)      - the ring is hidden
-     :1652  @media (max-height:720px)   118px minmax(0,1fr) - a smaller ring
-     :2080  unconditional               130px minmax(0,1fr) - a smaller ring
-
-   At the QA floor - 1093x614 - BOTH queries are true at once, so :1652 is as
-   much a competitor as :2080; the first version of this note blamed only the
-   latter. Fixing that by appending a fourth (0,2,0) rule would have worked
-   today purely because it landed last in the file, and would break the moment
-   anyone inserted another .rt-body rule after it or moved this one up to sit
-   beside the query it belongs to.
-
-   So it wins on SPECIFICITY instead: .rt-body's parent is the card, making
-   `.dash-row-c .dash-sec .rt-body` (0,3,0) against their (0,2,0). Order stops
-   mattering, which is the point - this file's whole recurring bug is rules
-   that are only correct in the order they happen to be written in.
-
-   The height queries are untouched and still right where the ring is VISIBLE
-   (max-height:720px above 1200px wide keeps its 118px ring); this only
-   collapses the grid where :1630 has already hidden the ring. */
-@media (max-width: 1200px) {
-  .dash-row-c .dash-sec .rt-body { grid-template-columns: minmax(0, 1fr); gap: 0; }
-}
-/* The short tiers still give height back, they just start from the new floor.
+     :1629  /* The short tiers still give height back, they just start from the new floor.
    Two rows at 640px rather than one: the bar it replaces was already hidden at
    this height, so this spends nothing the fold was relying on. */
-@media (max-height: 665px) { .dash-row-c .dash-sec .rt-right { max-height: 118px; } }
 /* Below this the card cannot hold four rows AND the ring AND stay above the
    fold, and the fold wins — it is the owner's stated constraint. Three rows and
    a scroll is what 1093x614 can afford. */
-@media (max-height: 640px) { .dash-row-c .dash-sec .rt-right { max-height: 92px; } }
-
-/* FOUR TYPES COME FROM DENSITY, NOT FROM A TALLER CARD. Raising .rt-right's
-   ceiling was the first attempt and it was the wrong lever: the list already
-   had a 158px ceiling at this size and was fitting three rows into it at 43px
-   each, so the fix is the 43, not the 158. Row C is the row the fold is
-   measured against — buying a fourth room type by making its tallest card
-   taller would have paid for it out of the one budget that has none.
-
-   34px a row: 22px icon in 2+2 of padding, 4px between rows. Four of those is
-   136px and the ceiling stays where it was. Nothing here is a figure or a
-   label; it is the space around them. */
-.dash-row-c .dash-sec .rt-row     { padding: 2px 10px; }
-.dash-row-c .dash-sec .rt-row__ic { width: 22px; height: 22px; border-radius: 7px; }
-.dash-row-c .dash-sec .rt-row__ic svg { width: 12px; height: 12px; }
 
 /* ══ THE MISSING TIER: 721-800px TALL ══════════════════════════════════════
 
@@ -1749,25 +1667,6 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
 @media (min-height: 721px) and (max-height: 800px) {
     #content { padding-top: 12px; }
     .dash-row-b, .dash-row-c, .dash-kpi-grid { margin-bottom: 7px; }
-    /* The chart alone gave 7px, not the 22 the arithmetic promised: below 223px
-       the SEAT card becomes the tallest thing in row B and takes over setting
-       it, so shrinking the chart further buys nothing. The last 12 come off the
-       card padding in both rows instead, 3px top and bottom on six cards -
-       which is the cheapest whitespace on the screen and the only thing left
-       that is not a figure, a label or a control. */
-    .dash-row-b > .dash-sec,
-    .dash-row-c > .dash-sec { padding-top: 11px; padding-bottom: 11px; }
-    /* Landing on exactly 0px of slack is not a fit, it is a coin toss - the
-       real content box varies with the taskbar, and a hostel with a sixth room
-       type or a two-line card title would tip it.
-
-       The margin comes off the room-type list, which is what sets row C at this
-       size, and row C is the tallest of the three. Not off row A: trimming the
-       KPI padding was tried and row A got 2px TALLER, because those tiles are
-       content-bound rather than padding-bound and the freed space just let the
-       value and the bar redistribute. */
-    .dash-row-c .dash-sec .rt-right { max-height: 148px; }
-    .dash-row-c .dash-sec .rt-row { margin-bottom: 3px; }
 }
 
 /* ══ THE SMALL TYPE (owner, 7 Sep: "the small fonts all over the dashboard are
@@ -1789,8 +1688,7 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
    1093x614 has 7px of slack. Weight and colour are free; a point of size is
    not. If the owner still finds them small after this, the size pass has to
    come out of a card, and that is a separate decision with a number attached. */
-.dash-sec .dash-sec__sub,
-.dash-row-c .rt-row__rooms {
+.dash-sec .dash-sec__sub {
     color: var(--text2);
     font-weight: 600;
 }
@@ -1816,10 +1714,6 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
    makes and the cheapest whitespace on the screen. Specificity over the
    `--sec-pad-x` rules that already exist at this tier, so order does not
    decide it. */
-@media (max-height: 640px) {
-    .dash-row-b > .dash-sec,
-    .dash-row-c > .dash-sec { padding-top: 8px; padding-bottom: 8px; }
-}
 
 /* ══ THE DONUT MOVES (owner, 7 Sep) ════════════════════════════════════════
    Two behaviours, both taken from the Reports donut so the app's two rings
@@ -1863,95 +1757,6 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
     .dnut .dnut__seg:hover { transform: none; stroke-width: 22; }
 }
 
-/* ══ NEEDS ACTION + QUICK ACTIONS ═════════════════════════════════════════
-   THE OLD CARDS, RESTORED (owner, 2026-09-09, third pass — `dashboard-now.png`
-   handed over as "the actual viewport design, old design").
-
-   What stood here was the build to `redesign nedd And quick actions.png`:
-   tinted rows, a glyph tile and chevron on every quick action, a sub-line under
-   each label, and a three-part panel head with an emoji chip, a subtitle and a
-   disabled "View all". It was faithful to that reference and it was the wrong
-   size for this column — the reference is drawn at nearly twice the width row C
-   gives these panels, so at 1366 every quick-action label wrapped to two lines
-   and the card measured 96px against the 79px tile it replaced.
-
-   The whole of it is gone rather than trimmed again. Two passes of shrinking it
-   (the row proportions, then the card's) landed on something that was neither
-   the reference nor the card the owner wanted back. The rules below are the
-   previous card's, restored from 55689fa — the `.dash-row-c` overrides higher
-   up this file are already written against them, which is the other half of why
-   the halfway version kept fighting.
-
-   The panel's inline-size container goes with it: nothing measures it now. */
-
-/* ── Quick Actions ───────────────────────────────────────────────────────── */
-.dl-acts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding:12px 14px 14px; }
-.dl-act {
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
-    padding:13px 6px; border:1px solid var(--border); border-radius:10px; cursor:pointer;
-    transition:border-color .14s ease, color .14s ease, background .14s ease;
-}
-.dl-act__ic { display:flex; }
-.dl-act__label { font-size:11px; font-weight:600; text-align:center; line-height:1.25; }
-
-/* ── QUICK ACTIONS, 2×2 ──────────────────────────────────────────────────────
-   Four actions in a square block rather than six in a 3-wide strip, per the
-   owner's quick.png. A 2×2 also stops the panel dictating the height of row C. */
-.dl-acts--4 { grid-template-columns:repeat(2,minmax(0,1fr)); }
-
-.dl-needs { display:flex; flex-direction:column; gap:2px; padding:6px 8px 10px; }
-.dl-need {
-    display:grid; grid-template-columns:auto auto 1fr auto; align-items:center; gap:9px;
-    width:100%; padding:8px; border:0; border-radius:9px;
-    text-align:left; cursor:pointer; color:var(--text2);
-    transition:background .14s ease;
-}
-.dl-need__ic {
-    display:flex; align-items:center; justify-content:center;
-    width:26px; height:26px; border-radius:8px;
-    background:var(--dh-bg); color:var(--dh);
-}
-.dl-need__ic .dl-ico { width:14px; height:14px; }
-.dl-need__n {
-    font-size:15px; font-weight:800; color:var(--text);
-    font-variant-numeric:tabular-nums;
-}
-.dl-need__label {
-    font-size:12px; color:var(--text2);
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.dl-need__verb { font-size:11px; font-weight:700; white-space:nowrap; }
-.dl-need:hover .dl-need__verb { text-decoration:underline; }
-
-/* A CLEARED ROW STAYS ON THE CARD (owner, 2026-09-06). All four rows are always
-   present so the list is scannable by position — "pending payments" is always
-   the second line — and only the numbers change. What changes with a 0 is the
-   weight, not the presence: the row recedes so the rows that still want
-   something are the ones carrying colour, and the verb becomes "Clear" because
-   View / Collect on an empty queue is an instruction to do nothing. */
-.dl-need.is-clear                { color:var(--text3); }
-.dl-need.is-clear .dl-need__n    { color:var(--text3); font-weight:700; }
-.dl-need.is-clear .dl-need__label{ color:var(--text3); }
-.dl-need.is-clear .dl-need__verb { font-weight:600; }
-
-/* ══ dashb.png — THE 2026-09-09 PASS ═══════════════════════════════════════
-   Colour, a tagline and a closing line on the three row-C panels; the glance
-   given room between its rows. Everything here is added to the OLD cards the
-   owner restored earlier the same day — the shape is theirs, this is the
-   finish on top of it. */
-
-/* ── the one-line head: chip, title, tagline, badge ──────────────────────── */
-.dl-head3 { display: flex; align-items: center; gap: 9px; }
-.dl-head3__ico {
-    flex: 0 0 auto;
-    width: 26px; height: 26px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--dh-bg); color: var(--dh);
-}
-.dl-head3__ico svg { width: 14px; height: 14px; }
-.dl-head3__b   { display: flex; flex-direction: column; min-width: 0; }
-.dl-head3 .dash-pill { margin-left: auto; flex-shrink: 0; }
-
 /* ── the closing line ────────────────────────────────────────────────────── */
 /* At the FOOT, not under the title. A card that says "Items that want a
    decision" AND "Resolve these to keep operations smooth" above its rows has
@@ -1969,35 +1774,6 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
 }
 .dl-foot--tint svg { color: var(--accent-strong); }
 
-/* ── Needs Action: the row wears its own tone while it wants something ───── */
-/* Its OWN tone, not one colour for all four: a pending cancellation is amber
-   business and a payment is red, and painting them alike leaves the count as
-   the only signal. A cleared row keeps its place and loses its colour. */
-.dl-need              { background: var(--dh-bg); }
-.dl-need .dl-need__ic { background: var(--card); }
-.dl-need__verb        { color: var(--dh); }
-.dl-need:hover        { background: var(--dh-bg); filter: brightness(.985); }
-
-.dl-need.is-clear              { background: transparent; }
-.dl-need.is-clear .dl-need__ic { background: var(--dash-sunk); color: var(--text3); }
-.dl-need.is-clear .dl-need__verb { color: var(--text3); }
-.dl-need.is-clear:hover        { background: var(--dash-sunk); filter: none; }
-
-/* ── Quick Actions: a tinted tile with the arrow the reference draws ─────── */
-.dl-act {
-    position: relative;
-    background: var(--dh-bg); border-color: transparent; color: var(--text2);
-}
-.dl-act:hover      { background: var(--dh-bg); border-color: var(--dh); color: var(--text); }
-.dl-act__ic        { color: var(--dh); }
-.dl-act__label     { color: var(--text); }
-.dl-act__go {
-    position: absolute; top: 6px; right: 6px;
-    display: flex; color: var(--dh); opacity: .75;
-}
-.dl-act__go svg    { width: 11px; height: 11px; }
-.dl-act:hover .dl-act__go { opacity: 1; }
-
 /* The glance's closing line is a sentence, so it wraps rather than truncating —
    "1 open job to clear tod…" is worse than two short lines. */
 .dl-foot--tint span    { white-space: normal; }
@@ -2012,93 +1788,6 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
 /* `.dash-sec__head` wraps, and with a chip, a two-line title block and a badge
    the Quick Actions head was breaking between the glyph and the word. */
 .dash-sec__head.dl-head3 { flex-wrap: nowrap; align-items: center; }
-
-/* ── narrower bars again (owner: "as that of 2 seater room") ─────────────── */
-.dash-row-c .rt-row__bar,
-.dash-split  .rt-row__bar { width: 28px; }
-
-/* ── ROW C GIVES ITS HEIGHT TO ROW B (owner, 2026-09-09) ──────────────────
-   Removing the taglines from Needs Action and Quick Actions and the closing
-   notes from the KPI tiles bought FOUR pixels, because neither row is sized by
-   what was removed: row A is as tall as Advance / Arrears, which never carried
-   a note, and row C is as tall as Occupancy by Room Type, whose height is the
-   donut.
-
-   So the donut is where the height actually is. 150px -> 118, which is the size
-   this file already steps it to on a short window, and the room list beside it
-   keeps every row. Row C falls to about 185 and row B takes what it leaves.
-
-   `.dash-row-c .rt-donut` at :1524 caps `max-width` at 168 and sits later in
-   the file, so both properties are restated here rather than one. */
-.dash-row-c .rt-body  { grid-template-columns: 118px minmax(0, 1fr); gap: 14px; }
-.dash-row-c .rt-donut { width: 118px; height: 118px; max-width: 118px; }
-
-/* ── ROW C GIVES ITS HEIGHT TO ROW B, AND THIS IS THE RULE THAT DOES IT ────
-   Measured with the row set to `align-items:start`, the three cards come to
-   215, 210 and 205 — within eleven pixels, so trimming any one moves nothing,
-   and that is also why removing the two panel taglines and the four KPI notes
-   bought four pixels: neither row was sized by what came out.
-
-   The tallest is Occupancy by Room Type, and its 215 is a head of 33 over a
-   body of 154 — where the body IS `.rt-right`, the room list, capped at 148px
-   by `.dash-row-c .dash-sec .rt-right` at :2524. A first attempt trimmed row
-   padding on all three cards at (0,2,0) and changed nothing, because that cap
-   is (0,3,0) and later.
-
-   120px still shows four room types before it scrolls, which is the whole of a
-   typical hostel's list; the list has always scrolled past that. Row C falls to
-   about 187 and row B takes what it leaves. Chrome, not type. */
-
-/* ── 120 SHOWED THREE ROOM TYPES AND EIGHT PIXELS OF A FOURTH ──────────────
-   (owner, 2026-09-10: "the other bars should have the same size as the seater
-   room bar so that all four show".)
-
-   The note above is arithmetic that forgot the column header. Measured at
-   1366x768 on the seeded five-type hostel: `.rt-list__hd` is 21px and a row is
-   28 + 3 of margin, so 120px buys 21 + 3x31 = 114 and spends the last 6 on the
-   top sliver of 4-Seater. A row cut in half is worse than a row not shown — it
-   is the one thing on this card that looks like a rendering fault rather than a
-   list that scrolls.
-
-   THE CEILING IS NOW AN EXACT NUMBER OF WHOLE ROWS, and it was MEASURED, not
-   derived: with the header at 19 the fourth row ends 137px down and its margin
-   closes at 139, and the fifth begins at 141. 141 therefore showed a 2px sliver
-   of the fifth — the same fault one row further on — so the cut is 139. A fifth
-   type starts below it and scrolls to; the list never shows a partial row at
-   this size. Four is the number the owner asked for and the whole of a typical
-   hostel's list; a five-type hostel scrolls by one.
-
-   THE 19px WAS ALREADY IN THE CARD, WHICH IS THE POINT. Row C's 202 is set by
-   Needs Action, not by this card: measured before the change, `.rt-body` ended
-   at 721 inside a card whose floor is 726, so five of the pixels were simply
-   unused and the 120px ceiling was never what the card could afford. The rest
-   is the body's own padding (4), the row margins 3 -> 2 and the header's
-   padding-bottom (6), and the ceiling itself. Row C is still 202 and still ends
-   its row; nothing below the fold moved to pay for this.
-
-   THE TAGLINE AND THE 26px CHIP CAME OUT TOO, and they bought nothing here —
-   the head measures 33 either way, because `.rt-full` (the "N% Full" pill) is
-   33 and it is the tallest thing in the row. They went for consistency with the
-   26px heads on the other two cards in row C, not for height. What DID move the
-   fold is row A: Advance / Arrears splitting its two buckets side by side drops
-   the KPI row from 160 to 153, so row C now ends at 730 of 738 instead of flush
-   against it — eight pixels of margin on the one measurement the QA floor keeps
-   failing by.
-
-   THE SHORT TIERS ARE RESTATED BELOW THIS RULE, not left to the four at :2463.
-   This selector is (0,3,0) and later in the file than every one of them, so an
-   unconditional value here silently becomes the value at EVERY height — which
-   is what the 120px rule this replaces was already doing to them. Restating
-   720-and-under at that same 120 keeps short windows exactly as they were
-   before this change; only the band above it, where the fold has the room,
-   moves. */
-.dash-row-c .dash-sec .rt-right { max-height: 139px; }
-@media (max-height: 720px) { .dash-row-c .dash-sec .rt-right { max-height: 120px; } }
-.dash-row-c .dash-sec .rt-row   { margin-bottom: 2px; }
-.dash-row-c .dash-sec .rt-body  { padding: 1px 0 1px; }
-.dash-row-c .dash-sec .rt-list__hd { padding-bottom: 4px; }
-.dash-row-c .dl-needs { gap: 2px; padding: 3px 8px 4px; }
-.dash-row-c .dl-acts  { gap: 6px; padding: 6px 10px 8px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE SEAT-AVAILABILITY EXPAND MODAL (`sxp-`)
