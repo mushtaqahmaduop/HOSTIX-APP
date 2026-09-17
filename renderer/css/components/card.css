@@ -6,12 +6,20 @@
 .ui-card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  /* 12px, from 8 (owner, 2026-09-17). The teardown puts every card-level
+     surface at 24px; that was drawn for large editorial panels, and this
+     dashboard holds fifteen cards at once. --radius-lg is the ladder's next
+     rung, so the softening costs no new token. */
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
   min-width: 0;
 }
+/* THE SERIF, at weight 400 (owner, 2026-09-17). A card title is a voice, not
+   chrome — and the display face is never bold on the serif, which is the one
+   rule the teardown states twice. Weight comes off the size, not the stroke. */
 .ui-card__title {
-  font-size: var(--text-lg); font-weight: var(--weight-medium); color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-lg); font-weight: var(--weight-normal); color: var(--text-primary);
 }
 
 /* For a card whose content owns the edge — a table, a list. */

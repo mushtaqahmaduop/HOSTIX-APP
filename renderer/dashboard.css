@@ -341,7 +341,8 @@
 /* ── Seat Availability ──────────────────────────────────────────────────── */
 .seat-hd { min-width: 0; margin-right: auto; }
 .seat-hd__t {
-    font-size: var(--text-lg); font-weight: var(--weight-medium);
+    font-family: var(--font-display);
+    font-size: var(--text-lg); font-weight: var(--weight-normal);
     color: var(--text-primary); line-height: var(--leading-tight);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -1085,7 +1086,9 @@ body.light-theme .dash-rp thead th { background: transparent; }
    owner could see and no rule in this file admitted to. */
 .dash-sec        { background:var(--card); border:1px solid var(--border); }
 .dash-sec__head  { display:flex; align-items:center; flex-wrap:wrap; }
-.dash-sec__title { font-weight:700; color:var(--text); }
+/* Serif at 400, like every card title since 2026-09-17. */
+.dash-sec__title { font-family: var(--font-display); font-weight: var(--weight-normal);
+                   color: var(--text-primary); }
 .dash-link       { font-size:12px; font-weight:700; color:var(--accent-strong); background:none; border:none; padding:0; cursor:pointer; }
 .dash-link:hover { text-decoration:underline; }
 
@@ -1110,7 +1113,11 @@ body.light-theme .dash-rp thead th { background: transparent; }
 .dash-pay__amt       { font-size:13px; font-weight:800; color:var(--red); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
 .dash-pay__due       { font-size:10.5px; color:var(--text3); margin-top:1px; text-align:right; white-space:nowrap; }
 .dash-status         { font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--dh-bg); color:var(--dh); white-space:nowrap; }
-.dash-sec               { --sec-pad-x:14px; padding:12px var(--sec-pad-x); border-radius:16px; }
+/* The shared shell for rows B, C and D. Radius and padding on the ladder
+   (owner, 2026-09-17); --sec-pad-x stays published because the Recent
+   Payments table and its footer read it for their full-bleed margins. */
+.dash-sec { --sec-pad-x: var(--space-3); padding: var(--space-3) var(--sec-pad-x);
+            border-radius: var(--radius-lg); }
 
 .dash-sec__head         { margin-bottom:10px; gap:8px; }
 .dash-sec__title        { font-size:13px; }

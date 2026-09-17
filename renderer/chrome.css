@@ -23,7 +23,7 @@
        --sidebar-bg, so the rail has ONE background token instead of two that
        had to be kept in step by hand. */
     --sb-border:   rgba(255,255,255,.09);
-    --sb-fg:       #f5f5f5;
+    --sb-fg:       #FAF9F5;   /* warm ivory, matching --text-primary */
     --sb-fg2:      rgba(255,255,255,.66);
     --sb-fg3:      rgba(255,255,255,.40);
     --sb-hover:    rgba(255,255,255,.07);
@@ -116,16 +116,20 @@ body.light-theme {
        4.8:1. All past AA. */
     /* WHITE (owner, 2026-09-14: "change the sidebar colour to the white mode").
        The dark foregrounds below only gain contrast on it. */
-    --sidebar-bg:  #FFFFFF;
-    --sb-border:   rgba(15,23,42,.08);
-    --sb-fg:       #0F172A;
-    --sb-fg2:      #334155;
-    --sb-fg3:      #64748B;
-    --sb-hover:    rgba(15,23,42,.055);
+    /* IVORY, NOT WHITE (owner, 2026-09-17). The rail was the last pure-white
+       surface in the app and it sat beside an ivory canvas, which read as a
+       bright strip rather than as paper. The inks come off the same warm ramp
+       as the page: 16.4:1, 9.8:1 and 5.6:1 on #FAF9F5, all past AA. */
+    --sidebar-bg:  #FAF9F5;
+    --sb-border:   rgba(20,20,19,.08);
+    --sb-fg:       #141413;
+    --sb-fg2:      #3D3D3A;
+    --sb-fg3:      #5C5A51;
+    --sb-hover:    rgba(20,20,19,.05);
     --sb-active:   var(--accent);
     --sb-active-hover:var(--accent-strong);
     --sb-active-fg:var(--text-on-accent);
-    --sb-divider:  rgba(15,23,42,.09);
+    --sb-divider:  rgba(20,20,19,.09);
     --sb-avatar:   var(--accent);
 }
 
@@ -828,7 +832,7 @@ body:not(.light-theme) .tsk-foot { box-shadow: 0 -4px 14px rgba(0, 0, 0, .30); }
    it — at 5.5% the hover and the active state were the same grey and the rail
    could not say which row you were on. Dark: the same idea, lifted. */
 #sidebar { --sb-active-surface: rgba(255,255,255,.10); --sb-active-edge: rgba(255,255,255,.14); }
-body.light-theme #sidebar { --sb-active-surface: #FFFFFF; --sb-active-edge: var(--border); }
+body.light-theme #sidebar { --sb-active-surface: var(--surface-1); --sb-active-edge: var(--border); }
 /* The white pill needs its own separation on an ivory rail, and a 1px border
    plus the app's own card shadow is how every other raised surface here does
    it. This is the card shadow, not a glow: no hue, 2px of blur. */

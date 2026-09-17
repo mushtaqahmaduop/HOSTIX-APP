@@ -1635,7 +1635,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     opacity: 0.5;
 }
 
-.room-num { font-size: 22px; font-weight: 900; color: var(--text); font-family: var(--font-display); }
+.room-num { font-size: 22px; font-weight: 900; color: var(--text); font-family: var(--ant-num-font); }
 .room-type {
     font-size: 11px; font-weight: 600; color: var(--text3);
     margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -3634,8 +3634,11 @@ body.light-theme .stat-card.glass {
 
    Tabular is inherited from .money-value and matters more here than anywhere:
    six KPI tiles whose digits do not line up read as six different sizes. */
+/* --ant-num-font (Inter), NOT --font-display. The display face became a
+   SERIF on 2026-09-17 and a serif has no business on money: Inter is what
+   carries the tabular figures these tiles line up on. */
 .money-value--display .money-amt {
-    font-family: var(--font-display);
+    font-family: var(--ant-num-font);
     font-weight: 700;
     letter-spacing: -0.03em;
 }
@@ -4749,9 +4752,10 @@ body.light-theme .dash-card {
 h1, h2, h3,
 .card-title,
 .modal-title,
+/* Figures, so the numeric face rather than the serif display one. */
 .stat-value,
 .sb-stat .v {
-    font-family: var(--font-display);
+    font-family: var(--ant-num-font);
 }
 
 /* ── STAT TREND CHIP ─────────────────────────────────────────────────────── */
