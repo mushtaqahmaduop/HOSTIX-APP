@@ -222,12 +222,19 @@ test('a part paid month arrives part paid, and the balance adds to it', async ()
 
   expect(shown.cls, 'part paid, not settled').toContain('is-partial');
   expect(shown.banner).toContain('part paid');
-  expect(Number(shown.paidBox), 'the box is seeded with what was already taken').toBe(PAID_SO_FAR);
+  /* THE BOX STARTS EMPTY, AND THAT IS THE POINT (finance spec Rule 3, §5;
+     owner review 2026-09-18). It used to be SEEDED with what had already been
+     taken, because the box WAS the month's cumulative total — and that is what
+     let a second collection overwrite the first. The box now asks only what is
+     being handed over now, so there is nothing to seed it with. The balance
+     beside it is still the real one, which is the half that had to survive. */
+  expect(shown.paidBox, 'the box asks for new money, so it starts empty').toBe('');
   expect(Number(shown.unpaid), 'and the remaining balance is the real one').toBe(FULL - PAID_SO_FAR);
   expect(shown.summary, 'the summary agrees with the record').toContain('10,500');
 
-  // The student hands over the remaining 10,500 → running total 14,500.
-  await win.fill('#f-ppaid', String(FULL));
+  // The student hands over the remaining 10,500. That is what is typed now —
+  // not the 14,500 running total the old model demanded.
+  await win.fill('#f-ppaid', String(FULL - PAID_SO_FAR));
   await win.evaluate(() => recalcUnpaid());
   await win.evaluate(() => submitAddPayment());
   // The merge is behind a confirm; take it.
@@ -252,7 +259,7 @@ test('a part paid month arrives part paid, and the balance adds to it', async ()
   expect(rec.p.status).toBe('Paid');
   expect(rec.p.partialPayments && rec.p.partialPayments.length,
     'todays instalment is on the record').toBe(1);
-  expect(rec.p.partialPayments[0].amount, 'and it is the difference, not the total')
+  expect(rec.p.partialPayments[0].amount, 'and it is the money received, not the total')
     .toBe(FULL - PAID_SO_FAR);
 
   expect(pageErrors, 'no uncaught errors').toEqual([]);

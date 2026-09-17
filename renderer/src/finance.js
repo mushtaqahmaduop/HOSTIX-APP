@@ -210,14 +210,23 @@ function applyPayment(p, opts) {
   p.overpaid = money(p.overpaid) + credit;
   p.status   = p.unpaid > 0 ? 'Pending' : 'Paid';
   p.paidDate = p.status === 'Paid' ? date : '';
-  p.method   = o.method || p.method || 'Cash';
+
+  /* THE RECORD'S METHOD IS NOT RESTAMPED BY A LATER COLLECTION (Rule 1: never
+     change a receipt's payment method). It used to be `o.method || p.method`
+     unconditionally, so a month opened in cash and topped up by bank transfer
+     retroactively became a bank transfer — on the record, on its row, and on
+     any receipt reprinted afterwards. The record's method describes the
+     collection that OPENED it; each later collection carries its own method on
+     its own trail entry, which is where a receipt reads it. */
+  const payMethod = o.method || p.method || 'Cash';
+  if (!p.method || paidBefore <= 0) p.method = payMethod;
 
   /* The instalment trail. Its entries carry their own dates, which is what lets
      a record part-paid in July and cleared in August be two cash events in two
      months rather than one lump on whichever date the record happens to hold. */
   if (!Array.isArray(p.partialPayments)) p.partialPayments = [];
   const entry = {
-    date, amount, method: p.method,
+    date, amount, method: payMethod,
     collectedBy: o.collectedBy ||
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
     note: o.note || 'Collected',

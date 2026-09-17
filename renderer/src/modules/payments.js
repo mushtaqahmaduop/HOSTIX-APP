@@ -1717,6 +1717,13 @@ function pfExistingForMonth(studentId, monthLabel) {
    figures the warden typed themselves, so only a fill is ever reversed. */
 let _pfFilledFrom = '';
 
+/* WHAT THE SELECTED MONTH HAS ALREADY COLLECTED. The amount box is "money
+   received now" (finance spec Rule 3), so the form's live balance has to know
+   what came in BEFORE today to price what is still owing. It used to know it
+   the wrong way round: the box itself held the cumulative figure, which is the
+   model that let a second collection overwrite the first. */
+let _pfAlready = 0;
+
 function pfLoadMonthContext() {
   const box = document.getElementById('pf-month-state');
   if (!box) return;                          // older forms carry no banner
@@ -1731,6 +1738,7 @@ function pfLoadMonthContext() {
   const list   = document.getElementById('extra-charges-list');
 
   if (!rec) {
+    _pfAlready = 0;
     box.style.display = 'none'; box.innerHTML = '';
     if (_pfFilledFrom) {                       // undo the previous month's fill
       _pfFilledFrom = '';
@@ -1747,6 +1755,7 @@ function pfLoadMonthContext() {
   _pfFilledFrom = rec.id || '';
 
   const already = Number(rec.amount || 0);
+  _pfAlready = money(already);
   const owing   = outstandingOf(rec);
   const settled = rec.status === 'Paid' || owing <= 0;
 
@@ -1760,10 +1769,13 @@ function pfLoadMonthContext() {
     list.innerHTML = '';
     (rec.extraCharges || []).forEach(c => addExtraChargeRow(c.description || c.label || '', c.amount || 0));
   }
-  // The box is the running total for the month, not today's instalment. Seeding
-  // it with what has already been taken means the warden edits a figure they
-  // can see instead of overwriting one they cannot.
-  if (paidEl) paidEl.value = already || '';
+  /* THE BOX STARTS EMPTY (spec §5: "The input must start empty").
+     It used to be seeded with `already` — the month's collected total — because
+     the box WAS that total. That seeding is what made the cumulative model
+     usable, and what made it dangerous: the warden was editing a historical
+     figure, and lowering it destroyed a collection. The box now asks only how
+     much is being handed over now, so there is nothing to seed it with. */
+  if (paidEl) paidEl.value = '';
   // A month charged by days opens as By days, with the figures it was charged on.
   pfProSet(!!rec.prorate, rec.prorate || null);
 
@@ -1776,9 +1788,9 @@ function pfLoadMonthContext() {
     ? `<div><b>${escHtml(month)} is already settled.</b> ${fmtPKR(already)} was collected${
         rec.paidDate ? ' on ' + escHtml(rec.paidDate) : ''}. Nothing more is owed for this month — use
        <b>Receive Outstanding</b> below to take money for an earlier month.</div>`
-    : `<div><b>${escHtml(month)} is part paid.</b> ${fmtPKR(already)} collected so far,
-       <b>${fmtPKR(owing)}</b> still owing.<br>Amount Paid below is the <b>total for this
-       month</b> and already holds what was taken — raise it by whatever is being handed over now.</div>`);
+    : `<div><b>${escHtml(month)} is part paid.</b> Received to date <b>${fmtPKR(already)}</b>,
+       outstanding <b>${fmtPKR(owing)}</b>.<br>Enter only what is being handed over
+       <b>now</b> — it is added to what was received before, never instead of it.</div>`);
   recalcUnpaid();
 }
 
@@ -1993,7 +2005,11 @@ function recalcUnpaid() {
      still capped and still says so. */
   const paidEl  = document.getElementById('f-ppaid');
   let pa = money(parseFloat(paidEl?.value)||0);
-  const implausible = total > 0 && pa > total * 2;
+  /* Measured against what is STILL OWING, not the whole bill: on a month that
+     has already taken most of its rent, the whole bill is no longer a
+     plausible amount to be handed over. */
+  const owingNow    = Math.max(0, total - money(_pfAlready));
+  const implausible = owingNow > 0 && pa > owingNow * 2;
   const note = (text, tone) => {
     let w = document.getElementById('f-ppaid-cap-warn');
     if (!text) { if (w) w.remove(); return; }
@@ -2007,21 +2023,25 @@ function recalcUnpaid() {
     w.textContent = text;
   };
   if (implausible) {
-    pa = total;
-    if(paidEl) { paidEl.value = total; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to total due: ' + total; }
-    note('⚠️ Amount capped to total due (' + Number(total).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
-  } else if (pa > total && total > 0) {
+    pa = owingNow;
+    if(paidEl) { paidEl.value = owingNow; paidEl.style.border = '2px solid var(--amber)'; paidEl.title = 'Capped to what is outstanding: ' + owingNow; }
+    note('⚠️ Amount capped to what is outstanding (' + Number(owingNow).toLocaleString('en-PK') + ' PKR). Check for typos.', 'amber');
+  } else if (pa > owingNow && owingNow >= 0 && total > 0) {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
-    note(fmtPKR(pa - total) + ' over the bill — recorded as a credit, refundable at checkout.', 'text2');
+    note(fmtPKR(pa - owingNow) + ' over what is outstanding — recorded as a credit, refundable at checkout.', 'text2');
   } else {
     if(paidEl) { paidEl.style.border = ''; paidEl.title = ''; }
     note('');
   }
-  const u = Math.max(0, total - pa);
+  /* WHAT IS STILL OWING AFTER TODAY. `pa` is today's money only, so what the
+     month already holds has to be added back in — otherwise a part-paid month
+     shows its whole bill as outstanding the moment the box is cleared. */
+  const takenBefore = money(_pfAlready);
+  const u = Math.max(0, total - takenBefore - pa);
   const el = document.getElementById('f-punpaid');
   if(el){ el.value=u; el.style.color=u>0?'var(--red)':u===0?'var(--green)':'var(--amber)'; }
   const st = document.getElementById('f-pstat');
-  if(st) st.value = (pa >= total && total > 0) ? 'Paid' : 'Pending';
+  if(st) st.value = (takenBefore + pa >= total && total > 0) ? 'Paid' : 'Pending';
   const etEl = document.getElementById('extra-charges-total');
   if(etEl) etEl.textContent = 'Rs. ' + Number(extra).toLocaleString('en-PK');
 
@@ -2052,7 +2072,7 @@ function recalcUnpaid() {
   wsLine('03', extra,  1);
   wsLine('04', pa,    -1);
   const qf = document.getElementById('ws-q-full');
-  if (qf) qf.textContent = fmtNum(total);
+  if (qf) qf.textContent = fmtNum(Math.max(0, total - money(_pfAlready)));
   pfPostLine();
 
   // The Add Payment page's right-hand summary is the same arithmetic, itemised.
@@ -2222,7 +2242,7 @@ function showAddPaymentForStudent(studentId) {
         </label>`}
       </div>`}
       <div class="field"><label>Admission Fee (PKR)</label><input class="form-control" id="f-ps-admfee" type="number" placeholder="0" min="0" value="0" oninput="recalcUnpaidPS()"></div>
-      <div class="field"><label>Amount Paid (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="Enter amount paid" value="" oninput="recalcUnpaidPS()"></div>
+      <div class="field"><label>Money Received Now (PKR)</label><input class="form-control" id="f-ps-paid" type="number" placeholder="0" value="" oninput="recalcUnpaidPS()"></div>
       <!-- Concession + Extra Charges -->
       <div class="field col-full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
         <div style="display:flex;flex-direction:column;gap:8px">
@@ -2378,13 +2398,24 @@ async function submitPaymentForStudent() {
       '⚠️ Pending Record Already Exists',
       `${escHtml(t.name)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth)}</strong>.<br>`
       + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
-      + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `Received to date: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Outstanding: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `<div style="margin:-4px 0 10px;font-size:11.5px;color:var(--text3)">Money received now is <strong>added</strong> to what is already received — it does not replace it.</div>`
       + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
       async function() {
         // ── UPDATE existing pending record in-place ──────────────────
         if (pinNeeded() && !(await pinConfirm({ what: 'posting a payment' }))) { window._updatePendingPS = false; return; }   // step 10
         const newMonthlyRent = parseFloat(document.getElementById('f-ps-amt')?.value)  || alreadyPending.monthlyRent || 0;
-        const newPaid        = parseFloat(document.getElementById('f-ps-paid')?.value) || 0;
+        /* MONEY RECEIVED NOW, NOT A RUNNING TOTAL (finance spec Rule 3, §19).
+           This read the box as the month's CUMULATIVE paid figure and wrote it
+           straight over `alreadyPending.amount`. A student who had already paid
+           Rs.5,000 and handed over Rs.5,000 more had to be entered as 10,000,
+           and entering 5,000 — the amount actually received — silently erased
+           the first collection. This path did not even write an instalment
+           entry, so the erased money left no trace at all.
+           The box is now "Money received now" and the collection goes through
+           applyPayment(), which is the one place money is added to a record. */
+        const received       = money(parseFloat(document.getElementById('f-ps-paid')?.value) || 0);
+        const prevPaid       = money(alreadyPending.amount);
         /* THE BUG. This computed `newMonthlyRent - newPaid` and dropped the mess
            charge, the extras, the admission fee and the concession outright — so
            at a bundled hostel, merging a payment into an existing pending record
@@ -2408,11 +2439,14 @@ async function submitPaymentForStudent() {
           rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
           extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
         });
-        const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
-        const newStatus      = document.getElementById('f-ps-stat')?.value  || 'Pending';
+        /* The balance is priced against what has ALREADY been received. Money
+           arriving now is applied by applyPayment() below, after the charges
+           are settled — pricing it in here would count it twice. */
+        const newUnpaid      = Math.max(0, newTotalDue - prevPaid);
         const newMethod      = document.getElementById('f-ps-method')?.value || alreadyPending.method || 'Cash';
         const newDate        = document.getElementById('f-ps-date')?.value   || today();
         const newNotes       = document.getElementById('f-ps-notes')?.value  || '';
+        const newRef         = (document.getElementById('f-ps-ref')?.value || '').trim();
 
         // A different charge turns a by-days month back into an ordinary one (step 9).
         if (alreadyPending.prorate && (money(newMonthlyRent) !== money(alreadyPending.monthlyRent)
@@ -2428,20 +2462,38 @@ async function submitPaymentForStudent() {
         alreadyPending.concession   = newConcession;
         alreadyPending.concessionDesc = newConcDesc;
         alreadyPending.discount     = newConcession;
-        alreadyPending.amount       = money(newPaid);
+        /* `amount` IS NOT WRITTEN HERE. It is the record's collected total and
+           only applyPayment() may move it (Rule 1: never overwrite money that
+           has been received). Same for the payment date, the method and the
+           collector on a record that already holds money — those are facts
+           about a collection that already happened. */
         alreadyPending.unpaid       = newUnpaid;
-        alreadyPending.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
-        alreadyPending.method       = newMethod;
-        alreadyPending.status       = newStatus;
-        alreadyPending.date         = newDate;
-        alreadyPending.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending.paidDate || '');
-        alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
+        alreadyPending.overpaid     = Math.max(0, prevPaid - newTotalDue);   // §14
+        alreadyPending.status       = newUnpaid > 0 ? 'Pending' : 'Paid';
+        if (!ownHeld(alreadyPending)) {
+          alreadyPending.method     = newMethod;
+          alreadyPending.date       = newDate;
+          alreadyPending.collectedBy = CUR_USER?.name || alreadyPending.collectedBy || '';
+        }
+        alreadyPending.paidDate     = alreadyPending.status === 'Paid'
+          ? (alreadyPending.paidDate || newDate) : '';
         if (newNotes) alreadyPending.notes = newNotes;
         ledgerTrack(alreadyPending, { why: 'Updated on the payment form' });
 
+        // The one collection path (§6): every entry point posts money here.
+        const gotA = received > 0
+          ? applyPayment(alreadyPending, { amount: received, method: newMethod, date: newDate,
+                                           note: 'Collected', reference: newRef })
+          : null;
+
         logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
+        if (gotA && gotA.ok) logActivity('Payment Collected',
+          `${t.name} — ${enteredMonth} · ${fmtPKR(received)} received${newRef ? ' · Ref ' + newRef : ''}`, 'Finance');
         await saveDB(); closeModal(); renderPage(currentPage);
-        toast(`Payment updated for ${t.name} — no duplicate created`, 'success');
+        toast(gotA && gotA.ok
+          ? fmtPKR(received) + ' received — ' + (money(alreadyPending.unpaid) > 0
+              ? fmtPKR(alreadyPending.unpaid) + ' still outstanding' : 'this month is fully paid')
+          : `Payment updated for ${t.name} — no duplicate created`, 'success');
         window._updatePendingPS = false;
       },
       function() { window._updatePendingPS = false; }
@@ -2468,7 +2520,6 @@ async function submitPaymentForStudent() {
     rent: monthlyRent, messCharge: messChargePS, messIncluded: true,
     extraTotal: extraTotalPS, admissionFee: admissionFeePS, concession: concessionPS,
   });
-  const unpaid      = Math.max(0, totalDuePS - money(paidAmount));
   const status      = document.getElementById('f-ps-stat')?.value || 'Pending';
   // Collecting a payment does NOT change what the student is charged. Price is
   // set in Settings → Rent & Mess; this form only records what was taken. It
@@ -2482,12 +2533,16 @@ async function submitPaymentForStudent() {
     studentName: t.name || '',
     roomId: t.roomId || '',
     roomNumber: room?.number || '',
-    amount: paidAmount,
-    monthlyRent, unpaid,
-    // §14 overpayment: money handed over above the bill is recorded, not
-    // swallowed by the Math.max that computes `unpaid`. Written even when 0, so
-    // calculateRefund() answers from the record instead of deriving.
-    overpaid: Math.max(0, money(paidAmount) - totalDuePS),
+    /* OPENS EMPTY, AND applyPayment() PUTS THE MONEY IN (§6: one collection
+       service). The record used to be created with the cash already inside it
+       and no instalment entry at all, so a first collection had no date, no
+       method and no collector of its own — _cashEvents() had to attribute it
+       to the record's own date, and ownOwner() to a loose `collectedBy` field.
+       Every collection is an event now, including the first. */
+    amount: 0,
+    monthlyRent,
+    unpaid: totalDuePS,
+    overpaid: 0,
     messCharge: messChargePS, messIncluded: messIncludedPS,
     admissionFee: admissionFeePS,
     extraCharges: extraChargesPS, extraTotal: extraTotalPS,
@@ -2502,7 +2557,17 @@ async function submitPaymentForStudent() {
     paidDate: status === 'Paid' ? document.getElementById('f-ps-date')?.value || today() : '',
     notes: document.getElementById('f-ps-notes')?.value || '',
   });
-  ledgerTrack(DB.payments.find(x => x.id === _newPayIdPS));
+  const _recPS = DB.payments.find(x => x.id === _newPayIdPS);
+  if (money(paidAmount) > 0) {
+    applyPayment(_recPS, {
+      amount: money(paidAmount),
+      method: document.getElementById('f-ps-method')?.value || 'Cash',
+      date:   document.getElementById('f-ps-date')?.value || today(),
+      note:   'Collected',
+    });
+  } else {
+    ledgerTrack(_recPS);          // a bill with no money still posts its charge
+  }
   await saveDB(); closeModal();
   renderPage(currentPage);
   toast(`Payment recorded for ${t.name}`, 'success');
@@ -2716,17 +2781,19 @@ function renderAddPayment() {
             </div>
           </div>
 
-          <!-- 04 — AMOUNT PAID. The running total for the month, not today's
-               instalment; pfLoadMonthContext() seeds it with what is already in. -->
+          <!-- 04 — MONEY RECEIVED NOW. Not the month's running total: this box
+               was that total until 2026-09-18, which is how a second collection
+               could overwrite the first (finance spec Rule 3, §19). It starts
+               empty and every entry is a new applyPayment() event. -->
           <div class="ws__row">
             <div class="ws__n">04</div>
             <div class="ws__p">
-              <b>Amount paid &mdash; this month<span class="req">*</span></b>
-              <i>The month's running total, not today's instalment alone</i>
+              <b>Money received now<span class="req">*</span></b>
+              <i>Only what is being handed over today &mdash; it is added to what was received before</i>
             </div>
             <div class="ws__d">
               <label class="ws__mini ws__mini--wide"><span>Rs.</span>
-                <input class="pf-in" id="f-ppaid" type="number" placeholder="Amount collected" value="" oninput="recalcUnpaid()"></label>
+                <input class="pf-in" id="f-ppaid" type="number" placeholder="0" value="" oninput="recalcUnpaid()"></label>
               <div class="ws__chips">
                 <button type="button" class="ws__chip" onclick="pfPayQuick('full')">Full <b id="ws-q-full">0</b></button>
                 <button type="button" class="ws__chip" onclick="pfPayQuick('half')">Half</button>
@@ -2911,13 +2978,18 @@ function pfRenderMonthRail() {
 /* ── LINE 04 SHORTCUTS ───────────────────────────────────────────────────────
    Each is a figure the form already knows, so none of them can disagree with
    the stub: full is the payable total, rent is the room half of the charge. */
+/* The chips offer AMOUNTS TO RECEIVE NOW, so Full is what is still outstanding
+   on the month, not the month's whole bill — on a part-paid month those are
+   different numbers, and the bill would over-collect by whatever came in
+   earlier. */
 function pfPayQuick(which) {
   const el = document.getElementById('f-ppaid');
   if (!el) return;
   const total = pfPayableTotal();
-  el.value = which === 'rent' ? pfRentAmount()
-           : which === 'half' ? Math.round(total / 2)
-           : total;
+  const owing = Math.max(0, total - money(_pfAlready));
+  el.value = which === 'rent' ? Math.min(pfRentAmount(), owing || pfRentAmount())
+           : which === 'half' ? Math.round(owing / 2)
+           : owing;
   recalcUnpaid();
 }
 
@@ -3214,7 +3286,8 @@ async function submitAddPayment() {
         '⚠️ Pending Record Already Exists',
         `${escHtml(tName)} already has a <strong>Pending</strong> payment for <strong>${escHtml(enteredMonth2)}</strong>.<br>`
         + `<div style="margin:10px 0;background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.8">`
-        + `Existing → Paid: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Unpaid: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+        + `Received to date: <strong>${fmtPKR(existingPaidAmt)}</strong> &nbsp;|&nbsp; Outstanding: <strong style="color:var(--red)">${fmtPKR(existingUnpaid)}</strong></div>`
+      + `<div style="margin:-4px 0 10px;font-size:11.5px;color:var(--text3)">Money received now is <strong>added</strong> to what is already received — it does not replace it.</div>`
         + `<strong>Update the existing record</strong> instead of creating a duplicate?<br><small style="color:var(--text3)">Click <em>OK</em> to update · <em>Cancel</em> to abort</small>`,
         async function() {
           // ── UPDATE existing pending record in-place ──────────────────
@@ -3224,7 +3297,15 @@ async function submitAddPayment() {
           const newMonthlyRent = _pro ? _pro.days * _pro.rate : (pfRentAmount() || alreadyPending2.monthlyRent || 0);
           const newMessOn      = _pro ? false : document.getElementById('f-pmess-on')?.checked !== false;
           const newMess        = pfMessAmount();
-          const newPaid        = parseFloat(document.getElementById('f-ppaid')?.value) || 0;
+          /* MONEY RECEIVED NOW, NOT A RUNNING TOTAL (finance spec Rule 3, §19).
+             The comment that stood here said it outright — "Amount Paid is the
+             running total for the month, so today's cash is the difference" —
+             and that is the model the spec rules out. A second Rs.5,000 had to
+             be typed as the cumulative 10,000; typing the 5,000 actually
+             received rewrote the collected total DOWNWARDS and the instalment
+             came out negative, so no trail entry was written and the first
+             collection was gone. */
+          const received       = money(parseFloat(document.getElementById('f-ppaid')?.value) || 0);
           const newExtraCharges= getExtraChargesData();
           const newExtraTotal  = newExtraCharges.reduce((s,c)=>s+c.amount,0);
           // Admission fee and concession were missing here too, so merging into
@@ -3236,8 +3317,9 @@ async function submitAddPayment() {
             rent: newMonthlyRent, messCharge: newMess, messIncluded: true,
             extraTotal: newExtraTotal, admissionFee: newAdmFee, concession: newConcession,
           });
-          const newUnpaid      = Math.max(0, newTotalDue - money(newPaid));
-          const newStatus      = document.getElementById('f-pstat')?.value || 'Pending';
+          /* Priced against what was ALREADY received; money arriving now is
+             applied below, after the charges are settled. */
+          const newUnpaid      = Math.max(0, newTotalDue - money(prevPaid));
           const newMethod      = document.getElementById('f-pmethod')?.value || alreadyPending2.method || 'Cash';
           const newDate        = document.getElementById('f-pdate')?.value  || today();
           const newNotes       = document.getElementById('f-pnotes-main')?.value || document.getElementById('f-pnotes')?.value || '';
@@ -3252,33 +3334,35 @@ async function submitAddPayment() {
           alreadyPending2.messIncluded = newMessOn;
           if (_pro) alreadyPending2.prorate = { days: _pro.days, rate: _pro.rate };
           else delete alreadyPending2.prorate;
-          alreadyPending2.amount       = newPaid;
+          /* `amount` IS NOT WRITTEN HERE — only applyPayment() moves a record's
+             collected total (Rule 1). The hand-rolled trail push that used to
+             sit here is gone with it: one collection path, one trail writer. */
           alreadyPending2.unpaid       = newUnpaid;
-          alreadyPending2.overpaid     = Math.max(0, money(newPaid) - newTotalDue);   // §14
-          // Amount Paid is the running total for the month, so today's cash is
-          // the difference. Recording it leaves a per-instalment trail instead
-          // of one figure that quietly changes shape between visits.
-          const instalment = newPaid - prevPaid;
-          if (instalment > 0) {
-            if (!alreadyPending2.partialPayments) alreadyPending2.partialPayments = [];
-            alreadyPending2.partialPayments.push({
-              date: newDate, amount: instalment, method: newMethod,
-              collectedBy: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden',
-              note: 'Instalment'
-            });
-          }
+          alreadyPending2.overpaid     = Math.max(0, money(prevPaid) - newTotalDue);   // §14
           alreadyPending2.extraCharges = newExtraCharges;
           alreadyPending2.extraTotal   = newExtraTotal;
           alreadyPending2.admissionFee = newAdmFee;
           alreadyPending2.concession   = newConcession;
           alreadyPending2.discount     = newConcession;
-          alreadyPending2.method       = newMethod;
-          alreadyPending2.status       = newStatus;
-          alreadyPending2.date         = newDate;
-          alreadyPending2.paidDate     = newStatus === 'Paid' ? newDate : (alreadyPending2.paidDate || '');
-          alreadyPending2.collectedBy  = CUR_USER?.name || alreadyPending2.collectedBy || '';
+          /* A record holding money keeps its date, method and collector: they
+             are facts about a collection that already happened (Rule 1). */
+          alreadyPending2.status       = newUnpaid > 0 ? 'Pending' : 'Paid';
+          if (!ownHeld(alreadyPending2)) {
+            alreadyPending2.method     = newMethod;
+            alreadyPending2.date       = newDate;
+            alreadyPending2.collectedBy = CUR_USER?.name || alreadyPending2.collectedBy || '';
+          }
+          alreadyPending2.paidDate     = alreadyPending2.status === 'Paid'
+            ? (alreadyPending2.paidDate || newDate) : '';
           if (newNotes) alreadyPending2.notes = newNotes;
           ledgerTrack(alreadyPending2, { why: 'Updated on the payment form' });
+
+          // The one collection path (§6).
+          const gotB = received > 0
+            ? applyPayment(alreadyPending2, { amount: received, method: newMethod, date: newDate,
+                                              note: 'Collected',
+                                              reference: (document.getElementById('f-pref')?.value || '').trim() })
+            : null;
 
           // Arrears entered alongside this update still post to their own months.
           const arrearsU = pfOutstandingAllocations();
@@ -3322,7 +3406,6 @@ async function submitAddPayment() {
     extraTotal, admissionFee, concession,
   });
   const totalRent   = monthlyRent;                // display rent = base only
-  const unpaid      = Math.max(0, totalDue - money(paidAmount));
   const status      = document.getElementById('f-pstat')?.value || 'Pending';
   const t    = isManual ? null : DB.students.find(x=>x.id===studentIdRaw);
   const room = t ? DB.rooms.find(r=>r.id===t?.roomId) : null;
@@ -3339,10 +3422,11 @@ async function submitAddPayment() {
     studentName: finalName,
     roomId: t?.roomId||'',
     roomNumber: room?.number||'',
-    amount: paidAmount,
-    monthlyRent, unpaid,
-    // §14 overpayment — see submitPaymentForStudent() for the reasoning.
-    overpaid: Math.max(0, money(paidAmount) - totalDue),
+    // Opens empty; applyPayment() below puts the money in (§6).
+    amount: 0,
+    monthlyRent,
+    unpaid: totalDue,
+    overpaid: 0,
     messCharge, messIncluded,
     // What a by-days month was charged on (step 9): the ledger, the receipt and
     // the Edit form all read it.
@@ -3364,8 +3448,19 @@ async function submitAddPayment() {
       date: document.getElementById('f-pdate')?.value || today(),
     })),
   });
-  // A manual-name payment has no student and stays out of the ledger.
-  ledgerTrack(DB.payments.find(x => x.id === _newPayId));
+  const _recAP = DB.payments.find(x => x.id === _newPayId);
+  if (money(paidAmount) > 0) {
+    applyPayment(_recAP, {
+      amount: money(paidAmount),
+      method: document.getElementById('f-pmethod')?.value || 'Cash',
+      date:   document.getElementById('f-pdate')?.value || today(),
+      note:   'Collected',
+      reference: (document.getElementById('f-pref')?.value || '').trim(),
+    });
+  } else {
+    // A manual-name payment has no student and stays out of the ledger.
+    ledgerTrack(_recAP);
+  }
   // Arrears collected on this visit are posted to the months they belong to,
   // never folded into the record just created for the selected month.
   const arrearsDesc = arrears.length
