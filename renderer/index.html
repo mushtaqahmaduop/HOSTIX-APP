@@ -450,42 +450,59 @@
         <div class="sub" id="sb-hostel-name" hidden></div>
       </div>
     </div>
-    <!-- MONTH PICKER — in the sidebar, where the sketch puts it and where the
+    <span id="sb-location-sub" style="display:none"></span>
+    <span id="sb-location" style="display:none"></span>
+    <span id="sb-version" style="display:none"></span>
+  </div>
+    <!-- OUT OF THE BRAND BLOCK (owner review #2, 2026-09-18). This lived
+         inside .sb-logo, which carries `padding: 18px 16px 16px 44px` so the
+         mark clears the collapse button. The picker inherited the 44px: it had
+         151px of a 212px rail, its button 135px, and "September 2026" did not
+         fit in the 85px that left for the label - which is why the control
+         looked like it needed a shorter label. It did not; it needed to not be
+         a child of the logo. It also put a second hairline under .sb-logo's
+         own, indented 44px, so the rail had a short floating line in it. -->
+    <!-- MONTH PICKER - in the sidebar, where the sketch puts it and where the
          sb- class names always said it belonged. Every figure on the dashboard
          is scoped to this month, so it reads as a property of the whole app
-         rather than one control among several in the page header. -->
+         rather than one control among several in the page header.
+
+         ONE BUTTON, NOT THREE (owner review #2, 2026-09-18). It was < label >
+         - a stepper whose label showed today's date and never the month being
+         shown. The button now carries the selected month and opens a 12-month
+         grid; see the note at the top of src/modules/sidebar_calendar.js. -->
     <div id="sb-calendar-wrap" class="sb-month-picker" style="position:relative">
       <div class="sb-month-picker__header">
-        <button onclick="sbCalPrev();event.stopPropagation()" class="sb-month-picker__arrow" title="Previous month">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <div class="sb-month-picker__display" onclick="toggleSbCal()" title="Show calendar">
+        <button type="button" id="sb-cal-btn" class="sb-month-picker__display"
+                onclick="toggleSbCal();event.stopPropagation()"
+                aria-haspopup="true" aria-expanded="false"
+                title="Choose the month the dashboard shows">
           <svg class="sb-month-picker__icon" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           <span id="sb-cal-today-lbl" class="sb-month-picker__label"></span>
+          <i id="sb-cal-off" class="sb-month-picker__off" hidden title="Not the current month"></i>
           <svg id="sb-cal-arrow" class="sb-month-picker__chevron" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-        <button onclick="sbCalNext();event.stopPropagation()" class="sb-month-picker__arrow" title="Next month">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
         </button>
       </div>
-      <div id="sb-cal-body" class="sb-month-picker__body" style="display:none;position:absolute;top:100%;right:0;width:280px;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.5);z-index:999;margin-top:4px">
+      <div id="sb-cal-body" class="sb-month-picker__body" style="display:none">
         <div class="sb-month-picker__controls">
-          <span id="sb-cal-current-lbl" onclick="(()=>{const k=_sbCalYear+'-'+String(_sbCalMonth+1).padStart(2,'0');navigateToMonth(k);})()" class="sb-month-picker__month-label" title="Click to view this month on dashboard"></span>
-          <select id="sb-cal-year-sel" onchange="sbCalSetYear(parseInt(this.value));event.stopPropagation()" onclick="event.stopPropagation()" class="sb-month-picker__year-select"></select>
-          <button id="sb-cal-reset-btn" onclick="event.stopPropagation();_dashboardMonth=null;this.style.display='none';renderPage(currentPage)" class="sb-month-picker__reset" style="display:none" title="Return to today's month">Today</button>
+          <select id="sb-cal-year-sel" onchange="sbCalSetYear(parseInt(this.value));event.stopPropagation()" onclick="event.stopPropagation()" class="sb-month-picker__year-select" aria-label="Year"></select>
+          <span class="sb-month-picker__gap"></span>
+          <button type="button" id="sb-cal-reset-btn" onclick="sbCalToday();event.stopPropagation()" class="sb-month-picker__reset" style="display:none" title="Go back to the current month">This month</button>
+        </div>
+        <div id="sb-cal-months" class="sb-month-picker__months"></div>
+        <!-- The day grid is not a second picker: every cell navigates to the
+             month it belongs to. It is here for the per-day payment dots. -->
+        <div class="sb-month-picker__dayhead">
+          <span id="sb-cal-current-lbl"></span>
+          <span class="sb-month-picker__key"><i class="is-paid"></i>paid<i class="is-pend"></i>pending</span>
         </div>
         <div class="sb-month-picker__weekdays">
           <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div class="sb-month-picker__weekend">Sa</div><div class="sb-month-picker__weekend">Su</div>
         </div>
         <div id="sb-cal-days" class="sb-month-picker__days"></div>
-        <div id="sb-cal-month-list" style="display:none"></div>
       </div>
     </div>
 
-    <span id="sb-location-sub" style="display:none"></span>
-    <span id="sb-location" style="display:none"></span>
-    <span id="sb-version" style="display:none"></span>
-  </div>
 
   <!-- SCROLLABLE MIDDLE — Main + Finance + System nav groups -->
   <nav class="sb-nav sidebar__middle">

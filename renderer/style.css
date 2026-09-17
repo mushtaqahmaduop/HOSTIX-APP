@@ -797,69 +797,96 @@ input, select, textarea { font-family: var(--font); }
 /* ── Premium Month Picker ─────────────────────────────────────────────────── */
 .sb-month-picker {
     flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--sb-border);
     padding: 0;
 }
 .sb-month-picker__header {
     display: flex;
     align-items: center;
-    gap: 2px;
     padding: 6px 8px;
 }
-.sb-month-picker__arrow {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-    color: var(--text3);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-    flex-shrink: 0;
-}
-.sb-month-picker__arrow:hover {
-    background: var(--bg3);
-    color: var(--text);
-}
+
+/* THE BUTTON IS THE WHOLE CONTROL (owner review #2). It replaced a three-part
+   < label > stepper, so it takes the full rail width - 212px less 16px of
+   header padding - and the arrow rules that used to flank it are gone. It is
+   painted from the rail's own tokens, not the page's: --sb-hover over
+   --sidebar-bg, which is the same one-step lift the active nav pill uses. */
 .sb-month-picker__display {
     flex: 1;
+    min-width: 0;
+    height: 32px;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 6px;
-    padding: 5px 10px;
+    padding: 0 8px;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.15s;
-    background: var(--bg3);
-    border: 1px solid var(--border);
+    font-family: inherit;
+    text-align: left;
+    color: var(--sb-fg);
+    background: var(--sb-hover);
+    border: 1px solid var(--sb-border);
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-.sb-month-picker__display:hover {
-    background: var(--bg4);
-    border-color: var(--border2);
+.sb-month-picker__display:hover { background: var(--surface-hover); }
+.sb-month-picker__display:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
-.sb-month-picker__icon {
-    color: var(--accent-strong);
-    flex-shrink: 0;
-}
+.sb-month-picker__icon { color: var(--sb-fg3); flex-shrink: 0; }
 .sb-month-picker__label {
+    flex: 1;
+    min-width: 0;
     font-size: 11px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--sb-fg);
     letter-spacing: 0.3px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.sb-month-picker__chevron {
-    color: var(--text3);
-    transition: transform 0.25s;
+/* The one thing in the rail allowed to catch the eye: you are not looking at
+   the current month. The accent is free for it now that the nav pill is
+   neutral. */
+.sb-month-picker__off {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--accent);
     flex-shrink: 0;
 }
+.sb-month-picker__chevron {
+    color: var(--sb-fg3);
+    transition: transform var(--dur-base) var(--ease);
+    flex-shrink: 0;
+}
+
+/* A menu, so it gets the one shadow the spec allows. It floats over the page,
+   so it is painted from page tokens rather than the rail's. */
+/* FIXED, AND POSITIONED FROM JS. Two reasons, both measured:
+
+   #sidebar is `overflow: hidden`, so an absolutely-positioned panel wider
+   than the 212px rail is clipped to the rail whatever side it is anchored
+   from. At `right: 0` - which is how it shipped - its left edge sat at -69px
+   and the first column of the grid, the year dropdown and the This month
+   button were off the left of the window; moved to `left: 8px` the right
+   column was cut off instead. Nothing had ever opened it in a screenshot, so
+   neither was noticed.
+
+   A fixed panel is not clipped by ancestor overflow (nothing in the chain
+   sets transform, filter, will-change or contain, which is what would make it
+   clip anyway - checked, not assumed). Fixed means the offsets are viewport
+   coordinates, so _sbCalChrome() sets top and left off the button's own rect
+   and keeps the panel inside the window. */
 .sb-month-picker__body {
-    padding: 6px 10px 10px;
-    border-top: 1px solid var(--border);
+    position: fixed;
+    width: 280px;
+    z-index: 999;
+    padding: 10px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-menu);
 }
 .sb-month-picker__controls {
     display: flex;
@@ -867,22 +894,15 @@ input, select, textarea { font-family: var(--font); }
     gap: 6px;
     margin-bottom: 8px;
 }
-.sb-month-picker__month-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text);
-    cursor: pointer;
-    flex: 1;
-}
-.sb-month-picker__month-label:hover { color: var(--accent-strong); }
+.sb-month-picker__gap { flex: 1; }
 .sb-month-picker__year-select {
     font-size: 11px;
     font-weight: 600;
-    color: var(--text2);
-    background: var(--bg3);
+    color: var(--text-secondary);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 3px 6px;
     cursor: pointer;
     outline: none;
     font-family: inherit;
@@ -891,16 +911,96 @@ input, select, textarea { font-family: var(--font); }
 .sb-month-picker__reset {
     font-size: 10px;
     font-weight: 600;
-    background: var(--bg3);
-    color: var(--accent-strong);
-    border: 1px solid var(--border2);
-    border-radius: 20px;
-    padding: 2px 10px;
+    background: var(--surface-2);
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 3px 10px;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.15s;
+    font-family: inherit;
+    transition: background var(--dur-fast) var(--ease);
 }
-.sb-month-picker__reset:hover { background: var(--bg4); }
+.sb-month-picker__reset:hover { background: var(--surface-hover); }
+
+/* THE PICKER ITSELF. Four columns, so the rows fall Jan-Apr / May-Aug /
+   Sep-Dec and any month in the browsed year is one click instead of up to six
+   presses of an arrow. */
+.sb-month-picker__months {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+}
+.sb-month-picker__mo {
+    position: relative;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.sb-month-picker__mo:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sb-month-picker__mo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A month that holds payment records, so an unused year reads as empty rather
+   than looking identical to a full one. */
+.sb-month-picker__mo.has-rec::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    width: 3px;
+    height: 3px;
+    margin-left: -1.5px;
+    border-radius: 999px;
+    background: var(--text-tertiary);
+}
+.sb-month-picker__mo.is-now { border-color: var(--border-strong); }
+.sb-month-picker__mo.is-on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+}
+.sb-month-picker__mo.is-on:hover { background: var(--accent); color: var(--on-accent); }
+.sb-month-picker__mo.is-on.has-rec::after { background: var(--on-accent); }
+
+/* The day grid below. Its cells all navigate to the same month - it is here
+   for the dots, which are the only per-day view of payments in the app. */
+.sb-month-picker__dayhead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 10px 0 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+.sb-month-picker__key {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.sb-month-picker__key i {
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    margin-left: 4px;
+}
+.sb-month-picker__key i.is-paid { background: var(--green); margin-left: 0; }
+.sb-month-picker__key i.is-pend { background: var(--amber); }
 .sb-month-picker__weekdays {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -910,16 +1010,58 @@ input, select, textarea { font-family: var(--font); }
 .sb-month-picker__weekdays > div {
     font-size: 9px;
     font-weight: 700;
-    color: var(--text3);
+    color: var(--text-tertiary);
     text-align: center;
     padding: 2px 0;
     text-transform: uppercase;
 }
-.sb-month-picker__weekend { color: var(--accent-strong) !important; opacity: 0.5; }
+.sb-month-picker__weekend { color: var(--accent) !important; opacity: 0.5; }
 .sb-month-picker__days {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 1px;
+}
+/* These four were 380 characters of inline style per cell, rebuilt on every
+   render with two inline mouse handlers to fake :hover. */
+.sb-month-picker__day {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: background var(--dur-fast) var(--ease);
+}
+.sb-month-picker__day:hover { background: var(--surface-hover); }
+.sb-month-picker__day.is-past { color: var(--text-tertiary); }
+/* --on-accent, not #000: --accent is #2451D6 in light mode and black ink on
+   it measured 2.1:1. */
+.sb-month-picker__day.is-today {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 800;
+}
+.sb-month-picker__day.is-today:hover { background: var(--accent); }
+.sb-month-picker__daydot {
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    margin-top: 1px;
+}
+
+/* At 62px the rail keeps the button as an icon: "September 2026" cannot fit,
+   and the old label could not either. #sidebar makes these (1,1,0), so they
+   win over the base rules whatever the file order. */
+@media (max-width: 640px) {
+    #sidebar .sb-month-picker__header { padding: 6px; }
+    #sidebar .sb-month-picker__display { justify-content: center; padding: 0; }
+    #sidebar .sb-month-picker__label,
+    #sidebar .sb-month-picker__chevron { display: none; }
 }
 
 .sb-section {

@@ -220,7 +220,13 @@ function navigate(page, isBack=false) {
   closeSidebar();
   // The month picked on the dashboard is the dashboard's alone (owner,
   // 2026-09-17): leaving it goes back to the real month.
-  if (page !== 'dashboard') _dashboardMonth = null;
+  if (page !== 'dashboard') {
+    _dashboardMonth = null;
+    /* ...and the picker has to be told, or its label keeps naming the month
+       you left. Nothing else repaints it on a page change: it is painted at
+       boot, on a DB write, on the day rolling over, and when it is opened. */
+    if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+  }
   // A visit starts clean — see FILTER_REGISTRY above.
   if (page !== currentPage) resetFilters();
   /* ONLY A CHANGE OF PAGE IS A STEP. `navigate(currentPage)` is how several

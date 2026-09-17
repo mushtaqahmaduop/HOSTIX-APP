@@ -44,12 +44,12 @@ body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
    not a type size, and the labels are unchanged. */
 #sidebar .sb-section { padding: 4px 10px 2px; margin-top: 2px; }
 
-/* The picker itself, as a single compact row. It was styled for a sidebar that
-   had room to spare — 28px arrows inside 6px of padding. −17px, and it still
-   clears the 24px minimum touch target on its arrows. */
-.sb-month-picker__header { padding: 2px 8px 4px; gap: 1px; }
-.sb-month-picker__arrow  { width: 24px; height: 24px; }
-.sb-month-picker__display { padding: 0 4px; }
+/* The picker itself, as a single compact row. It was styled for a sidebar
+   that had room to spare — 6px of padding around a 32px control. The two
+   28px arrows it also had are gone entirely (owner review #2), which is
+   worth more rail than this block ever was. */
+.sb-month-picker__header { padding: 2px 8px 4px; }
+.sb-month-picker__display { height: 30px; padding: 0 6px; }
 .sb-month-picker__label { font-size: 12px; }
 
 /* The calendar popover is unchanged — it opens over the page, so its size
