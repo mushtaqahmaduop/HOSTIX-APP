@@ -1360,7 +1360,6 @@ function renderDashboard() {
       ${dashEmojiChip('building', 26)}
       <div class="rt-hd">
         <div class="dash-sec__title">Occupancy by Room Type</div>
-        <div class="rt-hd__s">Seats filled per capacity</div>
       </div>
 <span class="rt-tot">${fmtNum(filledSeats)} / ${fmtNum(totalSeats)} <span class="rt-tot__d">·</span> ${seatPct}%</span>
     </div>

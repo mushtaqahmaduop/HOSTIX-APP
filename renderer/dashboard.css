@@ -614,12 +614,11 @@
 }
 
 /* ── Occupancy card: head ───────────────────────────────────────────────── */
+/* NO SUBTITLE (owner, 2026-09-17). "Seats filled per capacity" is the
+   reference's, and on this card it restated the footnote at the other end of
+   the same panel - which already says the percentages are seats and not rooms,
+   and says it better. Fifteen pixels back into the room list. */
 .rt-hd { min-width: 0; }
-.rt-hd__s {
-    font-size: var(--text-xs); color: var(--text-tertiary);
-    line-height: var(--leading-tight); margin-top: 1px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 /* "252 / 300 · 84%". It was a green "84% Full" pill, which spent a status
    colour on a reading: a full hostel is the goal, not a warning. Plain
    figures, tabular, so the two halves line up as the month moves. */
@@ -633,20 +632,30 @@
 /* ── Occupancy card: body ───────────────────────────────────────────────── */
 .rt-body {
     display: grid; grid-template-columns: 118px minmax(0, 1fr);
-    gap: var(--space-3); align-items: start; padding: var(--space-1) 0 0;
+    gap: var(--space-4); align-items: start; padding: var(--space-1) 0 0;
 }
 .rt-left { display: block; }
-.dash-row-c .rt-donut { width: 118px; height: 118px; max-width: 118px; margin: 0 auto; }
-.dash-row-c .rt-donut__n { font-size: var(--text-lg); }
-.dash-row-c .rt-donut__n span { font-size: var(--text-xs); }
-.dash-row-c .rt-donut__l { font-size: var(--text-xs); margin-top: 2px; }
+/* `.dnut`, NOT `.rt-donut`. _dashDonut() returns `<div class="dnut">` and
+   always has; `.rt-donut` matches nothing in this app and never did, so these
+   four rules were dead in the old file too. The ring therefore kept its base
+   150px inside a 118px grid track and covered the room-type names beside it -
+   which is what the owner reported (2026-09-17, "for now it is hidden by the
+   pie chart"). Sized to its track now, so the list gets its full width. */
+.dash-row-c .dnut { width: 118px; height: 118px; flex: 0 0 auto; margin: 0 auto; }
+.dash-row-c .dnut__mid { padding: 0 var(--space-2); }
+.dash-row-c .dnut__top { font-size: var(--text-lg); }
+.dash-row-c .dnut__top .rt-of { font-size: var(--text-xs); }
+.dash-row-c .dnut__sub { font-size: var(--text-xs); margin-top: 2px; }
 /* THE LIST SCROLLS INSIDE THE DONUT'S OWN HEIGHT. The reference's row is two
    lines - a free count over its bar - where the old one was one, so five room
    types are 170px where they used to be 120. Left to grow, the card took row
    C from 202px to 252 and pushed its own footer 24px past the 738px fold that
    three earlier passes spent their time on. Bounded to the donut beside it,
    the row lands back on 738 and the list scrolls, which it always could. */
-.rt-right { min-width: 0; max-height: 118px; overflow-y: auto; padding-right: 2px; }
+/* FOUR ROOM TYPES IN VIEW (owner, 2026-09-17: "keep upto 4th seater room type
+   from view"). A row is 34px - a free count over its bar - so four of them plus
+   the scroll affordance is 136. A fifth type scrolls. */
+.rt-right { min-width: 0; max-height: 136px; overflow-y: auto; padding-right: 2px; }
 
 /* ── Occupancy card: one room type ──────────────────────────────────────── */
 .rt-row {
@@ -805,7 +814,6 @@
 }
 @media (max-height: 665px) {
     .rt-right { max-height: 96px; }
-    .rt-hd__s { display: none; }
     .rt-body  { gap: var(--space-2); }
 }
 @media (max-width: 1200px) {
