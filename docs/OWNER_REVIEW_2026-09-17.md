@@ -13,7 +13,7 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 2 | Dashboard | The month selector is a left/right stepper; it should be a dropdown, and it does not show the month | todo |
 | 3 | Dashboard | "Today at a Glance" — the closing line ("2 open jobs to clear today") is too large | done |
 | 4 | Dashboard | The `Rs.` mark on the KPI figures is too small | done |
-| 5 | Chrome | The sidebar nav should be a neutral colour | todo |
+| 5 | Chrome | The sidebar nav should be a neutral colour | done |
 | 6 | Former students | Long reasons push the Export button out of the heading row | todo |
 | 7 | Dashboard | Needs Action — keep the row colours; only the numbers change, or lock the button | todo |
 | 8 | Students | Remove the Undertaking dropdown; fit the filters and Export in its place | todo |
@@ -57,11 +57,15 @@ grace is 120ms. Hovering the button still holds the bar down — the cursor is
 genuinely on top of the bar at that point, and hiding it under the pointer
 would be worse — but it now leaves the moment the cursor drops below 40px.
 
-**Still worth a decision, and not taken here:** the bar covering the header's
-one primary action is structural, not a timing problem. The options are to
-pin the bar (back to a fixed 40px offset, which is what auto-hide was asked to
-remove), to move the primary action off the top-right, or to leave it. Item 1
-is closed on the timing; this sentence is the part that is not.
+**The structural half, answered 2026-09-17: make the bar 30px.** The height is
+how much of the header the bar swallows while it is down — at 40 it covered the
+whole of a 40px button centred in a 56px header. At 30 the button's lower edge
+clears it. The drag region, the menus and both window buttons size off the same
+token, so they follow.
+
+The short-screen override went with it. `@media (max-height:700px)` set 32px,
+which was smaller than the old 40 and is LARGER than the new 30 — so on the
+screens with the least height to spare it would have grown the bar.
 
 ---
 
@@ -80,3 +84,21 @@ A spec had encoded the old default and failed on the change:
 `waitForSelector` waits for visibility. It now asserts the new guarantee — a
 new ticket opens on Student — and keeps the old one, that choosing Staff
 still pre-fills whoever is signed in.
+
+---
+
+## #5 — the active nav pill
+
+Measured, because "neutral" could have meant four different things in that
+rail: the pill was a flat `--gray-600` / `--gray-500` fill —
+`rgb(115,115,115)` in light — carrying near-white text.
+
+Two things were wrong with it. Grey is outside the warm family the rest of
+the app moved into on 2026-09-17, and a filled pill with its own inverted
+ink is the loudest object in the rail for something that only says "you are
+here".
+
+It is one tone step now — the rail's own hover surface with the ink it
+already had, which is what this system uses for a selected row.
+`--text-primary` measures 13.3:1 on the oat fill in light and 13.2:1 on the
+warm step in dark.

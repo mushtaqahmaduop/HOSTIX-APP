@@ -848,17 +848,25 @@ body.light-theme #sidebar .nav-item.active { box-shadow: 0 1px 3px rgba(15, 23, 
    neutral ramp's 500 in light (4.54:1 against the near-white type — AA, narrowly) and one step
    darker in dark, where a 500 pill would glare on the near-black rail. The
    accent edge goes; the fill says it. */
-#sidebar .nav-item.active,
-body.light-theme #sidebar .nav-item.active {
-    background: var(--gray-600);
-    color: var(--gray-50);
-    border-color: var(--gray-600);
+/* NEUTRAL, AND WARM WITH IT (owner, 2026-09-17: "change the sidebar nav bar to
+   a neutral colour"). It was a flat --gray-600 / --gray-500 fill carrying
+   near-white text — a cool grey slab with inverted ink, sitting on an ivory
+   rail. Two things were wrong with it: grey is outside the warm family the rest
+   of the app moved into, and a filled pill with its own text colour is the
+   loudest object in the rail for something that only says "you are here".
+
+   One tone step, which is what the system uses for a selected row: the rail's
+   own hover surface, and the ink it already had. --text-primary measures
+   13.3:1 on the oat fill in light and 13.2:1 on the warm step in dark. */
+#sidebar .nav-item.active {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: transparent;
     box-shadow: none;
 }
-body.light-theme #sidebar .nav-item.active { background: var(--gray-500); border-color: var(--gray-500); }
 #sidebar .nav-item.active::before { display: none; }
-#sidebar .nav-item.active .nav-icon { color: var(--gray-50); opacity: 1; }
-#sidebar .nav-item.active .nav-badge { background: var(--gray-50); color: var(--gray-700); }
+#sidebar .nav-item.active .nav-icon { color: var(--text-primary); opacity: 1; }
+#sidebar .nav-item.active .nav-badge { background: var(--neutral-bg); color: var(--neutral-fg); }
 
 /* THE SECTION LABELS. 1.4px of tracking at 10px on --sb-fg3 is five words of
    near-invisible grey, and there are five of them down the rail — the same
