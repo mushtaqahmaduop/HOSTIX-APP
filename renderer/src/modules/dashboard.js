@@ -830,7 +830,7 @@ function renderDashboard() {
   const vac = DB.rooms.length - occ;
   const seatsRemainingInOccupiedRooms = DB.rooms.filter(r=>getRoomOccupancy(r)>0).reduce((s,r)=>{const cap=getRoomType(r)?.capacity||1;return s+(cap-getRoomOccupancy(r));},0);
   const activeStudents = DB.students.filter(t=>t.status==='Active').length;
-  const mo = thisMonth();
+  const mo = dashMonth();
   const collected = calcRevenue(mo);   // Revenue — transfers do NOT reduce revenue
   // Cash basis — what should physically be in the drawer for this month. See
   // calcCashReceived(): this is deliberately NOT `collected`, and the two
@@ -1496,8 +1496,8 @@ function renderDashboard() {
 
    A day-fallback shipped first and was replaced by this at the owner's
    direction. The month is the better answer for one reason worth writing down:
-   it is the SAME WINDOW as the KPI row above it. `thisMonth()` reads the
-   sidebar month picker, so the panel now moves with it exactly as the KPI
+   it is the SAME WINDOW as the KPI row above it. `dashMonth()` reads the
+   dashboard's month, so the panel now moves with it exactly as the KPI
    cards, Collection by Method and the Pending figure already do — one scope on
    one screen, rather than five cards describing a month and a sixth describing
    a day nobody selected.
@@ -1749,7 +1749,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
         '<span class="dnut__cur">Rs.</span><span class="dnut__fig">'
           + escHtml(fmtCompactK(methods.total)) + '</span>',
         'Total Collected',
-        { aria: 'Collection by payment method for ' + thisMonthLabel() })
+        { aria: 'Collection by payment method for ' + dashMonthLabel() })
     : '';
 
   /* QUICK ACTIONS — four, per the owner's `quick.png`.
@@ -1905,7 +1905,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"'
       +       ' stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/>'
       +       '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>'
-      +       '<span>' + escHtml(thisMonthLabel()) + '</span>'
+      +       '<span>' + escHtml(dashMonthLabel()) + '</span>'
       +       '<svg class="dl-monthchip__cv" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
       +       ' stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
       +       '<path d="m6 9 6 6 6-6"/></svg>'
@@ -1920,7 +1920,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
             : '<div class="dl-empty dl-empty--tall">'
               + '<div class="dl-empty__t">No collections yet</div>'
               + '<div class="dl-empty__s">No payments recorded for '
-              + escHtml(thisMonthLabel()) + '.</div></div>')
+              + escHtml(dashMonthLabel()) + '.</div></div>')
       + '</div>',
 
     /* ONE LINE OF HEAD, both panels. The 9 Sep version carried an emoji chip,
@@ -2140,7 +2140,7 @@ function _dashRecentPayments(list, mo, collected) {
 
   // The strip says WHICH month, because the dashboard has a month selector and
   // "This Month" would be a lie on every month but one.
-  const when = thisMonthLabel();
+  const when = dashMonthLabel();
   const foot =
     '<div class="dash-rp-foot">'
     + stat('dh-blue',   'money',  'Total Payments', fmtPKR(t.collected), when)
@@ -2765,7 +2765,7 @@ function showSeatDetailModal(type) {
    not in the drawer). Both are listed, and the identity that ties them is
    printed at the bottom so the warden can follow it rather than trust it. */
 function showCashReceivedModal() {
-  const mo    = thisMonth();
+  const mo    = dashMonth();
   const label = (typeof _rptMonthName === 'function') ? _rptMonthName(mo) : mo;
   const cash  = cashBreakdown(mo);
   const rev   = calcRevenue(mo);

@@ -725,15 +725,27 @@ function fmtDate(d) {
   } catch (e) { return d; }
 }
 
-// Dashboard month selector (null = real current month, 'YYYY-MM' = selected)
-let _dashboardMonth = null;
+/* THE CALENDAR MONTH, AND THE MONTH THE DASHBOARD IS SHOWING, ARE TWO THINGS.
+   thisMonth() used to return the dashboard's picked month, so picking August to
+   look at it also moved every write that asks "which month is it?": ending a
+   concession ended it in August, a mess exemption took the charge off August's
+   record, and Add Payment and Generate Month defaulted to August. The owner
+   ruled (2026-09-17) that the picked month belongs to the dashboard alone, so
+   thisMonth() is the real month again and only dashboard code reads
+   dashMonth(). Every other screen has its own month filter in its toolbar. */
+let _dashboardMonth = null;   // null = the real month; 'YYYY-MM' = picked on the dashboard
 function thisMonth() {
-  return _dashboardMonth || ym(new Date());
+  return ym(new Date());
 }
-function thisMonthLabel() {
-  const [y, m] = thisMonth().split('-').map(Number);
+function dashMonth() {
+  return _dashboardMonth || thisMonth();
+}
+function _monthKeyLabel(key) {
+  const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 }
+function thisMonthLabel() { return _monthKeyLabel(thisMonth()); }
+function dashMonthLabel() { return _monthKeyLabel(dashMonth()); }
 function thisYear() { return new Date().getFullYear().toString(); }
 
 /* A stored month key rendered for a person. `p.month` is 'YYYY-MM' on newer

@@ -218,6 +218,9 @@ function filtersAreSet(key) {
 function navigate(page, isBack=false) {
   // Auto-close sidebar on navigation (mobile)
   closeSidebar();
+  // The month picked on the dashboard is the dashboard's alone (owner,
+  // 2026-09-17): leaving it goes back to the real month.
+  if (page !== 'dashboard') _dashboardMonth = null;
   // A visit starts clean — see FILTER_REGISTRY above.
   if (page !== currentPage) resetFilters();
   /* ONLY A CHANGE OF PAGE IS A STEP. `navigate(currentPage)` is how several

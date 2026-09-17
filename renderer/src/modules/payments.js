@@ -378,8 +378,12 @@ function _payResetFilter() {
 
 /** Payments, showing only what is still owed (lower-section spec §17). */
 function openPaymentsPending() {
+  /* The month the warden was LOOKING AT, read before navigate() leaves the
+     dashboard and puts its month back to the real one. */
+  const mo = dashMonth();
   navigate('payments');
   _payResetFilter();
+  if (mo !== thisMonth()) payFilter.month = mo;
   payFilter.status = 'Owing';
   renderPage('payments');
 }
@@ -388,8 +392,10 @@ function openPaymentsPending() {
     An unknown name would filter the table to nothing and look broken, so
     'Other' (and anything Settings does not know) opens the table unfiltered. */
 function openPaymentsByMethod(name) {
+  const mo = dashMonth();   // see openPaymentsPending()
   navigate('payments');
   _payResetFilter();
+  if (mo !== thisMonth()) payFilter.month = mo;
   const known = (DB.settings && Array.isArray(DB.settings.paymentMethods))
     ? DB.settings.paymentMethods.map(m => String(m).trim()) : [];
   const hit = known.find(m => m.toLowerCase() === String(name || '').trim().toLowerCase());

@@ -138,9 +138,8 @@ test('months do not mix, names stay in sync, arrears carry forward, mess bills s
 
   // ── 3. ARREARS ────────────────────────────────────────────────────────────
   const arrears = await win.evaluate(() => {
-    // Pretend "now" is August 2026 via the dashboard month selector, which is
-    // what thisMonth() reads.
-    _dashboardMonth = '2026-08';
+    // August 2026 is set on the Payments filter itself: the dashboard's month
+    // no longer reaches thisMonth() (owner, 2026-09-17).
     /* THE SCOPE IS AUGUST, NOT "All" — which is what the line above always
        meant to say. The arrears toggle carries an unpaid EARLIER month forward
        into the month being looked at, so with no month scope at all there is
@@ -199,7 +198,6 @@ test('months do not mix, names stay in sync, arrears carry forward, mess bills s
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   await win.evaluate(async () => {
-    _dashboardMonth = null;
     DB.students = DB.students.filter(s => s.id !== 'ZZTEST1');
     DB.payments = DB.payments.filter(p => !String(p.id).startsWith('ZZPAY_'));
     await saveDB();
