@@ -631,7 +631,7 @@
 
 /* ── Occupancy card: body ───────────────────────────────────────────────── */
 .rt-body {
-    display: grid; grid-template-columns: 118px minmax(0, 1fr);
+    display: grid; grid-template-columns: 104px minmax(0, 1fr);
     gap: var(--space-4); align-items: start; padding: var(--space-1) 0 0;
 }
 .rt-left { display: block; }
@@ -641,8 +641,18 @@
    150px inside a 118px grid track and covered the room-type names beside it -
    which is what the owner reported (2026-09-17, "for now it is hidden by the
    pie chart"). Sized to its track now, so the list gets its full width. */
-.dash-row-c .dnut { width: 118px; height: 118px; flex: 0 0 auto; margin: 0 auto; }
-.dash-row-c .dnut__mid { padding: 0 var(--space-2); }
+/* 118 -> 96 (owner, 2026-09-17: "reduce the size of pie chart and increase
+   the length of the bars"). The ring gives 22px straight to the meter beside
+   it, and it still holds its two lines: at 96 the hole is 80px across after
+   the centre's own padding, and "Rooms Filled" measures ~68. */
+.dash-row-c .dnut { width: 104px; height: 104px; flex: 0 0 auto; margin: 0 auto; }
+/* 19%, NOT A PIXEL VALUE, because the thing it has to clear is the ring and the
+   ring scales with the box. _dashDonut draws r=54 and stroke=22 in a 140
+   viewBox, so the HOLE is only 0.614 of the width — at 96px that is 59px, and
+   a fixed 8px padding let "Rooms Filled" run out over the stroke. (1 - 0.614)/2
+   is 19%, so the centre now ends exactly where the ring begins at any size. */
+.dash-row-c .dnut__mid { padding: 0 19%; }
+.dash-row-c .dnut__sub { white-space: normal; line-height: var(--leading-tight); }
 .dash-row-c .dnut__top { font-size: var(--text-lg); }
 .dash-row-c .dnut__top .rt-of { font-size: var(--text-xs); }
 .dash-row-c .dnut__sub { font-size: var(--text-xs); margin-top: 2px; }
@@ -666,8 +676,7 @@
    start immediately after them, and the slack falls at the right-hand end of
    the row where it reads as a margin rather than as a gap. */
 .rt-row {
-    display: grid; grid-template-columns: 10px 72px 168px auto;
-    justify-content: start;
+    display: grid; grid-template-columns: 10px 72px minmax(0, 216px) auto 1fr;
     align-items: center; gap: var(--space-2);
     padding: var(--space-1) 0;
 }
@@ -680,8 +689,12 @@
     color: var(--text-primary); white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
 }
-/* 168px, from the track above — capped rather than stretched (owner: "reduce
-   the length of the bars to fit in the card beside the pie chart"). */
+/* Up to 216px, from the track above. Capped rather than stretched (owner:
+   "reduce the length of the bars to fit in the card beside the pie chart"),
+   then lengthened from 168 because a 100% fill read short against a card this
+   wide. The track is minmax(0, 216) with a 1fr spacer after the percentage:
+   the bar takes its full length when the card has the room and gives it back
+   on a narrow one, rather than overflowing the way the method row did. */
 .rt-row__meter { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 /* The free count sits OVER the bar and right-aligned, so it ends where the bar
    ends and reads as a caption of it rather than as another column. */
