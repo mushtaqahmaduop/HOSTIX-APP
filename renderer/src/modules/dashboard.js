@@ -345,15 +345,20 @@ function _chartFontFix(chart) {
    `pct` is clamped to 0-100 for the BAR only. The label prints the true
    figure, because a month that spent more than it took is a thing a warden
    needs to see said out loud rather than flattened to "100%". */
-function _dashBar(part, whole, tone) {
+// The tone argument is gone with the five kbar--* hue families (owner,
+// 2026-09-17: the KPI row is neutral). A ratio is not a status, so the fill is
+// the one accent; Available Fund recolours it from .is-loss on the card when
+// the fund is negative, which is the only state this row reports.
+// The "0% / 100%" ends are gone too - they were display:none in every height
+// tier the file shipped, so nothing has ever drawn them.
+function _dashBar(part, whole) {
   const w = Number(whole || 0);
   const raw = w > 0 ? (Number(part || 0) / w * 100) : 0;
   const shown = Math.round(raw);
   const fill = Math.max(0, Math.min(100, raw));
-  return '<div class="kbar' + (tone ? ' ' + tone : '') + '">'
+  return '<div class="kbar">'
        +   '<div class="kbar__pct">' + shown + '%</div>'
        +   '<div class="kbar__track"><i style="width:' + fill.toFixed(1) + '%"></i></div>'
-       +   '<div class="kbar__ends"><span>0%</span><span>100%</span></div>'
        + '</div>';
 }
 
@@ -979,18 +984,18 @@ function renderDashboard() {
            reconciliation that explains why cash-in-the-drawer and revenue
            differ, and there is nowhere else in the app that answers it.
            counter-flow-decisions.spec.js asserts the tile keeps it. */}
-    <div class="dsh-card dh-blue">
+    <div class="ui-card dsh-card">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3.2" fill="currentColor" opacity=".38"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/><circle cx="5.6" cy="12" r="1.35" fill="currentColor"/><circle cx="18.4" cy="12" r="1.35" fill="currentColor"/></svg></div>
         <div class="dash-kpi__label">Total Revenue</div>
         <div class="dash-pill-stack">
-          ${revDelta!==null?`<span class="dash-pill ${revDelta>=0?'dh-green':'dh-red'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
-          <span class="dash-pill dh-slate">${paidCount} paid</span>
+          ${revDelta!==null?`<span class="ui-chip ${revDelta>=0?'ui-chip--success':'ui-chip--danger'}">${revDelta>=0?'+':''}${revDelta.toFixed(1)}%</span>`:''}
+          <span class="ui-chip ui-chip--neutral">${paidCount} paid</span>
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(collected,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub" title="of ${escHtml(fmtPKR(totalExpected))} expected">of <span class="pkr">Rs.</span>${fmtCompact(totalExpected)} expected</div>
-      ${_dashBar(collected, totalExpected, 'kbar--blue')}
+      ${_dashBar(collected, totalExpected)}
     </div>
 
     ${''/* PENDING AND EXPENSES SWAPPED (owner, 7 Sep). Worth recording what
@@ -1000,26 +1005,30 @@ function renderDashboard() {
            the result that uses it. Expenses now sits AFTER Fund. The owner's
            call, and the arithmetic is identical either way. */}
     <!-- Pending — amber -->
-    <div class="dsh-card dh-amber">
+    <div class="ui-card dsh-card">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M12 7.4v4.9l3.2 1.9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Pending</div>
         <div class="dash-pill-stack">
-          <span class="dash-pill">${totalExpected>0?Math.round(pending/totalExpected*100):0}%</span>
-          <span class="dash-pill">${pendingCount} unpaid</span>
+          ${''/* THE PERCENTAGE CHIP IS GONE (2026-09-17). The ratio bar at the
+                 foot of this very card already prints the same figure, from the
+                 same two numbers - it was the card stating one fact twice, and
+                 it was what pushed this card's headline 14px below the four
+                 beside it. */}
+          <span class="ui-chip ui-chip--neutral">${pendingCount} unpaid</span>
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(pending,{size:"display",compact:true})}</div>
-      ${_dashBar(pending, totalExpected, 'kbar--amber')}
+      ${_dashBar(pending, totalExpected)}
     </div>
 
     <!-- Available Fund — green when in profit, red when the fund is negative
          (a negative fund is genuine danger, not decoration) -->
-    <div class="dsh-card ${netProfit>=0?'dh-green':'dh-red'}">
+    <div class="ui-card dsh-card ${netProfit>=0?'':'is-loss'}">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><rect x="6.3" y="12.6" width="2.7" height="5.1" rx="1.35" fill="currentColor"/><rect x="10.65" y="9.2" width="2.7" height="8.5" rx="1.35" fill="currentColor"/><rect x="15" y="6.3" width="2.7" height="11.4" rx="1.35" fill="currentColor"/></svg></div>
         <div class="dash-kpi__label">Available Fund</div>
-        <div class="dash-pill-stack"><span class="dash-pill">${netProfit>=0?'Profit':'Loss'}</span></div>
+        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
       ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
@@ -1034,7 +1043,7 @@ function renderDashboard() {
            subtraction the headline states, month by month — nothing new is
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
-      ${_dashBar(netProfit, collected, 'kbar--green')}
+      ${_dashBar(netProfit, collected)}
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -1042,15 +1051,15 @@ function renderDashboard() {
          figure as "collected − expenses", and it used to sit to the LEFT of the
          expenses it subtracts, so the row asked the reader to hold a number
          that had not been shown yet. -->
-    <div class="dsh-card dh-red">
+    <div class="ui-card dsh-card">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M12 7.2v9.1m0 0 3.6-3.6M12 16.3l-3.6-3.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Expenses</div>
-        <div class="dash-pill-stack"><span class="dash-pill">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
+        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${moExpCount} item${moExpCount===1?'':'s'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(moExp,{size:"display",compact:true})}</div>
       <div class="dash-kpi__sub">this month</div>
-      ${_dashBar(moExp, collected, 'kbar--orange')}
+      ${_dashBar(moExp, collected)}
     </div>
 
     <!-- ADVANCE / ARREARS RECEIVED — the sixth tile (owner ref: nev.png,
@@ -1072,7 +1081,7 @@ function renderDashboard() {
 
          Both figures come from cashBreakdown(), which is the same function the
          reconciliation modal uses — one answer to "what moved", not two. */ -->
-    <div onclick="showCashReceivedModal()" class="dsh-card dsh-card--click dh-violet dash-kpi--split">
+    <div onclick="showCashReceivedModal()" class="ui-card dsh-card dsh-card--click dash-kpi--split">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><path d="M8.7 17V7.6m0 0L6.2 10.1M8.7 7.6l2.5 2.5M15.3 7v9.4m0 0 2.5-2.5M15.3 16.4l-2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="dash-kpi__label">Advance / Arrears</div>
@@ -1082,7 +1091,7 @@ function renderDashboard() {
                glyph in front of the count, which is what makes it read as "how
                many payments made up this figure" rather than as a status. */}
         <div class="dash-pill-stack">
-          <span class="dash-pill"><svg class="dash-pill__ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}</span>
+          <span class="ui-chip ui-chip--neutral" title="${fmtNum(_advArr.n)} payment${_advArr.n===1?'':'s'}"><svg class="dash-pill__ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>${fmtNum(_advArr.n)}</span>
         </div>
       </div>
       <div class="dash-kpi__value">${moneyValue(_advArr.total,{size:"display",compact:true})}</div>
@@ -1090,7 +1099,7 @@ function renderDashboard() {
              tile in the row and the only one carrying two split rows, so it is
              what sets row A's height — and unlike the other four it already
              says what it means, in the two lines under the figure. */}
-      ${_dashBar(_advArr.total, cashIn.total, 'kbar--violet')}
+      ${_dashBar(_advArr.total, cashIn.total)}
       ${''/* ONE LINE, TWO BUCKETS, A RULE BETWEEN THEM (owner ref:
              arrears.png, 2026-09-10). They were two stacked rows, and the
              reference draws them side by side — "Upcoming PKR 0 | Previous

@@ -108,7 +108,10 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
       labels,
       hasTransferCard: labels.some(l => /Funds ?Transfer/i.test(l)),
       // The pill must count the transfer too, since the value beside it does.
-      expPill: expCard?.querySelector('.dash-pill')?.textContent.trim(),
+      // `.ui-chip`, not `.dash-pill`: the KPI row moved onto the shared chip
+      // component in spec stage 5 (2026-09-17). What is asserted here is the
+      // COUNT, which is the same either way.
+      expPill: expCard?.querySelector('.ui-chip')?.textContent.trim(),
       expValue: expCard?.querySelector('.dash-kpi__value')?.textContent.trim(),
       // The standalone feature is gone — no way left to create a transfer
       // outside Add Expense → Fund Transfer.

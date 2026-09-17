@@ -181,7 +181,6 @@ option {
   color: var(--text-primary);
 }
 
-
 /* ════════════════════════════════════════════════════════════════════════════
    LEGACY BRIDGE — delete after the last screen is rebuilt (spec Part 6)
 
@@ -413,12 +412,6 @@ body.light-theme {
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
 
-  --kpi-1a: #3F7FE8;  --kpi-1b: #2B55B8;   /* Total Revenue    */
-  --kpi-2a: #C07D14;  --kpi-2b: #8A540B;   /* Pending          */
-  --kpi-3a: #1E9350;  --kpi-3b: #15703A;   /* Available Fund   */
-  --kpi-4a: #D2591A;  --kpi-4b: #A63F0D;   /* Expenses         */
-  --kpi-5a: #7048D2;  --kpi-5b: #522BA0;   /* Advance/Arrears  */
-  --kpi-loss-a: #D8443C; --kpi-loss-b: #A5211E;  /* Fund, negative */
 }
 body.light-theme {
   --teal:           #0E7D87;
@@ -435,10 +428,4 @@ body.light-theme {
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 
-  --kpi-1a: #3B82F6;  --kpi-1b: #1D4ED8;
-  --kpi-2a: #D97706;  --kpi-2b: #92400E;
-  --kpi-3a: #16A34A;  --kpi-3b: #15803D;
-  --kpi-4a: #EA580C;  --kpi-4b: #C2410C;
-  --kpi-5a: #7C3AED;  --kpi-5b: #5B21B6;
-  --kpi-loss-a: #EF4444; --kpi-loss-b: #B91C1C;
 }
