@@ -658,8 +658,16 @@
 .rt-right { min-width: 0; max-height: 136px; overflow-y: auto; padding-right: 2px; }
 
 /* ── Occupancy card: one room type ──────────────────────────────────────── */
+/* THE BAR SITS NEXT TO ITS NAME (owner, 2026-09-17: "the room seater types are
+   very away from their room bars"). The tracks were `auto 1fr`, so the name
+   took its content width and the meter was right-aligned in everything left
+   over — on a card this wide that put ~150px of nothing between a label and
+   the bar it labels. Fixed tracks now: the names align in a column, the bars
+   start immediately after them, and the slack falls at the right-hand end of
+   the row where it reads as a margin rather than as a gap. */
 .rt-row {
-    display: grid; grid-template-columns: 10px minmax(56px, auto) minmax(0, 1fr) 34px;
+    display: grid; grid-template-columns: 10px 72px 168px auto;
+    justify-content: start;
     align-items: center; gap: var(--space-2);
     padding: var(--space-1) 0;
 }
@@ -672,17 +680,9 @@
     color: var(--text-primary); white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
 }
-/* THE BAR IS CAPPED, NOT STRETCHED (owner, 2026-09-17: "reduce the length of
-   the bars to fit in the card beside the pie chart"). The reference draws a
-   narrow single-column card where a full-width bar is right; here the same
-   list sits beside a 118px donut in a much wider card, and a 1fr bar ran the
-   whole way across with the percentage stranded at the far edge. Capped and
-   pushed right, the swatch, the name, the meter and the figure read as one
-   row again. */
-.rt-row__meter {
-    display: flex; flex-direction: column; gap: 2px;
-    min-width: 0; max-width: 168px; width: 100%; margin-left: auto;
-}
+/* 168px, from the track above — capped rather than stretched (owner: "reduce
+   the length of the bars to fit in the card beside the pie chart"). */
+.rt-row__meter { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 /* The free count sits OVER the bar and right-aligned, so it ends where the bar
    ends and reads as a caption of it rather than as another column. */
 .rt-row__free {
@@ -703,7 +703,8 @@
 /* One ink for every percentage. It used to take the room type's own colour,
    which made a column of figures that could not be compared down the page. */
 .rt-row__pct {
-    text-align: right; font-size: var(--text-sm); font-weight: var(--weight-strong);
+    text-align: left; min-width: 34px;
+    font-size: var(--text-sm); font-weight: var(--weight-strong);
     color: var(--text-primary); font-variant-numeric: tabular-nums;
 }
 
@@ -830,6 +831,64 @@
     .rt-body { grid-template-columns: minmax(0, 1fr); }
     .rt-left { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROW D — Collection by Method · Pending Payments, side by side.
+
+   THIS BLOCK EXISTS BECAUSE I BROKE IT. The row B cut (0b33449) removed every
+   rule matching `^\.dash-split` to clear out `.dash-split > .dash-sec >
+   .dash-room-wrap`, a dead seat-grid rule — and took `.dash-split` itself with
+   it, which is the grid that puts these two cards ALONGSIDE each other. They
+   have been stacking since. No spec covers row D's layout, so nothing caught
+   it; the owner did, 2026-09-17: "previously the collection by method and
+   pending payments were alongside".
+
+   The layout is restored exactly as it was — 1.25fr / 1fr, stacking below
+   1180px. Row D keeps its old places (owner, earlier the same day); what
+   changes here is only what the ladder owns.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dash-split {
+    display: grid; grid-template-columns: 1.25fr 1fr;
+    gap: var(--space-2); margin-bottom: var(--space-2);
+    align-items: stretch;
+}
+.dash-split > .dash-sec { display: flex; flex-direction: column; }
+@media (max-width: 1180px) { .dash-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── The two cards' shared palette ──────────────────────────────────────── */
+/* IT WAS TEN RAW HEX IN THE LIGHT THEME and ten token references in the dark
+   one — the same ten roles, declared twice, only one of which could follow a
+   rebrand. The dark half was already derived; this is that half, once, for
+   both themes. The accent is the app's accent now rather than a frozen
+   #2563EB, so these two cards move when tokens.css moves.
+
+   The hues stay because on this row they are STATE, not category: money
+   collected, money pending, money overdue, a WhatsApp reminder that has been
+   sent. `pmBadge()` handles the payment METHOD chips and they remain neutral,
+   which is the distinction CLAUDE.md draws. */
+.dl-coll, .dl-pending {
+    --x-blue:        var(--accent);
+    --x-blue-tint:   var(--accent-bg);
+    --x-amber-fg:    var(--warning-fg);
+    --x-amber-tint:  var(--warning-bg);
+    --x-red-fg:      var(--danger-fg);
+    --x-red-tint:    var(--danger-bg);
+    --x-green:       var(--success-fg);
+    --x-green-tint:  var(--success-bg);
+    --x-slate-tint:  var(--neutral-bg);
+    --x-slate-fg:    var(--text-secondary);
+}
+
+/* ── Pending Payments: the rows ─────────────────────────────────────────── */
+/* Nothing below 11px. The due line and the room line were 10.5 and 11. */
+.dash-pay__due { font-size: var(--text-xs); }
+.dl-pending .dash-pay__due { font-size: var(--text-xs); }
+.dash-pay__room { font-size: var(--text-xs); }
+.dash-pay__name { font-size: var(--text-sm); }
+
+/* ── The card footer both panels share ──────────────────────────────────── */
+.dl-foot { font-size: var(--text-xs); }
 
 /* ── Section cards ───────────────────────────────────────────────────────── */
 /* --sec-pad-x IS THE CARD'S OWN HORIZONTAL PADDING, published as a variable so
@@ -1316,33 +1375,9 @@
    theme-parity's 4.5:1 floor still holds (owner's call, 7 Sep: derive rather
    than force one palette on both). Every pair is defined here as a variable so
    the two themes cannot drift into disagreeing about which hue means what. */
-.dl-coll, .dl-pending {
-    --x-blue:        #2563EB;
-    --x-blue-tint:   #DBEAFE;
-    --x-amber-fg:    #B45309;
-    --x-amber-tint:  #FEF3C7;
-    --x-red-fg:      #B91C1C;
-    --x-red-tint:    #FEE2E2;
-    --x-green:       #16A34A;
-    --x-green-tint:  #DCFCE7;
-    --x-slate-tint:  #F1F5F9;
-    --x-slate-fg:    #475569;
-}
-/* The default theme here is the DARK one (light is the .light-theme opt-in),
-   so the dark values are the ones that have to be stated first. */
-body:not(.light-theme) .dl-coll,
-body:not(.light-theme) .dl-pending {
-    --x-blue:        var(--accent);
-    --x-blue-tint:   color-mix(in srgb, var(--accent) 18%, transparent);
-    --x-amber-fg:    var(--warning-fg);
-    --x-amber-tint:  color-mix(in srgb, var(--warning-fg) 18%, transparent);
-    --x-red-fg:      var(--danger-fg);
-    --x-red-tint:    color-mix(in srgb, var(--danger-fg) 18%, transparent);
-    --x-green:       var(--success-fg);
-    --x-green-tint:  color-mix(in srgb, var(--success-fg) 18%, transparent);
-    --x-slate-tint:  var(--bg3);
-    --x-slate-fg:    var(--text2);
-}
+/* The --x-* palette moved to the ROW D block, derived from tokens once
+   for both themes rather than stated twice. */
+/* (the dark half of that palette went with it — it was the derived one)
 
 /* ── Collection by Method ───────────────────────────────────────────────── */
 .dl-coll .dash-chip--sm { background: var(--x-blue-tint); color: var(--x-blue); }
