@@ -21,7 +21,7 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 10 | Cancellations | Picking a student in the Add form leaves the search field empty | todo |
 | 11 | Payments | Extra charges and concession values should align with the row's values, reason beneath | todo |
 | 12 | Expenses | The KPI glyphs should move to the top left of their cards | done |
-| 13 | Complaints | The student picker in the Add/Edit form is broken | todo |
+| 13 | Complaints | The student picker in the Add/Edit form is broken | done — it was hidden, see #14 |
 | 14 | Maintenance | "Raised by" should default to Student | done |
 | 15 | Complaints | Move the "Assigned to" field up | todo |
 | 16 | Settings | The rules and regulations must accept Urdu, typed and pasted | todo |
