@@ -890,6 +890,178 @@
 /* ── The card footer both panels share ──────────────────────────────────── */
 .dl-foot { font-size: var(--text-xs); }
 
+/* ── Collection by Method: the meter ────────────────────────────────────── */
+/* THE ROW USED TO PUSH ITSELF WIDER THAN THE CARD (owner, 2026-09-17: "the
+   percentage bars squeeze out the card when have a little large number").
+   `.dl-coll` overrode the amount to a FIXED 60px track while `.dl-meth__amt`
+   carries `min-width: 74px` and `white-space: nowrap` — so the content could
+   never fit the track it was given, and every rupee past six digits pushed the
+   whole grid out of the card.
+
+   The two content columns are `auto` now and the BAR is the only flexible
+   track, so a long figure takes its width out of the bar — which is the one
+   thing on the row that can lose 30px and still say what it says. */
+.dl-coll .dl-meth__row { grid-template-columns: 10px 90px minmax(0, 1fr) auto auto; }
+
+/* ── Collection by Method: the donut centre ─────────────────────────────── */
+/* 24px -> --text-xl (owner: "reduce the size of the numbers inside the dognut
+   a little"). It sits inside a 240px ring holding a full PKR figure, and at 24
+   a seven-digit total ran to the edge of the hole. */
+.dl-coll .dnut__fig { font-size: var(--text-xl); letter-spacing: var(--track-tight); }
+.dl-coll .dnut__cur { font-size: var(--text-sm); }
+.dnut__sub { font-size: var(--text-xs); }
+/* ═══════════════════════════════════════════════════════════════════════════
+   RECENT PAYMENTS — the last card on the dashboard, below row D.
+
+   Rebuilt 2026-09-17. It is deliberately below the fold: a log is what you
+   scroll to, not what you are shown. Ten rows, a row menu and a four-figure
+   footer.
+
+   ONE REAL BUG FIXED HERE, and `.dash-sec` carries a comment about it:
+   the table is full-bleed through a negative margin, and that margin was
+   hard-coded at -16px while the card's own padding is `--sec-pad-x`. The two
+   have not matched since the padding was changed, so the table sat one pixel
+   OUTSIDE its card on both edges — the misaligned edge the owner could see and
+   no rule in the file admitted to. Both the wrapper and the footer read the
+   variable now, so they cannot drift again.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dash-rp-wrap { margin: 0 calc(-1 * var(--sec-pad-x)); }
+.dash-rp { width: 100%; }
+
+/* ── Head ───────────────────────────────────────────────────────────────── */
+/* Sentence case at 12/500, like every rebuilt table. It was 10px UPPERCASE
+   with .9px of tracking — three ways of saying "small" on one line. */
+.dash-rp th {
+    background: transparent;
+    padding: 0 var(--space-4) var(--space-2);
+    font-size: var(--text-sm); font-weight: var(--weight-medium);
+    letter-spacing: normal; text-transform: none;
+    color: var(--text-secondary);
+}
+.dash-rp thead th { border-bottom: 1px solid var(--border); }
+body.light-theme .dash-rp thead th { background: transparent; }
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+.dash-rp td { padding: var(--space-3) var(--space-4); }
+.dash-rp-row { cursor: pointer; }
+.dash-rp-who { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.dash-rp-av {
+    width: 30px; height: 30px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--accent); color: var(--text-on-accent);
+    font-size: var(--text-xs); font-weight: var(--weight-strong);
+}
+.dash-rp-name {
+    font-size: var(--text-base); font-weight: var(--weight-medium);
+    color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-rp-room {
+    font-size: var(--text-sm); font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.dash-rp-num {
+    font-size: var(--text-base); font-weight: var(--weight-strong);
+    color: var(--text-primary); white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+/* Money still owed is the one figure on the row that asks somebody to act. */
+.dash-rp-num--due { color: var(--danger-fg); }
+.dash-rp-nil { color: var(--text-tertiary); }
+.dash-rp-date {
+    font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+/* The extras broken out under the paid figure — why it is not the room rent. */
+.dash-rp-extra {
+    margin-top: 2px; white-space: nowrap;
+    font-size: var(--text-xs); font-weight: var(--weight-medium);
+    color: var(--accent-fg);
+}
+
+/* ── The row menu ───────────────────────────────────────────────────────── */
+/* Fixed, not absolute — an absolute menu is clipped by the card's own
+   overflow. A menu floats, so this is one of the three things the spec lets
+   carry a shadow. */
+.dash-rp-more { position: relative; width: 1%; text-align: right; }
+.dash-rp-more__btn {
+    width: 26px; height: 26px; border: none; border-radius: var(--radius-sm);
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-tertiary); cursor: pointer;
+}
+.dash-rp-more__btn:hover { background: var(--surface-2); color: var(--text-primary); }
+.dash-rp-menu {
+    display: none; position: fixed; z-index: 60; min-width: 174px;
+    padding: var(--space-1); border-radius: var(--radius-lg);
+    background: var(--surface-1); border: 1px solid var(--border);
+    box-shadow: var(--shadow-menu, var(--shadow));
+}
+.dash-rp-more.is-open .dash-rp-menu { display: block; }
+.dash-rp-menu__item {
+    width: 100%; display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2); border: none; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-secondary);
+    font-family: inherit; font-size: var(--text-sm); font-weight: var(--weight-medium);
+    text-align: left; cursor: pointer;
+}
+.dash-rp-menu__item .icon { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-tertiary); }
+.dash-rp-menu__item:hover { background: var(--surface-2); color: var(--text-primary); }
+/* "Collect" is the one item that moves money, so it is the one that is green. */
+.dash-rp-menu__item--go,
+.dash-rp-menu__item--go .icon { color: var(--success-fg); }
+
+/* ── The four-figure footer ─────────────────────────────────────────────── */
+/* The same negative margin as the table wrapper, from the same variable. */
+.dash-rp-foot {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+    margin: var(--space-3) calc(-1 * var(--sec-pad-x)) calc(-1 * var(--space-3));
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+}
+.dash-rp-stat {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 0 var(--space-4); min-width: 0;
+}
+.dash-rp-stat:first-child { padding-left: 0; }
+.dash-rp-stat + .dash-rp-stat { border-left: 1px solid var(--border); }
+.dash-rp-stat__chip {
+    width: var(--h-md); height: var(--h-md); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-full);
+    background: var(--dh-bg); color: var(--dh);
+}
+.dash-rp-stat__chip .icon { width: 18px; height: 18px; }
+.dash-rp-stat__body { min-width: 0; }
+.dash-rp-stat__label {
+    font-size: var(--text-xs); font-weight: var(--weight-medium);
+    text-transform: none; letter-spacing: normal;
+    color: var(--text-secondary);
+}
+.dash-rp-stat__val {
+    margin: 2px 0 1px; white-space: nowrap;
+    font-size: var(--text-lg); font-weight: var(--weight-strong);
+    color: var(--text-primary);
+    font-family: var(--ant-num-font); letter-spacing: var(--ant-num-track);
+    font-variant-numeric: tabular-nums;
+}
+.dash-rp-stat__sub {
+    font-size: var(--text-xs); color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Two across rather than four below 880, with a rule between the ranks. */
+@media (max-width: 880px) {
+    .dash-rp-foot { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--space-3); }
+    .dash-rp-stat:nth-child(odd) { padding-left: 0; border-left: none; }
+    .dash-rp-stat:nth-child(3),
+    .dash-rp-stat:nth-child(4) { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+}
+
 /* ── Section cards ───────────────────────────────────────────────────────── */
 /* --sec-pad-x IS THE CARD'S OWN HORIZONTAL PADDING, published as a variable so
    the one thing that has to match it can read it instead of guessing: the
@@ -934,114 +1106,8 @@
 .dash-av                { width:31px; height:31px; font-size:11px; }
 .dash-pay__name         { font-size:12.5px; }
 
-/* ── ROW 2 IS MEASURED AGAINST ROW 1 ─────────────────────────────────────────
-   The five KPI cards are the ruler. The three tiles beneath them span 2 / 1 / 2
-   of the same five tracks, so their edges land on the card edges above rather
-   than a third of the way across them:
-
-     Total Residents │ Total Revenue │ Expenses │ Available Fund │ Pending
-     Occupied Rooms                  │ Vacant   │ Active Students
-
-   Occupied Rooms therefore ends exactly where Total Revenue ends, Active
-   Students begins exactly where Available Fund begins, and Vacant Rooms — the
-   one tile that is a plain count with nothing to unpack — takes the single
-   middle track instead of a third of the row.
-
-   Both grids keep their own auto-fit wrapping below this width. Aligning them
-   costs nothing while five tracks fit; forcing five onto a narrow window would
-   squeeze Vacant Rooms under its own icon, and the two rows are free to wrap
-   independently once they can no longer line up anyway. The threshold is where
-   five KPI columns still clear the 196px the density block asks for. */
-
-/* ── Recent Payments (row 5) ─────────────────────────────────────────────────
-   Owner reference: `recent payments.png` (30 Aug). The table inherits the base
-   `table` rules in style.css; everything here is the delta the reference asks
-   for, scoped to `.dash-rp` so no other table moves.
-   ────────────────────────────────────────────────────────────────────────── */
-.dash-rp-wrap        { margin:0 calc(-1 * var(--sec-pad-x, 16px)); }
-.dash-rp             { width:100%; }
-.dash-rp th          { background:transparent; font-size:10px; letter-spacing:.9px; padding:0 16px 9px; }
-.dash-rp td          { padding:11px 16px; }
-.dash-rp-row         { cursor:pointer; }
-
-.dash-rp-who         { display:flex; align-items:center; gap:9px; min-width:0; }
-/* Solid accent, white letter — the reference's one filled element per row, and
-   the thing the eye lands on when scanning for a name. */
-.dash-rp-av {
-    width:30px; height:30px; border-radius:9px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    background:var(--accent); color:var(--text-on-accent); font-size:12px; font-weight:800;
-}
-.dash-rp-name        { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.dash-rp-room        { font-size:12.5px; font-weight:700; color:var(--text2); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; }
-.dash-rp-num         { font-size:12.5px; font-weight:700; color:var(--text); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
-/* Money still owed is the one figure on the row that asks somebody to act. */
-.dash-rp-num--due    { color:var(--red); }
-.dash-rp-nil         { color:var(--text3); }
-/* Why the paid figure is larger than the room rent beside it. */
-.dash-rp-extra       { margin-top:2px; font-size:10.5px; font-weight:700; color:var(--accent-strong); white-space:nowrap; }
-.dash-rp-date        { font-size:11.5px; color:var(--text3); font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums; white-space:nowrap; }
-
-/* The method chip is `.pm-chip` in style.css — shared with every other
-   screen that shows a payment method. */
-
-/* ── Row menu ─────────────────────────────────────────────────────────────── */
-.dash-rp-more        { position:relative; width:1%; text-align:right; }
-.dash-rp-more__btn {
-    width:26px; height:26px; border-radius:7px; border:none; background:transparent;
-    color:var(--text3); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
-}
-.dash-rp-more__btn:hover        { background:var(--bg3); color:var(--text); }
-/* Fixed, not absolute — see _dashToggleRowMenu(): an absolute menu is clipped
-   by the sideways scroll on `.table-wrap`. Coordinates are set in JS. */
-.dash-rp-menu {
-    display:none; position:fixed; z-index:60;
-    min-width:174px; padding:5px;
-    background:var(--card); border:1px solid var(--border2); border-radius:11px;
-    box-shadow:var(--shadow);
-}
-.dash-rp-more.is-open .dash-rp-menu { display:block; }
-.dash-rp-menu__item {
-    width:100%; display:flex; align-items:center; gap:9px;
-    padding:8px 10px; border:none; border-radius:8px; background:transparent;
-    color:var(--text2); font-size:12.5px; font-weight:600; text-align:left; cursor:pointer;
-}
-.dash-rp-menu__item:hover       { background:var(--bg3); color:var(--text); }
-.dash-rp-menu__item .icon       { width:14px; height:14px; flex-shrink:0; color:var(--text3); }
-.dash-rp-menu__item--go         { color:var(--green); }
-.dash-rp-menu__item--go .icon   { color:var(--green); }
-
-/* ── Summary strip ────────────────────────────────────────────────────────────
-   Describes the whole month, not the ten rows above it — so each tile says
-   which month it means rather than "This Month", which the month selector can
-   make untrue. */
-.dash-rp-foot {
-    display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0;
-    margin:12px -16px -14px; padding:14px 16px;
-    border-top:1px solid var(--border);
-}
-.dash-rp-stat        { display:flex; align-items:center; gap:11px; padding:0 16px; min-width:0; }
-.dash-rp-stat + .dash-rp-stat { border-left:1px solid var(--border); }
-.dash-rp-stat:first-child     { padding-left:0; }
-.dash-rp-stat__chip {
-    width:38px; height:38px; border-radius:50%; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    background:var(--dh-bg); color:var(--dh);
-}
-.dash-rp-stat__chip .icon { width:18px; height:18px; }
-.dash-rp-stat__body  { min-width:0; }
-.dash-rp-stat__label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.9px; color:var(--text3); }
-.dash-rp-stat__val   { font-size:17px; font-weight:800; color:var(--text); letter-spacing:var(--ant-num-track); font-family:var(--ant-num-font); font-variant-numeric:tabular-nums; margin:2px 0 1px; white-space:nowrap; }
-.dash-rp-stat__sub   { font-size:11px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
 /* Four tiles need ~880px before the values start truncating. Below that they
    pair up, and the vertical rule has to move with them or it lands mid-row. */
-@media (max-width:880px) {
-    .dash-rp-foot { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:14px; }
-    .dash-rp-stat:nth-child(odd)  { padding-left:0; border-left:none; }
-    .dash-rp-stat:nth-child(3)    { padding-top:14px; border-top:1px solid var(--border); }
-    .dash-rp-stat:nth-child(4)    { padding-top:14px; border-top:1px solid var(--border); }
-}
 
 .dl-panel { display:flex; flex-direction:column; min-width:0; }
 .dl-empty { padding:22px 14px; text-align:center; font-size:12px; color:var(--text3); line-height:1.6; }
@@ -1413,7 +1479,7 @@
 .dl-coll .dnut { width: 100%; max-width: 240px; height: auto; aspect-ratio: 1; }
 .dl-coll .dnut__mid { padding: 0 30px; }
 .dl-coll .dnut__cur { display: block; margin: 0 0 -2px; font-size: 12px; vertical-align: baseline; }
-.dl-coll .dnut__fig { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+.dl-coll .dnut__fig { display: block; font-weight: var(--weight-strong); }
 .dl-coll .dnut__top { font-size: inherit; }
 
 /* The bar takes the slack; the two right-hand columns are fixed so the
@@ -1427,7 +1493,6 @@
    measures at 12.5px/600 — it was 72 and truncated to "Bank Trans...", and a
    method whose name is cut off is worse than a bar 16px shorter. */
 .dl-coll .dl-meth__row {
-    grid-template-columns: 10px 90px minmax(0, 1fr) 34px 60px;
     gap: 6px; padding: 6px 4px;
 }
 .dl-coll .dl-meth__bar { height: 8px; background: var(--x-slate-tint); }
@@ -1586,44 +1651,6 @@
    Both now take one KPI-card width - 5 cards, 4 gaps of 12 - so the right
    column lines up with the card above it as well as with itself. */
 :root, .dash-row-b, .dash-row-c { --dash-right-col: calc((100% - 48px) / 5); }
-
-/* AND RE-ASSERTED, for the third time in this file and for the same reason:
-   an unconditional `#trend-chart-wrap { min-height }` added later beats the
-   max-height blocks that had already tightened it. The zoomed sizes went 50px
-   over the fold the moment 168 landed. If you raise this floor again, raise
-   these two with it. */
-/* 760: THE SIX PIXELS THE FOLD WAS SHORT BY, taken from the chart.
-   A 1366x768 window has 738px of viewport once the 40px title bar is gone, and
-   with 40 rooms row C ended at 744 — six pixels past the fold, which costs a
-   scrollbar and half a card for nothing. Every other candidate was worse: the
-   row margins are 7px and had 3 to give between them, and compacting the app
-   header at this height would change every screen in the product to fix one.
-
-   The chart is the one element here that is pure area — 168px of plot for
-   twelve bars, where 152 draws the same twelve. This is the ladder this file
-   already keeps for it (720 -> 136, 665 -> 112), with a step added at the top;
-   it must stay ABOVE those two, because a shorter window matches all three and
-   the last rule wins. CHROME AND AREA, NEVER TYPE — no number on this page
-   gets smaller. */
-
-/* ══ RECENT PAYMENTS: THE HEADER BAND AND THE OVERSIZED GLYPH ══════════════
-
-   1. THE GREY BAND. `.dash-rp th { background:transparent }` has been in this
-      file all along and never once applied: style.css carries
-      `body.light-theme table thead th { background: var(--bg3) }`, which is
-      (0,2,2) against this file's (0,1,1) and wins on specificity regardless of
-      order. So Recent Payments wore the app's generic table grey while every
-      other card header on the dashboard is white — the inconsistency the owner
-      could see. Matching the winning selector's weight is what fixes it; the
-      column labels keep their own colour and weight, they just lose the band.
-
-   2. THE BIG SVG. Every other card header sizes its glyph inline at 15-16px
-      inside a 30px chip. Recent Payments passes no size, so it fell to
-      `.dash-chip .icon` — 20px, two thirds of the chip, visibly heavier than
-      the four headers above it. 16px puts it in line with them. */
-body.light-theme .dash-rp thead th,
-.dash-rp thead th { background: transparent; }
-.dash-rp thead th { border-bottom: 1px solid var(--border); }
 
 .dash-sec .dash-chip .icon { width: 16px; height: 16px; }
 
