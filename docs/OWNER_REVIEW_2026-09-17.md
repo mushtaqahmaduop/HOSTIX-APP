@@ -17,7 +17,7 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 6 | Former students | Long reasons push the Export button out of the heading row | done |
 | 7 | Dashboard | Needs Action — keep the row colours; only the numbers change, or lock the button | todo |
 | 8 | Students | Remove the Undertaking dropdown; fit the filters and Export in its place | todo |
-| 9 | App-wide | Long reasons should be truncated and shown in full on hover | done (former students; other screens still to sweep) |
+| 9 | App-wide | Long reasons should be truncated and shown in full on hover | done |
 | 10 | Cancellations | Picking a student in the Add form leaves the search field empty | todo |
 | 11 | Payments | Extra charges and concession values should align with the row's values, reason beneath | todo |
 | 12 | Expenses | The KPI glyphs should move to the top left of their cards | done |
@@ -193,6 +193,14 @@ Measured at 1366 and 1093, six records, three reasons over 70 characters:
 toolbar 56px (one row) at both, Export inside the bar at both, every reason
 cell one 20px line, long ones reporting truncated with the title set.
 
-**Not swept yet:** #9 asked for this app-wide. Former students is done because
-it is where #6 put me. The same pattern belongs on the cancellations and
-complaints reason columns.
+**The sweep, done.** #9 asked for this app-wide, so the other two reason
+columns were checked rather than assumed:
+
+- **Cancellations** had the same fault - `.canc-reason` was
+  `white-space: normal` inside a 190px cap, so a long reason wrapped and set
+  its row's height. Same treatment: one ellipsised line, full text as the
+  title. Measured with five records, three reasons over 65 characters: every
+  cell one 20px line, rows a uniform 65px, long ones truncated and titled.
+- **Complaints and maintenance** already had it. `.iss-d` clamps to two lines
+  with `-webkit-line-clamp` and the description already carried its own
+  `title`. Left alone.

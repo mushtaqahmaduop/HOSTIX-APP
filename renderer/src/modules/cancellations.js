@@ -232,7 +232,7 @@ function renderCancellations(filterStatus='All') {
             : '<span class="canc-dash">End of month</span>'}</td>
       <td><span class="ui-chip ${st.hue}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${st.svg}</svg>${escHtml(c.status)}</span></td>
       ${/* canc-reason keeps the reason flush left — a sentence, not a value. */''}
-      <td class="canc-reason">${c.reason?escHtml(c.reason):'<span class="canc-dash">—</span>'}</td>
+      <td class="canc-reason">${c.reason?`<span class="canc-reason__t" title="${escHtml(c.reason)}">${escHtml(c.reason)}</span>`:'<span class="canc-dash">—</span>'}</td>
       <td>
         <div class="canc-acts">
           ${_ic('', `showEditCancellationModal('${c.id}')`, 'Edit this record', P_EDIT)}
