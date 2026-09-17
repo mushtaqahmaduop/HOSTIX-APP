@@ -720,8 +720,16 @@
 .dl-needs {
     display: flex; flex-direction: column; gap: 2px;
     padding: 2px 0 var(--space-1);
+    flex: 1 1 auto; min-height: 0;
 }
-/* A row that reports a queue with something in it carries its own tone; a
+/* THE ROWS SHARE THE CARD (owner, 2026-09-17: "fit the action buttons in
+   quick actions and need actions to the available space of the cards"). The
+   panel used to draw four rows at its natural height and leave the rest of the
+   card empty above its footer. It fills now, and because the row count is
+   fixed at four the rows simply get taller rather than the layout changing
+   shape.
+
+   A row that reports a queue with something in it carries its own tone; a
    cleared one goes quiet and keeps its place. Dropping cleared rows made the
    panel a different shape every render (owner, reversing 2026-09-05), and an
    absent row reads as missing rather than as clear. */
@@ -733,6 +741,7 @@
     background: var(--dh-bg); color: var(--text-secondary);
     font-family: inherit; text-align: left; cursor: pointer;
     transition: background var(--dur-fast) var(--ease);
+    flex: 1 1 auto;
 }
 .dl-need:hover { filter: brightness(.985); }
 .dl-need:hover .dl-need__verb { text-decoration: underline; }
@@ -766,6 +775,7 @@
 .dl-acts {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-1); padding: 2px 0 var(--space-1);
+    flex: 1 1 auto; min-height: 0; grid-auto-rows: 1fr;
 }
 .dl-acts--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dl-act {

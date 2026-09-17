@@ -1390,7 +1390,7 @@ function renderDashboard() {
                        onclick: "navigate('rooms')" };
             }).filter(x => x.value > 0),
             '<span class="dnut__fig">' + fmtNum(roomsInUse) + '<span class="rt-of">/' + fmtNum(roomsTotal) + '</span></span>',
-            'Rooms In Use',
+            'Rooms Filled',
             { aria: 'Occupied seats by room type', money: false })}
       </div>
 
