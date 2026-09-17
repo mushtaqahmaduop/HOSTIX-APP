@@ -3642,7 +3642,11 @@ body.light-theme .stat-card.glass {
     font-weight: 700;
     letter-spacing: -0.03em;
 }
-.money-value--display .money-cur { font-size: 0.34em; line-height: 1.35; }
+/* 0.34em -> 0.46em (owner, 2026-09-17: "increase the size of Rs in kpis").
+   At 0.34 of a 26px figure the mark was 8.8px — under the 11px floor the
+   rest of the app keeps. 0.46 puts it at 12px, and it still reads as the
+   quieter half of the pair because of its colour, which is what it is for. */
+.money-value--display .money-cur { font-size: 0.46em; line-height: 1.35; }
 .money-value--section  { font-size: var(--fs-section); font-weight: var(--fw-section); }
 .money-value--body     { font-size: var(--fs-body); }
 .money-value--label    { font-size: var(--fs-label); }

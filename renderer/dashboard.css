@@ -1882,7 +1882,11 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
    tint 2px under the card's floor — and because row B is `overflow:hidden`,
    that is a line quietly sliced, not a layout that reports itself. 2px of the
    margin over it and 1px of its own padding, both sides. */
-.dl-foot--tint { margin: 2px 10px 8px; padding: 4px 9px; }
+/* SMALLER (owner, 2026-09-17). The verdict is a closing line, not a banner:
+   at 9px of side padding with its own margins it made the quietest sentence
+   on the card the largest object in it. The tint and the ink stay, so it
+   still reads as a verdict rather than as another row; the box does not. */
+.dl-foot--tint { margin: 0 var(--space-2) var(--space-1); padding: 2px var(--space-2); }
 
 /* ── the panel head sits on one line ─────────────────────────────────────── */
 /* `.dash-sec__head` wraps, and with a chip, a two-line title block and a badge

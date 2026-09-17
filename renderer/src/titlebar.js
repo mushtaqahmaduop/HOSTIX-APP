@@ -261,15 +261,25 @@
     document.addEventListener('mousemove', function (e) {
       var shown = document.body.classList.contains('hz-tb-show');
       var h = bar.offsetHeight || 40;
-      if (e.clientY <= 4) {
+      // 2px, not 4: the bar slides down OVER the page, and at 4 it was coming
+      // down on the way to the header's own primary action rather than on the
+      // way to the window buttons (owner, 2026-09-17).
+      if (e.clientY <= 2) {
         clearTimeout(hideTimer);
         document.body.classList.add('hz-tb-show');
-      } else if (shown && e.clientY > h + 8) {
+      } else if (shown && e.clientY > h) {
+        // `h`, not `h + 8`. The 8px band below the bar used to fall through to
+        // the branch under this one, which CANCELS the hide — and the header's
+        // Add Student button sits at y 8-48, inside it. Hovering the button
+        // therefore pinned the bar open for as long as the cursor stayed
+        // there, which is what read as "it does not go back".
         clearTimeout(hideTimer);
         hideTimer = setTimeout(function () {
           if (!openMenu) document.body.classList.remove('hz-tb-show');
-        }, 300);
+        }, 120);
       } else if (shown) {
+        // Genuinely on the bar. Hiding it out from under the pointer would be
+        // worse than holding it.
         clearTimeout(hideTimer);
       }
     }, { passive: true });

@@ -22,8 +22,11 @@
   gap: var(--space-3); margin-bottom: var(--space-4);
 }
 /* The rooms page's card height, like every other strip (owner, 2026-09-16). */
+/* The glyph sits at the TOP of the card, not centred against it (owner,
+   2026-09-17: "move the svgs above to top left"). align-items:flex-start is
+   the whole change — the icon keeps its box, the text block keeps its stack. */
 .exp-stat {
-  display: flex; align-items: center; gap: var(--space-3); overflow: hidden;
+  display: flex; align-items: flex-start; gap: var(--space-3); overflow: hidden;
   box-sizing: border-box; min-height: 94px;
 }
 .ui-card.exp-stat { padding-top: 13px; padding-bottom: 13px; }

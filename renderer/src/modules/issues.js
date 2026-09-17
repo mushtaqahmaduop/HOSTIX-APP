@@ -809,7 +809,12 @@ function showIssueModal(id) {
 
   /* The maintenance form's student list — same pool, selected by the ticket's
      `raisedById` rather than a complaint's `studentId`. */
-  const mtByStu = !!(rec && rec.kind === 'maintenance' && rec.raw.raisedById);
+  /* STUDENT IS THE DEFAULT ON A NEW MAINTENANCE JOB (owner, 2026-09-17:
+     "keep the maintinace raised by student default"). Most jobs are reported
+     by the person living with the fault; staff is the exception. On an EDIT
+     the record decides, because it already knows who raised it — a default
+     that overrode a stored fact would be inventing one. */
+  const mtByStu = rec ? !!(rec.kind === 'maintenance' && rec.raw.raisedById) : true;
   const mtStuPool = (DB.students || []).filter(s =>
     s.status === 'Active' || (rec && rec.raw.raisedById === s.id));
   const mtStuOpts = studentsByRoom(mtStuPool).map(s => {

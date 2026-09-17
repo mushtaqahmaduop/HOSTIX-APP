@@ -303,12 +303,23 @@ test('the form adds, edits in place, and fills a complaint room from its student
   expect(reaches.exported, 'the export still has a blank Raised by for maintenance')
     .toBe('Gul Nawaz');
 
-  /* A NEW ticket defaults to whoever is signed in — they are the one at the
-     keyboard writing it. */
+  /* A NEW ticket opens on STUDENT (owner, 2026-09-17: "keep the maintinace
+     raised by student default") — most jobs are reported by the person living
+     with the fault. The staff box is therefore hidden on open, which is why
+     this used to wait on #mt-raised and time out: waitForSelector waits for
+     VISIBILITY. Switch to Staff first, then assert the old guarantee still
+     holds — that when you do choose Staff, it is pre-filled with whoever is
+     signed in, since they are the one at the keyboard. */
   await win.evaluate(() => { issuesTab = 'maintenance'; showIssueModal(); });
+  await win.waitForSelector('#mt-raised-stu-q', { timeout: 15000 });
+  const opensOn = await win.evaluate(() =>
+    document.getElementById('mt-by-stu').classList.contains('is-on') ? 'student' : 'staff');
+  expect(opensOn, 'a new maintenance ticket does not open on Student').toBe('student');
+
+  await win.evaluate(() => _issMtRaiser('staff'));
   await win.waitForSelector('#mt-raised', { timeout: 15000 });
   const dflt = await win.evaluate(() => document.getElementById('mt-raised').value);
-  expect(dflt, 'a new maintenance ticket does not default to the signed-in user')
+  expect(dflt, 'choosing Staff does not pre-fill the signed-in user')
     .toBeTruthy();
 
   await app.close();
