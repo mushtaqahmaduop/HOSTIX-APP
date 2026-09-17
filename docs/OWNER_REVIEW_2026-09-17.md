@@ -14,10 +14,10 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 3 | Dashboard | "Today at a Glance" — the closing line ("2 open jobs to clear today") is too large | done |
 | 4 | Dashboard | The `Rs.` mark on the KPI figures is too small | done |
 | 5 | Chrome | The sidebar nav should be a neutral colour | done |
-| 6 | Former students | Long reasons push the Export button out of the heading row | todo |
+| 6 | Former students | Long reasons push the Export button out of the heading row | done |
 | 7 | Dashboard | Needs Action — keep the row colours; only the numbers change, or lock the button | todo |
 | 8 | Students | Remove the Undertaking dropdown; fit the filters and Export in its place | todo |
-| 9 | App-wide | Long reasons should be truncated and shown in full on hover | todo |
+| 9 | App-wide | Long reasons should be truncated and shown in full on hover | done (former students; other screens still to sweep) |
 | 10 | Cancellations | Picking a student in the Add form leaves the search field empty | todo |
 | 11 | Payments | Extra charges and concession values should align with the row's values, reason beneath | todo |
 | 12 | Expenses | The KPI glyphs should move to the top left of their cards | done |
@@ -161,3 +161,38 @@ Measured at 1366x768, both themes: button 195x30, label fits, popover 280x402
 at x=8. Selected month #FAF9F5 on #2451D6 is 6.2:1 light, #181715 on #7BA0FF
 is 7.1:1 dark. Picking August moves the dashboard to August and the label with
 it; browsing 2027 leaves both alone; "This month" returns both. No page errors.
+
+---
+
+## #6 and #9 — one cause, two symptoms
+
+A reason is free text typed into a cancellation, with no length limit, and
+nothing downstream assumed one.
+
+**#6.** A `<select>` is as wide as its widest OPTION. One reason of
+"Shifted to a hostel closer to the university campus after the semester ended"
+stretched the reason filter until `.fm-tools__end` wrapped and Export left the
+toolbar row. The filter is capped at 180px with the overflow ellipsised - the
+full text is still there in the open list.
+
+That alone fixed 1366. 1093 - a 1366 screen at 125% - needed a second step:
+the panel is 794px inside its padding and the bar wanted 858, because the
+search box had grown back to its cap on a row that had spare width. Two tiers
+now, the same shape payments.css already uses: 1440 takes width off the search
+box and the selects, 1200 takes a little more. Measured 782px at 1093, so the
+four filters and both actions hold one line at every tier down to the floor.
+No filter and no action leaves the bar.
+
+**#9.** The reason cell was `white-space: normal`, so a long one wrapped to
+three lines and set the height of every other cell in its row. One line now,
+ellipsised, with the full reason as the title - which is the hover. The cap is
+on the span rather than the cell, so the column still takes the table's slack;
+it just stops claiming more than it can use.
+
+Measured at 1366 and 1093, six records, three reasons over 70 characters:
+toolbar 56px (one row) at both, Export inside the bar at both, every reason
+cell one 20px line, long ones reporting truncated with the title set.
+
+**Not swept yet:** #9 asked for this app-wide. Former students is done because
+it is where #6 put me. The same pattern belongs on the cancellations and
+complaints reason columns.
