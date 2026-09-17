@@ -364,7 +364,7 @@
 .mov__cv {
     /* auto, not 4px: whatever the label did above it, the figure lands on the
        bottom edge of the cell and therefore level with its neighbours. */
-    margin-top:auto; padding-top:4px; font-size:17px; font-weight:800; letter-spacing:var(--ant-num-track); color:var(--dh);
+    margin-top:auto; padding-top:4px; font-size:var(--text-lg); font-weight:800; letter-spacing:var(--ant-num-track); color:var(--dh);
     font-family:var(--ant-num-font);
     font-variant-numeric:tabular-nums; line-height:1.2;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -599,7 +599,14 @@
    longer than its neighbour. A two-card row with a ragged bottom edge is
    ordinary; a card with a hole in the middle of it is not. */
 .rpt-toprow--top { align-items: start; }
-@container hi (min-width: 660px) { .rpt-hi .mov__strip { grid-template-columns: repeat(4, 1fr); } }
+/* 660 -> 880 (2026-09-17). At 660 a cell is 165px, and once the icon (38),
+   the gap (11) and the padding (32) are out, the figure gets 84px to hold
+   "Rs. 195,000.00" — so .mov__cv's ellipsis fired and the money was cut
+   short on the Key Highlights strip in both themes. The ellipsis was doing
+   its job; four across was the wrong shape for the card's real width.
+   A cell needs ~200px for the figure at 15px, so four of them need ~880.
+   Below that the strip stays two across, which is two rows and no cut. */
+@container hi (min-width: 880px) { .rpt-hi .mov__strip { grid-template-columns: repeat(4, 1fr); } }
 @container hi (max-width: 330px) { .rpt-hi .mov__strip { grid-template-columns: 1fr; } }
 
 /* The period the highlights describe, beside the title. It is a caption, not a
