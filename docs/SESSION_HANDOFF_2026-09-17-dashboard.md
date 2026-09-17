@@ -1,6 +1,6 @@
 # Session handoff — 2026-09-17 (second) — the dashboard, spec stage 5
 
-Branch **`design/dashboard`**, four commits, **not merged and not pushed**.
+Branch **`design/dashboard`**, seven commits, **not merged and not pushed**.
 It sits on `fix/dashboard-month`, which is itself unmerged. `master` is at
 **5.1.0** and still **97 commits ahead of `origin/master`** — nothing in either
 of today's sessions has left this machine.
@@ -9,6 +9,9 @@ Continues `docs/SESSION_HANDOFF_2026-09-17.md`, which closed with stage 5 (the
 dashboard) as the next screen. It is now built, rows A, B and C.
 
 ```
+3581f55  design(dashboard): Rooms Filled, and the two action panels fill their cards
+5055a9f  fix(dashboard): the pie chart was 150px in a 118px track, and row C is back on the fold
+907deab  docs: session handoff — the dashboard, spec stage 5
 850a563  design(dashboard): row C, and Occupancy by Room Type rebuilt to methods.png
 0b33449  design(dashboard): row B on tokens, and the KPI cards lose 10%
 7c257e6  design(dashboard): row A on the component layer, and the KPI row goes neutral
@@ -16,7 +19,7 @@ dashboard) as the next screen. It is now built, rows A, B and C.
 17b174d  fix(month): the dashboard's picked month no longer reaches writes   (previous session)
 ```
 
-`renderer/dashboard.css`: **3,235 → 1,954 lines.**
+`renderer/dashboard.css`: **3,235 → 1928 lines.**
 
 ---
 
@@ -40,32 +43,29 @@ place it applies.
 
 ## What is still open, in the order it matters
 
-### 1. Row C is 18px past the fold at 1366×738
+### 1. ~~Row C is 18px past the fold~~ — CLOSED, same session
 
-Row C is **246px** against the **202** it used to be. Measured on the running
-app, all four shipped sizes:
+Row C is **224px** and ends at **734 of 738**. Two things paid for it, and one
+of them was a bug older than this stage:
+
+- **`.rt-donut` matches nothing and never has.** `_dashDonut()` returns
+  `<div class="dnut">`, so the four rules sizing the ring to 118px were dead in
+  the old file too — it kept its base 150px inside a 118px grid track and hung
+  over the room-type names. The owner reported it as "hidden by the pie chart".
+- **The "Seats filled per capacity" subtitle is gone** (owner). It restated the
+  footnote at the other end of the same card, which says it better.
+
+Measured, all four shipped sizes:
 
 | Size | row A | row B | row C | row C bottom | viewport |
 |---|---|---|---|---|---|
-| 1366×768 | 174 | 254 | 246 | 756 | 768 |
-| **1366×738** | 174 | 254 | 246 | **756** | **738** |
-| 1280×660 | 157 | 254 | 237 | 716 | 660 |
+| 1366×768 | 174 | 254 | 224 | 734 | 768 |
+| **1366×738** | 174 | 254 | 224 | **734** | **738** |
+| 1280×660 | 157 | 254 | 205 | 684 | 660 |
 | 1093×614 | 157 | 254 | 202 | 673 | 614 |
 
-`dashboard-cards.spec.js` passes — it asserts row C *starts* above the fold,
-and it does (510 of 738). What is broken is the 2026-09-09 result, which landed
-row C's **bottom** exactly on 738.
-
-The reference's two-line row (a free count over its bar) is inherently taller
-than the one-line row it replaces, and the footnote it restores costs 24 more.
-Every pixel available in chrome is already taken and the list is bounded to the
-donut's own 118px. **The last 18px has to come from a decision, not a trim:**
-
-- lose a room type from view (the list already scrolls at 5 types), or
-- drop the footnote again (row C hid it before; the reference draws it), or
-- break the 11px floor on this card.
-
-All three are the owner's call.
+The two small sizes run past their viewport, as they did before this stage.
+The assertion is that row C *starts* above the fold, and it does at all four.
 
 ### 2. Two values do not map to a token
 
@@ -86,7 +86,16 @@ so converting it is a single move that lands there too. It waits for row D's
 own pass. It paints the new palette in the meantime — `--card` and `--border`
 are legacy-bridge aliases.
 
-### 4. Row D and Recent Payments are not rebuilt
+### 4. Later asks, all closed the same session
+
+- Four room types in view; a fifth scrolls.
+- The donut caption is **"Rooms Filled"**, not "Rooms In Use". The figure is
+  unchanged — rooms with at least one student in them.
+- **Needs Action and Quick Actions fill their cards.** Safe to stretch because
+  neither panel's item count varies: Needs Action always draws its four queues
+  and Quick Actions always draws its four verbs.
+
+### 5. Row D and Recent Payments are not rebuilt
 
 Untouched, as instructed. They are the rest of stage 5 whenever it is wanted.
 
@@ -179,9 +188,7 @@ and the fold at four sizes). **Neither is part of the suite; do not `git add -A`
 
 ## What to do first, next session
 
-1. **Decide the 18px** (open item 1). It is the only thing blocking row C from
-   being finished rather than merely built.
-2. **Row D + Recent Payments**, which is also where `.dash-sec` becomes
+1. **Row D + Recent Payments**, which is also where `.dash-sec` becomes
    `.ui-card` for all six cards at once.
 3. Then the file moves to `renderer/css/screens/dashboard.css` and joins the
    rebuilt screens at index.html lines 48–55. **It must sit with them, after
