@@ -104,12 +104,22 @@ function _cashEvents(p) {
 }
 
 // Cash that physically arrived inside `key` (a YYYY-MM month or a YYYY year,
-// matched as a date prefix — the same shape calcExpenses() takes).
-function calcCashReceived(key) {
+// matched as a date prefix — the same shape calcExpenses() takes), counted over
+// a given set of records. The Annual Archive reads its own dataset (live rows
+// plus archived ones), so it needs the definition without the table baked in;
+// calcCashReceived() below is this over DB.payments and nothing else.
+//
+// NET OF REFUNDS AND REVERSALS ALREADY. A checkout refund goes through
+// reversePayment() into p.reversals, and _cashEvents() emits each reversal as a
+// negative event on the day the money went back out.
+function calcCashReceivedIn(list, key) {
   if (!key) return 0;
-  return (DB.payments || []).reduce((sum, p) =>
+  return (list || []).reduce((sum, p) =>
     sum + _cashEvents(p).reduce((s, e) =>
       s + (String(e.date || '').indexOf(String(key)) === 0 ? e.amount : 0), 0), 0);
+}
+function calcCashReceived(key) {
+  return calcCashReceivedIn(DB.payments || [], key);
 }
 
 /* The month's cash split by WHICH month it settles, which is the reconciliation
@@ -169,10 +179,30 @@ function calcTransfers(key) {
     .filter(t => String(t.date || '').startsWith(key))
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 }
-// Profit / Available Fund, stated once so nothing can compute it a second way.
-function calcProfit(key) {
+/* ── AVAILABLE FUND IS CASH (finance Phase 3, owner 2026-09-18) ─────────────
+   It was calcRevenue − calcExpenses: ACCRUAL revenue (what the month's bills
+   earned, whenever the money came) minus CASH expenses (what went out of the
+   till that month). Two bases in one number, printed under a name — "Available
+   Fund" — that a hostel owner reads as "what I have". The finance spec (§14)
+   forbids exactly that, and so did the arithmetic: July's rent collected in
+   August raised July's fund and lowered August's drawer.
+
+   Two figures now, each on one basis, each with its own name:
+
+     calcAvailableFund  cash received − expenses          (what is in hand)
+     calcEarned         what the bills earned − expenses  (accrual result)
+
+   Cash received is net of refunds and reversals already — see
+   calcCashReceivedIn(). Every screen that says "Available Fund" reads the first;
+   anything that means the second says "Earned". */
+function calcAvailableFund(key) {
+  return calcCashReceived(key) - calcExpenses(key);
+}
+function calcEarned(key) {
   return calcRevenue(key) - calcExpenses(key);
 }
+// The old name. It had no callers left; it keeps the meaning it always had.
+function calcProfit(key) { return calcEarned(key); }
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── PAYMENT MONTH MATCHER ────────────────────────────────────────────────────
@@ -858,7 +888,10 @@ function renderDashboard() {
   const moExpCount = DB.expenses.filter(e => String(e.date||'').startsWith(mo)).length
                    + (DB.transfers||[]).filter(t => String(t.date||'').startsWith(mo)).length;
   const totalExpected = collected + pending;
-  const netProfit = collected - moExp;
+  // Cash in hand and what the month earned — two bases, two names. See
+  // calcAvailableFund(). `netProfit` keeps its name for the card's markup.
+  const netProfit = calcAvailableFund(mo);
+  const earnedMo  = calcEarned(mo);
 
   // Seat calculations
   const totalSeats = DB.rooms.reduce((s,r)=>{ const t=DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); }, 0);
@@ -1037,10 +1070,16 @@ function renderDashboard() {
     <div class="ui-card dsh-card ${netProfit>=0?'':'is-loss'}">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><rect x="6.3" y="12.6" width="2.7" height="5.1" rx="1.35" fill="currentColor"/><rect x="10.65" y="9.2" width="2.7" height="8.5" rx="1.35" fill="currentColor"/><rect x="15" y="6.3" width="2.7" height="11.4" rx="1.35" fill="currentColor"/></svg></div>
-        <div class="dash-kpi__label">Available Fund</div>
-        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'Profit':'Loss'}</span></div>
+        <div class="dash-kpi__label" title="Cash received this month, less refunds and expenses">Available Fund</div>
+        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'In hand':'Short'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
+      ${''/* THE ACCRUAL FIGURE, BESIDE THE CASH ONE (owner, 2026-09-18: "make it
+             cash, keep accrual beside it"). This is NOT the sub-line removed on
+             7 Sep below — that one restated the Revenue and Expenses cards
+             either side as a subtraction. Earned is a figure no other card
+             prints, in the same "of Rs.X expected" shape Total Revenue uses. */}
+      <div class="dash-kpi__sub" title="What this month's bills earned, less expenses: ${escHtml(fmtPKR(earnedMo))}">Earned <span class="pkr">Rs.</span>${fmtCompact(earnedMo)} after expenses</div>
       ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
              restated the subtraction using the two cards either side of it —
              Total Revenue two tiles left, Expenses one tile right — so at a
@@ -1053,7 +1092,7 @@ function renderDashboard() {
            subtraction the headline states, month by month — nothing new is
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
-      ${_dashBar(netProfit, collected)}
+      ${_dashBar(netProfit, cashIn.total)}
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -2985,7 +3024,9 @@ function renderMonthModal(monthKey, monthLabel) {
   // revenue minus it — there is no separate transfer deduction anywhere.
   const expTotal = calcExpenses(monthKey);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
-  const netProfit = rev - expTotal;
+  // Cash in hand, and the accrual result beside it — see calcAvailableFund().
+  const netProfit = calcAvailableFund(monthKey);
+  const earnedM   = calcEarned(monthKey);
   // The roster AS IT STOOD in this month — not whoever happens to be Active
   // today. Anyone with a fee record for the month is included regardless, so a
   // student who has since left still appears against the money they paid.
@@ -3070,7 +3111,7 @@ function renderMonthModal(monthKey, monthLabel) {
       <!-- "Rev − Exp − Transfers" described a sum nothing computes: netProfit
            is rev − calcExpenses(), and calcExpenses() already carries the
            transfers. The caption implied they were deducted a second time. -->
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px" title="Cash received less refunds and expenses">Cash in − Exp · earned ${fmtPKR(earnedM)}</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
@@ -3280,7 +3321,10 @@ function _dashMonthExportDef(monthKey, label) {
     summary: [
       { label: 'Revenue',        value: EXPORT.fmt.money(rev), tone: 'pos' },
       { label: 'Expenses',       value: EXPORT.fmt.money(expTotal), tone: 'neg' },
-      { label: 'Available fund', value: EXPORT.fmt.money(rev - expTotal),
+      // Cash basis, with the accrual result on its own line (finance Phase 3).
+      { label: 'Available fund (cash)', value: EXPORT.fmt.money(calcAvailableFund(monthKey)),
+        tone: calcAvailableFund(monthKey) >= 0 ? 'pos' : 'neg' },
+      { label: 'Earned (billed − expenses)', value: EXPORT.fmt.money(rev - expTotal),
         tone: rev - expTotal >= 0 ? 'pos' : 'neg' },
       { label: 'Outstanding',    value: EXPORT.fmt.money(pend), tone: pend > 0 ? 'neg' : '' },
       { label: 'Residents',      value: String(residents.length) },
@@ -3569,7 +3613,11 @@ function drawTrendChart() {
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cRevenue+'80;display:inline-block"></span>Expenses</span><span style="font-weight:700;color:'+cText2+'">'+fmtPKR(exp)+'</span></div>',
       '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="display:flex;align-items:center;gap:5px;color:'+cText3+'"><span style="width:7px;height:7px;border-radius:50%;background:'+cPending+';display:inline-block"></span>Pending</span><span style="font-weight:700;color:'+cPending+'">'+fmtPKR(pend)+'</span></div>',
       '<hr style="border:none;border-top:1px solid '+cBorder+';margin:6px 0"/>',
-      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
+      /* EARNED, not Net: this chart plots revenue by the month it was billed
+         for, so its difference is the accrual result. The Available Fund card
+         above it is cash now (finance Phase 3) and the two are not meant to
+         match — naming them differently is what stops them looking wrong. */
+      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Earned</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
     ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
     var vw=window.innerWidth, vh=window.innerHeight;
     var left=x+16; if(left+230>vw) left=x-240;

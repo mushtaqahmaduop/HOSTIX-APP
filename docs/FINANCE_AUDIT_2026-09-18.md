@@ -148,10 +148,51 @@ as before; only new collections are written differently.
 ## 5. Order from here
 
 1. ~~Collection-path integrity~~ — done, this document.
-2. UI punch list (owner review 2026-09-17, items 7, 8, 10, 11, 15, 16).
+2. ~~UI punch list~~ — done (#10 open, not reproduced).
+2b. ~~Available Fund on one basis~~ — done, see below.
 3. Month-domain layer — G7, and G9 with it.
 4. Historical snapshots — G8.
 5. Bill immutability — G6.
 6. Persistence atomicity — G10.
 
 Receipt identity (G5) lands with 3 or 5, whichever reaches it first.
+
+---
+
+## Phase 3 — Available Fund is cash (2026-09-18)
+
+G4 closed. One definition, in `modules/dashboard.js` beside the others:
+
+    calcAvailableFund(key) = calcCashReceived(key) − calcExpenses(key)   cash
+    calcEarned(key)        = calcRevenue(key)      − calcExpenses(key)   accrual
+
+`calcCashReceived()` is already net of refunds and reversals — a checkout
+refund goes through `reversePayment()` into `p.reversals`, and `_cashEvents()`
+emits it as negative cash on the day it went out. No new data was needed.
+`calcCashReceivedIn(list, key)` is the same definition over a given record set,
+for the Annual Archive, which reads live + archived rows.
+
+**Every site that said "Available Fund" now reads the cash figure,** and the
+accrual one is stated beside it as "Earned": the dashboard KPI (chip In hand /
+Short, sub-line "Earned Rs.X after expenses"), the dashboard month modal and its
+PDF/Excel export, the Reports KPI + sparkline + detail cards + both exports
+(all through `_rptTotals().net`), the Annual Archive KPI, summary and yearly
+table, and the student monthly report ("Fund in hand"). The revenue-trend
+tooltip's "Net" is renamed "Earned" — that chart plots billed months, so its
+difference is accrual and should not look like it disagrees with the card.
+
+There were twelve sites, not the seven the audit counted. `calcProfit()` had
+no callers; it now aliases `calcEarned()`.
+
+**Measured** on a month where the two bases differ (a last-month arrear
+collected this month, a part-paid bill, a partial refund, expenses):
+cash 19,000, billed revenue 9,000, expenses 4,000 → Available Fund **15,000**,
+Earned **5,000** — identical on the functions, dashboard card, dashboard
+export, Reports and the Archive month view. The Archive year view reads
+15,000 / 15,000, which is correct: across the year the arrear and its
+collection fall in the same period.
+
+**Owner-visible change:** the Available Fund figure on existing installs will
+move for any month with arrears collected, money paid ahead, or refunds —
+that movement is the point. The Key Highlights "Profit" peaks stay accrual and
+say so in their comment.

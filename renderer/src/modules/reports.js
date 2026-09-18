@@ -68,7 +68,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       <div style="background:${net>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${net>=0?'rgba(46,201,138,0.3)':'rgba(224,82,82,0.3)'};border-radius:10px;padding:18px;text-align:center;margin-bottom:16px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:${net>=0?'var(--green)':'var(--red)'};font-weight:700;margin-bottom:6px">Available Fund</div>
         <div style="font-size:38px;font-weight:900;color:${net>=0?'var(--green)':'var(--red)'}">${fmtPKR(net)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} collected − ${fmtPKR(totalExp)} expenses</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(net + totalExp)} cash received − ${fmtPKR(totalExp)} expenses</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Student</th><th>Room</th><th>Month</th><th>Amount Paid</th><th>Method</th><th>Date</th></tr></thead><tbody>
       ${_pg.slice.map(p=>`<tr style="cursor:pointer" onclick="showStudentPanel('${p.studentId}')">
@@ -154,7 +154,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
       <div style="background:${net>=0?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${net>=0?'rgba(46,201,138,0.4)':'rgba(224,82,82,0.4)'};border-radius:12px;padding:22px;text-align:center;margin-bottom:16px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:${net>=0?'var(--green)':'var(--red)'};font-weight:700;margin-bottom:8px">Available Fund</div>
         <div style="font-size:44px;font-weight:900;color:${net>=0?'var(--green)':'var(--red)'};letter-spacing:-1px">${fmtPKR(net)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(rev)} collected − ${fmtPKR(totalExp)} expenses</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtPKR(net + totalExp)} cash received − ${fmtPKR(totalExp)} expenses</div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>
       ${_pg.slice.map(item=>`<tr>
@@ -503,7 +503,8 @@ function _rptSeries(what) {
   if (!keys.length) return [];
   if (what === 'rev')  return (_rptTrendData || []).map(m => m.rev);
   if (what === 'exp')  return (_rptTrendData || []).map(m => m.exp);
-  if (what === 'net')  return (_rptTrendData || []).map(m => m.rev - m.exp);
+  // The Available Fund card's sparkline — cash, like the figure it sits under.
+  if (what === 'net')  return keys.map(k => calcAvailableFund(k));
   if (what === 'pend') return keys.map(k =>
     (DB.payments || []).filter(p => _payMatchesMonth(p, k))
       .reduce((n, p) => n + outstandingOf(p), 0));
@@ -616,8 +617,14 @@ function _rptTotals(keys) {
   const totalExp       = keys.reduce((s, k) => s + calcExpenses(k), 0);
   const totalTransfers = keys.reduce((s, k) => s + calcTransfers(k), 0);
 
+  /* Available Fund is CASH (finance Phase 3). Every screen, card, delta and
+     export on this page reads `net`, so this one line moves all of them. */
+  const cashIn = keys.reduce((s, k) => s + calcCashReceived(k), 0);
+
   return {
-    pays, exps, rev, pending, totalExp, totalTransfers, net: rev - totalExp,
+    pays, exps, rev, pending, totalExp, totalTransfers, cashIn,
+    net: cashIn - totalExp,            // Available Fund — cash
+    earned: rev - totalExp,            // accrual result, stated beside it
     // The §14 figures, so a caller never has to sum a money column itself again.
     totals, pendingTotals,
     billed:        totals.billed,
@@ -831,8 +838,9 @@ function renderReports() {
 
      Peaks and margin are all derived from the same trendData the chart draws —
      no separate query, so the card can never disagree with the line above it.
-     m.exp counts funds transfers, so profit here is the same Available Fund the
-     dashboard and the PDFs quote.
+     m.exp counts funds transfers. "Profit" here is the ACCRUAL result — billed
+     revenue less expenses — which is not the Available Fund since finance
+     Phase 3 made that cash. Peaks by billed month is what this card is for.
 
      Only months that actually recorded something can win a peak. A hostel six
      weeks old has four empty months in this window, and "Highest Expense: Mar,
@@ -1678,8 +1686,10 @@ function _rptDetailDef(type) {
         { label: 'Revenue',  value: EXPORT.fmt.money(T.rev), tone: 'pos' },
         { label: 'Expenses', value: EXPORT.fmt.money(T.totalExp), tone: 'neg' },
         { label: 'Transfers', value: EXPORT.fmt.money(T.totalTransfers) },
-        { label: 'Available fund', value: EXPORT.fmt.money(T.net),
+        { label: 'Available fund (cash)', value: EXPORT.fmt.money(T.net),
           tone: T.net >= 0 ? 'pos' : 'neg' },
+        { label: 'Earned (billed − expenses)', value: EXPORT.fmt.money(T.earned),
+          tone: T.earned >= 0 ? 'pos' : 'neg' },
       ],
       columns: [
         { label: 'Date', type: 'date', width: 13, value: l => l.date },
@@ -1880,7 +1890,8 @@ function _rptOverviewDef() {
     summary: [
       { label: 'Revenue',        value: EXPORT.fmt.money(T.rev), tone: 'pos' },
       { label: 'Expenses',       value: EXPORT.fmt.money(T.totalExp), tone: 'neg' },
-      { label: 'Available fund', value: EXPORT.fmt.money(T.net), tone: T.net >= 0 ? 'pos' : 'neg' },
+      { label: 'Available fund (cash)', value: EXPORT.fmt.money(T.net), tone: T.net >= 0 ? 'pos' : 'neg' },
+      { label: 'Earned (billed − expenses)', value: EXPORT.fmt.money(T.earned), tone: T.earned >= 0 ? 'pos' : 'neg' },
       { label: 'Outstanding',    value: EXPORT.fmt.money(T.pending), tone: T.pending > 0 ? 'neg' : '' },
       { label: 'Payments',       value: String(paid.length) },
       { label: 'Rooms occupied', value: occ + ' / ' + DB.rooms.length },
