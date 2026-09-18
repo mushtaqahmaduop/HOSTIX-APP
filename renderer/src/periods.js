@@ -261,51 +261,208 @@ function _payMatchesMonth(p, mk) {
   return !!k && k.indexOf(String(mk)) === 0;
 }
 
+/* ══ STAYS — WHO LIVED HERE, WHEN, AND IN WHICH ROOM (finance Phase 5, G8) ══
+
+   A student record holds the PRESENT: one room, one status. Every historical
+   view needs the past — who was resident in March, and in which room — and
+   there was no answer for it, so March's report listed today's residents in
+   today's rooms. Students come for a month and go; that is most of a hostel.
+
+   NO NEW TABLE, AND NOTHING GUESSED. The history is already on disk as dated
+   events; it was simply never read as history:
+
+     joinDate / leftDate      the stay's two ends
+     DB.roomShifts            every move between rooms, dated, from → to
+     DB.cancellations         a confirmed departure's vacateDate
+     s.pastStays              a finished stay, frozen at re-admission (below)
+
+   studentStays() rebuilds the stays from those records alone. The one place
+   the app DESTROYED history — re-admission from Former Students overwrote
+   joinDate and blanked leftDate, erasing the first stay — now writes the
+   finished stay into s.pastStays before it does (studentCloseStay()).
+
+   WHERE A RECORD IS SILENT, THE RULE IS STATED, NOT INVENTED:
+     • no join date     → the earliest the record proves: createdAt or the
+                          first month billed (audit G9); a resident with
+                          neither counts from the current month only.
+     • left, no date    → the confirmed cancellation's vacate date; else the
+                          end of the last month billed; else the end of the
+                          month they arrived (owner, 2026-09-18: "stay ended").
+     • re-admitted before this existed → the earlier stay ends on its
+                          confirmed cancellation's vacate date.
+
+   Dates are YYYY-MM-DD; `to` is null while the stay is open.  */
+
+// Statuses under which the student is still living here.
+var _RESIDENT_STATUS = { Active: true, Cancelling: true };
+
+function _monthEndDate(mk) {
+  var y = Number(mk.slice(0, 4)), m = Number(mk.slice(5, 7));
+  return mk + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+}
+function _isDate(d) { return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d); }
+function _day(d)    { return String(d).slice(0, 10); }
+
+// Every month billed to this student, live and archived, oldest first.
+function _studentBillMonths(s) {
+  var out = [];
+  var scan = function (p) {
+    if (!p || p.studentId !== s.id) return;
+    var k = _payMonthKey(p);
+    if (k) out.push(k);
+  };
+  (DB.payments || []).forEach(scan);
+  (DB.archive || []).forEach(function (r) { if (r && r._src === 'payments') scan(r); });
+  return out.sort();
+}
+
+// Confirmed departures for this student with a vacate date, oldest first.
+function _studentVacates(s) {
+  return (DB.cancellations || [])
+    .filter(function (c) { return c && c.studentId === s.id && c.status === 'Confirmed' && _isDate(c.vacateDate); })
+    .sort(function (a, b) { return String(a.vacateDate).localeCompare(String(b.vacateDate)); });
+}
+
+function _roomIdByNumber(n) {
+  if (n == null || n === '') return null;
+  var r = (DB.rooms || []).find(function (x) { return String(x.number) === String(n); });
+  return r ? r.id : null;
+}
+
+function studentStays(s) {
+  if (!s) return [];
+  var stays = [];
+
+  (Array.isArray(s.pastStays) ? s.pastStays : []).forEach(function (p) {
+    if (p && _isDate(p.from) && _isDate(p.to))
+      stays.push({ from: _day(p.from), to: _day(p.to), roomId: p.roomId || _roomIdByNumber(p.roomNumber),
+                   roomNumber: p.roomNumber || '', src: 'past' });
+  });
+
+  var bills   = _studentBillMonths(s);
+  var vacates = _studentVacates(s);
+  var resident = !!_RESIDENT_STATUS[s.status];
+
+  // Re-admitted before pastStays existed: the earlier stay is recoverable from
+  // the confirmed cancellation that ended it.
+  if (!stays.length && s.restoredAt && _isDate(s.joinDate)) {
+    var prior = vacates.filter(function (c) { return _day(c.vacateDate) < _day(s.joinDate); }).pop();
+    if (prior) {
+      var pto = _day(prior.vacateDate);
+      var pfrom = bills.filter(function (k) { return k <= pto.slice(0, 7); })[0];
+      stays.push({ from: pfrom ? pfrom + '-01' : pto.slice(0, 7) + '-01', to: pto,
+                   roomId: _roomIdByNumber(prior.roomNumber), roomNumber: prior.roomNumber || '',
+                   src: 'cancellation' });
+    }
+  }
+
+  var after = stays.reduce(function (m, x) { return x.to > m ? x.to : m; }, '');
+
+  // ── the current (or most recent) stay ──
+  var from = _isDate(s.joinDate) ? _day(s.joinDate) : null;
+  if (!from) {
+    // After any finished stay: a bill in the month a past stay ended belongs
+    // to that stay, so this one's evidence starts the month after.
+    var afterMonth = after ? after.slice(0, 7) : '';
+    var ev = [];
+    if (_isDate(s.createdAt) && _day(s.createdAt) > after) ev.push(_day(s.createdAt));
+    var firstBill = bills.filter(function (k) { return k > afterMonth; })[0];
+    if (firstBill) ev.push(firstBill + '-01');
+    from = ev.sort()[0] || (resident ? thisMonth() + '-01' : null);
+  }
+  if (!from) return stays;
+
+  var to = null;
+  if (!resident) {
+    var left = s.leftDate || s.leaveDate;
+    if (_isDate(left)) to = _day(left);
+    if (!to) {
+      var v = vacates.filter(function (c) { return _day(c.vacateDate) >= from; }).pop();
+      if (v) to = _day(v.vacateDate);
+    }
+    if (!to) {
+      var lastBill = bills.filter(function (k) { return k >= from.slice(0, 7); }).pop();
+      to = _monthEndDate(lastBill || from.slice(0, 7));
+    }
+    if (from > to) from = to;       // entered after the fact: the record, not the stay, is late
+  }
+  stays.push({ from: from, to: to, roomId: s.roomId || null,
+               roomNumber: s.roomNumber || '', src: 'current' });
+  return stays.sort(function (a, b) { return a.from.localeCompare(b.from); });
+}
+
+// The first and last day of a YYYY-MM month or a YYYY year.
+function _periodBounds(mk) {
+  var k = String(mk);
+  if (k.length === 4) return { first: k + '-01-01', last: k + '-12-31' };
+  return { first: k + '-01', last: _monthEndDate(k) };
+}
+
+// The stay overlapping period `mk`, the latest if more than one.
+function studentStayIn(s, mk) {
+  if (!s || !mk) return null;
+  var b = _periodBounds(mk), hit = null;
+  studentStays(s).forEach(function (st) {
+    if (st.from <= b.last && (st.to === null || st.to >= b.first)) hit = st;
+  });
+  return hit;
+}
+
 // Was this student on the roster during period `mk` (a YYYY-MM month or a YYYY
 // year)? Used by every historical view, which previously listed whoever is
 // Active *today* — so a student admitted in August appeared inside July's
 // figures as though they had been living there all along.
 function _studentInPeriod(s, mk) {
-  if (!s || !mk) return false;
-  var key   = String(mk);
-  var last  = key.length === 4 ? key + '-12' : key;   // a year ends in December
-  var first = key.length === 4 ? key + '-01' : key;
-  var join = _toMonthKey(s.joinDate);
-  if (join && join > last) return false;              // not admitted yet
-  var left = _toMonthKey(s.leftDate || s.leaveDate);
-  if (left && left < first) return false;             // already moved out
-  if (join) return true;
-
-  /* NO JOIN DATE (audit G9). This returned `s.status === 'Active'`, which put
-     every Active student without a join date on EVERY period's roster — pick
-     last March and a student admitted yesterday was a March resident. "Active"
-     is a fact about today, so it may only speak for today.
-
-     An Active student with no join date is placed from the earliest thing the
-     record itself proves: the day it was entered (createdAt), or the earliest
-     month billed to them — whichever is sooner. From there to now they are on
-     the books; before it, nothing says they were. With neither, they count for
-     the current period (and later) only. Nothing is inferred beyond what is
-     stored.
-
-     A student who is not Active and has no join date stays off the roster, as
-     before; every caller that lists a period's students also lists anyone with
-     a fee record in it, so their paid months still name them. */
-  if (s.status !== 'Active') return false;
-  var since = _studentFirstEvidence(s);
-  if (since) return since <= last;
-  return last >= thisMonth();
+  return !!studentStayIn(s, mk);
 }
 
-// The earliest month this student's own records prove they were on the books:
-// the day the record was entered, or the earliest month billed to them.
-function _studentFirstEvidence(s) {
-  var best = _toMonthKey(s.createdAt);
-  (DB.payments || []).forEach(function (p) {
-    if (!p || p.studentId !== s.id) return;
-    var k = _payMonthKey(p);
-    if (k && (!best || k < best)) best = k;
+/* The room a student was in on `date`. A room shift dated D means they slept
+   in the new room from D; so on any day before the earliest shift after it,
+   they were still in that shift's FROM room. With no later shift inside the
+   stay, it is the room the stay ended in. */
+function studentRoomAt(s, date) {
+  var d = _day(date);
+  var st = studentStays(s).filter(function (x) { return x.from <= d && (x.to === null || d <= x.to); }).pop();
+  if (!st) return null;
+  var later = (DB.roomShifts || [])
+    .filter(function (x) {
+      return x && String(x.studentId) === String(s.id) && _isDate(x.date)
+          && _day(x.date) > d && _day(x.date) >= st.from && (st.to === null || _day(x.date) <= st.to);
+    })
+    .sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  return later.length ? (later[0].fromRoomId || _roomIdByNumber(later[0].fromRoomNumber)) : st.roomId;
+}
+
+/* Where this student stood in period `mk`: the room they were in at the END of
+   their time in it (the period's last day, or the day they left if sooner),
+   and whether they arrived or left inside it. null when not resident then. */
+function studentInPeriodInfo(s, mk) {
+  var st = studentStayIn(s, mk);
+  if (!st) return null;
+  var b = _periodBounds(mk);
+  var at = (st.to !== null && st.to < b.last) ? st.to : b.last;
+  if (at < st.from) at = st.from;
+  return {
+    stay: st,
+    roomId: studentRoomAt(s, at),
+    joined: st.from >= b.first && st.from <= b.last,
+    left:   st.to !== null && st.to >= b.first && st.to <= b.last,
+  };
+}
+
+/* THE ONE WRITE. Re-admission reuses the student record, and without this the
+   finished stay is overwritten out of existence. Call it BEFORE joinDate,
+   leftDate or roomId change for a new stay. */
+function studentCloseStay(s) {
+  if (!s) return;
+  var cur = studentStays(s).filter(function (x) { return x.src === 'current' || x.src === 'cancellation'; });
+  if (!Array.isArray(s.pastStays)) s.pastStays = [];
+  cur.forEach(function (st) {
+    if (st.to === null) return;
+    if (s.pastStays.some(function (p) { return p && p.from === st.from && p.to === st.to; })) return;
+    var r = (DB.rooms || []).find(function (x) { return x.id === st.roomId; });
+    s.pastStays.push({ from: st.from, to: st.to, roomId: st.roomId || null,
+                       roomNumber: r ? String(r.number) : String(st.roomNumber || '') });
   });
-  return best;
 }
 // ─────────────────────────────────────────────────────────────────────────────

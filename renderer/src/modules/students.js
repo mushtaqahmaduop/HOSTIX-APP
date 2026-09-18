@@ -4361,6 +4361,11 @@ async function submitEditStudent(id) {
   t.email           = _newEmail;
   t.occupation      = _newOccup;
   t.joinDate        = _newJoin;
+  /* A DEPARTURE GETS A DATE (finance Phase 5). Setting Left or Blacklisted
+     here recorded no leftDate, so the stay had no end and every later month's
+     report listed this student. Today is the day it was recorded; a checkout
+     through Cancellations still stamps its own vacate date. */
+  if (_RESIDENT_STATUS[t.status] && !_RESIDENT_STATUS[_newStatus] && !t.leftDate) t.leftDate = today();
   t.status          = _newStatus;
   t.emergencyContact= _newEmerg;
   t.address         = _newAddr;
@@ -5181,6 +5186,11 @@ async function submitRestoreStudent(studentId) {
   if(!rsCharges.configured) {toast('That room has no rent configured — set it in Settings → Rent & Mess','error');return;}
   const type=getRoomType(room);
   if(getRoomOccupancy(room)>=(type?.capacity||1)){toast('That room is full — pick another','error');return;}
+  /* THE FIRST STAY IS KEPT (finance Phase 5). The lines below overwrite
+     joinDate, blank leftDate and move the room, which used to erase the stay
+     that ended — so every report for those months lost this student. It is
+     frozen into s.pastStays first; see studentStays() in periods.js. */
+  studentCloseStay(t);
   t.name            =document.getElementById('rs-name').value.trim()||t.name;
   t.fatherName      =document.getElementById('rs-fname').value.trim();
   t.cnic            =document.getElementById('rs-cnic').value.trim();

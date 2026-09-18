@@ -666,7 +666,8 @@ async function submitEditCancellation(cancId) {
       student.leftDate = c.vacateDate || today();
       student.lastRoom = _cancRoomNumberOf(student);
     }
-    else if(newStatus==='Restored') student.status='Active';
+    // An undone departure: the stay never ended, so its end date goes too.
+    else if(newStatus==='Restored') { student.status='Active'; student.leftDate=''; }
     else if(newStatus==='Pending') student.status='Cancelling';
   }
   await saveDB(); closeModal();
@@ -1228,7 +1229,8 @@ async function restoreFromCancellation(cancId) {
   showConfirm('Restore Student', `Restore ${escHtml(c.studentName)} to Active? Their seat will be re-occupied.`, (async ()=>{
     c.status = 'Restored';
     const student = DB.students.find(s=>s.id===c.studentId);
-    if(student){ student.status='Active'; }
+    // An undone departure: the stay never ended, so its end date goes too.
+    if(student){ student.status='Active'; student.leftDate=''; }
     await saveDB();
     toast(`${c.studentName} restored to Active. Seat is re-occupied.`, 'success');
     renderPage('cancellations');
