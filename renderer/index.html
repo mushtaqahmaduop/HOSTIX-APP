@@ -821,6 +821,10 @@
   <!-- Spec §14 financial integrity layer. AFTER utils.js: it calls
        resolveCharges() and outstandingOf() rather than reimplementing them. -->
   <script src="src/finance.js"></script>
+  <!-- The month-domain layer (finance Phase 4): which month a record bills, who
+       was resident in a period, when cash moved, and the revenue / cash / fund
+       figures. AFTER utils.js (thisMonth); BEFORE every screen module. -->
+  <script src="src/periods.js"></script>
   <!-- The student ledger (warden ledger spec §2.1). AFTER finance.js: it prices
        records with money() and calculateOutstanding(). BEFORE storage.js, whose
        saveDB() hands it each save. -->

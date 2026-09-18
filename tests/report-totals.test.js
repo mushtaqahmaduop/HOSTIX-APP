@@ -52,7 +52,7 @@ vm.createContext(sandbox);
    load time — it lives in nav.js. Without it this sandbox threw a
    broken harness rather than a broken total. */
 for (const f of ['config.js', 'utils.js', 'finance.js', 'toolbar.js', 'modules/nav.js',
-                 'modules/dashboard.js', 'modules/payments.js', 'modules/reports.js']) {
+                 'periods.js', 'modules/dashboard.js', 'modules/payments.js', 'modules/reports.js']) {
   vm.runInContext(R(f), sandbox, { filename: f });
 }
 

@@ -43,7 +43,7 @@ const sandbox = {
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
-for (const f of ['config.js', 'utils.js', 'finance.js', 'modules/dashboard.js']) {
+for (const f of ['config.js', 'utils.js', 'finance.js', 'periods.js']) {
   vm.runInContext(R(f), sandbox, { filename: f });
 }
 
