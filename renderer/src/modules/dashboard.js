@@ -1844,16 +1844,32 @@ function _dashLedgerRow(mo, pending, pendingCount) {
      button (a button inside a button is markup a browser un-nests wherever it
      likes) and cost a div, a role and a keydown handler to get the keyboard
      back. A button that is a button needs none of them. */
+  /* ONLY THE NUMBER CHANGES (owner review #7, 2026-09-18: "keep the row
+     colours; only the numbers change, or lock the button").
+
+     A cleared row used to change three things at once: it lost its tone to
+     --text-tertiary, its icon tile went grey, and its verb swapped from
+     Collect / View / Resolve / Assign to the word "Clear". Four rows that each
+     restyled themselves meant the panel never looked the same twice, and a row
+     reading "0 pending payments · Clear" is a different object from the one
+     reading "3 pending payments · Collect" — so the eye had to re-read the
+     whole card instead of reading four numbers.
+
+     The row keeps its colour and its verb. What changes at zero is the number,
+     and the button locks: there is nothing waiting on that screen, so the
+     control stops promising an action. That is the owner's own second option,
+     and it is the honest one — the row still SAYS Collect, and being disabled
+     is what says there is nothing to collect. */
   const needsRows = needs.map(r =>
-        '<button class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-clear' : '') + '"'
-        + ' onclick="navigate(\'' + r.page + '\')">'
+        '<button class="dl-need dh-' + r.tone + (r.n === 0 ? ' is-done' : '') + '"'
+        + (r.n === 0
+            ? ' disabled aria-disabled="true" title="Nothing waiting — this is clear"'
+            : ' onclick="navigate(\'' + r.page + '\')"')
+        + '>'
         + '<span class="dl-need__ic dh-' + r.tone + '">' + _dlIco(r.k) + '</span>'
         + '<span class="dl-need__n">' + fmtNum(r.n) + '</span>'
         + '<span class="dl-need__label">' + escHtml(r.n === 1 ? r.one : r.many) + '</span>'
-        /* The verb still names the decision, because the row is still the way
-           to that screen — but on a cleared row it would be an instruction to
-           do nothing, so it reads Clear and loses its accent. */
-        + '<span class="dl-need__verb">' + (r.n === 0 ? 'Clear' : escHtml(r.verb)) + '</span>'
+        + '<span class="dl-need__verb">' + escHtml(r.verb) + '</span>'
         + '</button>').join('');
 
   return {

@@ -72,7 +72,11 @@
 /* The Advanced Filters popover is a .ui-menu; this only says where it hangs. */
 .stu-popw { position:relative; }
 .stu-pop  { position:absolute; top:calc(100% + var(--space-2)); right:0; }
-.stu-pop__fee { display:flex; flex-wrap:wrap; gap:var(--space-1); padding:0 var(--space-2) var(--space-1); }
+/* Two filter groups, one layout. They are separate classes because they are
+   separate filters: `.stu-pop__fee .ui-btn` has to keep meaning the four fee
+   states, which is what students-fee-status.spec.js asserts. */
+.stu-pop__fee,
+.stu-pop__und { display:flex; flex-wrap:wrap; gap:var(--space-1); padding:0 var(--space-2) var(--space-1); }
 
 .stu-bulk {
     display:flex; align-items:center; gap:var(--space-3);

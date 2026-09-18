@@ -51,3 +51,31 @@ table, .amount, .num, .kpi-value, .stat-value, input[type="number"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── BIDIRECTIONAL TEXT ───────────────────────────────────────────────────────
+   For the few fields a hostel writes in Urdu as well as English — the rules and
+   the responsibility declaration (owner review #16, 2026-09-18).
+
+   Nothing was ever filtering the characters; undSave() stores whatever is
+   typed. What made Urdu look unsupported was direction and face. The element
+   carries dir="auto", so the browser takes the direction from the first strong
+   character and a list holding both scripts gets each line right; this rule
+   supplies the face, because Inter has no Arabic script at all and every glyph
+   was falling through to whatever came next in the stack.
+
+   Nastaliq first — it is how Urdu is set — with the Naskh faces behind it for
+   machines that do not have it. text-align: start rather than left, so an RTL
+   line aligns to its own reading edge. */
+/* The class is stated TWICE on purpose. style.css loads after this file and
+   sets font-family on .form-control, which is (0,1,0) — the same weight as a
+   bare .is-bidi, so the later file won and the Urdu box kept Inter. Doubling
+   the class makes it (0,2,0) without touching the markup; the same trap and
+   the same remedy are documented for listkit in CLAUDE.md. */
+.is-bidi.is-bidi {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting',
+               'Noto Naskh Arabic', 'Segoe UI', Inter, system-ui, sans-serif;
+  text-align: start;
+}
+/* Nastaliq sits on a deep baseline and clips at the app's tighter line heights. */
+textarea.is-bidi { line-height: 2; }
+ol.is-bidi > li   { line-height: 1.9; }

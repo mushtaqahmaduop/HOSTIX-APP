@@ -183,7 +183,13 @@ test('admission form: rules versions, the original once, reprints watermarked, p
 
     // ── The Students filter ────────────────────────────────────────────────
     await win.evaluate(() => { closeStudentPanel(); navigate('students'); });
-    await win.waitForSelector('#stu-und-filter', { timeout: 15000 });
+    /* The filter moved off the primary bar into Advanced filters (owner review
+       #8, 2026-09-18), so the page is ready when that button is; the control
+       itself is asserted to be in the popover, and the filtering below is
+       unchanged. */
+    await win.waitForSelector('#stu-pop-btn', { timeout: 15000 });
+    expect(await win.evaluate(() => !!document.querySelector('#stu-pop .stu-pop__und')),
+      'the undertaking filter lives in Advanced filters').toBe(true);
     const shown = await win.evaluate(() => {
       const names = () => [...document.querySelectorAll('#content')].map(n => n.textContent).join(' ');
       studentFilter.month = ''; studentFilter.und = 'noscan'; renderPage('students');

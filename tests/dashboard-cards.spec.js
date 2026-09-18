@@ -281,7 +281,8 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
 
   let n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
-      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+      text: r.innerText.replace(/\s+/g, ' ').trim(), locked: r.disabled,
+      tone: (r.className.match(/dh-\w+/) || [''])[0] })),
     /* `.dash-pill` again. This selector has now been right, wrong and right
        within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
        and the owner's 9 Sep revert to the old card moved it back. The badge
@@ -292,14 +293,19 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   }));
 
   expect(n.rows.length, 'all four rows are always present').toBe(4);
-  expect(n.rows.every(r => r.clear)).toBe(true);
+  /* ONLY THE NUMBER CHANGES (owner review #7, 2026-09-18). A zero row used to
+     become a different object — tone drained, verb replaced by "Clear". It
+     keeps its tone and its verb now, and is locked instead: nothing is waiting
+     on that screen, so the control stops promising an action. */
+  expect(n.rows.every(r => r.locked), 'a zero row is locked').toBe(true);
+  expect(n.rows.map(r => r.tone)).toEqual(['dh-amber', 'dh-red', 'dh-violet', 'dh-blue']);
   expect(n.rows.map(r => r.text)).toEqual([
-    '0 pending cancellations Clear',
-    '0 pending payments Clear',
-    '0 open complaints Clear',
+    '0 pending cancellations View',
+    '0 pending payments Collect',
+    '0 open complaints Resolve',
     // "0 open maintenances" — the naive + 's' pluraliser was wrong at every
     // count, not just at zero; it was simply never visible before.
-    '0 open maintenance jobs Clear',
+    '0 open maintenance jobs Assign',
   ]);
   expect(n.pill, 'no badge when nothing wants attention').toBeNull();
 
@@ -317,7 +323,8 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
 
   n = await win.evaluate(() => ({
     rows: [...document.querySelectorAll('.dl-need')].map(r => ({
-      text: r.innerText.replace(/\s+/g, ' ').trim(), clear: r.classList.contains('is-clear') })),
+      text: r.innerText.replace(/\s+/g, ' ').trim(), locked: r.disabled,
+      tone: (r.className.match(/dh-\w+/) || [''])[0] })),
     /* `.dash-pill` again. This selector has now been right, wrong and right
        within one day: the 9 Sep rebuild moved the count into `.dl-head2__pill`,
        and the owner's 9 Sep revert to the old card moved it back. The badge
@@ -329,11 +336,13 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
 
   expect(n.rows.length).toBe(4);
   // Same order, same positions — the list is scannable because it does not move.
-  expect(n.rows[0].text).toBe('0 pending cancellations Clear');
+  expect(n.rows[0].text).toBe('0 pending cancellations View');
   expect(n.rows[1].text).toBe('1 pending payment Collect');
   expect(n.rows[2].text).toBe('1 open complaint Resolve');
-  expect(n.rows[3].text).toBe('0 open maintenance jobs Clear');
-  expect(n.rows.map(r => r.clear)).toEqual([true, false, false, true]);
+  expect(n.rows[3].text).toBe('0 open maintenance jobs Assign');
+  expect(n.rows.map(r => r.locked)).toEqual([true, false, false, true]);
+  // The tones did not move when the counts did.
+  expect(n.rows.map(r => r.tone)).toEqual(['dh-amber', 'dh-red', 'dh-violet', 'dh-blue']);
   expect(n.pill, 'the badge counts what wants attention, not the rows').toBe('2');
 
   await app.close();

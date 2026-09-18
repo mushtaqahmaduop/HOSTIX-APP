@@ -778,13 +778,14 @@
     font-size: var(--text-xs); font-weight: var(--weight-medium);
     color: var(--dh); white-space: nowrap;
 }
-.dl-need.is-clear { background: transparent; color: var(--text-tertiary); }
-.dl-need.is-clear .dl-need__ic    { background: var(--surface-2); color: var(--text-tertiary); }
-.dl-need.is-clear .dl-need__label,
-.dl-need.is-clear .dl-need__n,
-.dl-need.is-clear .dl-need__verb  { color: var(--text-tertiary); }
-.dl-need.is-clear .dl-need__n     { font-weight: var(--weight-strong); }
-.dl-need.is-clear:hover { background: var(--surface-2); filter: none; }
+/* A CLEARED ROW KEEPS ITS COLOUR (owner review #7, 2026-09-18). `.is-clear`
+   repainted the row, its icon tile and all three of its texts in
+   --text-tertiary, so a row at zero was a different-looking object from the
+   same row at three and the card never held still. The row is unchanged now
+   except that it is locked: one opacity step, no pointer, tone untouched. */
+.dl-need.is-done { opacity: .55; cursor: default; }
+.dl-need.is-done:hover { filter: none; }
+.dl-need.is-done:hover .dl-need__verb { text-decoration: none; }
 
 /* ── Quick Actions ──────────────────────────────────────────────────────── */
 .dl-acts {

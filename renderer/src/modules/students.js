@@ -379,15 +379,13 @@ function renderStudents() {
         </select>
       </span>
 
-      ${''/* Step 11 (spec §3.8): students without a signed undertaking on file. */}
-      <span class="ui-selectw">
-        <select class="ui-select ui-select--sm${studentFilter.und&&studentFilter.und!=='All'?' is-set':''}" id="stu-und-filter" aria-label="Filter by a signed undertaking on file" onchange="studentFilter.und=this.value;studentFilter.page=1;renderPage('students')">
-          <option value="All">Undertaking: all</option>
-          <option value="scan" ${studentFilter.und==='scan'?'selected':''}>Signed scan on file</option>
-          <option value="noscan" ${studentFilter.und==='noscan'?'selected':''}>No signed scan</option>
-        </select>
-      </span>
-
+      ${''/* THE UNDERTAKING FILTER MOVED TO ADVANCED FILTERS (owner review #8,
+             2026-09-18: "remove the undertaking dropdown and fit the filters
+             and Export there"). It is not deleted — step 11 / spec §3.8 still
+             needs it, and it is the same move the Fee status filter already
+             made for the same reason. §17: Advanced Filters exists "for
+             secondary filters rather than making the primary filter bar too
+             crowded", and this was the seventh control on that bar. */}
       <span class="ui-selectw">
         <select class="ui-select ui-select--sm${studentFilter.status!=='All'?' is-set':''}" aria-label="Filter by status" onchange="studentFilter.status=this.value;studentFilter.page=1;renderPage('students')">
         ${(() => {
@@ -430,10 +428,21 @@ function renderStudents() {
                       onclick="stuSetFee('${f}')">${f==='All'?'Any':f}</button>`).join('')}
           </div>
           <div class="ui-menu__sep"></div>
+          ${''/* Moved off the primary bar (owner review #8). A real control, the
+                 same shape as Fee status above it — not a readout. */}
+          <div class="ui-menu__t">Signed undertaking</div>
+          <div class="stu-pop__und">
+            ${[['All','Any'],['scan','On file'],['noscan','Not on file']].map(([v,l])=>`
+              <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm${(studentFilter.und||'All')===v?' is-on':''}"
+                      aria-pressed="${(studentFilter.und||'All')===v}"
+                      onclick="stuSetUnd('${v}')">${l}</button>`).join('')}
+          </div>
+          <div class="ui-menu__sep"></div>
           <div class="ui-menu__t">Active filters</div>
           <div class="ui-menu__read">Room: <b>${studentFilter.room==='All'?'Any':escHtml(studentFilter.room)}</b></div>
           <div class="ui-menu__read">Charged for: <b>${(studentFilter.plan||'All')==='All'?'Any':(studentFilter.plan==='both'?'Rent + mess':studentFilter.plan==='rent'?'Rent only':'Mess only')}</b></div>
           <div class="ui-menu__read">Status: <b>${escHtml(studentFilter.status)}</b></div>
+          <div class="ui-menu__read">Undertaking: <b>${(studentFilter.und||'All')==='All'?'Any':(studentFilter.und==='scan'?'On file':'Not on file')}</b></div>
           <div class="ui-menu__sep"></div>
           <button type="button" class="ui-menu__item" role="menuitem" onclick="stuResetFilters()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -729,6 +738,14 @@ function stuPager(pg) {
 /* Chosen from Advanced Filters. The popover stays OPEN: picking a fee status
    is usually followed by reading the count, and a popover that closes on every
    click makes comparing Pending against Overdue a four-click job. */
+/* The signed-undertaking filter, from the Advanced filters popover it moved
+   into on 2026-09-18 (owner review #8). Same shape as stuSetFee(). */
+function stuSetUnd(v) {
+  studentFilter.und = v;
+  studentFilter.page = 1;
+  renderPage('students');
+}
+
 function stuSetFee(f) {
   studentFilter.fee = f;
   studentFilter.page = 1;
@@ -3878,7 +3895,9 @@ function _stuUndPage(t, adm) {
            <div class="doc-head__s">Rules &amp; Undertaking · Version ${escHtml(String(ver.v))}</div></div>
       <div class="doc-head__d">${escHtml(t.name || '')} · #${escHtml(String(t.id))}</div>
     </div>
-    <ol class="und__rules">${undRuleLines(ver.rules).map(l => `<li>${escHtml(l)}</li>`).join('')}</ol>
+    ${''/* dir="auto" per line so an Urdu rule prints right-to-left and an
+           English one does not (owner review #16). */}
+    <ol class="und__rules">${undRuleLines(ver.rules).map(l => `<li dir="auto">${escHtml(l)}</li>`).join('')}</ol>
     <div class="und__decl"><div class="und__h">Declaration</div>${escHtml(ver.declaration).replace(/\n/g, '<br>')}</div>
     <div class="und__sigs">
       ${sig('Student', t.name)}${sig('Guardian', t.fatherName)}${sig('Warden / Admin', warden)}

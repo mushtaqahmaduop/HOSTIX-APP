@@ -973,10 +973,15 @@ function showIssueModal(id) {
                <option value="UnderReview" ${rec && rec.status === 'UnderReview' ? 'selected' : ''}>Under Review</option>
                <option value="Resolved"    ${rec && rec.status === 'Resolved' ? 'selected' : ''}>Resolved</option>
              </select>`)}
-          ${_issField('Complaint date', 'calendar', dateCtrl('cp-date', rec ? rec.date : today(), 'Select date'), { req: true })}
-          ${_issField('Expected resolution', 'clock', dateCtrl('cp-expected', rec ? rec.expected : '', 'Optional'))}
+          ${''/* ASSIGNED TO SITS WITH THE TRIAGE FIELDS (owner review #15,
+                 2026-09-18). It was sixth, under the two dates, so the four
+                 decisions a warden makes when a complaint arrives — what kind,
+                 how urgent, what state, who owns it — were split across two
+                 rows by a pair of dates nobody fills in first. */}
           ${_issField('Assigned to', 'person',
             `<input id="cp-assigned" class="form-control" list="iss-staff" placeholder="Staff member" value="${rec ? escHtml(rec.assigned) : ''}">`)}
+          ${_issField('Complaint date', 'calendar', dateCtrl('cp-date', rec ? rec.date : today(), 'Select date'), { req: true })}
+          ${_issField('Expected resolution', 'clock', dateCtrl('cp-expected', rec ? rec.expected : '', 'Optional'))}
           ${_issField('Subject', 'fileText',
             `<input id="cp-subject" class="form-control" placeholder="e.g. No water in bathroom" value="${rec ? escHtml(rec.title) : ''}">`,
             { req: true, full: true })}

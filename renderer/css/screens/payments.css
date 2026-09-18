@@ -1575,7 +1575,20 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 }
 .pay-th { display:inline-flex; align-items:center; gap:4px; }
 .pay-th__l { display:inline-block; }
+/* EVERY FIGURE IN A ROW ON ONE LINE (owner review #11, 2026-09-18: "align
+   extra-charges and concession values with the row's values, reason below").
+
+   Measured at 1440: Paid, Unpaid and Adm. Fee all sat at y=314, while Extra
+   and Concession sat at y=305 — 9px high. Those two cells are the only ones
+   carrying a `.pay-why` reason under the figure, and `vertical-align: middle`
+   centres a two-line stack, which lifts its first line above the single-line
+   cells beside it. The money in a row did not read across.
+
+   Top-aligning the numeric cells puts every figure on the row's first line and
+   lets the reason hang beneath its own value, which is what was asked for. The
+   identity and status columns keep their centring. */
 .pay-table th.pay-col-num, .pay-table td.pay-col-num { text-align:center; }
+.pay-table td.pay-col-num { vertical-align:top; }
 .pay-table th.pay-col-num .pay-th { justify-content:center; text-align:center; }
 .pay-table th.pay-col-no, .pay-table td.pay-col-no { width:1%; text-align:center; color:var(--text3); font-variant-numeric:tabular-nums; }
 .pay-num {

@@ -15,16 +15,16 @@ Status: `todo` · `doing` · `done` · `answered` (a question, no code change)
 | 4 | Dashboard | The `Rs.` mark on the KPI figures is too small | done |
 | 5 | Chrome | The sidebar nav should be a neutral colour | done |
 | 6 | Former students | Long reasons push the Export button out of the heading row | done |
-| 7 | Dashboard | Needs Action — keep the row colours; only the numbers change, or lock the button | todo |
-| 8 | Students | Remove the Undertaking dropdown; fit the filters and Export in its place | todo |
+| 7 | Dashboard | Needs Action — keep the row colours; only the numbers change, or lock the button | done |
+| 8 | Students | Remove the Undertaking dropdown; fit the filters and Export in its place | done |
 | 9 | App-wide | Long reasons should be truncated and shown in full on hover | done |
-| 10 | Cancellations | Picking a student in the Add form leaves the search field empty | todo |
-| 11 | Payments | Extra charges and concession values should align with the row's values, reason beneath | todo |
+| 10 | Cancellations | Picking a student in the Add form leaves the search field empty | open — not reproduced, need steps |
+| 11 | Payments | Extra charges and concession values should align with the row's values, reason beneath | done |
 | 12 | Expenses | The KPI glyphs should move to the top left of their cards | done |
 | 13 | Complaints | The student picker in the Add/Edit form is broken | done — it was hidden, see #14 |
 | 14 | Maintenance | "Raised by" should default to Student | done |
-| 15 | Complaints | Move the "Assigned to" field up | todo |
-| 16 | Settings | The rules and regulations must accept Urdu, typed and pasted | todo |
+| 15 | Complaints | Move the "Assigned to" field up | done |
+| 16 | Settings | The rules and regulations must accept Urdu, typed and pasted | done |
 
 ---
 
@@ -204,3 +204,49 @@ columns were checked rather than assumed:
 - **Complaints and maintenance** already had it. `.iss-d` clamps to two lines
   with `-webkit-line-clamp` and the description already carried its own
   `title`. Left alone.
+
+---
+
+## Phase 2 — items 7, 8, 10, 11, 15, 16 (2026-09-18)
+
+UI only. No finance, ledger, ownership or month logic touched — checked in the
+diff, not assumed.
+
+**#7 Needs Action.** A zero row changed three things at once: `.is-clear`
+drained its tone to `--text-tertiary`, greyed its icon tile, and swapped the
+verb (Collect / View / Resolve / Assign) for the word "Clear". It keeps its tone
+and verb now; at zero it is **locked** (`disabled`, one opacity step) — the
+owner's own second option. Measured: tones `dh-amber / dh-red / dh-violet /
+dh-blue` identical at 0 and at 1.
+
+**#8 Students.** The Undertaking select moved into **Advanced filters** as a
+real control (Any / On file / Not on file) with its line in the active-filters
+readout — the same move Fee status already made, for the same reason. Not
+deleted: step 11 still needs it. Primary bar 5 selects → 4; measured one 32px
+row with Export level with the search box. It has its own class,
+`.stu-pop__und`, so `.stu-pop__fee .ui-btn` still means the four fee states.
+
+**#10 Cancellations — not reproduced.** Measured both ways a student gets into
+the form: preselected from a profile, and picked from the dropdown. Both leave
+the search field holding the student's name, the hidden id set and the room
+filled. Nothing was changed; a working picker should not be "fixed" on a guess.
+Needs the exact steps.
+
+**#11 Payments.** Measured at 1440: Paid, Unpaid and Adm. Fee at y=314, Extra
+and Concession at y=305 — 9px high, because they are the only cells carrying a
+`.pay-why` reason and `vertical-align: middle` re-centres a two-line stack.
+Numeric cells are top-aligned now: all six figures at y=299, reasons beneath at
+320.
+
+**#15 Complaints.** "Assigned to" moved from sixth to fourth, directly after
+Status, so Category / Priority / Status / Assigned to sit together and the two
+dates follow.
+
+**#16 Urdu.** Nothing was filtering characters — `undSave()` stores whatever is
+typed. The fault was direction and face: an LTR textarea, and Inter carries no
+Arabic script. `dir="auto"` on both textareas, on each rule in the version
+modal and on each rule in the printed admission form, so an Urdu line reads
+right-to-left and an English one does not. `.is-bidi` in `base.css` supplies
+Nastaliq first, Naskh behind it. It is written `.is-bidi.is-bidi` on purpose:
+`style.css` loads after `base.css` and its `.form-control` font-family won at
+equal specificity. Measured: resolves `rtl`, text preserved byte-for-byte.

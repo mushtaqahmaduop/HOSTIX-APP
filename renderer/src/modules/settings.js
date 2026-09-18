@@ -667,10 +667,23 @@ function renderRulesPanel() {
         <span class="set-note__i">${setIco(SET_ICO.info, 15, 2)}</span>
         <span><b>Starter text — review and save it before printing admission forms.</b> It names no hostel and no person; change anything that does not match your hostel.</span>
       </div>` : ''}
-      <div class="field"><label for="und-rules">Rules <span class="opt">one per line &mdash; printed as a numbered list</span></label>
-        <textarea class="form-control" id="und-rules" rows="12" maxlength="6000">${escHtml(cur.rules)}</textarea></div>
+      ${''/* URDU, TYPED AND PASTED (owner review #16, 2026-09-18). Nothing
+             was filtering the characters — undSave() stores whatever is typed
+             — so the text went in fine and came out reading wrong. The fault
+             was direction: an LTR textarea puts Urdu's full stop, its numerals
+             and any Latin word in the wrong place, and a mixed list looked
+             broken enough to seem unsupported.
+
+             `dir="auto"` asks the browser to take the direction from the first
+             strong character, so an English rule stays LTR, an Urdu rule goes
+             RTL, and a list holding both gets each line right. The font stack
+             gains the Urdu faces Windows ships; Inter carries no Arabic script
+             at all, so every glyph was already falling through to whatever came
+             next. */}
+      <div class="field"><label for="und-rules">Rules <span class="opt">one per line &mdash; printed as a numbered list &middot; English or اردو</span></label>
+        <textarea class="form-control is-bidi" id="und-rules" rows="12" maxlength="6000" dir="auto" lang="und">${escHtml(cur.rules)}</textarea></div>
       <div class="field" style="margin-top:12px"><label for="und-decl">Responsibility declaration</label>
-        <textarea class="form-control" id="und-decl" rows="4" maxlength="1500">${escHtml(cur.declaration)}</textarea></div>
+        <textarea class="form-control is-bidi" id="und-decl" rows="4" maxlength="1500" dir="auto" lang="und">${escHtml(cur.declaration)}</textarea></div>
       <div style="display:flex;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-primary" id="und-save" onclick="setRulesSave()">Save as new version</button>
       </div>
@@ -719,8 +732,8 @@ function setRulesView(v) {
   const x = undVersion(v);
   if (!x) return;
   showModal('modal-md', 'Rules &amp; Undertaking — version ' + escHtml(String(x.v)),
-    `<ol style="margin:0 0 14px 20px;line-height:1.65">${undRuleLines(x.rules).map(l => `<li>${escHtml(l)}</li>`).join('')}</ol>
-     <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(x.declaration)}</span></div>`,
+    `<ol class="is-bidi" style="margin:0 0 14px 20px;line-height:1.65">${undRuleLines(x.rules).map(l => `<li dir="auto">${escHtml(l)}</li>`).join('')}</ol>
+     <div class="cfg-note">${icon('info', 'xs')}<span class="is-bidi" dir="auto">${escHtml(x.declaration)}</span></div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`);
 }
 
