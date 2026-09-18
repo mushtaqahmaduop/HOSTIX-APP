@@ -960,6 +960,51 @@ function renderReports() {
     </div>`;
 
   return `
+  ${''/* THE TAB STRIP (owner ref: `reports2.png`). FIRST ON THE PAGE, above
+         the period bar and the exports (owner, 2026-09-18: "move the overview
+         and revenue and payments strip above all"). It is the page's own
+         navigation; the bar under it sets the window every tab reads.
+
+         Seven of these views existed
+         long before this redesign and the only way into one was to click the
+         right KPI card, which is not a thing anybody discovers. They are named
+         now.
+
+         CANCELLATIONS AND COMPLAINTS ARE BUILT, NOT SKIPPED. I left them out
+         on the last pass and wrote a comment here explaining that this app had
+         no report screen behind either. That was true of the SCREEN and not of
+         the DATA — DB.cancellations carries settlements and _issAll() already
+         normalises maintenance and complaints into one shape for the register.
+         Both views are in renderReportDetail() now, both export through
+         _rptDetailDef() like every other tab, and the reference's eight are all
+         real. See those two blocks for how each one is scoped to the period.
+
+         TEN TABS, NOT EIGHT. Revenue, Pending and Available fund are this app's
+         own and are not being dropped to make a picture match — the strip is a
+         superset of the reference, and it scrolls sideways if a window is too
+         narrow for the row. Occupancy is the reference's eighth: this app calls
+         the same view Rooms and its own heading reads "Room Occupancy", so it
+         is one tab under the name this app already uses rather than two tabs
+         showing one table. */}
+  <div class="rpt-tabs" role="tablist">
+    ${[['','Overview','home'],
+       ['financial','Revenue','money'],
+       ['payments','Payments','card'],
+       ['pending','Pending','clock'],
+       ['expenses','Expenses','expense'],
+       ['netprofit','Available fund','wallet'],
+       ['students','Students','users'],
+       ['rooms','Rooms','bed'],
+       ['cancellations','Cancellations','transfer'],
+       ['complaints','Complaints','tool']]
+      .map(([k,label,ico])=>`
+        <button role="tab" class="rpt-tab${(reportDetail||'')===k?' is-on':''}"
+                aria-selected="${(reportDetail||'')===k}"
+                onclick="reportDetail=${k?`'${k}'`:'null'};renderPage('reports')">
+          ${icon(ico,'xs')}${escHtml(label)}
+        </button>`).join('')}
+  </div>
+
   <div class="rpt-bar">
     <div class="rpt-seg">
       <button class="${reportPeriod==='month'?'is-on':''}"  onclick="rptSetPeriod('month')">Month</button>
@@ -1031,46 +1076,6 @@ function renderReports() {
               title="The whole report — every section, in one document">
         ${icon('print','xs')} Print / PDF</button>
     </div>
-  </div>
-
-  ${''/* THE TAB STRIP (owner ref: `reports2.png`). Seven of these views existed
-         long before this redesign and the only way into one was to click the
-         right KPI card, which is not a thing anybody discovers. They are named
-         now.
-
-         CANCELLATIONS AND COMPLAINTS ARE BUILT, NOT SKIPPED. I left them out
-         on the last pass and wrote a comment here explaining that this app had
-         no report screen behind either. That was true of the SCREEN and not of
-         the DATA — DB.cancellations carries settlements and _issAll() already
-         normalises maintenance and complaints into one shape for the register.
-         Both views are in renderReportDetail() now, both export through
-         _rptDetailDef() like every other tab, and the reference's eight are all
-         real. See those two blocks for how each one is scoped to the period.
-
-         TEN TABS, NOT EIGHT. Revenue, Pending and Available fund are this app's
-         own and are not being dropped to make a picture match — the strip is a
-         superset of the reference, and it scrolls sideways if a window is too
-         narrow for the row. Occupancy is the reference's eighth: this app calls
-         the same view Rooms and its own heading reads "Room Occupancy", so it
-         is one tab under the name this app already uses rather than two tabs
-         showing one table. */}
-  <div class="rpt-tabs" role="tablist">
-    ${[['','Overview','home'],
-       ['financial','Revenue','money'],
-       ['payments','Payments','card'],
-       ['pending','Pending','clock'],
-       ['expenses','Expenses','expense'],
-       ['netprofit','Available fund','wallet'],
-       ['students','Students','users'],
-       ['rooms','Rooms','bed'],
-       ['cancellations','Cancellations','transfer'],
-       ['complaints','Complaints','tool']]
-      .map(([k,label,ico])=>`
-        <button role="tab" class="rpt-tab${(reportDetail||'')===k?' is-on':''}"
-                aria-selected="${(reportDetail||'')===k}"
-                onclick="reportDetail=${k?`'${k}'`:'null'};renderPage('reports')">
-          ${icon(ico,'xs')}${escHtml(label)}
-        </button>`).join('')}
   </div>
 
   ${reportPeriod==='custom'&&!keys.length?`
