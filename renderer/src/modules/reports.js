@@ -11,17 +11,95 @@
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
+/* ── WHO LIVED HERE IN THE REPORTED PERIOD, AND IN WHICH ROOM (finance Phase 5)
+   Every roster, room table, occupancy figure and headcount on this page and in
+   its exports reads this. They read `status === 'Active'` and `t.roomId`,
+   which are TODAY — so the report for a past month listed this month's
+   residents in this month's rooms (owner, 2026-09-18: "students goes in and
+   out … should be only shown in that month"). The stays in periods.js answer
+   it now: anyone resident at any point in the period, in the room they were in
+   at the end of their time in it, flagged if they arrived or left inside it.
+
+   A student with a bill for the period is on it too, even where their stay
+   dates are silent: the bill is itself a record that they were here, and it
+   names the room it was raised against. */
+function _rptResidents(keys) {
+  keys = keys || _rptKeys();
+  if (!keys.length) return [];
+  const billed = new Map();   // studentId -> latest bill in the period
+  (DB.payments || []).forEach(p => {
+    if (!p || !keys.some(k => _payMatchesMonth(p, k))) return;
+    const cur = billed.get(p.studentId);
+    if (!cur || String(_payMonthKey(p)) >= String(_payMonthKey(cur))) billed.set(p.studentId, p);
+  });
+  const out = [];
+  (DB.students || []).forEach(s => {
+    const info = studentInPeriodInfo(s, keys);
+    const bill = billed.get(s.id);
+    if (!info && !bill) return;
+    out.push({
+      s,
+      roomId: (info && info.roomId) || (bill && (bill.roomId || _roomIdByNumber(bill.roomNumber))) || null,
+      joined: !!(info && info.joined),
+      left:   !!(info && info.left),
+      from:   info ? info.stay.from : (s.joinDate || ''),
+      to:     info ? (info.stay.to || '') : '',
+    });
+  });
+  return out;
+}
+
+// Where a resident stood in the period, in one word.
+function _rptStayWord(r) {
+  return r.joined && r.left ? 'Joined & left' : r.joined ? 'Joined' : r.left ? 'Left' : 'Resident';
+}
+
+// The same word as a badge: there throughout, arrived, or gone by the end.
+function _rptStayBadge(r) {
+  const w = _rptStayWord(r);
+  const cls = w === 'Resident' ? 'badge-green' : w === 'Joined' ? 'badge-blue' : 'badge-gray';
+  return `<span class="badge ${cls}">${escHtml(w)}</span>`;
+}
+
+/* The Student Report's filter, in the period's own terms. `studentReportFilter`
+   used to hold a status (Active / Left / Blacklisted); a value left over from
+   that reads as All rather than as an empty table. */
+function _rptStayMatches(r, w) {
+  if (w === 'Joined')   return r.joined;
+  if (w === 'Left')     return r.left;
+  if (w === 'Resident') return !r.joined && !r.left;
+  return true;
+}
+function _rptFilterResidents(residents) {
+  const w = ['Resident', 'Joined', 'Left'].includes(studentReportFilter) ? studentReportFilter : 'All';
+  if (w !== studentReportFilter) studentReportFilter = 'All';
+  return residents.filter(r => _rptStayMatches(r, w));
+}
+
+// What each student was billed for the period — the charge that month, not the
+// rent their room carries today.
+function _rptBilledByStudent(pays) {
+  const m = new Map();
+  (pays || []).forEach(p => m.set(p.studentId, (m.get(p.studentId) || 0) + calculateBill(p)));
+  return m;
+}
+
 // PERF: shared room/student indexes built in ONE pass, so report tables and PDF builders
 // stop doing a DB.rooms.find / DB.students.filter per row (which was O(rows × students)).
-function _buildRoomStudentIndex() {
+// For the REPORTED period — see _rptResidents() above.
+function _buildRoomStudentIndex(keys) {
   const roomById = new Map(DB.rooms.map(r=>[r.id, r]));
-  const activeStudentsByRoom = new Map();   // roomId -> [active students]
-  (DB.students||[]).forEach(t=>{
-    if(t.status!=='Active') return;
-    let arr=activeStudentsByRoom.get(t.roomId); if(!arr){ arr=[]; activeStudentsByRoom.set(t.roomId,arr); }
-    arr.push(t);
+  const residents = _rptResidents(keys);
+  const activeStudentsByRoom = new Map();   // roomId -> [students resident in it in the period]
+  const stayOf = new Map();                 // studentId -> { roomId, joined, left }
+  residents.forEach(x => {
+    stayOf.set(x.s.id, x);
+    if (!x.roomId) return;
+    let arr=activeStudentsByRoom.get(x.roomId); if(!arr){ arr=[]; activeStudentsByRoom.set(x.roomId,arr); }
+    arr.push(x.s);
   });
-  return { roomById, activeStudentsByRoom, occ: r => (activeStudentsByRoom.get(r.id)||[]).length };
+  return { roomById, residents, stayOf, activeStudentsByRoom,
+           occ: r => (activeStudentsByRoom.get(r.id)||[]).length };
 }
 
 function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
@@ -29,7 +107,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // branch, so a Custom Range detail headed itself with the current YEAR while
   // listing the range's rows.
   const _plKeys = _rptKeys();
-  const periodLabel = reportPeriod==='month' ? (reportMonth || thisMonth())
+  const periodLabel = reportPeriod==='month' ? monthLabel(reportMonth || thisMonth())
     : reportPeriod==='year' ? thisYear()
     : (_plKeys.length ? _rptMonthName(_plKeys[0]) + ' – ' + _rptMonthName(_plKeys[_plKeys.length-1])
                       : 'Custom Range');
@@ -37,7 +115,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" title="Export this report as a PDF document" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export PDF</button>`;
 
   // PERF: index rooms by id and active students by room ONCE (see _buildRoomStudentIndex).
-  const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom } = _buildRoomStudentIndex();
+  const { roomById:_roomById, activeStudentsByRoom:_activeStudentsByRoom, residents:_residents } = _buildRoomStudentIndex();
 
   // PERF: reset to page 1 only when the detail type / period / sub-filter changes, so
   // paging within a detail table is preserved but switching cards starts fresh.
@@ -170,22 +248,23 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
   // ── STUDENTS ───────────────────────────────────────────────────────────────
   if (id === 'students') {
-    // Scoped to the period the report header names. This table used to read the
-    // whole roster, so a student admitted in August was listed inside a July
-    // report — the same month-mixing the fee figures had.
-    const _keys = _rptKeys();
-    const inPeriod = DB.students.filter(t => _keys.some(k => _studentInPeriod(t, k)));
+    /* THE PERIOD'S RESIDENTS, IN THE PERIOD'S ROOMS (finance Phase 5). The
+       filters were today's statuses — Active / Left / Blacklisted — which
+       say nothing about the month on screen: a student who stayed all of
+       March and left in June counted as "Left" in March. They are what
+       happened IN the period now: arrived, left, or there throughout. */
+    const inPeriod = _rptFilterResidents(_residents);
+    const _n = w => _residents.filter(r => _rptStayMatches(r, w)).length;
     const badges = [
-      {label:'All',       count:inPeriod.length,                              color:'var(--blue)',  dim:'var(--blue-dim)',  border:'rgba(74,156,240,0.4)'},
-      {label:'Active',    count:inPeriod.filter(t=>t.status==='Active').length,  color:'var(--green)', dim:'var(--green-dim)', border:'rgba(46,201,138,0.4)'},
-      {label:'Left',      count:inPeriod.filter(t=>t.status==='Left').length,    color:'var(--amber)', dim:'var(--amber-dim)', border:'rgba(240,160,48,0.4)'},
-      {label:'Blacklisted',count:inPeriod.filter(t=>t.status==='Blacklisted').length,color:'var(--red)',dim:'var(--red-dim)',border:'rgba(224,82,82,0.4)'},
+      {label:'All',      count:_residents.length, color:'var(--blue)',  dim:'var(--blue-dim)',  border:'rgba(74,156,240,0.4)'},
+      {label:'Resident', count:_n('Resident'),    color:'var(--green)', dim:'var(--green-dim)', border:'rgba(46,201,138,0.4)'},
+      {label:'Joined',   count:_n('Joined'),      color:'var(--accent)',dim:'var(--accent-dim)',border:'rgba(37,99,235,0.4)'},
+      {label:'Left',     count:_n('Left'),        color:'var(--amber)', dim:'var(--amber-dim)', border:'rgba(240,160,48,0.4)'},
     ];
-    const filtered = studentReportFilter==='All' ? inPeriod : inPeriod.filter(t=>t.status===studentReportFilter);
-    const _pg = paginate(filtered, reportDetailFilter);
+    const _pg = paginate(inPeriod, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">${icon('users')} Student Report</div>
+        <div class="card-title">${icon('users')} Student Report — ${escHtml(periodLabel)}</div>
         <div style="display:flex;gap:8px;align-items:center">${csvBtn('students','var(--blue)')}${pdfBtn}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
@@ -196,19 +275,20 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
         </div>`).join('')}
       </div>
       ${studentReportFilter!=='All'?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:12px;color:var(--text3)">Showing <strong style="color:var(--text)">${studentReportFilter}</strong> (${filtered.length})</span>
+        <span style="font-size:12px;color:var(--text3)">Showing <strong style="color:var(--text)">${studentReportFilter}</strong> (${inPeriod.length})</span>
         <button onclick="studentReportFilter='All';renderPage('reports')" class="btn btn-secondary btn-sm" style="font-size:11px">✕ Clear</button>
       </div>`:''}
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Join Date</th><th>${hostelServesMess() ? 'Rent + Mess' : 'Rent'}</th><th>Status</th><th>Phone</th></tr></thead><tbody>
-      ${_pg.slice.map(t=>{const r=_roomById.get(t.roomId);return `<tr style="cursor:pointer" onclick="showStudentPanel('${t.id}')">
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Father</th><th>Room</th><th>Joined</th><th>Left</th><th>Billed</th><th>In period</th><th>Phone</th></tr></thead><tbody>
+      ${(()=>{const _billed=_rptBilledByStudent(pays);return _pg.slice.map(x=>{const t=x.s;const r=_roomById.get(x.roomId);const b=_billed.get(t.id);return `<tr style="cursor:pointer" onclick="showStudentPanel('${t.id}')">
         <td class="fw-700" style="color:var(--blue)">${escHtml(t.name)}</td>
         <td class="text-muted" style="font-size:12px">${escHtml(t.fatherName||'—')}</td>
-        <td class="text-gold fw-700">${r?'#'+r.number:'—'}</td>
-        <td class="text-muted" style="font-size:12px">${fmtDate(t.joinDate)}</td>
-        <td class="text-green fw-700">${fmtPKR(resolveCharges(t).total)}</td>
-        <td>${statusBadge(t.status)}</td>
+        <td class="text-gold fw-700">${r?'#'+escHtml(String(r.number)):'—'}</td>
+        <td class="text-muted" style="font-size:12px">${x.from?fmtDate(x.from):'—'}</td>
+        <td class="text-muted" style="font-size:12px">${x.to?fmtDate(x.to):'—'}</td>
+        <td class="${b?'text-green fw-700':'text-muted'}">${b!=null?fmtPKR(b):'Not billed'}</td>
+        <td>${_rptStayBadge(x)}</td>
         <td class="text-muted">${escHtml(t.phone||'—')}</td>
-      </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No students found</td></tr>'}
+      </tr>`;}).join('');})()||'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px">Nobody lived here in this period</td></tr>'}
       </tbody></table></div>
       ${renderPager(_pg,'reportDetailFilter','reports')}
     </div>`;
@@ -218,7 +298,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   if (id === 'rooms') {
     const _pg = paginate(DB.rooms, reportDetailFilter);
     return `<div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">${icon('bed')} Room Occupancy — Details</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
+      <div class="card-header"><div class="card-title">${icon('bed')} Room Occupancy — ${escHtml(periodLabel)}</div><div style="display:flex;gap:8px;align-items:center">${csvBtn('rooms','var(--teal)')}${pdfBtn}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
         <div style="background:var(--green-dim);border:1px solid rgba(46,201,138,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">Occupied</div><div style="font-size:28px;font-weight:900;color:var(--green)">${occ}</div></div>
         <div style="background:var(--accent-dim);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:16px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent-strong);font-weight:700">Vacant</div><div style="font-size:28px;font-weight:900;color:var(--accent-strong)">${DB.rooms.length-occ}</div></div>
@@ -479,11 +559,20 @@ function _rptKeys() {
 /* Every month the data knows about, newest first, with the current one always
    present. A picker that cannot show its own selection reads as a blank
    screen on the 1st of a month, before anything has been recorded. */
+/* EVERY MONTH FROM THE FIRST RECORD TO NOW, not only months holding money
+   (finance Phase 5). A month in which students lived but nothing was billed or
+   spent is still a month to report on — who was here — and the picker could
+   not offer it, so it showed a different month over the report instead. */
 function _rptMonthOptions() {
-  const seen = new Set([thisMonth()]);
-  (DB.payments || []).forEach(p => { const k = _payMonthKey(p); if (k) seen.add(k); });
-  (DB.expenses || []).forEach(e => { const k = String(e.date || '').slice(0, 7); if (k) seen.add(k); });
-  return [...seen].sort((a, b) => String(b).localeCompare(String(a)));
+  const now = thisMonth();
+  let first = now;
+  const see = k => { if (/^\d{4}-\d{2}$/.test(k || '') && k < first) first = k; };
+  (DB.payments || []).forEach(p => see(_payMonthKey(p)));
+  (DB.expenses || []).forEach(e => see(String(e.date || '').slice(0, 7)));
+  (DB.students || []).forEach(s => see(_toMonthKey(s.joinDate)));
+  if (reportMonth) see(reportMonth);
+  const last = reportMonth && reportMonth > now ? reportMonth : now;
+  return _rptMonthsBetween(first, last).reverse();
 }
 
 function rptSetMonth(v) {
@@ -540,7 +629,9 @@ function _rptExportLabel() {
   const ks = _rptKeys();
   if (reportPeriod === 'year')   return thisYear();
   if (reportPeriod === 'custom') return ks.length ? ks[0] + '_to_' + ks[ks.length - 1] : 'custom';
-  return thisMonth();
+  // The month on screen. This returned thisMonth(), so March's report,
+  // exported in September, was filed under September.
+  return ks[0] || thisMonth();
 }
 function _rptExportWord() {
   return reportPeriod === 'month' ? 'Monthly'
@@ -643,13 +734,10 @@ function _rptTotals(keys) {
   };
 }
 
-// Students whose join/leave dates fall inside the window — the only honest
-// "vs last period" the roster supports, since no historical headcount is kept.
-function _rptStudentDelta(keys) {
-  const inWin = d => !!d && keys.some(k => String(d).startsWith(k));
-  const joined = DB.students.filter(t => inWin(t.joinDate)).length;
-  const left   = DB.students.filter(t => inWin(t.leftDate)).length;
-  return joined - left;
+// Arrivals less departures inside the window, read off the stays — so a
+// re-admitted student's first departure still counts in the month it happened.
+function _rptStudentDelta(residents) {
+  return residents.filter(r => r.joined).length - residents.filter(r => r.left).length;
 }
 
 /* Delta chip. `mode` 'pct' for money, 'abs' for counts. Returns '' when there
@@ -695,21 +783,12 @@ function renderReports() {
     ? 'Latest record: ' + fmtDate(_latest)
     : 'No records entered yet';
 
-  // PERF: index active students by room ONCE so the per-room / per-type loops below are
-  // O(students+rooms) instead of O(rooms×students). getRoomOccupancy() rescans ALL students
-  // on every call, which made Reports lag badly with hundreds of students.
-  const _activeByRoom = new Map();              // roomId -> active student count
-  const _activeIdsByType = new Map();           // typeId -> Set of active studentIds
-  const _typeIdByRoomId = new Map(DB.rooms.map(r=>[r.id, r.typeId]));
-  DB.students.forEach(t=>{
-    if(t.status!=='Active') return;
-    _activeByRoom.set(t.roomId, (_activeByRoom.get(t.roomId)||0)+1);
-    const tid=_typeIdByRoomId.get(t.roomId);
-    if(tid==null) return;
-    let set=_activeIdsByType.get(tid); if(!set){ set=new Set(); _activeIdsByType.set(tid,set); }
-    set.add(t.id);
-  });
-  const _roomOcc = r => _activeByRoom.get(r.id)||0;
+  // PERF: index the period's residents by room ONCE so the per-room / per-type loops below
+  // are O(students+rooms) instead of O(rooms×students). FOR THE REPORTED PERIOD, not today
+  // (finance Phase 5) — occupancy, headcounts and the room table all read this.
+  const _idx = _buildRoomStudentIndex(keys);
+  const _residents = _idx.residents;
+  const _roomOcc = r => _idx.occ(r);
 
   const occ=DB.rooms.filter(r=>_roomOcc(r)>0).length;
   const occRate=DB.rooms.length?Math.round(occ/DB.rooms.length*100):0;
@@ -802,13 +881,26 @@ function renderReports() {
      is rooms-with-somebody-in-them over rooms of that type, the same ratio the
      Occupancy KPI quotes for the whole hostel; a type with no rooms configured
      shows an em dash rather than a 0% that reads like a failure. */
+  /* REVENUE BY THE ROOM THE BILL WAS RAISED AGAINST. It summed Paid records of
+     students living in that type TODAY — so a student who had moved rooms, or
+     left, took their money with them into the wrong row or out of the table,
+     and part-payments were missing (the donut's bug, again). Every collection
+     in the period now, each under the room its own record names, the same
+     money calcRevenue() counts. */
+  const _typeIdByRoomId = new Map(DB.rooms.map(r=>[r.id, r.typeId]));
+  const _revByType = new Map();
+  pays.forEach(p => {
+    if (!(Number(p.amount) > 0)) return;
+    const rid = p.roomId || _roomIdByNumber(p.roomNumber) || ((_idx.stayOf.get(p.studentId) || {}).roomId);
+    const tid = _typeIdByRoomId.get(rid);
+    if (tid != null) _revByType.set(tid, (_revByType.get(tid) || 0) + Number(p.amount));
+  });
   const _rtTot = { rooms: 0, occ: 0, vac: 0, rev: 0 };
   const _rtPct = (o, n) => n > 0 ? Math.round(o / n * 100) : null;
   const rtRows=DB.settings.roomTypes.map(type=>{
     const tRooms=DB.rooms.filter(r=>r.typeId===type.id);
     const tOcc=tRooms.filter(r=>_roomOcc(r)>0).length;
-    const tIds=_activeIdsByType.get(type.id)||new Set();   // O(1) membership instead of per-student rooms.find
-    const tRev=pays.filter(p=>p.status==='Paid'&&tIds.has(p.studentId)).reduce((s,p)=>s+Number(p.amount),0);
+    const tRev=_revByType.get(type.id)||0;
     const vac=tRooms.length-tOcc;
     const pct=_rtPct(tOcc, tRooms.length);
     _rtTot.rooms += tRooms.length; _rtTot.occ += tOcc; _rtTot.vac += vac; _rtTot.rev += tRev;
@@ -917,18 +1009,23 @@ function renderReports() {
   })();
 
   // ── Student summary ───────────────────────────────────────────────────────
-  const nActiveS = DB.students.filter(t=>t.status==='Active').length;
-  const nLeftS   = DB.students.filter(t=>t.status==='Left').length;
+  // THE PERIOD'S PEOPLE (finance Phase 5). These counted today's statuses and
+  // the all-time roster under a report for March; they count March now.
+  const nResS    = _residents.length;
+  const nJoinS   = _residents.filter(r => r.joined).length;
+  const nLeftS   = _residents.filter(r => r.left).length;
+  // Blacklisting carries no date, so it can only be stated as of today — and
+  // it is labelled so, rather than passed off as a figure for the period.
   const nBlackS  = DB.students.filter(t=>t.status==='Blacklisted').length;
-  const sDelta   = _rptStudentDelta(keys);
+  const sDelta   = _rptStudentDelta(_residents);
 
   /* THE SPARKLINE IS OPTIONAL AND THAT IS THE POINT (owner ref:
      `reports2.png`, which draws one behind all six figures). Three of these
      six have a month-by-month history this app can honestly draw — money in,
-     money out, and what is left of it. Occupancy and the roster are STANDING
-     figures: nothing in this database records what occupancy was in June, and
-     a line drawn for them would be invented. They keep their sentence, which
-     is what the card beside them was already doing. */
+     money out, and what is left of it. Occupancy and the roster were STANDING
+     figures when this was written; since finance Phase 5 the stays can say
+     what occupancy was in June, but a sparkline for them is not drawn yet.
+     They keep their sentence. */
   const stat = (id, hue, label, value, sub, svg, clickable, series) => `
     <div class="rpt-stat ${hue}${clickable===false?' rpt-stat--flat':''}${reportDetail===id?' is-on':''}"
          ${clickable===false?'':`onclick="reportDetail='${id}';renderPage('reports')"`}
@@ -1124,11 +1221,11 @@ function renderReports() {
       '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
       true, _rptSeries('pend'))}
     ${stat('rooms','dh-blue','Occupancy Rate',`${occRate}%`,
-      // No historical occupancy is stored, so this reports the standing figure
-      // rather than a change against a period the data cannot describe.
+      // Rooms somebody lived in during the period, read off the stays (finance
+      // Phase 5) — not the rooms occupied today.
       `${occ} of ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
       '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>')}
-    ${stat('students','dh-blue','Active Students',nActiveS,
+    ${stat('students','dh-blue','Residents',nResS,
       `${_rptDelta(sDelta,0,'abs')} joined vs left`,
       '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
   </div>
@@ -1271,12 +1368,12 @@ function renderReports() {
         Student Summary
       </div>
       <div class="rpt-sum">
-        ${tile('Active Students', nActiveS, 'On the roster now', 'dh-green', 'students', 'userCheck')}
-        ${tile('Left / Departed', nLeftS,   'Checked out',       'dh-slate', 'students', 'logout')}
-        ${tile('Blacklisted',     nBlackS,  nBlackS?'Barred from return':'None on record', 'dh-red', 'students', 'lock')}
-        ${tile('Total Registered',DB.students.length, 'All time', 'dh-violet', 'students', 'clipboard')}
-        ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied`, 'dh-blue', 'rooms', 'bed')}
-        ${tile('Total Payments',  DB.payments.length, 'All time', 'dh-amber', 'financial', 'card')}
+        ${tile('Residents',       nResS,    'Lived here in the period', 'dh-green', 'students', 'userCheck')}
+        ${tile('Joined',          nJoinS,   'Arrived in the period',    'dh-violet', 'students', 'users')}
+        ${tile('Left / Departed', nLeftS,   'Left in the period',       'dh-slate', 'students', 'logout')}
+        ${tile('Blacklisted',     nBlackS,  nBlackS?'On record today':'None on record', 'dh-red', 'students', 'lock')}
+        ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied in the period`, 'dh-blue', 'rooms', 'bed')}
+        ${tile('Payments',        pays.length, 'Bills for the period', 'dh-amber', 'financial', 'card')}
       </div>
     </div>
   </div>
@@ -1318,13 +1415,20 @@ function renderReports() {
              "Monthly Financial Report" is what a warden asks their office for.
              The sentence under each is this app's own, saying what is actually
              in the file. */}
+      ${''/* FOR THE PERIOD ABOVE, AS THE NOTE SAYS (finance Phase 5). Five of
+             these ran the REGISTER's export — exportStudentsPDF() and the rest —
+             which prints whatever that register's own page was last filtered to:
+             "Student List" was everyone on the roster today, whatever month this
+             page was set to. They now run this page's own period documents, the
+             same ones each tab's Export button produces. Pending stays the
+             register, for the reason given above. */}
       ${[['Monthly Financial Report','Collection, expenses and profit','chart','printReport()'],
-         ['Student List Report','Everyone on the roster now','users','exportStudentsPDF()'],
-         ['Room Occupancy Report','Room by room, and who is in them','bed','exportRoomsPDF()'],
+         ['Student List Report','Everyone who lived here in the period','users',"downloadDetailPDF('students')"],
+         ['Room Occupancy Report','Room by room, and who was in them','bed',"downloadDetailPDF('rooms')"],
          ['Pending Payments Report','Opens the register, ready to collect','clock','openPaymentsPending()'],
-         ['Expense Report','By category, with a subtotal each','expense','exportExpensesPDF()'],
-         ['Cancellations Report','Departures and their settlements','transfer','exportCancellationsPDF()'],
-         ['Complaints Report','Every issue raised, and its state','tool','exportIssuesPDF()']]
+         ['Expense Report','By category, with a subtotal each','expense',"downloadDetailPDF('expenses')"],
+         ['Cancellations Report','Departures in the period, and their settlements','transfer',"downloadDetailPDF('cancellations')"],
+         ['Complaints Report','Every issue raised in the period, and its state','tool',"downloadDetailPDF('complaints')"]]
         .map(q=>`
           <button class="rpt-quick__b" onclick="${q[3]}" title="${escHtml(q[0])}">
             <span class="rpt-quick__i">${icon(q[2],'sm')}</span>
@@ -1634,6 +1738,86 @@ function _rptPeriodWords() {
   return monthLabel(ks[0]);
 }
 
+/* THE PERIOD'S STUDENTS AND ROOMS, AS DOCUMENT SECTIONS (finance Phase 5).
+   One definition each, read by the tab's own export AND by the whole-period
+   report, so the two files cannot name two rosters. Both used to read today:
+   `t.roomId`, `t.status`, `resolveCharges(t)` (this month's rate) and
+   getRoomOccupancy() — a March report printed September. Now each row is a
+   stay in the period: the room they were in then, when they came and went,
+   and what they were billed for it. */
+function _rptStudentsSection(keys, pays, def, opts) {
+  opts = opts || {};
+  const idx = _buildRoomStudentIndex(keys);
+  const billed = _rptBilledByStudent(pays);
+  const roomNo = x => { const r = idx.roomById.get(x.roomId); return r ? String(r.number) : ''; };
+  let rows = opts.all ? idx.residents.slice() : _rptFilterResidents(idx.residents);
+  rows.sort((a, b) => (Number(roomNo(a)) || 1e9) - (Number(roomNo(b)) || 1e9)
+                   || String(a.s.name || '').localeCompare(String(b.s.name || '')));
+  const filt = !opts.all && studentReportFilter !== 'All' ? studentReportFilter : null;
+  const totalBilled = rows.reduce((s, x) => s + (billed.get(x.s.id) || 0), 0);
+  return {
+    sheet: 'Students',
+    filters: (def ? def.filters : []).concat([['Shown', filt]]),
+    summary: [
+      { label: 'Lived here', value: String(rows.length) },
+      { label: 'Joined', value: String(rows.filter(x => x.joined).length), tone: 'pos' },
+      { label: 'Left',   value: String(rows.filter(x => x.left).length) },
+      { label: 'Billed for the period', value: EXPORT.fmt.money(totalBilled) },
+    ],
+    columns: [
+      { label: 'Room', type: 'id', width: 9, value: x => roomNo(x),
+        get: x => roomNo(x) ? '<b>#' + escHtml(roomNo(x)) + '</b>' : '—' },
+      { label: 'Student', type: 'text', width: 22, value: x => x.s.name || '',
+        get: x => '<b>' + escHtml(x.s.name || '—') + '</b>' },
+      { label: 'Father / Guardian', type: 'text', width: 20, value: x => x.s.fatherName || '' },
+      { label: 'Phone', type: 'text', width: 15, value: x => String(x.s.phone || '') },
+      // Masked, like every other exported CNIC (owner, 2026-09-10).
+      { label: 'CNIC',  type: 'text', width: 18, pdf: false, value: x => maskCnic(x.s.cnic) },
+      { label: 'Joined', type: 'date', width: 13, value: x => x.from || '' },
+      { label: 'Left',   type: 'date', width: 13, value: x => x.to || '' },
+      { label: 'Billed', type: 'money', width: 14, total: 'sum',
+        value: x => billed.has(x.s.id) ? billed.get(x.s.id) : null },
+      { label: 'In period', type: 'status', width: 13, value: x => _rptStayWord(x) },
+    ],
+    rows,
+    empty: 'Nobody lived here in this period.',
+  };
+}
+
+function _rptRoomsSection(keys) {
+  const idx = _buildRoomStudentIndex(keys);
+  const cap = r => (getRoomType(r) || {}).capacity || 0;
+  const occupied = DB.rooms.filter(r => idx.occ(r) > 0).length;
+  return {
+    meta: occupied + ' of ' + DB.rooms.length + ' rooms occupied',
+    summary: [
+      { label: 'Rooms', value: String(DB.rooms.length) },
+      { label: 'Occupied in the period', value: String(occupied), tone: 'pos' },
+      { label: 'Residents', value: idx.residents.filter(x => x.roomId).length + ' / ' +
+          DB.rooms.reduce((s, r) => s + cap(r), 0) + ' beds' },
+    ],
+    columns: [
+      { label: 'Room', type: 'id', width: 10, value: r => String(r.number),
+        get: r => '<b>#' + escHtml(String(r.number)) + '</b>' },
+      { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
+      { label: 'Type',  type: 'text', width: 16, value: r => (getRoomType(r) || {}).name || '' },
+      { label: 'Capacity', type: 'number', width: 10, pdf: false, value: r => cap(r) },
+      { label: 'Occupied', type: 'number', width: 10, value: r => idx.occ(r) },
+      { label: 'Available', type: 'number', width: 11, value: r => Math.max(0, cap(r) - idx.occ(r)) },
+      // The room's rate as set in Settings — a property of the room, not a bill.
+      { label: 'Rent / mo', type: 'money', width: 14,
+        value: r => Number(r.rent != null && r.rent !== ''
+                     ? r.rent : ((getRoomType(r) || {}).defaultRent || 0)) || null },
+      { label: 'Status', type: 'status', width: 12,
+        value: r => idx.occ(r) > 0 ? 'Occupied' : 'Vacant' },
+      { label: 'Students', type: 'wrap', width: 34,
+        value: r => (idx.activeStudentsByRoom.get(r.id) || []).map(t => t.name).join(', ') },
+    ],
+    rows: roomsByNumber(DB.rooms),
+    empty: 'No rooms are recorded.',
+  };
+}
+
 function _rptDetailDef(type) {
   const keys = _rptKeys();
   const T    = _rptTotals(keys);
@@ -1738,78 +1922,11 @@ function _rptDetailDef(type) {
   }
 
   if (type === 'students') {
-    const idx = _buildRoomStudentIndex();
-    /* The roster for the PERIOD in this document's own header — anyone living
-       here in it, or who paid for it. The PDF used to skip this scoping while
-       the CSV applied it, so one report exported twice named two rosters. */
-    let roster = studentsByRoom(DB.students.filter(t =>
-      keys.some(k => _studentInPeriod(t, k)) ||
-      DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
-    if (studentReportFilter !== 'All') roster = roster.filter(t => t.status === studentReportFilter);
-
-    return Object.assign(def, {
-      sheet: 'Students',
-      filters: def.filters.concat([
-        ['Status', studentReportFilter !== 'All' ? studentReportFilter : null]]),
-      summary: [
-        { label: 'Students', value: String(roster.length) },
-        { label: 'Active',   value: String(roster.filter(t => t.status === 'Active').length), tone: 'pos' },
-        { label: 'Charged / month',
-          value: EXPORT.fmt.money(roster.reduce((s, t) => s + Number(resolveCharges(t).total || 0), 0)) },
-      ],
-      columns: [
-        { label: 'Room', type: 'id', width: 9,
-          value: t => { const r = idx.roomById.get(t.roomId); return r ? String(r.number) : ''; },
-          get:   t => { const r = idx.roomById.get(t.roomId);
-                        return r ? '<b>#' + escHtml(String(r.number)) + '</b>' : '—'; } },
-        { label: 'Student', type: 'text', width: 22, value: t => t.name || '',
-          get: t => '<b>' + escHtml(t.name || '—') + '</b>' },
-        { label: 'Father / Guardian', type: 'text', width: 22, value: t => t.fatherName || '' },
-        { label: 'Phone', type: 'text', width: 16, value: t => String(t.phone || '') },
-        // Masked, like every other exported CNIC (owner, 2026-09-10).
-        { label: 'CNIC',  type: 'text', width: 18, pdf: false, value: t => maskCnic(t.cnic) },
-        { label: 'Joined', type: 'date', width: 13, value: t => t.joinDate || '' },
-        /* resolveCharges, not `t.rent`: the whole monthly charge is rent AND
-           mess, and every one of these reports quoted the rent half alone. */
-        { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
-          value: t => { const c = resolveCharges(t); return c.configured ? c.total : null; } },
-        { label: 'Status', type: 'status', width: 12, value: t => t.status || 'Active' },
-      ],
-      rows: roster,
-      empty: 'Nobody was on the roster in this period.',
-    });
+    return Object.assign(def, _rptStudentsSection(keys, pays, def));
   }
 
   if (type === 'rooms') {
-    const idx = _buildRoomStudentIndex();
-    return Object.assign(def, {
-      sheet: 'Rooms',
-      summary: [
-        { label: 'Rooms', value: String(DB.rooms.length) },
-        { label: 'Occupied', value: String(DB.rooms.filter(r => idx.occ(r) > 0).length), tone: 'pos' },
-        { label: 'Beds', value: DB.students.filter(isResident).length + ' / ' +
-            DB.rooms.reduce((s, r) => s + ((getRoomType(r) || {}).capacity || 0), 0) },
-      ],
-      columns: [
-        { label: 'Room', type: 'id', width: 10, value: r => String(r.number),
-          get: r => '<b>#' + escHtml(String(r.number)) + '</b>' },
-        { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
-        { label: 'Type',  type: 'text', width: 16, value: r => (getRoomType(r) || {}).name || '' },
-        { label: 'Capacity', type: 'number', width: 10, pdf: false,
-          value: r => (getRoomType(r) || {}).capacity || 0 },
-        { label: 'Occupied', type: 'number', width: 10, value: r => getRoomOccupancy(r) },
-        { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
-        { label: 'Rent / mo', type: 'money', width: 14,
-          value: r => Number(r.rent != null && r.rent !== ''
-                       ? r.rent : ((getRoomType(r) || {}).defaultRent || 0)) || null },
-        { label: 'Status', type: 'status', width: 12,
-          value: r => getRoomOccupancy(r) > 0 ? 'Occupied' : 'Vacant' },
-        { label: 'Students', type: 'wrap', width: 34,
-          value: r => (idx.activeStudentsByRoom.get(r.id) || []).map(t => t.name).join(', ') },
-      ],
-      rows: roomsByNumber(DB.rooms),
-      empty: 'No rooms are recorded.',
-    });
+    return Object.assign(def, _rptRoomsSection(keys), { sheet: 'Rooms' });
   }
 
   /* THE TWO NEW TABS EXPORT LIKE EVERY OTHER ONE. A detail view whose Export
@@ -1901,13 +2018,14 @@ function downloadDetailExcel(type)         { EXPORT.excel(_rptDetailDef(type)); 
 function _rptOverviewDef() {
   const keys = _rptKeys();
   const T    = _rptTotals(keys);
-  const idx  = _buildRoomStudentIndex();
+  const idx  = _buildRoomStudentIndex(keys);
   const occ  = DB.rooms.filter(r => idx.occ(r) > 0).length;
   const paid = T.pays.filter(p => p.status === 'Paid');
 
-  const roster = studentsByRoom(DB.students.filter(t =>
-    keys.some(k => _studentInPeriod(t, k)) ||
-    DB.payments.some(p => p.studentId === t.id && keys.some(k => _payMatchesMonth(p, k)))));
+  // The period's residents in the period's rooms — the same sections the tabs
+  // export, so this document and theirs cannot name two rosters.
+  const stu   = _rptStudentsSection(keys, T.pays, null, { all: true });
+  const rooms = _rptRoomsSection(keys);
 
   return {
     module: 'Report',
@@ -1925,7 +2043,7 @@ function _rptOverviewDef() {
       { label: 'Outstanding',    value: EXPORT.fmt.money(T.pending), tone: T.pending > 0 ? 'neg' : '' },
       { label: 'Payments',       value: String(paid.length) },
       { label: 'Rooms occupied', value: occ + ' / ' + DB.rooms.length },
-      { label: 'Residents',      value: String(DB.students.filter(isResident).length) },
+      { label: 'Residents',      value: String(stu.rows.length) },
     ],
 
     sections: [
@@ -1957,10 +2075,10 @@ function _rptOverviewDef() {
       },
       {
         title: 'Students',
-        meta: roster.length + ' on the roster',
-        columns: _stuExportDef(roster).columns,
-        rows: roster,
-        empty: 'Nobody was on the roster in this period.',
+        meta: stu.rows.length + ' lived here in the period',
+        columns: stu.columns,
+        rows: stu.rows,
+        empty: stu.empty,
       },
       /* CANCELLATIONS AND COMPLAINTS. Neither has a report SCREEN in this app,
          which is why neither is a tab on the page — but both have a full
@@ -1984,21 +2102,10 @@ function _rptOverviewDef() {
       },
       {
         title: 'Room occupancy',
-        meta: occ + ' of ' + DB.rooms.length + ' rooms occupied',
-        columns: [
-          { label: 'Room', type: 'id', width: 10, value: r => String(r.number),
-            get: r => '<b>#' + escHtml(String(r.number)) + '</b>' },
-          { label: 'Floor', type: 'text', width: 12, value: r => r.floor || '' },
-          { label: 'Type',  type: 'text', width: 16, value: r => (getRoomType(r) || {}).name || '' },
-          { label: 'Occupied', type: 'number', width: 10, value: r => getRoomOccupancy(r) },
-          { label: 'Available', type: 'number', width: 11, value: r => roomFreeBeds(r) },
-          { label: 'Status', type: 'status', width: 12,
-            value: r => getRoomOccupancy(r) > 0 ? 'Occupied' : 'Vacant' },
-          { label: 'Students', type: 'wrap', width: 34,
-            value: r => (idx.activeStudentsByRoom.get(r.id) || []).map(t => t.name).join(', ') },
-        ],
-        rows: roomsByNumber(DB.rooms),
-        empty: 'No rooms are recorded.',
+        meta: rooms.meta,
+        columns: rooms.columns,
+        rows: rooms.rows,
+        empty: rooms.empty,
       },
     ],
 
@@ -2007,13 +2114,16 @@ function _rptOverviewDef() {
 }
 
 /* The two registers the overview report adds, scoped to the report's own
-   period. A cancellation belongs to the month it was FILED, which is the same
-   rule the cancellations register scopes by; an issue to the day it was
-   raised. */
+   period; an issue to the day it was raised.
+
+   A cancellation belongs to the month the bed came FREE — vacateDate, or the
+   notice date where none is set — the rule the Cancellations tab and its
+   export already use. This filed it by notice date, so a departure noticed in
+   August for September sat in August's printed report and September's tab. */
 function _rptCancels() {
   const keys = _rptKeys();
   return (DB.cancellations || []).filter(c =>
-    keys.some(k => String(c.requestDate || '').indexOf(k) === 0));
+    keys.some(k => String(c.vacateDate || c.requestDate || '').indexOf(k) === 0));
 }
 function _rptIssues() {
   const keys = _rptKeys();

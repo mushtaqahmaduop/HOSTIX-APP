@@ -339,17 +339,20 @@ function studentStays(s) {
                    roomNumber: p.roomNumber || '', src: 'past' });
   });
 
-  var bills   = _studentBillMonths(s);
-  var vacates = _studentVacates(s);
+  // Scanned only when the dates on the record do not already answer — most
+  // students have both, and a report asks this of every student it lists.
+  var _b = null, _v = null;
+  var bills   = function () { return _b || (_b = _studentBillMonths(s)); };
+  var vacates = function () { return _v || (_v = _studentVacates(s)); };
   var resident = !!_RESIDENT_STATUS[s.status];
 
   // Re-admitted before pastStays existed: the earlier stay is recoverable from
   // the confirmed cancellation that ended it.
   if (!stays.length && s.restoredAt && _isDate(s.joinDate)) {
-    var prior = vacates.filter(function (c) { return _day(c.vacateDate) < _day(s.joinDate); }).pop();
+    var prior = vacates().filter(function (c) { return _day(c.vacateDate) < _day(s.joinDate); }).pop();
     if (prior) {
       var pto = _day(prior.vacateDate);
-      var pfrom = bills.filter(function (k) { return k <= pto.slice(0, 7); })[0];
+      var pfrom = bills().filter(function (k) { return k <= pto.slice(0, 7); })[0];
       stays.push({ from: pfrom ? pfrom + '-01' : pto.slice(0, 7) + '-01', to: pto,
                    roomId: _roomIdByNumber(prior.roomNumber), roomNumber: prior.roomNumber || '',
                    src: 'cancellation' });
@@ -366,7 +369,7 @@ function studentStays(s) {
     var afterMonth = after ? after.slice(0, 7) : '';
     var ev = [];
     if (_isDate(s.createdAt) && _day(s.createdAt) > after) ev.push(_day(s.createdAt));
-    var firstBill = bills.filter(function (k) { return k > afterMonth; })[0];
+    var firstBill = bills().filter(function (k) { return k > afterMonth; })[0];
     if (firstBill) ev.push(firstBill + '-01');
     from = ev.sort()[0] || (resident ? thisMonth() + '-01' : null);
   }
@@ -377,11 +380,11 @@ function studentStays(s) {
     var left = s.leftDate || s.leaveDate;
     if (_isDate(left)) to = _day(left);
     if (!to) {
-      var v = vacates.filter(function (c) { return _day(c.vacateDate) >= from; }).pop();
+      var v = vacates().filter(function (c) { return _day(c.vacateDate) >= from; }).pop();
       if (v) to = _day(v.vacateDate);
     }
     if (!to) {
-      var lastBill = bills.filter(function (k) { return k >= from.slice(0, 7); }).pop();
+      var lastBill = bills().filter(function (k) { return k >= from.slice(0, 7); }).pop();
       to = _monthEndDate(lastBill || from.slice(0, 7));
     }
     if (from > to) from = to;       // entered after the fact: the record, not the stay, is late
@@ -398,10 +401,21 @@ function _periodBounds(mk) {
   return { first: k + '-01', last: _monthEndDate(k) };
 }
 
-// The stay overlapping period `mk`, the latest if more than one.
+// Bounds of one key, or of a contiguous list of keys (a custom range).
+function _boundsOf(mk) {
+  if (Array.isArray(mk)) {
+    if (!mk.length) return null;
+    return { first: _periodBounds(mk[0]).first, last: _periodBounds(mk[mk.length - 1]).last };
+  }
+  return mk ? _periodBounds(mk) : null;
+}
+
+// The stay overlapping period `mk` (a key, or a list of keys), the latest if
+// more than one.
 function studentStayIn(s, mk) {
-  if (!s || !mk) return null;
-  var b = _periodBounds(mk), hit = null;
+  var b = _boundsOf(mk);
+  if (!s || !b) return null;
+  var hit = null;
   studentStays(s).forEach(function (st) {
     if (st.from <= b.last && (st.to === null || st.to >= b.first)) hit = st;
   });
@@ -439,7 +453,7 @@ function studentRoomAt(s, date) {
 function studentInPeriodInfo(s, mk) {
   var st = studentStayIn(s, mk);
   if (!st) return null;
-  var b = _periodBounds(mk);
+  var b = _boundsOf(mk);
   var at = (st.to !== null && st.to < b.last) ? st.to : b.last;
   if (at < st.from) at = st.from;
   return {
