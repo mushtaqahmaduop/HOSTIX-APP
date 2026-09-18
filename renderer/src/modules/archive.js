@@ -157,13 +157,12 @@ function _arcTotals() {
   const pending = _arcOwed(pays);
   const exps    = _arcPeriodExpenses();
   const exp  = exps.reduce((s, e) => s + Number(e.amount || 0), 0);
-  /* Available Fund is CASH (finance Phase 3): money that arrived in the period
-     from ANY record — an arrear paid this year for last year counts here — less
-     what went out. Over this archive's own dataset, not the live tables only. */
+  // Available Fund is revenue − expenses (owner, 2026-09-18). The period's cash
+  // stays on the return for anything that wants the drawer figure.
   const cashIn = calcCashReceivedIn(_arcPayments(), _arcKey());
   return {
     pays, exps, rev, pending, exp, cashIn,
-    net: cashIn - exp,        // Available Fund — cash
+    net: rev - exp,           // Available Fund — revenue − expenses
     earned: rev - exp,        // what the period's bills earned, less expenses
     cancels:  _arcPeriodCancels(),
     fines:    _arcPeriodFines(),
@@ -237,7 +236,7 @@ function renderArchive() {
   <div class="arc-kpis">
     ${kpi('dh-green','Revenue',   moneyValue(T.rev,{compact:true}),     `${T.pays.filter(p=>p.status==='Paid').length} paid records`)}
     ${kpi('dh-red',  'Expenses',  moneyValue(T.exp,{compact:true}),     `${T.exps.length} record${T.exps.length===1?'':'s'}`)}
-    ${kpi(T.net>=0?'dh-green':'dh-red','Available Fund', moneyValue(T.net,{compact:true}), 'Cash in − Expenses · earned ' + fmtPKR(T.earned))}
+    ${kpi(T.net>=0?'dh-green':'dh-red','Available Fund', moneyValue(T.net,{compact:true}), 'Revenue − Expenses')}
     ${kpi('dh-amber','Pending',   moneyValue(T.pending,{compact:true}), `${T.pays.filter(p=>p.status==='Pending').length} unpaid`)}
     ${kpi('dh-blue', 'Students',  String(T.students.length), 'on the roster in this period')}
     ${kpi('dh-blue', 'Cancellations', String(T.cancels.length), 'requests raised')}
@@ -434,7 +433,7 @@ function _arcOverviewPanel(T, label) {
       const cn = cans.filter(c => String(_arcCancDate(c)).startsWith(mk)).length;
       const any = mp.length || ex || cn;
       const cash = calcCashReceivedIn(pays, mk);   // Available Fund is cash (Phase 3)
-      return { mn, i, mk, rev, pend, ex, cn, cash, net: cash - ex, any };
+      return { mn, i, mk, rev, pend, ex, cn, cash, net: rev - ex, any };
     });
     const tot = rows.reduce((a, r) => ({ rev:a.rev+r.rev, pend:a.pend+r.pend, ex:a.ex+r.ex, cn:a.cn+r.cn }),
                             { rev:0, pend:0, ex:0, cn:0 });
@@ -466,7 +465,7 @@ function _arcOverviewPanel(T, label) {
             <td class="num" style="color:var(--green)">${fmtPKR(tot.rev)}</td>
             <td class="num" style="color:var(--red)">${fmtPKR(tot.ex)}</td>
             ${''/* The year's cash, not the sum of twelve billed figures. */}
-            <td class="num" style="color:${calcCashReceivedIn(pays, y)-tot.ex>=0?'var(--green)':'var(--red)'}">${fmtPKR(calcCashReceivedIn(pays, y)-tot.ex)}</td>
+            <td class="num" style="color:${tot.rev-tot.ex>=0?'var(--green)':'var(--red)'}">${fmtPKR(tot.rev-tot.ex)}</td>
             <td class="num" style="color:var(--amber)">${fmtPKR(tot.pend)}</td>
             <td class="num">${tot.cn}</td>
           </tr>
@@ -486,9 +485,7 @@ function _arcOverviewPanel(T, label) {
       <tbody>
         <tr><td class="nm">Revenue collected</td><td class="num" style="color:var(--green)">${fmtPKR(T.rev)}</td></tr>
         <tr><td class="nm">Expenses</td><td class="num" style="color:var(--red)">${fmtPKR(T.exp)}</td></tr>
-        <tr><td class="nm">Cash received</td><td class="num">${fmtPKR(T.cashIn)}</td></tr>
-        <tr class="arc-sub"><td>Available Fund (cash)</td><td class="num" style="color:${T.net>=0?'var(--green)':'var(--red)'}">${fmtPKR(T.net)}</td></tr>
-        <tr><td class="nm">Earned (billed − expenses)</td><td class="num">${fmtPKR(T.earned)}</td></tr>
+        <tr class="arc-sub"><td>Available Fund</td><td class="num" style="color:${T.net>=0?'var(--green)':'var(--red)'}">${fmtPKR(T.net)}</td></tr>
         <tr><td class="nm">Still outstanding</td><td class="num" style="color:var(--amber)">${fmtPKR(T.pending)}</td></tr>
         <tr><td class="nm">Students on the roster</td><td class="num">${T.students.length}</td></tr>
         <tr><td class="nm">Cancellations raised</td><td class="num">${T.cancels.length}</td></tr>

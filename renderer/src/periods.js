@@ -187,24 +187,20 @@ function calcTransfers(key) {
     .filter(t => String(t.date || '').startsWith(key))
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 }
-/* ── AVAILABLE FUND IS CASH (finance Phase 3, owner 2026-09-18) ─────────────
-   It was calcRevenue − calcExpenses: ACCRUAL revenue (what the month's bills
-   earned, whenever the money came) minus CASH expenses (what went out of the
-   till that month). Two bases in one number, printed under a name — "Available
-   Fund" — that a hostel owner reads as "what I have". The finance spec (§14)
-   forbids exactly that, and so did the arithmetic: July's rent collected in
-   August raised July's fund and lowered August's drawer.
+/* ── AVAILABLE FUND IS REVENUE − EXPENSES (owner, 2026-09-18) ───────────────
+   Finance Phase 3 made it cash — money that physically arrived in the month,
+   less expenses — on the audit's reading that the owner had chosen that. The
+   owner has now seen it and said otherwise: "it shows an amount I don't have
+   … it should be revenue − expenses". Cash counts an arrear collected this
+   month for last month, and money paid ahead for next month, neither of which
+   is this month's revenue, so the card named a figure the owner did not
+   recognise. It is revenue − expenses again, everywhere it is shown.
 
-   Two figures now, each on one basis, each with its own name:
-
-     calcAvailableFund  cash received − expenses          (what is in hand)
-     calcEarned         what the bills earned − expenses  (accrual result)
-
-   Cash received is net of refunds and reversals already — see
-   calcCashReceivedIn(). Every screen that says "Available Fund" reads the first;
-   anything that means the second says "Earned". */
+   calcCashReceived() and cashBreakdown() are unchanged — the drawer
+   reconciliation (Advance / Arrears) still reads them. calcEarned() is the
+   same subtraction under its Phase 3 name and stays for its callers. */
 function calcAvailableFund(key) {
-  return calcCashReceived(key) - calcExpenses(key);
+  return calcRevenue(key) - calcExpenses(key);
 }
 function calcEarned(key) {
   return calcRevenue(key) - calcExpenses(key);

@@ -628,10 +628,9 @@ function renderDashboard() {
   const moExpCount = DB.expenses.filter(e => String(e.date||'').startsWith(mo)).length
                    + (DB.transfers||[]).filter(t => String(t.date||'').startsWith(mo)).length;
   const totalExpected = collected + pending;
-  // Cash in hand and what the month earned — two bases, two names. See
-  // calcAvailableFund(). `netProfit` keeps its name for the card's markup.
+  // Revenue − expenses — see calcAvailableFund(). `netProfit` keeps its name
+  // for the card's markup.
   const netProfit = calcAvailableFund(mo);
-  const earnedMo  = calcEarned(mo);
 
   // Seat calculations
   const totalSeats = DB.rooms.reduce((s,r)=>{ const t=DB.settings.roomTypes.find(x=>x.id===r.typeId); return s+(t?t.capacity:1); }, 0);
@@ -810,16 +809,10 @@ function renderDashboard() {
     <div class="ui-card dsh-card ${netProfit>=0?'':'is-loss'}">
       <div class="dash-kpi__top">
         <div class="dash-chip"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="currentColor" opacity=".38"/><rect x="6.3" y="12.6" width="2.7" height="5.1" rx="1.35" fill="currentColor"/><rect x="10.65" y="9.2" width="2.7" height="8.5" rx="1.35" fill="currentColor"/><rect x="15" y="6.3" width="2.7" height="11.4" rx="1.35" fill="currentColor"/></svg></div>
-        <div class="dash-kpi__label" title="Cash received this month, less refunds and expenses">Available Fund</div>
-        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'In hand':'Short'}</span></div>
+        <div class="dash-kpi__label" title="This month's revenue, less expenses">Available Fund</div>
+        <div class="dash-pill-stack"><span class="ui-chip ui-chip--neutral">${netProfit>=0?'Profit':'Loss'}</span></div>
       </div>
       <div class="dash-kpi__value">${moneyValue(netProfit,{size:"display",compact:true})}</div>
-      ${''/* THE ACCRUAL FIGURE, BESIDE THE CASH ONE (owner, 2026-09-18: "make it
-             cash, keep accrual beside it"). This is NOT the sub-line removed on
-             7 Sep below — that one restated the Revenue and Expenses cards
-             either side as a subtraction. Earned is a figure no other card
-             prints, in the same "of Rs.X expected" shape Total Revenue uses. */}
-      <div class="dash-kpi__sub" title="What this month's bills earned, less expenses: ${escHtml(fmtPKR(earnedMo))}">Earned <span class="pkr">Rs.</span>${fmtCompact(earnedMo)} after expenses</div>
       ${''/* THE "PKR 170T - PKR 77.89T" SUB-LINE IS GONE (owner, 7 Sep). It
              restated the subtraction using the two cards either side of it —
              Total Revenue two tiles left, Expenses one tile right — so at a
@@ -832,7 +825,7 @@ function renderDashboard() {
            subtraction the headline states, month by month — nothing new is
            computed here, and _dashSpark scales to min/max so the months the
            fund ran negative still read. -->
-      ${_dashBar(netProfit, cashIn.total)}
+      ${_dashBar(netProfit, collected)}
     </div>
 
     <!-- Expenses — red. Money OUT sits immediately after money IN and before
@@ -2764,9 +2757,8 @@ function renderMonthModal(monthKey, monthLabel) {
   // revenue minus it — there is no separate transfer deduction anywhere.
   const expTotal = calcExpenses(monthKey);
   const pendTotal = pendPays.reduce((s,p)=>s+Number(p.amount),0);
-  // Cash in hand, and the accrual result beside it — see calcAvailableFund().
+  // Revenue − expenses — see calcAvailableFund().
   const netProfit = calcAvailableFund(monthKey);
-  const earnedM   = calcEarned(monthKey);
   // The roster AS IT STOOD in this month — not whoever happens to be Active
   // today. Anyone with a fee record for the month is included regardless, so a
   // student who has since left still appears against the money they paid.
@@ -2857,7 +2849,7 @@ function renderMonthModal(monthKey, monthLabel) {
       <!-- "Rev − Exp − Transfers" described a sum nothing computes: netProfit
            is rev − calcExpenses(), and calcExpenses() already carries the
            transfers. The caption implied they were deducted a second time. -->
-      <div style="font-size:10px;color:var(--text3);margin-top:3px" title="Cash received less refunds and expenses">Cash in − Exp · earned ${fmtPKR(earnedM)}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Rev − Exp</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">Pending</div>
@@ -3076,10 +3068,7 @@ function _dashMonthExportDef(monthKey, label) {
     summary: [
       { label: 'Revenue',        value: EXPORT.fmt.money(rev), tone: 'pos' },
       { label: 'Expenses',       value: EXPORT.fmt.money(expTotal), tone: 'neg' },
-      // Cash basis, with the accrual result on its own line (finance Phase 3).
-      { label: 'Available fund (cash)', value: EXPORT.fmt.money(calcAvailableFund(monthKey)),
-        tone: calcAvailableFund(monthKey) >= 0 ? 'pos' : 'neg' },
-      { label: 'Earned (billed − expenses)', value: EXPORT.fmt.money(rev - expTotal),
+      { label: 'Available fund', value: EXPORT.fmt.money(rev - expTotal),
         tone: rev - expTotal >= 0 ? 'pos' : 'neg' },
       { label: 'Outstanding',    value: EXPORT.fmt.money(pend), tone: pend > 0 ? 'neg' : '' },
       { label: 'Residents',      value: String(residents.length) },
@@ -3371,7 +3360,7 @@ function drawTrendChart() {
          for, so its difference is the accrual result. The Available Fund card
          above it is cash now (finance Phase 3) and the two are not meant to
          match — naming them differently is what stops them looking wrong. */
-      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Earned</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
+      '<div style="display:flex;justify-content:space-between;font-weight:700"><span>Net</span><span style="color:'+(net>=0?cGreen:cRed)+'">'+(net>=0?'+':'−')+fmtPKR(net)+'</span></div>'
     ].join(''):'<div style="color:'+cText3+';font-size:12px;text-align:center;padding:6px 0">No data yet</div>');
     var vw=window.innerWidth, vh=window.innerHeight;
     var left=x+16; if(left+230>vw) left=x-240;
