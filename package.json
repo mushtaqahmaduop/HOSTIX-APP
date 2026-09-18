@@ -30,6 +30,7 @@
     "test:ledger": "node tests/ledger.test.js",
     "test:handovers": "node tests/handovers.test.js",
     "test:cashevents": "node tests/cash-events.test.js",
+    "test:periods": "node tests/periods.test.js",
     "test:reporttotals": "node tests/report-totals.test.js",
     "test:feestatus": "node tests/fee-status.test.js",
     "test:services": "node tests/services.test.js",

@@ -274,8 +274,38 @@ function _studentInPeriod(s, mk) {
   if (join && join > last) return false;              // not admitted yet
   var left = _toMonthKey(s.leftDate || s.leaveDate);
   if (left && left < first) return false;             // already moved out
-  // No join date on record: the only honest signal left is the current status.
-  if (!join) return s.status === 'Active';
-  return true;
+  if (join) return true;
+
+  /* NO JOIN DATE (audit G9). This returned `s.status === 'Active'`, which put
+     every Active student without a join date on EVERY period's roster — pick
+     last March and a student admitted yesterday was a March resident. "Active"
+     is a fact about today, so it may only speak for today.
+
+     An Active student with no join date is placed from the earliest thing the
+     record itself proves: the day it was entered (createdAt), or the earliest
+     month billed to them — whichever is sooner. From there to now they are on
+     the books; before it, nothing says they were. With neither, they count for
+     the current period (and later) only. Nothing is inferred beyond what is
+     stored.
+
+     A student who is not Active and has no join date stays off the roster, as
+     before; every caller that lists a period's students also lists anyone with
+     a fee record in it, so their paid months still name them. */
+  if (s.status !== 'Active') return false;
+  var since = _studentFirstEvidence(s);
+  if (since) return since <= last;
+  return last >= thisMonth();
+}
+
+// The earliest month this student's own records prove they were on the books:
+// the day the record was entered, or the earliest month billed to them.
+function _studentFirstEvidence(s) {
+  var best = _toMonthKey(s.createdAt);
+  (DB.payments || []).forEach(function (p) {
+    if (!p || p.studentId !== s.id) return;
+    var k = _payMonthKey(p);
+    if (k && (!best || k < best)) best = k;
+  });
+  return best;
 }
 // ─────────────────────────────────────────────────────────────────────────────
