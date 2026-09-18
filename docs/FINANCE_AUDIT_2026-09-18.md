@@ -150,7 +150,7 @@ as before; only new collections are written differently.
 1. ~~Collection-path integrity~~ — done, this document.
 2. ~~UI punch list~~ — done (#10 open, not reproduced).
 2b. ~~Available Fund on one basis~~ — done, see below.
-3. Month-domain layer — G7, and G9 with it.
+3. ~~Month-domain layer — G7, and G9 with it~~ — done, see below.
 4. Historical snapshots — G8.
 5. Bill immutability — G6.
 6. Persistence atomicity — G10.
@@ -196,3 +196,31 @@ collection fall in the same period.
 move for any month with arrears collected, money paid ahead, or refunds —
 that movement is the point. The Key Highlights "Profit" peaks stay accrual and
 say so in their comment.
+
+---
+
+## Phase 4 — the month-domain layer (2026-09-18)
+
+**G7 closed** (`7503623`). `calcRevenue`, `_cashEvents`, `calcCashReceived(In)`,
+`cashBreakdown`, `calcExpenses` / `calcExpensesOnly` / `calcTransfers`,
+`calcAvailableFund` / `calcEarned` / `calcProfit`, `_toMonthKey`, `_payMonthKey`,
+`_payMatchesMonth` and `_studentInPeriod` moved verbatim from
+`modules/dashboard.js` to `src/periods.js`, loaded after `finance.js` and before
+every screen module. `tests/cash-events.test.js` now loads it with no screen at
+all.
+
+**G9 closed** (`00e0031`). An Active student with no join date is placed from
+the earliest month their own records prove — `createdAt`, or the earliest month
+billed to them — and with neither, counts for the current period onward only.
+A non-Active student with no join date stays off, as before (callers already
+list anyone with a fee record for the period). `tests/periods.test.js`, 7
+tests; against the old rule the 4 G9 tests fail.
+
+**Noticed, not touched:** a student whose status is Left, with a join date but
+no `leftDate`, is on every period's roster from the join onward. Same family as
+G9, but fixing it means deciding where their tenancy ended — that belongs with
+G8, not here.
+
+Also in this pass (`0d02260`): the Reports payment-method donut counted Paid
+records only. It now counts every collection by the method on its own trail
+entry, and its total equals `calcRevenue()`.

@@ -13,6 +13,10 @@ Branch **`design/dashboard`**, tree clean. Nothing pushed — `master` is still
 | `4e78191` | Review #9 sweep — cancellations reason column |
 | `2d770c9` | **Finance Phase 1** — one collection path (see below) |
 | `0a02fe9` | **Phase 2** — review #7, #8, #11, #15, #16 |
+| `82031ee` | **Phase 3** — Available Fund is cash; Earned stated beside it |
+| `0d02260` | Reports payment-method donut counts every rupee, by trail method |
+| `7503623` | **Phase 4 / G7** — month-domain layer moved to `src/periods.js` |
+| `00e0031` | **Phase 4 / G9** — Active speaks for today only (`tests/periods.test.js`) |
 
 ## Finance — read `docs/FINANCE_AUDIT_2026-09-18.md` first
 
@@ -37,16 +41,12 @@ The owner was explicit: one phase at a time, stop and report after each.
 
 1. ~~Collection-path integrity~~ — done.
 2. ~~UI punch list~~ — done except **#10** (below).
-3. **Available Fund** — owner chose cash basis, accrual beside it. It is **seven**
-   separate `net = rev − exp` computations (dashboard KPI, month-detail modal,
-   three in archive, two in reports), each also showing `rev`. `calcProfit()`
-   exists but has **no callers**. Its own phase.
-4. Month-domain layer — `_studentInPeriod` / `_payMatchesMonth` / `_cashEvents`
-   / `calcRevenue` live in `modules/dashboard.js`. Includes the tracked defect
-   that `_studentInPeriod()` falls back to `s.status === 'Active'` with no join
-   date.
-5. Historical room/status — **none is stored anywhere**. Needs a real
-   assignment model; do not infer.
+3. ~~Available Fund~~ — done (`82031ee`), twelve sites.
+4. ~~Month-domain layer~~ — done. The money/month functions now live in
+   `src/periods.js`, not the dashboard screen; G9 fixed. Details in the audit doc.
+5. **Next:** Historical room/status — **none is stored anywhere**. Needs a real
+   assignment model; do not infer. Also owns the open case found in Phase 4: a
+   Left student with a join date but no `leftDate` is on every later roster.
 6. Bill immutability — owner chose: `p.generated` snapshot, frozen once money
    is held, later changes in `p.adjustments[]`.
 7. `saveDB()` atomicity — row-by-row IPC upsert. Its own phase.
@@ -87,3 +87,6 @@ Playwright: 6–8 files per run,
 `NODE_OPTIONS="--max-old-space-size=512 --max-semi-space-size=2"`,
 `HOSTIX_TEST_PROFILE` holding a `license.enc`.
 Node: `node --test tests/finance.test.js tests/ledger.test.js …`.
+
+`tests/handovers.test.js` is flaky — 2 of 14 fail about one run in five,
+before and after Phase 4 (it never loads `periods.js`). Not investigated.
