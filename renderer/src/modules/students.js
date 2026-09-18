@@ -5318,8 +5318,13 @@ function doGenerateStudentsPDF(monthKey) {
   });
 
   var total  = students.length;
-  var active = students.filter(function(s){return s.status==='Active';}).length;
-  var left   = students.filter(function(s){return s.status==='Left';}).length;
+  /* WHAT HAPPENED IN THIS MONTH, not today's statuses (finance Phase 5). A
+     student who lived here all of March and left in June counted as "Left"
+     on March's report. Active = still here at the month's end; Left = left
+     during it. */
+  var _inMo  = new Map(students.map(function(s){ return [s.id, studentInPeriodInfo(s, monthKey)]; }));
+  var active = students.filter(function(s){ var i=_inMo.get(s.id); return i && !i.left; }).length;
+  var left   = students.filter(function(s){ var i=_inMo.get(s.id); return i && i.left; }).length;
 
   // Grand totals
   var grandRent=0, grandAdmFee=0, grandExtra=0, grandConc=0, grandPaid=0, grandPending=0;
@@ -5332,7 +5337,7 @@ function doGenerateStudentsPDF(monthKey) {
 
   var rows = '';
   students.forEach(function(s, i) {
-    var room = _roomById.get(s.roomId);
+    var room = _roomById.get(studentRoomIn(s, monthKey));   // the room THAT month
 
     // FIX #1 #5: use _payMatchesMonth — correctly matches both "2026-04-15" date fields
     // AND "April 2026" month labels (the old startsWith never matched month labels).
@@ -5350,7 +5355,9 @@ function doGenerateStudentsPDF(monthKey) {
     var hasRecord   = mPays.length > 0;
     var statusTxt   = !hasRecord ? '—' : pendingAmt>0 ? 'Partial' : 'Paid ✓';
     var statusCls   = !hasRecord ? 'p-none' : pendingAmt>0 ? 'p-part' : 'p-paid';
-    var sCls        = s.status==='Active' ? 'p-act' : s.status==='Left' ? 'p-left' : 'p-other';
+    var _i          = _inMo.get(s.id);
+    var sWord       = !_i ? 'Billed' : _i.joined && _i.left ? 'Joined & left' : _i.joined ? 'Joined' : _i.left ? 'Left' : 'Resident';
+    var sCls        = !_i ? 'p-other' : _i.left ? 'p-left' : 'p-act';
     // Zebra striping is a :nth-child rule in the stylesheet now, not a colour
     // computed per row and pasted onto every <tr>.
 
@@ -5403,7 +5410,7 @@ function doGenerateStudentsPDF(monthKey) {
     rows += '<td class="money '+(paidAmt>0?'paid':'nil')+'">'+(paidAmt>0?fmtPKR(paidAmt):dash)+'</td>';
     rows += '<td class="money '+(pendingAmt>0?'pend':'nil')+'">'+(pendingAmt>0?fmtPKR(pendingAmt):dash)+'</td>';
     rows += '<td class="c"><span class="pill '+statusCls+'">'+statusTxt+'</span></td>';
-    rows += '<td class="c"><span class="pill '+sCls+'">'+escHtml(s.status||'—')+'</span></td>';
+    rows += '<td class="c"><span class="pill '+sCls+'">'+escHtml(sWord)+'</span></td>';
     rows += '</tr>';
   });
 
