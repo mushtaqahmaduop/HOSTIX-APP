@@ -745,14 +745,39 @@ function renderReports() {
      ramp (`_RPT_METHOD_HUES[i % len]`), so Cash was green here and blue on the
      dashboard, and a method added in Settings shifted every colour below it.
      `i` is no longer read; it stays only so the map signature is unchanged. */
-  const methods = (DB.settings.paymentMethods||[]).map((m,i) => {
-    const amt = pays.filter(p=>p.status==='Paid'&&p.method===m).reduce((s,p)=>s+Number(p.amount),0);
-    return { m, amt, color: methodHue(m) };
-  }).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+  /* EVERY RUPEE COLLECTED, BY THE METHOD IT ACTUALLY CAME IN (sweep
+     2026-09-18). This counted Paid records only, and labelled the result
+     "Total Collected" — so a month with part-payments read Rs.48,000 here
+     beside a Total Revenue card, a Payments page and a dashboard all saying
+     Rs.62,000. Part-payments had been dropped to stop the slice percentages
+     summing to under 100%; counting them in the slices AND the total fixes
+     that the honest way, and the centre now agrees with the rest of the app.
+
+     Split by the trail, not the record: since finance Phase 1 a month opened
+     in cash and topped up by JazzCash keeps "Cash" on the record and carries
+     "JazzCash" on the top-up's own entry. Reversals come off the method they
+     went back out by. Whatever the trail does not explain goes to the
+     record's method, and a trail claiming more than was collected is not
+     believed at all — the same rules _cashEvents() dates cash by, so the
+     total is exactly calcRevenue() over the same records. Methods found on
+     records but missing from Settings are kept, not dropped. */
+  const _byMethod = new Map();
+  const _add = (m, v) => { const k = m || 'Cash'; _byMethod.set(k, (_byMethod.get(k) || 0) + v); };
+  pays.forEach(p => {
+    const total = Number(p.amount || 0);
+    if (total <= 0) return;
+    const trail = (Array.isArray(p.partialPayments) ? p.partialPayments : []).filter(e => e && Number(e.amount) > 0);
+    const revs  = (Array.isArray(p.reversals) ? p.reversals : []).filter(e => e && Number(e.amount) > 0);
+    const net   = trail.reduce((s, e) => s + Number(e.amount), 0) - revs.reduce((s, e) => s + Number(e.amount), 0);
+    if (!trail.length || net > total + 0.5) { _add(p.method, total); return; }
+    trail.forEach(e => _add(e.method || p.method, Number(e.amount)));
+    revs.forEach(e => _add(e.method || p.method, -Number(e.amount)));
+    if (total - net > 0.5) _add(p.method, total - net);
+  });
+  const methods = [..._byMethod.entries()]
+    .map(([m, amt]) => ({ m, amt, color: methodHue(m) }))
+    .filter(x => x.amt > 0).sort((a, b) => b.amt - a.amt);
   const methodTotal = methods.reduce((s,x)=>s+x.amt,0);
-  // Percentages are of the collected total the donut draws, not of `rev` —
-  // `rev` also carries partial payments this donut deliberately excludes, so
-  // dividing by it made the slices add up to less than 100%.
   /* THE SHARE AND THE AMOUNT ARE TWO COLUMNS, NOT ONE PARENTHESIS (owner ref:
      `reports2.png`). They were "PKR 62,500,000 (62.5%)" on one line, which
      reads fine for one row and stops reading at four: the eye cannot compare
