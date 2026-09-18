@@ -2775,17 +2775,23 @@ function renderMonthModal(monthKey, monthLabel) {
     DB.payments.some(p => p.studentId === s.id && _payMatchesMonth(p, monthKey)));
 
   const studentRows = activeStudents.map(s=>{
-    const room = DB.rooms.find(r=>r.id===s.roomId);
+    // The room they were in THIS month, and what this month billed them —
+    // not today's room and today's rate (finance Phase 5).
+    const _rid = studentRoomIn(s, monthKey);
+    const room = DB.rooms.find(r=>r.id===_rid);
     const sPays = DB.payments.filter(p=>p.studentId===s.id&&_payMatchesMonth(p,monthKey));
+    const sBill = sPays.reduce((t,p)=>t+calculateBill(p),0);
+    const _in = studentInPeriodInfo(s, monthKey);
+    const sWord = !_in ? 'Billed' : _in.joined && _in.left ? 'Joined & left' : _in.joined ? 'Joined' : _in.left ? 'Left' : 'Resident';
     const sPaid = sPays.filter(p=>p.status==='Paid').reduce((t,p)=>t+Number(p.amount),0);
     const sPend = sPays.filter(p=>p.status==='Pending').reduce((t,p)=>t+Number(p.amount),0);
     return `<tr>
       <td><span style="font-weight:700;color:var(--text)">${escHtml(s.name)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(s.phone||'')}</div></td>
       <td style="font-weight:700;color:var(--text2)">#${escHtml(String(room?room.number:'—'))}</td>
-      <td style="color:var(--text3);font-size:12px">${fmtPKR(resolveCharges(s).total)}/mo</td>
+      <td style="color:var(--text3);font-size:12px">${sPays.length?fmtPKR(sBill):'Not billed'}</td>
       <td style="color:var(--text);font-weight:700">${sPaid>0?fmtPKR(sPaid):'—'}</td>
       <td style="color:${sPend>0?'var(--text)':'var(--text3)'};font-weight:${sPend>0?'700':'400'}">${sPend>0?fmtPKR(sPend):'—'}</td>
-      <td>${statusBadge(s.status)}</td>
+      <td><span class="badge ${sWord==='Resident'?'badge-green':sWord==='Joined'?'badge-blue':'badge-gray'}">${escHtml(sWord)}</span></td>
     </tr>`;
   }).join('');
 
@@ -2870,7 +2876,7 @@ function renderMonthModal(monthKey, monthLabel) {
   <!-- STUDENTS TAB -->
   <div id="mpanel-students">
     <div class="table-wrap">
-      <table><thead><tr><th>Student</th><th>Room</th><th>${hostelServesMess() ? 'Rent + Mess' : 'Room Rent'}</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Student</th><th>Room</th><th>Billed</th><th>Paid</th><th>Pending</th><th>This month</th></tr></thead>
       <tbody>${studentRows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">No students found</td></tr>'}</tbody>
       </table>
     </div>
@@ -3046,9 +3052,18 @@ function _dashMonthExportDef(monthKey, label) {
   const rev  = calcRevenue(monthKey);
   const expTotal = calcExpenses(monthKey);
   const pend = pays.filter(p => p.status === 'Pending').reduce((s, p) => s + outstandingOf(p), 0);
-  const residents = DB.students.filter(isResident);
+  /* THE MONTH'S RESIDENTS, NOT TODAY'S (finance Phase 5). This was
+     DB.students.filter(isResident) — whoever lives here now — printed under
+     a heading naming the month, in today's rooms at today's rate. It is the
+     same roster the month window shows: resident in the month, or billed for
+     it; in the room they had then; charged what that month billed. */
+  const residents = DB.students.filter(s =>
+    _studentInPeriod(s, monthKey) || pays.some(p => p.studentId === s.id));
   const groups = _rptByCategory(exps);
-  const roomOf = s => { const r = DB.rooms.find(x => x.id === s.roomId); return r ? String(r.number) : ''; };
+  const roomOf = s => { const id = studentRoomIn(s, monthKey); const r = DB.rooms.find(x => x.id === id); return r ? String(r.number) : ''; };
+  const billOf = s => { const ps = pays.filter(p => p.studentId === s.id); return ps.length ? ps.reduce((t, p) => t + calculateBill(p), 0) : null; };
+  const wordOf = s => { const i = studentInPeriodInfo(s, monthKey);
+    return !i ? 'Billed' : i.joined && i.left ? 'Joined & left' : i.joined ? 'Joined' : i.left ? 'Left' : 'Resident'; };
 
   return {
     module: 'Month-Report',
@@ -3119,21 +3134,20 @@ function _dashMonthExportDef(monthKey, label) {
       },
       {
         title: 'Residents',
-        meta: residents.length + ' living here',
+        meta: residents.length + ' lived here this month',
         empty: 'Nobody was on the roster in this month.',
         columns: [
           { label: 'Room', type: 'id', width: 9, value: roomOf,
             get: s => { const r = roomOf(s); return r ? '<b>#' + escHtml(r) + '</b>' : '—'; } },
           { label: 'Student', type: 'text', width: 24, value: s => s.name || '' },
           { label: 'Phone',   type: 'text', width: 16, value: s => String(s.phone || '') },
-          /* The WHOLE monthly charge. This table quoted `s.rent` — the rent
-             half — beside payments that included the mess, so the two columns
-             could not be reconciled by the person holding the page. */
-          { label: 'Charge / mo', type: 'money', width: 14, total: 'sum',
-            value: s => { const c = resolveCharges(s); return c.configured ? c.total : null; } },
-          { label: 'Status', type: 'status', width: 12, value: s => s.status || 'Active' },
+          /* What THIS MONTH billed them — the whole charge, rent and mess,
+             as the fee records above carry it — not today's rate. */
+          { label: 'Billed', type: 'money', width: 14, total: 'sum', value: billOf },
+          { label: 'This month', type: 'status', width: 13, value: wordOf },
         ],
-        rows: studentsByRoom(residents),
+        rows: residents.slice().sort((a, b) => cmpRoomNo(roomOf(a), roomOf(b))
+          || String(a.name || '').localeCompare(String(b.name || ''))),
       },
     ],
 

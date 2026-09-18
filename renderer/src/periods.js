@@ -464,6 +464,20 @@ function studentInPeriodInfo(s, mk) {
   };
 }
 
+/* The room a student was in during period `mk`, for any month view's roster.
+   From the stays; for a student whose stay is silent but who was billed for
+   the period, the room that bill was raised against. Null when neither says —
+   never today's room passed off as that month's. */
+function studentRoomIn(s, mk) {
+  var info = studentInPeriodInfo(s, mk);
+  if (info && info.roomId) return info.roomId;
+  var archived = (DB.archive || []).filter(function (r) { return r && r._src === 'payments'; });
+  var bill = (DB.payments || []).concat(archived).filter(function (p) {
+    return p && p.studentId === s.id && _payMatchesMonth(p, mk);
+  }).pop();
+  return bill ? (bill.roomId || _roomIdByNumber(bill.roomNumber)) : null;
+}
+
 /* THE ONE WRITE. Re-admission reuses the student record, and without this the
    finished stay is overwritten out of existence. Call it BEFORE joinDate,
    leftDate or roomId change for a new stay. */

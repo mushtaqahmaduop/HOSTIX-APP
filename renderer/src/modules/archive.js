@@ -517,9 +517,15 @@ function _arcStudentsPanel(T, label) {
   const key = _arcKey();
   const rows = T.students.map(s => {
     const f = _arcStudentFigures(s.id, key);
-    const room = (DB.rooms || []).find(r => r.id === s.roomId);
-    const ch = (typeof resolveCharges === 'function') ? resolveCharges(s) : { total: Number(s.rent||0) };
-    return { s, f, room, charge: ch.total };
+    /* The room they had IN THE PERIOD and what the period billed them — not
+       today's room and today's rate (finance Phase 5). An archive of 2025
+       printed each student in the room they occupy now. */
+    const rid = studentRoomIn(s, key);
+    const room = (DB.rooms || []).find(r => r.id === rid);
+    const billed = f.pays.reduce((t, p) => t + calculateBill(p), 0);
+    const i = studentInPeriodInfo(s, key);
+    const word = !i ? 'Billed' : i.joined && i.left ? 'Joined & left' : i.joined ? 'Joined' : i.left ? 'Left' : 'Resident';
+    return { s, f, room, charge: f.pays.length ? billed : null, word, from: i ? i.stay.from : s.joinDate };
   // Room order, then name inside a room — the same rule every other list and
   // export follows since 2026-08-31.
   }).sort((a, b) => {
@@ -538,16 +544,16 @@ function _arcStudentsPanel(T, label) {
     </div>
     ${rows.length ? `
     <div class="arc-wrap"><table class="arc-table">
-      <thead><tr><th>Student</th><th>Father</th><th>Room</th><th>Joined</th><th>Status</th>
-        <th class="num">Monthly Charge</th><th class="num">Paid</th><th class="num">Pending</th></tr></thead>
+      <thead><tr><th>Student</th><th>Father</th><th>Room</th><th>Joined</th><th>In period</th>
+        <th class="num">Billed</th><th class="num">Paid</th><th class="num">Pending</th></tr></thead>
       <tbody>
         ${rows.map(r => `<tr class="is-click" onclick="showArchiveStudent('${r.s.id}')" title="Open ${escHtml(r.s.name||'')}">
           <td class="nm">${escHtml(r.s.name || '—')}</td>
           <td>${escHtml(r.s.fatherName || '—')}</td>
           <td>${r.room ? '#' + escHtml(String(r.room.number)) : '—'}</td>
-          <td>${escHtml(fmtDate(r.s.joinDate) || '—')}</td>
-          <td>${statusBadge(r.s.status)}</td>
-          <td class="num">${fmtPKR(r.charge)}</td>
+          <td>${escHtml(fmtDate(r.from) || '—')}</td>
+          <td><span class="badge ${r.word==='Resident'?'badge-green':r.word==='Joined'?'badge-blue':'badge-gray'}">${escHtml(r.word)}</span></td>
+          <td class="num">${r.charge != null ? fmtPKR(r.charge) : '—'}</td>
           <td class="num" style="color:${r.f.paid?'var(--green)':'var(--text3)'}">${r.f.paid?fmtPKR(r.f.paid):'—'}</td>
           <td class="num" style="color:${r.f.pending?'var(--red)':'var(--text3)'}">${r.f.pending?fmtPKR(r.f.pending):'—'}</td>
         </tr>`).join('')}
