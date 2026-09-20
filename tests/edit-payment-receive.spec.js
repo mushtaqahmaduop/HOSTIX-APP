@@ -238,6 +238,47 @@ test('edit payment: a part-paid month shows ITS pending, after an Add Payment fo
       return { status: p.status, unpaid: p.unpaid, amount: p.amount, n: p.partialPayments.length };
     });
     expect(saved).toEqual({ status: 'Paid', unpaid: 0, amount: 8000, n: 2 });
+
+    /* MONEY GOING BACK OUT HAS A DOOR ON THIS FORM (owner: "no refund strategy
+       there"). The banner told the warden to use Reverse a collection and gave
+       nothing to press; the only way in was the register row's ⋯ menu. The
+       button is the same call with the same ownership limit, not a second
+       refund path — reversePayment() in finance.js stays the one authority. */
+    await win.evaluate(() => { closeModal(); showEditPaymentModal('PP1'); });
+    await win.waitForSelector('#f-precv', { timeout: 15000 });
+    await win.waitForTimeout(250);
+    const door = await win.evaluate(() => {
+      const b = document.querySelector('.pef-back__b');
+      return { present: !!b, disabled: b ? b.disabled : null,
+               limit: (document.querySelector('.pef-back__m') || {}).textContent || '' };
+    });
+    expect(door.present, 'no way to reach a refund from the Edit form').toBe(true);
+    expect(door.disabled).toBe(false);
+    expect(door.limit).toContain('Rs. 8,000');   // what this account collected
+
+    await win.evaluate(() => pefReverseFromEdit('PP1'));
+    await win.waitForSelector('#f-prev-amt', { timeout: 15000 });
+    const reversed = await win.evaluate(async () => {
+      document.getElementById('f-prev-amt').value = '2000';
+      document.getElementById('f-prev-reason').value = 'Mess charged twice';
+      await submitReversePayment('PP1');
+      await new Promise(r => setTimeout(r, 400));
+      const p = DB.payments.find(x => x.id === 'PP1');
+      return { amount: p.amount, unpaid: p.unpaid, status: p.status,
+               reason: (p.reversals || []).map(r => r.reason).join('') };
+    });
+    expect(reversed).toEqual({ amount: 6000, unpaid: 2000, status: 'Pending',
+                               reason: 'Mess charged twice' });
+
+    // …and it shows on the card as money leaving, not as one more collection.
+    await win.evaluate(() => showEditPaymentModal('PP1'));
+    await win.waitForSelector('#f-precv', { timeout: 15000 });
+    await win.waitForTimeout(250);
+    const card = await win.evaluate(() => [...document.querySelectorAll('#pef-recent-b tr')]
+      .map(r => (r.className || 'in') + '|' + [...r.cells].map(c => c.textContent.trim()).join('/')));
+    expect(card.length, 'the instalments and the reversal').toBe(3);
+    expect(card.filter(r => r.startsWith('is-back')).length).toBe(1);
+    expect(card.find(r => r.startsWith('is-back'))).toContain('−Rs. 2,000');
   } finally {
     await app.close();
   }

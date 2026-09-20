@@ -3660,6 +3660,34 @@ function showEditPaymentModal(id) {
             </div>
           </div>
           <div class="pef-rcv__tip">${icon('info', 'xs')}<span>Enter the amount received now, or leave it empty to collect nothing. It is recorded as a new payment in your name and reduces the pending amount.</span></div>
+          ${''/* MONEY GOING BACK OUT HAS A DOOR NOW (owner, 2026-09-19: "no refund
+                 strategy there"). The path itself was never missing —
+                 reversePayment() in finance.js is the §14 authority for it, with
+                 the ownership limit, the PIN, the required reason, the ledger
+                 entry and the activity log all already built. What was missing
+                 was any way to REACH it from here: the banner at the top of this
+                 form says "to take money back use Reverse a collection" and then
+                 offers nothing to press, so the warden had to cancel the form,
+                 find the row again and open its ⋯ menu.
+
+                 Deliberately NOT a second refund engine. This is the same call
+                 the row menu makes, with the same limit — what this account
+                 collected and still holds, or the whole collection for an admin —
+                 and the same reason shown when it may not. */}
+          ${!held ? '' : (() => {
+            const rv = ownReversible(p);
+            const why = rv.waiting > 0 ? 'In a handover waiting for approval'
+                      : rv.approved > 0 ? 'Approved in a handover — admin only'
+                      : (rv.reason || 'Not available on this record');
+            return `<div class="pef-back">
+              <span class="pef-back__t">Money going back out</span>
+              ${rv.max > 0
+                ? `<button type="button" class="pef-back__b" onclick="pefReverseFromEdit('${escHtml(id)}')">Refund or reverse a collection…</button>
+                   <span class="pef-back__m">up to ${fmtPKR(rv.max)}</span>`
+                : `<button type="button" class="pef-back__b" disabled>Refund or reverse a collection…</button>
+                   <span class="pef-back__m">${escHtml(why)}</span>`}
+            </div>`;
+          })()}
           <input type="hidden" id="f-ppaid" value="${money(p.amount)}">
         </div>
 
@@ -3831,42 +3859,43 @@ let _pefRecentAll = false;
 function _pefCollections(t) {
   if (!t) return [];
   const out = [];
-  const ready = typeof _ledgerReady !== 'undefined' && _ledgerReady === true;
-  const led = (ready && typeof ledgerEntriesFor === 'function') ? ledgerEntriesFor(t.id) : [];
-  led.forEach(e => {
-    if (!e) return;
-    const day = String(e.date || e.createdAt || '').slice(0, 10);
-    if (e.type === 'payment') {
-      out.push({ day, month: e.month || '', amount: money(e.amount), method: e.method || '',
-                 reference: e.reference || '', back: false });
-    } else if (e.type === 'adjustment' && e.part === 'reversal') {
-      out.push({ day, month: e.month || '', amount: money(e.amount), method: e.method || '',
-                 reference: '', back: true });
+  /* ONE SOURCE: THE RECORDS' OWN TRAIL. This first read the student ledger and
+     fell back to the records only when the ledger held nothing for the student
+     at all — which was all-or-nothing, and wrong in both directions. The moment
+     one new collection posted a ledger entry, an imported history vanished from
+     the card. And a live ledger entry is stamped with the time it was POSTED,
+     not the day the money came in, so a collection taken on the 6th and posted
+     on the 20th was listed as the 20th.
+
+     `partialPayments` and `reversals` are written by applyPayment() and
+     reversePayment() in finance.js — the §14 authorities — and each entry
+     carries the date and method the money actually moved on. The ledger mirrors
+     them; for a card that answers "when did money move", the trail is the
+     shorter and truer read, and it needs no fallback. */
+  (DB.payments || []).filter(p => p && p.studentId === t.id).forEach(p => {
+    const parts = (p.partialPayments || []).filter(x => x && money(x.amount) > 0);
+    parts.forEach(x => out.push({
+      day: String(x.date || p.paidDate || p.date || '').slice(0, 10),
+      month: p.month || '', amount: money(x.amount),
+      method: x.method || p.method || '', reference: x.reference || '', back: false }));
+    /* A record holding money with no instalment behind it still collected it —
+       every record written before the collection path was one (Phase 1). The
+       reversed total is added back because `p.amount` is net of reversals, and
+       the reversals are listed separately below; without it, reversing money on
+       a legacy record would quietly shrink the collection it is reversing. */
+    if (!parts.length) {
+      const revd = (p.reversals || []).reduce((s, r) => s + money(r && r.amount), 0);
+      const ever = money(p.amount) + revd;
+      if (ever > 0) out.push({
+        day: String(p.paidDate || p.date || '').slice(0, 10), month: p.month || '',
+        amount: ever, method: p.method || '', reference: '', back: false });
     }
-  });
-  /* THE FALLBACK IS NOT A SECOND SOURCE — it runs only when the ledger holds
-     nothing at all for this student, which is what an imported history looks
-     like. Running both would double every instalment the ledger already knows. */
-  if (!out.length) {
-    (DB.payments || []).filter(p => p && p.studentId === t.id).forEach(p => {
-      (p.partialPayments || []).forEach(x => {
-        if (!x || !(money(x.amount) > 0)) return;
-        out.push({ day: String(x.date || p.paidDate || p.date || '').slice(0, 10),
-                   month: p.month || '', amount: money(x.amount),
-                   method: x.method || p.method || '', reference: x.reference || '', back: false });
-      });
-      // A record holding money with no instalment behind it still collected it.
-      if (!(p.partialPayments || []).length && money(p.amount) > 0) {
-        out.push({ day: String(p.paidDate || p.date || '').slice(0, 10), month: p.month || '',
-                   amount: money(p.amount), method: p.method || '', reference: '', back: false });
-      }
-      (p.reversals || []).forEach(r => {
-        if (!r || !(money(r.amount) > 0)) return;
-        out.push({ day: String(r.date || '').slice(0, 10), month: p.month || '',
-                   amount: money(r.amount), method: r.method || '', reference: '', back: true });
-      });
+    (p.reversals || []).forEach(r => {
+      if (!r || !(money(r.amount) > 0)) return;
+      out.push({ day: String(r.date || '').slice(0, 10), month: p.month || '',
+                 amount: money(r.amount), method: r.method || '', reference: '', back: true });
     });
-  }
+  });
   // Newest first. A blank date sorts last rather than to 1970.
   return out.sort((a, c) => String(c.day || '').localeCompare(String(a.day || '')));
 }
@@ -3899,6 +3928,26 @@ function pefTypeChange(v) {
   const combo = document.getElementById('f-pcombo');
   if (combo) combo.value = String(pfRentAmount() + pfMessAmount());
   recalcUnpaid();
+}
+
+/* Leaving the Edit form for the reverse dialog. They share one modal container,
+   so this sheet is replaced — anything typed into it and not saved goes with it,
+   and the warden is told so rather than finding out. Nothing typed, nothing to
+   ask: the dialog opens straight away. */
+function pefReverseFromEdit(id) {
+  const typed = () => {
+    const rcv = document.getElementById('f-precv');
+    if (rcv && String(rcv.value).trim() !== '') return true;
+    const note = document.getElementById('f-pnotes');
+    const p = DB.payments.find(x => x.id === id);
+    if (note && p && String(note.value || '') !== String(p.notes || '')) return true;
+    const why = document.getElementById('f-pedit-reason');
+    return !!(why && String(why.value).trim() !== '');
+  };
+  if (!typed()) { showReversePaymentModal(id); return; }
+  showConfirm('Leave this form?',
+    'The reverse dialog opens in place of this one, so what you have entered here and not saved will be lost.',
+    () => showReversePaymentModal(id));
 }
 
 /* Full pending: the whole balance this form now shows, into the receive box. */
