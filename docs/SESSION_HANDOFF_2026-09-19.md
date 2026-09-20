@@ -140,3 +140,76 @@ The punch list is done bar the Student-information question in item 8.
 Then finance **Phase 6** (bill immutability: `p.generated` snapshot frozen once
 money is held, later changes in `p.adjustments[]`) and **Phase 7** (`saveDB()`
 atomicity). One phase at a time, report after each.
+
+## 2026-09-20 — the second punch list
+
+| Item | Result |
+|---|---|
+| Chase the `method` defect in ownership.spec.js | **No defect** — stale test, `bc9ab79` |
+| Features in the code not visible in the UI | Audited; see below |
+| Move Payments' Export button right | `bc4020a` (Rooms too) |
+| PDF + Excel inside one Export button everywhere | `bc4020a` — 4 screens converted |
+| The payment PIN "not visible / can't apply" | **It works** — see below |
+| No date of admission / date of payment | `bc4020a` — two new sortable columns |
+
+### The `method` defect was not a defect
+
+Traced in the running app: the bill is raised as Cash, Sara collects Cash,
+Ali collects JazzCash — and `p.method` stays **Cash** throughout, with the
+trail reading `5000:Cash, 3000:JazzCash`. That is §14 Rule 1, closed in
+`2d770c9`: the record's method is the collection that OPENED it, and each
+later collection carries its own method on its own trail entry, which is where
+a receipt reads it. The test was last touched 40 commits BEFORE that fix and
+still expected the old restamping behaviour. **My note in `2d56c9d` calling
+this a `method` defect was wrong.**
+
+### Unreachable code audit — nothing is actually lost
+
+1,438 functions across `renderer/`; **40 are never referenced anywhere but
+their own definition**. Every one that looked like a user-facing entry point
+was checked by hand, and they are all **superseded dead code**, not features
+hidden from the UI:
+
+| Orphan | Superseded by |
+|---|---|
+| `addPaymentMethod`, `addFloor` | `cfgAddPrompt()` / `cfgAdd()` — the generic adder. The old pair reads `#new-pm` / `#new-fl`, which no longer exist |
+| `saveRoomTypes` | `_rtTouch()` + auto-save |
+| `showVacantRoomsModal`, `showOccupiedRoomsModal` | the Rooms page's own All / Occupied / Vacant filter |
+| `addStudentExtraChargeRow`, `getStudentExtraChargesData` | the Add Student form no longer has `#student-extra-charges-list` |
+| `showBackupRestorePage` | backup is a page now (`renderBackupPage`) |
+| `exportMonthCSV`, `downloadArchiveCSV` | the Excel exports |
+| `sendBackupToGmail`, `sendBackupToDrive` | stubs — both just call `exportBackup('json')` |
+| `calcProfit` | an alias of `calcEarned()` with no callers |
+
+**Conclusion: no built feature is unreachable.** Deleting the 40 is a worthwhile
+cleanup but it is its own phase, not a side-effect of a UI pass.
+
+Caveat on the method: a function named only inside a COMMENT still counts as
+referenced, so the true orphan count is slightly higher —
+`_dashOccupancyOverview()` is retired but survives the scan that way.
+
+### The payment PIN works
+
+Driven end to end: **Users → Edit user → Role & access → "Require PIN to post
+payments"**. The switch is present and visible, saving sets `pinRequired`, and
+the next collection is gated — `markPaymentPaid()` stopped at Rs. 0 with the
+`pin-layer` asking for it. The account sets its own PIN the first time it is
+asked; an admin can only CLEAR one, never read or choose it.
+
+So this is a "where is it" problem, not a broken feature. It was deliberately
+**not** duplicated into Settings: a second switch would be a second answer to
+"does this account need a PIN". Ask the owner where he looked before adding a
+pointer there.
+
+### The two new date columns
+
+* Students → **Admitted**, sortable, from `joinDate`. The roster carried no date
+  at all for someone still living here: `statusDateNote()` under Status only
+  speaks for a student Leaving or Left.
+* Payments → **Paid on**, sortable — the day money LAST came in.
+  `payLastCollectedOn()` reads the latest date on the instalment trail; it is
+  not a new figure. A record that has collected nothing shows an em dash.
+
+Both use `fmtDateShort()`, which drops the year when it IS this year. With the
+full date, Paid on ran 106px and pushed the payments table 39px past the 1366
+floor, clipping Actions. Measured after: 1070px table in a 1070px wrap.
