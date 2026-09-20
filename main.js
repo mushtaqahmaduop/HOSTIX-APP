@@ -855,7 +855,60 @@ function refreshEnforcement() {
       if (!win.isDestroyed()) win.webContents.send('license:enforcementChanged', decision);
     }
   } catch (_) {}
+  /* A LOCK TAKES EFFECT NOW, NOT AT THE NEXT LAUNCH (owner, 2026-09-20).
+
+     Until this, a suspension or revocation arriving mid-session only pushed a
+     BANNER: the app stayed open and the warden carried on filling forms, and
+     the licence screen appeared only if somebody happened to restart. Which
+     page loads was decided once, at window creation, and never revisited.
+
+     Only ever index -> licence. Never the reverse: coming BACK from a lock is
+     an activation, and activateLicense() reloads the app itself once the new
+     key is stored. Navigating a window that is already on the licence screen
+     would also throw away what the customer had typed into it. */
+  if (decision && decision.blocked) _lockToLicenceScreen(decision);
+  else _unlockFromLicenceScreen(decision);
   return decision;
+}
+
+/* AND BACK AGAIN WHEN THE LOCK IS LIFTED.
+
+   Without this, restoring a licence from the control plane left the hostel
+   staring at the activation screen until somebody thought to restart — the
+   suspension was reversible from the portal and the app was not, which is the
+   worst half of both designs.
+
+   Only a window WE locked comes back: the licence screen carries `locked=1`
+   when it was reached by a lock rather than by a fresh install or a
+   deactivation, so a machine that has genuinely never been activated is left
+   where it belongs. */
+function _unlockFromLicenceScreen(decision) {
+  if (!decision || decision.blocked) return;
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      const url = safe(() => win.webContents.getURL(), '') || '';
+      if (!/license\.html/i.test(url) || !/locked=1/.test(url)) continue;
+      win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    }
+  } catch (e) { console.error('[HOSTYLLO] unlock failed:', e && e.message); }
+}
+
+/** Send every open app window to the licence screen, with the reason on it. */
+function _lockToLicenceScreen(decision) {
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      const url = safe(() => win.webContents.getURL(), '') || '';
+      if (!/index\.html/i.test(url)) continue;          // already locked, or not the app
+      win.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
+        query: { reason: decision.reason || decision.state || 'blocked',
+                 message: (decision.banner && decision.banner.text) || '', locked: '1' }
+      });
+    }
+  } catch (e) { console.error('[HOSTYLLO] lock to licence screen failed:', e && e.message); }
 }
 
 // ── Activate License ──────────────────────────────────────────────────────────
@@ -1241,8 +1294,20 @@ function createWindow() {
   if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
+    /* The STATE is the fallback, not 'blocked' (owner, 2026-09-20). A licence
+       suspended by the control plane has no `lic.reason` — the file itself is
+       fine — so without this the screen fell through to the generic "License
+       verification failed", which tells a suspended customer nothing about why
+       or who to call, and hides the data-export button keyed off the state. */
+    /* `locked` is set only for the two states the control plane chooses —
+       so lifting one brings the app back without a restart, while a machine
+       that has simply never been activated stays on this screen where it
+       belongs. See _unlockFromLicenceScreen(). */
+    const _byOwner = decision.state === 'SUSPENDED' || decision.state === 'REVOKED';
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason || decision.reason, message: lic.message }
+      query: { reason: lic.reason || decision.reason || decision.state || 'blocked',
+               message: lic.message || (decision.banner && decision.banner.text) || '',
+               ...(_byOwner ? { locked: '1' } : {}) }
     });
   }
 

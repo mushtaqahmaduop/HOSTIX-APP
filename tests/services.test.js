@@ -1515,7 +1515,27 @@ ok('a fresh entitlement outranks the local file', () => {
   });
   assert.strictEqual(d.state, 'SUSPENDED');
   assert.strictEqual(d.source, 'entitlement');
-  assert.strictEqual(d.readOnly, true);
+  /* SUSPENDED BLOCKS, it does not go read-only (owner, 2026-09-20). Read-only
+     is for EXPIRED, where the reasoning is late payment; a suspension is the
+     control plane being used deliberately against one install, and an install
+     that can work through it is not suspended. */
+  assert.strictEqual(d.blocked, true);
+  assert.strictEqual(d.readOnly, false);
+});
+
+ok('the states line up with the ruling: expired read-only, suspended blocked', () => {
+  const at = (state) => enf.resolve({ licence: licenceValid(), entitlement: { state, policy: enf.DEFAULT_POLICY } });
+  const shape = (d) => d.readOnly + '/' + d.blocked;
+  assert.strictEqual(shape(at('ACTIVE')),    'false/false');
+  assert.strictEqual(shape(at('EXPIRED')),   'true/false',  'expiry must stay usable and printable');
+  assert.strictEqual(shape(at('SUSPENDED')), 'false/true',  'a suspension must lock the app');
+  assert.strictEqual(shape(at('REVOKED')),   'false/true');
+  // Whichever way it is refused, the write is refused — and the audit trail
+  // still records what happened during the lockout.
+  for (const st of ['EXPIRED', 'SUSPENDED', 'REVOKED']) {
+    assert.strictEqual(enf.writeBlocked(at(st), 'students'), true, st);
+    assert.strictEqual(enf.writeBlocked(at(st), 'activitylog'), false, st + ' audit trail');
+  }
 });
 
 ok('a STALE or missing entitlement falls back to the licence file', () => {

@@ -504,8 +504,12 @@
           wrong_machine:{ bg: '#eef2ff', border: '#c7d2fe', color: '#4338ca' },
           time_cheat:   { bg: '#fffbeb', border: '#fde68a', color: '#b45309' },
           corrupt:      { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+          // The two the control plane can do deliberately (owner, 2026-09-20).
+          suspended:    { bg: '#fef2f2', border: '#fecaca', color: '#b91c1c' },
+          revoked:      { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b' },
         };
-        const c = bannerColors[reason] || bannerColors.expired;
+        const key = String(reason).toLowerCase();
+        const c = bannerColors[key] || bannerColors.expired;
         const banner = document.createElement('div');
         banner.style.cssText = `display:flex;align-items:flex-start;gap:12px;`
           + `margin-bottom:22px;padding:15px 18px;border-radius:12px;`
@@ -518,6 +522,43 @@
         // textContent, not innerHTML: `message` arrives from a query string.
         txt.textContent = message || 'License verification failed.';
         banner.appendChild(ic); banner.appendChild(txt);
+
+        /* LOCKED OUT OF WORKING, NEVER OUT OF THEIR OWN RECORDS.
+
+           Suspension stops the app (owner, 2026-09-20) but the other half of
+           D-3 is not negotiable: the data is theirs. `db:exportFull` is a READ
+           and is deliberately ungated, so it still answers here, on the very
+           screen that is refusing them everything else. */
+        if (key === 'suspended' || key === 'revoked') {
+          const save = document.createElement('button');
+          save.type = 'button';
+          save.textContent = 'Download my data';
+          save.style.cssText = 'margin-top:12px;padding:9px 16px;border-radius:9px;'
+            + 'border:1px solid ' + c.border + ';background:#fff;color:' + c.color + ';'
+            + 'font:700 13px inherit;cursor:pointer;display:block';
+          save.onclick = async function () {
+            save.disabled = true;
+            const was = save.textContent;
+            save.textContent = 'Preparing…';
+            try {
+              const data = await window.electronAPI.dbExportFull();
+              if (!data) throw new Error('nothing returned');
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'hostyllo-data-' + new Date().toISOString().slice(0, 10) + '.json';
+              a.click();
+              setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+              save.textContent = 'Downloaded';
+            } catch (e) {
+              save.textContent = 'Could not export — contact support';
+              save.disabled = false;
+              return;
+            }
+            setTimeout(function () { save.textContent = was; save.disabled = false; }, 2500);
+          };
+          banner.appendChild(save);
+        }
         // Insert before machine-box
         const machineBox = document.querySelector('.machine-box');
         if (machineBox) machineBox.parentNode.insertBefore(banner, machineBox);

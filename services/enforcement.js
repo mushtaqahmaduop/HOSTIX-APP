@@ -33,16 +33,36 @@ const STATE = {
   ACTIVE:     'ACTIVE',      // full operation
   GRACE:      'GRACE',       // full operation, renewal warning
   EXPIRED:    'EXPIRED',     // read-only
-  SUSPENDED:  'SUSPENDED',   // read-only, with the owner's reason
+  SUSPENDED:  'SUSPENDED',   // blocked — the licence screen, with the reason
   REVOKED:    'REVOKED',     // blocked — back to the activation screen
   UNLICENSED: 'UNLICENSED'   // no usable licence file at all
 };
 
 /** States in which the app runs but refuses new work. */
-const READ_ONLY_STATES = new Set([STATE.EXPIRED, STATE.SUSPENDED]);
+const READ_ONLY_STATES = new Set([STATE.EXPIRED]);
 
-/** States in which the app does not open at all. */
-const BLOCKED_STATES = new Set([STATE.REVOKED, STATE.UNLICENSED]);
+/* States in which the app does not open at all.
+
+   SUSPENDED MOVED HERE ON 2026-09-20, at the owner's direction, and it is an
+   amendment to D-3 rather than a bug fix — so the reasoning it overrides is
+   left standing above and this says why.
+
+   D-3 treats every non-active state the same way: read-only, because a hostel
+   that pays LATE must lose nothing. That reasoning is about money, and it
+   still holds for EXPIRED, which is why EXPIRED stays read-only.
+
+   Suspension is not late payment. It is the control plane being used
+   deliberately against one install — the owner's answer to a dispute, a
+   chargeback, or a copy running where it should not be. A suspension the
+   customer can work through is not an answer to any of those: the app carried
+   on taking admissions and payments behind a banner, and the only thing that
+   actually stopped was the save, silently, in the main process.
+
+   EXPORTS SURVIVE THE LOCK (owner, same ruling). `db:exportFull` is a read and
+   stays ungated, and the licence screen offers it — so a suspended hostel is
+   locked out of WORKING, never out of its own records. That is the half of
+   D-3 that is not negotiable. */
+const BLOCKED_STATES = new Set([STATE.REVOKED, STATE.UNLICENSED, STATE.SUSPENDED]);
 
 const DAY_MS = 86400000;
 
@@ -277,7 +297,8 @@ function message(decision, opts) {
     case STATE.EXPIRED:
       return { tone: 'error', text: 'Your licence expired on ' + on + '. You can still view, search and print everything, but new entries and edits are paused until it is renewed.' };
     case STATE.SUSPENDED:
-      return { tone: 'error', text: 'This licence has been suspended. You can still view, search and print everything. Contact ' + support + ' to restore full access.' };
+      return { tone: 'error', text: 'This licence has been suspended. The app is locked until it is '
+              + 'restored — you can still download your data from this screen. Contact ' + support + '.' };
     case STATE.REVOKED:
       return { tone: 'error', text: 'This licence has been revoked. Contact ' + support + '.' };
     default:
