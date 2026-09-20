@@ -268,5 +268,15 @@ the dialog. The wrapper's removal just made the chain visible.
 
 This matters because that dialog is a real, finished screen — a month's fee
 records, its expense register, and an Export control that `bc4020a` converted
-to the combined menu. **Either wire it up or retire it**; it should not sit
-there finished and unopenable.
+to the combined menu. **Wired up in `62b5d0a`** — it opens from the sidebar calendar, beside the name
+of the month being browsed, via `sbCalMonthReport()`. Deliberately NOT from a
+KPI card: the owner locked those on 7 Sep and `counter-flow-decisions.spec.js`
+holds them locked; the calendar cells also keep their one job (picking a month
+moves the dashboard). Cover: `tests/month-report-dialog.spec.js`, which also
+asserts picking a month still opens no dialog.
+
+Two caption bugs surfaced the moment it could be seen, and are fixed with it:
+"0 payments" under a revenue figure (it counted records whose status is Paid,
+not collections — the Reports-donut fault again) and "1 records".
+
+That leaves **21** of the 22, all listed above, for the owner to rule on.
