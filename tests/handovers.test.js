@@ -62,6 +62,20 @@ const ok = (name, fn) => {
 };
 const same = (a, b, m) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), m);
 
+/* A per-method map (hoByMethod, h.expected, h.countedHow) has no meaningful key
+   order. Its keys arrive in whatever order the LINES are in, and both
+   hoPendingLines and hoItems sort by entry.createdAt, which is an ISO string at
+   MILLISECOND resolution: two collections recorded in the same millisecond tie,
+   the stable sort then leaves them in insertion order instead of newest-first,
+   and the keys come out the other way round. Machine timing decided whether
+   these assertions passed -- about one run in five failed, with identical
+   totals in a different order. Compare the pairs, not the string.
+
+   (deepStrictEqual is not an option: these objects are built inside the vm
+   sandbox, so they carry another realm’s prototypes.) */
+const sameMap = (a, b, m) => same(Object.keys(a || {}).sort().map(k => [k, a[k]]),
+                                  Object.keys(b || {}).sort().map(k => [k, b[k]]), m);
+
 function rec(o) {
   const p = Object.assign({ id: 'p1', studentId: 's1', studentName: 'Fixture', month: 'September 2026',
     monthlyRent: 20000, messCharge: 0, messIncluded: true, extraCharges: [], extraTotal: 0,
@@ -97,7 +111,7 @@ ok('a warden hands over net cash: collections less the reversals they recorded',
   const lines = H.hoPendingLines('w_sara');
   assert.strictEqual(lines.length, 3);
   assert.strictEqual(H.hoSum(lines), 7000);
-  same(H.hoByMethod(lines), { Cash: 4000, JazzCash: 3000 });
+  sameMap(H.hoByMethod(lines), { Cash: 4000, JazzCash: 3000 });
 });
 
 ok('imported history is never a line', () => {
@@ -116,7 +130,7 @@ ok('sending takes a snapshot of every waiting line', () => {
   assert.strictEqual(HO.status, 'pending');
   assert.strictEqual(HO.totalAmount, 7000);
   assert.strictEqual(HO.lineCount, 3);
-  same(HO.expected, { Cash: 4000, JazzCash: 3000 });
+  sameMap(HO.expected, { Cash: 4000, JazzCash: 3000 });
   assert.ok(DB.wardenCollections.every(x => x.status === 'handed_over' && x.handoverId === HO.id));
   assert.strictEqual(H.hoLabel(HO), 'Waiting');
 });
@@ -199,7 +213,7 @@ ok('approving a discrepancy needs a note; unticked lines go back when approved',
   assert.strictEqual(H.hoLabel(HO), 'Part approved');
   assert.strictEqual(HO.approvedAmount, 6000);
   assert.strictEqual(HO.adminName, 'Owner');
-  same(HO.countedHow, { Cash: 'typed', JazzCash: 'matched' });
+  sameMap(HO.countedHow, { Cash: 'typed', JazzCash: 'matched' });
   const jazz = DB.wardenCollections.find(x => x.ledgerEntryId === entryOf('JazzCash', 3000));
   assert.strictEqual(jazz.status, 'pending_handover');
   assert.strictEqual(jazz.handoverId, null);
