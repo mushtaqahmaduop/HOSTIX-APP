@@ -1154,6 +1154,12 @@ async function submitCancellationSettlement(cancId) {
   const date   = document.getElementById('canc-set-date')?.value || c.vacateDate || today();
 
   let moved = 0;
+  /* A CHECKOUT IS ONE ACT (audit G5). Settling a leaver touches every month
+     that still owes, and refunding touches every month holding a credit — but
+     the student stands at the counter once and is handed one slip. All of it
+     carries a single posting id, so the whole settlement can be read back as
+     the one thing it was. */
+  const _rcpCheckout = newReceiptId();
   if (doIt && s.action === 'collect') {
     /* Settled month by month against the records that hold the debt, through
        applyPayment() — a lump written anywhere else would leave every month it
@@ -1162,7 +1168,8 @@ async function submitCancellationSettlement(cancId) {
       if (l.outstanding <= 0) return;
       const p = DB.payments.find(x => x.id === l.paymentId);
       if (!p) return;
-      const r = applyPayment(p, { amount: l.outstanding, method, date, note: 'Checkout settlement' });
+      const r = applyPayment(p, { amount: l.outstanding, method, date,
+                                  note: 'Checkout settlement', receiptId: _rcpCheckout });
       if (r.ok) moved += r.applied;
     });
     if (moved > 0) logActivity('Payment Collected',
@@ -1175,7 +1182,8 @@ async function submitCancellationSettlement(cancId) {
       if (l.credit <= 0) return;
       const p = DB.payments.find(x => x.id === l.paymentId);
       if (!p) return;
-      const r = reversePayment(p, { amount: l.credit, method, date, reason: 'Refunded at checkout' });
+      const r = reversePayment(p, { amount: l.credit, method, date,
+                                    reason: 'Refunded at checkout', receiptId: _rcpCheckout });
       if (r.ok) moved += r.reversed;
     });
     if (moved > 0) logActivity('Payment Reversed',

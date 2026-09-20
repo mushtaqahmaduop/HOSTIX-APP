@@ -46,7 +46,7 @@ const F = vm.runInContext(`({
   applyPayment, reversePayment, calculateRefund,
   calculateSettlement, calculateReportTotals,
   refundPolicy, calculateMidMonthRefund, refundPolicyLabel,
-  billSnapshot, billFreeze, billDrift
+  billSnapshot, billFreeze, billDrift, newReceiptId
 })`, sandbox);
 const { DB } = F;
 
@@ -848,6 +848,73 @@ ok('collecting money does not disturb the snapshot', () => {
   F.applyPayment(p, { amount: 5000, method: 'Cash', date: '2026-08-06' });
   assert.strictEqual(p.generated.total, 14500);
   assert.strictEqual(F.billDrift(p), null, 'taking money read as a change to the bill');
+});
+
+/* -- G5 . ONE HAND-OVER, ONE IDENTITY ------------------------------------- */
+
+const rec = (id, month, rent) => ({ id, studentId: 's1', month, amount: 0,
+  monthlyRent: rent, totalRent: rent, messCharge: 0, messIncluded: false,
+  admissionFee: 0, concession: 0, extraCharges: [], extraTotal: 0, unpaid: rent,
+  status: 'Pending', date: '2026-08-01', partialPayments: [] });
+
+ok('a posting id is only stamped when the caller names one', () => {
+  setup();
+  const p = rec('r1', '2026-08', 5000);
+  F.applyPayment(p, { amount: 1000, method: 'Cash', date: '2026-08-02' });
+  assert.strictEqual(p.partialPayments[0].receiptId, undefined,
+    'an id was invented for a caller that named none');
+  F.applyPayment(p, { amount: 1000, method: 'Cash', date: '2026-08-03', receiptId: 'rcp_x' });
+  assert.strictEqual(p.partialPayments[1].receiptId, 'rcp_x');
+});
+
+ok('one hand-over across two months carries one id', () => {
+  setup();
+  const july = rec('rJ', '2026-07', 5000);
+  const aug  = rec('rA', '2026-08', 5000);
+  // The shape of a real visit: the arrear, then the month on the form.
+  const id = F.newReceiptId();
+  F.applyPayment(july, { amount: 5000, method: 'Cash', date: '2026-08-05', receiptId: id });
+  F.applyPayment(aug,  { amount: 3000, method: 'Cash', date: '2026-08-05', receiptId: id });
+  assert.strictEqual(july.partialPayments[0].receiptId, id);
+  assert.strictEqual(aug.partialPayments[0].receiptId, id);
+  assert.strictEqual(july.partialPayments[0].receiptId, aug.partialPayments[0].receiptId,
+    'the two halves of one hand-over are not tied together');
+});
+
+ok('two separate visits are two postings', () => {
+  setup();
+  const p = rec('r2', '2026-08', 9000);
+  F.applyPayment(p, { amount: 2000, method: 'Cash', date: '2026-08-02', receiptId: F.newReceiptId() });
+  F.applyPayment(p, { amount: 3000, method: 'Cash', date: '2026-08-20', receiptId: F.newReceiptId() });
+  assert.notStrictEqual(p.partialPayments[0].receiptId, p.partialPayments[1].receiptId,
+    'two visits a fortnight apart were recorded as one hand-over');
+});
+
+ok('an id is unique per call', () => {
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(F.newReceiptId());
+  assert.strictEqual(seen.size, 200);
+});
+
+ok('money handed BACK belongs to a posting too', () => {
+  setup();
+  const p = rec('r3', '2026-08', 9000);
+  F.applyPayment(p, { amount: 9000, method: 'Cash', date: '2026-08-02' });
+  const r = F.reversePayment(p, { amount: 1000, reason: 'Keyed too much',
+                                  date: '2026-08-03', receiptId: 'rcp_back' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(p.reversals[0].receiptId, 'rcp_back');
+});
+
+ok('the id never touches what is owed', () => {
+  setup();
+  const bare  = rec('r4', '2026-08', 7000);
+  const idful = rec('r5', '2026-08', 7000);
+  F.applyPayment(bare,  { amount: 2500, method: 'Cash', date: '2026-08-02' });
+  F.applyPayment(idful, { amount: 2500, method: 'Cash', date: '2026-08-02', receiptId: 'rcp_y' });
+  assert.strictEqual(bare.amount, idful.amount);
+  assert.strictEqual(bare.unpaid, idful.unpaid);
+  assert.strictEqual(F.calculateOutstanding(bare), F.calculateOutstanding(idful));
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

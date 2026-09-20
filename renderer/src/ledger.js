@@ -270,7 +270,9 @@ function _ledgerDiff(p, posted, why) {
       out.push({ type: 'payment', amount: amt, part: 'instalment',
                  date: t.date || p.paidDate || recDate,
                  method: t.method || p.method || '', byName: t.collectedBy || '',
-                 reference: t.reference || '' });
+                 reference: t.reference || '',
+                 // The hand-over this instalment belonged to (audit G5).
+                 receiptId: t.receiptId || '' });
       dp -= amt;
     }
     // Money the record holds that no instalment explains — a form that wrote
@@ -289,6 +291,7 @@ function _ledgerDiff(p, posted, why) {
     const said = String(r.reason || '').trim();
     out.push({ type: 'adjustment', amount: money(r.amount), part: 'reversal',
                date: r.date || recDate, method: r.method || '', byName: r.by || '',
+               receiptId: r.receiptId || '',
                reason: 'Collection reversed' + (said ? ': ' + said : '') + tail });
   }
   return out;
@@ -310,8 +313,17 @@ function _ledgerPost(p, d, opts) {
     createdBy: o.imported ? null : (user && typeof CUR_ROLE !== 'undefined' ? CUR_ROLE : null),
     createdByName: d.byName || (o.imported ? String(p.collectedBy || '') : (user && user.name) || ''),
     approvedBy: null,
-    // Schema Q6 (b): one receipt number per month record, shared by its entries.
-    receiptId: p.receiptNo || null,
+    /* Schema Q6 (b) gave every entry of a month record the record's printed
+       receipt number. That is per RECORD, so one hand-over clearing August and
+       paying September landed under two different numbers — or, since
+       `receiptNo` is only assigned when a receipt is actually printed, under
+       two nulls (audit G5).
+
+       The posting's own id wins where the draft carries one: it is assigned at
+       collection time and is the same across every record that one hand-over
+       touched. The printed number stays the fallback, so nothing that used to
+       be grouped by it stops being grouped. */
+    receiptId: d.receiptId || p.receiptNo || null,
     runningBalance: prev + ledgerEffect(d),
     createdAt: o.imported
       ? (d.date ? d.date + 'T00:00:00' : new Date().toISOString())
@@ -634,6 +646,20 @@ function ledgerHistoryFor(studentId, recordId, n) {
 }
 
 /** A month record's entries, in the order they were posted. */
+/* EVERYTHING ONE HAND-OVER DID (audit G5). The entries of a single posting,
+   oldest first, across however many month records it touched — which is the
+   question "what was on this receipt?" and the one the trail could not answer
+   before the posting had an id of its own.
+
+   An empty id matches nothing on purpose: entries written before this existed
+   carry no posting, and they must not all group together as one enormous
+   hand-over that never happened. */
+function ledgerEntriesForReceipt(receiptId) {
+  const want = String(receiptId || '');
+  if (!want) return [];
+  return _ledgerList().filter(e => e && String(e.receiptId || '') === want);
+}
+
 function ledgerEntriesForRecord(recordId) {
   return (_ledgerByRecord.get(recordId) || []).slice();
 }

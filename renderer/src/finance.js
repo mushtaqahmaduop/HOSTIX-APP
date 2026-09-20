@@ -243,6 +243,33 @@ function billDrift(p) {
   return { was: wasTotal, now: nowTotal, delta: nowTotal - wasTotal, parts: parts, at: g.at, by: g.by };
 }
 
+/* ── §14 · newReceiptId ───────────────────────────────────────────────────────
+   ONE HAND-OVER, ONE IDENTITY (audit G5).
+
+   A warden takes Rs. 20,000 across a counter once. If it clears August's
+   arrears and pays September, that single act writes a collection on TWO
+   records — and nothing on either of them said they were the same hand-over.
+   The student holds one slip; the trail held N unrelated entries, and "show me
+   everything from this receipt" had no answer.
+
+   THE DECISION WAS DELIBERATELY NOT A TABLE (audit §1, owner). Making receipts
+   first-class with month records derived from them is the second source of
+   truth §14 exists to prevent — 52 call sites each answering "what is owed"
+   its own way is this codebase's documented history. So the posting stamps an
+   id on the trail entries it writes, and that is all: same answers, no
+   migration, no competing authority.
+
+   It is NOT `p.receiptNo`. That is the printed, human-facing number, assigned
+   lazily per RECORD the first time a receipt is printed (receipt.js). This is
+   assigned at collection time and groups the entries of one posting across
+   however many records it touched. A receipt reads the first; the trail reads
+   the second.                                                                */
+function newReceiptId() {
+  return 'rcp_' + (typeof uid === 'function'
+    ? uid()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+}
+
 /* ── §14 · applyPayment ───────────────────────────────────────────────────────
    Collect money against a record. Every collection in the app goes through
    here: the Add Payment form, the Edit form, the single-row Mark Paid, the bulk
@@ -310,6 +337,10 @@ function applyPayment(p, opts) {
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
     note: o.note || 'Collected',
   };
+  /* THE POSTING THIS COLLECTION BELONGED TO (audit G5). Written only when the
+     caller names one, so a record collected by an older build — or by a path
+     that has not been given one — carries no id rather than a made-up one. */
+  if (o.receiptId) entry.receiptId = String(o.receiptId);
   // A bank or wallet transaction number, when the collector gave one (Edit Payment).
   const ref = String(o.reference == null ? '' : o.reference).trim().slice(0, 40);
   if (ref) entry.reference = ref;
@@ -378,6 +409,9 @@ function reversePayment(p, opts) {
     date, amount,
     method: o.method || p.method || 'Cash',
     reason: String(o.reason || '').trim(),
+    // Money handed BACK across a counter is one act too, and belongs to a
+    // posting for the same reason a collection does (audit G5).
+    ...(o.receiptId ? { receiptId: String(o.receiptId) } : {}),
     by: o.by ||
       ((typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Warden'),
   };

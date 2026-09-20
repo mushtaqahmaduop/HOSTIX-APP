@@ -155,7 +155,8 @@ as before; only new collections are written differently.
 5. ~~Bill immutability — G6~~ — done, see below.
 6. ~~Persistence atomicity — G10~~ — done, see below.
 
-Receipt identity (G5) lands with 3 or 5, whichever reaches it first.
+~~Receipt identity (G5) lands with 3 or 5, whichever reaches it first.~~ — it
+landed on its own, after 7. See below.
 
 ---
 
@@ -335,3 +336,52 @@ Measured on the same workload, changeset vs per-row:
     500 new rows    749ms -> 271ms
      50 changed     100ms ->  13ms
       1 changed       4ms ->   5ms
+
+---
+
+## G5 — one hand-over, one identity (2026-09-20)
+
+**Closed.** A warden takes money across a counter once. If it clears an arrear
+and pays the current month, that single act writes a collection on TWO records
+— and nothing on either said they were the same hand-over. The student holds
+one slip; the trail held N unrelated entries, and "show me everything on this
+receipt" had no answer.
+
+`newReceiptId()` in **`finance.js`**. A posting generates one id and every
+collection it makes carries it on its own trail entry. Written only when the
+caller names one, so a record collected by an older build carries no id rather
+than a made-up one.
+
+**It is not `p.receiptNo`.** That is the printed, human-facing number, assigned
+lazily per RECORD the first time a receipt is printed (`receipt.js`). This is
+assigned at COLLECTION time and groups the entries of one posting across
+however many records it touched. A receipt reads the first; the trail reads the
+second. `_ledgerPost()` prefers the posting id and keeps `receiptNo` as the
+fallback, so nothing that used to be grouped by it stops being grouped.
+
+One id per posting, at every site that collects:
+
+    submitAddPayment()          the month on the form AND every arrear, one visit
+    submitPaymentForStudent()   the same, from the student panel
+    pfApplyOutstandings()       takes the CALLER'S id — generating its own would
+                                give each arrear a separate hand-over
+    payBulkMarkPaid()           one press settling N rows is one act
+    markPaymentPaid() x2        the single-row paths
+    submitEditPayment()         receiving the pending amount
+    submitReversePayment()      money handed BACK is one act too
+    confirmCancellation()       a checkout settles or refunds every month at once
+
+`ledgerEntriesForReceipt(id)` reads one posting back out of the immutable
+ledger. An empty id matches NOTHING on purpose: entries written before this
+carry no posting, and they must not all group together as one enormous
+hand-over that never happened.
+
+**No table, no migration, no second authority** — the decision in §1. The id is
+inert: a test asserts a collection stamped with one and a collection without
+leave identical `amount`, `unpaid` and `calculateOutstanding()`.
+
+Cover: `tests/finance.test.js` (+6, 85 total) and
+`tests/receipt-identity.spec.js`, which drives the real Add Payment page —
+arrears allocator included — and reads the posting back across both records.
+Against the arrears path with the id removed it fails with "the arrear
+collection carries no posting id".

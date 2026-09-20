@@ -977,10 +977,13 @@ async function payBulkMarkPaid() {
       // legacy record and used to mark a real debtor Paid having collected
       // nothing at all.
       let collected = 0;
+      // One press settling N rows is one act, so one posting id for the lot
+      // (audit G5) — that is what makes it reviewable afterwards as a batch.
+      const _rcpBulk = newReceiptId();
       targets.forEach(p => {
         const due = calculateOutstanding(p);
         if (due <= 0) { p.status = 'Paid'; p.paidDate = p.paidDate || today(); return; }
-        collected += applyPayment(p, { amount: due, date: today(),
+        collected += applyPayment(p, { amount: due, date: today(), receiptId: _rcpBulk,
                                        note: 'Pending cleared (bulk)' }).applied;
       });
       if (collected > 0) logActivity('Payment Collected',
@@ -1319,7 +1322,8 @@ async function markPaymentPaid(id) {
   }
   // Step 10: an account that confirms money with a PIN does so here (pin.js).
   if (pinNeeded() && !(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;
-  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared',
+                             receiptId: newReceiptId() });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
   p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
@@ -1346,7 +1350,8 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
     return;
   }
   if (pinNeeded() && !(await pinConfirm({ what: 'collecting ' + fmtPKR(due) }))) return;   // step 10
-  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared' });
+  const r = applyPayment(p, { amount: due, date: today(), note: 'Pending cleared',
+                             receiptId: newReceiptId() });
   p.discount = p.discount || 0;
   const collectionNote = `Remaining ${fmtPKR(r.applied)} collected on ${today()}`;
   p.notes = p.notes ? p.notes + ' | ' + collectionNote : collectionNote;
@@ -1900,10 +1905,13 @@ function pfOutstandingAllocations() {
    Through applyPayment() (§14), so an arrear collected here is written exactly
    the way one collected from the row action is: same balance, same trail entry,
    same status and paidDate rules. It used to compute its own. */
-function pfApplyOutstandings(allocations, method, date) {
+/* `receiptId` is the CALLER'S — one hand-over that clears two earlier months
+   and pays this one is a single posting, and all of it carries one id (audit
+   G5). Generating one here would give each arrear its own. */
+function pfApplyOutstandings(allocations, method, date, receiptId) {
   const done = [];
   allocations.forEach(({ payment: p, amount }) => {
-    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected' });
+    const r = applyPayment(p, { amount, method, date, note: 'Arrears collected', receiptId });
     if (!r.ok) return;
     done.push((p.month || '—') + ' ' + fmtPKR(r.applied));
   });
@@ -2409,6 +2417,8 @@ function recalcUnpaidPS() {
 }
 async function submitPaymentForStudent() {
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
+  // One visit, one posting (audit G5) — see submitAddPayment().
+  const _rcp = newReceiptId();
   const studentId   = document.getElementById('f-ps-studentId')?.value || '';
   const t           = DB.students.find(s => s.id === studentId);
   if (!t) { toast('Student not found', 'error'); return; }
@@ -2525,7 +2535,7 @@ async function submitPaymentForStudent() {
         // The one collection path (§6): every entry point posts money here.
         const gotA = received > 0
           ? applyPayment(alreadyPending, { amount: received, method: newMethod, date: newDate,
-                                           note: 'Collected', reference: newRef })
+                                           note: 'Collected', reference: newRef, receiptId: _rcp })
           : null;
 
         logActivity('Payment Updated', `${t.name} — ${enteredMonth} (existing record updated, no duplicate created)`, 'Finance');
@@ -2603,6 +2613,7 @@ async function submitPaymentForStudent() {
   billFreeze(_recPS, 'student-panel');   // Phase 6 — before any collection
   if (money(paidAmount) > 0) {
     applyPayment(_recPS, {
+      receiptId: _rcp,
       amount: money(paidAmount),
       method: document.getElementById('f-ps-method')?.value || 'Cash',
       date:   document.getElementById('f-ps-date')?.value || today(),
@@ -3241,6 +3252,11 @@ function pfCount() {
   if (ta && el) el.textContent = ta.value.length + '/250';
 }
 async function submitAddPayment() {
+  /* ONE VISIT, ONE POSTING (audit G5). This form can write the selected month
+     AND any number of earlier months in one press. They are one hand-over —
+     the student is given one slip — so every collection it makes carries this
+     id, whichever of the branches below actually runs. */
+  const _rcp = newReceiptId();
   // Try to auto-select if only one student matches the search text
   const searchEl = document.getElementById('f-pstudent-search');
   const hiddenEl = document.getElementById('f-pstudent');
@@ -3297,7 +3313,7 @@ async function submitAddPayment() {
         if (pinNeeded() && !(await pinConfirm({ what: 'collecting arrears' }))) return;   // step 10
         const aMethod = document.getElementById('f-pmethod')?.value || 'Cash';
         const aDate   = document.getElementById('f-pdate')?.value   || today();
-        const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate);
+        const aDesc   = pfApplyOutstandings(arrearsOnly, aMethod, aDate, _rcp);
         logActivity('Arrears Collected', `${tName} — ${aDesc}`, 'Finance');
         await saveDB(); closeModal(); renderPage('payments');
         toast(`Arrears posted to ${arrearsOnly.length} earlier month(s) for ${tName} · `
@@ -3403,7 +3419,7 @@ async function submitAddPayment() {
           // The one collection path (§6).
           const gotB = received > 0
             ? applyPayment(alreadyPending2, { amount: received, method: newMethod, date: newDate,
-                                              note: 'Collected',
+                                              note: 'Collected', receiptId: _rcp,
                                               reference: (document.getElementById('f-pref')?.value || '').trim() })
             : null;
 
@@ -3415,7 +3431,7 @@ async function submitAddPayment() {
             alreadyPending2.arrearsCollected = (alreadyPending2.arrearsCollected || []).concat(
               arrearsU.map(a => ({ month: a.payment.month || '—', amount: a.amount, date: newDate })));
           }
-          const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate) : '';
+          const arrearsUDesc = arrearsU.length ? pfApplyOutstandings(arrearsU, newMethod, newDate, _rcp) : '';
 
           logActivity('Payment Updated', `${tName} — ${enteredMonth2} (existing record updated, no duplicate created)`, 'Finance');
           if (arrearsUDesc) logActivity('Arrears Collected', `${tName} — ${arrearsUDesc}`, 'Finance');
@@ -3501,6 +3517,7 @@ async function submitAddPayment() {
       method: document.getElementById('f-pmethod')?.value || 'Cash',
       date:   document.getElementById('f-pdate')?.value || today(),
       note:   'Collected',
+      receiptId: _rcp,
       reference: (document.getElementById('f-pref')?.value || '').trim(),
     });
   } else {
@@ -3512,7 +3529,7 @@ async function submitAddPayment() {
   const arrearsDesc = arrears.length
     ? pfApplyOutstandings(arrears,
         document.getElementById('f-pmethod')?.value || 'Cash',
-        document.getElementById('f-pdate')?.value || today())
+        document.getElementById('f-pdate')?.value || today(), _rcp)
     : '';
 
   logActivity('Payment Added', `${finalName||'student'} — ${document.getElementById('f-pmonth')?.value||''}`, 'Finance');
@@ -4139,7 +4156,8 @@ async function submitEditPayment(id) {
   let got = null;
   if (receive > 0) {
     got = applyPayment(p, { amount: receive, method: rcvMethod, date: rcvDate,
-                            note: 'Pending received', reference: rcvRef });
+                            note: 'Pending received', reference: rcvRef,
+                            receiptId: newReceiptId() });
     if (!p.date) p.date = rcvDate;
   }
   // Editing one month's record does NOT re-price the student.
@@ -4275,7 +4293,8 @@ async function submitReversePayment(id) {
   if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
   if (pinNeeded() && !(await pinConfirm({ what: 'reversing ' + fmtPKR(amount) }))) return;   // step 10
 
-  const r = reversePayment(p, { amount, reason, date });
+  // Money handed back is one act as well (audit G5).
+  const r = reversePayment(p, { amount, reason, date, receiptId: newReceiptId() });
   if (!r.ok) {
     toast(r.reason === 'exceeds-collected'
         ? 'That is more than was collected on this record (' + fmtPKR(r.max) + ')'
