@@ -99,6 +99,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbUpsert:      (table, id, record) => ipcRenderer.invoke('db:upsert',      table, id, record),
   dbDelete:      (table, id)         => ipcRenderer.invoke('db:delete',      table, id),
   dbBulkReplace: (table, records)    => ipcRenderer.invoke('db:bulkReplace', table, records),
+  // One save, one SQLite transaction (finance Phase 7). See db:applyChangeset
+  // in main.js — the per-row channels above stay for the fallback path.
+  dbApplyChangeset: (changeset)      => ipcRenderer.invoke('db:applyChangeset', changeset),
   dbGetSetting:  (key)               => ipcRenderer.invoke('db:getSetting',  key),
   dbSetSetting:  (key, value)        => ipcRenderer.invoke('db:setSetting',  key, value),
   // §17. dbHealth answers even when the database does not open — that is the

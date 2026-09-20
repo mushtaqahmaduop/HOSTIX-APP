@@ -2256,6 +2256,70 @@ ipcMain.handle('db:bulkReplace', (_e, table, records) => {
   } catch (e) { console.error('[DB] bulkReplace:', e.message); return _writeFailure(e); }
 });
 
+/* ── ONE SAVE, ONE TRANSACTION (finance Phase 7, audit G10) ──────────────────
+
+   saveDB() used to walk the tables and await an IPC call PER CHANGED ROW, then
+   the settings, then the ledger. Every one of those is its own implicit
+   transaction, so a crash, a power cut or a licence refusal partway through
+   left some of a save on disk and the rest of it gone — a payment row written
+   with its student's updated balance missing, or money recorded with no ledger
+   entry behind it. §29 asks for atomicity and this was the gap.
+
+   The renderer now sends the whole save as one changeset and it is applied
+   inside a single db.transaction(): all of it lands, or none of it does.
+
+   THE GATES RUN FIRST, FOR EVERY TABLE, BEFORE ANYTHING IS WRITTEN. A refusal
+   part-way through would otherwise roll back cleanly but still have to be
+   reported as a partial intent; checking up front means the answer is the same
+   whether the licence refuses the first table or the last.
+
+   The ledger travels in the same transaction rather than in a call after it.
+   ledgerStore.append() opens its own db.transaction(), which better-sqlite3
+   runs as a SAVEPOINT when nested — its append-only guard still applies, and a
+   refusal now takes the records down with it instead of leaving money on disk
+   with no entry explaining it.                                              */
+ipcMain.handle('db:applyChangeset', (_e, changeset) => {
+  try {
+    const cs     = changeset || {};
+    const tables = cs.tables || {};
+    _assertDbWritable();
+    for (const t of Object.keys(tables)) { _assertRendererTable(t); _assertWritable(t); }
+    if (cs.settings !== undefined) _assertWritable('settings');
+    const entries = Array.isArray(cs.ledger) ? cs.ledger : [];
+    if (entries.length) _assertWritable(ledgerStore.TABLE);
+
+    let upserts = 0, deletes = 0, ledgerInserted = 0;
+    const tx = db.transaction(() => {
+      for (const t of Object.keys(tables)) {
+        const ops = tables[t] || {};
+        for (const r of (ops.upsert || [])) { if (!r || r.id == null) continue; _dbInsert(t, r.id, r); upserts++; }
+        const del = db.prepare(`DELETE FROM ${t} WHERE id = ?`);
+        for (const id of (ops.remove || [])) { del.run(id); deletes++; }
+      }
+      if (cs.settings !== undefined) {
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+          .run('hostelSettings', JSON.stringify(cs.settings));
+      }
+      if (entries.length) {
+        // append() reports a refusal rather than throwing it. Inside this
+        // transaction it has to throw, or the records would commit around it.
+        const r = ledgerStore.append(db, entries);
+        if (!r || r.ok === false) {
+          const err = new Error((r && r.error) || 'The ledger could not be saved.');
+          err.code = (r && r.code) || 'LEDGER_REFUSED';
+          throw err;
+        }
+        ledgerInserted = r.inserted || 0;
+      }
+    });
+    tx();
+    return { ok: true, upserts, deletes, ledgerInserted };
+  } catch (e) {
+    console.error('[DB] applyChangeset:', e.message);
+    return _writeFailure(e);
+  }
+});
+
 /* THE STUDENT LEDGER'S OWN CHANNELS (warden ledger spec §2.1, schema Q4).
  *
  * Owner, 2026-09-14: the main process refuses any change or delete of a ledger

@@ -153,7 +153,7 @@ as before; only new collections are written differently.
 3. ~~Month-domain layer — G7, and G9 with it~~ — done, see below.
 4. ~~Historical snapshots — G8~~ — done (Phase 5, `2b8c69c`).
 5. ~~Bill immutability — G6~~ — done, see below.
-6. Persistence atomicity — G10.
+6. ~~Persistence atomicity — G10~~ — done, see below.
 
 Receipt identity (G5) lands with 3 or 5, whichever reaches it first.
 
@@ -285,3 +285,53 @@ student's CURRENT rate — the `_own` rule in `showEditPaymentModal()`. So a ren
 corrected on an unpaid record reverts when the form is reopened. That is the
 documented intent (a bill follows the student's price until money is taken),
 but it surprised this phase's test and may surprise a warden.
+
+---
+
+## Phase 7 — one save, one transaction (2026-09-20)
+
+**G10 closed.** `saveDB()` walked the tables and awaited an IPC call **per
+changed row**, then the settings, then the ledger. Every one of those is its own
+implicit transaction, so a crash, a power cut or a licence refusal partway
+through left part of a save on disk and lost the rest — a payment row written
+while the student's balance was not, or money recorded with no ledger entry
+behind it.
+
+The renderer now builds ONE changeset (`_buildChangeset()` in `storage.js` —
+the same diff the surgical save always computed, lifted out) and sends it on a
+new `db:applyChangeset` channel. The main process applies the whole thing
+inside a single `db.transaction()`: all of it lands, or none of it does.
+
+**The ledger travels in the same transaction.** It used to be a separate call
+after the rows, so a refusal there left money on disk with nothing explaining
+it. `ledgerStore.append()` opens its own `db.transaction()`, which
+better-sqlite3 runs as a SAVEPOINT when nested, so its append-only guard still
+applies — and a refusal now takes the records down with it. `ledgerPending()` /
+`ledgerMarkFlushed()` hand the queue to the save and are only cleared once the
+transaction has committed.
+
+**The gates run first, for every table, before anything is written** — the
+licence, the database health, and the per-table write rules. A blocked table
+refuses the save whole rather than committing the allowed tables around it.
+`tests/licence-enforcement.spec.js` now covers the new channel, including that
+a changeset carrying ONLY the activity log is still allowed during a lockout
+(§18 keeps the audit trail recording).
+
+**A refusal does not fall back.** `ok:false` is a decision and the transaction
+has already rolled back; retrying down the `_saveDBFull()` path would rewrite
+every table with `dbBulkReplace` and only THEN hit the same refusal, leaving on
+disk exactly the records the refusal existed to prevent. The full rewrite stays
+as the safety net for a broken channel, and the per-row path stays for an
+installed build whose preload predates this.
+
+Cover: `tests/save-atomicity.spec.js` — a save carrying record changes AND a
+ledger entry that rewrites history is refused, and the database is read back
+through `db:all` to prove the rename and the payment row never landed. Against
+the same handler with the transaction wrapper removed the test fails with
+"the student rename committed although the save was refused".
+
+Measured on the same workload, changeset vs per-row:
+
+    500 new rows    749ms -> 271ms
+     50 changed     100ms ->  13ms
+      1 changed       4ms ->   5ms

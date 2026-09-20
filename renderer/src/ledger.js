@@ -412,6 +412,17 @@ function ledgerImportIfEmpty() {
 }
 
 /** Hand unsaved entries to the main process. Called by saveDB(); throws on refusal. */
+/* The entries a save still has to carry, and the acknowledgement that it did.
+   saveDB() sends them INSIDE its changeset so the records and the entries that
+   explain them commit together (finance Phase 7); ledgerFlush() below stays for
+   the fallback path and for browser dev mode. Nothing else may empty the queue:
+   dropping an entry loses the only immutable record of a money movement. */
+function ledgerPending() { return _ledgerUnsaved.slice(); }
+
+function ledgerMarkFlushed(n) {
+  _ledgerUnsaved = _ledgerUnsaved.slice(Math.max(0, Number(n) || 0));
+}
+
 async function ledgerFlush() {
   if (!_ledgerUnsaved.length) return true;
   const api = (typeof window !== 'undefined') ? window.electronAPI : null;

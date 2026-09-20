@@ -231,8 +231,80 @@ function _showSaveFailure(detail) {
 }
 
 // ── Save DB ───────────────────────────────────────────────────────────────────
+/* ── WHAT THIS SAVE CHANGES ──────────────────────────────────────────────────
+   The diff the surgical save has always computed, lifted out so it can be sent
+   as one changeset instead of driven as a loop of IPC calls. `remove` rather
+   than `delete`, which is a reserved word and reads badly as a property.     */
+function _buildChangeset() {
+  const tables = {};
+  let n = 0;
+  for (const [dbKey, table] of Object.entries(_TABLE_MAP)) {
+    const prev = _dbSnapshot[dbKey] || new Map();
+    const cur  = DB[dbKey] || [];
+    const seen = new Set();
+    const upsert = [], remove = [];
+    for (const r of cur) {
+      if (!r || r.id == null) continue;
+      seen.add(r.id);
+      if (prev.get(r.id) !== JSON.stringify(r)) upsert.push(r);
+    }
+    for (const id of prev.keys()) if (!seen.has(id)) remove.push(id);
+    if (upsert.length || remove.length) { tables[table] = { upsert, remove }; n += upsert.length + remove.length; }
+  }
+  return { tables, count: n };
+}
+
 async function saveDB() {
   if (typeof enforceDataRetention === 'function') enforceDataRetention();
+
+  /* ── ONE SAVE, ONE TRANSACTION (finance Phase 7, audit G10) ────────────────
+     This walked the tables and awaited an IPC call PER CHANGED ROW, then the
+     settings, then the ledger — each its own implicit transaction. A crash, a
+     power cut or a licence refusal partway through left some of the save on
+     disk and the rest gone: a payment written while the student's balance was
+     not, or money recorded with no ledger entry behind it.
+
+     The whole save now goes as one changeset, applied inside a single
+     db.transaction() in the main process. The ledger travels with it, so the
+     records and the entries that explain them commit together or not at all.
+
+     THE OLD PATH IS KEPT BELOW, not deleted: an installed build whose preload
+     predates this channel still has to be able to save. */
+  if (window.electronAPI && window.electronAPI.dbApplyChangeset) {
+    try {
+      const cs = _buildChangeset();
+      const pending = (typeof ledgerPending === 'function') ? ledgerPending() : [];
+      const res = await window.electronAPI.dbApplyChangeset({
+        tables: cs.tables, settings: DB.settings, ledger: pending,
+      });
+      /* A REFUSAL IS NOT A REASON TO FALL BACK. The main process answering
+         ok:false is a decision — the licence blocks this table, the file is
+         damaged, the ledger will not have history rewritten — and the whole
+         transaction has already rolled back. Retrying it down the full-rewrite
+         path would write every table with dbBulkReplace and only THEN hit the
+         same refusal, leaving on disk exactly the records the refusal existed
+         to prevent. The fallback below is for a broken CHANNEL, not a No. */
+      if (res && res.ok === false) {
+        console.error('[HOSTYLLO] save refused:', res.error, res.code || '');
+        _showSaveFailure(res.error);
+        return false;
+      }
+      if (!res) throw new Error('The save got no answer.');
+      // Only once the transaction has committed. Dropping these earlier would
+      // lose the only immutable record of a money movement on a failed save.
+      if (pending.length && typeof ledgerMarkFlushed === 'function') ledgerMarkFlushed(pending.length);
+      _takeFullSnapshot();
+      _clearSaveFailure();
+      if (typeof updateSidebar         === 'function') updateSidebar();
+      if (typeof renderSidebarCalendar === 'function') renderSidebarCalendar();
+      return true;
+    } catch (e) {
+      // The channel itself broke — not an answer, so there is nothing to trust
+      // about what is on disk. The full rewrite is the safety net for that.
+      console.error('[HOSTYLLO] changeset save could not be sent, rewriting in full:', e);
+      return _saveDBFull();
+    }
+  }
 
   if (window.electronAPI && window.electronAPI.dbUpsert) {
     try {
