@@ -1,8 +1,6 @@
 /* ─── HOSTYLLO — ISSUES (Maintenance & Complaints) MODULE ────────────────────
    Contains: renderIssues, showIssueModal, saveIssue,
-             resolveMaintenance, progressMaintenance, deleteMaintenance,
-             resolveComplaint, deleteComplaint,
-             showAddMaintenanceModal, showAddComplaintModal
+             resolveMaint, progressMaint, delMaint, resolveComp, delComp
 
    REDESIGNED 2026-09-08 to the owner's references `complaints2.png` (the
    register) and `add complaaint and maintinanace.png` (both forms).
@@ -1229,18 +1227,9 @@ async function delComp(id){
    any hand-written onclick used, and they cost four lines. Do not add a comment
    claiming a caller without checking: the previous one said "so dashboard
    alerts still work", and the dashboard navigates to this page instead. */
-function resolveMaintenance(id){resolveMaint(id);}
-function progressMaintenance(id){progressMaint(id);}
-function deleteMaintenance(id){delMaint(id);}
-function resolveComplaint(id){resolveComp(id);}
-function deleteComplaint(id){delComp(id);}
 // `showAddIssueModal` is what the older call sites and the keyboard shortcut
 // use; it is the add form, which is showIssueModal with no record.
 function showAddIssueModal(){showIssueModal();}
-function showAddMaintenanceModal(){issuesTab='maintenance';showIssueModal();}
-function showAddComplaintModal(){issuesTab='complaints';showIssueModal();}
-
-
 // ══════════════════════════════════════════════════════════════════
 // RECEIPT GENERATOR
 // ══════════════════════════════════════════════════════════════════

@@ -279,11 +279,6 @@ function payStatusIcon(s) {
    fmtPKRk() already implements the spec's thresholds exactly (§7: PKR 8K,
    PKR 476.5K, PKR 1.24M), so this adds the tooltip and nothing else. Both
    halves come from the one formatter, so there is never a second "PKR". */
-function payMoney(n) {
-  const compact = fmtPKRk(n), exact = fmtPKR(n);
-  return compact === exact ? compact : `<span title="${exact}">${compact}</span>`;
-}
-
 /* The split behind a Charge/Mo figure, for its tooltip.
 
    NOT chargesBreakdown(). That helper reads resolveCharges()'s shape — it opens
@@ -328,10 +323,6 @@ function payAvatarHue(name) {
    well as the first seven.
 
    cnicHtml() returns escaped markup and adds the hover reveal. */
-function payMaskCnic(c) {
-  return cnicHtml(c);
-}
-
 // Every month present in the data, newest first — the month select is built
 // from real records, so it can never offer a month with nothing behind it.
 /* THE PICKER LISTS MONTH KEYS, NOT WHATEVER STRING IS IN THE RECORD (owner,

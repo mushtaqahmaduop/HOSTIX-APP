@@ -455,15 +455,6 @@ var issuesTab = 'all';
 
 
 // ── SETTINGS DROPDOWN ────────────────────────────────────────────────────────
-function toggleSettingsDropdown() {
-  const dd = document.getElementById('settings-dropdown');
-  const ch = document.getElementById('settings-chevron');
-  if (!dd) return;
-  const open = dd.style.display === 'block';
-  dd.style.display = open ? 'none' : 'block';
-  if (ch) ch.style.transform = open ? '' : 'rotate(180deg)';
-}
-
 // ── FORMER STUDENTS — search & restore ─────────────────────────────────────
 // NOTE: showFormerStudentsModal() is defined in src/modules/students.js
 

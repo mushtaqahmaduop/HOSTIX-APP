@@ -108,11 +108,6 @@ function _cancNextSeq() {
 
 /* Room types carry their own colour in settings — that is data, not styling, so
    the type chip uses it rather than a decorative hue. */
-function _cancTypeColor(name) {
-  const t = ((DB.settings && DB.settings.roomTypes) || []).find(x => x.name === name);
-  return t && t.color ? t.color : '';
-}
-
 function _cancInitials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '—';
@@ -977,10 +972,6 @@ function cafCount() {
   if (box && out) out.textContent = box.value.length + '/500';
 }
 
-function prefillCancStudentInfo(studentId) {
-  selectCancStudent(studentId);
-}
-
 async function saveCancellation() {
   const studentId = document.getElementById('canc-student').value;
   const vacateDate = document.getElementById('canc-vacate').value;
@@ -1407,8 +1398,6 @@ function exportCancellationsExcel() {
 }
 
 /* The name the toolbar button has always called. */
-function downloadCancellationReport() { exportCancellationsPDF(); }
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 /* ── WHAT THE CHECKOUT DID WITH THE MONEY ───────────────────────────────────

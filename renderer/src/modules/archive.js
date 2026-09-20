@@ -927,8 +927,6 @@ function _arcExportDef() {
 function printArchive()        { EXPORT.pdf(_arcExportDef()); }
 function exportArchivePDF()    { EXPORT.pdf(_arcExportDef()); }
 function exportArchiveExcel()  { EXPORT.excel(_arcExportDef()); }
-function downloadArchiveCSV()  { exportArchiveExcel(); }
-
 /* ── ONE STUDENT'S PERIOD RECORD ─────────────────────────────────────────────
    A record document rather than a register: the identity block is `facts`, and
    the single table is that student's payments. §5 puts a document of this

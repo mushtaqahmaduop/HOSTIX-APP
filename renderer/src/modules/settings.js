@@ -7,12 +7,11 @@
              saveIssue/maintenance/complaints/notices/fines/inspections/billsplits,
              renderActivityLog, calcBillSplit, saveBillSplit, saveCheckin,
              deleteCheckin, saveNotice, deleteNotice, saveFine, payFine,
-             deleteFine, drawCharts, enforceDataRetention,
+             deleteFine, enforceDataRetention,
              (the logo uploader was removed — the brand mark is fixed)
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
-function drawCharts() {} // charts are rendered as HTML bars
 
 async function saveMaintenance() {
   const title = document.getElementById('mt-title')?.value?.trim();
@@ -823,13 +822,6 @@ async function rtStep(id, delta) {
   const next = Math.max(1, (Number(t.capacity) || 1) + delta);
   if (next === t.capacity) return;
   await rtSetCap(id, next);
-}
-
-async function saveRoomTypes() {
-  _rtTouch();
-  await saveDB();
-  rtRefreshStrip();
-  toast('Room types saved', 'success');
 }
 
 /* ── Reorder ─────────────────────────────────────────────────────────────────
@@ -2771,7 +2763,6 @@ function openLicenseSettingsWindow() {
     toast('License settings window not available in dev/browser mode.', 'info');
   }
 }
-function _doLicenseUnlock() { openLicenseSettingsWindow(); }
 async function liveUpdateSetting(key, val) {
   DB.settings[key] = val;
   await saveDB();
@@ -2969,10 +2960,6 @@ function _applyChargesToStudent(student, newRent, newMess, messOptIn) {
 }
 
 // Kept for older call sites that only know about rent.
-function _applyRentToStudentCore(student, newRent) {
-  _applyChargesToStudent(student, newRent, Number(student.mess) || 0, student.messOptIn);
-}
-
 /* ── ROOM RENT WRITE-THROUGH ──────────────────────────────────────────────────
    Rooms are the third copy of the price and were the one nothing wrote to:
    applyRentByType()/applyRentToAll() updated the room TYPE and the STUDENTS but
@@ -3378,12 +3365,6 @@ async function removeRoomType(id) {
   _rtTouch();
   await saveDB(); renderPage('settings'); toast('Room type removed','info');
 }
-async function addPaymentMethod() {
-  const val=document.getElementById('new-pm').value.trim();
-  if(!val||DB.settings.paymentMethods.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.paymentMethods.push(val);
-  await saveDB(); renderPage('settings'); toast('Payment method added','success');
-}
 async function removePaymentMethod(m) {
   if(DB.settings.paymentMethods.length<=1){toast('Must keep at least one method','error');return;}
   // Room types and floors have always refused to be removed while something is
@@ -3398,12 +3379,6 @@ async function removePaymentMethod(m) {
   logActivity('Payment Method Removed', m, 'Settings');
   await saveDB(); renderPage('settings');
 }
-async function addExpenseCategory() {
-  const val=document.getElementById('new-ec').value.trim();
-  if(!val||DB.settings.expenseCategories.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.expenseCategories.push(val);
-  await saveDB(); renderPage('settings'); toast('Category added','success');
-}
 async function removeExpenseCategory(c) {
   if(DB.settings.expenseCategories.length<=1){toast('Must keep at least one category','error');return;}
   const _inUse = (DB.expenses||[]).filter(e=>e.category===c).length;
@@ -3411,12 +3386,6 @@ async function removeExpenseCategory(c) {
   DB.settings.expenseCategories=DB.settings.expenseCategories.filter(x=>x!==c);
   logActivity('Expense Category Removed', c, 'Settings');
   await saveDB(); renderPage('settings');
-}
-async function addFloor() {
-  const val=document.getElementById('new-fl').value.trim();
-  if(!val||DB.settings.floors.includes(val)){toast(val?'Already exists':'Enter a name','error');return;}
-  DB.settings.floors.push(val);
-  await saveDB(); renderPage('settings'); toast('Floor added','success');
 }
 async function removeFloor(f) {
   if(DB.settings.floors.length<=1){toast('Must keep at least one floor','error');return;}

@@ -534,11 +534,6 @@ function _rptMonthsBetween(from, to) {
 // Transfers inside the report's current period. Every transfer figure on the
 // Reports page goes through this, so the overview card, the detail table and
 // the CSV export can no longer describe three different windows.
-function _periodTransfers() {
-  const keys = _rptKeys();
-  return (DB.transfers || []).filter(t => keys.some(k => String(t.date||'').startsWith(k)));
-}
-
 // The prefixes the current view covers.
 /** 'YYYY-MM' → 'Aug 2026'. Parses the key by hand rather than through
  *  new Date('YYYY-MM'), which UTC-parses and can slip to the previous month
@@ -2007,7 +2002,6 @@ function _rptDetailDef(type) {
 
 function downloadReportDetailPDF(detailId) { EXPORT.pdf(_rptDetailDef(detailId)); }
 function downloadDetailPDF(type)           { EXPORT.pdf(_rptDetailDef(type)); }
-function downloadDetailCSV(type)           { EXPORT.excel(_rptDetailDef(type)); }
 function downloadDetailExcel(type)         { EXPORT.excel(_rptDetailDef(type)); }
 
 /* ── THE PERIOD REPORT ───────────────────────────────────────────────────────

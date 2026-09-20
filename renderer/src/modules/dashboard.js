@@ -3149,7 +3149,6 @@ function _dashMonthExportDef(monthKey, label) {
 }
 
 function exportMonthExcel(monthKey, label) { EXPORT.excel(_dashMonthExportDef(monthKey, label)); }
-function exportMonthCSV(monthKey, label)   { exportMonthExcel(monthKey, label); }
 function printMonthReport(monthKey, label) { EXPORT.pdf(_dashMonthExportDef(monthKey, label)); }
 
 
@@ -3559,13 +3558,6 @@ function navigateToMonth(monthKey) {
 // downloadDetailCSV(type) is defined in src/modules/reports.js (loads after this
 // file and is a strict superset). The former copy here was dead-shadowed; removed.
 let calPopoverOpen = false;
-function calPopSelect(key, label) {
-  document.getElementById('cal-popover-el')?.remove();
-  calPopoverOpen=false;
-  showMonthDetailModal(key, label);
-}
-
-
 // checkAutoMonthAdvance() lived here. It ran at boot and raised a Pending
 // payment row against every active student for each month that had rolled
 // over since the last launch. Records the warden never entered were landing

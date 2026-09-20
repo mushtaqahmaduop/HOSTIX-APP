@@ -206,7 +206,6 @@ function calcEarned(key) {
   return calcRevenue(key) - calcExpenses(key);
 }
 // The old name. It had no callers left; it keeps the meaning it always had.
-function calcProfit(key) { return calcEarned(key); }
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── PAYMENT MONTH MATCHER ────────────────────────────────────────────────────

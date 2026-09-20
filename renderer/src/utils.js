@@ -112,12 +112,6 @@ function migrateStudentIdsToNumeric() {
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
-function toggleClearBtn(inputId, btnId) {
-  const inp = /** @type {HTMLInputElement} */ (document.getElementById(inputId));
-  const btn = document.getElementById(btnId);
-  if (!inp || !btn) return;
-  btn.classList.toggle('visible', inp.value.length > 0);
-}
 
 // Safe window.open() wrapper — handles popup blocker gracefully
 function safeOpenWindow(width, height) {
@@ -813,10 +807,6 @@ function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-function csvEsc(s) {
-  const v = String(s == null ? '' : s);
-  return '"' + v.replace(/"/g, '""') + '"';
-}
 
 // ── Input formatters ──────────────────────────────────────────────────────────
 function formatRoomNumber(inp) {
@@ -826,12 +816,6 @@ function formatRoomNumber(inp) {
 }
 function capFirstChar(inp) {
   if (inp.value.length === 1) inp.value = inp.value.toUpperCase();
-}
-function formScrollNext(inp) {
-  const field = inp.closest ? inp.closest('.field') : null;
-  if (!field) return;
-  const next = field.nextElementSibling;
-  if (next) next.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 // Capitalize ASCII only — protects Urdu/Arabic names
 function autoCapName(inp) {

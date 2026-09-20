@@ -233,10 +233,6 @@ async function exportBackup(mode) {
 // ─────────────────────────────────────────────────────────────────────────────
 // (Google Drive backup functions removed — backup is now download-only)
 // Stub no-ops to avoid errors from any remaining call sites:
-function getNextBackupLabel()        { return ''; }
-function updateBackupScheduleLabel() {}
-function sendBackupToDrive()         { exportBackup('json'); }
-function sendBackupToGmail()         { exportBackup('json'); }
 function checkAutoBackupSchedule()   {}
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -195,11 +195,6 @@ function stuFeeTitle(f) {
   return f.nextDueDate ? owed + ' · due ' + fmtDate(f.nextDueDate) : owed;
 }
 
-function stuStatusHue(s) {
-  return s === 'Active' ? 'dh-green' : s === 'Cancelling' ? 'dh-amber'
-       : s === 'Blacklisted' ? 'dh-red' : 'dh-slate';
-}
-
 /* The same four states as chip roles (design spec Part 4, 2026-09-16). The
    reasoning above is unchanged — amber is the live signal and belongs to
    'Cancelling', not to 'Left' — it is just said in roles now rather than in

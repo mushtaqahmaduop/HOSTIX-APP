@@ -534,7 +534,3 @@ function bkPasteRestore() {
 
 /* The page the old modal used to be. Kept because the command palette, the
    File menu and the backup-due toast all still call it by this name. */
-function showBackupRestorePage() {
-  backupTab = 'main';
-  navigate('backup');
-}

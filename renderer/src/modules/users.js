@@ -1295,8 +1295,6 @@ function usrWardenRail(u) {
 }
 
 function usrWardenOpen(id)  { usersRailFilter.page = 1; showWardenPanel(id); }
-function usrWardenClose()   { closeAccountPanel(); }
-
 /* ── EXPORTS — through the one engine (export/engine.js) ─────────────────────
    The document is the list on screen: the same rows, the same filters. */
 function _usrCollectionsExportDef() {
@@ -1578,7 +1576,6 @@ function refreshAccountPanel() {
 }
 
 function usrOpen(id) { showAccountPanel(id); }
-function usrClose() { closeAccountPanel(); }
 function usrReset() {
   usersFilter = { search: '', role: 'All', status: 'All', dept: 'All', page: 1, sel: usersFilter.sel };
   renderPage('users');

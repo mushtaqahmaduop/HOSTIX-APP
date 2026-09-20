@@ -1,6 +1,6 @@
 ﻿/* ─── HOSTYLLO — EXPENSES MODULE ─────────────────────────────────────────────
    Contains: renderExpenses, showAddExpenseModal, submitAddExpense,
-             showEditExpenseModal, submitEditExpense, deleteExpense
+             showEditExpenseModal, submitExpense, deleteExpense
    ─────────────────────────────────────────────────────────────────────────── */
 'use strict';
 
@@ -1037,8 +1037,6 @@ async function submitExpense(id) {
 
 /* The names the rest of the app calls. */
 async function submitAddExpense()      { return submitExpense(); }
-async function submitEditExpense(id)   { return submitExpense(id); }
-
 /* The deletion itself, with no confirmation of its own — both callers raise
    their own, and nesting them asked the warden the same question twice. */
 async function _expDoDelete(id) {
