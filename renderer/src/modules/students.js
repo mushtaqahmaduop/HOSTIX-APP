@@ -149,6 +149,7 @@ function studentsFiltered() {
     // which Number() reads as NaN and a plain string compare orders 1, 10, 2.
     room:   { get: t => { const r = byId.get(t.roomId); return r ? r.number : ''; }, cmp: cmpRoomNo },
     course: t => t.occupation || t.course || '',
+    admitted: t => t.joinDate || '',
     status: t => t.status,
     /* Ordered by urgency, not alphabetically: Overdue, Pending, Paid. Sorting a
        column of states by their spelling puts Overdue between Paid and Pending,
@@ -528,6 +529,7 @@ function renderStudents() {
           <col class="stu-col-id">      <!-- ID       -->
           <col class="stu-col-who">     <!-- student  -->
           <col class="stu-col-room">    <!-- room     -->
+          <col class="stu-col-adm">     <!-- admitted -->
           <col class="stu-col-contact"> <!-- contact  -->
           ${''/* NATIONALITY IS GONE (owner, 2026-09-15: "remove nationality
                  column from students page so that the CNIC, course and address
@@ -545,6 +547,14 @@ function renderStudents() {
           ${th('id','ID')}
           ${th('name','Student')}
           ${th('room','Room')}
+          ${''/* DATE OF ADMISSION (owner, 2026-09-20: "in students and payments
+                 there are no dates for date of admission and date of payment").
+                 The roster carried no date at all for a student still living
+                 here — statusDateNote() under Status only speaks for someone
+                 Leaving or Left. Width comes from the widest columns rather
+                 than from CNIC, course and address alone, which the owner had
+                 asked on 2026-09-15 to let breathe. */}
+          ${th('admitted','Admitted')}
           <th>Contact / emergency</th>
           <th>CNIC</th>
           ${th('course','Course')}
@@ -567,7 +577,7 @@ function renderStudents() {
           <th>Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length===0?`<tr><td colspan="11"><div class="ui-empty"><div class="ui-empty__t">No students match these filters.</div></div></td></tr>`:
+        ${_pg.slice.length===0?`<tr><td colspan="12"><div class="ui-empty"><div class="ui-empty__t">No students match these filters.</div></div></td></tr>`:
         _pg.slice.map(t=>{
           const room  = _roomById.get(t.roomId);
           const rtype = room ? getRoomType(room) : null;
@@ -611,6 +621,9 @@ function renderStudents() {
                 ${rtype&&rtype.name?`<div class="stu-room__t stu-room__type">${escHtml(rtype.name)}</div>`:''}
               </div>
             </td>
+            <td class="stu-c-adm">${t.joinDate
+              ? `<span class="stu-adm" title="${escHtml(fmtDate(t.joinDate))}">${escHtml(fmtDateShort(t.joinDate))}</span>`
+              : '<span class="stu-dash">—</span>'}</td>
             ${''/* THE WHATSAPP MARK BELONGS TO THE STUDENT'S NUMBER, not the
                    guardian's (owner, 2026-09-09). The first number the intake
                    form asks for IS the student's WhatsApp — it is how the

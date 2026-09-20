@@ -216,8 +216,10 @@ function renderArchive() {
     <span class="arc-bar__lbl">Month</span>
     <select class="arc-select" onchange="arcSetMonth(this.value)" title="Narrow to one month">${monthOpts}</select>
     <div class="arc-bar__end">
-      <button class="arc-btn" onclick="exportArchiveExcel()" title="Export the whole period to Excel — one sheet per section">${icon('download','xs')} Export Excel</button>
-      <button class="arc-btn arc-btn--primary" onclick="exportArchivePDF()" title="Export the whole period as a PDF document">${icon('print','xs')} Export PDF</button>
+      ${''/* One control, both formats inside it (owner, 2026-09-08 — the rule
+             the seven registers already follow; this screen was missed). */}
+      ${tbExport({ id: 'arc-export', cls: 'arc-btn arc-btn--primary',
+                   excel: 'exportArchiveExcel()', pdf: 'exportArchivePDF()' })}
     </div>
   </div>`;
 

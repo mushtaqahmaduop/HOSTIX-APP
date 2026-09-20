@@ -104,14 +104,15 @@
    wrong answer, not an untidy one. */
 .stu-table col.stu-col-sel     { width:2.6%; }
 .stu-table col.stu-col-id      { width:3.6%; }
-.stu-table col.stu-col-who     { width:15.3%; }
+.stu-table col.stu-col-who     { width:14%; }
 .stu-table col.stu-col-room    { width:9%; }
-.stu-table col.stu-col-contact { width:13.5%; }
-.stu-table col.stu-col-cnic    { width:12.4%; }
-.stu-table col.stu-col-course  { width:9.6%; }
-.stu-table col.stu-col-addr    { width:9%; }
-.stu-table col.stu-col-charge  { width:9.5%; }
-.stu-table col.stu-col-status  { width:9.8%; }
+.stu-table col.stu-col-adm     { width:7.5%; }   /* date of admission (owner, 2026-09-20) */
+.stu-table col.stu-col-contact { width:12.2%; }
+.stu-table col.stu-col-cnic    { width:10.6%; }
+.stu-table col.stu-col-course  { width:8.8%; }
+.stu-table col.stu-col-addr    { width:8%; }
+.stu-table col.stu-col-charge  { width:9%; }
+.stu-table col.stu-col-status  { width:9%; }
 .stu-table col.stu-col-acts    { width:5.2%; }
 .stu-table input[type=checkbox] { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
 
@@ -1877,3 +1878,10 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -4px 14px rgba(0,0,0,.30); }
 .esf-doc__a { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 .esf-doc__ask { font-size: var(--text-sm); color: var(--danger-fg); }
 .esf-doc__note { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--text-tertiary); }
+
+
+/* The admission date. Tabular figures so a column of dates lines up, and one
+   step down from the name beside it — it is a fact about the student, not the
+   thing the row is identified by. */
+.stu-adm { font-size: var(--text-xs); color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stu-c-adm { white-space: nowrap; }

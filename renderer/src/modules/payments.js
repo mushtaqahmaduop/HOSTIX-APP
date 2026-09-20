@@ -14,6 +14,29 @@
    they are DERIVED here rather than written back to the record.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* THE DAY MONEY LAST CAME IN (owner, 2026-09-20: "in students and payments
+   there are no dates for date of admission and date of payment").
+
+   The register showed `month` — what the record BILLS — and never the day
+   anybody paid, so a warden asking "when did this come in" had to open the
+   record. It is NOT a new figure: the instalment trail already carries the date
+   of every collection, and the latest of those is the answer. A record that has
+   collected nothing has no payment date and says so.
+
+   The fallback is for records written before the trail existed (finance Phase
+   1): they hold money with nothing behind it, and their own paidDate/date is
+   the only day on them. */
+function payLastCollectedOn(p) {
+  if (!p) return '';
+  const days = (p.partialPayments || [])
+    .filter(x => x && money(x.amount) > 0 && x.date)
+    .map(x => String(x.date).slice(0, 10))
+    .sort();
+  if (days.length) return days[days.length - 1];
+  if (money(p.amount) > 0) return String(p.paidDate || p.date || '').slice(0, 10);
+  return '';
+}
+
 // A pending payment is overdue once its own dueDate is in the past.
 function payIsOverdue(p) {
   if (!p || p.status === 'Paid') return false;
@@ -460,6 +483,7 @@ function payFiltered() {
     paid:    p => Number(p.amount || 0),
     unpaid:  p => outstandingOf(p),
     method:  p => p.method,
+    paidon:  p => payLastCollectedOn(p),
     status:  p => payStatusOf(p),
     // Sortable like the rest, as the reference draws them (owner, 2026-09-15).
     adm:     p => Number(p.admissionFee || p.fee || 0),
@@ -717,8 +741,6 @@ function renderPayments() {
       </div>
 
       <div class="pay-tools__end">
-        ${tbExport({ id: 'pay-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
-                     excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
         <button class="ui-btn ui-btn--secondary ui-btn--sm" onclick="generateMonthlyRents()" title="Create this month's rent records for every active student">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
           Generate<span class="pay-lbl-x"> Month</span>
@@ -729,6 +751,14 @@ function renderPayments() {
                  at the 1366 floor (owner, 2026-09-10: all options in one row). */}
           <span class="pay-lbl-x">Send </span>Reminders
         </button>
+        ${''/* EXPORT LAST, AS IT IS ON EVERY OTHER REGISTER (owner, 2026-09-20:
+               "move the export button in payment page to right"). It stood first
+               in this group, so the one control that is the same on all seven
+               list screens was the one that moved when you came from Students or
+               Expenses. Generate Month and Reminders act ON this month; Export
+               takes away what is on screen, and reads last. */}
+        ${tbExport({ id: 'pay-export', cls: 'ui-btn ui-btn--secondary ui-btn--sm',
+                     excel: 'exportPaymentsExcel()', pdf: 'exportPaymentsPDF()' })}
       </div>
     </div>
 
@@ -762,11 +792,12 @@ function renderPayments() {
           ${th('extra', 'Extra<br>(Rs.)', 'pay-col-num pay-col-x')}
           ${th('conc', 'Concession<br>(Rs.)', 'pay-col-num pay-col-x')}
           ${th('method', 'Method')}
+          ${th('paidon', 'Paid on', 'pay-col-date')}
           ${th('status', 'Status')}
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length === 0 ? `<tr><td colspan="14"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
+        ${_pg.slice.length === 0 ? `<tr><td colspan="15"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
         _pg.slice.map((p, i) => {
           const st     = DB.students.find(s => s.id === p.studentId);
           const room   = DB.rooms.find(r => String(r.number) === String(p.roomNumber));
@@ -830,6 +861,15 @@ function renderPayments() {
             <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span>${
               conc > 0 ? `<span class="pay-why">${escHtml(concD || 'No reason recorded')}</span>` : ''}</td>
             <td>${paid > 0 ? pmBadge(p.method) : '<span class="pay-dash">—</span>'}</td>
+            ${(() => { const d = payLastCollectedOn(p);
+               /* fmtDateShort, not fmtDate: it drops the year when it IS this
+                  year, which is the same width decision the students register
+                  made for its status column. With the full date the column ran
+                  106px and pushed the table 39px past the 1366 floor, clipping
+                  Actions. The full date stays on the hover. */
+               return d
+                 ? `<td class="pay-col-date" title="${escHtml(fmtDate(d))}">${escHtml(fmtDateShort(d))}</td>`
+                 : '<td class="pay-col-date"><span class="pay-dash">—</span></td>'; })()}
             <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
             <td class="pay-col-act">
               <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="event.stopPropagation();payRowMenu('${p.id}',this)"

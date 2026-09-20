@@ -1795,3 +1795,9 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    to state, broken across two lines. The label may wrap; the figure may not. */
 .pef-newbal > b { flex-shrink: 0; white-space: nowrap; }
 .pef-newbal > span { min-width: 0; }
+
+/* 7 — THE DAY MONEY CAME IN (owner, 2026-09-20). Nowrap because a date broken
+   across three lines ("11-" / "Sept-" / "2026") is taller than the row and
+   unreadable as a date; tabular figures so a column of them lines up. */
+.pay-col-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.pay-col-date { font-size: var(--text-xs); color: var(--text2); }

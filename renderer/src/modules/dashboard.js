@@ -2897,9 +2897,13 @@ function renderMonthModal(monthKey, monthLabel) {
       </table>
     </div>
   </div>`,
-  `<button class="btn btn-secondary" onclick="exportMonthExcel('${monthKey}','${escHtml(monthLabel)}')">${ICONS.download} Export Excel</button>
-   <button class="btn btn-secondary" onclick="printMonthReport('${monthKey}','${escHtml(monthLabel)}')">${ICONS.print} Export PDF</button>
-   <button class="btn btn-primary" onclick="closeModal()">${ICONS.check} Done</button>`
+  /* One control, both formats inside it (owner, 2026-09-08 — the rule the
+     registers follow; this dialog was missed). It opens UPWARD: this is a modal
+     footer, and `.modal { overflow: hidden }` would cut a menu dropping down. */
+  tbExport({ id: 'dashmo-export', cls: 'btn btn-secondary', up: true,
+             excel: `exportMonthExcel('${monthKey}','${escHtml(monthLabel)}')`,
+             pdf:   `printMonthReport('${monthKey}','${escHtml(monthLabel)}')` }) +
+  `<button class="btn btn-primary" onclick="closeModal()">${ICONS.check} Done</button>`
   );
 }
 

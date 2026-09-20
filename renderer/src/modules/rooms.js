@@ -316,12 +316,15 @@ function renderRooms() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M17.5 14.5v6"/><path d="M14.5 17.5h6"/></svg>
         Bulk Add
       </button>
-      ${tbExport({ id:'rms-export', cls:'rms-btn',
-                   excel:'exportRoomsExcel()', pdf:'exportRoomsPDF()' })}
       <button class="rms-btn" onclick="printSeatAvailability()" title="Print a room + occupancy sheet by floor">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
         Print
       </button>
+      ${''/* Export last, as on every other register (owner, 2026-09-20). Print
+             stays its own control: it makes a seat-availability sheet by floor,
+             not a copy of the list on screen, which is all the Export menu offers. */}
+      ${tbExport({ id:'rms-export', cls:'rms-btn',
+                   excel:'exportRoomsExcel()', pdf:'exportRoomsPDF()' })}
     </div>
   </div>
 

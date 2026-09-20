@@ -178,10 +178,12 @@ function _usrAccountsView(tabs) {
     </div>
     <div class="al-head__acts">
       <button class="set-btn set-btn--go" onclick="showUserEditor(null)">${icon('plus','xs')}Add user</button>
-      <button class="set-btn" onclick="exportUsersExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportUsersPDF()">${icon('print','xs')}Export PDF</button>
       <button class="set-btn" onclick="navigate('activitylog')">${icon('list','xs')}Audit log</button>
       <button class="set-btn" disabled title="There is no importer for accounts. Each one is created here, because a password has to be set for it.">${icon('upload','xs')}Import</button>
+      ${''/* One control, both formats inside it (owner, 2026-09-08), and last
+             in the row as it is on every register. */}
+      ${tbExport({ id: 'usr-export', cls: 'set-btn',
+                   excel: 'exportUsersExcel()', pdf: 'exportUsersPDF()' })}
     </div>
   </div>
   ${tabs}
@@ -444,11 +446,14 @@ function usrCollectionsView(tabs) {
         : 'Money you have collected and not yet handed over.'}</div>
     </div>
     <div class="al-head__acts">
-      <button class="set-btn" onclick="exportMyCollectionsExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportMyCollectionsPDF()">${icon('print','xs')}Export PDF</button>
       ${noHandover ? '' : `<button class="set-btn set-btn--go" id="usr-handover" ${why ? 'disabled' : ''}
           title="${escHtml(why || 'Send the money you hold to an administrator to count and approve.')}"
           onclick="usrHoShowSend()">${icon(why ? 'lock' : 'wallet','xs')}Hand over cash</button>`}
+      ${''/* One control, both formats inside it (owner, 2026-09-08), last in
+             the row. Hand over cash is the action on this screen and keeps
+             its place ahead of it. */}
+      ${tbExport({ id: 'mycol-export', cls: 'set-btn',
+                   excel: 'exportMyCollectionsExcel()', pdf: 'exportMyCollectionsPDF()' })}
     </div>
   </div>
   ${tabs}
@@ -1178,8 +1183,8 @@ function usrWardensView(tabs) {
       <div class="bk-head__s">What each account holds, and the handovers waiting for you to count.</div>
     </div>
     <div class="al-head__acts">
-      <button class="set-btn" onclick="exportWardensExcel()">${icon('fileSpreadsheet','xs')}Export Excel</button>
-      <button class="set-btn" onclick="exportWardensPDF()">${icon('print','xs')}Export PDF</button>
+      ${tbExport({ id: 'wrd-export', cls: 'set-btn',
+                   excel: 'exportWardensExcel()', pdf: 'exportWardensPDF()' })}
     </div>
   </div>
   ${tabs}

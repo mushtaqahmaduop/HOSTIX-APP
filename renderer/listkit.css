@@ -266,6 +266,11 @@ body.light-theme .lk-sin:focus {
 }
 .tb-menu.is-open { display: block; }
 
+/* Upward, for an Export that sits at the bottom of its container — a modal
+   footer, where `.modal { overflow: hidden }` would otherwise cut a menu that
+   drops down. Opening up keeps it inside the dialog. */
+.tb-menu--up { top: auto; bottom: calc(100% + 6px); }
+
 .tb-menu__i {
     display: flex;
     align-items: flex-start;
