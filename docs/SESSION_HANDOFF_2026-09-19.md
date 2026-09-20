@@ -72,30 +72,46 @@ revenue. `calcAvailableFund()`, `_rptTotals().net` and the archive's net are
 **Unchanged on purpose:** `calcCashReceived()` and `cashBreakdown()`. The
 Advance / Arrears drawer reconciliation is what cash is for.
 
-## The owner's Add / Edit Payment punch list (`44.png`) — 1 of 9 done
+## The owner's Add / Edit Payment punch list (`44.png`) — all 10 done
 
 The screenshot is the **Edit Payment** modal, not Add Payment.
 
-1. ~~No pending amount though 4,000 of 8,000 is paid~~ — **done**, `2d56c9d`
-2. ~~"Full pending" is locked~~ — **done**: same cause, it keys off pending > 0
-3. Search bar on Add Payment should be more vivid / visible — open
-4. The small descriptions under each heading ("Pick a student to load the
-   charge") — owner's sentence is cut off in the transcript; **ask what he
-   wants done with them** before touching them
-5. The form opens awkwardly — wants a smoother open — open
-6. "Receiving money field is very small" (`#f-precv`, `.pef-rcv__in`) — open
-7. Payment type (Rent only / Rent + Mess) is changeable on a record holding
-   money — owner's sentence is cut off; **ask** what the intended rule is
-8. "The form is very much crowded and looking as a slop" — a layout pass on
-   `.pef-layout` / the five sections — open
-9. "No refund strategy there" — the lock banner points at *Reverse a
-   collection*; the owner wants a refund path. **A policy question, not a
-   layout one — ask before building.** `calculateRefund()` exists in
-   `finance.js` and `_payRefund(p)` in `payments.js`
-10. "Recent payments" shows no history of full / partial instalments —
-    the card reads `ledgerEntriesFor(t.id)` filtered to `type === 'payment'`,
-    last 5; "View all" calls `stuAllPayments(t.id)` in `students.js:1884` —
-    open, not yet diagnosed
+| # | Item | Where |
+|---|---|---|
+| 1 | No pending amount though 4,000 of 8,000 is paid | `2d56c9d` |
+| 2 | "Full pending" is locked | `2d56c9d` — same cause |
+| 3 | Search bar more vivid / visible | `0017dde` |
+| 4 | The small grey lines under the headings are too dim | `0017dde` |
+| 5 | The form opens awkwardly | `0017dde` |
+| 6 | "Receiving money field is very small" | `0017dde` — 103px → 204px |
+| 7 | Payment type changeable on a record holding money | `0017dde` — locked |
+| 8 | "Crowded and looking as a slop" | `edea6fb` — partly; see below |
+| 9 | "No refund strategy there" | `617e306` |
+| 10 | Recent payments shows no instalment history | `0017dde`, fixed again in `617e306` |
+
+**1 and 2 were one bug.** `_pfAlready` is module state holding what the selected
+month has already collected. The ADD form writes it; the EDIT form never did,
+and keeps its own copy in the hidden `f-ppaid`. After any Add Payment form had
+run, the collection was subtracted twice. Reproduced exactly, down to the
+"Rs. 1,000 over what is outstanding" note.
+
+**Owner's rulings taken this session**, for the record:
+
+* the payment type is **locked once the record holds money** (nothing reads
+  `f-ptype` on save — the mess decision is the hidden `f-pmess-on` — so this is
+  display-only)
+* a refund is **recorded against this month, through `p.reversals`**. The entry
+  point on the Edit form calls the SAME `reversePayment()` the row menu does.
+  There is no second refund engine and there must not be one.
+* the hint lines were **too dim**, not unwanted — keep the wording, raise the
+  contrast
+
+**Item 8 is only part done, and the rest is the owner's call.** Measured on a
+1440x860 window: the sheet is now 1,034px of content in a 661px modal body
+(was 1,183). The remaining fat is the **Student information card, 241px**
+restating the name, room and status that the sheet's own title bar already
+carries. Trimming it to the identity strip plus the phone is worth about 120px
+more — but it is his screen, so ask before deleting fields from it.
 
 ## Known-failing at HEAD, NOT caused by the above
 
@@ -120,7 +136,7 @@ The profile must hold a `license.enc` or every spec times out at `#login-input`.
 
 ## Next
 
-Finish the punch list above — items 4, 7 and 9 need the owner's answer first.
+The punch list is done bar the Student-information question in item 8.
 Then finance **Phase 6** (bill immutability: `p.generated` snapshot frozen once
 money is held, later changes in `p.adjustments[]`) and **Phase 7** (`saveDB()`
 atomicity). One phase at a time, report after each.
