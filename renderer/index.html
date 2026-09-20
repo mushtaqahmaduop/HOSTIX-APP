@@ -494,6 +494,11 @@
              month it belongs to. It is here for the per-day payment dots. -->
         <div class="sb-month-picker__dayhead">
           <span id="sb-cal-current-lbl"></span>
+          <!-- Opens the full month report for the month being browsed. The day
+               and month cells still just navigate; see sbCalMonthReport(). -->
+          <button type="button" id="sb-cal-report" class="sb-month-picker__report"
+                  onclick="sbCalMonthReport(event)"
+                  title="Open the full report for this month — fee records, expenses and exports">Report</button>
           <span class="sb-month-picker__key"><i class="is-paid"></i>paid<i class="is-pend"></i>pending</span>
         </div>
         <div class="sb-month-picker__weekdays">

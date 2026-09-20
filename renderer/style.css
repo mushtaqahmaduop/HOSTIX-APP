@@ -983,6 +983,27 @@ input, select, textarea { font-family: var(--font); }
     font-weight: 700;
     color: var(--text-secondary);
 }
+/* The month report opener. Quiet by default — the day grid below it is what
+   this panel is for — and it sits between the month's name and the dot key so
+   it reads as an action ON that month. */
+.sb-month-picker__report {
+    margin-left: auto;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font: 700 9.5px var(--font);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.sb-month-picker__report:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.sb-month-picker__dayhead .sb-month-picker__key { margin-left: 0; }
+
 .sb-month-picker__key {
     display: flex;
     align-items: center;

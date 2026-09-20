@@ -2836,12 +2836,21 @@ function renderMonthModal(monthKey, monthLabel) {
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.money} Total Revenue</div>
       <div>${moneyValue(rev,{size:"section"})}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">${paidPays.length} payments</div>
+      ${''/* COLLECTIONS, NOT SETTLED RECORDS. This counted `paidPays` — records
+             whose status is Paid — under a figure that is calcRevenue(), every
+             rupee collected. A month where one student has paid 4,000 of 9,000
+             therefore read "Rs. 4,000 · 0 payments". Same fault as the Reports
+             donut (0d02260): a part payment is a payment. */}
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">${(() => {
+        const n = pays.reduce((s, p) => s + (p.partialPayments || []).filter(x => x && money(x.amount) > 0).length
+                                          + ((p.partialPayments || []).length ? 0 : (money(p.amount) > 0 ? 1 : 0)), 0);
+        return n + (n === 1 ? ' collection' : ' collections');
+      })()}</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.trendDown} Expenses</div>
       <div>${moneyValue(expTotal,{size:"section"})}</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} records</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">${exps.length} record${exps.length === 1 ? '' : 's'}</div>
     </div>
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px">${ICONS.bed.replace('icon','icon').slice(0,0)}${'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13a1 1 0 0 1 1 1v6a1 1 0 0 1-2 0v-6a1 1 0 0 1 1-1Zm7-9a1 1 0 0 1 1 1v15a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm7 4a1 1 0 0 1 1 1v11a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1Z"/></svg>'} Available Fund</div>

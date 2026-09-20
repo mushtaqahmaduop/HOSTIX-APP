@@ -183,6 +183,33 @@ function renderSidebarCalendar() {
   daysEl.innerHTML = html;
 }
 
+/* THE MONTH AS A DOCUMENT, not as a filter (2026-09-20).
+
+   showMonthDetailModal() — a month's KPIs, its fee records, its expense
+   register, Add Fee Record / Add Expense, and an Export of the lot — was
+   reachable only from a calendar popover that no longer exists. Nothing else
+   opened it: navigateToMonth(), which every cell here calls, re-filters the
+   page you are on and never opens a dialog. So a finished screen sat in the
+   build with no way in.
+
+   It hangs HERE, beside the name of the month being browsed, and nowhere near
+   the KPI cards: the owner locked those on 7 Sep because a tile that links to
+   a worse version of Reports makes the dashboard twitch under the pointer, and
+   counter-flow-decisions.spec.js holds them locked. The cells keep their one
+   job — picking a month moves the dashboard — and this is a second, explicit
+   action on the month you are LOOKING at, which is not necessarily the one the
+   dashboard is showing. */
+function sbCalMonthReport(ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const key = _sbCalYear + '-' + String(_sbCalMonth + 1).padStart(2, '0');
+  if (typeof showMonthDetailModal !== 'function') {
+    if (typeof toast === 'function') toast('The month report is unavailable', 'error');
+    return;
+  }
+  closeSbCal();
+  showMonthDetailModal(key, monthLabel(key));
+}
+
 /* Picking a month is the only thing here that moves the dashboard. */
 function sbCalPickMonth(m) {
   _sbCalMonth = m;
