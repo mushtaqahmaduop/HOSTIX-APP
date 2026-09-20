@@ -170,12 +170,28 @@ test('collected money is locked, and only its collector or an admin may change i
       document.getElementById('f-pedit-reason').value = 'Rent lowered for a shared room';
       await submitEditPayment(pid);
       const adj = DB.studentLedger.filter(e => e.paymentRecordId === pid && e.type === 'adjustment').pop();
-      return { noReason, rent: p().monthlyRent, amount: p().amount, method: p().method, reason: adj && adj.reason };
+      return { noReason, rent: p().monthlyRent, amount: p().amount, method: p().method,
+               trail: (p().partialPayments || []).map(x => x.amount + ':' + x.method),
+               reason: adj && adj.reason };
     }, pid);
     expect(edit.noReason, 'a charge changed without a reason').toBe(10000);
     expect(edit.rent).toBe(9000);
     expect(edit.amount, 'the locked Amount paid was saved over').toBe(7000);
-    expect(edit.method, 'the locked method changed').toBe('JazzCash');
+
+    /* THE RECORD'S METHOD IS THE COLLECTION THAT OPENED IT (§14 Rule 1, closed
+       in `2d770c9`). This asserted 'JazzCash' — Ali's, the LATEST collection —
+       which is the behaviour applyPayment() had when this test was written and
+       which was deliberately removed 40 commits later: a month opened in cash
+       and topped up by bank transfer was retroactively becoming a bank transfer
+       on the record, on its row, and on every receipt reprinted afterwards.
+
+       Sara opened this record in cash, so the record says Cash. Ali's JazzCash
+       is not lost — it is on HIS trail entry, which is where a receipt reads it,
+       and the assertion below is what actually protects that. Neither his
+       collection nor this bill edit may move the record's own method. */
+    expect(edit.method, 'the method of the collection that OPENED the record changed').toBe('Cash');
+    expect(edit.trail, 'a later collection lost the method it came in by')
+      .toEqual(['5000:Cash', '3000:JazzCash']);
     expect(edit.reason).toContain('Rent lowered for a shared room');
 
     // ── Delete: refused for a record holding money, admin included ──────────
