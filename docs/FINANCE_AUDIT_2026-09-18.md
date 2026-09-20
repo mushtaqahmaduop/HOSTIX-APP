@@ -151,8 +151,8 @@ as before; only new collections are written differently.
 2. ~~UI punch list~~ — done (#10 open, not reproduced).
 2b. ~~Available Fund on one basis~~ — done, see below.
 3. ~~Month-domain layer — G7, and G9 with it~~ — done, see below.
-4. Historical snapshots — G8.
-5. Bill immutability — G6.
+4. ~~Historical snapshots — G8~~ — done (Phase 5, `2b8c69c`).
+5. ~~Bill immutability — G6~~ — done, see below.
 6. Persistence atomicity — G10.
 
 Receipt identity (G5) lands with 3 or 5, whichever reaches it first.
@@ -224,3 +224,64 @@ G8, not here.
 Also in this pass (`0d02260`): the Reports payment-method donut counted Paid
 records only. It now counts every collection by the method on its own trail
 entry, and its total equals `calcRevenue()`.
+
+---
+
+## Phase 6 — the bill as it was first raised (2026-09-20)
+
+**G6 closed.** A record's charge fields are written in place, so the figure a
+month was ORIGINALLY billed at was gone the moment a rent was corrected or an
+extra added. The ledger records that it CHANGED — "Rent changed 8,000 → 9,000",
+with a reason, a date and an account — but recovering the opening bill meant
+replaying every entry on the record in order. "What did you charge me in
+August?" is a question a hostel is asked directly.
+
+`billSnapshot()`, `billFreeze()` and `billDrift()` in **`finance.js`** (§14).
+`p.generated` is written ONCE by whichever path raises the record and never
+rewritten — `billFreeze()` no-ops on a record that already has one, so it is
+safe to call twice and from anywhere. Five creation paths write it:
+
+    monthly-generate   generateMonthlyRents()
+    add-payment        submitAddPayment()        — before applyPayment()
+    student-panel      submitPaymentForStudent()
+    admission          the re-admission form (students.js)
+    excel-import       the spreadsheet importer (settings.js)
+
+**It is not a second answer to what is owed.** Nothing asks the snapshot what a
+month bills; `calculateBill()` and `outstandingOf()` remain the only
+authorities, and the two disagreeing is the whole point of keeping it. Covered
+by a test that asserts exactly that.
+
+**Not backfilled.** Records raised before this have no snapshot, `billDrift()`
+returns null, and the screens say nothing rather than guessing. Deriving one
+from the ledger would state a figure the hostel never billed, on records whose
+ledger is incomplete.
+
+The Edit Payment sheet shows **"Billed when raised"** in its summary card, and
+only on a record whose bill has actually moved; the hover names what changed,
+when it was raised and by whom, and points at the ledger for the reasons.
+
+Cover: `tests/finance.test.js` (+9, 79 total) and `tests/bill-snapshot.spec.js`
+— generate, edit through the real form, collect, and a legacy record.
+
+### `p.adjustments[]` was NOT built, deliberately
+
+The decision recorded for this phase was "snapshot at generation, freeze once
+money is held, later changes in `p.adjustments[]`". The first two are built.
+The third is **already** in the student ledger: `_ledgerDiff()` posts every
+charge change as an immutable `adjustment` entry carrying the part, the delta,
+"Rent changed 8,000 → 9,000", the reason, the date, the account and a running
+balance — and the main process refuses UPDATE and DELETE on that table.
+
+A second array on the record would be a second answer to "how did this bill
+change", which is the D-1 shape §14 exists to prevent. Flagged for the owner
+rather than built. If he wants it, the honest form is a read-only accessor over
+the ledger (`billHistory(p)`), not a new store.
+
+### Noticed, not changed
+
+Reopening the Edit form on a record holding NO money re-prices it from the
+student's CURRENT rate — the `_own` rule in `showEditPaymentModal()`. So a rent
+corrected on an unpaid record reverts when the form is reopened. That is the
+documented intent (a bill follows the student's price until money is taken),
+but it surprised this phase's test and may surprise a warden.

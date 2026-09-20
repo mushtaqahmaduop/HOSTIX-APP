@@ -164,6 +164,85 @@ function calculateBill(rec) {
     - money(r.concession   != null ? r.concession   : r.discount));
 }
 
+/* ── §14 · billSnapshot / billFreeze / billDrift ──────────────────────────────
+   THE BILL AS IT WAS FIRST RAISED (finance Phase 6, audit G6).
+
+   A record's charge fields are written in place. Correct a rent, add an extra,
+   grant a concession, and the figure the month was ORIGINALLY billed at is
+   gone: nothing on the record remembers it. The student ledger records that it
+   changed — "Rent changed 8,000 → 9,000", with a reason, a date and an account —
+   but recovering what the bill started as means replaying every entry on the
+   record in order. A month's opening bill is a fact a hostel is asked for
+   directly ("what did you charge me in August?"), and it should not have to be
+   reconstructed.
+
+   `p.generated` is that fact, written ONCE by whichever path raises the record
+   and never rewritten. It is a frozen copy, not a live figure — nothing asks it
+   what is owed, so it cannot become a second answer to that. calculateBill()
+   and outstandingOf() remain the only authorities on what the month bills now.
+
+   WRITTEN ONCE, AT CREATION. `billFreeze()` no-ops on a record that already has
+   one, so it is safe to call from anywhere and safe to call twice. A record
+   created and corrected the same afternoon keeps the first figure, typo and
+   all — which is what an audit trail is for; the correction is the ledger's to
+   tell, and billDrift() below pairs the two.
+
+   NOT BACKFILLED. Records raised before this existed have no snapshot, and
+   nothing invents one for them: `billDrift()` returns null and the screens say
+   they do not know. Deriving one from the ledger would produce a figure the
+   hostel never actually billed on a record where the ledger is incomplete. */
+function billSnapshot(p, source) {
+  const r = p || {};
+  const extras = r.extraTotal != null
+    ? money(r.extraTotal)
+    : moneySum(r.extraCharges, c => c && c.amount);
+  return {
+    at:     r.date || (typeof today === 'function' ? today() : ''),
+    by:     (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) ? CUR_USER.name : 'Auto',
+    source: String(source || ''),
+    monthlyRent:  money(r.monthlyRent != null ? r.monthlyRent : r.rent),
+    messCharge:   money(r.messCharge != null ? r.messCharge : r.mess),
+    messIncluded: r.messIncluded !== false,
+    admissionFee: money(r.admissionFee != null ? r.admissionFee : r.fee),
+    concession:   money(r.concession   != null ? r.concession   : r.discount),
+    extraTotal:   extras,
+    // The one figure that matters, from the one authority that prices a bill.
+    total:        calculateBill(r),
+  };
+}
+
+/** Write the snapshot if this record has none. Returns it either way. */
+function billFreeze(p, source) {
+  if (!p) return null;
+  if (p.generated && typeof p.generated === 'object') return p.generated;
+  p.generated = billSnapshot(p, source);
+  return p.generated;
+}
+
+/* What this bill has become since it was raised, or null when it has not moved
+   — and null, too, when there is no snapshot to compare against, which a caller
+   must treat as "not known" rather than "unchanged". `parts` names only the
+   components that actually differ, so a screen can say WHAT changed without
+   diffing the record itself. */
+function billDrift(p) {
+  const g = p && p.generated;
+  if (!g || typeof g !== 'object') return null;
+  const now = billSnapshot(p, g.source);
+  const keys = ['monthlyRent', 'messCharge', 'admissionFee', 'concession', 'extraTotal'];
+  const parts = [];
+  keys.forEach(k => {
+    const was = money(g[k]), is = money(now[k]);
+    if (was !== is) parts.push({ key: k, was: was, now: is });
+  });
+  // The mess being switched off is a change to the bill that moves no field of
+  // its own — messCharge can stay put while messIncluded flips.
+  if ((g.messIncluded !== false) !== (now.messIncluded !== false))
+    parts.push({ key: 'messIncluded', was: g.messIncluded !== false, now: now.messIncluded !== false });
+  const wasTotal = money(g.total), nowTotal = money(now.total);
+  if (!parts.length && wasTotal === nowTotal) return null;
+  return { was: wasTotal, now: nowTotal, delta: nowTotal - wasTotal, parts: parts, at: g.at, by: g.by };
+}
+
 /* ── §14 · applyPayment ───────────────────────────────────────────────────────
    Collect money against a record. Every collection in the app goes through
    here: the Add Payment form, the Edit form, the single-row Mark Paid, the bulk

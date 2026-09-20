@@ -3734,6 +3734,10 @@ async function confirmExcelImport() {
       notes: r.paidAtAdmission > 0 ? 'Paid at admission (imported)' : 'Imported via Excel',
       byWarden: ''
     });
+    /* An imported record carries what the spreadsheet said it was billed
+       (finance Phase 6). It is marked `import` so a later reader knows the
+       figure came from a sheet rather than from this app raising a bill. */
+    billFreeze(DB.payments[DB.payments.length - 1], 'excel-import');
     ledgerTrack(DB.payments[DB.payments.length - 1]);
     added++;
   });

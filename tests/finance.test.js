@@ -45,7 +45,8 @@ const F = vm.runInContext(`({
   calculateCharges, calculateOutstanding, calculateBill,
   applyPayment, reversePayment, calculateRefund,
   calculateSettlement, calculateReportTotals,
-  refundPolicy, calculateMidMonthRefund, refundPolicyLabel
+  refundPolicy, calculateMidMonthRefund, refundPolicyLabel,
+  billSnapshot, billFreeze, billDrift
 })`, sandbox);
 const { DB } = F;
 
@@ -741,6 +742,112 @@ ok('an unpaid month reduces the bill but returns no cash', () => {
   const r = F.calculateMidMonthRefund(unpaid, '2026-09-10', { policy: { mode: 'both', cutoff: 0 } });
   assert.strictEqual(r.amount, 14000);   // the charge drops by this much…
   assert.strictEqual(r.cash, 0);         // …but there is no money to hand back
+});
+
+/* -- PHASE 6 . THE BILL AS IT WAS FIRST RAISED (audit G6) ----------------- */
+
+const raised = () => ({ id: 'g1', studentId: 's1', month: '2026-08', amount: 0,
+  monthlyRent: 8000, totalRent: 8000, messCharge: 6500, messIncluded: true,
+  admissionFee: 0, concession: 0, extraCharges: [], extraTotal: 0, unpaid: 14500,
+  date: '2026-08-01' });
+
+ok('the snapshot is the bill, from the one authority that prices one', () => {
+  setup();
+  const p = raised();
+  const g = F.billFreeze(p, 'monthly-generate');
+  assert.strictEqual(g.total, F.calculateBill(p));
+  assert.strictEqual(g.total, 14500);
+  assert.strictEqual(g.monthlyRent, 8000);
+  assert.strictEqual(g.messCharge, 6500);
+  assert.strictEqual(g.source, 'monthly-generate');
+  assert.strictEqual(g.at, '2026-08-01');
+});
+
+ok('it is written ONCE - a later call never rewrites it', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.monthlyRent = 9000;                    // the rent is corrected afterwards
+  F.billFreeze(p, 'add-payment');          // and something calls it again
+  assert.strictEqual(p.generated.monthlyRent, 8000, 'the original figure was overwritten');
+  assert.strictEqual(p.generated.total, 14500);
+  assert.strictEqual(p.generated.source, 'monthly-generate');
+});
+
+ok('a bill that has not moved reports no drift', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  assert.strictEqual(F.billDrift(p), null);
+});
+
+ok('drift names what changed, and by how much', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.monthlyRent = 9000;
+  p.extraCharges = [{ label: 'Cooler', amount: 500 }];
+  p.extraTotal = 500;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.was, 14500);
+  assert.strictEqual(d.now, 16000);
+  assert.strictEqual(d.delta, 1500);
+  // join()/JSON, not deepStrictEqual: these come from inside the vm sandbox, so
+  // their prototypes are the sandbox's and a structural compare is never equal.
+  assert.strictEqual(d.parts.map(x => x.key).sort().join(','), 'extraTotal,monthlyRent');
+  assert.strictEqual(JSON.stringify(d.parts.find(x => x.key === 'monthlyRent')),
+                     JSON.stringify({ key: 'monthlyRent', was: 8000, now: 9000 }));
+});
+
+ok('the mess switched off is drift, though messCharge never moves', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.messIncluded = false;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.now, 8000);
+  assert.strictEqual(d.delta, -6500);
+  assert.ok(d.parts.some(x => x.key === 'messIncluded'), 'the mess flag was not named');
+});
+
+ok('a concession granted later is drift, not a smaller original bill', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  p.concession = 2000;
+  const d = F.billDrift(p);
+  assert.strictEqual(d.was, 14500, 'the original bill shrank with the concession');
+  assert.strictEqual(d.now, 12500);
+});
+
+ok('a record raised before this existed reports null, and nothing is invented', () => {
+  setup();
+  const legacy = raised();
+  delete legacy.generated;
+  assert.strictEqual(F.billDrift(legacy), null, 'a snapshot was invented for a legacy record');
+  assert.strictEqual(legacy.generated, undefined);
+});
+
+ok('the snapshot is not a second answer to what is owed', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  // Both, as submitEditPayment() writes them - outstandingOf() reads totalRent.
+  p.monthlyRent = 9000; p.totalRent = 9000; p.unpaid = 15500;
+  // What the month bills NOW comes from calculateBill(), never from the
+  // snapshot - the two disagreeing is the whole point of keeping it.
+  assert.strictEqual(F.calculateBill(p), 15500);
+  assert.strictEqual(F.calculateOutstanding(p), 15500);
+  assert.strictEqual(p.generated.total, 14500);
+});
+
+ok('collecting money does not disturb the snapshot', () => {
+  setup();
+  const p = raised();
+  F.billFreeze(p, 'monthly-generate');
+  F.applyPayment(p, { amount: 5000, method: 'Cash', date: '2026-08-06' });
+  assert.strictEqual(p.generated.total, 14500);
+  assert.strictEqual(F.billDrift(p), null, 'taking money read as a change to the bill');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

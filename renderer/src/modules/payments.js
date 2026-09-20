@@ -1278,6 +1278,8 @@ async function generateMonthlyRents() {
       if (!c.configured || due <= 0) { skipped++; return; }
       const _rec = {id:'p_'+uid(),collectedBy:CUR_USER?CUR_USER.name:'Auto',studentId:t.id,studentName:t.name,roomId:t.roomId,roomNumber:room?.number||'',amount:0,monthlyRent:c.rent,totalRent:c.rent,messCharge:mess,messIncluded:messOn,unpaid:due,admissionFee:0,extraCharges:[],extraTotal:0,concession:0,concessionDesc:'',discount:0,method:t.paymentMethod||'Cash',month:mo,date:today(),dueDate:'',status:'Pending',notes:'Auto-generated',paidDate:''};
       DB.payments.push(_rec);
+      // The bill as raised, frozen before anything can change it (Phase 6).
+      billFreeze(_rec, 'monthly-generate');
       ledgerTrack(_rec);   // the month's charge, into the student ledger
       // Standing concessions covering this month (warden ledger step 8).
       if (typeof cnApplyToRecord === 'function') cnApplyToRecord(_rec);
@@ -2598,6 +2600,7 @@ async function submitPaymentForStudent() {
     notes: document.getElementById('f-ps-notes')?.value || '',
   });
   const _recPS = DB.payments.find(x => x.id === _newPayIdPS);
+  billFreeze(_recPS, 'student-panel');   // Phase 6 — before any collection
   if (money(paidAmount) > 0) {
     applyPayment(_recPS, {
       amount: money(paidAmount),
@@ -3489,6 +3492,9 @@ async function submitAddPayment() {
     })),
   });
   const _recAP = DB.payments.find(x => x.id === _newPayId);
+  /* Phase 6 — BEFORE applyPayment() below. The snapshot is what the month was
+     billed, so it has to be taken while the record still holds nothing. */
+  billFreeze(_recAP, 'add-payment');
   if (money(paidAmount) > 0) {
     applyPayment(_recAP, {
       amount: money(paidAmount),
@@ -3823,6 +3829,26 @@ function showEditPaymentModal(id) {
 
         <div class="pef-card">
           <div class="pef-card__h">${icon('fileText','sm')} Payment summary</div>
+          ${''/* WHAT THIS MONTH WAS FIRST BILLED, when it is no longer that
+                 (finance Phase 6, audit G6). The charge fields are written in
+                 place, so before the snapshot the opening figure was gone and
+                 answering "what did you charge me in August?" meant replaying
+                 the ledger. It shows ONLY when the bill has actually moved —
+                 on the ordinary record the row would be the same number twice.
+                 Absent on records raised before the snapshot existed: billDrift()
+                 returns null and nothing is invented for them. */}
+          ${(() => {
+            const d = typeof billDrift === 'function' ? billDrift(p) : null;
+            if (!d) return '';
+            const names = { monthlyRent: 'rent', messCharge: 'mess', admissionFee: 'admission fee',
+                            concession: 'concession', extraTotal: 'extras', messIncluded: 'mess included' };
+            const what = d.parts.map(x => names[x.key] || x.key).join(', ') || 'the charge';
+            const tip = 'Raised ' + fmtDate(d.at) + (d.by ? ' by ' + d.by : '')
+                      + ' at ' + fmtPKR(d.was) + '. Changed since: ' + what
+                      + '. See the student ledger for each change and its reason.';
+            return `<div class="pef-sum__row pef-sum__was" title="${escHtml(tip)}">
+              <span>Billed when raised</span><b>${fmtPKR(d.was)}</b></div>`;
+          })()}
           <div class="pef-sum__row"><span>Total due (this month)</span><b id="pef-due">-</b></div>
           <div class="pef-sum__row is-paid"><span>Total paid</span><b id="pef-paid">-</b></div>
           <div class="pef-sum__row" id="pef-rem-row"><span>Pending amount</span><b id="pef-rem">-</b></div>

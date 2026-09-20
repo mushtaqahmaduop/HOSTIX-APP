@@ -5242,6 +5242,8 @@ async function submitRestoreStudent(studentId) {
     if(concession>0) notesParts.push(`Concession: ${fmtPKR(concession)}${concReason?' ('+concReason+')':''}`);
     if(extraNotes) notesParts.push(extraNotes);
     DB.payments.push({id:uid(),studentId:t.id,studentName:t.name,roomId,roomNumber:room?.number||'',month:monthVal,monthlyRent:rent,totalRent:rent,messCharge:rsCharges.messBilled,messIncluded:rsCharges.messOptIn,amount,unpaid,admissionFee:0,fee:0,extraCharges,extraTotal,concession,concessionDesc:concReason||'',discount:concession,method:t.paymentMethod,status:pStatus,date:t.joinDate||today(),notes:notesParts.join(' | ')});
+    // The bill as raised, frozen first (finance Phase 6).
+    billFreeze(DB.payments[DB.payments.length - 1], 'admission');
     ledgerTrack(DB.payments[DB.payments.length - 1]);
   }
   if(!DB.activityLog) DB.activityLog=[];

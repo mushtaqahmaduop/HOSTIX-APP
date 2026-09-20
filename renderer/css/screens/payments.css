@@ -1801,3 +1801,9 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    unreadable as a date; tabular figures so a column of them lines up. */
 .pay-col-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 td.pay-col-date { font-size: var(--text-xs); color: var(--text2); }
+
+/* 8 — "Billed when raised" (finance Phase 6). A quieter row than the live
+   figures beneath it: it is history, not what anybody owes now, and it appears
+   only on a record whose bill has actually moved. */
+.pef-sum__was { color: var(--text3); }
+.pef-sum__was b { color: var(--text2); font-weight: 600; text-decoration: line-through; text-decoration-thickness: 1px; }
