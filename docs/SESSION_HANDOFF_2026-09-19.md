@@ -1,5 +1,9 @@
 # Session handoff — 2026-09-19 / 20
 
+> **SUPERSEDED as the entry point by `SESSION_HANDOFF_2026-09-20.md`.**
+> Read that one first; this file keeps the detail on Phase 5, the Available
+> Fund reversal, the first payment punch list and the 21 dead features.
+
 Branch **`design/dashboard`**, tree clean apart from untracked scratch
 (`tests/tmp-*.spec.js`, `.shots/`). Nothing pushed — 35 commits ahead of
 `origin/master`.
