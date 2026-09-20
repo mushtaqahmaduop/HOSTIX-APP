@@ -3158,6 +3158,8 @@ function sfDropPhoto(ev) {
 }
 
 async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=false) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Admitting a student')) return;
   // Gated at the form AND at the submit: the page can be reached without the button.
   if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const name=document.getElementById('f-tname').value.trim();
@@ -4315,6 +4317,8 @@ function showEditStudentModal(id) {
 }
 
 async function submitEditStudent(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a student')) return;
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t=DB.students.find(x=>x.id===id); if(!t) return;
   const _originalRoomId = t.roomId; // capture BEFORE any changes
@@ -4623,6 +4627,8 @@ function showRoomShiftModal(studentId) {
 
 
 async function submitRoomShift(studentId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A room change')) return;
   // Gated at the form AND here — the submit is reachable without the form.
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const t = DB.students.find(x => x.id === studentId);
@@ -5184,6 +5190,8 @@ function rsRecalc() {
 }
 
 async function submitRestoreStudent(studentId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Re-admitting a student')) return;
   if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const t=DB.students.find(x=>x.id===studentId); if(!t) return;
   const roomId=document.getElementById('rs-room').value;

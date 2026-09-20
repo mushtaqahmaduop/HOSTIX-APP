@@ -955,6 +955,8 @@ function payToggleAll(on) {
 // the partialPayments installment log, so a bulk settle is indistinguishable
 // from settling each row by hand.
 async function payBulkMarkPaid() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Marking payments paid')) return;
   const ids = [...paySelected];
   const targets = DB.payments.filter(p => ids.includes(p.id) && p.status !== 'Paid');
   if (!targets.length) { toast('Nothing to settle — every selected row is already paid', 'info'); return; }
@@ -1246,6 +1248,8 @@ function exportPaymentsExcel() {
 function exportPaymentsCSV() { exportPaymentsExcel(); }
 
 async function generateMonthlyRents() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Generating rent records')) return;
   // FIX: use thisMonthLabel() — locale-safe, matches how all payment records store month strings.
   // Previously used toLocaleString('default',…) which can return different formats per device locale,
   // breaking the duplicate-guard check and generating duplicate entries on non-en-US systems.
@@ -1303,6 +1307,8 @@ async function generateMonthlyRents() {
    recorded balance from the charge authority. That is the entire point of there
    being one answer. */
 async function markPaymentPaid(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Marking a payment paid')) return;
   const p = DB.payments.find(x => x.id === id); if (!p) return;
   const due = calculateOutstanding(p);
   if (due <= 0) {
@@ -1355,6 +1361,8 @@ async function markPaymentPaidFromStudentView(payId, studentId) {
   if (!refreshStudentView(studentId)) showStudentPanel(studentId);
 }
 async function deletePayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Deleting a payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   const _dp = DB.payments.find(x => x.id === id);
   // Step 6: a record holding money is reversed first, never deleted in one go.
@@ -2407,6 +2415,8 @@ function recalcUnpaidPS() {
   if(unpaidEl) { unpaidEl.value = unpaid; unpaidEl.style.color = unpaid > 0 ? 'var(--red)' : 'var(--green)'; }
 }
 async function submitPaymentForStudent() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   // One visit, one posting (audit G5) — see submitAddPayment().
   const _rcp = newReceiptId();
@@ -3243,6 +3253,8 @@ function pfCount() {
   if (ta && el) el.textContent = ta.value.length + '/250';
 }
 async function submitAddPayment() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A payment')) return;
   /* ONE VISIT, ONE POSTING (audit G5). This form can write the selected month
      AND any number of earlier months in one press. They are one hand-over —
      the student is given one slip — so every collection it makes carries this
@@ -4044,6 +4056,8 @@ function pefReceiveFull() {
 }
 
 async function submitEditPayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a payment')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
   /* Step 6, refused here as well as on the form (ownership.js). */
@@ -4266,6 +4280,8 @@ function pfReverseHint() {
 }
 
 async function submitReversePayment(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Reversing a collection')) return;
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x => x.id === id); if (!p) return;
 

@@ -698,6 +698,8 @@ function roomModalTitle(ico, title, sub) {
   </span>`;
 }
 async function submitAddRoom() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A room')) return;
   if (typeof requirePerm === 'function' && !requirePerm('add')) return;
   const num=(document.getElementById('f-rnum').value||'').trim().toUpperCase();
   const floor=document.getElementById('f-rfloor').value;
@@ -988,6 +990,8 @@ function showEditRoomModal(id) {
   syncRoomPreview();
 }
 async function submitEditRoom(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a room')) return;
   if (typeof requirePerm === 'function' && !requirePerm('edit')) return;
   const r=DB.rooms.find(x=>x.id===id); if(!r) return;
   const newNum=(document.getElementById('f-rnum').value||'').trim().toUpperCase()||r.number;

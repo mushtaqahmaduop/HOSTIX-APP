@@ -635,6 +635,8 @@ function _cancRoomNumberOf(student) {
 }
 
 async function submitEditCancellation(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A change to a cancellation')) return;
   const c = (DB.cancellations||[]).find(x=>x.id===cancId);
   if(!c) return;
   const newStatus = document.getElementById('f-cstatus').value;
@@ -973,6 +975,8 @@ function cafCount() {
 }
 
 async function saveCancellation() {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A cancellation')) return;
   const studentId = document.getElementById('canc-student').value;
   const vacateDate = document.getElementById('canc-vacate').value;
   const reason = document.getElementById('canc-reason').value.trim();
@@ -1035,6 +1039,8 @@ async function saveCancellation() {
    cancellation itself, so the answer survives later edits to the records.
    ══════════════════════════════════════════════════════════════════════════ */
 async function confirmCancellation(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A checkout')) return;
   const c = DB.cancellations.find(x=>x.id===cancId);
   if(!c) return;
 
@@ -1121,6 +1127,8 @@ async function confirmCancellation(cancId) {
 }
 
 async function submitCancellationSettlement(cancId) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('A checkout settlement')) return;
   const c = DB.cancellations.find(x => x.id === cancId);
   if (!c) return;
   // Step 10: collecting or handing back money at checkout is confirmed with the

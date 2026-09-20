@@ -985,6 +985,8 @@ function showEditExpenseModal(id)  { showExpenseModal(id); }
  * @param {string} [id]
  */
 async function submitExpense(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('An expense')) return;
   // Same split as the form above — gated again here, because the submit can be
   // reached without it.
   if (typeof requirePerm === 'function' && !requirePerm(id ? 'edit' : 'add')) return;
@@ -1052,6 +1054,8 @@ async function _expDoDelete(id) {
 }
 
 async function deleteExpense(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('Deleting an expense')) return;
   if (typeof requirePerm === 'function' && !requirePerm('delete')) return;
   showConfirm('Delete expense?','This cannot be undone.', () => _expDoDelete(id));
 }

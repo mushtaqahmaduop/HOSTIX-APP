@@ -1103,6 +1103,8 @@ function _issFormIsComplaint() {
 const _issVal = (id) => String((document.getElementById(id) || {}).value || '').trim();
 
 async function saveIssue(id) {
+  // The licence gate, before anything is read or written (see enforcement-ui.js).
+  if (typeof requireWritable === 'function' && !requireWritable('This record')) return;
   const isComp = _issFormIsComplaint();
 
   if (!isComp) {
