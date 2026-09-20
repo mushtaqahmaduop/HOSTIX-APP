@@ -3738,6 +3738,15 @@ function showEditPaymentModal(id) {
           </div>
         </div>
 
+        ${''/* THE LAST TWO SECTIONS SHARE A ROW (owner, 2026-09-19: "the form is
+               very much crowded and looking as a slop"). Measured on this sheet:
+               1,066px of form in a 661px body — a warden could see barely half
+               of it at once, and scrolled past the figures to reach the fields.
+               Notes and the reason for a change are both one short input; side
+               by side they cost one row instead of two. Auto-fit, so when there
+               is no reason field — a record holding no money — Notes still takes
+               the full width, and both drop back to stacked on a narrow window. */}
+        <div class="pef-pair">
         <div class="pef-sec">
           ${secHead(5, 'Notes (optional)', '')}
           <div class="hf-in hf-in--top">
@@ -3754,6 +3763,7 @@ function showEditPaymentModal(id) {
             <input class="form-control" id="f-pedit-reason" maxlength="120" placeholder="e.g. Cooler charge added">
           </div>
         </div>` : ''}
+        </div>
       </div>
 
       <aside class="pef-side">
@@ -3852,7 +3862,7 @@ function showEditPaymentModal(id) {
    Where the ledger has nothing it reads the records' own `partialPayments` and
    `reversals`, which is where that history has always been. "View all" expands
    the card in place — no navigation, and nothing typed into the form is lost. */
-const PEF_RECENT_N = 5;
+const PEF_RECENT_N = 4;
 let _pefRecent = [];
 let _pefRecentAll = false;
 

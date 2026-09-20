@@ -1731,9 +1731,15 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    The expanded list is capped and scrolls: a student two years in has dozens of
    collections, and the card must not push the sheet's own scroll around. */
 .pef-recent th.num, .pef-recent td.num { text-align: right; }
-.pef-recent__w { max-height: none; overflow: visible; }
-.pef-recent__w.is-all { max-height: 216px; overflow-y: auto; overscroll-behavior: contain; }
-.pef-recent__w.is-all thead th { position: sticky; top: 0; z-index: 1; }
+/* CAPPED WHETHER OR NOT IT IS EXPANDED. It was uncapped when collapsed, so the
+   card grew with the student: this rail measured 1,055px against a 661px modal
+   body, and Recent payments was 376px of it — the single tallest thing on the
+   sheet, and the reason the owner's main-column savings did not shorten it. The
+   cap is the same either way; "View all" changes how many rows are IN the list,
+   not how much of the sheet it is allowed to take. */
+.pef-recent__w { max-height: 172px; overflow-y: auto; overscroll-behavior: contain; }
+.pef-recent__w.is-all { max-height: 216px; }
+.pef-recent__w thead th { position: sticky; top: 0; z-index: 1; }
 /* Money going back OUT. The minus sign is already on the figure; this stops it
    reading as one more collection at a glance. */
 .pef-recent tr.is-back td,
@@ -1764,3 +1770,28 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 .pef-back__b:hover:not(:disabled) { border-color: var(--red); background: var(--red-dim); }
 .pef-back__b:disabled { opacity: .5; cursor: not-allowed; color: var(--text3); }
 .pef-back__m { font-size: 11px; color: var(--text3); margin-left: auto; }
+
+/* 6 — DENSITY (owner: "the form is very much crowded and looking as a slop").
+   Measured before: 1,066px of form inside a 661px modal body. Two changes, both
+   pairing fields that were stacked for no reason other than order.
+
+   Admission fee and Concession are one short number each and belong on one
+   line; only the concession's description needs the width. */
+.pef-adj__l { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 9px 10px; }
+.pef-adj__l > .field:nth-child(3) { grid-column: 1 / -1; }
+@media (max-width: 760px) { .pef-adj__l { grid-template-columns: minmax(0,1fr); } }
+
+/* Notes and the reason-for-a-change share the last row. auto-fit means one
+   child takes the full width, so a record holding no money — which has no
+   reason field — is unaffected. */
+.pef-pair {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 12px; align-items: start;
+}
+.pef-pair > .pef-sec { margin-bottom: 0; }
+
+/* 6b — the new-balance figure was wrapping between "Rs." and the number, which
+   is the single sloppiest thing on the sheet: the one figure the block exists
+   to state, broken across two lines. The label may wrap; the figure may not. */
+.pef-newbal > b { flex-shrink: 0; white-space: nowrap; }
+.pef-newbal > span { min-width: 0; }
