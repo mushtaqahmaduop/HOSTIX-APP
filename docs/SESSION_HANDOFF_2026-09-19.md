@@ -213,3 +213,60 @@ pointer there.
 Both use `fmtDateShort()`, which drops the year when it IS this year. With the
 full date, Paid on ran 106px and pushed the payments table 39px past the 1366
 floor, clipping Actions. Measured after: 1070px table in a 1070px wrap.
+
+## Dead-code cleanup (2026-09-20, `63459ec`) — 40 removed, 22 left for the owner
+
+The scan counts a function dead only when its name appears nowhere in the
+repo's CODE but its own declaration. Two refinements matter, and the earlier
+orphan audit in this file got both wrong:
+
+* **comments are stripped first** — `_dashOccupancyOverview` is named only in a
+  comment saying it is "retired, not deleted", which is not a call site;
+* **`.md` is excluded** — the orphan table in this very handoff names these
+  functions, which made every one of them look used.
+
+Two dispatch sites take a function name as a string (`command-palette.js`, and
+`_dashRowAct` in `dashboard.js`). Both are called with literals written in the
+source, so a text scan does see them. Checked before deleting anything.
+
+**Removed (40):** orphaned wrappers whose target is still called by its own
+name; stubs that promise what they do not do (`sendBackupToGmail` and
+`sendBackupToDrive` both just call `exportBackup('json')`); the four config
+adders superseded by `cfgAddPrompt`/`cfgAdd` (the old ones read `#new-pm`,
+`#new-fl`, `#new-ec`, which no longer exist); and unused helpers.
+
+### The 22 left, and why
+
+These are the ONLY implementation of a feature with no way in. Deleting them
+is a product decision, not a cleanup — git keeps them either way, so nothing is
+lost by leaving them until the owner rules.
+
+| Feature with no UI | Functions |
+|---|---|
+| Bill splitting | `calcBillSplit` (60L), `saveBillSplit` |
+| Fines | `payFine`, `deleteFine` |
+| Notices | `deleteNotice` |
+| Check-in log | `saveCheckin`, `deleteCheckin` |
+| Inspections | `deleteInspection` |
+| Maintenance (settings copy) | `saveMaintenance` |
+| Warden photo upload | `handleWardenPhoto` (41L), `removeWardenPhoto` |
+| Add Student documents | `asfDocLoad` (69L) |
+| Extra charges at admission | `addStudentExtraChargeRow`, `getStudentExtraChargesData` |
+| Reset All Data | `resetAllData` (34L) — destructive, and no button reaches it |
+| Licence settings window | `openLicenseSettingsWindow` |
+| Checkout settle cell | `cancSettleCell` |
+| Dashboard occupancy panel | `_dashOccupancyOverview` — comment says retired |
+| **Dashboard month dialog** | `showMonthDetailModal` — see below |
+| Misc helpers | `safeOpenWindow`, `toggleOccField`, `_getSession` |
+
+### The month dialog has no way in
+
+Removing `calPopSelect` (a dead calendar-popover wrapper) orphaned
+`showMonthDetailModal`. It was ALREADY unreachable — `navigateToMonth()`, which
+the sidebar calendar calls, only re-filters the page it is on; it never opens
+the dialog. The wrapper's removal just made the chain visible.
+
+This matters because that dialog is a real, finished screen — a month's fee
+records, its expense register, and an Export control that `bc4020a` converted
+to the combined menu. **Either wire it up or retire it**; it should not sit
+there finished and unopenable.
