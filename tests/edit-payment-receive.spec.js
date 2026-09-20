@@ -77,11 +77,16 @@ test('edit payment: an extra added after full payment is received here, with its
     const opened = await win.evaluate(() => ({
       receive: document.getElementById('f-precv').value,
       type: document.getElementById('f-ptype').value,
+      // Locked, like the month and the collected amount, once the record holds
+      // money (owner, 2026-09-19). The select then carries one option showing
+      // what this record was charged as, so its value is that label, not 'both'.
+      typeLocked: document.getElementById('f-ptype').disabled,
       combo: document.getElementById('f-pcombo').value,
       month: document.getElementById('f-pmonth').disabled,
       full: document.getElementById('pef-full').disabled,
     }));
-    expect(opened).toEqual({ receive: '', type: 'both', combo: '17000', month: true, full: true });
+    expect(opened).toEqual({ receive: '', type: 'Rent + Mess', typeLocked: true,
+                             combo: '17000', month: true, full: true });
     expect(await txt(win, 'pef-pend')).toBe('Rs. 0');
     expect(await txt(win, 'pef-mstat')).toBe('Fully paid');
 

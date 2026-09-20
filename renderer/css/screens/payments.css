@@ -1659,3 +1659,88 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
     color: var(--text-tertiary); text-align: right;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+
+/* ══ THE PAYMENT FORMS, READ AT A COUNTER (owner, 2026-09-19) ═══════════════
+   Three complaints from `44.png` and the message that came with it, answered
+   here rather than in the rules above, because this file's convention is that
+   the later block wins and the original rule keeps its reasoning intact.
+
+   The overrides are deliberately narrow: the student search on Add Payment,
+   the receive box on Edit Payment, and the small grey lines under the
+   headings. Nothing else in the payment screens changes size or colour. */
+
+/* 1 — THE STUDENT SEARCH IS THE FIRST QUESTION THE FORM ASKS, so it should not
+   look like the smallest control on the page. It sat at the shared .pf-in
+   size (34px, 12.5px type, the faint --border2) among a dozen identical
+   boxes; the warden's eye had nowhere to land. Taller, larger type, a border
+   that is actually a border, and a search icon in the accent so the box reads
+   as a search rather than a field waiting to be filled in. */
+#f-pstudent-search {
+    height: 42px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+}
+#f-pstudent-search::placeholder { color: var(--text2); font-weight: 500; }
+#f-pstudent-search:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.ap-who .pf-wrapin > svg { color: var(--accent); }
+.ap-who .pf-wrapin > .pf-caret { color: var(--text2); }
+
+/* 2 — THE RECEIVE BOX IS WHERE THE MONEY IS TYPED. It was the narrowest cell
+   of four, sharing its width with the "Full pending" button, so the field
+   that takes the only number the warden actually enters on this form was
+   smaller than the three read-only figures beside it (owner: "the receiving
+   money field is very small"). It gets a floor of 260px, and the input is set
+   in the same tabular figures at the same weight as the amounts it answers. */
+.pef-rcv { grid-template-columns: repeat(3, minmax(0,1fr)) minmax(260px, 1.9fr); }
+@media (max-width: 760px) {
+    /* Two columns of figures, and the box across the full width beneath them —
+       not squeezed into a half-cell. */
+    .pef-rcv { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .pef-rcv__in { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+}
+.pef-rcv__in { padding: 10px 12px; gap: 6px; }
+.pef-rcv__in label { font-size: 11.5px; color: var(--text2); }
+#f-precv {
+    height: 40px;
+    font-size: 17px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--ant-num-font);
+    letter-spacing: var(--ant-num-track);
+}
+.pef-rcv__full { padding: 9px 12px; font-size: 11.5px; }
+
+/* 3 — THE SMALL LINES UNDER THE HEADINGS were --text3, the tertiary step, and
+   at 10.5px on a dark ground they were not readable so much as present (owner:
+   "all the little descriptions below the heading like: Pick a student to load
+   the charge"). They carry real instruction — which student loads the charge,
+   what section 2 collects — so they move up one step to --text2 and gain half
+   a point of size. They stay lighter than the headings above them. */
+.ws__p i        { font-size: 11px; color: var(--text2); }
+.pef-sec__hint  { font-size: 11.5px; color: var(--text2); }
+.pef-note       { font-size: 11px; color: var(--text2); }
+
+/* 4 — RECENT PAYMENTS now lists instalments and money handed back, and expands
+   in place rather than navigating away (see _pefCollections in payments.js).
+   The expanded list is capped and scrolls: a student two years in has dozens of
+   collections, and the card must not push the sheet's own scroll around. */
+.pef-recent th.num, .pef-recent td.num { text-align: right; }
+.pef-recent__w { max-height: none; overflow: visible; }
+.pef-recent__w.is-all { max-height: 216px; overflow-y: auto; overscroll-behavior: contain; }
+.pef-recent__w.is-all thead th { position: sticky; top: 0; z-index: 1; }
+/* Money going back OUT. The minus sign is already on the figure; this stops it
+   reading as one more collection at a glance. */
+.pef-recent tr.is-back td,
+.pef-recent tr.is-back td b { color: var(--red); }
+
+/* 2b — the Full pending shortcut moves onto the label row, so the input owns
+   the cell's whole width (see the markup note in showEditPaymentModal). */
+.pef-rcv__lab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pef-rcv__lab label { margin: 0; }
+.pef-rcv__row .hf-in { width: 100%; }

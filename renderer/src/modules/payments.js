@@ -3575,19 +3575,33 @@ function showEditPaymentModal(id) {
       <span class="pef-sec__t">${escHtml(title)}</span></div>
     ${hint ? `<div class="pef-sec__hint">${escHtml(hint)}</div>` : ''}`;
 
-  const typeCtl = optional
+  /* THE TYPE IS LOCKED ONCE THE RECORD HOLDS MONEY (owner, 2026-09-19, and his
+     ruling on it: "lock it once money is held"). Rent-only against Rent + Mess
+     is a difference of the whole mess charge, so flipping it after a collection
+     silently re-prices a month somebody has already paid against — the student
+     handed over 4,000 of an 8,000 bill and the form could turn the bill into
+     6,000. It is the same rule the month and the collected amount already
+     follow (ledger step 6). The charge itself stays correctable through rent,
+     mess, extras and the concession, with a reason, which is where a genuine
+     re-pricing belongs and where it reaches the ledger. */
+  const typeLocked = held || !optional;
+  const typeCtl = !typeLocked
     ? `<select class="form-control" id="f-ptype" onchange="pefTypeChange(this.value)">
          <option value="both"${messIncluded ? ' selected' : ''}>Rent + Mess</option>
          <option value="rent"${messIncluded ? '' : ' selected'}>Rent only</option>
        </select>`
     : `<select class="form-control" id="f-ptype" disabled>
-         <option>${!serves ? 'Rent' : (messIncluded ? 'Rent + Mess' : 'Rent only — mess exempt')}</option>
+         <option>${!serves ? 'Rent'
+                  : messIncluded ? 'Rent + Mess'
+                  : optional ? 'Rent only'
+                  : 'Rent only — mess exempt'}</option>
        </select>`;
 
   // The student card and the month's recent collections, off the ledger.
   const fact = (k, v) => `<div class="pef-sum__row"><span>${escHtml(k)}</span><b>${v ? escHtml(v) : '<span class="lk-dash">—</span>'}</b></div>`;
-  const recent = (t && typeof ledgerEntriesFor === 'function' ? ledgerEntriesFor(t.id) : [])
-    .filter(e => e.type === 'payment').slice(-5).reverse();
+  // Every collection this student has made, newest first — see _pefCollections().
+  _pefRecent = _pefCollections(t);
+  _pefRecentAll = false;
   const initial = String(p.studentName || '?').trim().charAt(0).toUpperCase() || '?';
 
   showModal('modal-lg pef-modal', `
@@ -3609,7 +3623,8 @@ function showEditPaymentModal(id) {
           <div class="hf-g3">
             ${F('Month', held ? 'lock' : 'calendar', `<select class="form-control" id="f-pmonth"${held ? ' disabled' : ''}>${payMonthPickerOptions(p.month || '', p.studentId || '')}</select>`,
                { req: true, for: 'f-pmonth', cls: held ? 'is-readonly' : '' })}
-            ${F('Payment type', 'layers', typeCtl, { req: true, for: 'f-ptype' })}
+            ${F('Payment type', typeLocked ? 'lock' : 'layers', typeCtl,
+               { req: true, for: 'f-ptype', cls: typeLocked ? 'is-readonly' : '' })}
             ${F('Amount (PKR)', 'home',
                `<input class="form-control" id="f-pcombo" type="number" min="0" step="1" value="${monthlyRent + (messIncluded ? messCharge : 0)}" oninput="pfComboInput()">
                 <input type="hidden" id="f-prent" value="${monthlyRent}">
@@ -3625,12 +3640,22 @@ function showEditPaymentModal(id) {
             <div class="pef-rcv__c"><span>Expected amount</span><b id="pef-exp">-</b></div>
             <div class="pef-rcv__c"><span>Already paid</span><b class="is-paid" id="pef-already">${fmtPKR(money(p.amount))}</b></div>
             <div class="pef-rcv__c"><span>Pending amount</span><b class="is-due" id="pef-pend">-</b></div>
+            ${''/* THE BOX GETS THE WHOLE CELL (owner, 2026-09-19: "the receiving
+                   money field is very small"). It used to share one row with the
+                   Full pending button, and a wallet icon inside it: of a 266px
+                   cell the input got 103px — narrower than any of the three
+                   read-only figures beside it, for the one number a warden
+                   actually types on this form. The button moves up beside the
+                   label, where it reads as what it is, a shortcut for filling
+                   this field, and the input takes the full width underneath. */}
             <div class="pef-rcv__in">
-              <label for="f-precv">Receive pending (Rs.)</label>
+              <div class="pef-rcv__lab">
+                <label for="f-precv">Receive pending (Rs.)</label>
+                <button type="button" class="pef-rcv__full" id="pef-full" onclick="pefReceiveFull()">Full pending</button>
+              </div>
               <div class="pef-rcv__row">
                 <div class="hf-in"><span class="hf-in__i">${icon('wallet', 'sm')}</span>
                   <input class="form-control" id="f-precv" type="number" min="0" step="1" placeholder="0" oninput="recalcUnpaid()"></div>
-                <button type="button" class="pef-rcv__full" id="pef-full" onclick="pefReceiveFull()">Full pending</button>
               </div>
             </div>
           </div>
@@ -3738,15 +3763,12 @@ function showEditPaymentModal(id) {
         </div>
 
         <div class="pef-card">
-          <div class="pef-card__h">${icon('clock','sm')} Recent payments${t
-            ? `<button type="button" class="pef-card__lnk" onclick="closeModal();stuAllPayments('${escHtml(t.id)}')">View all</button>` : ''}</div>
-          ${recent.length ? `<table class="pef-recent">
-            <thead><tr><th>Date</th><th>Amount</th><th>Method</th></tr></thead>
-            <tbody>${recent.map(e => `<tr>
-              <td>${escHtml(fmtDate(String(e.createdAt || '').slice(0, 10)))}</td>
-              <td><b>${fmtPKR(money(e.amount))}</b></td>
-              <td>${escHtml(e.method || '—')}</td></tr>`).join('')}</tbody>
-          </table>` : '<div class="pef-none">No payments recorded yet</div>'}
+          <div class="pef-card__h">${icon('clock','sm')} Recent payments${_pefRecent.length > PEF_RECENT_N
+            ? `<button type="button" class="pef-card__lnk" id="pef-recent-x" onclick="pefRecentToggle()">View all (${_pefRecent.length})</button>` : ''}</div>
+          ${_pefRecent.length ? `<div class="pef-recent__w" id="pef-recent-w"><table class="pef-recent">
+            <thead><tr><th>Date</th><th>Month</th><th class="num">Amount</th><th>Method</th></tr></thead>
+            <tbody id="pef-recent-b">${_pefRecentRows()}</tbody>
+          </table></div>` : '<div class="pef-none">Nothing has been collected from this student yet</div>'}
         </div>
       </aside>
     </div>`,
@@ -3757,7 +3779,14 @@ function showEditPaymentModal(id) {
          : `<button class="btn btn-danger btn-sm pef-foot-del" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete Payment</button>`}
        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
        <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Save Changes</button>`);
-  setTimeout(function() {
+  /* PAINTED BEFORE THE SHEET IS SEEN, NOT 50ms INTO ITS ANIMATION (owner,
+     2026-09-19: "it opens very awkward"). showModal() writes the markup with
+     innerHTML, so every node below exists the instant it returns — there was
+     nothing to wait for. The delay meant the sheet animated in showing "-" in
+     all four figures, an empty extras list and a blank Remaining, and then
+     snapped to the real numbers a frame or three later, while it was still
+     moving. Run it now: the first frame the warden sees is the finished form. */
+  (function () {
     const ecl = document.getElementById('extra-charges-list');
     if(ecl && p.extraCharges && p.extraCharges.length) {
       ecl.innerHTML = '';
@@ -3775,7 +3804,91 @@ function showEditPaymentModal(id) {
       document.querySelectorAll('#extra-charges-list input, #extra-charges-list button, .pef-extra__add')
         .forEach(el => el.setAttribute('disabled', ''));
     }
-  }, 50);
+  })();
+}
+
+/* ── RECENT PAYMENTS = THE INSTALMENTS, NOT THE MONTH RECORDS ────────────────
+   Owner, 2026-09-19: "clicking recent payments does not show any history of
+   recent full or partial instalments".
+
+   Two faults. The card listed only ledger entries of `type === 'payment'`, so
+   a student whose history predates the ledger — every imported record, and
+   anything collected by a form that wrote `p.amount` directly — showed "No
+   payments recorded yet" beside a record plainly holding money. And "View all"
+   closed the form and sent the warden to the payments REGISTER, which lists one
+   row per MONTH: the instalments he went looking for are exactly what that page
+   cannot show, and his half-filled form was thrown away to get there.
+
+   It now lists money movements: each instalment, and each reversal as money
+   going back out, newest first, naming the month each was collected against.
+   Where the ledger has nothing it reads the records' own `partialPayments` and
+   `reversals`, which is where that history has always been. "View all" expands
+   the card in place — no navigation, and nothing typed into the form is lost. */
+const PEF_RECENT_N = 5;
+let _pefRecent = [];
+let _pefRecentAll = false;
+
+function _pefCollections(t) {
+  if (!t) return [];
+  const out = [];
+  const ready = typeof _ledgerReady !== 'undefined' && _ledgerReady === true;
+  const led = (ready && typeof ledgerEntriesFor === 'function') ? ledgerEntriesFor(t.id) : [];
+  led.forEach(e => {
+    if (!e) return;
+    const day = String(e.date || e.createdAt || '').slice(0, 10);
+    if (e.type === 'payment') {
+      out.push({ day, month: e.month || '', amount: money(e.amount), method: e.method || '',
+                 reference: e.reference || '', back: false });
+    } else if (e.type === 'adjustment' && e.part === 'reversal') {
+      out.push({ day, month: e.month || '', amount: money(e.amount), method: e.method || '',
+                 reference: '', back: true });
+    }
+  });
+  /* THE FALLBACK IS NOT A SECOND SOURCE — it runs only when the ledger holds
+     nothing at all for this student, which is what an imported history looks
+     like. Running both would double every instalment the ledger already knows. */
+  if (!out.length) {
+    (DB.payments || []).filter(p => p && p.studentId === t.id).forEach(p => {
+      (p.partialPayments || []).forEach(x => {
+        if (!x || !(money(x.amount) > 0)) return;
+        out.push({ day: String(x.date || p.paidDate || p.date || '').slice(0, 10),
+                   month: p.month || '', amount: money(x.amount),
+                   method: x.method || p.method || '', reference: x.reference || '', back: false });
+      });
+      // A record holding money with no instalment behind it still collected it.
+      if (!(p.partialPayments || []).length && money(p.amount) > 0) {
+        out.push({ day: String(p.paidDate || p.date || '').slice(0, 10), month: p.month || '',
+                   amount: money(p.amount), method: p.method || '', reference: '', back: false });
+      }
+      (p.reversals || []).forEach(r => {
+        if (!r || !(money(r.amount) > 0)) return;
+        out.push({ day: String(r.date || '').slice(0, 10), month: p.month || '',
+                   amount: money(r.amount), method: r.method || '', reference: '', back: true });
+      });
+    });
+  }
+  // Newest first. A blank date sorts last rather than to 1970.
+  return out.sort((a, c) => String(c.day || '').localeCompare(String(a.day || '')));
+}
+
+function _pefRecentRows() {
+  const list = _pefRecentAll ? _pefRecent : _pefRecent.slice(0, PEF_RECENT_N);
+  return list.map(e => `<tr${e.back ? ' class="is-back"' : ''}>
+      <td>${escHtml(e.day ? fmtDate(e.day) : '—')}</td>
+      <td>${escHtml(e.month ? payMonthShort(e.month) : '—')}</td>
+      <td class="num"><b>${e.back ? '−' : ''}${fmtPKR(e.amount)}</b></td>
+      <td>${escHtml(e.method || '—')}</td>
+    </tr>`).join('');
+}
+
+function pefRecentToggle() {
+  _pefRecentAll = !_pefRecentAll;
+  const body = document.getElementById('pef-recent-b');
+  if (body) body.innerHTML = _pefRecentRows();
+  const btn = document.getElementById('pef-recent-x');
+  if (btn) btn.textContent = _pefRecentAll ? 'Show less' : 'View all (' + _pefRecent.length + ')';
+  const wrap = document.getElementById('pef-recent-w');
+  if (wrap) wrap.classList.toggle('is-all', _pefRecentAll);
 }
 
 /* The Payment type select moves the hidden plan tick. The rent half stays what
