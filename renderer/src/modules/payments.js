@@ -3522,6 +3522,17 @@ function printAndSubmitPaymentForStudent() {
 function showEditPaymentModal(id) {
   if (typeof requirePerm === 'function' && !requirePerm('payments')) return;
   const p = DB.payments.find(x=>x.id===id); if(!p) return;
+  /* THIS FORM CARRIES ITS OWN "ALREADY COLLECTED" (owner, 2026-09-19: "no
+     pending amount is showing as the student has paid 4000 and more").
+     The edit form puts what the record has taken into the hidden `f-ppaid`,
+     which recalcUnpaid() reads as `pa`. `_pfAlready` is the ADD form's copy of
+     that same figure, and it is module state that outlives whichever form set
+     it — this form never wrote it, so it arrived holding the last Add Payment's
+     number. The collection was then subtracted TWICE: Rs. 8,000 billed with
+     Rs. 4,000 taken showed Pending Rs. 0, disabled "Full pending" (it keys off
+     pending > 0) and printed a nonsense "over what is outstanding" note.
+     Zeroed here so the collection is subtracted once, by `f-ppaid`. */
+  _pfAlready = 0;
   const t = DB.students.find(s=>s.id===p.studentId);
   const room = t ? DB.rooms.find(r=>r.id===t.roomId) : null;
   const rtype = room ? DB.settings.roomTypes.find(x=>x.id===room.typeId) : null;

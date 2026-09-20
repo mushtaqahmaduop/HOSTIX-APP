@@ -145,3 +145,95 @@ test('edit payment: an extra added after full payment is received here, with its
     await app.close();
   }
 });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE PENDING AMOUNT IS THIS RECORD'S, NOT THE LAST FORM'S (owner, 2026-09-19:
+   "no pending amount is showing as the student has paid 4000").
+
+   `_pfAlready` is module state holding what the selected month has already
+   collected. The ADD form writes it; the EDIT form never did, and carries its
+   own copy of that figure in the hidden `f-ppaid` — so after any Add Payment
+   form had run, recalcUnpaid() subtracted a collection twice, once from each.
+   A part-paid month then showed Pending Rs. 0 with "Full pending" disabled and
+   a nonsense "over what is outstanding" note under the amount.
+
+   The journey matters: the Add form has to be visited FIRST and left, exactly
+   as a warden takes a payment and then goes to the register to fix another.
+   ════════════════════════════════════════════════════════════════════════════ */
+test('edit payment: a part-paid month shows ITS pending, after an Add Payment form has run', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  try {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1366, 768));
+    await login(win);
+
+    await win.evaluate(async () => {
+      window.toast = () => {};
+      DB.settings.serviceModel = 'rent_mess_optional';
+      const M = thisMonth(), L = monthLabel(M);
+      DB.rooms = [{ id: 'rmP', number: 'P1', floor: 'Ground', typeId: '2s' }];
+      const stu = (id, name) => ({ id, name, fatherName: 'F', phone: '0300', status: 'Active',
+        roomId: 'rmP', joinDate: M + '-01', monthlyRent: 6000, mess: 2000, messOptIn: true,
+        createdAt: M + '-01' });
+      DB.students = [stu('PS1', 'Part Paid'), stu('PS2', 'Other Payer')];
+      const rec = (id, sid, name, taken, owed, day) => ({ id, studentId: sid, studentName: name,
+        month: L, monthlyRent: 6000, messCharge: 2000, messIncluded: true, admissionFee: 0,
+        concession: 0, extraCharges: [], extraTotal: 0, amount: taken, unpaid: owed,
+        status: 'Pending', method: 'Cash', date: M + '-' + day,
+        partialPayments: [{ amount: taken, date: M + '-' + day, method: 'Cash' }] });
+      // 8,000 billed, 4,000 taken — and a DIFFERENT student with 5,000 taken,
+      // which is the figure the Add form leaves behind in `_pfAlready`.
+      DB.payments = [rec('PP1', 'PS1', 'Part Paid', 4000, 4000, '06'),
+                     rec('PP2', 'PS2', 'Other Payer', 5000, 3000, '04')];
+      await saveDB();
+    });
+
+    // The Add Payment form runs first, on the OTHER student's part-paid month.
+    await win.evaluate(() => navigate('addpayment'));
+    await win.waitForSelector('#f-pmonth', { timeout: 15000 });
+    await win.evaluate(async () => {
+      selectStudentForPayment('PS2');
+      await new Promise(r => setTimeout(r, 400));
+      const sel = document.getElementById('f-pmonth'), want = monthLabel(thisMonth());
+      if (sel) for (const o of sel.options) if (o.value === want) sel.value = want;
+      pfMonthChanged();
+    });
+    await win.waitForTimeout(400);
+    const banner = await txt(win, 'pf-month-state');
+    expect(banner, 'the Add form did not load the other month, so nothing was staged')
+      .toContain('part paid');
+
+    // ...and the warden goes back to the register and edits the FIRST student.
+    await win.evaluate(() => navigate('payments'));
+    await win.waitForTimeout(400);
+    await win.evaluate(() => showEditPaymentModal('PP1'));
+    await win.waitForSelector('#f-precv', { timeout: 15000 });
+    await win.waitForTimeout(300);
+
+    expect(await txt(win, 'pef-exp')).toBe('Rs. 8,000');
+    expect(await txt(win, 'pef-already')).toBe('Rs. 4,000');
+    expect(await txt(win, 'pef-pend'), 'the collection was subtracted twice').toBe('Rs. 4,000');
+    expect(await txt(win, 'pef-rem')).toBe('Rs. 4,000');
+    expect(await win.evaluate(() => document.getElementById('pef-full').disabled),
+      'Full pending is locked when the pending amount reads zero').toBe(false);
+    expect(await win.evaluate(() => !!document.getElementById('f-ppaid-cap-warn')),
+      'a spurious over-payment note under the amount').toBe(false);
+
+    // Full pending fills the real balance and settles the month.
+    await win.evaluate(() => pefReceiveFull());
+    await win.waitForTimeout(250);
+    expect(await win.evaluate(() => document.getElementById('f-precv').value)).toBe('4000');
+    expect(await txt(win, 'pef-newbal-v')).toBe('Rs. 0');
+    expect(await txt(win, 'pef-mstat')).toBe('Fully paid');
+
+    await win.evaluate(() => submitEditPayment('PP1'));
+    await win.waitForTimeout(600);
+    const saved = await win.evaluate(() => {
+      const p = DB.payments.find(x => x.id === 'PP1');
+      return { status: p.status, unpaid: p.unpaid, amount: p.amount, n: p.partialPayments.length };
+    });
+    expect(saved).toEqual({ status: 'Paid', unpaid: 0, amount: 8000, n: 2 });
+  } finally {
+    await app.close();
+  }
+});
