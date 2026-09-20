@@ -126,15 +126,40 @@ body.light-theme {
   color-scheme: light;
 
   /* WARM, NEVER COOL, NEVER PURE WHITE (owner, 2026-09-17, from the Anthropic
-     teardown). Four flat ivory rungs a few percent apart: depth is read from
+     teardown). PARTLY AMENDED 2026-09-21 — the two FILL rungs are neutral grey
+     now, the paper rungs are still ivory; the note below says why. The rest of
+     this paragraph still governs, and NEVER PURE WHITE is untouched.
+
+     Four flat rungs a few percent apart: depth is read from
      the tone step plus a 1px hairline, which is what this system uses instead
-     of a shadow or a gradient. Measured span 10.5 L*, so CLAUDE.md rule 6
-     (>8 points) holds on the light side too.
+     of a shadow or a gradient. Measured span 10.1 L*, so CLAUDE.md rule 6
+     (>8 points) holds on the light side too. (Was 10.5 while all four rungs
+     were ivory; see the grey note below.)
         canvas -> card -> sunken -> hover fill */
-  --surface-page:   #F0EEE6;   /* canvas */
+
+  /* THE FILLS ARE NEUTRAL GREY, THE PAPER STAYS IVORY (owner, 2026-09-21).
+     The two rungs the ground DRAWS ON — the sunken/header fill and the hover
+     fill — are pure neutrals now; canvas and card keep the warm ivory. The
+     oat hover was the warm note in the system: its channel spread was 23,
+     more than double any other rung (page 10, sunken 13, card 5), which is
+     why it, not the canvas, was what read as beige.
+
+     Both are LIGHTNESS-MATCHED to the ivory they replace, within 0.4 L* —
+     a hue change, not a contrast change, so nothing that depended on surface
+     separation regresses. Every ink pair holds or improves, and the tightest
+     one (--text-tertiary on the hover fill, tuned to exactly 5.00 on oat)
+     comes out at 5.04. Span is 10.1 L*, so CLAUDE.md rule 6 (>8) still holds.
+
+     Both changed together on purpose: --surface-2 is the table header and
+     --surface-hover is the row hover directly beneath it. A warm header over
+     a neutral hover reads as a mistake, so one without the other is worse
+     than neither. #F5F5F5 was the reference grey; it measures L* 96.5, which
+     leaves the sunken rung 1.4 points off the card and stops it reading as
+     sunken at all. #F0F0F0 keeps the step the ivory had. */
+  --surface-page:   #F0EEE6;   /* canvas — ivory */
   --surface-1:      #FAF9F5;   /* cards, panels, table body — ivory, not #FFF */
-  --surface-2:      #F5F0E8;   /* sunken, table header, striped rows */
-  --surface-hover:  #E3DACC;   /* oat — row hover, grouped fills */
+  --surface-2:      #F0F0F0;   /* sunken, table header, striped rows — grey */
+  --surface-hover:  #DCDCDC;   /* row hover, grouped fills — grey */
 
   --border:         #E6DFD8;   /* hairline */
   --border-strong:  #CCCBC8;   /* stone — section rules */
