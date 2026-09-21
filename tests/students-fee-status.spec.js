@@ -113,13 +113,18 @@ test('the three fee states are still computed, and the column really is gone', a
       .map(t => t.innerText.replace(/[⇅▲▼]/g, '').trim().toUpperCase()));
 
   // Every column the spec's §5-§14 require is still present…
-  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY', 'CNIC',
+  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY',
                      'COURSE', 'ADDRESS', 'CHARGES / MONTH', 'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
   // Nationality left the register on 2026-09-15 (owner: "so that the CNIC,
   // course and address should relax a little"); it stays on the form and the PDF.
   expect(headers, 'Nationality was removed on 2026-09-15').not.toContain('NATIONALITY');
+  // CNIC left on 2026-09-21 (owner: "remove the cnic entire column because if a
+  // warden needs a student full detail it is already in the student profile").
+  // Still on the profile, the PDF and the Excel export — only the register
+  // column went, and its 10.6% went back to Student, Contact, Course, Address.
+  expect(headers, 'CNIC was removed on 2026-09-21').not.toContain('CNIC');
   // …and Fee Status is not one of them any more. Asserted, not merely dropped:
   // a column removed by deleting one <th> and leaving its <td> behind is a
   // table whose header and body disagree from that row on.

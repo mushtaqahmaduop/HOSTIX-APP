@@ -262,6 +262,17 @@ function renderStudents() {
      clutter on the ~95% of days nobody is leaving, and with nobody on notice
      the other three sum to Total on their own anyway. */
   const nCanc   = _roster.filter(t=>t.status==='Cancelling').length;
+
+  /* WHAT THE ACTIVE STUDENTS ARE CHARGED FOR (owner, 2026-09-21), replacing
+     the Rent & mess dropdown that used to sit on the filter bar. A category
+     nobody is in is not named, so a hostel with no mess at all reads exactly
+     as it did before. Counted off stuPlanOf() — the same resolver the
+     Charges column prints — so the hint and the column cannot disagree. */
+  const _planN = {};
+  _roster.filter(t=>t.status==='Active').forEach(t=>{ const k=stuPlanOf(t); _planN[k]=(_planN[k]||0)+1; });
+  const planHint = [['rent','Rent only'],['both','Rent + mess'],['mess','Mess only']]
+    .filter(([k])=>_planN[k])
+    .map(([k,l])=>`<span class="stu-plan-hint">${l} <b>${_planN[k]}</b></span>`).join('');
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
@@ -306,7 +317,7 @@ function renderStudents() {
     <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Active')" title="Show only active students">
       <div class="stu-stat__label">Active</div>
       <div class="stu-stat__val is-good">${nActive}</div>
-      <div class="stu-stat__sub">Students</div>
+      <div class="stu-stat__sub">${planHint || 'Students'}</div>
     </button>
 
     ${nCanc?`<button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
@@ -359,21 +370,17 @@ function renderStudents() {
         </select>
       </span>
 
-      ${''/* COURSES OUT, CHARGE PLAN IN (owner, 2026-09-09). The course is on
-             every row already and a hostel's list of them is long and
-             unstable — it was a dropdown nobody filtered by. What a warden
-             does ask for is "who is on the mess", which nothing could answer
-             until now: the plan is resolved per student by resolveCharges(),
-             the same call the Charges column prints, so the filter and the
-             column can never disagree. */}
-      <span class="ui-selectw">
-        <select class="ui-select ui-select--sm${studentFilter.plan&&studentFilter.plan!=='All'?' is-set':''}" aria-label="Filter by what the student is charged for" onchange="studentFilter.plan=this.value;studentFilter.page=1;renderPage('students')">
-          <option value="All">Rent &amp; mess: all</option>
-          <option value="both" ${studentFilter.plan==='both'?'selected':''}>Rent + mess</option>
-          <option value="rent" ${studentFilter.plan==='rent'?'selected':''}>Rent only</option>
-          <option value="mess" ${studentFilter.plan==='mess'?'selected':''}>Mess only</option>
-        </select>
-      </span>
+      ${''/* THE RENT & MESS DROPDOWN IS GONE (owner, 2026-09-21: "remove the
+             rent and mess dropdown and instead add a little hints in the
+             above Active kpi"). It answered "who is on the mess" by making
+             the warden filter the table; the Active card now simply says it,
+             and names a category only when somebody is actually in it.
+
+             studentFilter.plan and its row filter are LEFT IN PLACE — the hint
+             is a readout, not a control, so the value is just never set from
+             this bar any more. Deleting the field would reach into the filter
+             registry, stuResetFilters() and the popover readout, none of
+             which was asked for. */}
 
       ${''/* THE UNDERTAKING FILTER MOVED TO ADVANCED FILTERS (owner review #8,
              2026-09-18: "remove the undertaking dropdown and fit the filters
@@ -410,6 +417,14 @@ function renderStudents() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
           Advanced filters${activeFilters?`<span class="ui-chip ui-chip--accent ui-chip--count">${activeFilters}</span>`:''}
         </button>
+        ${''/* CLEAR WITHOUT OPENING THE POPOVER (owner, 2026-09-21). Reset all
+               filters already lived inside the menu, so undoing what the count
+               chip had just told you about cost two clicks and a read.
+
+               A SIBLING of the button, never a child: a button inside a button
+               is invalid HTML and the inner one never receives the click. */}
+        ${activeFilters?`<button type="button" class="flt-reset" onclick="stuResetFilters()"
+                title="Clear all filters" aria-label="Clear all filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>`:''}
         <div class="ui-menu stu-pop" id="stu-pop" role="menu" hidden>
           ${''/* It was a READOUT — four rows restating what the selects above
                  already showed, and nothing to act on. §17 asks this to hold
@@ -530,7 +545,6 @@ function renderStudents() {
                  column from students page so that the CNIC, course and address
                  should relax a little"). Its 7% went to them: CNIC +1, course +2,
                  address +4. The field stays on the form, the profile and the PDF. */}
-          <col class="stu-col-cnic">    <!-- CNIC     -->
           <col class="stu-col-course">  <!-- course   -->
           <col class="stu-col-addr">    <!-- address  -->
           <col class="stu-col-charge">  <!-- charges  -->
@@ -551,7 +565,6 @@ function renderStudents() {
                  asked on 2026-09-15 to let breathe. */}
           ${th('admitted','Admitted')}
           <th>Contact / emergency</th>
-          <th>CNIC</th>
           ${th('course','Course')}
           <th>Address</th>
           ${''/* "Charges / month", not "Rent + Mess / mo". The old heading named
@@ -629,20 +642,13 @@ function renderStudents() {
               <div class="stu-contact"><i class="stu-wa" title="Student's WhatsApp">${waIcon}</i>${escHtml(t.phone||'—')}</div>
               ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i class="stu-ph" title="Guardian">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
-            ${''/* MASKED, AND ON ONE LINE (owner, 2026-09-10: "make the cnic
-                   detail in pages as it is in the pdf and only should be shovn
-                   vhen cursor is placed upon it").
-
-                   It used to break across its own hyphens over two or three
-                   lines, because 15 characters would not fit the width this
-                   table could spare. The mask is the same 15 characters, so
-                   that constraint has not changed — but a value that wraps
-                   cannot be swapped for the full number on hover without the
-                   row changing height under the cursor, so the column was
-                   widened to hold one line instead (see the colgroup) and both
-                   halves are nowrap. `.stu-cnic` still carries the type
-                   styling; cnicHtml() carries the mask and the reveal. */}
-            <td>${t.cnic?`<span class="stu-cnic">${cnicHtml(t.cnic)}</span>`:'<span class="stu-dash">—</span>'}</td>
+            ${''/* THE CNIC COLUMN IS GONE (owner, 2026-09-21: "remove the cnic
+                   entire column because if a warden needs a student full detail
+                   it is already in the student profile"). It is still on the
+                   profile, the PDF and the Excel export, and cnicHtml() and
+                   maskCnic() are untouched — only the register column went.
+                   Its 10.6% went back to Student, Contact, Course and Address,
+                   which the owner had asked on 2026-09-15 to let breathe. */}
             ${''/* ONE LINE, THE REST ON HOVER (owner, 2026-09-15: "if has large text
                    then hidden half and Mdcat prep... and show default pop hover").
                    The native title is the hover; the address below does the same. */}

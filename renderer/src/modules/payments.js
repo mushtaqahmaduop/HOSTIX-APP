@@ -713,6 +713,10 @@ function renderPayments() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>
           <span class="pay-lbl-x">More </span>Filters${activeFilters ? `<span class="ui-chip ui-chip--accent ui-chip--count">${activeFilters}</span>` : ''}
         </button>
+        ${''/* The same one-click reset as the students register (owner,
+               2026-09-21). A sibling, never a child — see the note there. */}
+        ${activeFilters?`<button type="button" class="flt-reset" onclick="payResetFilters()"
+                title="Clear all filters" aria-label="Clear all filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>`:''}
         <div class="ui-menu pay-pop" id="pay-pop" role="menu" hidden>
           <div class="ui-menu__t">Scope</div>
           <label class="pay-pop__row"><input type="checkbox" ${payFilter.showAll ? 'checked' : ''}

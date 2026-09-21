@@ -66,12 +66,25 @@
 .stu-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
 .stu-tools .ui-search  { flex:1 1 220px; min-width:180px; max-width:420px; }
 .stu-tools .ui-selectw { min-width:132px; }
-/* Pushes Export to the right edge without a margin on the button itself. */
-.stu-tools__gap { margin-left:auto; }
+/* Pushes Export to the right edge. The auto margin is on the EXPORT CONTROL,
+   not on a spacer: a spacer only works while the bar is one line, and this
+   bar wraps at the widths the screen is used at — Export then started line 2
+   hard against the left. The spacer stays as a no-op so the markup that
+   emits it needs no change. */
+.stu-tools__gap { display:none; }
+.stu-tools .tb-wrap { margin-left:auto; }
 
 /* The Advanced Filters popover is a .ui-menu; this only says where it hangs. */
 .stu-popw { position:relative; }
+
 .stu-pop  { position:absolute; top:calc(100% + var(--space-2)); right:0; }
+
+/* The charge-plan hint that replaced the Rent & mess dropdown (owner,
+   2026-09-21). It sits in the Active card's sub line, so it has to read as
+   a caption and not as a control: no border, no hover, not focusable. */
+.stu-plan-hint { display:inline-block; white-space:nowrap; }
+.stu-plan-hint + .stu-plan-hint { margin-left:var(--space-2); }
+.stu-plan-hint b { font-weight:var(--weight-semibold); color:var(--text-primary); }
 /* Two filter groups, one layout. They are separate classes because they are
    separate filters: `.stu-pop__fee .ui-btn` has to keep meaning the four fee
    states, which is what students-fee-status.spec.js asserts. */
@@ -104,13 +117,12 @@
    wrong answer, not an untidy one. */
 .stu-table col.stu-col-sel     { width:2.6%; }
 .stu-table col.stu-col-id      { width:3.6%; }
-.stu-table col.stu-col-who     { width:14%; }
+.stu-table col.stu-col-who     { width:16%; }
 .stu-table col.stu-col-room    { width:9%; }
 .stu-table col.stu-col-adm     { width:7.5%; }   /* date of admission (owner, 2026-09-20) */
-.stu-table col.stu-col-contact { width:12.2%; }
-.stu-table col.stu-col-cnic    { width:10.6%; }
-.stu-table col.stu-col-course  { width:8.8%; }
-.stu-table col.stu-col-addr    { width:8%; }
+.stu-table col.stu-col-contact { width:13.8%; }
+.stu-table col.stu-col-course  { width:11.8%; }
+.stu-table col.stu-col-addr    { width:12%; }
 .stu-table col.stu-col-charge  { width:9%; }
 .stu-table col.stu-col-status  { width:9%; }
 .stu-table col.stu-col-acts    { width:5.2%; }
