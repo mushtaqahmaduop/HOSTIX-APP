@@ -121,6 +121,47 @@ test('every tab on the strip opens the view it names', async () => {
   await app.close();
 });
 
+test('the KPI strip belongs to Overview alone', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+  await win.evaluate(() => navigate('reports'));
+  await win.waitForSelector('.rpt-tabs', { timeout: 8000 });
+
+  /* Owner, 2026-09-21: "the kpi cards should be only the overview".
+
+     They rendered above all ten tabs, which made them the tallest thing on a
+     detail view and gave the page two navigations for the same ten places —
+     the tab strip, and a card row where every card opens a tab. */
+  expect(await win.evaluate(() => !!document.querySelector('.rpt-stats')),
+    'the strip is missing from Overview, where it belongs').toBe(true);
+
+  const tabs = await win.evaluate(() => document.querySelectorAll('.rpt-tab').length);
+  for (let i = 1; i < tabs; i++) {
+    await win.evaluate(n => document.querySelectorAll('.rpt-tab')[n].click(), i);
+    await win.waitForTimeout(300);
+    const seen = await win.evaluate(() => ({
+      name: (document.querySelector('.rpt-tab.is-on') || {}).textContent?.trim() || '?',
+      strip: !!document.querySelector('.rpt-stats'),
+      cards: document.querySelectorAll('.rpt-stat').length,
+      // The tab strip and the period bar are still there — this removed the
+      // duplicate navigation, not the way back.
+      tabs: !!document.querySelector('.rpt-tabs'),
+      bar: !!document.querySelector('.rpt-bar'),
+    }));
+    expect(seen.strip, seen.name + ' still shows the KPI strip').toBe(false);
+    expect(seen.cards, seen.name + ' still shows KPI cards').toBe(0);
+    expect(seen.tabs && seen.bar, seen.name + ' lost the tab strip or the bar').toBe(true);
+  }
+
+  // …and it comes back with Overview.
+  await win.evaluate(() => document.querySelectorAll('.rpt-tab')[0].click());
+  await win.waitForTimeout(300);
+  expect(await win.evaluate(() => document.querySelectorAll('.rpt-stat').length),
+    'the strip did not come back on Overview').toBeGreaterThan(0);
+
+  await app.close();
+});
+
 test('the month picker moves the whole window, not just the heading', async () => {
   const { app, win } = await openApp();
   await seed(win);

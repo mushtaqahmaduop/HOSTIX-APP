@@ -867,6 +867,68 @@ async function rtDrop(ev, id) {
   toast('Room type order updated', 'success');
 }
 
+/* ── Expense categories: reorder ─────────────────────────────────────────────
+   Owner, 2026-09-21: "the expenses categries should be dragable not fixed".
+
+   The same five handlers as the room-type table above, and deliberately a copy
+   of that shape rather than a shared abstraction over both: the two lists are
+   different types (objects with ids, and bare strings), so a generic version
+   would spend its first three lines working out which it had been handed.
+
+   DRAGGING DOES NOT REPAINT THE REPORT. The Expense Breakdown used to colour
+   each bar by the category's POSITION in this array, so a drag would have
+   recoloured every bar on Reports. expenseCatHue() in utils.js keys the colour
+   by name instead — changed in the same commit as this, and the reason that
+   function exists. */
+let _ecDrag = null;
+
+function ecGrab(el) {
+  const tr = el.closest('tr'); if (!tr) return;
+  /* Only draggable while the pointer is on the grip. Leaving `draggable` on
+     permanently stops text selection inside the row, and releasing on the
+     grip's own mouseup is not enough because the pointer is usually off a 16px
+     icon by the time the button comes up. The `!_ecDrag` guard is what keeps a
+     real drag alive past this. */
+  tr.draggable = true;
+  document.addEventListener('mouseup', function clear() {
+    if (!_ecDrag) tr.draggable = false;
+  }, { once: true });
+}
+
+function ecDragStart(ev, i) {
+  _ecDrag = i;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(i)); } catch (e) {}
+  ev.currentTarget.classList.add('is-dragging');
+}
+function ecDragOver(ev, i) {
+  if (_ecDrag === null || _ecDrag === i) return;
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
+  ev.currentTarget.classList.toggle('is-over-up',   i < _ecDrag);
+  ev.currentTarget.classList.toggle('is-over-down', i > _ecDrag);
+}
+function ecDragLeave(ev) { ev.currentTarget.classList.remove('is-over-up', 'is-over-down'); }
+function ecDragEnd(ev) {
+  _ecDrag = null;
+  if (ev.currentTarget) ev.currentTarget.draggable = false;
+  document.querySelectorAll('#expense-cats-list tr').forEach(tr => {
+    tr.classList.remove('is-dragging', 'is-over-up', 'is-over-down');
+    tr.draggable = false;
+  });
+}
+async function ecDrop(ev, i) {
+  ev.preventDefault();
+  const list = DB.settings.expenseCategories || [];
+  const from = _ecDrag;
+  _ecDrag = null;
+  if (from === null || from === i || from < 0 || from >= list.length
+      || i < 0 || i >= list.length) { ecDragEnd(ev); return; }
+  list.splice(i, 0, list.splice(from, 1)[0]);
+  await saveDB();
+  renderPage('settings');
+  toast('Category order updated', 'success');
+}
+
 /* ── DATA MANAGEMENT ─────────────────────────────────────────────────────── */
 
 function _setBytes(n) {
@@ -1257,7 +1319,8 @@ function _cfgCard(o) {
       </div>
     </div>
     ${o.rows ? `<div class="set-table-wrap"><table class="set-table cfg-table">
-        <thead><tr>${o.cols}</tr></thead><tbody>${o.rows}</tbody></table></div>`
+        <thead><tr>${o.cols}</tr></thead>
+        <tbody${o.bodyId ? ` id="${o.bodyId}"` : ''}>${o.rows}</tbody></table></div>`
              : `<div class="set-empty"><div class="set-empty__i">${icon(o.ico)}</div>
                 <div class="set-empty__t">Nothing here yet</div></div>`}
     <div class="cfg-note">${icon('info', 'xs')}<span>${escHtml(o.note)}</span></div>
@@ -1295,8 +1358,22 @@ function renderConfigurationPanel() {
     </tr>`;
   }).join('');
 
-  const cats = (s.expenseCategories || []).map((c, i) => `<tr>
-      <td class="cfg-n">${i + 1}</td>
+  /* DRAGGABLE, NOT FIXED (owner, 2026-09-21). The array order is the order
+     every expense form lists categories in, so dragging a row is a real edit
+     and not a view preference — the same thing rtDrop() does for room types,
+     and it reuses that table's drop-line styling.
+
+     KEYED BY INDEX, NOT BY NAME. A category is a plain string typed by the
+     owner, and threading one through an inline ondragstart="" attribute makes
+     the first name containing an apostrophe a broken handler. The index is
+     stable for the life of one render, and every drop re-renders. */
+  const cats = (s.expenseCategories || []).map((c, i) => `<tr
+      ondragstart="ecDragStart(event,${i})" ondragover="ecDragOver(event,${i})"
+      ondragleave="ecDragLeave(event)" ondrop="ecDrop(event,${i})" ondragend="ecDragEnd(event)">
+      <td class="cfg-n">
+        <span class="set-grip__h" onmousedown="ecGrab(this)"
+              title="Drag to reorder — this is the order expense forms list categories in">${i + 1}</span>
+      </td>
       <td>${_cfgIconPicker('category', c)}</td>
       <td class="cfg-name">${escHtml(c)}</td>
       ${_cfgActs('category', c)}
@@ -1335,7 +1412,9 @@ function renderConfigurationPanel() {
         ico: 'receipt', hue: 'dh-amber', kind: 'category', addLabel: 'Add category',
         cols: '<th class="cfg-n">#</th><th>Icon</th><th>Category name</th><th>Actions</th>',
         rows: cats,
-        note: 'Every expense is filed under one of these, and the register totals by them.',
+        // ecDragEnd() sweeps this tbody to clear the drop line off every row.
+        bodyId: 'expense-cats-list',
+        note: 'Drag a row by its number to reorder. Every expense is filed under one of these, and the register totals by them.',
       })}
 
       ${_cfgCard({

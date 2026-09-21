@@ -791,10 +791,11 @@ function renderReports() {
   const occRate=DB.rooms.length?Math.round(occ/DB.rooms.length*100):0;
 
   // ── Expense by category ────────────────────────────────────────────────────
-  // Categories carry no colour in settings, so one is assigned by the category's
-  // fixed position in DB.settings.expenseCategories. Position-keyed rather than
-  // render-order-keyed, so a category keeps the same colour when another one
-  // drops out of the period.
+  /* Categories carry no colour in settings, so expenseCatHue() in utils.js
+     answers it — BY NAME. This read `_RPT_HUES[i % len]` off the category's
+     position in DB.settings.expenseCategories, which was fine while that list
+     could only be appended to. Since 2026-09-21 the owner can DRAG those rows,
+     and a position-keyed colour repaints this whole card every time they do. */
   // Fund Transfer is an ordinary member of settings.expenseCategories now, so
   // it needs no special-casing here. It is still appended defensively for an
   // install whose owner deleted the category from Settings while transfer
@@ -809,9 +810,9 @@ function renderReports() {
   }).filter(c=>c.amt>0).sort((a,b)=>b.amt-a.amt);
   const catBars = cats.map(c => `
     <div class="rpt-brow">
-      <span class="rpt-brow__d" style="background:${_RPT_HUES[c.i%_RPT_HUES.length]}"></span>
+      <span class="rpt-brow__d" style="background:${expenseCatHue(c.cat)}"></span>
       <span class="rpt-brow__n" title="${escHtml(c.cat)}">${escHtml(c.cat)}</span>
-      <span class="rpt-brow__t"><span class="rpt-brow__f" style="width:${c.pct}%;background:${_RPT_HUES[c.i%_RPT_HUES.length]}"></span></span>
+      <span class="rpt-brow__t"><span class="rpt-brow__f" style="width:${c.pct}%;background:${expenseCatHue(c.cat)}"></span></span>
       <span class="rpt-brow__v">${fmtPKR(c.amt)}</span>
       <span class="rpt-brow__p">${c.pct}%</span>
     </div>`).join('');
@@ -1177,6 +1178,20 @@ function renderReports() {
     <div class="rpt-none">Pick a start and end month above to build the report.</div>
   </div>`:''}
 
+  ${''/* THE KPI CARDS BELONG TO OVERVIEW, AND ONLY TO OVERVIEW (owner,
+         2026-09-21: "the kpi cards should be only the overview").
+
+         They rendered above every one of the ten tabs. That made them the
+         tallest thing on a detail view — six cards of period totals sitting on
+         top of, say, the Cancellations register, which is not what that page
+         is answering. Worse, they were the page's second navigation: each card
+         opens its own detail view, so a warden on the Payments tab had a tab
+         strip and a card row that both jumped between the same ten places.
+
+         The strip stays a navigation on Overview, where it is the only one and
+         where the figures ARE the subject. A detail view has the tab strip
+         above it and the Back control on the bar. */}
+  ${reportDetail ? '' : `
   <!-- ══ STAT STRIP — each card opens its own detail view ══ -->
   <div class="rpt-stats">
     ${/* COMPACT, THROUGH THE SAME HELPER THE DASHBOARD KPI ROW USES. These
@@ -1225,7 +1240,7 @@ function renderReports() {
     ${stat('students','dh-blue','Residents',nResS,
       `${_rptDelta(sDelta,0,'abs')} joined vs left`,
       '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
-  </div>
+  </div>`}
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
   <!-- ══ MONTHLY OVERVIEW + PAYMENT METHODS — one row ══ -->
@@ -1442,16 +1457,17 @@ function renderReports() {
 }
 
 /* ── Reports v5 — period controls + charts ───────────────────────────────── */
-// Chart series colours. Fixed order so a series keeps its colour between
-// periods; these identify a series, they are not status signals.
-// Expenses are money going out, so a warm ramp led by red reads correctly.
-const _RPT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
-                   '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
-/* _RPT_METHOD_HUES IS GONE. Payment-method colour is one question with one
-   answer and it lives in utils.js as methodHue(); this file's own ramp was the
-   reason the two screens disagreed. _RPT_HUES above stays — that one paints
-   EXPENSE CATEGORIES, which the dashboard does not draw, so there is no second
-   opinion to reconcile. */
+/* _RPT_METHOD_HUES IS GONE, AND SO IS _RPT_HUES.
+
+   Payment-method colour is one question with one answer and it lives in
+   utils.js as methodHue(); this file's own ramp was the reason the two screens
+   disagreed about the same wallet.
+
+   _RPT_HUES painted EXPENSE CATEGORIES and survived that sweep, because the
+   dashboard does not draw them and there was no second opinion to reconcile.
+   It moved to utils.js as EXPENSE_CAT_HUES on 2026-09-21, when the categories
+   became draggable in Settings: the ramp was indexed by a category's POSITION,
+   so a drag would have repainted the card. expenseCatHue() keys it by name. */
 let _rptTrendData = [];
 let _rptDonutData = [];
 let _rptTrendChart = null;

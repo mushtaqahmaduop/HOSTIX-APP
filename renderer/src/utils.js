@@ -309,6 +309,47 @@ function methodHue(name) {
   return spare.get(k) || '#94A3B8';
 }
 
+/* ── EXPENSE-CATEGORY COLOUR — THE ONLY PLACE THAT ANSWERS "WHAT COLOUR IS GAS"
+
+   Same rule as methodHue() above, and it is here for that reason plus one
+   more: the categories became DRAGGABLE in Settings on 2026-09-21.
+
+   Reports picked this colour with `_RPT_HUES[i % len]`, where `i` was the
+   category's POSITION in DB.settings.expenseCategories. That was defensible
+   while the list could only be appended to. The moment the owner can drag a
+   row it becomes the bug methodHue() already documents: reordering the list
+   repaints the whole Expense Breakdown, and a category is a different colour
+   between two visits to the same report for a reason nobody can see.
+
+   So the colour follows the NAME, and dragging changes the order of the list
+   without touching the chart.
+
+   ALLOCATED BY WALKING THE NAMES IN A STABLE ORDER, NOT BY HASHING ONE. A hash
+   can collide however long the ramp is, and the failure is invisible until two
+   particular categories happen to be configured together. Alphabetical is the
+   one ordering the owner cannot change by dragging, which is the whole point.
+
+   THE RAMP moved here from reports.js, where it was `_RPT_HUES`. Expenses are
+   money going out, so a warm ramp led by red reads correctly; these identify a
+   series and are not status signals. */
+const EXPENSE_CAT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
+                          '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
+
+function expenseCatHue(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (!k) return '#94A3B8';
+  const known = ((typeof DB !== 'undefined' && DB.settings && DB.settings.expenseCategories) || [])
+    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean);
+  /* A category can sit on a record while being absent from Settings — one the
+     owner deleted, or Fund Transfer on an install that removed it. It still
+     needs a colour and still must not take one already spoken for, so it joins
+     the same ordering rather than falling to a grey two of them would share. */
+  if (known.indexOf(k) < 0) known.push(k);
+  const names = [...new Set(known)].sort();
+  const i = names.indexOf(k);
+  return i < 0 ? '#94A3B8' : EXPENSE_CAT_HUES[i % EXPENSE_CAT_HUES.length];
+}
+
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──
    Settings is the writer of price; every screen that shows or bills a monthly
    charge is a reader, and reads it through here.
