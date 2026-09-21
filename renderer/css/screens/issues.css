@@ -16,11 +16,10 @@
    spec schedules for stage 8, and is untouched.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Tabs ───────────────────────────────────────────────────────────────────
-   The three-up segmented box is gone: it is a `.ui-tabs` tablist now, marked
-   by the accent underline rather than by filling the active tab. A filled pill
-   reads as a primary action, and a tab is not one. Only the spacing is here. */
-.iss-tabs { margin-bottom: var(--space-3); }
+/* The `.iss-tabs` rule stood here and is deleted with the tab strip it
+   spaced (owner, 2026-09-21: one register). Nothing replaces it: `.ui-stats`
+   carries its own margin-bottom in the component layer, which is what every
+   other stat-strip screen with no tabs already relies on for that gap. */
 
 /* ── Toolbar and footer ─────────────────────────────────────────────────── */
 .iss-tools { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) var(--space-4); }

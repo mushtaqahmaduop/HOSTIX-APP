@@ -23,8 +23,12 @@ const _TABLE_MAP = {
   payments:      'payments',
   expenses:      'expenses',
   cancellations: 'cancellations',
+  /* ONE REGISTER (owner, 2026-09-21). `issues` is the live collection; the
+     other two are kept so a restore of a pre-merge backup has somewhere to
+     land, and as migration 003's rollback path. Nothing reads them. */
   maintenance:   'maintenance',
   complaints:    'complaints',
+  issues:        'issues',
   checkinlog:    'checkinlog',
   notices:       'notices',
   fines:         'fines',

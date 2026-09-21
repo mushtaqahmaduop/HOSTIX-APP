@@ -13,34 +13,20 @@
 'use strict';
 
 
-async function saveMaintenance() {
-  const title = document.getElementById('mt-title')?.value?.trim();
-  if(!title){toast('Enter a title','error');return;}
-  if(!DB.maintenance) DB.maintenance=[];
-  logActivity('Maintenance Added', title, 'Maintenance');
-  DB.maintenance.push({
-    id:'mt_'+uid(), seq:_issNextSeq(DB.maintenance), title, roomId:document.getElementById('mt-room')?.value||'',
-    priority:document.getElementById('mt-priority')?.value||'Medium',
-    description:document.getElementById('mt-desc')?.value?.trim()||'',
-    date:document.getElementById('mt-date')?.value||today(),
-    status:'Open', resolvedDate:''
-  });
-  await saveDB(); closeModal(); renderPage('maintenance'); toast('Maintenance request added','success');
-}async function saveComplaint() {
-  const subject = document.getElementById('cp-subject')?.value?.trim();
-  if(!subject){toast('Enter a subject','error');return;}
-  if(!DB.complaints) DB.complaints=[];
-  logActivity('Complaint Added', subject, 'Complaint');
-  DB.complaints.push({
-    id:'cp_'+uid(), seq:_issNextSeq(DB.complaints), subject,
-    studentId: document.getElementById('cp-student')?.value||'',
-    category: document.getElementById('cp-category')?.value||'General',
-    description: document.getElementById('cp-desc')?.value?.trim()||'',
-    date: document.getElementById('cp-date')?.value||today(),
-    status:'Open', resolvedDate:''
-  });
-  await saveDB(); closeModal(); renderPage('complaints'); toast('Complaint added','success');
-}
+/* saveMaintenance() and saveComplaint() stood here and are deleted.
+
+   They pushed straight into DB.maintenance and DB.complaints, and they had NO
+   CALLERS — verified across the renderer and index.html before removing, and
+   they had already outlived the 2026-09-08 redesign that gave the register its
+   own saveIssue(). The dead-function sweep missed them.
+
+   Left in place they would have become live damage rather than clutter: since
+   2026-09-21 the register reads DB.issues, so a stray call to either would have
+   written a record into a collection nothing displays, and the warden would
+   have watched a saved complaint not appear.
+
+   The one way in is showIssueModal() -> saveIssue() in modules/issues.js. */
+
 async function saveCheckin() {
   const studentId = document.getElementById('ci-student')?.value;
   if(!studentId){toast('Select a student','error');return;}
@@ -3737,8 +3723,12 @@ async function resetAllData() {
     DB.payments=[];
     DB.expenses=[];
     DB.cancellations=[];
+    /* All three: `issues` is what the register reads, and the other two are
+       migration 003's rollback copies. Leaving those behind would mean Reset
+       All Data emptied the screen while the old records sat in the file. */
     DB.maintenance=[];
     DB.complaints=[];
+    DB.issues=[];
     DB.fines=[];
     DB.notices=[];
     DB.activityLog=[];

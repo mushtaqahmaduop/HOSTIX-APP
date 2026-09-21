@@ -119,9 +119,13 @@ test('the glance counts today, and the heading says which day', async () => {
         amount: rent, unpaid: mess, overpaid: 0, status: 'Paid', paidDate: d(4),
         monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
     ];
-    DB.complaints  = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td,   status: 'Open' },
-                      { id: 'cp2', seq: 2, subject: 'Door', date: d(3), status: 'Open' }];
-    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    /* ONE REGISTER since 2026-09-21: the dashboard reads DB.issues and tells
+       the two kinds apart by `kind`. Seeding DB.complaints/DB.maintenance now
+       fills a collection nothing reads. */
+    DB.issues = [{ id: 'cp1', kind: 'complaint',  seq: 1, title: 'Fan',  date: td,   status: 'Open' },
+                 { id: 'cp2', kind: 'complaint',  seq: 2, title: 'Door', date: d(3), status: 'Open' },
+                 { id: 'mt1', kind: 'maintenance', seq: 1, title: 'Tap', date: td,   status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     DB.checkinlog  = [{ id: 'ci1', studentId: 's1', type: 'Check-in',  date: td,   time: '09:00' },
                       { id: 'ci2', studentId: 's1', type: 'Check-out', date: td,   time: '18:00' },
                       { id: 'ci3', studentId: 's3', type: 'Check-in',  date: d(2), time: '10:00' }];
@@ -185,7 +189,7 @@ test('the glance and Collection by Method cover different windows, and each says
         unpaid: 0, overpaid: 0, status: 'Paid', paidDate: d(3),
         monthlyRent: rent, messCharge: mess, messIncluded: true, method: 'JazzCash' },
     ];
-    DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
@@ -236,7 +240,7 @@ test('the glance does NOT follow the sidebar month picker — it is a day card',
       { id: 's2', name: 'July Joiner',  roomId: 'r1', status: 'Active', joinDate: '2026-07-04', messOptIn: true, paymentMethod: 'Cash' },
       { id: 's3', name: 'Aug Joiner',   roomId: 'r1', status: 'Active', joinDate: '2026-08-06', messOptIn: true, paymentMethod: 'Cash' },
     ];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.checkinlog = []; DB.cancellations = [];
     await saveDB();
   }, [RENT, MESS]);
 
@@ -275,7 +279,7 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
   await seed(win, async () => {
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
     DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
     await saveDB();
   });
 
@@ -315,7 +319,8 @@ test('Needs Action keeps all four rows, and only the numbers change', async () =
     DB.payments = [{ id: 'p1', studentId: 's1', studentName: 'A', month: thisMonth(),
                      date: td, amount: 0, unpaid: 14500, status: 'Pending',
                      monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' }];
-    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
+    DB.issues = [{ id: 'cp1', kind: 'complaint', seq: 1, title: 'Fan', date: td, status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     await saveDB();
     navigate('dashboard');
   });
@@ -360,7 +365,7 @@ test('every Quick Action opens its own form, and Seat Availability can expand an
   await seed(win, async () => {
     DB.rooms = [{ id: 'r1', number: '1', floor: 'G', typeId: '2s', studentIds: ['s1'], amenities: [], notes: '' }];
     DB.students = [{ id: 's1', name: 'A', roomId: 'r1', status: 'Active', joinDate: today(), messOptIn: true, paymentMethod: 'Cash' }];
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = []; DB.checkinlog = [];
     await saveDB();
   });
 
@@ -455,7 +460,7 @@ test('the expanded seat grid separates rooms with space, full rooms and over-fil
     mk('sr1', 1, 'a');          // space left
     mk('sr2', cap, 'b');        // exactly full
     mk('sr3', cap + 2, 'c');    // deliberately over-filled
-    DB.payments = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = [];
+    DB.payments = []; DB.issues = []; DB.complaints = []; DB.maintenance = []; DB.cancellations = [];
     await saveDB();
   });
 
@@ -537,8 +542,9 @@ test('rows A-C reach the fold at every shipped size, on a 40-room hostel', async
                          status: i % 3 ? 'Paid' : 'Pending', paidDate: i % 3 ? td : '',
                          monthlyRent: 8000, messCharge: 6500, messIncluded: true, method: 'Cash' });
     }
-    DB.complaints = [{ id: 'cp1', seq: 1, subject: 'Fan', date: td, status: 'Open' }];
-    DB.maintenance = [{ id: 'mt1', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    DB.issues = [{ id: 'cp1', kind: 'complaint',  seq: 1, title: 'Fan', date: td, status: 'Open' },
+                 { id: 'mt1', kind: 'maintenance', seq: 1, title: 'Tap', date: td, status: 'Open' }];
+    DB.complaints = []; DB.maintenance = [];
     DB.cancellations = [{ id: 'c1', seq: 1, studentId: 's1', studentName: 'Student 1',
                           roomNumber: '2', requestDate: td, vacateDate: '2026-09-30',
                           status: 'Pending', reason: 'x', createdAt: td }];

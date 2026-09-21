@@ -1347,8 +1347,11 @@ function _dlGlance(mo) {
        day, and Needs Action in row C already carries the pending ones. */
     { k: 'cancel',label: 'Cancellations',full: 'Cancellations filed today',  n: (DB.cancellations || []).filter(c => isToday(c.requestDate)).length,  page: 'cancellations' },
     { k: 'money', label: 'Payments',    full: 'Payments collected today',   n: paid.length, money: paid.reduce((s, p) => s + money(p.amount), 0), page: 'payments' },
-    { k: 'issue', label: 'Complaints',  full: 'Complaints raised today',    n: (DB.complaints || []).filter(c => isToday(c.date || c.createdAt)).length,  page: 'issues' },
-    { k: 'wrench',label: 'Maintenance', full: 'Maintenance raised today',   n: (DB.maintenance || []).filter(m => isToday(m.date || m.createdAt)).length, page: 'maintenance' },
+    /* ONE REGISTER (owner, 2026-09-21), still two facts. Both read DB.issues
+       and tell each other apart by `kind`, and both land on the same page —
+       'maintenance' was a route of its own and is now the same register. */
+    { k: 'issue', label: 'Complaints',  full: 'Complaints raised today',    n: (DB.issues || []).filter(c => c.kind !== 'maintenance' && isToday(c.date || c.createdAt)).length, page: 'issues' },
+    { k: 'wrench',label: 'Maintenance', full: 'Maintenance raised today',   n: (DB.issues || []).filter(m => m.kind === 'maintenance' && isToday(m.date || m.createdAt)).length, page: 'issues' },
   ];
 }
 
@@ -1600,9 +1603,9 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       one:'pending cancellation', many:'pending cancellations', verb:'View',    page:'cancellations' },
     { k:'card',   tone:'red',    n:pendingCount,
       one:'pending payment',      many:'pending payments',      verb:'Collect', page:'payments' },
-    { k:'issue',  tone:'violet', n:(DB.complaints||[]).filter(c=>c.status==='Open').length,
+    { k:'issue',  tone:'violet', n:(DB.issues||[]).filter(c=>c.kind!=='maintenance'&&c.status==='Open').length,
       one:'open complaint',       many:'open complaints',       verb:'Resolve', page:'issues' },
-    { k:'wrench', tone:'blue',   n:(DB.maintenance||[]).filter(m=>m.status==='Open').length,
+    { k:'wrench', tone:'blue',   n:(DB.issues||[]).filter(m=>m.kind==='maintenance'&&m.status==='Open').length,
       one:'open maintenance',     many:'open maintenance jobs', verb:'Assign',  page:'issues' },
   ];
   // The pill counts the rows that still want something, not the rows on screen —
@@ -1669,8 +1672,7 @@ function _dashLedgerRow(mo, pending, pendingCount) {
          open it names that instead of claiming everything is smooth. */
       +   '<div class="dl-foot dl-foot--tint">' + _dlIco('pulse')
       +     '<span>' + (() => {
-              const open = (DB.complaints || []).filter(c => c.status === 'Open').length
-                         + (DB.maintenance || []).filter(m => m.status === 'Open').length;
+              const open = (DB.issues || []).filter(i => i.status === 'Open').length;
               return open
                 ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' to clear today'
                 : 'Keep things running smoothly';

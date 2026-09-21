@@ -416,7 +416,10 @@ document.addEventListener('keydown', function(e) {
 // 'all' | 'maintenance' | 'complaints'. v5 lands on the unified feed the
 // reference design shows; nav.js still forces a single kind for the
 // /maintenance and /complaints routes.
-var issuesTab = 'all';
+/* `issuesTab` stood here. It chose which kind the issues screen showed, and
+   it went with the tab strip on 2026-09-21 — one register, nothing to
+   choose. Removed rather than left at 'all': a global nothing reads is a
+   question for whoever finds it next. */
 
 
 // ── Fix #8: Patch window.open so receipt windows never show LICENSE INFO ──────

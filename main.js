@@ -32,6 +32,12 @@ const Database = require('better-sqlite3');
 const migration001 = require('./migrations/001-relational-schema');
 // The append-only student ledger (warden ledger spec §2.1) and its guards.
 const ledgerStore = require('./migrations/002-student-ledger');
+const migration003 = require('./migrations/003-issues-merge');
+
+/* The newest schema this build understands. It is 003's, not 001's: the
+   downgrade guard below compares against it, and a guard that still named 001
+   would wave through a v2 file this build could only half-read. */
+const SUPPORTED_SCHEMA = migration003.SCHEMA_VERSION;
 let db = null;
 // The live database file. Held at module scope because the restore path needs
 // to snapshot it before it mutates it, and initDatabase() is long finished by
@@ -45,7 +51,7 @@ let dbPath = null;
    silently dropped by the next restore, which is the kind of data loss nobody
    notices until they need the data. */
 const BACKUP_TABLES = ['rooms','students','payments','expenses','cancellations',
-  'maintenance','complaints','checkinlog','notices','fines',
+  'maintenance','complaints','issues','checkinlog','notices','fines',
   'activitylog','inspections','billsplits','transfers','archive'];
 
 /* THE HANDOVER TABLES (warden ledger spec §2.2–2.3, step 4). Backed up and
@@ -287,13 +293,13 @@ function initDatabase() {
        it is the app that is behind — so nothing is migrated, renamed or
        touched. */
     const found = _readSchemaVersion(handle);
-    if (found > migration001.SCHEMA_VERSION) {
+    if (found > SUPPORTED_SCHEMA) {
       try { handle.close(); } catch (_) {}
       db = null;
       _setDbHealth('UNSUPPORTED_SCHEMA',
         'This data was created by a newer version of Hostyllo (database format v' +
-        found + '; this version understands up to v' + migration001.SCHEMA_VERSION + ').',
-        'schema v' + found + ' > supported v' + migration001.SCHEMA_VERSION);
+        found + '; this version understands up to v' + SUPPORTED_SCHEMA + ').',
+        'schema v' + found + ' > supported v' + SUPPORTED_SCHEMA);
       return null;
     }
   }
@@ -325,6 +331,12 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS cancellations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS maintenance   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS complaints    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+    /* One register (owner, 2026-09-21). The maintenance and complaints tables
+       above are kept and still created: migration 003 COPIES out of them rather
+       than moving, so they are the rollback path for one release, and a restore
+       of a backup taken before the merge still has somewhere to land.
+       (No backticks in here - this whole block is a template literal.) */
+    CREATE TABLE IF NOT EXISTS issues        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS checkinlog    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS notices       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS fines         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -359,6 +371,28 @@ function initDatabase() {
     }
     const migRes = migration001.migrateDatabase(db);
     if (migRes.migrated) console.log('[HOSTYLLO] Schema migrated to v' + migRes.version);
+
+    /* ── 003 — maintenance + complaints become one `issues` table ──────────
+       Its own snapshot, and its own name. pre-v1.bak is written once, before
+       the FIRST migration this database ever saw; a hostel that has been on v1
+       for months has one that predates everything since, so it is not the file
+       anyone would want back after v2. A version gets the backup taken on its
+       own doorstep or it effectively has none.
+
+       Same `dbExisted` guard: a database this launch created is empty, and a
+       snapshot of nothing is noise in the customer's folder. */
+    if (dbExisted && migration003.currentVersion(db) < migration003.SCHEMA_VERSION) {
+      const bak2 = dbPath + '.pre-v2.bak';
+      if (!fs.existsSync(bak2)) {
+        db.exec(`VACUUM INTO '${bak2.replace(/'/g, "''")}'`);
+        console.log('[HOSTYLLO] Pre-migration backup written:', bak2);
+      }
+    }
+    const migRes3 = migration003.migrateDatabase(db);
+    if (migRes3.migrated) {
+      console.log('[HOSTYLLO] Schema migrated to v' + migRes3.version +
+                  ' (' + migRes3.copied + ' issues merged)');
+    }
   } catch (e) {
     console.error('[HOSTYLLO] Schema migration failed (continuing on existing schema):', e.message);
   }

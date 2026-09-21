@@ -98,7 +98,13 @@ function migrateStudentIdsToNumeric() {
   ['payments', 'cancellations', 'roomShifts', 'checkinlog', 'fines',
    'archive', 'complaints', 'issues', 'billSplits'].forEach(function (col) {
     (DB[col] || []).forEach(function (r) {
-      if (r && r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      if (!r) return;
+      if (r.studentId && idMap[r.studentId]) r.studentId = idMap[r.studentId];
+      /* `raisedById` is the SAME LINK under the other name — a maintenance
+         ticket's resident. It was never remapped because maintenance was not in
+         this list at all; now that both kinds live in `issues`, missing it would
+         point every "raised by" at whoever inherits that code. */
+      if (r.raisedById && idMap[r.raisedById]) r.raisedById = idMap[r.raisedById];
     });
   });
 
@@ -1242,11 +1248,100 @@ function studentsByRoom(list) {
   });
 }
 
+/* ─── ONE ISSUES REGISTER — the shared transform ─────────────────────────────
+
+   Maintenance and complaints became one `issues` collection on 2026-09-21
+   (owner). Two places have to perform that fold and they must agree exactly:
+
+     migrations/003-issues-merge.js   the SQLite tables, once, on upgrade
+     _initDBFields() in modals.js     a RESTORED BACKUP written before the merge
+
+   The second is not optional. A backup file taken last month carries
+   `maintenance` and `complaints` and no `issues`, and restoreBackup() hands it
+   straight to _initDBFields(). Without the fold the register comes back EMPTY
+   and nothing says so — the records are in the file, just not where anything
+   looks.
+
+   So the transform lives HERE, in the module the renderer loads as globals and
+   node can require, and both callers use this one copy. The alternative is two
+   implementations of a data migration that must agree forever, which is the
+   mistake the vendored server copy exists to avoid.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/** The middle state, for both kinds, since the merge. */
+const ISSUE_MIDDLE_STATUS = 'InProgress';
+
+/**
+ * One maintenance ticket or complaint, as an issues record.
+ *
+ * Starts from a copy of the WHOLE record and applies three named changes — a
+ * whitelist would silently drop whatever it forgot, and it forgets the next
+ * field somebody adds to the form.
+ *
+ *   kind              stamped; it is what MA-/CO- reads
+ *   subject → title   one thing had two names, and one form cannot have both
+ *   UnderReview → InProgress   one register, one word for the middle state
+ *
+ * `seq` is stamped when absent, from the record's position in its ORIGINAL
+ * collection. Records written before `seq` existed fall back to that position
+ * for their reference number, and after the fold there is no such position —
+ * so this is the last moment MA-0004 can be kept at MA-0004.
+ *
+ * @param {'maintenance'|'complaint'} kind
+ * @param {object} rec
+ * @param {number} position  1-based, within its own original collection
+ */
+function issueMergeRecord(kind, rec, position) {
+  const out = Object.assign({}, rec);
+  out.kind = kind;
+  if (kind === 'complaint') {
+    // Both spellings can sit on a record edited across versions; `subject` wins
+    // because it is what the complaint form wrote.
+    out.title = String(rec.subject || rec.title || '');
+    delete out.subject;
+  } else {
+    out.title = String(rec.title || '');
+  }
+  if (out.status === 'UnderReview') out.status = ISSUE_MIDDLE_STATUS;
+  if (!Number(out.seq)) out.seq = Number(position) || 1;
+  return out;
+}
+
+/**
+ * Fold a pre-merge database shape into `d.issues`. Idempotent, and ONCE.
+ *
+ * The flag is load-bearing rather than tidy. Without it, every load would fold
+ * the legacy arrays again — and since those arrays are deliberately left
+ * populated as the rollback path, an issue the warden DELETED would come back
+ * on the next launch. So the fold happens once per database and is recorded.
+ */
+function issuesFoldLegacy(d) {
+  if (!d) return d;
+  if (!Array.isArray(d.issues)) d.issues = [];
+  if (!d.settings) d.settings = {};
+  if (d.settings.issuesMergedAt) return d;
+
+  const have = new Set(d.issues.map(function (x) { return x && x.id; }).filter(Boolean));
+  const take = function (arr, kind) {
+    (Array.isArray(arr) ? arr : []).forEach(function (rec, i) {
+      if (!rec || !rec.id || have.has(rec.id)) return;
+      d.issues.push(issueMergeRecord(kind, rec, i + 1));
+      have.add(rec.id);
+    });
+  };
+  take(d.maintenance, 'maintenance');
+  take(d.complaints, 'complaint');
+
+  d.settings.issuesMergedAt = new Date().toISOString().slice(0, 10);
+  return d;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     validateKeyFormat, validateKeyChecksum, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
-    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo
+    buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────
@@ -1286,7 +1381,10 @@ if (typeof module !== 'undefined' && module.exports) {
    naming an internal field.                                                  */
 const BACKUP_COLLECTIONS = [
   'students', 'rooms', 'payments', 'expenses', 'cancellations', 'maintenance',
-  'complaints', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
+  // `issues` is where maintenance and complaints live since 2026-09-21. The two
+  // older names stay listed so a backup written before the merge still counts as
+  // a valid file — restoreBackup() folds them in on the way through.
+  'complaints', 'issues', 'checkinlog', 'notices', 'fines', 'activityLog', 'inspections',
   'billSplits', 'transfers', 'roomShifts', 'archive',
   // The student ledger: camelCase from Settings → Export Data, the table name
   // from the menu backup. Both are lists of records with ids.

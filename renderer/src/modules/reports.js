@@ -2120,7 +2120,7 @@ function _rptCancels() {
 }
 function _rptIssues() {
   const keys = _rptKeys();
-  const all = (DB.maintenance || []).concat(DB.complaints || []);
+  const all = DB.issues || [];   // one register since 2026-09-21
   return all.filter(i =>
     keys.some(k => String((i && (i.date || i.createdAt)) || '').indexOf(k) === 0));
 }

@@ -68,8 +68,10 @@ async function launch() {
     }
     DB.expenses = [{ id: 'e1', date: '2026-09-01', category: 'Utilities',
       description: 'Bill', amount: 5000 }];
-    DB.maintenance = [{ id: 'mt_1', seq: 1, title: 'Tap', description: 'Leak',
+    // ONE REGISTER since 2026-09-21 — DB.issues, with the kind stamped.
+    DB.issues = [{ id: 'mt_1', kind: 'maintenance', seq: 1, title: 'Tap', description: 'Leak',
       roomId: r0.id, priority: 'High', date: '2026-09-02', status: 'Open', resolvedDate: '' }];
+    DB.maintenance = [];
     DB.cancellations = [{ id: 'canc_1', seq: 1, studentId: 'p1', studentName: 'Student 1',
       roomId: r0.id, roomNumber: r0.number, requestDate: '2026-09-01',
       vacateDate: '2026-09-30', status: 'Pending', reason: '' }];

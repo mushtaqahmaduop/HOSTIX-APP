@@ -261,6 +261,16 @@ function _initDBFields(d) {
   if (!Array.isArray(d.handoverItems))     d.handoverItems = [];
   if (!Array.isArray(d.concessions))       d.concessions = [];   // concessions.js (step 8)
   if (!d.settings) d.settings = {};
+
+  /* ONE ISSUES REGISTER (owner, 2026-09-21).
+
+     This runs for loadDB() AND for restoreBackup(), which is the point: a
+     backup file written before the merge carries `maintenance` and
+     `complaints` and no `issues`, and without this the register comes back
+     empty with the records sitting in the file, unread. The fold is recorded
+     in settings and happens once — see issuesFoldLegacy() for why running it
+     twice would resurrect deleted records. */
+  issuesFoldLegacy(d);
   // Init roomTypes BEFORE generateRooms so rooms get correct default rents
   // roomTypes already initialized above (before generateRooms)
   if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);

@@ -1,8 +1,17 @@
 // ════════════════════════════════════════════════════════════════════════════
-// The Complaints & Maintenance register — redesigned 2026-09-08 to
-// `complaints2.png` and `add complaaint and maintinanace.png`.
+// The Complaints register — ONE register, ONE form (owner, 2026-09-21).
+//
+// Maintenance and complaints were two collections behind a three-tab strip and
+// two forms. They are one `issues` collection now, and the CATEGORY decides
+// which kind a new record is: Maintenance numbers MA-, everything else CO-.
+// Redesigned 2026-09-08 to `complaints2.png`; merged 2026-09-21.
 //
 // What this file holds closed, and why each one is here:
+//
+//  0. The merge itself: one list carrying both kinds, both reference series
+//     intact, the category deciding the kind of a NEW record and never
+//     renumbering an existing one, and a staff-raised job still loggable
+//     without a student.
 //
 //  1. The register is a TABLE of ten named columns. The screen was a card feed
 //     until this change; a spec that only counts rows would pass on either.
@@ -66,29 +75,33 @@ async function seed(win) {
       { id: 'stu-b', name: 'Asif Raza', phone: '0300-3334444', cnic: '17301-7654321-9',
         roomId: r1.id, status: 'Active', admissionDate: '2026-03-11', monthlyRent: 12000 });
 
-    DB.maintenance = [
-      { id: 'mt_1', seq: 1, title: 'Water leakage in bathroom', description: 'Leaking tap.',
-        roomId: r0.id, category: 'Plumbing', priority: 'High', location: 'Bathroom',
-        date: '2026-09-02', expectedDate: '2026-09-05', assignedTo: 'Azat Ullah',
-        status: 'Open', resolvedDate: '' },
-      { id: 'mt_2', seq: 2, title: 'Fan not working', description: 'Noisy fan.',
-        roomId: r1.id, category: 'Electrical', priority: 'Medium',
+    /* ONE collection, both kinds, in the shape migration 003 leaves them:
+       `kind` stamped, `title` for what a complaint used to call `subject`. The
+       two series are independent, so MA-0001 and CO-0001 both exist. */
+    DB.issues = [
+      { id: 'mt_1', kind: 'maintenance', seq: 1, title: 'Water leakage in bathroom',
+        description: 'Leaking tap.', roomId: r0.id, category: 'Plumbing', priority: 'High',
+        location: 'Bathroom', date: '2026-09-02', expectedDate: '2026-09-05',
+        assignedTo: 'Azat Ullah', status: 'Open', resolvedDate: '' },
+      { id: 'mt_2', kind: 'maintenance', seq: 2, title: 'Fan not working',
+        description: 'Noisy fan.', roomId: r1.id, category: 'Electrical', priority: 'Medium',
         date: '2026-09-05', expectedDate: '2026-09-20', assignedTo: 'Hikmat Ullah',
         status: 'InProgress', resolvedDate: '' },
       // Pre-2026-09-08 shape: no category, no assignee, no expected date.
-      { id: 'mt_3', seq: 3, title: 'WiFi dead on first floor', description: 'No internet.',
-        roomId: r1.id, priority: 'Low', date: '2026-08-11', status: 'Open', resolvedDate: '' },
-    ];
-
-    DB.complaints = [
-      { id: 'cp_1', seq: 1, subject: 'No hot water', description: 'Geyser cold before 8am.',
-        studentId: 'stu-a', category: 'Plumbing', priority: 'High', assignedTo: 'Azat Ullah',
-        date: '2026-09-03', expectedDate: '2026-09-06', status: 'Open', resolvedDate: '', response: '' },
+      { id: 'mt_3', kind: 'maintenance', seq: 3, title: 'WiFi dead on first floor',
+        description: 'No internet.', roomId: r1.id, priority: 'Low', date: '2026-08-11',
+        status: 'Open', resolvedDate: '' },
+      { id: 'cp_1', kind: 'complaint', seq: 1, title: 'No hot water',
+        description: 'Geyser cold before 8am.', studentId: 'stu-a', category: 'Plumbing',
+        priority: 'High', assignedTo: 'Azat Ullah', date: '2026-09-03',
+        expectedDate: '2026-09-06', status: 'Open', resolvedDate: '', response: '' },
       // Pre-2026-09-08 shape: no category, no priority, no assignee.
-      { id: 'cp_2', seq: 2, subject: 'Noise after midnight', description: 'Music late.',
-        studentId: 'stu-b', date: '2026-08-20', status: 'Resolved',
+      { id: 'cp_2', kind: 'complaint', seq: 2, title: 'Noise after midnight',
+        description: 'Music late.', studentId: 'stu-b', date: '2026-08-20', status: 'Resolved',
         resolvedDate: '2026-08-24', response: 'Warned the residents.' },
     ];
+    DB.maintenance = [];        // migration 003's rollback copies; nothing reads them
+    DB.complaints = [];
     await saveDB();
   });
   /* The register opens scoped to the CURRENT month (owner, 2026-09-08), and
@@ -97,7 +110,6 @@ async function seed(win) {
      so the scope is widened here; the default itself is asserted on its own,
      in `the register opens on the current month` at the foot of this file. */
   await win.evaluate(() => {
-    issuesTab = 'all';
     navigate('issues');
     issueFilter.month = '';
     renderPage('issues');
@@ -195,46 +207,98 @@ test('category chips are neutral; priority and status keep their hue', async () 
   await app.close();
 });
 
-test('the form adds, edits in place, and fills a complaint room from its student', async () => {
+test('ONE form: the category decides the kind, and an edit never renumbers', async () => {
   test.setTimeout(240000);
   const { app, win } = await launch();
   await seed(win);
 
-  // ── Add a complaint through the new form ──────────────────────────────────
-  await win.evaluate(() => { issuesTab = 'complaints'; showIssueModal(); });
-  await win.waitForSelector('#cp-subject', { timeout: 15000 });
+  // -- There is no kind to choose any more ----------------------------------
+  await win.evaluate(() => showIssueModal());
+  await win.waitForSelector('#mt-title', { timeout: 15000 });
 
+  const formShape = await win.evaluate(() => ({
+    // The Maintenance / Complaint switcher is gone: the category decides.
+    kindSwitch: !!document.getElementById('ib-maint') || !!document.getElementById('ib-comp'),
+    // The second form is gone with it.
+    secondForm: !!document.getElementById('if-comp'),
+    // Maintenance is a CATEGORY now, and it is offered.
+    cats: [...document.getElementById('mt-category').options].map(o => o.value),
+    // "Raised by" survives, and it asks a different question: WHO reported it.
+    raisedBy: !!document.getElementById('mt-by-stu') && !!document.getElementById('mt-by-staff'),
+  }));
+  expect(formShape.kindSwitch, 'the old kind switcher is still on the form').toBe(false);
+  expect(formShape.secondForm, 'the second form is still in the DOM').toBe(false);
+  expect(formShape.cats).toContain('Maintenance');
+  expect(formShape.cats).toContain('Plumbing');
+  expect(formShape.raisedBy, 'a staff-raised job can no longer be logged').toBe(true);
+
+  // -- A student-raised issue, category Furniture -> a COMPLAINT, CO- --------
   const room = await win.evaluate(() => {
-    const sel = document.getElementById('cp-student');
+    const sel = document.getElementById('mt-raised-stu');
     sel.value = 'stu-a';
     sel.dispatchEvent(new Event('change'));
-    return document.getElementById('cp-room').value;
+    return document.getElementById('mt-room').value;
   });
-  const expectedRoom = await win.evaluate(() => {
-    const s = DB.students.find(t => t.id === 'stu-a');
-    const r = DB.rooms.find(x => x.id === s.roomId);
-    return '#' + String(r.number);
-  });
-  expect(room).toBe(expectedRoom);
+  const expectedRoom = await win.evaluate(() =>
+    DB.students.find(t => t.id === 'stu-a').roomId);
+  expect(room, 'the room does not follow the student who raised it').toBe(expectedRoom);
 
   await win.evaluate(async () => {
-    document.getElementById('cp-subject').value = 'Broken window latch';
-    document.getElementById('cp-desc').value = 'The latch will not close.';
-    document.getElementById('cp-category').value = 'Furniture';
-    document.getElementById('cp-assigned').value = 'Azat Ullah';
+    document.getElementById('mt-title').value = 'Broken window latch';
+    document.getElementById('mt-desc').value = 'The latch will not close.';
+    document.getElementById('mt-category').value = 'Furniture';
+    document.getElementById('mt-assigned').value = 'Azat Ullah';
     await saveIssue();
   });
   await win.waitForTimeout(450);
 
   const added = await win.evaluate(() => {
-    const c = DB.complaints.find(x => x.subject === 'Broken window latch');
-    return c && { cat: c.category, prio: c.priority, asg: c.assignedTo,
-                  stu: c.studentId, status: c.status, count: DB.complaints.length };
+    const c = (DB.issues || []).find(x => x.title === 'Broken window latch');
+    const shown = _issAll().find(i => i.id === c.id);
+    return { kind: c.kind, cat: c.category, prio: c.priority, asg: c.assignedTo,
+             stu: c.studentId, raisedById: c.raisedById, status: c.status,
+             seq: c.seq, ref: _issSeq(shown), count: DB.issues.length };
   });
-  expect(added).toMatchObject({ cat: 'Furniture', prio: 'Medium', asg: 'Azat Ullah',
-                                stu: 'stu-a', status: 'Open', count: 3 });
+  /* A complaint, because Furniture is not Maintenance. It takes the NEXT
+     complaint number - CO-0003 after the two seeded - and the maintenance
+     series is untouched. The resident is stored as `studentId`, the key a
+     complaint has always used. */
+  expect(added).toMatchObject({ kind: 'complaint', cat: 'Furniture', prio: 'Medium',
+    asg: 'Azat Ullah', stu: 'stu-a', raisedById: '', status: 'Open',
+    seq: 3, ref: 'CO-0003', count: 6 });
 
-  // ── Edit an existing maintenance record ───────────────────────────────────
+  // -- Category Maintenance -> a JOB, numbered MA-, raised by STAFF ----------
+  await win.evaluate(() => showIssueModal());
+  await win.waitForSelector('#mt-title', { timeout: 15000 });
+  await win.evaluate(() => _issMtRaiser('staff'));
+  await win.waitForSelector('#mt-raised', { timeout: 15000 });
+
+  /* Choosing Staff pre-fills whoever is signed in - they are the one at the
+     keyboard writing it. The guarantee predates the merge and survives it. */
+  expect(await win.evaluate(() => document.getElementById('mt-raised').value),
+    'choosing Staff does not pre-fill the signed-in user').toBeTruthy();
+
+  await win.evaluate(async () => {
+    document.getElementById('mt-title').value = 'Burst pipe in the kitchen';
+    document.getElementById('mt-category').value = 'Maintenance';
+    document.getElementById('mt-raised').value = 'Gul Nawaz';
+    document.getElementById('mt-location').value = 'Kitchen';
+    await saveIssue();
+  });
+  await win.waitForTimeout(450);
+
+  const job = await win.evaluate(() => {
+    const m = (DB.issues || []).find(x => x.title === 'Burst pipe in the kitchen');
+    return { kind: m.kind, seq: m.seq, ref: _issSeq(_issAll().find(i => i.id === m.id)),
+             raisedBy: m.raisedBy, studentId: m.studentId, loc: m.location,
+             idPrefix: m.id.slice(0, 3) };
+  });
+  /* THE RECORD NOBODY COULD HAVE LOGGED without the Raised by switch: a job
+     reported by the cook, with no student behind it at all. */
+  expect(job).toMatchObject({ kind: 'maintenance', seq: 4, ref: 'MA-0004',
+    raisedBy: 'Gul Nawaz', studentId: '', loc: 'Kitchen', idPrefix: 'mt_' });
+
+  // -- Editing keeps the record, its number AND its kind --------------------
   await win.evaluate(() => showIssueModal('mt_1'));
   await win.waitForSelector('#mt-title', { timeout: 15000 });
 
@@ -245,46 +309,40 @@ test('the form adds, edits in place, and fills a complaint room from its student
     loc: document.getElementById('mt-location').value,
     exp: document.getElementById('mt-expected').value,
     asg: document.getElementById('mt-assigned').value,
-    /* WHO REPORTED IT (owner, 2026-09-10: "add maintinance raised in the
-       maintinaance form"). This ticket was seeded before the field existed, so
-       it has nothing recorded and the box opens empty rather than inventing a
-       name for a record nobody signed. */
-    raised: document.getElementById('mt-raised').value,
-    // A complaint cannot become a maintenance ticket, so the kind switch is
-    // not offered on an edit.
-    // The KIND switch specifically: since 2026-09-14 the form also carries a
-    // Student / Staff switch on "Raised by", drawn with the same component.
-    hasSwitch: !!document.getElementById('ib-maint'),
   }));
   expect(prefill).toEqual({ title: 'Water leakage in bathroom', cat: 'Plumbing',
-    prio: 'High', loc: 'Bathroom', exp: '2026-09-05', asg: 'Azat Ullah',
-    raised: '', hasSwitch: false });
+    prio: 'High', loc: 'Bathroom', exp: '2026-09-05', asg: 'Azat Ullah' });
 
+  /* RE-CATEGORISING MUST NOT REISSUE THE NUMBER. mt_1 is a maintenance record
+     filed under Plumbing; moving it to a category that would make a NEW record
+     a complaint has to leave it MA-0001, because that number may already be on
+     a printed sheet. The kind is set once, at creation. */
   await win.evaluate(async () => {
     document.getElementById('mt-title').value = 'Water leakage in bathroom (re-checked)';
+    document.getElementById('mt-category').value = 'Cleanliness';
     document.getElementById('mt-raised').value = 'Gul Nawaz';
     await saveIssue('mt_1');
   });
   await win.waitForTimeout(450);
 
   const edited = await win.evaluate(() => {
-    const m = DB.maintenance.find(x => x.id === 'mt_1');
-    return { title: m.title, seq: m.seq, cat: m.category, raisedBy: m.raisedBy,
-             count: DB.maintenance.length };
+    const m = (DB.issues || []).find(x => x.id === 'mt_1');
+    return { title: m.title, kind: m.kind, seq: m.seq, cat: m.category,
+             raisedBy: m.raisedBy, ref: _issSeq(_issAll().find(i => i.id === 'mt_1')),
+             count: DB.issues.length };
   });
-  // Edited in place: same record, same reference number, no duplicate.
   expect(edited).toEqual({ title: 'Water leakage in bathroom (re-checked)',
-                           seq: 1, cat: 'Plumbing', raisedBy: 'Gul Nawaz', count: 3 });
+    kind: 'maintenance', seq: 1, cat: 'Cleanliness', raisedBy: 'Gul Nawaz',
+    ref: 'MA-0001', count: 7 });
 
-  /* …and it reaches the register, the search and the export — the three
-     surfaces that were printing a blank for every maintenance ticket because
-     nothing ever recorded who raised one. */
+  /* ...and who raised it reaches the register, the search and the export - the
+     three surfaces that printed a blank for every maintenance ticket before
+     the field existed. */
   await win.evaluate(() => {
     closeModal();
-    issuesTab = 'maintenance'; issueFilter.search = ''; issueFilter.month = '';
+    issueFilter.search = ''; issueFilter.month = '';
     renderPage('issues');
   });
-  // renderPage() defers its work by 80ms, so the DOM has to be read after it.
   await win.waitForTimeout(450);
 
   const reaches = await win.evaluate(() => {
@@ -299,28 +357,33 @@ test('the form adds, edits in place, and fills a complaint room from its student
   });
   expect(reaches.cell, 'the register does not name who raised the ticket')
     .toContain('Gul Nawaz');
-  expect(reaches.hits, 'searching for who raised it found nothing').toBe(1);
+  expect(reaches.hits, 'searching for who raised it found nothing').toBe(2);
   expect(reaches.exported, 'the export still has a blank Raised by for maintenance')
     .toBe('Gul Nawaz');
 
-  /* A NEW ticket opens on STUDENT (owner, 2026-09-17: "keep the maintinace
-     raised by student default") — most jobs are reported by the person living
-     with the fault. The staff box is therefore hidden on open, which is why
-     this used to wait on #mt-raised and time out: waitForSelector waits for
-     VISIBILITY. Switch to Staff first, then assert the old guarantee still
-     holds — that when you do choose Staff, it is pre-filled with whoever is
-     signed in, since they are the one at the keyboard. */
-  await win.evaluate(() => { issuesTab = 'maintenance'; showIssueModal(); });
-  await win.waitForSelector('#mt-raised-stu-q', { timeout: 15000 });
-  const opensOn = await win.evaluate(() =>
-    document.getElementById('mt-by-stu').classList.contains('is-on') ? 'student' : 'staff');
-  expect(opensOn, 'a new maintenance ticket does not open on Student').toBe('student');
+  await app.close();
+});
 
-  await win.evaluate(() => _issMtRaiser('staff'));
-  await win.waitForSelector('#mt-raised', { timeout: 15000 });
-  const dflt = await win.evaluate(() => document.getElementById('mt-raised').value);
-  expect(dflt, 'choosing Staff does not pre-fill the signed-in user')
-    .toBeTruthy();
+test('the register is ONE list: both kinds together, and no tab strip', async () => {
+  test.setTimeout(240000);
+  const { app, win } = await launch();
+  await seed(win);
+
+  const one = await win.evaluate(() => ({
+    // The three-tab strip went with the merge.
+    tabs: document.querySelectorAll('#content .iss-tabs [role="tab"]').length,
+    // Both kinds are on screen at once, under both reference series.
+    refs: [...document.querySelectorAll('#content .iss-table tbody tr')]
+      .map(r => r.children[0].textContent.trim()),
+  }));
+
+  expect(one.tabs, 'the tab strip is still there, so this is not one register').toBe(0);
+  expect(one.refs.some(r => /MA-\d{4}/.test(r)), 'no maintenance record on screen').toBe(true);
+  expect(one.refs.some(r => /CO-\d{4}/.test(r)), 'no complaint on screen').toBe(true);
+  /* Both series START AT 1 and do not collide - they are independent, which is
+     the whole reason the merge kept two prefixes instead of renumbering. */
+  expect(one.refs).toContain('MA-0001');
+  expect(one.refs).toContain('CO-0001');
 
   await app.close();
 });
@@ -361,7 +424,7 @@ test('the register opens on the current month, and can be widened off it', async
   // what resets the filters to a fresh visit.
   await win.evaluate(() => navigate('dashboard'));
   await win.waitForTimeout(350);
-  await win.evaluate(() => { issuesTab = 'all'; navigate('issues'); });
+  await win.evaluate(() => navigate('issues'));
   await win.waitForTimeout(450);
 
   const opened = await win.evaluate(() => ({
