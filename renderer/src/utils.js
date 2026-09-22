@@ -1721,5 +1721,141 @@ function statusDateNote(t) {
   const s = statusDateText(t);
   if (!s) return '';
   const full = (String(t.status) === 'Left' ? 'Left ' : 'Vacates ') + fmtDate(statusDate(t));
-  return '<div class="lk-statdate" title="' + escHtml(full) + '">' + escHtml(s) + '</div>';
+  /* THE APP'S OWN HOVER CARD, not the OS tooltip (owner, 2026-09-23). This line
+     prints a SHORTENED date — "Vacates 30-Sept" — so the full one is exactly
+     the kind of value the card exists for, and every register that draws a
+     status draws this. */
+  return '<div class="lk-statdate" data-tip="' + escHtml(full) + '" data-tip-always>'
+       + escHtml(s) + '</div>';
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE HOVER CARD FOR A CLIPPED VALUE (owner, 2026-09-23)
+
+   Every register clips values it has no room for and put the full text on a
+   native `title`. That was the owner's own request on 2026-09-15 and their
+   complaint on 2026-09-23: the OS tooltip is the one surface in this app the
+   theme cannot reach, so it stays a pale Windows box on a dark page.
+
+   HOW IT IS USED. Put `data-tip="the full value"` on the element instead of
+   `title`, and optionally `data-tip-label="Guardian"` for a caption above it.
+   Nothing else: one delegated listener covers every register, and a cell
+   rendered by a template literal needs no wiring.
+
+   IT ONLY OPENS WHEN THE TEXT IS ACTUALLY CLIPPED, which is the whole point —
+   a hover card over a value you can already read in full is noise. Pass
+   `data-tip-always` for the cases where the tip says something the cell does
+   not (whose number a phone is, what a mask hides).
+
+   ONE ELEMENT, ON <body>. A tooltip inside its trigger would be clipped by the
+   same `overflow:hidden` that clipped the text.
+   ════════════════════════════════════════════════════════════════════════════ */
+let _uiTipEl = null, _uiTipTimer = null, _uiTipFor = null;
+
+function _uiTipNode() {
+  if (_uiTipEl && _uiTipEl.isConnected) return _uiTipEl;
+  _uiTipEl = document.createElement('div');
+  _uiTipEl.className = 'ui-tip';
+  _uiTipEl.setAttribute('role', 'tooltip');
+  _uiTipEl.hidden = true;
+  document.body.appendChild(_uiTipEl);
+  return _uiTipEl;
+}
+
+/** Is this element's own text wider (or taller) than the box it was given? */
+function _uiTipClipped(el) {
+  if (el.hasAttribute('data-tip-always')) return true;
+  if (el.scrollWidth - el.clientWidth > 1 || el.scrollHeight - el.clientHeight > 1) return true;
+  /* A cell that clips through a CHILD — `.stu-who__name` inside its button —
+     reports no overflow itself. One level down covers every case on the
+     registers without walking the whole subtree on each hover. */
+  for (const c of el.children) {
+    if (c.scrollWidth - c.clientWidth > 1) return true;
+  }
+  return false;
+}
+
+function uiTipShow(el) {
+  const text = el.getAttribute('data-tip');
+  if (!text || !_uiTipClipped(el)) return;
+  const tip = _uiTipNode();
+  const label = el.getAttribute('data-tip-label');
+  tip.innerHTML = (label ? '<span class="ui-tip__l">' + escHtml(label) + '</span>' : '')
+                + escHtml(text);
+  tip.hidden = false;
+  _uiTipFor = el;
+
+  /* Placed against the viewport, above the trigger, nudged back inside when it
+     would run off an edge. `position:fixed`, so the page's own scrolling needs
+     no listener — a scroll hides it instead (see below), which is also what a
+     reader expects when the thing they were pointing at moves. */
+  const r = el.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const gap = 8;
+  let top = r.top - t.height - gap;
+  if (top < gap) top = r.bottom + gap;                 // no room above: go under
+  let left = r.left + (r.width - t.width) / 2;
+  left = Math.max(gap, Math.min(left, window.innerWidth - t.width - gap));
+  tip.style.top = Math.round(top) + 'px';
+  tip.style.left = Math.round(left) + 'px';
+  requestAnimationFrame(() => tip.classList.add('is-on'));
+}
+
+function uiTipHide() {
+  clearTimeout(_uiTipTimer);
+  _uiTipFor = null;
+  if (!_uiTipEl) return;
+  _uiTipEl.classList.remove('is-on');
+  _uiTipEl.hidden = true;
+}
+
+/* Delegated, once, for the whole app. `mouseover` rather than `mouseenter`
+   because only the bubbling one can be delegated; the `closest()` guard makes
+   moving WITHIN a trigger a no-op rather than a re-open. */
+(function _uiTipBind() {
+  /* THIS FILE IS LOADED HEADLESSLY. finance.test.js and three other node suites
+     run utils.js inside a vm context with a stubbed `document` and no `window`
+     at all — they are testing the money helpers, not the DOM — so a binder that
+     assumes a browser takes those suites down at require() time with
+     "window.addEventListener is not a function".
+
+     Both objects are checked, and for the METHOD rather than the name: a stub
+     that defines `document` without addEventListener is exactly the shape that
+     got through the first guard. */
+  if (typeof document === 'undefined' || !document || typeof document.addEventListener !== 'function') return;
+  if (typeof window === 'undefined' || !window || typeof window.addEventListener !== 'function') return;
+  /* An Event's `target` is an EventTarget, which has no closest() — text nodes
+     and the document itself reach these handlers too. One reader, typed once,
+     rather than three `&& e.target.closest` guards that typecheck cannot see
+     through. */
+  const trigger = e => {
+    const n = /** @type {Node} */ (e.target);
+    return n && n.nodeType === 1
+      ? /** @type {Element} */ (n).closest('[data-tip]')
+      : null;
+  };
+  document.addEventListener('mouseover', e => {
+    const el = trigger(e);
+    if (!el || el === _uiTipFor) return;
+    clearTimeout(_uiTipTimer);
+    // Long enough not to flash while the cursor crosses a row on its way
+    // somewhere else; short enough to feel like the app answering.
+    _uiTipTimer = setTimeout(() => uiTipShow(el), 140);
+  }, true);
+  document.addEventListener('mouseout', e => {
+    const el = trigger(e);
+    if (el && el === _uiTipFor) uiTipHide();
+    else if (el) clearTimeout(_uiTipTimer);
+  }, true);
+  // Keyboard reaches it too: a tabbable trigger shows its tip on focus.
+  document.addEventListener('focusin', e => {
+    const el = trigger(e);
+    if (el) uiTipShow(el);
+  }, true);
+  document.addEventListener('focusout', uiTipHide, true);
+  /* Anything that moves the trigger closes it rather than leaving a card
+     floating over the wrong row. */
+  document.addEventListener('scroll', uiTipHide, true);
+  window.addEventListener('resize', uiTipHide);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') uiTipHide(); }, true);
+})();

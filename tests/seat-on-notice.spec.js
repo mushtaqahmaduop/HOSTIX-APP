@@ -189,7 +189,31 @@ test('the Rooms page and the capacity gate agree about the same room', async () 
   expect(agreement.gateOccupancy).toBe(2);
   // The card reports the same two beds, and says one of them is on its way out.
   expect(agreement.cardText).toContain('2');
-  expect(agreement.cardText).toContain('vacating');
+
+  /* ── ONE WORD FOR ONE STATE (owner, 2026-09-23) ───────────────────────────
+     "the student page shows a student cancelling and rooms page show it
+     vacating, should use one to have trust and uniformity".
+
+     Three words described this student: the students register said Cancelling,
+     this card said vacating, and the occupant chip said Leaving. A warden
+     checking the same person in two places got two answers and no way to know
+     they were the same answer.
+
+     `Cancelling` wins because it is what the record says — the stored `status`,
+     one of RESIDENT_STATUSES. `Vacates <date>` survives for DATES only: a verb
+     about the bed, not a name for the student's state.
+
+     Asserted in BOTH directions. Without the negative half this passes again
+     the moment somebody reintroduces "vacating" alongside the new word, which
+     is exactly the drift that produced three synonyms in the first place. */
+  expect(agreement.cardText, 'the bed count names the status the record holds')
+    .toContain('cancelling');
+  expect(agreement.cardText, 'the date line is a verb about the bed')
+    .toContain('Vacates');
+  expect(agreement.cardText, '"vacating" is the word that was retired')
+    .not.toMatch(/vacating/i);
+  expect(agreement.cardText, '"Leaving" is the other word that was retired')
+    .not.toMatch(/Leaving/);
 
   await app.close();
 });

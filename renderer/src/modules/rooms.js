@@ -159,7 +159,25 @@ function renderRooms() {
         ${r.photo?`<img src="${escHtml(r.photo)}" alt="Room ${escHtml(String(r.number))}">`:picPlaceholder}
         <span class="rms-card__state">${occ>0?'Occupied':'Vacant'}</span>
         <span class="rms-card__beds">${occ}/${cap} beds</span>
-        ${nVac?`<span class="rms-card__vac" title="${nVac} of these beds ${nVac===1?'is':'are'} on notice and will free up">${nVac} vacating</span>`:''}
+        ${''/* ONE WORD FOR ONE STATE (owner, 2026-09-23: "the student page
+               shows a student cancelling and rooms page show it vacating,
+               should use one to have trust and uniformity").
+
+               Three words described one thing: the students register said
+               Cancelling, this card said vacating, and the occupant chip below
+               said Leaving. A warden checking the same student in two places
+               got two answers and no way to know they were the same answer.
+
+               `Cancelling` wins because it is what the record actually says —
+               it is the stored `status`, one of RESIDENT_STATUSES, and the
+               chip on every register already prints it. The other two were
+               prose written around it.
+
+               `Vacates <date>` survives, and only for DATES: it is a verb
+               about the bed, not a name for the student's state, and
+               statusDateText() has printed it that way everywhere since
+               2026-09-10. Two words, and they do not overlap. */}
+        ${nVac?`<span class="rms-card__vac" data-tip="${nVac} of these beds ${nVac===1?'is':'are'} held by a student who has given notice. They stay occupied until the vacate date." data-tip-always>${nVac} cancelling</span>`:''}
       </div>
       <div class="rms-card__body ${stateHue}">
         <div class="rms-card__head">
@@ -183,7 +201,7 @@ function renderRooms() {
         ${people.length?`<div class="rms-occ">${people.map(p=>{
           const leaving = p.leaves !== null;
           const when = leaving ? (p.leaves ? fmtDate(p.leaves) : 'end of month') : '';
-          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showStudentPanel('${p.id}')" title="${leaving?`Leaving ${escHtml(when)} — bed stays theirs until then`:`Open ${escHtml(p.name)}`}"><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">${escHtml(when)}</b>`:''}</span>`;
+          return `<span class="rms-occ__chip${leaving?' is-vacating':''}" onclick="event.stopPropagation();showStudentPanel('${p.id}')" data-tip="${leaving?`Cancelling — vacates ${escHtml(when)}. The bed stays theirs until then.`:`Open ${escHtml(p.name)}`}" data-tip-always><i></i><span>${escHtml(p.name)}</span>${leaving?`<b class="rms-occ__vac">Vacates ${escHtml(when)}</b>`:''}</span>`;
         }).join('')}</div>`:''}
 
         <div class="rms-acts">

@@ -50,7 +50,17 @@
 }
 /* The only two coloured figures on the strip, and both are states: everybody
    present, and everybody barred. */
+/* A card whose figure is zero says so quietly — it is still a fact ("nobody is
+   leaving"), and it is still a filter, but it should not draw the eye the way
+   a card with something in it does. */
+.stu-stat.is-quiet .stu-stat__val { color:var(--text-tertiary); }
+
+/* COLOUR MEANS MEANING, NOT DECORATION (students1.png §8). Three of the five
+   figures carry a semantic hue and the other two stay ink — a strip where
+   every card is a different colour is a strip where none of them says
+   anything. */
 .stu-stat__val.is-good { color:var(--success-fg); }
+.stu-stat__val.is-warn { color:var(--warning-fg); }
 .stu-stat__val.is-bad  { color:var(--danger-fg); }
 .stu-stat__val small   { font-size:var(--text-base); font-weight:var(--weight-medium); color:var(--text-tertiary); }
 .stu-stat__sub {
@@ -82,9 +92,21 @@
 /* The charge-plan hint that replaced the Rent & mess dropdown (owner,
    2026-09-21). It sits in the Active card's sub line, so it has to read as
    a caption and not as a control: no border, no hover, not focusable. */
+/* THE PLAN SPLIT ON THE ACTIVE CARD (owner, 2026-09-23). It sat in the
+   caption's 12px tertiary — the line every other card uses for a sentence — so
+   the one card carrying a second real figure looked like it carried a note.
+   The COUNT is set in the card's own ink; the plan name stays quiet beside it.
+
+   They wrap rather than ellipsising: two plans is the normal case and a hostel
+   with three would otherwise lose the third entirely. The card's caption line
+   is the only one on the strip allowed to run to two. */
+.stu-stat__sub:has(.stu-plan-hint) { white-space:normal; line-height:var(--leading-tight); }
 .stu-plan-hint { display:inline-block; white-space:nowrap; }
 .stu-plan-hint + .stu-plan-hint { margin-left:var(--space-2); }
-.stu-plan-hint b { font-weight:var(--weight-semibold); color:var(--text-primary); }
+.stu-plan-hint b {
+    font-weight:var(--weight-strong); color:var(--text-primary);
+    font-variant-numeric:tabular-nums;
+}
 /* Two filter groups, one layout. They are separate classes because they are
    separate filters: `.stu-pop__fee .ui-btn` has to keep meaning the four fee
    states, which is what students-fee-status.spec.js asserts. */
@@ -134,10 +156,22 @@
    button away in the first place.
 
    Still sums to 99.5, which is what this colgroup has always summed to. */
-.stu-table col.stu-col-room    { width:10.7%; }
-.stu-table col.stu-col-adm     { width:7.5%; }   /* date of admission (owner, 2026-09-20) */
-.stu-table col.stu-col-contact { width:12.1%; }
-.stu-table col.stu-col-course  { width:11.8%; }
+.stu-table col.stu-col-room    { width:9.9%; }
+/* 7.5% -> 8.3% (owner, 2026-09-23). The cell prints "04 Sep 2026" now rather
+   than "04 Sep" — the year is the whole point of the column on a roster that
+   spans three intakes — and the full date wants 4px more than the old one had.
+
+   IT COMES OUT OF THE ROOM COLUMN, which was widened to 10.7% on 2026-09-22
+   for a card reading "#12" and no longer carries the hash. Course, Address and
+   Student keep every pixel the owner gave them on 2026-09-15. Still 99.5. */
+.stu-table col.stu-col-adm     { width:8.3%; }   /* date of admission (owner, 2026-09-20) */
+/* 12.1% -> 12.6% (owner, 2026-09-23). A phone number was ellipsising at the
+   1366 floor — 5px short — and a clipped phone number is the one value on this
+   row a warden copies by eye. The half point comes from Course, which
+   truncates on a long name at any width this table will ever have and carries
+   the hover card that says so. */
+.stu-table col.stu-col-contact { width:12.6%; }
+.stu-table col.stu-col-course  { width:11.3%; }
 .stu-table col.stu-col-addr    { width:12%; }
 .stu-table col.stu-col-charge  { width:9%; }
 .stu-table col.stu-col-status  { width:9%; }
@@ -172,7 +206,18 @@
 .stu-money  { font-weight:var(--weight-medium); white-space:nowrap; }
 .stu-money small { display:block; font-size:var(--text-sm); color:var(--text-tertiary); }
 .stu-dash   { color:var(--text-tertiary); }
-.stu-charge { font-weight:var(--weight-strong); white-space:nowrap; }
+/* THE AMOUNT IS THE HERO OF ITS COLUMN (students1.png §22): the figure at
+   weight 700 in the card's ink, the plan under it quiet. Tabular figures so a
+   column of charges lines up on its digits. */
+.stu-charge {
+    font-weight:var(--weight-strong); white-space:nowrap;
+    color:var(--text-primary); font-variant-numeric:tabular-nums;
+}
+.stu-charge__plan {
+    margin-top:1px; font-size:var(--text-xs); font-weight:var(--weight-regular);
+    color:var(--text-tertiary); line-height:var(--leading-tight);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 
 .stu-acts { display:flex; align-items:center; gap:var(--space-1); }
 /* The status cell, named so the chip in it can be addressed without counting

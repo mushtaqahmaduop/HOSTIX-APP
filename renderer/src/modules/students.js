@@ -270,9 +270,20 @@ function renderStudents() {
      Charges column prints — so the hint and the column cannot disagree. */
   const _planN = {};
   _roster.filter(t=>t.status==='Active').forEach(t=>{ const k=stuPlanOf(t); _planN[k]=(_planN[k]||0)+1; });
+  /* BOTH PLANS ARE NAMED, AND THE COUNT LEADS (owner, 2026-09-23: "rent only
+     and rent + mess should be visible on the active students kpi").
+
+     It read "Rent only 12" in the caption's own 11px grey, which is the line
+     every other card uses for a sentence — so the one card carrying a real
+     second figure looked like it carried a note. The count is the fact; it is
+     set in the card's ink with the plan beside it.
+
+     `rentonly` — a hostel that serves no food at all — is still not named:
+     every active student is in it, and a line saying so on every row of the
+     only category that exists is a line that never changes. */
   const planHint = [['rent','Rent only'],['both','Rent + mess'],['mess','Mess only']]
     .filter(([k])=>_planN[k])
-    .map(([k,l])=>`<span class="stu-plan-hint">${l} <b>${_planN[k]}</b></span>`).join('');
+    .map(([k,l])=>`<span class="stu-plan-hint"><b>${_planN[k]}</b> ${escHtml(l)}</span>`).join('');
   const occRooms  = DB.rooms.filter(r=>getRoomOccupancy(r)>0).length;
   const occPct    = DB.rooms.length ? Math.round(occRooms/DB.rooms.length*100) : 0;
 
@@ -320,17 +331,40 @@ function renderStudents() {
       <div class="stu-stat__sub">${planHint || 'Students'}</div>
     </button>
 
-    ${nCanc?`<button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
-      <div class="stu-stat__label">On notice</div>
-      <div class="stu-stat__val">${nCanc}</div>
-      <div class="stu-stat__sub">Bed held till vacate date</div>
+    ${''/* "Cancelling", not "On notice" — see the note in rooms.js. This card
+           filters the table to status Cancelling and the rows it reveals are
+           chipped Cancelling, so a card labelled anything else was naming a
+           state the app does not have.
+
+           It is the one deviation from `students1.png`, which heads this card
+           "On Notice" while chipping the same students "Cancelling". The
+           owner's uniformity ruling is the later and more specific
+           instruction, so it wins; say the word and it goes back. */}
+    ${''/* ALWAYS SHOWN NOW, not only when somebody is on notice. It appeared
+           conditionally so a quiet month read as four cards rather than five
+           with a zero — but the strip is a fixed five in the design, and a row
+           that changes its column count as the data changes is a row that
+           moves under the cursor. A zero here is also a fact worth stating:
+           nobody is leaving. */}
+    ${true?`<button type="button" class="ui-card stu-stat${nCanc?'':' is-quiet'}" onclick="stuSetStatus('Cancelling')" title="Show only students who have given notice">
+      <div class="stu-stat__label">Cancelling</div>
+      <div class="stu-stat__val is-warn">${nCanc}</div>
+      <div class="stu-stat__sub">Bed held till the vacate date</div>
     </button>`:''}
 
-    <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Left')" title="Show only students who have left">
-      <div class="stu-stat__label">Left</div>
-      <div class="stu-stat__val">${nLeft}</div>
-      <div class="stu-stat__sub">Students</div>
-    </button>
+    ${''/* THE "LEFT" CARD IS GONE (students1.png, and §7 of the spec, which
+           lists five metrics: Students, Active, On Notice, Blacklisted,
+           Occupied Rooms).
+
+           Departed students are not a state of THIS roster — they are the
+           Former Students page, which is a rail item of its own, and the
+           status dropdown on the bar below still filters to Left for anyone
+           who wants them in place. What the card cost was a fifth of the
+           strip's width on a figure that is 0 on most days and, when it is
+           not, points somewhere else.
+
+           `nLeft` stays computed: the status dropdown's option list is built
+           from the same roster and the export summary counts it. */}
 
     <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('Blacklisted')" title="Show only blacklisted students">
       <div class="stu-stat__label">Blacklisted</div>
@@ -568,9 +602,9 @@ function renderStudents() {
                  the student's line, the handset on the guardian's — so naming
                  both in the heading was the caption of a picture that is
                  already labelled, in the heading that had to wrap to fit. */}
-          <th>Contacts</th>
+          <th scope="col">Contacts</th>
           ${th('course','Course')}
-          <th>Address</th>
+          <th scope="col">Address</th>
           ${''/* IT NAMES THE PERIOD, NEVER THE COMPONENTS. It was "Rent + Mess
                 / mo": the cell under it shows the total AND a badge saying
                 which components are in it, so the heading naming them again
@@ -588,7 +622,7 @@ function renderStudents() {
           ${''/* "Monthly Charges" (owner, 2026-09-22). The slash was doing the
                  work of a word, and "/ month" reads as a rate in a column of
                  plain totals. */}
-          <th>Monthly Charges</th>
+          <th scope="col">Monthly Charges</th>
           ${''/* DATE OF ADMISSION (owner, 2026-09-20: "in students and payments
                  there are no dates for date of admission and date of payment").
                  The roster carried no date at all for a student still living
@@ -596,7 +630,7 @@ function renderStudents() {
                  Leaving or Left. */}
           ${th('admitted','Admitted')}
           ${th('status','Status')}
-          <th>Actions</th>
+          <th scope="col">Actions</th>
         </tr></thead>
         <tbody>
         ${_pg.slice.length===0?`<tr><td colspan="12"><div class="ui-empty"><div class="ui-empty__t">No students match these filters.</div></div></td></tr>`:
@@ -620,13 +654,13 @@ function renderStudents() {
               <button type="button" class="stu-who" onclick="showStudentPanel('${t.id}')" title="Open student details">
                 ${studentAvatar(t, 32)}
                 <div class="stu-who__b">
-                  <div class="stu-who__name" title="${escHtml(nm)}">${escHtml(nm)}</div>
+                  <div class="stu-who__name" data-tip="${escHtml(nm)}" data-tip-label="Student">${escHtml(nm)}</div>
                   ${''/* S/O or D/O BEFORE THE FATHER'S NAME (owner, 2026-09-15). From
                          the record's gender, or the hostel's default when it has
                          none; no prefix for "Other", rather than a wrong one. */}
                   ${t.fatherName?(()=>{const _g=String(t.gender||_stuDefaultGender()||'').toLowerCase();
                     const _rel=_g==='female'?'D/O':_g==='male'?'S/O':'';
-                    return `<div class="stu-who__sub" title="${escHtml((_rel?_rel+' ':'')+t.fatherName)}">${_rel?`<span class="stu-who__rel">${_rel}</span> `:''}${escHtml(t.fatherName)}</div>`;})():''}
+                    return `<div class="stu-who__sub" data-tip="${escHtml((_rel?_rel+' ':'')+t.fatherName)}" data-tip-label="Father">${_rel?`<span class="stu-who__rel">${_rel}</span> `:''}${escHtml(t.fatherName)}</div>`;})():''}
                 </div>
               </button>
             </td>
@@ -653,15 +687,25 @@ function renderStudents() {
                    `.canc-room` is a screen file's. This register no longer emits
                    `.stu-room` at all. */}
             <td>
+              ${''/* NO HASH ON THE NUMBER (owner, 2026-09-23: "remove hashtag
+                     from room label because with a large room number the number
+                     then could not fit in the label").
+
+                     The box is 34px of type at most, and `#` spends a character
+                     of it saying what the column heading already says. A hostel
+                     numbering rooms "A 214" needs those pixels; one numbering
+                     them 1-22 never noticed. The hash stays in the HOVER, where
+                     "Room #12" is a sentence rather than a label, and in the
+                     room REGISTER's own cells, which are not this narrow. */}
               <div class="ui-room ui-room--wide">
-                <span class="ui-room__n" title="${room?'Room #'+escHtml(String(room.number)):'No room assigned'}">${room?'#'+escHtml(String(room.number)):'—'}</span>
+                <span class="ui-room__n" data-tip="${room?'Room '+escHtml(String(room.number)):'No room assigned'}" data-tip-label="Room">${room?escHtml(String(room.number)):'—'}</span>
                 ${''/* The floor and the room type, beside the number rather than
                        under it. Each carries its own hover: this is the smallest
                        text in the row and "2-Seater (Attached)" is a value that
                        clips. */}
                 ${room&&(room.floor||(rtype&&rtype.name))?`<span class="ui-room__m">
-                  ${room.floor?`<span class="ui-room__t" title="${escHtml(String(room.floor))} Floor">${escHtml(stuFloorShort(room.floor))}</span>`:''}
-                  ${rtype&&rtype.name?`<span class="ui-room__t" title="${escHtml(rtype.name)}">${escHtml(rtype.name)}</span>`:''}
+                  ${room.floor?`<span class="ui-room__t" data-tip="${escHtml(String(room.floor))} Floor" data-tip-label="Floor">${escHtml(stuFloorShort(room.floor))}</span>`:''}
+                  ${rtype&&rtype.name?`<span class="ui-room__t" data-tip="${escHtml(rtype.name)}" data-tip-label="Room type">${escHtml(rtype.name)}</span>`:''}
                 </span>`:''}
               </div>
             </td>
@@ -687,8 +731,8 @@ function renderStudents() {
                    number was recorded, so it is labelled from whichever of the
                    two it found. */}
             <td>
-              <div class="stu-contact" title="Student${t.phone?': '+escHtml(t.phone):' — no number recorded'}"><i class="stu-wa">${waIcon}</i>${escHtml(t.phone||'—')}</div>
-              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em" title="Guardian: ${escHtml(t.emergencyPhone||t.emergencyContact)}"><i class="stu-ph">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
+              <div class="stu-contact" data-tip="${t.phone?escHtml(t.phone)+' — also their WhatsApp':'No number recorded'}" data-tip-label="Student" data-tip-always><i class="stu-wa">${waIcon}</i>${escHtml(t.phone||'—')}</div>
+              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em" data-tip="${escHtml(t.emergencyPhone||t.emergencyContact)}" data-tip-label="Guardian" data-tip-always><i class="stu-ph">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
             ${''/* THE CNIC COLUMN IS GONE (owner, 2026-09-21: "remove the cnic
                    entire column because if a warden needs a student full detail
@@ -700,8 +744,8 @@ function renderStudents() {
             ${''/* ONE LINE, THE REST ON HOVER (owner, 2026-09-15: "if has large text
                    then hidden half and Mdcat prep... and show default pop hover").
                    The native title is the hover; the address below does the same. */}
-            <td class="stu-c-left">${t.occupation||t.course?`<span class="stu-course" title="${escHtml(t.occupation||t.course)}">${escHtml(t.occupation||t.course)}</span>`:'<span class="stu-dash">—</span>'}</td>
-            <td class="stu-c-left">${t.address?`<span class="stu-addr" title="${escHtml(t.address)}"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(t.address)}</span></span>`:'<span class="stu-dash">—</span>'}</td>
+            <td class="stu-c-left">${t.occupation||t.course?`<span class="stu-course" data-tip="${escHtml(t.occupation||t.course)}" data-tip-label="Course">${escHtml(stuCapFirst(t.occupation||t.course))}</span>`:'<span class="stu-dash">—</span>'}</td>
+            <td class="stu-c-left">${t.address?`<span class="stu-addr" data-tip="${escHtml(t.address)}" data-tip-label="Address"><i class="stu-pin">${pinIcon}</i><span class="stu-addr__t">${escHtml(stuCapFirst(t.address))}</span></span>`:'<span class="stu-dash">—</span>'}</td>
             ${(()=>{const c=resolveCharges(t),cov=chargeCoverage({rent:c.rent,mess:c.mess,messIncluded:c.messOptIn&&c.mess>0,hasMess:c.mess>0});
               return `<td>
                 ${''/* THE SUB-LINE IS GONE (owner, 2026-09-06). It read
@@ -713,11 +757,25 @@ function renderStudents() {
                        that was 116px wide in a table overflowing by 444px.
                        Total plus badge; the split is on the student's profile
                        and in the Rent & Mess settings that produced it. */}
-                <div class="stu-charge" title="${c.configured?escHtml(cov.label):'No charge configured'}">${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
-                ${''/* WHAT the month covers is a category, so the chip is
-                       neutral — except "Not set", which is a charge nobody has
-                       configured and therefore something to act on. */}
-                <span class="ui-chip ${cov.key==='none'?'ui-chip--warning':'ui-chip--neutral'}">${escHtml(cov.label)}</span>
+                ${''/* THE AMOUNT LEADS, THE PLAN EXPLAINS IT (students1.png).
+
+                       The plan was a `.ui-chip` — a bordered, filled badge the
+                       same weight as a STATUS chip two columns over. A chip is
+                       for a state you act on; "Rent + Mess" is a description of
+                       the figure above it, and giving it a chip made every row
+                       carry two badges of equal loudness for two unequal facts.
+
+                       It is a caption now: the amount in the card's ink at
+                       weight 700, the plan under it in the tertiary at 400 —
+                       the same two-line shape the Room and Admitted cells use.
+
+                       "Not set" KEEPS ITS CHIP. That one is not a description:
+                       it is a charge nobody has configured, the only value in
+                       this column a warden has to go and fix. */}
+                <div class="stu-charge" data-tip="${c.configured?escHtml(cov.label)+' — '+escHtml(fmtPKR(c.total))+' a month':'No monthly charge is configured for this student'}" data-tip-label="Monthly charge" data-tip-always>${c.configured?fmtPKR(c.total):'<span class="stu-dash">not set</span>'}</div>
+                ${cov.key==='none'
+                  ? `<span class="ui-chip ui-chip--warning">${escHtml(cov.label)}</span>`
+                  : `<div class="stu-charge__plan">${escHtml(cov.label)}</div>`}
               </td>`;})()}
             ${''/* THE DATE, AND THE ACCOUNT THAT ADMITTED THEM (owner,
                    2026-09-22: "the admitted column ... should be underlined by
@@ -735,16 +793,36 @@ function renderStudents() {
                    stamped from today; every student admitted before this build
                    has no answer, and the cell prints the date alone rather than
                    guessing at whichever account happens to be logged in now. */}
+            ${''/* THE YEAR IS ALWAYS THERE (owner, 2026-09-23: "admitted date
+                   should be date, prefix of the month and year because a
+                   student admitted in 2025 will not be differentiated").
+
+                   It printed fmtDateShort(), which DROPS the year for the
+                   current one — a width decision made for the Status column on
+                   2026-09-10 and inherited here. On a roster that carries
+                   students admitted across three years, "04 Sept" and "04
+                   Sept" are the same string for two different admissions, and
+                   the column a warden reads to sort old from new could not
+                   tell them apart.
+
+                   `04 Sep 2026` on one line, two digits and a three-letter
+                   month so every row is the same width and the column sorts by
+                   eye. The account that admitted them is the second line — the
+                   shape the floor already takes under a room number. */}
             <td class="stu-c-adm">${t.joinDate
-              ? `<span class="stu-adm" title="Admitted ${escHtml(fmtDate(t.joinDate))}${t.admittedByName?' by '+escHtml(t.admittedByName):''}">${escHtml(fmtDateShort(t.joinDate))}</span>`
-                + (t.admittedByName?`<div class="stu-adm__by" title="Admitted by ${escHtml(t.admittedByName)}">${escHtml(ledgerFirstName(t.admittedByName))}</div>`:'')
+              ? `<span class="stu-adm" data-tip="Admitted ${escHtml(fmtDate(t.joinDate))}${t.admittedByName?' by '+escHtml(t.admittedByName):''}" data-tip-label="Admitted">${escHtml(stuAdmDate(t.joinDate))}</span>`
+                + (t.admittedByName?`<div class="stu-adm__by" data-tip="Admitted by ${escHtml(t.admittedByName)}" data-tip-label="Admitted by">${escHtml(ledgerFirstName(t.admittedByName))}</div>`:'')
               : '<span class="stu-dash">—</span>'}</td>
             ${''/* THE STATUS NAMES A DATE, SO THE CELL PRINTS IT (owner,
                    2026-09-10). "Left" answers nothing a warden asks next, and
                    "On Notice" is worse — the bed is still occupied and the only
                    useful fact is the day it frees. statusDateNote() is shared,
                    so the same line appears wherever this status does. */}
-            <td class="stu-c-status"><span class="ui-chip ${stuStatusRole(status)}" title="${escHtml(status)}">${escHtml(status)}</span>
+            ${''/* NO TITLE ON THE CHIP. It carried `title="Active"` over a chip
+                   reading "Active" — a hover that repeats what it is hovering.
+                   The chip is nowrap and its widest word ("Blacklisted") is
+                   measured to fit, so there is nothing here to reveal. */}
+            <td class="stu-c-status"><span class="ui-chip ${stuStatusRole(status)}">${escHtml(status)}</span>
                 ${statusDateNote(t)}</td>
             ${''/* ONE BUTTON, THREE ACTIONS BEHIND IT (owner, 2026-09-06).
                    Three always-visible icons were 124px — the widest ornament
@@ -5989,6 +6067,50 @@ function stuFloorShort(floor) {
 /* WHICH PLAN A STUDENT IS ON, for the charge-plan filter. It reads the same
    resolveCharges() → chargeCoverage() pair the Charges column prints, so the
    filter can never select a row the column then contradicts. */
+/* ── A PLACE NAME IS A PROPER NOUN (owner, 2026-09-23: "the address first
+   letter should be capital") ────────────────────────────────────────────────
+   Wardens type "charsadda" at speed and the register printed it back that way,
+   beside "North Waziristan" typed by somebody else — the column read as two
+   different kinds of data.
+
+   PRESENTATION ONLY. The stored value is untouched: this runs where the cell
+   is drawn, so nothing rewrites what a warden entered and an export still
+   carries exactly what is on the record. Capitalising on SAVE would be a
+   silent edit of somebody's data, and would fight them every time they meant
+   the lower case.
+
+   ONLY THE FIRST LETTER, and only when it is currently lower case. Title-casing
+   every word would turn "D.I. Khan" into "D.i. Khan" and "swat (upper)" into
+   "Swat (Upper)" — this app has no business deciding that a hostel's own
+   spelling of a village is wrong. */
+/* "04 Sep 2026" — the admission date, always with its year.
+
+   NOT fmtDateShort(), which drops the year when it is the current one. That is
+   right in the Status column, where the date is about something happening now
+   and the column is 74px; it is wrong here, where the whole job of the column
+   is to tell a 2025 admission from a 2026 one (owner, 2026-09-23).
+
+   Built from parts rather than through toLocaleDateString's `year` option so
+   the month is always the three-letter form: en-PK renders "Sept" for
+   September, which is four characters and the only month that would not align
+   in a column of tabular figures. */
+function stuAdmDate(d) {
+  const s = String(d || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return fmtDateShort(s);
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return m[3] + ' ' + MON[Number(m[2]) - 1] + ' ' + m[1];
+}
+
+function stuCapFirst(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  const first = s[0];
+  return first === first.toLowerCase() && first !== first.toUpperCase()
+    ? first.toUpperCase() + s.slice(1)
+    : s;
+}
+
 function stuPlanOf(t) {
   const c = resolveCharges(t);
   return chargeCoverage({ rent: c.rent, mess: c.mess,
