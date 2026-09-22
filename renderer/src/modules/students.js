@@ -539,7 +539,6 @@ function renderStudents() {
           <col class="stu-col-id">      <!-- ID       -->
           <col class="stu-col-who">     <!-- student  -->
           <col class="stu-col-room">    <!-- room     -->
-          <col class="stu-col-adm">     <!-- admitted -->
           <col class="stu-col-contact"> <!-- contact  -->
           ${''/* NATIONALITY IS GONE (owner, 2026-09-15: "remove nationality
                  column from students page so that the CNIC, course and address
@@ -548,6 +547,13 @@ function renderStudents() {
           <col class="stu-col-course">  <!-- course   -->
           <col class="stu-col-addr">    <!-- address  -->
           <col class="stu-col-charge">  <!-- charges  -->
+          ${''/* ADMITTED SITS BESIDE STATUS (owner, 2026-09-22: "the admitted
+                 column should go near to the status column"). Both columns
+                 answer the same question — where this student is in their stay
+                 — and they were four columns apart with the whole identity
+                 block between them. Neither column's width changes; only its
+                 place does. */}
+          <col class="stu-col-adm">     <!-- admitted -->
           <col class="stu-col-status">  <!-- status   -->
           <col class="stu-col-acts">    <!-- actions  -->
         </colgroup>
@@ -556,22 +562,21 @@ function renderStudents() {
           ${th('id','ID')}
           ${th('name','Student')}
           ${th('room','Room')}
-          ${''/* DATE OF ADMISSION (owner, 2026-09-20: "in students and payments
-                 there are no dates for date of admission and date of payment").
-                 The roster carried no date at all for a student still living
-                 here — statusDateNote() under Status only speaks for someone
-                 Leaving or Left. Width comes from the widest columns rather
-                 than from CNIC, course and address alone, which the owner had
-                 asked on 2026-09-15 to let breathe. */}
-          ${th('admitted','Admitted')}
-          <th>Contact / emergency</th>
+          ${''/* ONE WORD (owner, 2026-09-22: "contact/emergency should only be
+                 Contacts in the headings"). The cell holds two numbers and two
+                 glyphs that already say which is which — the WhatsApp mark on
+                 the student's line, the handset on the guardian's — so naming
+                 both in the heading was the caption of a picture that is
+                 already labelled, in the heading that had to wrap to fit. */}
+          <th>Contacts</th>
           ${th('course','Course')}
           <th>Address</th>
-          ${''/* "Charges / month", not "Rent + Mess / mo". The old heading named
-                the two components; the cell under it now shows the total and a
-                badge saying which components are in it, so the heading naming
-                them again was the third time the same fact appeared in one
-                column. */}
+          ${''/* IT NAMES THE PERIOD, NEVER THE COMPONENTS. It was "Rent + Mess
+                / mo": the cell under it shows the total AND a badge saying
+                which components are in it, so the heading naming them again
+                was the third time one fact appeared in one column. It became
+                "Charges / month" on 2026-09-09 and "Monthly Charges" on
+                2026-09-22. */}
           ${''/* FEE STATUS IS NOT A COLUMN ANY MORE (owner, 2026-09-09:
                  "remove payment status"). Whether this month is paid is a
                  question about a PAYMENT, and the payments register answers it
@@ -580,7 +585,16 @@ function renderStudents() {
                  already short of width. It survives as a FILTER in Advanced
                  Filters, which is how a warden actually uses it: "show me who
                  has not paid", not "read down this column". */}
-          <th>Charges / month</th>
+          ${''/* "Monthly Charges" (owner, 2026-09-22). The slash was doing the
+                 work of a word, and "/ month" reads as a rate in a column of
+                 plain totals. */}
+          <th>Monthly Charges</th>
+          ${''/* DATE OF ADMISSION (owner, 2026-09-20: "in students and payments
+                 there are no dates for date of admission and date of payment").
+                 The roster carried no date at all for a student still living
+                 here — statusDateNote() under Status only speaks for someone
+                 Leaving or Left. */}
+          ${th('admitted','Admitted')}
           ${th('status','Status')}
           <th>Actions</th>
         </tr></thead>
@@ -617,30 +631,64 @@ function renderStudents() {
               </button>
             </td>
             ${''/* ONE LIGHT LABEL, not two loose lines (owner, 2026-09-09 —
-                   `students red.png`). The wrapper is what the pale ground and
-                   the border hang on; without it the number and the floor were
-                   two unrelated strings in the middle of a wide row. */}
+                   `students red.png`): the number and the floor were two
+                   unrelated strings in the middle of a wide row, and a ground
+                   and a border are what made them one thing. Still true — the
+                   box moved onto the NUMBER on 2026-09-22, it did not go. */}
+            ${''/* THE ROOM CARD AS THE CANCELLATIONS PAGE DRAWS IT (owner,
+                   2026-09-22: "the room number card should [be] as it is in the
+                   cancellations page").
+
+                   It was three lines stacked inside one bordered box — number,
+                   floor, type — which made the room cell the tallest thing in
+                   the row and set the height of all eleven columns. The
+                   cancellations shape boxes the NUMBER alone and sets the floor
+                   and the type beside it, so the card is two lines high and the
+                   number keeps a border of its own. `.canc-room` says in its own
+                   comment that the type does not fit under a room number; this
+                   is the same finding, reached from the other side.
+
+                   It is `.ui-room--wide` in the component layer rather than a
+                   third copy of the same pill: `.stu-room` was listkit's and
+                   `.canc-room` is a screen file's. This register no longer emits
+                   `.stu-room` at all. */}
             <td>
-              <div class="stu-room">
-                <div class="stu-room__n">${room?'#'+escHtml(String(room.number)):'—'}</div>
-                ${room&&room.floor?`<div class="stu-room__t">${escHtml(stuFloorShort(room.floor))}</div>`:''}
-                ${''/* The room type, inside the label under the floor (owner,
-                       2026-09-15) — moved here from under the Payments room box. */}
-                ${rtype&&rtype.name?`<div class="stu-room__t stu-room__type">${escHtml(rtype.name)}</div>`:''}
+              <div class="ui-room ui-room--wide">
+                <span class="ui-room__n" title="${room?'Room #'+escHtml(String(room.number)):'No room assigned'}">${room?'#'+escHtml(String(room.number)):'—'}</span>
+                ${''/* The floor and the room type, beside the number rather than
+                       under it. Each carries its own hover: this is the smallest
+                       text in the row and "2-Seater (Attached)" is a value that
+                       clips. */}
+                ${room&&(room.floor||(rtype&&rtype.name))?`<span class="ui-room__m">
+                  ${room.floor?`<span class="ui-room__t" title="${escHtml(String(room.floor))} Floor">${escHtml(stuFloorShort(room.floor))}</span>`:''}
+                  ${rtype&&rtype.name?`<span class="ui-room__t" title="${escHtml(rtype.name)}">${escHtml(rtype.name)}</span>`:''}
+                </span>`:''}
               </div>
             </td>
-            <td class="stu-c-adm">${t.joinDate
-              ? `<span class="stu-adm" title="${escHtml(fmtDate(t.joinDate))}">${escHtml(fmtDateShort(t.joinDate))}</span>`
-              : '<span class="stu-dash">—</span>'}</td>
             ${''/* THE WHATSAPP MARK BELONGS TO THE STUDENT'S NUMBER, not the
                    guardian's (owner, 2026-09-09). The first number the intake
                    form asks for IS the student's WhatsApp — it is how the
                    hostel sends a receipt — and the second is the guardian's
                    voice line. The two glyphs were the wrong way round, which
                    told a warden to message the father and telephone the son. */}
+            ${''/* THE HOVER IS ON THE VALUE, NOT ONLY ON THE GLYPH (owner,
+                   2026-09-22: "there is no specific pop hover for the hidden
+                   data when the data is hidden when no large space").
+
+                   Both lines are `text-overflow: ellipsis` inside a 12.1%
+                   column and neither carried a title — the only hover here named
+                   the ICON ("Student's WhatsApp"), so a clipped number had no
+                   way of being read in full. A phone number missing its last
+                   digits is a wrong answer, not a short one.
+
+                   The title names WHOSE number it is as well as the number,
+                   because the two lines are otherwise told apart only by a 13px
+                   glyph. The guardian line falls back to a NAME when no guardian
+                   number was recorded, so it is labelled from whichever of the
+                   two it found. */}
             <td>
-              <div class="stu-contact"><i class="stu-wa" title="Student's WhatsApp">${waIcon}</i>${escHtml(t.phone||'—')}</div>
-              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em"><i class="stu-ph" title="Guardian">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
+              <div class="stu-contact" title="Student${t.phone?': '+escHtml(t.phone):' — no number recorded'}"><i class="stu-wa">${waIcon}</i>${escHtml(t.phone||'—')}</div>
+              ${t.emergencyPhone||t.emergencyContact?`<div class="stu-contact__em" title="Guardian: ${escHtml(t.emergencyPhone||t.emergencyContact)}"><i class="stu-ph">${phIcon}</i>${escHtml(t.emergencyPhone||t.emergencyContact)}</div>`:''}
             </td>
             ${''/* THE CNIC COLUMN IS GONE (owner, 2026-09-21: "remove the cnic
                    entire column because if a warden needs a student full detail
@@ -671,6 +719,26 @@ function renderStudents() {
                        configured and therefore something to act on. */}
                 <span class="ui-chip ${cov.key==='none'?'ui-chip--warning':'ui-chip--neutral'}">${escHtml(cov.label)}</span>
               </td>`;})()}
+            ${''/* THE DATE, AND THE ACCOUNT THAT ADMITTED THEM (owner,
+                   2026-09-22: "the admitted column ... should be underlined by
+                   the user who admit it") — the name on a second line under the
+                   date, the shape the floor already takes under a room number.
+
+                   A FIRST NAME, not the whole one. This is a 7.5% column and it
+                   is not being widened: "Mushtaq Ahmad Khan" clips to a wrong
+                   name where "Mushtaq" is a right one, and the ledger already
+                   reduces a collector to their first name for exactly this
+                   reason (ledgerFirstName). The full name is on the hover, with
+                   the full date.
+
+                   NOTHING IS INVENTED FOR AN OLDER RECORD. `admittedBy` is
+                   stamped from today; every student admitted before this build
+                   has no answer, and the cell prints the date alone rather than
+                   guessing at whichever account happens to be logged in now. */}
+            <td class="stu-c-adm">${t.joinDate
+              ? `<span class="stu-adm" title="Admitted ${escHtml(fmtDate(t.joinDate))}${t.admittedByName?' by '+escHtml(t.admittedByName):''}">${escHtml(fmtDateShort(t.joinDate))}</span>`
+                + (t.admittedByName?`<div class="stu-adm__by" title="Admitted by ${escHtml(t.admittedByName)}">${escHtml(ledgerFirstName(t.admittedByName))}</div>`:'')
+              : '<span class="stu-dash">—</span>'}</td>
             ${''/* THE STATUS NAMES A DATE, SO THE CELL PRINTS IT (owner,
                    2026-09-10). "Left" answers nothing a warden asks next, and
                    "On Notice" is worse — the bed is still occupied and the only
@@ -854,6 +922,31 @@ function showStudentPanel(id, tab) {
     if (p) p.classList.add('is-open');
   });
   document.addEventListener('keydown', _stuPanelEsc, true);
+}
+
+/* ── REDRAW THE OPEN PANEL, WITHOUT RE-OPENING IT ────────────────────────────
+   For a write that happens somewhere else while the slide-over is open — a
+   cancellation started from its own action tile, today — the panel has to
+   catch up. renderPage() cannot do it: the host is appended to document.body,
+   not to #content, which is what keeps the panel standing while the page under
+   it redraws.
+
+   It is NOT showStudentPanel(). That one replaces the markup and then adds
+   `is-open` on the next frame so the slide-in animates; called on a panel that
+   is already on screen, the new markup arrives without the class and the whole
+   panel slides in a second time. Here the class goes on in the same tick, so
+   the contents change and the panel does not move.
+
+   Does nothing when no panel is open, and closes one whose student has gone. */
+function stuPanelRefresh() {
+  if (!_stuPanelId || !document.getElementById('stu-panel')) return;
+  const t = DB.students.find(x => x.id === _stuPanelId);
+  if (!t) { closeStudentPanel(); return; }
+  const host = document.getElementById('stu-panel-host');
+  if (!host) return;
+  host.innerHTML = _stuPanelHtml(t);
+  const p = document.getElementById('stu-panel');
+  if (p) p.classList.add('is-open');
 }
 
 function closeStudentPanel() {
@@ -2233,23 +2326,13 @@ function _stuRemark(t) {
   return out.join(' · ');
 }
 
-/* ── CNIC, PARTLY MASKED ─────────────────────────────────────────────────────
-   17102-1178441-2 leaves as "17102-11*******". The issuing district and the
-   first two digits are enough to match a person against the card in their
-   hand; the rest is the part that identifies them to a bank, a SIM vendor or
-   anyone else who asks, and a printed roster is a document that gets left on a
-   desk and photographed.
-
-   The stored record is untouched — this is a presentation rule. Anything that
-   is not a CNIC-shaped string is passed through: a hostel that records a
-   B-form or a passport number should still see what it typed.
-
-   THE RULE MOVED TO utils.js AS maskCnic() (owner, 2026-09-10: "make the cnic
-   detail in pages as it is in the pdf"). It was the export's rule only, and
-   the payments register had a second, different one; the pages now use this
-   same one, so it belongs where every module can reach it. The name stays
-   because the export definition below reads well with it. */
-function _stuMaskCnic(v) { return maskCnic(v); }
+/* ── THE CNIC MASK IS NOT AN EXPORT RULE ANY MORE ────────────────────────────
+   `_stuMaskCnic()` was this module's alias for utils.js's maskCnic(), and its
+   one caller was the export's CNIC column. That column now leaves the PDF
+   entirely and carries the FULL number in the workbook (owner, 2026-09-22), so
+   the alias has no callers and is gone rather than left as a second name for a
+   rule that lives in utils.js. maskCnic() itself is untouched — it is what the
+   student's profile still reveals on hover. */
 
 /* The gender a blank field means, taken from what the hostel said it was when
    it was set up (owner, 2026-09-10). A boys' hostel that has never filled the
@@ -2322,10 +2405,17 @@ function _stuExportDef(list, opts) {
     ],
 
     /* ========================================================================
-       THE COLUMNS ARE THE OWNER'S SHEET, EXACTLY (`student excel sheet.png`,
-       2026-09-10), and the same fifteen in the PDF as in the workbook.
+       THE COLUMNS ARE THE OWNER'S SHEET (`student excel sheet.png`,
+       2026-09-10).
 
-       They were not the same before. Nine columns carried `pdf:false` — CNIC,
+       THEY ARE NO LONGER IDENTICAL IN BOTH FILES, and the one difference is
+       deliberate: CNIC is `pdf:false` (owner, 2026-09-22 — see its own note
+       below). Everything else is the same column in the printed roster and in
+       the workbook. Contact and Emergency are now ONE column, Contacts, in
+       both.
+
+       They were not the same before either, and that was the bug this
+       paragraph was written about. Nine columns carried `pdf:false` — CNIC,
        gender, nationality, address, emergency contact, date of birth, session,
        blood group, floor — so the printed roster and the exported one were two
        different documents built from one definition, and the printed one was
@@ -2364,26 +2454,52 @@ function _stuExportDef(list, opts) {
 
       { label: 'Father Name', type: 'text', width: 22, value: t => t.fatherName || '' },
 
-      { label: 'Contact', type: 'text', width: 16, value: t => String(t.phone || '') },
+      /* BOTH NUMBERS, ONE COLUMN (owner, 2026-09-22: "both contacts should
+         [be] in single column: Contacts") — the same change the register's own
+         heading takes on the screen, so the sheet and the screen name the field
+         the same way.
 
-      /* "Emergency Contact" is 17 characters over a column of phone numbers,
-         and it was the widest heading on the sheet (owner, 2026-09-10: "the
-         emergency contact heading is taking very much space"). "Emergency" is
-         the whole word and the column beside it is already headed Contact. */
-      { label: 'Emergency', type: 'text', width: 15,
-        value: t => String(t.emergencyPhone || '') },
+         "Emergency Contact" had already been shortened to "Emergency" on
+         2026-09-10 because it was the widest heading on the sheet; two columns
+         of eleven-digit numbers side by side was the remaining cost, and it
+         bought nothing a stacked pair does not. The student's number is the
+         first line and the guardian's the second, the order the register draws
+         them in and the order the form asks for them.
 
-      /* CNIC IS PARTLY MASKED, ON PURPOSE (owner, 2026-09-10: "hide other with
-         **** so that the legal data of anyone cannot be used or seen").
+         `wrap` is the type that gives the workbook cell `wrapText`, so the
+         newline renders as a second line in Excel rather than as one run-on
+         string; the PDF builds the same two lines from `get`, with the
+         guardian's number in the engine's `.sub` style. ONE value feeds both
+         (§60) — they differ in presentation, not in data. */
+      { label: 'Contacts', type: 'wrap', width: 18,
+        value: t => [String(t.phone || ''), String(t.emergencyPhone || '')]
+                      .filter(Boolean).join('\n'),
+        get:   t => { const a = String(t.phone || ''), b = String(t.emergencyPhone || '');
+          if (!a && !b) return '—';
+          return (a ? escHtml(a) : '—') +
+                 (b ? '<span class="sub">' + escHtml(b) + '</span>' : ''); } },
 
-         A national identity number is the single most sensitive field this app
-         holds, and a printed roster is a document that gets left on a desk,
-         photographed and forwarded. Enough is shown to MATCH a person against
-         a record they are holding — the issuing district and the first digits
-         — and the rest is stars. The full number is on the student's own
-         record for anyone who needs it, one click away, and is untouched in
-         the database. */
-      { label: 'CNIC', type: 'text', width: 16, value: t => _stuMaskCnic(t.cnic) },
+      /* CNIC IS A WORKBOOK COLUMN ONLY, AND IT IS NOT MASKED (owner,
+         2026-09-22: "remove cnic column from export pdfs as [it] is already
+         hidden and no need to print without any need ... unmask in the excel").
+
+         THE TWO HALVES ARE ONE RULING, not a contradiction. A printed roster is
+         the document that gets left on a desk, photographed and forwarded — so
+         the identity number comes off it altogether, which is the same reason
+         the register column went on 2026-09-21. A workbook is a file somebody
+         opens on purpose, and it is the record an office is asked for; a
+         half-starred number in it is a number that has to be looked up
+         somewhere else anyway, which made the mask there a cost with no reader.
+
+         So: not on the page, not on the PDF, complete in the workbook, complete
+         on the student's own profile. maskCnic() still guards the profile and
+         the payments register, where the number sits on a screen someone else
+         can be standing behind.
+
+         This reverses the CNIC line of the paragraph above — and only that
+         line. The other eight columns it names stay in both files. */
+      { label: 'CNIC', type: 'text', width: 18, pdf: false,
+        value: t => String(t.cnic || '') },
 
       /* OCCUPATION, one word (owner, 2026-09-10). "Course / Study /
          Profession" is three words for one field, and it is the one field it
@@ -3073,7 +3189,35 @@ function renderAddStudent() {
                 ${ic(P.seat, `<select class="sf-sel" id="f-tbed">${sfBedOptions(preset)}</select>`)}</div>
               <div class="sf-f"><label for="f-tfloor">Floor</label>
                 ${ic(P.layers, `<input class="sf-in sf-in--ro" id="f-tfloor" value="${escHtml(preset?(preset.floor||'')+' Floor':'')}" placeholder="Set by room" readonly>`)}</div>
-              <div class="sf-f" style="grid-column:span 2"><label>Monthly charge</label>
+              ${''/* THE MESS QUESTION IS ASKED ON THE FORM (owner, 2026-09-22:
+                     "are not differentiating the rent and rent + mess students,
+                     means all have same badges of rent + mess").
+
+                     It was not asked. submitAddStudent() stamped `messOptIn: true`
+                     on every admission and a comment sent the warden to Settings ->
+                     Rent & Mess to turn it off afterwards — so at a hostel that lets
+                     a student choose, nobody had chosen. Every row printed the same
+                     total and the same Rent + Mess badge, the "Charged for" hint
+                     above the table named one category, and the plan filter had one
+                     population to filter. The resolver was right the whole time; the
+                     intake never gave it anything to resolve.
+
+                     A field belongs on the form before it belongs in a column — the
+                     same rule the expense `method` field was added under (CLAUDE.md,
+                     Exports).
+
+                     ONLY A "STUDENT CHOOSES" HOSTEL IS ASKED. A bundled hostel
+                     cannot take anyone off the mess and a rent-only hostel serves no
+                     food; on both, the question has one answer and resolveCharges()
+                     already gives it, so a dropdown with one real option would be a
+                     decision the warden cannot make. */}
+              ${messIsOptional() ? `
+              <div class="sf-f"><label for="f-tmess">Mess</label>
+                ${ic(P.coin, `<select class="sf-sel" id="f-tmess" onchange="sfRefreshCharge()">
+                  <option value="on" selected>On the mess &mdash; rent + mess</option>
+                  <option value="off">Room only &mdash; no mess</option>
+                </select>`)}</div>` : ''}
+              <div class="sf-f"${messIsOptional() ? '' : ' style="grid-column:span 2"'}><label>Monthly charge</label>
                 ${ic(P.coin, `<input class="sf-in sf-in--ro" id="f-trent-display" readonly placeholder="Set by room (Rs.)"
                   value="${presetCharges && presetCharges.configured ? escHtml(fmtPKR(presetCharges.total)+' / month') : ''}">`)}</div>
               <div class="sf-f"><label for="f-tjoin">Join date<span class="req">*</span></label>
@@ -3122,6 +3266,33 @@ function renderAddStudent() {
 function asfGoStep(n) {
   const el = document.getElementById('asf-sec-' + n);
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── THE MESS CHOICE ON THE INTAKE FORM ──────────────────────────────────────
+   One reader and one refresher, because the answer is needed in three places:
+   the read-only Monthly charge cell as the warden fills the form, the record
+   the form writes, and the preview rail. Reading the select in each of them is
+   how two of them end up disagreeing.
+
+   The field only exists at a hostel where the student may choose, so an absent
+   select reads as ON — which is what resolveCharges() does with a student
+   record that has no `messOptIn` at all, and is the behaviour every install
+   had before the field existed. */
+function sfMessOn() {
+  const el = document.getElementById('f-tmess');
+  return el ? el.value !== 'off' : true;
+}
+
+/* The Monthly charge cell, recomputed from the room AND the mess choice. It is
+   the same resolveCharges() the register's Charges column prints, so the number
+   the warden is shown while admitting is the number the row will carry. */
+function sfRefreshCharge() {
+  const rentEl = document.getElementById('f-trent-display');
+  if (!rentEl) return;
+  const roomId = (document.getElementById('f-troom') || {}).value || '';
+  const rc = roomId ? resolveCharges({ roomId, messOptIn: sfMessOn() }) : null;
+  rentEl.value = rc && rc.configured ? fmtPKR(rc.total) + ' / month' : '';
+  rentEl.placeholder = rc && !rc.configured ? 'No rent set for this room type' : 'Set by room';
 }
 
 // Bed / seat options for a room — one per seat of its type's capacity.
@@ -3194,12 +3365,13 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
     phone:_v('f-tphone'), email:getEmailValue(),
     occupation: _v('f-tocc'),
     roomId, rent,
-    // Mess starts from the room type's configured food charge and is on by
-    // default; Settings → Rent & Mess is where it gets turned off for a
-    // student who takes the room only. 0 on a hostel that has not split its
-    // charge, so admissions behave exactly as before until it is configured.
+    // Mess starts from the room type's configured food charge. `mess` is the
+    // AMOUNT — stored whether or not it is billed, so turning the mess back on
+    // later restores the same figure — and `messOptIn` is the answer the form
+    // asked for. 0 on a hostel that has not split its charge, so admissions
+    // behave exactly as before until it is configured.
     mess: admitCharges.mess,
-    messOptIn: true,
+    messOptIn: sfMessOn(),
     deposit: _n('f-tdeposit'),
     admissionFee: _n('f-tadmfee'),
     discount: _n('f-tdiscount'),
@@ -3214,6 +3386,15 @@ async function submitAddStudent(presetRoomId='', addAnother=false, saveOnly=fals
     bed:_v('f-tbed'), expectedStay:_v('f-texpstay'),
     bloodGroup:_v('f-tblood'), allergies:_v('f-tallergies'),
     status:'Active', createdAt:today(),
+    /* WHO ADMITTED THEM (owner, 2026-09-22) — stamped here because nothing else
+       holds it. The activity log records 'Student Added' with the account name,
+       but it trims at 200 entries, so on a hostel of any age the answer for an
+       older student is simply gone. Both halves are kept, the same pair
+       ledger.js writes: the ACCOUNT ID survives a rename, the NAME survives the
+       account being deleted. Records written before today carry neither and the
+       register prints the date alone. */
+    admittedBy: (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null,
+    admittedByName: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '',
     /* `files` sits BESIDE `photo`, never instead of it. Everything that reads a
        student photo reads docs.photo and none of it has to learn about the
        array; everything that reads documents goes through stuDocsOf(), which
@@ -5705,12 +5886,7 @@ function pickRoomSearch(roomId, rent, label) {
      warden sees the price while assigning rather than first at the payment
      step. resolveCharges() is the reader -- never rent alone, which would hide
      the mess half. Absent on the other forms that share this function. */
-  const rentEl = document.getElementById('f-trent-display');
-  if (rentEl) {
-    const rc = roomId ? resolveCharges({ roomId }) : null;
-    rentEl.value = rc && rc.configured ? fmtPKR(rc.total) + ' / month' : '';
-    rentEl.placeholder = rc && !rc.configured ? 'No rent set for this room type' : 'Set by room';
-  }
+  sfRefreshCharge();
 
   recalcStudentUnpaid();
   if (typeof asfCompletion === 'function') asfCompletion();

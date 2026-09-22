@@ -112,11 +112,26 @@ test('the three fee states are still computed, and the column really is gone', a
     [...document.querySelectorAll('.stu-table thead th')]
       .map(t => t.innerText.replace(/[⇅▲▼]/g, '').trim().toUpperCase()));
 
-  // Every column the spec's §5-§14 require is still present…
-  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACT / EMERGENCY',
-                     'COURSE', 'ADDRESS', 'CHARGES / MONTH', 'STATUS']) {
+  /* Every column the spec's §5-§14 require is still present…
+
+     TWO WERE RENAMED ON 2026-09-22, not removed: "Contact / emergency" is
+     Contacts (the cell's two glyphs already say which number is which, and the
+     heading was the one that had to wrap), and "Charges / month" is Monthly
+     Charges. Both are asserted by their NEW names here rather than loosened to
+     a substring — a heading is what the warden reads, and a test that accepts
+     either name is a test that would not notice the next silent change. */
+  for (const col of ['ID', 'STUDENT', 'ROOM', 'CONTACTS',
+                     'COURSE', 'ADDRESS', 'MONTHLY CHARGES', 'ADMITTED', 'STATUS']) {
     expect(headers, 'missing column: ' + col).toContain(col);
   }
+  /* ADMITTED SITS BESIDE STATUS (owner, 2026-09-22). Asserted as an ORDER, not
+     just as presence: the colgroup and the body cells have to move with the
+     heading, and a `<col>` left behind in the old place is exactly the mistake
+     that silently hands one column's width to another. */
+  expect(headers.indexOf('ADMITTED'), 'Admitted must sit directly before Status')
+    .toBe(headers.indexOf('STATUS') - 1);
+  expect(await win.evaluate(() => document.querySelectorAll('.stu-table col').length),
+    'one <col> per column, or the widths drift').toBe(headers.length);
   // Nationality left the register on 2026-09-15 (owner: "so that the CNIC,
   // course and address should relax a little"); it stays on the form and the PDF.
   expect(headers, 'Nationality was removed on 2026-09-15').not.toContain('NATIONALITY');

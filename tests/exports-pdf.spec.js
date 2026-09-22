@@ -91,7 +91,11 @@ async function seed(win) {
       { id: 'r1',  number: '1',    floor: 'Ground', typeId: 'rt1' },
     ];
     DB.students = [
-      { id: 's10', name: 'Ten Room',    roomId: 'r10', status: 'Active', joinDate: mk + '-01', phone: '0300-0000010' },
+      /* A CNIC and a guardian's number on one student, so the two assertions
+         about what the printed roster does NOT carry are about a value that
+         genuinely exists in the data (owner, 2026-09-22). */
+      { id: 's10', name: 'Ten Room',    roomId: 'r10', status: 'Active', joinDate: mk + '-01', phone: '0300-0000010',
+        cnic: '11102-0386165-3', emergencyPhone: '0345-1112223' },
       { id: 's2',  name: 'Two Room',    roomId: 'r2',  status: 'Active', joinDate: mk + '-01', phone: '0300-0000002' },
       { id: 'sA',  name: 'Lettered',    roomId: 'rA',  status: 'Active', joinDate: mk + '-01', phone: '0300-0000001' },
       { id: 's1',  name: 'One Room',    roomId: 'r1',  status: 'Active', joinDate: mk + '-01', phone: '0300-0000011' },
@@ -164,6 +168,25 @@ test('the student roster prints in room order, lettered rooms included', async (
   /* 'Charge / mo' became 'Charges (Rs.)' — the owner's sheet, then the brief of
      2026-09-10, which asks for Rs. rather than PKR in a currency heading. */
   expect(doc.headers).toContain('Charges (Rs.)');
+
+  /* NO CNIC ON THE PRINTED ROSTER (owner, 2026-09-22: "remove cnic column from
+     export pdfs ... it should be only shown and printed in the student
+     profile"). A printed roster is the document that gets left on a desk,
+     photographed and forwarded; the register column went on 2026-09-21 for the
+     same reason, and the number is still whole in the workbook and on the
+     student's own profile.
+
+     The NUMBER is asserted, not just the heading: `pdf:false` on the column
+     removes the cell, and a mask left in a `get` would still print digits. */
+  expect(doc.headers, 'the CNIC is back on the printed roster').not.toContain('CNIC');
+  expect(doc.text).not.toContain('11102-0386165-3');
+  expect(doc.text, 'a masked CNIC is still a CNIC on the page').not.toContain('11102-03*');
+
+  /* ONE Contacts COLUMN, both numbers in it (owner, 2026-09-22). */
+  expect(doc.headers).toContain('Contacts');
+  expect(doc.headers).not.toContain('Emergency');
+  expect(doc.text).toContain('0345-1112223');
+
   // Section 16: an export must state the scope it was taken under.
   expect(doc.text).toContain('Scope');
   expect(doc.text).toContain('Generated');

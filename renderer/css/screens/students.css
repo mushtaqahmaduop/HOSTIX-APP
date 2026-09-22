@@ -118,9 +118,25 @@
 .stu-table col.stu-col-sel     { width:2.6%; }
 .stu-table col.stu-col-id      { width:3.6%; }
 .stu-table col.stu-col-who     { width:16%; }
-.stu-table col.stu-col-room    { width:9%; }
+/* 9% -> 10.7% (owner, 2026-09-22). MEASURED IN THE RUNNING APP AT THE 1366
+   FLOOR, not reasoned about: the card is `.ui-room--wide` now — the number in
+   its box with the floor and the type BESIDE it rather than under it — and
+   that shape wants 115px where the stacked one wanted 97. At 9% it ran 18px
+   into Contacts.
+
+   THE 1.7% COMES FROM CONTACTS, and from nothing the owner asked to let
+   breathe. Contacts was measured at 148px holding ~115px of content: it was
+   handed 1.6% on 2026-09-21 when the CNIC column was removed, and it is the
+   only column on the row with slack of that size. Course, Address and Student
+   are the three the owner widened on 2026-09-15 and all three keep every
+   pixel. Actions is 56px for a 30px kebab and was the obvious donor until the
+   colgroup note of 2026-09-10 recorded that cutting it is what clipped the
+   button away in the first place.
+
+   Still sums to 99.5, which is what this colgroup has always summed to. */
+.stu-table col.stu-col-room    { width:10.7%; }
 .stu-table col.stu-col-adm     { width:7.5%; }   /* date of admission (owner, 2026-09-20) */
-.stu-table col.stu-col-contact { width:13.8%; }
+.stu-table col.stu-col-contact { width:12.1%; }
 .stu-table col.stu-col-course  { width:11.8%; }
 .stu-table col.stu-col-addr    { width:12%; }
 .stu-table col.stu-col-charge  { width:9%; }
@@ -854,12 +870,20 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -6px 18px rgba(0,0,0,.34); }
    its column and pushed four others off the end. Fixed widths mean a long value
    wraps inside its own cell instead of stealing from its neighbours.        */
 .stu-table { table-layout: fixed; width: 100%; }
-/* A LITTLE SHORTER, WITH THE ROOM TYPE INSIDE THE LABEL (owner, 2026-09-15).
-   The label now holds three lines — number, floor, type — so its own padding
-   and line gaps come down rather than the row growing. */
-.stu-table .stu-room { padding: var(--space-1) var(--space-2); gap: 0; }
-.stu-table .stu-room__t { line-height: var(--leading-tight); }
-.stu-table .stu-room__type { font-size: var(--text-xs); }
+/* THE ROOM CELL IS `.ui-room--wide` NOW (owner, 2026-09-22) — the number in
+   its box with the floor and the type beside it, as the cancellations register
+   draws it. The three `.stu-room*` rules that used to sit here tightened a
+   THREE-line stacked label; there is no longer a three-line stacked label on
+   this page, and `.stu-room` is no longer emitted by it at all. The base still
+   lives in listkit.css for the registers that have not been rebuilt.
+
+   NOTHING ABOUT THE CARD IS STYLED FROM THIS FILE. The three `.stu-room*`
+   rules that used to sit here tightened the leading of a three-line stacked
+   label and capped its measure — both now belong to `.ui-room--wide` in
+   components/card.css, because `.ui-room__n` and `.ui-room__t` are the SHARED
+   component and issues.css draws them too. A rule written here against those
+   class names reaches the issues register as well, and nobody editing that
+   screen would see it coming. */
 
 /* COURSE AND ADDRESS: ONE LINE, ALIGNED, THE REST ON HOVER (owner, 2026-09-15).
    Course wrapped to two lines and Address clamped to two, so the two columns
@@ -1039,8 +1063,8 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -4px 14px rgba(0,0,0,.30); }
    They were set at the same leading as the primary line, which is what made a
    two-line cell 81px tall. */
 .stu-who__sub,
-.stu-room__t,
 .stu-contact__em,
+.stu-adm__by,
 .stu-charge__sub { line-height: var(--leading-tight); }
 .stu-who__name   { line-height: var(--leading-tight); }
 
@@ -1059,9 +1083,23 @@ body:not(.light-theme) .asf-foot { box-shadow:0 -4px 14px rgba(0,0,0,.30); }
 
 /* One-line values ellipsis rather than overflow. Each of these is a value whose
    full text is on the row's title or one click away on the profile. */
+/* The room card is NOT in this list, though it clips the same way: its classes
+   are the shared component's, and this selector group is unscoped, so naming
+   them here would clip every other register's room cell too. `.ui-room--wide`
+   carries it in components/card.css instead. */
 .stu-who__name, .stu-who__sub,
-.stu-room__n, .stu-room__t,
-.stu-contact, .stu-contact__em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-contact, .stu-contact__em,
+.stu-adm__by { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* WHO ADMITTED THEM, under the date (owner, 2026-09-22). Quieter than the date
+   it sits under — it is who recorded the fact, not the fact — and it is the
+   same weight and hue as the floor under a room number and the vacate date
+   under a status pill, because all three are that same kind of line.
+
+   It clips rather than wraps (the rule above): this is a 7.5% column, and the
+   cell already prints a FIRST name for the same reason. The full name is on
+   the hover. */
+.stu-adm__by { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 1px; }
 .stu-who__body, .stu-who > div { min-width: 0; }
 
 

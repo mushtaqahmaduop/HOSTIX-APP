@@ -1014,8 +1014,31 @@ async function saveCancellation() {
   await saveDB();
   closeModal();
   toast(`${student.name} is on notice — bed held until ${vacateDate ? fmtDate(vacateDate) : 'the vacate date'}.`, 'success');
-  if(currentPage==='cancellations') renderPage('cancellations');
-  else if(currentPage==='dashboard') renderPage('dashboard');
+  /* THE PAGE THE WARDEN IS STANDING ON IS THE ONE THAT HAS TO CHANGE (owner,
+     2026-09-22: "when a student applies for cancellations, the student page
+     shows it active — it should be showing Cancelling or outgoing").
+
+     The status WAS written. `student.status = 'Cancelling'` is four lines up
+     and has always run, and every screen drawn AFTER it reads it correctly —
+     including the room's vacating count. What did not happen is the redraw:
+     this named two pages by hand, and the students register was not one of
+     them, so the row the warden had just acted on went on painting the stale
+     `Active` chip until they navigated away and back. A cancellation is
+     started from the cancellations page and the dashboard, which were named,
+     and from the students panel and the student's own modal (students.js:1297
+     and :3487), which were not — and those last two are the ones raised while
+     looking straight at the row that then failed to change.
+
+     `currentPage` is always a base page name — navigate() normalises
+     `cancellations_Pending` to `cancellations` — so re-rendering it is exactly
+     what the two branches did, for every page rather than for two of them.
+
+     THE SLIDE-OVER IS NOT INSIDE #content. showStudentPanel() appends its host
+     to document.body, so renderPage() cannot reach it and a panel left open
+     behind the modal would go on showing Active under a student who is now on
+     notice. It is redrawn by name, and only when it is open. */
+  renderPage(currentPage);
+  if (typeof stuPanelRefresh === 'function') stuPanelRefresh();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
