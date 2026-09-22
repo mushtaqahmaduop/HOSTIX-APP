@@ -1087,6 +1087,17 @@ async function deleteExpense(id) {
    Evaluated at load, so a session left open past the turn of a month still
    opens on the month it now is. */
 let reportMonth = thisMonth();
+/* MONTH OR WHOLE YEAR (owner, 2026-09-23: "I want an option in the month
+   picker ... through which I can see monthly or full yearly reports data").
+
+   A flag beside the anchor rather than a second anchor: `reportMonth` still
+   says WHERE the window sits and this says how wide it is, so switching to the
+   year and back returns to the month you were on. It is deliberately NOT the
+   old `reportPeriod` — that took three values and had a 'custom' range with
+   its own pair of inputs, all of which stay gone. Two states, one checkbox.
+
+   Reset to false with reportMonth whenever Reports is entered; see navigate(). */
+let reportYearly = false;
 let reportDetail=null;
 let studentReportFilter='All';
 // PERF: pagination state for Reports KPI-card detail tables. Rendering EVERY row

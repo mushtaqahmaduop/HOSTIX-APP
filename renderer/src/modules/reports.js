@@ -106,7 +106,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
   // Names the window the detail is actually built from — one month, since
   // 2026-09-22. It reads _rptKeys() rather than reportMonth so it cannot drift
   // from the keys the rows below it were selected with.
-  const periodLabel = monthLabel(_rptKeys()[0]);
+  const periodLabel = _rptScopeLabel();
   const csvBtn = (type, color) => `<button onclick="downloadDetailExcel('${type}')" title="Export this report to Excel" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export Excel</button>`;
   const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" title="Export this report as a PDF document" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export PDF</button>`;
 
@@ -548,13 +548,22 @@ function _rptMonthName(key) {
     .toLocaleString('default', { month: 'short', year: 'numeric' });
 }
 
-/* ONE MONTH, ALWAYS (owner, 2026-09-22). This returned a bare year prefix for
-   'year' and a computed span for 'custom'; both windows are gone with the
-   segment that selected them, so every caller now gets exactly one key and the
-   array stays an array only because eight call sites iterate it. */
+/* ONE KEY, AND IT IS A PREFIX. A month is 'YYYY-MM' and a whole year is
+   'YYYY' (owner, 2026-09-23) — every matcher on this page is a startsWith or
+   _payMatchesMonth, both of which take either, which is why a year needs no
+   second code path and did not when this page had a year segment.
+
+   The 'custom' range that also lived here is still gone, with the control that
+   selected it. The array stays an array only because eight call sites iterate
+   it. */
 function _rptKeys() {
-  return [reportMonth || thisMonth()];
+  const m = reportMonth || thisMonth();
+  return [reportYearly ? m.slice(0, 4) : m];
 }
+
+/** The window in words, for a heading. monthLabel() passes a bare year
+    through unchanged, so one helper covers both shapes. */
+function _rptScopeLabel() { return monthLabel(_rptKeys()[0]); }
 
 /* `_rptMonthOptions()` stood here: every month from the first record to now,
    newest first, to fill a <select>. The grid picker that replaced that select
@@ -566,6 +575,8 @@ function _rptKeys() {
 
 function rptSetMonth(v) {
   reportMonth = v || thisMonth();
+  // Picking a month IS asking for that month — the year switch comes off.
+  reportYearly = false;
   reportDetailFilter.page = 1;
   // The panel is inside the markup renderPage() is about to replace, so the
   // document-level listeners it installed have to come off first.
@@ -573,24 +584,15 @@ function rptSetMonth(v) {
   renderPage('reports');
 }
 
-/* THE SERIES BEHIND A KPI's SPARKLINE. Only three of the six figures on that
-   row have a month-by-month history this app can honestly draw: money in,
-   money out, and what is left. Occupancy and the student count are STANDING
-   figures — nothing stores what occupancy was in June — and inventing a line
-   for them would be drawing data the database does not have, which is the one
-   thing this codebase does not do. Those two keep their sentence instead. */
-function _rptSeries(what) {
-  const keys = (_rptTrendData || []).map(m => m.key);
-  if (!keys.length) return [];
-  if (what === 'rev')  return (_rptTrendData || []).map(m => m.rev);
-  if (what === 'exp')  return (_rptTrendData || []).map(m => m.exp);
-  // The Available Fund card's sparkline — revenue − expenses, like the figure it sits under.
-  if (what === 'net')  return keys.map(k => calcAvailableFund(k));
-  if (what === 'pend') return keys.map(k =>
-    (DB.payments || []).filter(p => _payMatchesMonth(p, k))
-      .reduce((n, p) => n + outstandingOf(p), 0));
-  return [];
-}
+/* `_rptSeries()` stood here: the month-by-month array behind a KPI card's
+   sparkline, for revenue, expenses, net and pending. The sparklines were
+   removed on 2026-09-23 and it had no other caller.
+
+   What it knew is worth keeping in words, because the next person to want a
+   line on this row will hit it: only those four figures have a history this
+   app can honestly draw. Occupancy and the roster are answerable per month
+   since finance Phase 5, but through _buildRoomStudentIndex() per key — six
+   index builds for one 30px graphic — which is why they never had one. */
 
 // The equivalent window immediately before it — what "vs last month" compares to.
 function _rptPrevKeys() {
@@ -599,9 +601,10 @@ function _rptPrevKeys() {
     m -= n; while (m < 1) { m += 12; y--; }
     return y + '-' + String(m).padStart(2, '0');
   };
+  if (reportYearly) return [String(Number(_rptKeys()[0]) - 1)];
   return [shift(reportMonth || thisMonth(), 1)];
 }
-function _rptPeriodWord() { return 'last month'; }
+function _rptPeriodWord() { return reportYearly ? 'last year' : 'last month'; }
 
 /* ── EXPORT PERIOD ───────────────────────────────────────────────────────────
    Every PDF and CSV must describe the same window the screen is showing.
@@ -614,7 +617,7 @@ function _rptExportLabel() {
   // exported in September, was filed under September.
   return _rptKeys()[0] || thisMonth();
 }
-function _rptExportWord() { return 'Monthly'; }
+function _rptExportWord() { return reportYearly ? 'Annual' : 'Monthly'; }
 
 // Every outgoing in a period as ONE list of expense-shaped rows: the expenses
 // themselves, plus each funds transfer carrying a category of its own. Anything
@@ -749,7 +752,7 @@ function renderReports() {
   /* "This Month" was right while the month was always the current one. With a
      picker on the bar it is a label that can be wrong — set to March, the chart
      header said "This Month" over March's figures — so it names the month. */
-  const periodLabel = monthLabel(_rptKeys()[0]);
+  const periodLabel = _rptScopeLabel();
 
   // "Last updated" means the newest record the report is built from — not the
   // clock. If nothing has been entered, say so rather than showing a date.
@@ -882,7 +885,22 @@ function renderReports() {
     const pct=_rtPct(tOcc, tRooms.length);
     _rtTot.rooms += tRooms.length; _rtTot.occ += tOcc; _rtTot.vac += vac; _rtTot.rev += tRev;
     return `<tr>
-      <td><span class="rpt-tbl__chip" style="background:${type.color}22;color:${type.color}">${escHtml(type.name)}</span></td>
+      ${''/* THE TYPE READS AS A LABEL (owner, 2026-09-23: "the room seater
+             labels are also a little transparent, make it a little vivid").
+
+             The wash was the type's own colour at hex `22` — 13% — with the
+             same colour as the ink on top. At 13% over a light card that is
+             barely a tint, and the text was a saturated hue on almost-white,
+             which is the pairing that reads as washed out however strong the
+             ink is. `33` (20%) with a `55` (33%) border gives the chip an edge
+             to sit inside, so the colour is stated by the shape rather than by
+             the ink alone, and the ink itself is unchanged — it is the one
+             part that was already measured for contrast.
+
+             `type.color` is DATA: a hue the owner picked per room type in
+             Settings, not a design token, which is why it is composed here
+             rather than named in the stylesheet. */}
+      <td><span class="rpt-tbl__chip" style="background:${type.color}33;border:1px solid ${type.color}55;color:${type.color}">${escHtml(type.name)}</span></td>
       <td>${tRooms.length}</td>
       <td class="${tOcc?'':'rpt-tbl__z'}">${tOcc}</td>
       <td class="${vac?'':'rpt-tbl__z'}">${vac}</td>
@@ -907,16 +925,36 @@ function renderReports() {
      that drew a span of arbitrary length went with the control that produced
      it (2026-09-22); six is now the only width, which is why the chart can
      label its bars in full ("Apr 2026") rather than as bare short months. */
-  const RPT_TREND_MONTHS = 6;
+  /* A YEAR DRAWS ITS OWN TWELVE MONTHS; a month draws the six ending on it.
+
+     Both are anchored on what is being REPORTED, never on today — with the
+     picker set to March the chart used to draw the six months ending now, so
+     the line beside the figures described a different window from the figures.
+
+     The year case is not "six months ending in December": a report on 2026 is
+     about 2026, and its chart says January to December of it. Twelve bars in
+     the same width is why the label drops the year there — "Jan" under a chart
+     whose card already names 2026 is not ambiguous. */
   const trendData = [];
-  const _anch = new Date(Number(_rptKeys()[0].slice(0, 4)),
-                         Number(_rptKeys()[0].slice(5, 7)) - 1, 1);
-  for (let i = RPT_TREND_MONTHS - 1; i >= 0; i--) {
-    const d = new Date(_anch.getFullYear(), _anch.getMonth() - i, 1);
-    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    trendData.push({ key: k,
-                     lbl: d.toLocaleString('default', { month: 'short', year: 'numeric' }),
-                     rev: calcRevenue(k), exp: calcExpenses(k) });
+  if (reportYearly) {
+    const y = Number(_rptKeys()[0]);
+    for (let mo = 0; mo < 12; mo++) {
+      const k = y + '-' + String(mo + 1).padStart(2, '0');
+      trendData.push({ key: k,
+                       lbl: new Date(y, mo, 1).toLocaleString('default', { month: 'short' }),
+                       rev: calcRevenue(k), exp: calcExpenses(k) });
+    }
+  } else {
+    const RPT_TREND_MONTHS = 6;
+    const _anch = new Date(Number(_rptKeys()[0].slice(0, 4)),
+                           Number(_rptKeys()[0].slice(5, 7)) - 1, 1);
+    for (let i = RPT_TREND_MONTHS - 1; i >= 0; i--) {
+      const d = new Date(_anch.getFullYear(), _anch.getMonth() - i, 1);
+      const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      trendData.push({ key: k,
+                       lbl: d.toLocaleString('default', { month: 'short', year: 'numeric' }),
+                       rev: calcRevenue(k), exp: calcExpenses(k) });
+    }
   }
   _rptTrendData = trendData;
 
@@ -946,18 +984,25 @@ function renderReports() {
   const nBlackS  = DB.students.filter(t=>t.status==='Blacklisted').length;
   const sDelta   = _rptStudentDelta(_residents);
 
-  /* THE SPARKLINE IS OPTIONAL AND THAT IS THE POINT (owner ref:
-     `reports2.png`, which draws one behind all six figures). Three of these
-     six have a month-by-month history this app can honestly draw — money in,
-     money out, and what is left of it. Occupancy and the roster were STANDING
-     figures when this was written; since finance Phase 5 the stays can say
-     what occupancy was in June, but a sparkline for them is not drawn yet.
-     They keep their sentence. */
-  /* `foot` is an optional block under the caption — the occupancy bar uses it.
-     It sits in FLOW, unlike the sparkline, which is absolutely placed behind
-     the card so it cannot change the row's height. A bar that is part of the
-     reading has to take its own space. */
-  const stat = (id, hue, label, value, sub, svg, clickable, series, foot) => `
+  /* THE SPARKLINES ARE GONE (owner, 2026-09-23: "in kpi cards remove the zig
+     zag lines").
+
+     They were a SHAPE — six months of movement drawn behind the figure with no
+     axis, no scale and no labels — so the only thing a reader could take from
+     one was "up a bit" or "down a bit", which the delta line under the figure
+     already states in a number. Behind a figure at 50% opacity they also put
+     a moving line under text, which is the one place a decorative graphic
+     costs legibility.
+
+     The dashboard reached the same conclusion first and replaced its own with
+     a ratio bar (dashboard.js, final-layout spec §1); this row is the last
+     caller of _dashSpark() and now calls nothing.
+
+     `foot` replaces the `series` slot: an optional block under the caption, in
+     FLOW. The occupancy bar is the only user. With the sparkline gone there is
+     room for it in the card's own 94px, and in flow it cannot cover the line
+     it belongs to — which is what an absolutely-placed one did. */
+  const stat = (id, hue, label, value, sub, svg, clickable, foot) => `
     <div class="rpt-stat ${hue}${clickable===false?' rpt-stat--flat':''}${reportDetail===id?' is-on':''}"
          ${clickable===false?'':`onclick="reportDetail='${id}';renderPage('reports')"`}
          ${clickable===false?'':`title="Open the ${label.toLowerCase()} detail"`}>
@@ -968,8 +1013,6 @@ function renderReports() {
       <div class="rpt-stat__val">${value}</div>
       <div class="rpt-stat__sub">${sub}</div>
       ${foot || ''}
-      ${series && series.filter(v => typeof v === 'number' && isFinite(v)).length > 1
-        ? `<div class="rpt-stat__spark">${_dashSpark(series)}</div>` : ''}
     </div>`;
 
   /* ══ REVENUE COMPOSITION (owner's design, 2026-09-22) ═════════════════════
@@ -1174,7 +1217,7 @@ function renderReports() {
               aria-haspopup="dialog" aria-expanded="false"
               title="Which month this report covers">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-        <span class="rpt-mp__lbl">${escHtml(monthLabel(_rptKeys()[0]))}</span>
+        <span class="rpt-mp__lbl">${escHtml(reportYearly ? 'Year ' + _rptKeys()[0] : _rptScopeLabel())}</span>
         <svg class="rpt-mp__cv" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <div class="rpt-mp__pop" id="rpt-mp-pop" role="dialog" aria-label="Choose a month" hidden>
@@ -1188,6 +1231,23 @@ function renderReports() {
           </button>
         </div>
         <div class="rpt-mp__grid" id="rpt-mp-grid"></div>
+        ${''/* WHOLE YEAR, AS A SWITCH INSIDE THE SAME PANEL (owner,
+               2026-09-23). Not a second control on the bar: the question is
+               still "which window", and answering it in one place is why the
+               three controls this panel replaced were collapsed in the first
+               place.
+
+               A checkbox rather than a 13th cell in the grid, because it is
+               not a sibling of the months — it changes what CLICKING a month
+               means. Ticked, the report covers the whole year on show and the
+               grid marks every month of it; unticked, it returns to the month
+               that was selected before, which is why `reportMonth` keeps its
+               value rather than being overwritten with a year. */}
+        <label class="rpt-mp__yrall">
+          <input type="checkbox" id="rpt-mp-all" ${reportYearly?'checked':''}
+                 onchange="rptPickerYearly(this.checked)">
+          <span>Whole year <b id="rpt-mp-ally">${escHtml(String(_rptPickYear))}</b></span>
+        </label>
         <div class="rpt-mp__note">Months with nothing recorded are dimmed &mdash; they can still be opened.</div>
       </div>
     </div>
@@ -1250,7 +1310,7 @@ function renderReports() {
           <svg class="rpt-xp__cv" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="ui-menu rpt-xp__m" id="rpt-xp-menu" role="menu" hidden>
-          <div class="ui-menu__t">${escHtml(monthLabel(_rptKeys()[0]))}</div>
+          <div class="ui-menu__t">${escHtml(reportYearly ? 'Year ' + _rptKeys()[0] : _rptScopeLabel())}</div>
           <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);exportReportExcel()">
             ${icon('fileSpreadsheet','xs')} Full report &mdash; Excel</button>
           <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);printReport()">
@@ -1274,9 +1334,19 @@ function renderReports() {
             ${icon('card','xs')} Payment register &mdash; PDF</button>
         </div>
       </div>
-      <button class="rpt-print" onclick="printReport()"
-              title="The whole report — every section, in one document">
-        ${icon('print','xs')} Print / PDF</button>
+      ${''/* PRINT / PDF STOOD HERE and it is gone (owner, 2026-09-23:
+             "remove the print/pdf button because it does the same work as the
+             exports button do").
+
+             It ran printReport() — which is exactly what "Full report — PDF"
+             inside the menu beside it runs. Two controls, one document, and
+             the filled one was the more prominent of the pair, so the menu
+             read as the lesser option when it holds three more exports.
+
+             This reverses the 2026-09-10 decision to give it the accent, which
+             was made when the exports were four loose buttons and there was no
+             menu for it to be inside. The document it produces has not moved:
+             the menu's second item, and the first Quick Report. */}
     </div>
   </div>
 
@@ -1329,21 +1399,17 @@ function renderReports() {
            who left — is the Student Movement card below, where it adds up. */}
     ${stat('financial','dh-green','Total Revenue',moneyValue(rev,{compact:true}),
       `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
-      '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-      true, _rptSeries('rev'))}
+      '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
     ${stat('expenses','dh-red','Total Expenses',moneyValue(totalExp,{compact:true}),
       `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
-      '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
-      true, _rptSeries('exp'))}
+      '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>')}
     ${stat('netprofit','dh-violet','Net Result',
       moneyValue(net,{compact:true,color:net>=0?'var(--green)':'var(--red)'}),
       `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
-      '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
-      true, _rptSeries('net'))}
+      '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>')}
     ${stat('pending','dh-amber','Pending Payments',moneyValue(pending,{compact:true}),
       `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
-      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-      true, _rptSeries('pend'))}
+      '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
     ${''/* OCCUPANCY DRAWS A BAR, NOT A SPARKLINE (owner's design). It is a
            RATIO — a part of a whole, where every other card on the row is a
            running figure — and the design draws the one thing a percentage can
@@ -1352,10 +1418,23 @@ function renderReports() {
     ${stat('rooms','dh-blue','Occupancy Rate',`${occRate}%`,
       // Rooms somebody lived in during the period, read off the stays (finance
       // Phase 5) — not the rooms occupied today.
-      `${occ} / ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
-      '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>',
-      true, null,
-      `<div class="rpt-stat__bar"><span style="width:${Math.max(0,Math.min(100,occRate))}%"></span></div>`)}
+      /* THE BAR SHARES THE CAPTION'S LINE, it does not sit under it.
+
+         Under it, the card grew from 94px to 106 and took the other four with
+         it — and this row is held at the students strip's 94 (owner,
+         2026-09-10) so the KPI rows on every register line up. Absolutely
+         placed it cost no height but covered "8 / 8 rooms occupied", which is
+         the fact the percentage is about (owner, 2026-09-23).
+
+         Beside it, it costs nothing and reads as what it is: the measure of
+         the sentence it sits next to. It is passed as part of `sub` rather
+         than through `foot` because it belongs to that line.
+
+         A plain comment, not `${''/* … *​/}`: this is an ARGUMENT LIST, not a
+         template literal, and the interpolating form is a syntax error here. */
+      `<span class="rpt-stat__subt">${occ} / ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied</span>` +
+      `<span class="rpt-stat__bar"><span style="width:${Math.max(0,Math.min(100,occRate))}%"></span></span>`,
+      '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>')}
   </div>`}
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
@@ -1379,14 +1458,17 @@ function renderReports() {
     <div class="rpt-card__h">
       <div class="rpt-card__ht">
         <div class="rpt-card__t">Financial Performance</div>
-        <div class="rpt-card__s">Revenue, expenses and net result for the selected period.</div>
+        <div class="rpt-card__s">Revenue, expenses and net result${reportYearly?' across '+escHtml(_rptKeys()[0]):' for the selected period'}.</div>
       </div>
       <div class="rpt-fin__legend">
         <span class="rpt-k rpt-k--rev"><i></i>Revenue</span>
         <span class="rpt-k rpt-k--exp"><i></i>Expenses</span>
         <span class="rpt-k rpt-k--net"><i></i>Net Result</span>
       </div>
-      <span class="rpt-grain">${icon('calendar','xs')} Monthly</span>
+      ${''/* The design draws a "Monthly" select here. It is STATED, not
+             offered: the grain follows the month picker's own whole-year
+             switch, so a select would be a second control for one setting. */}
+      <span class="rpt-grain">${icon('calendar','xs')} ${reportYearly?'Jan&ndash;Dec':'Monthly'}</span>
     </div>
 
     ${trendData.some(m=>m.rev||m.exp)
@@ -1664,12 +1746,30 @@ function renderReports() {
              which prints whatever that register's own page was last filtered to:
              "Student List" was everyone on the roster today, whatever month this
              page was set to. They now run this page's own period documents, the
-             same ones each tab's Export button produces. Pending stays the
-             register, for the reason given above. */}
+             same ones each tab's Export button produces.
+
+             PENDING IS A DOCUMENT TOO NOW (owner, 2026-09-23: "the real bug in
+             the pending payments report which redirects to the payments page
+             still owing students and not presenting the pendings ... student
+             record pdf").
+
+             It alone called openPaymentsPending(), which NAVIGATES — and that
+             function reads dashMonth(), the DASHBOARD's month. Run from here
+             with Reports set to August it left the page, opened the payments
+             register, and filtered it to whatever month the dashboard happened
+             to be on. So the one item on this list that was not a file was
+             also the one that could show the wrong month, in a card whose own
+             note promises "for the period above".
+
+             It is `downloadDetailPDF('pending')` now: the same document the
+             Pending tab's own Export button produces, scoped to this page's
+             month like the six beside it. openPaymentsPending() is untouched
+             and still correct where it belongs — on the dashboard, which is
+             the page dashMonth() is about. */}
       ${[['Monthly Financial Report','Collection, expenses and profit','chart','printReport()'],
          ['Student List Report','Everyone who lived here in the period','users',"downloadDetailPDF('students')"],
          ['Room Occupancy Report','Room by room, and who was in them','bed',"downloadDetailPDF('rooms')"],
-         ['Pending Payments Report','Opens the register, ready to collect','clock','openPaymentsPending()'],
+         ['Pending Payments Report','Every student still owing, for the period','clock',"downloadDetailPDF('pending')"],
          ['Expense Report','By category, with a subtotal each','expense',"downloadDetailPDF('expenses')"],
          ['Cancellations Report','Departures in the period, and their settlements','transfer',"downloadDetailPDF('cancellations')"],
          ['Complaints Report','Every issue raised in the period, and its state','tool',"downloadDetailPDF('complaints')"]]
@@ -1779,18 +1879,37 @@ function rptPickerYear(step) {
 /* Repaints the panel in place. The page is NOT re-rendered while stepping
    years: nothing about the report has changed yet, and a full renderPage()
    would tear down the panel the warden is still using. */
+/* Ticking it reports the year the PANEL is showing; unticking returns to the
+   month that was selected before, which is why reportMonth is not overwritten.
+   A tick also moves the anchor's year to the panel's, so stepping to 2025 and
+   ticking reports 2025 rather than silently reporting the anchor's year. */
+function rptPickerYearly(on) {
+  reportYearly = !!on;
+  if (on) {
+    const mm = String(reportMonth || thisMonth()).slice(5, 7) || '01';
+    reportMonth = _rptPickYear + '-' + mm;
+  }
+  reportDetailFilter.page = 1;
+  rptPickerToggle(false);
+  renderPage('reports');
+}
+
 function rptPickerPaint() {
   const yEl = document.getElementById('rpt-mp-y');
   if (yEl) yEl.textContent = String(_rptPickYear);
+  const allY = document.getElementById('rpt-mp-ally');
+  if (allY) allY.textContent = String(_rptPickYear);
   const grid = document.getElementById('rpt-mp-grid');
   if (!grid) return;
   const has = rptMonthsWithData();
   const sel = reportMonth || thisMonth();
   const now = thisMonth();
+  // Reporting a whole year, every month of that year is in the window.
+  const selYear = reportYearly && String(_rptPickYear) === String(sel).slice(0, 4);
   grid.innerHTML = Array.from({ length: 12 }, (_, i) => {
     const k = _rptPickYear + '-' + String(i + 1).padStart(2, '0');
     const cls = ['rpt-mp__m'];
-    if (k === sel) cls.push('is-on');
+    if (selYear || k === sel) cls.push('is-on');
     if (k === now) cls.push('is-now');
     if (!has.has(k)) cls.push('is-empty');
     const name = new Date(_rptPickYear, i, 1).toLocaleString('default', { month: 'short' });
@@ -1811,6 +1930,26 @@ function drawReportCharts() {
   if (typeof Chart === 'undefined') return;
   const grid = _rptCss('--border', 'rgba(255,255,255,.1)');
   const ink  = _rptCss('--text3', '#909090');
+
+  /* ── THE HOVER CARD FOLLOWS THE THEME (owner, 2026-09-23: "the pop hover
+     card are not changing background colour with the light/dark mode
+     changes").
+
+     Chart.js paints its tooltip from its OWN defaults — a dark translucent
+     panel with white text — and nothing in this app ever overrode them, so on
+     a light page the hover card stayed dark while every other surface was
+     white. It was not a stale-repaint problem like the grid: it was never
+     themed at all, in either direction.
+
+     Read here, once, and spread across all four charts, so a fifth cannot be
+     added with a fifth opinion about what a tooltip looks like. */
+  const tip = {
+    backgroundColor: _rptCss('--card', '#fff'),
+    titleColor:      _rptCss('--text', '#111'),
+    bodyColor:       _rptCss('--text2', '#444'),
+    borderColor:     _rptCss('--border2', 'rgba(0,0,0,.15)'),
+    borderWidth:     1,
+  };
 
   // ── Financial performance: two bars and a line ────────────────────────────
   /* THE DESIGN'S CHART, AND THE SHAPE IS THE ARGUMENT (owner, 2026-09-22).
@@ -1834,7 +1973,11 @@ function drawReportCharts() {
   const tc = document.getElementById('rpt-trend');
   if (tc && _rptTrendData.length) {
     const revHex = _rptCss('--accent', '#2451D6');
-    const expHex = _rptCss('--amber',  '#f0a030');
+    /* `--warning-solid`, not `--amber` (owner, 2026-09-23). `--amber` aliases
+       `--warning-fg`, which is an INK — #7A5309 in the light theme — and the
+       bars painted as dark olive. The solid is the same role at fill weight.
+       See tokens.css for what a solid is and when to add another. */
+    const expHex = _rptCss('--warning-solid', _rptCss('--amber', '#f0a030'));
     const netHex = _rptCss('--green',  '#16a34a');
     const revVals = _rptTrendData.map(m => m.rev);
     const expVals = _rptTrendData.map(m => m.exp);
@@ -1863,6 +2006,7 @@ function drawReportCharts() {
           datalabels: { display: false },
           legend: { display: false },   // the legend in the card header carries it
           tooltip: {
+            ...tip,
             usePointStyle: true, padding: 12, boxPadding: 5, cornerRadius: 10,
             titleFont: { size: 12, weight: '700' }, bodyFont: { size: 12 },
             callbacks: { label: c => '  ' + c.dataset.label + ':  ' + fmtPKR(c.parsed.y) },
@@ -1897,7 +2041,8 @@ function drawReportCharts() {
         plugins: {
           datalabels: { display: false },
           legend: { display: false },   // the legend beside it carries the figures
-          tooltip: { callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } }
+          tooltip: { ...tip, cornerRadius: 10, padding: 10,
+                     callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } }
         }
       }
     });
@@ -1923,7 +2068,8 @@ function drawReportCharts() {
         plugins: {
           datalabels: { display: false },
           legend: { display: false },
-          tooltip: { callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } },
+          tooltip: { ...tip, cornerRadius: 10, padding: 10,
+                     callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } },
         },
       },
     });
@@ -2120,7 +2266,7 @@ function _rptBaseDef(type) {
 
 /* The period a reader understands, rather than the key a filename needs.
    '2026-09' is a database value; "September 2026" is a period. */
-function _rptPeriodWords() { return monthLabel(_rptKeys()[0]); }
+function _rptPeriodWords() { return _rptScopeLabel(); }
 
 /* THE PERIOD'S STUDENTS AND ROOMS, AS DOCUMENT SECTIONS (finance Phase 5).
    One definition each, read by the tab's own export AND by the whole-period

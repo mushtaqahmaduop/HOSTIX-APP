@@ -240,9 +240,27 @@ function navigate(page, isBack=false) {
   }
   currentPage = page;
   _syncBackBtn();
-  // BUG FIX: Reset reportDetail on every fresh navigation to reports so the
-  // overview badges always show first instead of the last opened detail panel.
-  if (page === 'reports') reportDetail = null;
+  /* A VISIT TO REPORTS STARTS ON THIS MONTH (owner, 2026-09-23: "the reports
+     month dropdown are not coming to its default month when the page is closed
+     or exited").
+
+     `reportMonth` is module state, so a warden who looked at March, left for
+     Students and came back found March still on the bar — with every figure on
+     the page describing March under a heading that gives no hint the window is
+     historical. The period is a property of the VISIT, not of the session.
+
+     Reset on arrival rather than on departure: there is one way in (navRail →
+     navigate) and several ways out, and nothing on the page calls
+     navigate('reports') to re-render — it uses renderPage(), which is exactly
+     the distinction that makes resetting here safe.
+
+     reportDetail was already reset here, so the overview shows first instead of
+     the last opened detail panel. */
+  if (page === 'reports') {
+    reportDetail = null;
+    reportMonth  = thisMonth();
+    reportYearly = false;
+  }
   const cfg = pageConfig[page] || { title: page, sub: '', action: null };
   // The header Back button was removed; sub-pages carry their own exit.
   // goBack()/pageHistory stay — the command palette and in-page controls use them.

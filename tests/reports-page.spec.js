@@ -295,23 +295,40 @@ test('the report KPI strip is still the students card height', async () => {
   await win.evaluate(() => navigate('reports'));
   await win.waitForSelector('.rpt-stat', { timeout: 8000 });
 
-  /* 94px, settled on 2026-09-10 across all six registers. The sparkline added
-     on the same day is absolutely placed for exactly this reason: laid out in
-     flow it took the card to 124, and a KPI row that grows every time a
-     graphic is added is how that budget gets lost. */
+  /* 94px, settled on 2026-09-10 across all six registers. This is the budget a
+     KPI row loses one graphic at a time, so it is asserted rather than trusted:
+     the sparklines were absolutely placed to stay inside it, and when the
+     occupancy bar replaced them it was put in FLOW and took the card to 106
+     before this test caught it.
+
+     The bar now shares the caption's line, which costs nothing. `sameLine` is
+     what stops it being quietly moved back underneath — that arrangement reads
+     fine in a screenshot and only shows up as +12px here. */
   const m = await win.evaluate(() => {
-    const c = document.querySelector('.rpt-stat');
-    const sp = c.querySelector('.rpt-stat__spark');
-    return { h: Math.round(c.getBoundingClientRect().height),
+    const cards = [...document.querySelectorAll('.rpt-stat')];
+    const occ = cards.find(c => /Occupancy/.test(c.textContent));
+    const bar = occ.querySelector('.rpt-stat__bar');
+    const cap = occ.querySelector('.rpt-stat__subt');
+    const br = bar.getBoundingClientRect(), cr = cap.getBoundingClientRect();
+    return { h: Math.round(cards[0].getBoundingClientRect().height),
+             cards: cards.length,
              sparks: document.querySelectorAll('.rpt-stat__spark').length,
-             sparkPos: sp ? getComputedStyle(sp).position : null };
+             coversCaption: br.left < cr.right - 1,
+             sameLine: Math.abs(br.top + br.height / 2 - (cr.top + cr.height / 2)) < 4,
+             caption: cap.textContent.trim() };
   });
   expect(m.h, 'the reports KPI card is no longer the students card height').toBeLessThanOrEqual(96);
-  expect(m.sparkPos, 'a sparkline in flow costs the card its height').toBe('absolute');
-  /* Four of the six have a month-by-month history this app can honestly draw.
-     Occupancy and the roster are standing figures — nothing records what
-     occupancy was in June — so they get no line rather than an invented one. */
-  expect(m.sparks).toBe(4);
+  /* THE SPARKLINES ARE GONE (owner, 2026-09-23: "in kpi cards remove the zig
+     zag lines"). They drew six months of movement with no axis and no scale
+     behind the figure, which the delta line under it already states as a
+     number. Asserted at zero so they cannot drift back in one card at a time. */
+  expect(m.sparks, 'the KPI sparklines were removed on 2026-09-23').toBe(0);
+  expect(m.cards, 'five cards: revenue, expenses, net result, pending, occupancy').toBe(5);
+  /* The bar covered "18 / 22 rooms occupied" when it was absolutely placed —
+     the fact its own percentage is about (owner, 2026-09-23). */
+  expect(m.caption, 'the occupancy caption still states the rooms').toMatch(/\d+ \/ \d+ rooms? occupied/);
+  expect(m.coversCaption, 'the occupancy bar is back on top of its caption').toBe(false);
+  expect(m.sameLine, 'the bar moved off the caption line and will cost 12px').toBe(true);
 
   await app.close();
 });
@@ -394,6 +411,100 @@ test('the whole-report exports survive a month holding complaints', async () => 
     .toEqual(expect.arrayContaining(['CO-0001', 'MA-0001']));
   expect(out.xls.sheets, 'the workbook is missing the issues sheet')
     .toEqual(expect.arrayContaining([expect.stringMatching(/Complaint/i)]));
+
+  await app.close();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE WHOLE-YEAR SWITCH, AND THE PERIOD RESETTING ON ARRIVAL
+//
+// Both are owner requests of 2026-09-23 and both are easy to break silently:
+// a year is expressed as a shorter key prefix ('2026' rather than '2026-09')
+// that every matcher on the page already accepts, so a half-applied change
+// reports a month under a heading naming the year; and the reset lives in
+// navigate(), which nothing on the page calls, so a later refactor that moved
+// the page onto navigate() for re-rendering would wipe the picker mid-use.
+// ════════════════════════════════════════════════════════════════════════════
+test('the whole-year switch widens the window, and a month narrows it back', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+  await win.evaluate(() => navigate('reports'));
+  await win.waitForSelector('.rpt-mp__btn', { timeout: 8000 });
+
+  await win.click('.rpt-mp__btn');
+  await win.waitForSelector('#rpt-mp-pop:not([hidden])', { timeout: 4000 });
+  await win.check('#rpt-mp-all');
+  await win.waitForTimeout(600);
+
+  const year = String(new Date().getFullYear());
+  const y = await win.evaluate(() => ({
+    keys: _rptKeys(), yearly: reportYearly,
+    label: document.querySelector('.rpt-mp__lbl').textContent.trim(),
+    word: _rptExportWord(), words: _rptPeriodWords(),
+    prev: _rptPrevKeys(), bars: (_rptTrendData || []).length,
+    popOpen: !document.getElementById('rpt-mp-pop').hasAttribute('hidden'),
+  }));
+  expect(y.keys, 'a whole year is one prefix key').toEqual([year]);
+  expect(y.yearly).toBe(true);
+  expect(y.label, 'the button says which window it is').toBe('Year ' + year);
+  expect(y.word, 'the export is filed as Annual').toBe('Annual');
+  expect(y.words).toBe(year);
+  expect(y.prev, 'the comparison is the year before').toEqual([String(Number(year) - 1)]);
+  expect(y.bars, 'a year draws its own twelve months').toBe(12);
+  expect(y.popOpen, 'the panel closed on the choice').toBe(false);
+
+  /* THE FIGURES HAVE TO MOVE WITH IT. The seed writes into two months, so a
+     year total is strictly greater than either — a label that changed while
+     the totals did not would pass everything above this line. */
+  const sums = await win.evaluate(() => {
+    const t = _rptTotals(_rptKeys());
+    return { rev: t.rev, collected: t.collected };
+  });
+  await win.click('.rpt-mp__btn');
+  await win.waitForSelector('#rpt-mp-pop:not([hidden])', { timeout: 4000 });
+  const cur = await win.evaluate(() => window.__k.cur);
+  await win.click(`.rpt-mp__m[data-k="${cur}"]`);
+  await win.waitForTimeout(600);
+
+  const m = await win.evaluate(() => ({
+    keys: _rptKeys(), yearly: reportYearly, word: _rptExportWord(),
+    rev: _rptTotals(_rptKeys()).rev, bars: (_rptTrendData || []).length,
+  }));
+  expect(m.keys, 'picking a month narrows the window back').toEqual([cur]);
+  expect(m.yearly, 'picking a month clears the year switch').toBe(false);
+  expect(m.word).toBe('Monthly');
+  expect(m.bars, 'a month draws the six ending on it').toBe(6);
+  expect(sums.rev, 'the year total must exceed the single month it contains')
+    .toBeGreaterThan(m.rev);
+
+  await app.close();
+});
+
+test('a visit to Reports starts on this month', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+  await win.evaluate(() => navigate('reports'));
+  await win.waitForSelector('.rpt-mp__btn', { timeout: 8000 });
+
+  const prev = await win.evaluate(() => window.__k.prev);
+  await win.evaluate((p) => rptSetMonth(p), prev);
+  await win.waitForTimeout(500);
+  expect(await win.evaluate(() => _rptKeys()), 'the picker moved').toEqual([prev]);
+
+  // Leave, and come back the way a warden does — the rail.
+  await win.evaluate(() => navRail('students'));
+  await win.waitForTimeout(500);
+  await win.evaluate(() => navRail('reports'));
+  await win.waitForTimeout(700);
+
+  const back = await win.evaluate(() => ({
+    keys: _rptKeys(), yearly: reportYearly,
+    label: document.querySelector('.rpt-mp__lbl').textContent.trim(),
+  }));
+  expect(back.keys, 'the period is a property of the visit, not the session')
+    .toEqual([await win.evaluate(() => thisMonth())]);
+  expect(back.yearly, 'the whole-year switch comes off with it').toBe(false);
+  expect(back.label).toBe(await win.evaluate(() => monthLabel(thisMonth())));
 
   await app.close();
 });

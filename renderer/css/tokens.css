@@ -185,6 +185,23 @@ body.light-theme {
   --danger-bg:  #F7E5DE;  --danger-fg:  #9E2F20;
   --neutral-bg: #EFEAE1;  --neutral-fg: #3D3D3A;
 
+  /* ── THE SOLIDS: A ROLE'S COLOUR AS A FILL, NOT AS INK ────────────────────
+     Owner, 2026-09-23. `--warning-fg` is #7A5309 here — an ink, chosen to
+     clear contrast as TEXT on `--warning-bg`. Painted as an area it reads as
+     dark olive, which is what the Reports expense bars looked like and why
+     they did not match the design's gold.
+
+     A solid is the same role at the weight a FILL wants: saturated enough to
+     name the role at a glance, dark enough to carry white on it, and the same
+     hue in both themes so a chart does not change meaning when the lights go
+     out. They are for areas a reader looks AT — a bar, an arc, a chart series
+     — never for text, which keeps using the `-fg` ink it was measured on.
+
+     Only warning has one today, because only warning was wrong. The other
+     three roles' inks already sit at fill weight; add a solid here when one
+     of them is measured to need it, not before. */
+  --warning-solid: #D9931F;
+
   /* Addition 1 — the spec's light shadows, restated so the dark block below
      cannot leak into light mode. */
   --shadow-menu:  0 4px 12px rgba(15, 23, 42, 0.10);
@@ -224,6 +241,11 @@ body.light-theme {
   --warning-bg: rgba(232, 184, 75, 0.16);  --warning-fg: #E8B84B;
   --danger-bg:  rgba(240, 138, 122, 0.16); --danger-fg:  #F08A7A;
   --neutral-bg: rgba(162, 170, 182, 0.14); --neutral-fg: #A2AAB6;
+
+  /* The fill weight of the warning role — see the light block for what a
+     solid is for. Lifted off the dark ground rather than reusing light's
+     #D9931F, which goes muddy against #1A1917; the hue is the same. */
+  --warning-solid: #E8A93B;
 
   --shadow-menu:  0 4px 12px rgba(0, 0, 0, 0.40);
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);

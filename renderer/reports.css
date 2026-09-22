@@ -68,7 +68,17 @@
 .rpt-mp__m.is-on    { background:var(--accent); border-color:var(--accent); color:var(--text-on-accent); font-weight:700; }
 /* …and the month it actually is, when that is not the one being reported. */
 .rpt-mp__m.is-now:not(.is-on) { border-color:var(--border2); }
-.rpt-mp__note { margin-top:9px; font-size:11px; line-height:1.45; color:var(--text3); }
+/* The whole-year switch. A row, not a 13th cell: it changes what clicking a
+   month MEANS, so it is ruled off from the grid rather than sitting in it. */
+.rpt-mp__yrall {
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    margin-top:9px; padding-top:9px; border-top:1px solid var(--border);
+    font-size:12.5px; font-weight:600; color:var(--text);
+}
+.rpt-mp__yrall input { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+.rpt-mp__yrall b     { font-variant-numeric:tabular-nums; }
+.rpt-mp__yrall:hover { color:var(--accent); }
+.rpt-mp__note { margin-top:8px; font-size:11px; line-height:1.45; color:var(--text3); }
 
 /* ── THE EXPORT MENU ─────────────────────────────────────────────────────── */
 .rpt-xp { position:relative; }
@@ -265,13 +275,10 @@
 .rpt-k   { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--text2); white-space:nowrap; }
 .rpt-k i { width:8px; height:8px; border-radius:50%; background:var(--k); flex-shrink:0; }
 .rpt-k--rev i { background:var(--accent); }
-/* `--amber` is what dashboard.js:3324 paints its charts with, so the two pages
-   agree. NOTE: in the light theme that token resolves to `--warning-fg`
-   (#7A5309) — an INK, picked to be readable as text on a wash — so the bars
-   read olive rather than the design's gold. Matching the design needs a
-   `--warning-solid` fill token in tokens.css, which is the owner's call under
-   design governance, not this change's. */
-.rpt-k--exp i { background:var(--amber); }
+/* The dot marks the bars, so it takes the bars' own colour: `--warning-solid`,
+   the warning role at fill weight (owner, 2026-09-23). `--amber` aliases
+   `--warning-fg`, an ink, and both the dot and the bars read olive under it. */
+.rpt-k--exp i { background:var(--warning-solid); }
 .rpt-k--net i { background:var(--green); }
 /* The grain is STATED, not offered — one option in a select is not a control.
    See the chart's own note in reports.js. */
@@ -404,18 +411,25 @@
 
 /* THE OCCUPANCY CARD'S BAR (owner's design, 2026-09-22). Occupancy is a RATIO
    where the four cards beside it are running figures, and a percentage is the
-   one thing a bar can state honestly without a history behind it — which is
-   what the sparkline on the others needs and what nothing stores for this.
+   one thing a bar can state honestly without a history behind it.
 
-   ABSOLUTELY PLACED, FOR THE SAME REASON THE SPARKLINE IS. The KPI row is held
-   at the students strip's 94px (owner, 2026-09-10) and reports-page.spec.js
-   enforces it; in flow this bar took the card to 104 and every card on the row
-   with it. It sits on the card's bottom edge, which is where the design draws
-   it and where the sparkline on the other four already lives — so the two
-   graphics occupy the same band and no card is taller than another. */
+   IN FLOW, UNDER THE CAPTION (owner, 2026-09-23: "the bar in the occupancy
+   card are hiding the occupied rooms number"). It was absolutely placed at the
+   card's bottom edge to stay inside the row's 94px budget while the other four
+   cards carried a sparkline in that same band — and it sat straight on top of
+   "18 / 22 rooms occupied", which is the fact the percentage is about.
+
+   The sparklines went on the same day, so the band is free and the bar simply
+   takes its own 12px. The row still measures 94. */
+/* On the caption's own line, taking whatever it leaves. The line stops
+   wrapping when it carries a bar — a wrap would put the bar on a second row
+   and cost the 12px this arrangement exists to save — and the caption gives
+   way first, which is why it is a span and not a bare text node. */
+.rpt-stat__sub:has(.rpt-stat__bar) { flex-wrap:nowrap; }
+.rpt-stat__subt { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* `min-width` stops a long caption crushing the bar to a dot. */
 .rpt-stat__bar {
-    position:absolute; left:14px; right:14px; bottom:11px; z-index:1;
-    height:5px; border-radius:99px;
+    flex:1 1 auto; min-width:34px; height:5px; border-radius:99px;
     background:var(--dash-track); overflow:hidden;
 }
 .rpt-stat__bar span { display:block; height:100%; border-radius:99px; background:var(--accent); }
@@ -750,22 +764,9 @@
    cannot push the row taller — and a min-height is what makes that promise
    hold from the other direction too. */
 .rpt-stat { display: flex; flex-direction: column; box-sizing: border-box; min-height: 94px; }
-.rpt-stat__spark {
-    position: absolute; left: 42%; right: 0; bottom: 0; height: 30px;
-    opacity: .5; line-height: 0; pointer-events: none;
-}
-.rpt-stat__spark svg { width: 100%; height: 100%; display: block; color: var(--dh); }
-.rpt-stat__spark .dash-spark-empty { display: none; }
-/* The sparkline's own marks. They lived in dashboard.css as .dash-spark
-   polyline / .dash-spark__area until 2026-09-17, when the dashboard stopped
-   drawing sparklines at all - its KPI cards carry a ratio bar now. This tile
-   is the only surface left that calls _dashSpark(), so the two marks live
-   with their caller. Without them the polyline has no stroke and the area
-   polygon takes the SVG default fill, which is solid black.
-   currentColor, because the rule above already sets it from the tile. */
-.rpt-stat__spark polyline { stroke: currentColor; }
-.rpt-stat__spark .dash-spark__area { fill: currentColor; opacity: .10; stroke: none; }
-/* The card's own content stays above it. */
+/* `.rpt-stat__spark` and its three marks stood here — the absolutely-placed
+   SVG behind each figure. Removed with the sparklines on 2026-09-23; this was
+   the last surface in the app calling _dashSpark(). */
 .rpt-stat__top, .rpt-stat__val, .rpt-stat__sub { position: relative; z-index: 1; }
 
 
@@ -839,21 +840,14 @@
    used to mix (the segment's 40, the month select's 34, the card action's 32).
    Card headers are untouched. */
 .rpt-bar .rpt-card__a,
-.rpt-bar .rpt-print,
 .rpt-bar .rpt-mp__btn { height: var(--h-md); }
 
 .rpt-card__a--excel svg { color: var(--green); }
 
-.rpt-print {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 34px; padding: 0 14px; border-radius: 9px; cursor: pointer;
-    background: var(--accent); border: 1px solid var(--accent); color: var(--text-on-accent);
-    font-family: var(--font); font-size: 12px; font-weight: 650;
-    transition: var(--transition); white-space: nowrap;
-}
-.rpt-print svg   { flex-shrink: 0; }
-.rpt-print:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
-.rpt-print:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* `.rpt-print` stood here — the one filled button on the page. Removed with
+   the control on 2026-09-23: it ran printReport(), which is what "Full report
+   — PDF" inside the Export menu beside it already ran. */
+
 
 
 /* ══ KEY HIGHLIGHTS AS ITS OWN CARD (owner ref: reports2.png) ══════════════
