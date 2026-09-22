@@ -182,7 +182,9 @@ test('fund transfer hidden, expenses grouped by category, no month mixing', asyn
   expect(expPage.totalShown).toBe('Rs. 16,700.00');
 
   // ── 4. Reports: no Transfers stat, expenses grouped by category ──────────
-  await win.evaluate(() => { reportPeriod = 'month'; reportDetail = null; navigate('reports'); });
+  // `reportPeriod = 'month'` stood here. A month is the only window Reports
+  // has since 2026-09-22, so there is nothing to set.
+  await win.evaluate(() => { reportDetail = null; navigate('reports'); });
   await win.waitForTimeout(1000);
   const rptStats = await win.evaluate(() => ({
     renderError: document.body.innerText.includes('Render Error'),

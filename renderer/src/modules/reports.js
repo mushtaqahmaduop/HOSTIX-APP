@@ -103,14 +103,10 @@ function _buildRoomStudentIndex(keys) {
 }
 
 function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
-  // Names the window the detail is actually built from. There was no 'custom'
-  // branch, so a Custom Range detail headed itself with the current YEAR while
-  // listing the range's rows.
-  const _plKeys = _rptKeys();
-  const periodLabel = reportPeriod==='month' ? monthLabel(reportMonth || thisMonth())
-    : reportPeriod==='year' ? thisYear()
-    : (_plKeys.length ? _rptMonthName(_plKeys[0]) + ' – ' + _rptMonthName(_plKeys[_plKeys.length-1])
-                      : 'Custom Range');
+  // Names the window the detail is actually built from — one month, since
+  // 2026-09-22. It reads _rptKeys() rather than reportMonth so it cannot drift
+  // from the keys the rows below it were selected with.
+  const periodLabel = monthLabel(_rptKeys()[0]);
   const csvBtn = (type, color) => `<button onclick="downloadDetailExcel('${type}')" title="Export this report to Excel" style="background:${color};color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export Excel</button>`;
   const pdfBtn = `<button onclick="downloadReportDetailPDF('${id}')" title="Export this report as a PDF document" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Export PDF</button>`;
 
@@ -119,7 +115,7 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 
   // PERF: reset to page 1 only when the detail type / period / sub-filter changes, so
   // paging within a detail table is preserved but switching cards starts fresh.
-  const _detKey = id+'|'+reportPeriod+'|'+studentReportFilter;
+  const _detKey = id+'|'+_rptKeys()[0]+'|'+studentReportFilter;
   if (reportDetailFilter._lastKey !== _detKey) { reportDetailFilter.page = 1; reportDetailFilter._lastKey = _detKey; }
 
   // ── REVENUE ────────────────────────────────────────────────────────────────
@@ -509,13 +505,20 @@ function renderReportDetail(id, pays, exps, rev, pending, totalExp, net, occ) {
 }
 
 
-/* ── Reports v5 — period selection ───────────────────────────────────────────
-   `reportPeriod` gains a third value, 'custom'. Rather than inventing a second
-   date-filtering path, a custom range is expressed as the LIST of YYYY-MM keys
-   it spans, and every figure is summed over those keys using the same
-   _payMatchesMonth / startsWith matching the month and year views already use.
-   That keeps one vetted matcher instead of two that can disagree. */
-let reportRange = { from:'', to:'' };
+/* ── Reports — period selection ──────────────────────────────────────────────
+   ONE MONTH. This used to read "reportPeriod gains a third value, 'custom'",
+   and described a range expressed as the list of YYYY-MM keys it spans. The
+   segment that selected a year or a range was removed on 2026-09-22; what
+   survives of that design is the SHAPE — every figure is still summed over a
+   list of keys through the same _payMatchesMonth / startsWith matcher, so
+   there is still one vetted matcher rather than two that can disagree, and a
+   wider window would be a change to _rptKeys() alone. */
+/* THE YEAR THE PICKER'S PANEL IS SHOWING. Not the reported period — that is
+   `reportMonth` alone. This is only where the twelve-month grid is scrolled
+   to, so a warden can step to 2025 and back without the report moving under
+   them until they choose a month. Reset to the reported month's own year every
+   time the panel opens, so it never opens somewhere surprising. */
+let _rptPickYear = Number(String(thisMonth()).slice(0, 4));
 
 function _rptMonthsBetween(from, to) {
   const out = [];
@@ -545,34 +548,28 @@ function _rptMonthName(key) {
     .toLocaleString('default', { month: 'short', year: 'numeric' });
 }
 
+/* ONE MONTH, ALWAYS (owner, 2026-09-22). This returned a bare year prefix for
+   'year' and a computed span for 'custom'; both windows are gone with the
+   segment that selected them, so every caller now gets exactly one key and the
+   array stays an array only because eight call sites iterate it. */
 function _rptKeys() {
-  if (reportPeriod === 'year')   return [thisYear()];
-  if (reportPeriod === 'custom') return _rptMonthsBetween(reportRange.from, reportRange.to);
   return [reportMonth || thisMonth()];
 }
 
-/* Every month the data knows about, newest first, with the current one always
-   present. A picker that cannot show its own selection reads as a blank
-   screen on the 1st of a month, before anything has been recorded. */
-/* EVERY MONTH FROM THE FIRST RECORD TO NOW, not only months holding money
-   (finance Phase 5). A month in which students lived but nothing was billed or
-   spent is still a month to report on — who was here — and the picker could
-   not offer it, so it showed a different month over the report instead. */
-function _rptMonthOptions() {
-  const now = thisMonth();
-  let first = now;
-  const see = k => { if (/^\d{4}-\d{2}$/.test(k || '') && k < first) first = k; };
-  (DB.payments || []).forEach(p => see(_payMonthKey(p)));
-  (DB.expenses || []).forEach(e => see(String(e.date || '').slice(0, 7)));
-  (DB.students || []).forEach(s => see(_toMonthKey(s.joinDate)));
-  if (reportMonth) see(reportMonth);
-  const last = reportMonth && reportMonth > now ? reportMonth : now;
-  return _rptMonthsBetween(first, last).reverse();
-}
+/* `_rptMonthOptions()` stood here: every month from the first record to now,
+   newest first, to fill a <select>. The grid picker that replaced that select
+   on 2026-09-22 needs no list — a year holds twelve months whether or not this
+   hostel has records in them, which is the same finding that widened this
+   function in the first place (finance Phase 5: a month in which students
+   lived but nothing was billed is still a month to report on). What survives
+   of it is rptMonthsWithData(), which decides only which cells are dimmed. */
 
 function rptSetMonth(v) {
   reportMonth = v || thisMonth();
   reportDetailFilter.page = 1;
+  // The panel is inside the markup renderPage() is about to replace, so the
+  // document-level listeners it installed have to come off first.
+  if (typeof rptPickerToggle === 'function') rptPickerToggle(false);
   renderPage('reports');
 }
 
@@ -602,17 +599,9 @@ function _rptPrevKeys() {
     m -= n; while (m < 1) { m += 12; y--; }
     return y + '-' + String(m).padStart(2, '0');
   };
-  if (reportPeriod === 'year')  return [String(Number(thisYear()) - 1)];
-  if (reportPeriod === 'custom') {
-    const ks = _rptKeys(); if (!ks.length) return [];
-    return ks.map(k => shift(k, ks.length));
-  }
   return [shift(reportMonth || thisMonth(), 1)];
 }
-function _rptPeriodWord() {
-  return reportPeriod === 'year' ? 'last year'
-       : reportPeriod === 'custom' ? 'previous range' : 'last month';
-}
+function _rptPeriodWord() { return 'last month'; }
 
 /* ── EXPORT PERIOD ───────────────────────────────────────────────────────────
    Every PDF and CSV must describe the same window the screen is showing.
@@ -621,17 +610,11 @@ function _rptPeriodWord() {
    the owner the WHOLE YEAR under a filename naming the range. These two put the
    exports back on _rptKeys(), the same matcher the page itself uses.          */
 function _rptExportLabel() {
-  const ks = _rptKeys();
-  if (reportPeriod === 'year')   return thisYear();
-  if (reportPeriod === 'custom') return ks.length ? ks[0] + '_to_' + ks[ks.length - 1] : 'custom';
   // The month on screen. This returned thisMonth(), so March's report,
   // exported in September, was filed under September.
-  return ks[0] || thisMonth();
+  return _rptKeys()[0] || thisMonth();
 }
-function _rptExportWord() {
-  return reportPeriod === 'month' ? 'Monthly'
-       : reportPeriod === 'year'  ? 'Annual' : 'Custom Range';
-}
+function _rptExportWord() { return 'Monthly'; }
 
 // Every outgoing in a period as ONE list of expense-shaped rows: the expenses
 // themselves, plus each funds transfer carrying a category of its own. Anything
@@ -766,11 +749,7 @@ function renderReports() {
   /* "This Month" was right while the month was always the current one. With a
      picker on the bar it is a label that can be wrong — set to March, the chart
      header said "This Month" over March's figures — so it names the month. */
-  const periodLabel = reportPeriod === 'month' ? monthLabel(reportMonth || thisMonth())
-    : reportPeriod === 'year' ? 'This Year'
-    : (reportRange.from && reportRange.to)
-      ? _rptMonthName(reportRange.from) + ' – ' + _rptMonthName(reportRange.to)
-      : 'Custom Range';
+  const periodLabel = monthLabel(_rptKeys()[0]);
 
   // "Last updated" means the newest record the report is built from — not the
   // clock. If nothing has been entered, say so rather than showing a date.
@@ -866,8 +845,8 @@ function renderReports() {
     <div class="rpt-legend__r">
       <span class="rpt-legend__d" style="background:${x.color}"></span>
       <span class="rpt-legend__n" title="${escHtml(x.m)}">${escHtml(x.m)}</span>
-      <span class="rpt-legend__p">${methodTotal?(x.amt/methodTotal*100).toFixed(1):'0.0'}%</span>
       <span class="rpt-legend__v">${fmtPKR(x.amt)}</span>
+      <span class="rpt-legend__p">${methodTotal?(x.amt/methodTotal*100).toFixed(1):'0.0'}%</span>
     </div>`).join('');
   _rptDonutData = methods.map(x=>({label:x.m, value:x.amt, color:x.color}));
 
@@ -919,92 +898,42 @@ function renderReports() {
       <td>${fmtPKR(_rtTot.rev)}</td></tr>` : '';
 
   // ── Revenue vs expenses trend (drawn by drawReportTrend after paint) ──────
-  const mCount=reportPeriod==='month'?6:12;
-  const trendData=[];
-  if (reportPeriod==='custom' && keys.length) {
-    keys.forEach(k=>{
-      const d=new Date(Number(k.slice(0,4)), Number(k.slice(5,7))-1, 1);
-      trendData.push({ key:k, lbl:d.toLocaleString('default',{month:'short'}),
-                       rev:calcRevenue(k), exp:calcExpenses(k) });
-    });
-  } else {
-    for(let i=mCount-1;i>=0;i--){
-      /* Anchored on the month being REPORTED, not on today. With the picker
-         set to March the chart used to draw the six months ending now, so the
-         line beside the figures described a different window from the figures. */
-      const _anch = reportPeriod === 'month' && reportMonth
-        ? new Date(Number(reportMonth.slice(0,4)), Number(reportMonth.slice(5,7)) - 1, 1)
-        : new Date();
-      const d=new Date(_anch.getFullYear(),_anch.getMonth()-i,1);
-      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-      trendData.push({ key:k, lbl:d.toLocaleString('default',{month:'short'}),
-                       rev:calcRevenue(k), exp:calcExpenses(k) });
-    }
+  /* SIX MONTHS ENDING ON THE MONTH BEING REPORTED — the window the design's
+     Financial Performance chart draws, and the one the KPI sparklines read.
+
+     Anchored on the REPORTED month, not on today: with the picker set to March
+     the chart used to draw the six months ending now, so the line beside the
+     figures described a different window from the figures. The 'custom' branch
+     that drew a span of arbitrary length went with the control that produced
+     it (2026-09-22); six is now the only width, which is why the chart can
+     label its bars in full ("Apr 2026") rather than as bare short months. */
+  const RPT_TREND_MONTHS = 6;
+  const trendData = [];
+  const _anch = new Date(Number(_rptKeys()[0].slice(0, 4)),
+                         Number(_rptKeys()[0].slice(5, 7)) - 1, 1);
+  for (let i = RPT_TREND_MONTHS - 1; i >= 0; i--) {
+    const d = new Date(_anch.getFullYear(), _anch.getMonth() - i, 1);
+    const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    trendData.push({ key: k,
+                     lbl: d.toLocaleString('default', { month: 'short', year: 'numeric' }),
+                     rev: calcRevenue(k), exp: calcExpenses(k) });
   }
   _rptTrendData = trendData;
 
-  // ── Key Highlights ────────────────────────────────────────────────────────
-  /* ITS OWN CARD NOW, NOT A STRIP INSIDE THE CHART (owner ref: `reports2.png`,
-     which draws it on the row below beside Expense Breakdown). It was welded to
-     the bottom of Monthly Overview, which made that card 640px tall and pushed
-     everything under it below the fold on a 768px laptop — and read as a
-     footnote to the chart when it is a summary of the whole period.
-     Nothing about WHAT it says changes; only where it sits.
+  /* ── Key Highlights ───────────────────────────────────────────────────────
+     `_hiCells` stood here: the peak collection, peak profit, peak expense and
+     average profit margin across the six months behind the chart, built into
+     four tiles.
 
-     Peaks and margin are all derived from the same trendData the chart draws —
-     no separate query, so the card can never disagree with the line above it.
-     m.exp counts funds transfers. "Profit" here is the ACCRUAL result — billed
-     revenue less expenses — which is not the Available Fund since finance
-     Phase 3 made that cash. Peaks by billed month is what this card is for.
+     REMOVED 2026-09-22 with the owner's redesign, which puts Revenue
+     Composition and Collection Performance on that row instead. It was a set
+     of facts about a six-month WINDOW sitting in a row of cards about the
+     reported MONTH, and every one of them is readable off the bars above it:
+     the tallest blue bar is the highest collection, the tallest amber the
+     highest expense, and the green line's high point the best month.
 
-     Only months that actually recorded something can win a peak. A hostel six
-     weeks old has four empty months in this window, and "Highest Expense: Mar,
-     PKR 0" is not a fact about March — it is the reduce() seed showing
-     through. */
-  const _hiCells = (() => {
-    const live = trendData.filter(m => m.rev || m.exp)
-                          .map(m => ({...m, profit: m.rev - m.exp}));
-    if (!live.length) return null;
-    const peak = (k) => live.reduce((b,m) => m[k] > b[k] ? m : b, live[0]);
-    const topRev = peak('rev'), topProfit = peak('profit'), topExp = peak('exp');
-    const sumRev = live.reduce((s,m)=>s+m.rev,0);
-    const sumProfit = live.reduce((s,m)=>s+m.profit,0);
-    // Margin is only meaningful once something was actually collected.
-    const margin = sumRev > 0 ? (sumProfit / sumRev * 100) : null;
-    // …and it is an average across every month with data, NOT the period the
-    // page header names. Labelling it "This Month" while summing six of them
-    // was the card's own caption contradicting its figure.
-    const span = live.length === 1
-      ? _rptMonthName(live[0].key)
-      : _rptMonthName(live[0].key) + ' – ' + _rptMonthName(live[live.length-1].key);
-    // Each peak names its month in full, so a window that crosses New Year
-    // cannot show two different "Jan"s with no way to tell them apart.
-    const at = m => _rptMonthName(m.key);
-    const cell = (hue,ico,label,sub,val) => `
-      <div class="mov__cell ${hue}">
-        <span class="mov__cico">${icon(ico,'sm')}</span>
-        <div>
-          <div class="mov__cl">${label}</div>
-          <div class="mov__cv">${val}</div>
-          <div class="mov__cs">${escHtml(sub)}</div>
-        </div>
-      </div>`;
-    /* COMPACT, THROUGH THE SAME HELPER THE KPI ROW USES. Four cells across a
-       685px card is 170px each, and after the 38px icon chip and the padding
-       that leaves 89px of text — where fmtPKR's "Rs. 189,000" wants 95 at 17px
-       and was ellipsising to "Rs. 189,…". moneyValue(compact) keeps the exact
-       figure in the title attribute, so hovering still gives the reconcilable
-       number; nothing is lost but the digits that would not fit anyway. */
-    const fig = v => moneyValue(v, { compact: true });
-    return {
-      span,
-      html: cell('dh-violet','trendUp','Highest Collection',at(topRev),fig(topRev.rev))
-          + cell('dh-green','chart','Highest Profit',at(topProfit),fig(topProfit.profit))
-          + cell('dh-red','arrowDownCircle','Highest Expense',at(topExp),fig(topExp.exp))
-          + cell('dh-blue','pieChart','Average Profit Margin',span,
-              margin===null ? '<span class="is-na">—</span>' : margin.toFixed(1)+'%'),
-    };
-  })();
+     `trendData` is untouched — the chart and the KPI sparklines are its real
+     readers, and they always were. */
 
   // ── Student summary ───────────────────────────────────────────────────────
   // THE PERIOD'S PEOPLE (finance Phase 5). These counted today's statuses and
@@ -1024,7 +953,11 @@ function renderReports() {
      figures when this was written; since finance Phase 5 the stays can say
      what occupancy was in June, but a sparkline for them is not drawn yet.
      They keep their sentence. */
-  const stat = (id, hue, label, value, sub, svg, clickable, series) => `
+  /* `foot` is an optional block under the caption — the occupancy bar uses it.
+     It sits in FLOW, unlike the sparkline, which is absolutely placed behind
+     the card so it cannot change the row's height. A bar that is part of the
+     reading has to take its own space. */
+  const stat = (id, hue, label, value, sub, svg, clickable, series, foot) => `
     <div class="rpt-stat ${hue}${clickable===false?' rpt-stat--flat':''}${reportDetail===id?' is-on':''}"
          ${clickable===false?'':`onclick="reportDetail='${id}';renderPage('reports')"`}
          ${clickable===false?'':`title="Open the ${label.toLowerCase()} detail"`}>
@@ -1034,9 +967,115 @@ function renderReports() {
       </div>
       <div class="rpt-stat__val">${value}</div>
       <div class="rpt-stat__sub">${sub}</div>
+      ${foot || ''}
       ${series && series.filter(v => typeof v === 'number' && isFinite(v)).length > 1
         ? `<div class="rpt-stat__spark">${_dashSpark(series)}</div>` : ''}
     </div>`;
+
+  /* ══ REVENUE COMPOSITION (owner's design, 2026-09-22) ═════════════════════
+     What the period's money is MADE OF, beside the Payment Methods donut that
+     says how it arrived.
+
+     IT COMPOSES THE BILL, NOT THE COLLECTION, and that is the only honest way
+     to draw it. A payment record says what was charged under each head — rent,
+     mess, admission fee, extras, less any concession — but a part-payment does
+     not say WHICH head it paid. Splitting collected money into five slices
+     would mean inventing an allocation the ledger never recorded, which is the
+     one thing this codebase does not do. So the centre reads Total Billed and
+     the card says so; Total Collected is the figure in the Payment Methods
+     donut next to it and on the Revenue KPI above.
+
+     THE FIVE SLICES ARE calculateBill()'s OWN TERMS, in its order, so the
+     slices sum to `billed` by construction rather than by coincidence:
+       rent + (mess when billed) + extras + admission fee − concession.
+     Concessions are money given away and draw as a negative row under the
+     donut rather than a slice of it — an arc cannot be negative, and a
+     reduction drawn as an area reads as income.
+
+     calculateBill() clamps each record at 0, so a record whose concession
+     exceeds its charges contributes 0 to `billed` while its parts still carry
+     figures. The slices are scaled to their own sum for the arcs and the
+     stated total is that same sum, so the card is internally consistent
+     whichever way that lands. */
+  const _revParts = (() => {
+    let rent = 0, mess = 0, extras = 0, adm = 0, conc = 0;
+    pays.forEach(p => {
+      const ch = paymentCharges(p, DB.students.find(s => s.id === p.studentId));
+      rent += ch.rent;
+      mess += ch.messIncluded ? ch.mess : 0;
+      extras += Number(p.extraTotal != null ? p.extraTotal
+        : (p.extraCharges || []).reduce((s, c) => s + Number((c && c.amount) || 0), 0)) || 0;
+      adm  += Number(p.admissionFee != null ? p.admissionFee : p.fee) || 0;
+      conc += Number(p.concession != null ? p.concession : p.discount) || 0;
+    });
+    const slices = [
+      { label: 'Rent',          value: rent,   color: _rptCss('--accent', '#2451D6') },
+      { label: 'Mess',          value: mess,   color: _rptCss('--green',  '#2ec98a') },
+      { label: 'Extra charges', value: extras, color: _rptCss('--violet', '#7c3aed') },
+      { label: 'Admission fee', value: adm,    color: _rptCss('--amber',  '#f0a030') },
+    ].filter(s => s.value > 0);
+    const gross = slices.reduce((s, x) => s + x.value, 0);
+    const total = gross - conc;
+    return { slices, conc, gross, total,
+             rows: slices.map(s => ({ ...s, pct: gross ? s.value / gross * 100 : 0 })) };
+  })();
+  _rptRevData = _revParts.slices.map(s => ({ label: s.label, value: s.value, color: s.color }));
+
+  /* ══ COLLECTION PERFORMANCE (owner's design, 2026-09-22) ═══════════════════
+     One ratio and the six figures behind it. Every one comes off _rptTotals()
+     — the §14 layer — rather than being summed here, so this card cannot
+     disagree with the KPI row above it about the same rupees.
+
+     THE RATE IS COLLECTED ÷ BILLED, and it is null rather than 0 when nothing
+     was billed: "0% collected" on a month with no bills is a failure the data
+     never recorded. A hostel that collects arrears from an earlier month can
+     read over 100%, which is a true fact about the month and is left alone.
+
+     THE THREE HEADCOUNTS ARE STUDENTS, NOT RECORDS. A student with two records
+     in one month — the month's rent and a re-issued bill — is one person, and
+     the register they are chased from lists people. Counted off outstandingOf()
+     so "unpaid" here and an arrears list elsewhere name the same students. */
+  const _collect = (() => {
+    const billed = cur.billed, collected = cur.collected;
+    const byStudent = new Map();
+    pays.forEach(p => {
+      const k = p.studentId || p.id;
+      const a = byStudent.get(k) || { bill: 0, paid: 0 };
+      a.bill += calculateBill(p);
+      a.paid += Number(p.amount) || 0;
+      byStudent.set(k, a);
+    });
+    let paid = 0, part = 0, unpaid = 0;
+    byStudent.forEach(a => {
+      if (a.bill <= 0) return;                 // nothing charged: not a debtor
+      if (a.paid >= a.bill - 0.5) paid++;
+      else if (a.paid > 0.5)      part++;
+      else                        unpaid++;
+    });
+    return { billed, collected, pending: cur.pending, paid, part, unpaid,
+             rate: billed > 0 ? collected / billed * 100 : null };
+  })();
+  // drawReportCharts() runs 50ms after this markup paints and reads it there.
+  _rptGaugePct = _collect.rate;
+
+  /* ══ STUDENT MOVEMENT (owner's design, 2026-09-22) ═════════════════════════
+     Four figures that have to add up: starting + admissions − departures =
+     ending. All four read the same stays `_residents` the rest of the page
+     counts, so the card cannot disagree with the Students tab.
+
+     "Starting" is everyone who was already living here when the month opened —
+     residents who did NOT join inside it. A student who joined AND left in the
+     same month is in neither Starting nor Ending, and in both of the middle
+     two, which is exactly right: they were here, and they are not now. */
+  const _move = (() => {
+    const admissions = nJoinS, departures = nLeftS;
+    const starting = _residents.filter(r => !r.joined).length;
+    const ending   = starting + admissions - departures;
+    const prevIdx  = _buildRoomStudentIndex(_rptPrevKeys());
+    return { admissions, departures, starting, ending,
+             prevAdmissions: prevIdx.residents.filter(r => r.joined).length,
+             prevDepartures: prevIdx.residents.filter(r => r.left).length };
+  })();
 
   /* AN ICON CHIP, LEFT (owner ref: `reports2.png`). The six tiles were a label,
      a figure and a caption in a stack — identical shapes distinguished only by
@@ -1044,6 +1083,21 @@ function renderReports() {
      tile's hue, so Active/Left/Blacklisted are told apart before the text is
      read. `ico` is optional: a caller that passes none gets the old stack, and
      no existing call site breaks. */
+  /* A STUDENT MOVEMENT TILE. Not `tile()` above: that one opens a detail view
+     on click and carries a caption under its figure. These four are a READOUT —
+     the four numbers balance against each other and there is nothing behind an
+     individual one to open — so they are not controls, and `sub` carries a
+     delta chip rather than a sentence. */
+  const moveTile = (label, value, hue, ico, sub, title) => `
+    <div class="rpt-mv ${hue}"${title?` title="${escHtml(title)}"`:''}>
+      <span class="rpt-mv__i">${icon(ico,'sm')}</span>
+      <div class="rpt-mv__x">
+        <div class="rpt-mv__l">${escHtml(label)}</div>
+        <div class="rpt-mv__v">${value}</div>
+        <div class="rpt-mv__s">${sub}</div>
+      </div>
+    </div>`;
+
   const tile = (label, value, sub, hue, det, ico) => `
     <div class="rpt-tile ${hue}${ico?' rpt-tile--ico':''}" onclick="reportDetail='${det}';renderPage('reports')" title="Open detail">
       ${ico ? `<span class="rpt-tile__i">${icon(ico,'sm')}</span>` : ''}
@@ -1101,28 +1155,42 @@ function renderReports() {
   </div>
 
   <div class="rpt-bar">
-    <div class="rpt-seg">
-      <button class="${reportPeriod==='month'?'is-on':''}"  onclick="rptSetPeriod('month')">Month</button>
-      <button class="${reportPeriod==='year'?'is-on':''}"   onclick="rptSetPeriod('year')">This Year</button>
-      <button class="${reportPeriod==='custom'?'is-on':''}" onclick="rptSetPeriod('custom')">Custom Range</button>
+    ${''/* ONE CONTROL, AND IT ANSWERS ONE QUESTION (owner, 2026-09-22: "remove
+           the month, this year and custom range and make a professional month
+           dropdown in which different month and years can be selected").
+
+           There were three: a Month / This Year / Custom Range segment that
+           said how WIDE the window was, a <select> of every month on record
+           that said where it SAT, and a pair of month inputs that appeared
+           only in the third mode. Two of them had to agree for the page to be
+           right, and the <select> was a 30-row scroll by the second year.
+
+           A year stepper over a twelve-month grid is two clicks to any month
+           in any year, and it states the year rather than leaving it to be
+           inferred from whichever option you happen to be looking at. */}
+    <div class="rpt-mp">
+      <button type="button" class="rpt-mp__btn${(reportMonth||thisMonth())!==thisMonth()?' is-set':''}"
+              id="rpt-mp-btn" onclick="rptPickerToggle()"
+              aria-haspopup="dialog" aria-expanded="false"
+              title="Which month this report covers">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+        <span class="rpt-mp__lbl">${escHtml(monthLabel(_rptKeys()[0]))}</span>
+        <svg class="rpt-mp__cv" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="rpt-mp__pop" id="rpt-mp-pop" role="dialog" aria-label="Choose a month" hidden>
+        <div class="rpt-mp__yr">
+          <button type="button" class="rpt-mp__nav" onclick="rptPickerYear(-1)" aria-label="Previous year">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <span class="rpt-mp__y" id="rpt-mp-y" aria-live="polite"></span>
+          <button type="button" class="rpt-mp__nav" onclick="rptPickerYear(1)" aria-label="Next year">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div class="rpt-mp__grid" id="rpt-mp-grid"></div>
+        <div class="rpt-mp__note">Months with nothing recorded are dimmed &mdash; they can still be opened.</div>
+      </div>
     </div>
-
-    ${''/* WHICH MONTH, not just "this" one. The segment says how wide the
-           window is; this says where it sits. Together they are the reference's
-           month dropdown plus the two windows this app also reports on. */}
-    ${reportPeriod==='month'?`
-    <select class="rpt-mo${reportMonth!==thisMonth()?' is-set':''}" onchange="rptSetMonth(this.value)"
-            title="Which month this report covers">
-      ${_rptMonthOptions().map(m=>`<option value="${escHtml(m)}" ${(reportMonth||thisMonth())===m?'selected':''}>${escHtml(monthLabel(m))}</option>`).join('')}
-    </select>`:''}
-
-    ${reportPeriod==='custom'?`
-    <div class="rpt-range" title="Pick the first and last month to include">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-      <input type="month" value="${escHtml(reportRange.from)}" onchange="rptSetRange('from',this.value)" aria-label="From month">
-      <span>→</span>
-      <input type="month" value="${escHtml(reportRange.to)}"   onchange="rptSetRange('to',this.value)"   aria-label="To month">
-    </div>`:''}
 
     ${reportDetail?`<button class="rpt-card__a" onclick="reportDetail=null;renderPage('reports')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
@@ -1160,23 +1228,58 @@ function renderReports() {
              It leads, in the accent, exactly as `reports2.png` draws it. The
              two register buttons stay where they are — they were asked for by
              name and it is not this change's business to move them. */}
-      <button class="rpt-card__a" onclick="exportAllStudentsPDF()" title="The whole student register as a PDF">
-        ${icon('users','xs')} All Students PDF</button>
-      <button class="rpt-card__a" onclick="exportAllPaymentsPDF()" title="The whole payment register as a PDF">
-        ${icon('card','xs')} All Payments PDF</button>
-      <button class="rpt-card__a rpt-card__a--excel" onclick="exportReportExcel()"
-              title="Every section of this report as a spreadsheet">
-        ${icon('fileSpreadsheet','xs')} Export Excel</button>
+      ${''/* FOUR BUTTONS BECOME A MENU AND A PRIMARY (owner's design,
+             2026-09-22, which draws "Export ▾" beside a filled "Print / PDF").
+
+             This is a reversal of the 2026-09-10 note that used to sit here,
+             and it is the owner's own reversal: that note recorded a decision
+             to spell all four out rather than fold them into a menu. The bar
+             now also carries the month picker, and four export buttons plus a
+             picker wrapped onto a second line at the 1366 floor — which is
+             where the design's own answer is better than the old one.
+
+             Print / PDF stays out as the primary, in the accent, because it is
+             the one the owner asked for by name ("from reports print/pdf
+             option is hidden which total summary at once") and it is the whole
+             report in one press. The three that produce a FILE live together
+             under the verb they share. */}
+      <div class="rpt-xp">
+        <button type="button" class="rpt-card__a" id="rpt-xp-btn" onclick="rptExportToggle()"
+                aria-haspopup="menu" aria-expanded="false" title="Save this report as a file">
+          ${icon('download','xs')} Export
+          <svg class="rpt-xp__cv" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="ui-menu rpt-xp__m" id="rpt-xp-menu" role="menu" hidden>
+          <div class="ui-menu__t">${escHtml(monthLabel(_rptKeys()[0]))}</div>
+          <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);exportReportExcel()">
+            ${icon('fileSpreadsheet','xs')} Full report &mdash; Excel</button>
+          <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);printReport()">
+            ${icon('print','xs')} Full report &mdash; PDF</button>
+          <div class="ui-menu__sep"></div>
+          ${''/* THE TWO REGISTER PDFs FOLLOW THE PAGE'S MONTH (owner,
+                 2026-09-22: "make the all student pdf and payment a month,
+                 year dropdowns and make it default to current month").
+
+                 They took the WHOLE register — every student since the hostel
+                 opened, every payment ever — under a scope line that said
+                 "Complete record". The month they now carry is the one the
+                 picker above is already set to, which opens on the current
+                 month: one window for the page rather than a third and fourth
+                 month control on the same bar, and the menu's own heading
+                 states which month is about to be printed so it can never be
+                 read as "all of them". */}
+          <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);rptStudentsMonthPDF()">
+            ${icon('users','xs')} Student register &mdash; PDF</button>
+          <button role="menuitem" class="ui-menu__item" onclick="rptExportToggle(false);rptPaymentsMonthPDF()">
+            ${icon('card','xs')} Payment register &mdash; PDF</button>
+        </div>
+      </div>
       <button class="rpt-print" onclick="printReport()"
               title="The whole report — every section, in one document">
         ${icon('print','xs')} Print / PDF</button>
     </div>
   </div>
 
-  ${reportPeriod==='custom'&&!keys.length?`
-  <div class="rpt-card" style="margin-bottom:14px">
-    <div class="rpt-none">Pick a start and end month above to build the report.</div>
-  </div>`:''}
 
   ${''/* THE KPI CARDS BELONG TO OVERVIEW, AND ONLY TO OVERVIEW (owner,
          2026-09-21: "the kpi cards should be only the overview").
@@ -1200,21 +1303,30 @@ function renderReports() {
          full figure simply ran out of card. moneyValue(compact) keeps the
          exact number in the title attribute, so nothing is lost: hover, and
          the reconcilable figure is there. */''}
-    ${''/* THE REFERENCE'S ORDER AND THE REFERENCE'S NAMES (owner ref:
-           `reports2.png`): Total Revenue, Total Expenses, Available Fund,
-           Pending Payments, Occupancy Rate, Active Students.
+    ${''/* FIVE CARDS, AND THE THIRD IS NET RESULT (owner's design, 2026-09-22):
+           Total Revenue, Total Expenses, Net Result, Pending Payments,
+           Occupancy Rate.
 
            The order is not cosmetic — it is the arithmetic, left to right.
-           Revenue minus Expenses IS Available Fund, so the three sit together
-           and the third reads as the answer to the two before it. This page
-           had Pending wedged between Revenue and Expenses, which broke that
-           sentence in half; Pending is a different question (money not in yet)
-           and belongs after the sum, not inside it. Same rule the dashboard KPI
-           row already follows.
+           Revenue minus Expenses IS the Net Result, so the three sit together
+           and the third reads as the answer to the two before it. Pending is a
+           different question (money not in yet) and belongs after the sum, not
+           inside it. Same rule the dashboard KPI row already follows.
 
-           Full names for the same reason the labels stopped shouting: "Revenue"
-           and "Pending" are what a developer calls the variables. "Total
-           Revenue" and "Pending Payments" are what the figures are. */}
+           NET RESULT IS NOT AVAILABLE FUND, and the swap is deliberate. This
+           card was Available Fund, which since finance Phase 3 is a CASH
+           figure — what is actually in the drawer. Net Result is the accrual
+           one: what the period earned less what it spent, the number that
+           belongs beside Revenue and Expenses because it is literally their
+           difference. Available Fund keeps its TAB (owner, 2026-09-22), so the
+           cash view is one click away and nothing is lost.
+
+           `cur.net` is already revenue − expenses; it is read under its own
+           name here rather than recomputed.
+
+           RESIDENTS IS GONE FROM THIS ROW. It was a sixth card of people in a
+           row of money, and the whole of it — starting, ending, who arrived,
+           who left — is the Student Movement card below, where it adds up. */}
     ${stat('financial','dh-green','Total Revenue',moneyValue(rev,{compact:true}),
       `${_rptDelta(rev,prev.rev,'pct')} vs ${vs}`,
       '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
@@ -1223,54 +1335,66 @@ function renderReports() {
       `${_rptDelta(totalExp,prev.totalExp,'pct')} vs ${vs}`,
       '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
       true, _rptSeries('exp'))}
-    ${stat('netprofit','dh-violet','Available Fund',
+    ${stat('netprofit','dh-violet','Net Result',
       moneyValue(net,{compact:true,color:net>=0?'var(--green)':'var(--red)'}),
       `${_rptDelta(net,prev.net,'pct')} vs ${vs}`,
-      '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+      '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
       true, _rptSeries('net'))}
     ${stat('pending','dh-amber','Pending Payments',moneyValue(pending,{compact:true}),
       `${_rptDelta(pending,prev.pending,'pct')} vs ${vs}`,
       '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
       true, _rptSeries('pend'))}
+    ${''/* OCCUPANCY DRAWS A BAR, NOT A SPARKLINE (owner's design). It is a
+           RATIO — a part of a whole, where every other card on the row is a
+           running figure — and the design draws the one thing a percentage can
+           honestly show: how full the bar is. A sparkline would need what
+           occupancy was in June, which nothing stores. */}
     ${stat('rooms','dh-blue','Occupancy Rate',`${occRate}%`,
       // Rooms somebody lived in during the period, read off the stays (finance
       // Phase 5) — not the rooms occupied today.
-      `${occ} of ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
-      '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>')}
-    ${stat('students','dh-blue','Residents',nResS,
-      `${_rptDelta(sDelta,0,'abs')} joined vs left`,
-      '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
+      `${occ} / ${DB.rooms.length} room${DB.rooms.length!==1?'s':''} occupied`,
+      '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 13h.01"/><path d="M15 9h.01"/><path d="M15 13h.01"/>',
+      true, null,
+      `<div class="rpt-stat__bar"><span style="width:${Math.max(0,Math.min(100,occRate))}%"></span></div>`)}
   </div>`}
 
   ${reportDetail ? renderReportDetail(reportDetail, pays, exps, rev, pending, totalExp, net, occ) : `
-  <!-- ══ MONTHLY OVERVIEW + PAYMENT METHODS — one row ══ -->
+  ${''/* ══ FINANCIAL PERFORMANCE + PAYMENT METHODS — one row ═══════════════════
+         The owner's design, 2026-09-22. What changed from "Monthly Overview":
+
+         BARS FOR THE TWO STOCKS, A LINE FOR THE RESULT. Three area-filled
+         lines drew revenue, expenses and profit as the same kind of thing, and
+         the two filled areas overlapped so neither could be read where they
+         crossed. Revenue and Expenses are independent monthly quantities and
+         belong side by side as bars, where their heights compare directly;
+         Net Result is the DIFFERENCE between them — a derived line — and it
+         crosses zero, which a bar cannot show and an area fill lies about.
+
+         THE HEADER NAMES THE GRAIN. The design draws a "Monthly" select at the
+         card's top right. This app has one grain and the month picker on the
+         bar already says which window; a select with one option is a control
+         that does nothing, so the grain is STATED rather than offered. */}
   <div class="rpt-toprow">
-  <div class="mov">
-    <div class="mov__head">
-      <span class="mov__ico">${icon('chart','sm')}</span>
-      <div>
-        <div class="mov__t">Monthly Overview</div>
-        <div class="mov__s">Track collection, expenses and profit month by month</div>
+  <div class="rpt-card rpt-fin">
+    <div class="rpt-card__h">
+      <div class="rpt-card__ht">
+        <div class="rpt-card__t">Financial Performance</div>
+        <div class="rpt-card__s">Revenue, expenses and net result for the selected period.</div>
       </div>
-      <span class="mov__period">${icon('calendar','xs')} ${escHtml(periodLabel)}</span>
+      <div class="rpt-fin__legend">
+        <span class="rpt-k rpt-k--rev"><i></i>Revenue</span>
+        <span class="rpt-k rpt-k--exp"><i></i>Expenses</span>
+        <span class="rpt-k rpt-k--net"><i></i>Net Result</span>
+      </div>
+      <span class="rpt-grain">${icon('calendar','xs')} Monthly</span>
     </div>
 
-    <div class="mov__chart">
-      <div class="mov__bar">
-        <span class="mov__bart">Revenue Trend</span>
-        <div class="mov__legend">
-          <span class="mov__k" style="--k:#8b5cf6"><i></i>Collection</span>
-          <span class="mov__k" style="--k:#ef4444"><i></i>Expenses</span>
-          <span class="mov__k" style="--k:#16a34a"><i></i>Profit</span>
-        </div>
-      </div>
-      ${trendData.some(m=>m.rev||m.exp)
-        ? `<div class="rpt-canvas"><canvas id="rpt-trend"></canvas></div>`
-        : `<div class="rpt-none">Nothing recorded in this period yet.</div>`}
-    </div>
+    ${trendData.some(m=>m.rev||m.exp)
+      ? `<div class="rpt-canvas rpt-canvas--fin"><canvas id="rpt-trend"></canvas></div>`
+      : `<div class="rpt-none">Nothing recorded in these six months yet.</div>`}
 
     <div class="mov__foot">
-      <span>${icon('info','xs')} All amounts are in PKR</span>
+      <span>${icon('info','xs')} All amounts are in ${escHtml(DB.settings.currency||'Rs.')}</span>
       <span>${icon('clock','xs')} ${withDataNote}</span>
       ${''/* §14: the layer returns whether it will vouch for these figures —
            either a total has left the range where integer arithmetic is exact,
@@ -1288,46 +1412,90 @@ function renderReports() {
 
     <div class="rpt-card">
       <div class="rpt-card__h">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-        Payment Methods
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Payment Methods</div>
+          <div class="rpt-card__s">Distribution of collected payments.</div>
+        </div>
       </div>
       ${methods.length?`
       <div class="rpt-donut">
         <div class="rpt-donut__c">
           <canvas id="rpt-methods"></canvas>
-          ${''/* Figure first, caption under it (owner ref: reports2.png). The
-                 number is what the hole is for; "Collected" above it made the
-                 caption the headline of its own centre. */}
+          ${''/* Figure first, caption under it. The number is what the hole is
+                 for; "Collected" above it made the caption the headline of its
+                 own centre. */}
           <div class="rpt-donut__mid"><b>${fmtPKR(methodTotal)}</b><span>Total Collected</span></div>
         </div>
+        ${''/* FOUR COLUMNS, ONE ROW EACH (owner's design). The legend was a
+               stack with the donut's own height distributed through it, so two
+               methods sat 160px apart and the card read as mostly empty. Dot,
+               name, amount, share — the share last and right-aligned, because
+               that is the column the eye ranks down. */}
         <div class="rpt-legend">${methodLegend}</div>
       </div>`:`<div class="rpt-none">No payments collected in this period.</div>`}
     </div>
   </div>
 
-  ${''/* ══ KEY HIGHLIGHTS + EXPENSE BREAKDOWN — one row (owner ref: reports2.png)
-         Highlights was welded to the foot of Monthly Overview and Expense
-         Breakdown sat beside Room Type Performance. The reference pairs them,
-         and it is right to: both answer "what stands out in this period", one
-         in peaks and one in categories, and neither needs a card 640px tall to
-         say it. See the _hiCells comment above for why it moved. */}
-  ${_hiCells ? `
-  <div class="rpt-toprow rpt-toprow--top">
-    <div class="rpt-card rpt-hi">
+  ${''/* ══ REVENUE COMPOSITION · EXPENSE BREAKDOWN · COLLECTION PERFORMANCE ════
+         The owner's design, 2026-09-22. Three cards that answer the three
+         questions a month's money raises: what it was made of, where it went,
+         and how much of it actually arrived.
+
+         KEY HIGHLIGHTS IS GONE FROM THIS ROW, and it is a removal, not a move.
+         It named the peak collection, peak profit, peak expense and average
+         margin across the six months behind the chart — facts about a WINDOW,
+         sitting in a row of cards about the reported MONTH, and every one of
+         them is readable off the bars above. The design replaces it with the
+         two cards the owner asked for by name ("collection performance,
+         revenue composition must"). */}
+  <div class="rpt-row3">
+    <div class="rpt-card">
       <div class="rpt-card__h">
-        ${icon('award','sm')}
-        Key Highlights <span class="rpt-card__hs">${escHtml(_hiCells.span)}</span>
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Revenue Composition</div>
+          ${''/* BILLED, NOT COLLECTED, and the subtitle says so. See the
+                 _revParts note above for why a part-payment cannot be split
+                 into heads without inventing the allocation. */}
+          <div class="rpt-card__s">What the period&rsquo;s bills are made of.</div>
+        </div>
       </div>
-      <div class="mov__strip">${_hiCells.html}</div>
+      ${_revParts.rows.length?`
+      <div class="rpt-donut rpt-donut--sm">
+        <div class="rpt-donut__c">
+          <canvas id="rpt-revmix"></canvas>
+          <div class="rpt-donut__mid"><b>${fmtPKR(_revParts.total)}</b><span>Total Billed</span></div>
+        </div>
+        <div class="rpt-legend">
+          ${_revParts.rows.map(r=>`
+            <div class="rpt-legend__r">
+              <span class="rpt-legend__d" style="background:${r.color}"></span>
+              <span class="rpt-legend__n" title="${escHtml(r.label)}">${escHtml(r.label)}</span>
+              <span class="rpt-legend__v">${fmtPKR(r.value)}</span>
+              <span class="rpt-legend__p">${r.pct.toFixed(1)}%</span>
+            </div>`).join('')}
+          ${''/* A CONCESSION IS NOT A SLICE. It is money given away — it makes
+                 the total smaller — and an arc cannot be negative. It reads as
+                 the deduction it is, under the parts it comes off. */}
+          ${_revParts.conc>0?`
+            <div class="rpt-legend__r rpt-legend__r--neg">
+              <span class="rpt-legend__d rpt-legend__d--hollow"></span>
+              <span class="rpt-legend__n">Concessions</span>
+              <span class="rpt-legend__v">&minus;${fmtPKR(_revParts.conc)}</span>
+              <span class="rpt-legend__p">&minus;${(_revParts.gross?_revParts.conc/_revParts.gross*100:0).toFixed(1)}%</span>
+            </div>`:''}
+        </div>
+      </div>`:`<div class="rpt-none">Nothing was billed in this period.</div>`}
     </div>
 
     <div class="rpt-card">
       <div class="rpt-card__h">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
-        Expense Breakdown
-        ${''/* The reference's "View Details →". It opens the expenses detail
-               view this page already builds — the same one the Expenses KPI
-               card opens — rather than a second screen saying the same thing. */}
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Expense Breakdown</div>
+          <div class="rpt-card__s">Expenses by category.</div>
+        </div>
+        ${''/* The design's "View Details →". It opens the expenses detail view
+               this page already builds — the same one the Expenses KPI card
+               opens — rather than a second screen saying the same thing. */}
         <button class="rpt-card__a" onclick="reportDetail='expenses';renderPage('reports')"
                 title="Every expense in this period, by category">
           View Details
@@ -1335,25 +1503,56 @@ function renderReports() {
         </button>
       </div>
       ${cats.length?`
-        <div class="rpt-bars">${catBars}</div>
+        ${''/* BIGGEST FIRST, AND IT SCROLLS BY HAND WHEN IT OVERFLOWS (owner,
+               2026-09-22: "if the categories move out from card then make it
+               draggable showing the large percentage categories first").
+
+               `cats` is already sorted by amount descending, so the rows that
+               matter are the ones on screen before any scrolling happens — the
+               list can be cut off at the bottom without cutting off the answer.
+               A hostel with twenty categories gets a scroll rather than a card
+               that grows until it pushes the row below it off the page.
+
+               DRAG TO SCROLL, not just a wheel: rptDragScroll() binds
+               pointer-drag panning on the list, which is how the owner asked
+               for it and how a table is panned on the payments register
+               already. The scrollbar stays visible as the affordance. */}
+        <div class="rpt-bars rpt-bars--scroll" id="rpt-expbars">${catBars}</div>
         <div class="rpt-btot"><span>Total Expenses</span><b>${fmtPKR(totalExp)}</b></div>`
       :`<div class="rpt-none">No expenses recorded in this period.</div>`}
     </div>
-  </div>` : `
-  ${''/* No month in the window recorded anything, so there are no peaks to
-         name. Expense Breakdown still stands on its own — it has its own empty
-         state and a warden looking for it should not have to wonder whether
-         the page failed to load. */}
-  <div class="rpt-card" style="margin-bottom:14px">
-    <div class="rpt-card__h">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
-      Expense Breakdown
+
+    <div class="rpt-card">
+      <div class="rpt-card__h">
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Collection Performance</div>
+          <div class="rpt-card__s">How much of the billing arrived.</div>
+        </div>
+        <button class="rpt-card__a" onclick="reportDetail='pending';renderPage('reports')"
+                title="Every unpaid balance in this period">
+          View Details
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </div>
+      ${_collect.rate===null?`<div class="rpt-none">Nothing was billed in this period.</div>`:`
+      <div class="rpt-coll">
+        <div class="rpt-gauge">
+          <canvas id="rpt-gauge"></canvas>
+          <div class="rpt-gauge__mid">
+            <b>${_collect.rate.toFixed(1)}%</b><span>Collection Rate</span>
+          </div>
+        </div>
+        <div class="rpt-coll__f">
+          <div class="rpt-fact"><span>Amount Billed</span><b>${fmtPKR(_collect.billed)}</b></div>
+          <div class="rpt-fact"><span>Amount Collected</span><b>${fmtPKR(_collect.collected)}</b></div>
+          <div class="rpt-fact"><span>Pending Amount</span><b class="${_collect.pending>0?'is-neg':''}">${fmtPKR(_collect.pending)}</b></div>
+          <div class="rpt-fact rpt-fact--sep"><span>Paid Students</span><b>${_collect.paid}</b></div>
+          <div class="rpt-fact"><span>Partially Paid</span><b>${_collect.part}</b></div>
+          <div class="rpt-fact"><span>Unpaid Students</span><b class="${_collect.unpaid>0?'is-neg':''}">${_collect.unpaid}</b></div>
+        </div>
+      </div>`}
     </div>
-    ${cats.length?`
-      <div class="rpt-bars">${catBars}</div>
-      <div class="rpt-btot"><span>Total Expenses</span><b>${fmtPKR(totalExp)}</b></div>`
-    :`<div class="rpt-none">No expenses recorded in this period.</div>`}
-  </div>`}
+  </div>
 
   ${''/* ══ ROOM TYPE PERFORMANCE + STUDENT SUMMARY — one row (owner ref:
          reports2.png). Student Summary ran the full width of the page for six
@@ -1361,34 +1560,70 @@ function renderReports() {
          reference sets it beside the room table at roughly equal width, three
          tiles across and two down, and the two read as one answer: how the
          rooms are doing, and who is in them. */}
-  <div class="rpt-grid">
+  <div class="rpt-row4">
     <div class="rpt-card">
       <div class="rpt-card__h">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M4 18v2"/><path d="M20 18v2"/></svg>
-        Room Type Performance
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Room Type Performance</div>
+          <div class="rpt-card__s">Occupancy and revenue by room type.</div>
+        </div>
       </div>
       ${rtRows?`<div class="rpt-tbl-wrap">
         <table class="rpt-tbl">
-          <thead><tr><th>Type</th><th>Total Rooms</th><th>Occupied</th><th>Vacant</th><th>Occupancy</th><th>Revenue</th></tr></thead>
+          ${''/* "Total Rooms" is "Rooms" here: the column beside it is
+                 Occupied and the one after Vacant, so what it totals is not in
+                 question, and the word cost the narrowest table on the page a
+                 column's worth of width. */}
+          <thead><tr><th>Type</th><th>Rooms</th><th>Occupied</th><th>Vacant</th><th>Occupancy</th><th>Revenue</th></tr></thead>
           <tbody>${rtRows}${rtFoot}</tbody>
         </table></div>`:`<div class="rpt-none">No room types configured.</div>`}
     </div>
 
     <div class="rpt-card">
       <div class="rpt-card__h">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Student Summary
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Student Movement</div>
+          <div class="rpt-card__s">Changes in student count this period.</div>
+        </div>
       </div>
-      <div class="rpt-sum">
-        ${tile('Residents',       nResS,    'Lived here in the period', 'dh-green', 'students', 'userCheck')}
-        ${tile('Joined',          nJoinS,   'Arrived in the period',    'dh-violet', 'students', 'users')}
-        ${tile('Left / Departed', nLeftS,   'Left in the period',       'dh-slate', 'students', 'logout')}
-        ${tile('Blacklisted',     nBlackS,  nBlackS?'On record today':'None on record', 'dh-red', 'students', 'lock')}
-        ${tile('Total Rooms',     DB.rooms.length,    `${occ} occupied in the period`, 'dh-blue', 'rooms', 'bed')}
-        ${tile('Payments',        pays.length, 'Bills for the period', 'dh-amber', 'financial', 'card')}
+      ${''/* FOUR FIGURES THAT ADD UP (owner's design, 2026-09-22):
+             starting + admissions − departures = ending, and all four come off
+             the same stays the rest of the page counts.
+
+             STUDENT SUMMARY'S SIX TILES ARE REPLACED, NOT RESHUFFLED. Those
+             were Residents, Joined, Left, Blacklisted, Total Rooms and
+             Payments — three headcounts, a standing status, a room count that
+             belongs to the table beside it, and a record count. Only the first
+             three were about MOVEMENT, and none of them balanced against the
+             others, so the card could not be checked by reading it. This one
+             can: the top row is what changed, the bottom row is the count
+             before and after.
+
+             Blacklisted carried "On record today" because blacklisting stores
+             no date — a standing fact in a card about a period. It is on the
+             Students tab, which is where a status without a date belongs. */}
+      <div class="rpt-move">
+        ${''/* THE CAPTIONS ARE SHORT BECAUSE THE TILE IS. Four of these share
+               a third of a row: "↑ 50% vs last month" and "Already here on
+               the 1st" both clipped mid-word, and a clipped caption is worse
+               than a brief one. The delta chip carries its own arrow and
+               figure — what it compares against is the same "vs last month"
+               every other delta on this page means, and the card header
+               already names the period. The full sentence is each tile's
+               title. */}
+        ${moveTile('New Admissions', _move.admissions, 'dh-green', 'userCheck',
+          _rptDelta(_move.admissions, _move.prevAdmissions, 'pct'),
+          'Students admitted in ' + monthLabel(keys[0]))}
+        ${moveTile('Departures', _move.departures, 'dh-red', 'logout',
+          _rptDelta(_move.departures, _move.prevDepartures, 'pct'),
+          'Students who left in ' + monthLabel(keys[0]))}
+        ${moveTile('Starting Students', _move.starting, 'dh-slate', 'users',
+          'On the 1st', 'Already living here when the month opened')}
+        ${moveTile('Ending Students', _move.ending, 'dh-blue', 'users',
+          'At month end', 'On the roster when the month closed')}
       </div>
     </div>
-  </div>
+
 
   ${''/* ══ QUICK REPORTS (owner ref: reports2.png) ═══════════════════════════
          Seven documents this app can already produce, in one place. Every one
@@ -1406,22 +1641,19 @@ function renderReports() {
          for that list is going to ACT on it — mark paid, send a reminder — and
          a PDF cannot be acted on. The Export control there produces the file
          if a file is what they were after. */}
-  <div class="rpt-card rpt-quick">
-    <div class="rpt-card__h">
-      ${icon('fileSpreadsheet','sm')}
-      Quick Reports
-      <span class="rpt-quick__note">Each one is that register's own export, for the period above</span>
-      ${''/* "View All Reports →" sits HERE in the reference, not on Student
-             Summary where this app had put it. That is the right place for it:
-             this is the block about documents, and the thing it opens is the
-             full report — every section — rather than the student view a button
-             on the student card implied. */}
-      <button class="rpt-card__a rpt-quick__all" onclick="printReport()"
-              title="The whole report — every section, in one document">
-        View All Reports
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </button>
-    </div>
+    <div class="rpt-card rpt-quick">
+      <div class="rpt-card__h">
+        <div class="rpt-card__ht">
+          <div class="rpt-card__t">Quick Reports</div>
+          <div class="rpt-card__s">Generate detailed reports.</div>
+        </div>
+        ${''/* "View All Reports →" sat in this header. In a third-of-a-row
+               card it was a second control beside a title and a line of
+               description, and it ran printReport() — which is the Print / PDF
+               button on the bar above and the first item in the list below.
+               Three routes to one document on one screen; this was the one
+               that named it least clearly. */}
+      </div>
     <div class="rpt-quick__g">
       ${''/* Titled as the reference titles them — these are DOCUMENT names, and
              "Monthly Financial Report" is what a warden asks their office for.
@@ -1449,6 +1681,7 @@ function renderReports() {
               <span class="rpt-quick__s">${escHtml(q[1])}</span>
             </span>
           </button>`).join('')}
+      </div>
     </div>
   </div>
   `}
@@ -1469,30 +1702,104 @@ function renderReports() {
    became draggable in Settings: the ramp was indexed by a category's POSITION,
    so a drag would have repainted the card. expenseCatHue() keys it by name. */
 let _rptTrendData = [];
-let _rptDonutData = [];
+let _rptDonutData = [];    // Payment Methods — how the money arrived
+let _rptRevData   = [];    // Revenue Composition — what the bills are made of
+let _rptGaugePct  = null;  // Collection Performance — collected ÷ billed, or null
 let _rptTrendChart = null;
 let _rptDonutChart = null;
+let _rptRevChart   = null;
+let _rptGaugeChart = null;
 
-function rptSetPeriod(p) {
-  reportPeriod = p;
-  reportDetail = null;
-  if (p === 'custom' && !reportRange.from) {
-    // Default to the last six months so the view is never blank on arrival.
-    const d = new Date();
-    reportRange.to   = thisMonth();
-    const s = new Date(d.getFullYear(), d.getMonth() - 5, 1);
-    reportRange.from = s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0');
-  }
-  renderPage('reports');
+/* ── THE MONTH PICKER ────────────────────────────────────────────────────────
+   A button that names the month, and a panel holding a year stepper over a
+   twelve-month grid (owner, 2026-09-22). It replaces a three-way Month / This
+   Year / Custom Range segment, a <select> of every month the data knows about,
+   and a pair of <input type="month"> boxes — four controls where the question
+   is only ever "which month".
+
+   A GRID, NOT A LIST. The <select> listed every month from the first record to
+   now, newest first, which is a scroll of 30+ rows by the second year and
+   gives no sense of a year as a shape. Twelve cells under a year stepper is
+   two clicks to any month in any year, and the year you are looking at is
+   stated rather than inferred from the option you happen to be near.
+
+   MONTHS WITH NOTHING RECORDED ARE DIMMED, NOT DISABLED. A month in which
+   students lived but nothing was billed or spent is still a month to report on
+   — who was here — which is the finding that widened the old <select> in the
+   first place (finance Phase 5). Dimming says "expect little"; disabling would
+   say "you may not look", and that would be wrong. */
+function rptMonthsWithData() {
+  const out = new Set();
+  const see = k => { if (/^\d{4}-\d{2}$/.test(k || '')) out.add(k); };
+  (DB.payments  || []).forEach(p => see(_payMonthKey(p)));
+  (DB.expenses  || []).forEach(e => see(String(e.date || '').slice(0, 7)));
+  (DB.transfers || []).forEach(x => see(String(x.date || '').slice(0, 7)));
+  (DB.students  || []).forEach(s => see(_toMonthKey(s.joinDate)));
+  return out;
 }
-function rptSetRange(which, val) {
-  reportRange[which] = val || '';
-  // Keep the pair ordered rather than silently returning nothing.
-  if (reportRange.from && reportRange.to && reportRange.from > reportRange.to) {
-    if (which === 'from') reportRange.to = reportRange.from;
-    else                  reportRange.from = reportRange.to;
+
+function rptPickerToggle(force) {
+  const pop = document.getElementById('rpt-mp-pop');
+  if (!pop) return;
+  const open = force != null ? force : pop.hasAttribute('hidden');
+  if (open) {
+    // Always opens on the year of the month being reported, never on wherever
+    // it was left last time.
+    _rptPickYear = Number(String(reportMonth || thisMonth()).slice(0, 4));
+    rptPickerPaint();
+    pop.removeAttribute('hidden');
+    document.addEventListener('mousedown', _rptPickerAway, true);
+    document.addEventListener('keydown', _rptPickerEsc, true);
+  } else {
+    pop.setAttribute('hidden', '');
+    document.removeEventListener('mousedown', _rptPickerAway, true);
+    document.removeEventListener('keydown', _rptPickerEsc, true);
   }
-  renderPage('reports');
+  const btn = document.getElementById('rpt-mp-btn');
+  if (btn) btn.setAttribute('aria-expanded', String(open));
+}
+function _rptPickerAway(e) {
+  if (!e.target.closest || !e.target.closest('.rpt-mp')) rptPickerToggle(false);
+}
+/* CAPTURE PHASE. app.js binds a bubble-phase Escape of its own, so a panel
+   that waits for the bubble never sees the key it was closed by. */
+function _rptPickerEsc(e) {
+  if (e.key !== 'Escape') return;
+  e.stopPropagation();
+  rptPickerToggle(false);
+  const btn = document.getElementById('rpt-mp-btn');
+  if (btn) btn.focus();
+}
+
+function rptPickerYear(step) {
+  _rptPickYear += step;
+  rptPickerPaint();
+}
+
+/* Repaints the panel in place. The page is NOT re-rendered while stepping
+   years: nothing about the report has changed yet, and a full renderPage()
+   would tear down the panel the warden is still using. */
+function rptPickerPaint() {
+  const yEl = document.getElementById('rpt-mp-y');
+  if (yEl) yEl.textContent = String(_rptPickYear);
+  const grid = document.getElementById('rpt-mp-grid');
+  if (!grid) return;
+  const has = rptMonthsWithData();
+  const sel = reportMonth || thisMonth();
+  const now = thisMonth();
+  grid.innerHTML = Array.from({ length: 12 }, (_, i) => {
+    const k = _rptPickYear + '-' + String(i + 1).padStart(2, '0');
+    const cls = ['rpt-mp__m'];
+    if (k === sel) cls.push('is-on');
+    if (k === now) cls.push('is-now');
+    if (!has.has(k)) cls.push('is-empty');
+    const name = new Date(_rptPickYear, i, 1).toLocaleString('default', { month: 'short' });
+    return '<button type="button" class="' + cls.join(' ') + '" data-k="' + k + '"' +
+           (k === sel ? ' aria-current="true"' : '') +
+           ' onclick="rptSetMonth(\'' + k + '\')"' +
+           ' title="' + escHtml(monthLabel(k)) + (has.has(k) ? '' : ' — nothing recorded') + '">' +
+           escHtml(name) + '</button>';
+  }).join('');
 }
 
 function _rptCss(name, fallback) {
@@ -1505,42 +1812,50 @@ function drawReportCharts() {
   const grid = _rptCss('--border', 'rgba(255,255,255,.1)');
   const ink  = _rptCss('--text3', '#909090');
 
-  // ── Revenue vs expenses ───────────────────────────────────────────────────
+  // ── Financial performance: two bars and a line ────────────────────────────
+  /* THE DESIGN'S CHART, AND THE SHAPE IS THE ARGUMENT (owner, 2026-09-22).
+
+     Revenue and Expenses are independent monthly quantities: bars, side by
+     side, where the heights compare directly and a month with nothing recorded
+     is visibly absent rather than a line passing through zero.
+
+     Net Result is their DIFFERENCE — derived, and it crosses zero. A bar
+     cannot show a negative month honestly next to positive ones at this size, and
+     the area fill the old chart used implied an area under a difference, which
+     is not a quantity of anything. It is a plain line with points, on the same
+     axis, because the design draws it that way and because a second axis would
+     let the line sit above the bars while being worth less than them.
+
+     tension 0 — straight point-to-point segments. Curve smoothing invents
+     intermediate values the ledger never recorded: a bowed line between two
+     months implies a mid-month figure, and it can dip below zero between two
+     positive points. */
   if (_rptTrendChart) { _rptTrendChart.destroy(); _rptTrendChart = null; }
   const tc = document.getElementById('rpt-trend');
   if (tc && _rptTrendData.length) {
-    const ctx  = tc.getContext('2d');
-    const fill = (hex) => {
-      const g = ctx.createLinearGradient(0, 0, 0, 250);
-      g.addColorStop(0, hex + '38'); g.addColorStop(1, hex + '00');
-      return g;
-    };
-    // `values` is passed explicitly so Profit — which has no key on the row —
-    // can be plotted from the same array without inventing a stored field.
-    // tension 0 — straight point-to-point segments, per the owner's reference
-    // design. Curve smoothing invents intermediate values the ledger never
-    // recorded: a bowed line between two months implies a mid-month figure,
-    // and it can dip below zero between two positive points.
-    const series = (label, values, hex) => ({
-      label, data: values,
-      borderColor: hex, backgroundColor: fill(hex),
-      borderWidth: 2.4, fill: true, tension: 0,
-      pointRadius: 3.5, pointBackgroundColor: hex, pointBorderColor: '#fff',
-      pointBorderWidth: 1.5, pointHoverRadius: 6
-    });
+    const revHex = _rptCss('--accent', '#2451D6');
+    const expHex = _rptCss('--amber',  '#f0a030');
+    const netHex = _rptCss('--green',  '#16a34a');
     const revVals = _rptTrendData.map(m => m.rev);
     const expVals = _rptTrendData.map(m => m.exp);
-    _rptTrendChart = new Chart(ctx, {
-      type: 'line',
-      data: { labels: _rptTrendData.map(m => m.lbl),
-              datasets: [
-                series('Collection', revVals, '#8b5cf6'),
-                series('Expenses',   expVals, '#ef4444'),
-                // Profit is revenue minus expenses for that month — the figure the
-                // owner actually reads the chart for, and previously had to do in
-                // their head from two lines.
-                series('Profit', revVals.map((v,i) => v - expVals[i]), '#16a34a')
-              ] },
+    _rptTrendChart = new Chart(tc.getContext('2d'), {
+      data: {
+        labels: _rptTrendData.map(m => m.lbl),
+        datasets: [
+          { type: 'bar', label: 'Revenue', data: revVals,
+            backgroundColor: revHex, borderRadius: 4, borderSkipped: false,
+            categoryPercentage: 0.62, barPercentage: 0.9, order: 2 },
+          { type: 'bar', label: 'Expenses', data: expVals,
+            backgroundColor: expHex, borderRadius: 4, borderSkipped: false,
+            categoryPercentage: 0.62, barPercentage: 0.9, order: 2 },
+          { type: 'line', label: 'Net Result',
+            data: revVals.map((v, i) => v - expVals[i]),
+            borderColor: netHex, backgroundColor: netHex, borderWidth: 2.4,
+            fill: false, tension: 0, pointRadius: 3.5, pointHoverRadius: 6,
+            pointBackgroundColor: netHex, pointBorderColor: '#fff',
+            pointBorderWidth: 1.5, order: 1 },
+        ],
+      },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
@@ -1550,18 +1865,19 @@ function drawReportCharts() {
           tooltip: {
             usePointStyle: true, padding: 12, boxPadding: 5, cornerRadius: 10,
             titleFont: { size: 12, weight: '700' }, bodyFont: { size: 12 },
-            callbacks: { label: c => '  ' + c.dataset.label + ':  ' + fmtPKR(c.parsed.y) }
-          }
+            callbacks: { label: c => '  ' + c.dataset.label + ':  ' + fmtPKR(c.parsed.y) },
+          },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: ink, font: { size: 11 } } },
+          x: { stacked: false, grid: { display: false },
+               ticks: { color: ink, font: { size: 11 } } },
           y: { beginAtZero: true, border: { display: false },
                grid: { color: grid },
                ticks: { color: ink, font: { size: 11 },
-                        callback: v => Math.abs(v) >= 1000000 ? (v/1000000) + 'M'
-                                     : Math.abs(v) >= 1000 ? (v/1000) + 'K' : v } }
-        }
-      }
+                        callback: v => Math.abs(v) >= 1000000 ? (v / 1000000) + 'M'
+                                     : Math.abs(v) >= 1000 ? (v / 1000) + 'K' : v } },
+        },
+      },
     });
     _chartFontFix(_rptTrendChart);
   }
@@ -1586,6 +1902,68 @@ function drawReportCharts() {
       }
     });
     _chartFontFix(_rptDonutChart);
+  }
+
+  // ── Revenue composition ───────────────────────────────────────────────────
+  /* The same ring as Payment Methods and deliberately so: the two sit side by
+     side a row apart and answer "what was it made of" and "how did it arrive".
+     Two different shapes for two breakdowns of the same money would imply a
+     difference in kind that is not there. */
+  if (_rptRevChart) { _rptRevChart.destroy(); _rptRevChart = null; }
+  const rc = document.getElementById('rpt-revmix');
+  if (rc && _rptRevData.length) {
+    _rptRevChart = new Chart(rc.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: _rptRevData.map(d => d.label),
+              datasets: [{ data: _rptRevData.map(d => d.value),
+                           backgroundColor: _rptRevData.map(d => d.color),
+                           borderWidth: 0, hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        plugins: {
+          datalabels: { display: false },
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => c.label + ': ' + fmtPKR(c.parsed) } },
+        },
+      },
+    });
+    _chartFontFix(_rptRevChart);
+  }
+
+  // ── Collection rate gauge ────────────────────────────────────────────────
+  /* ONE ARC AND ITS REMAINDER, not a pie of one value. The card states the
+     percentage in the middle; the ring's job is to make "how far along" legible
+     without reading it. Drawn as a full ring rather than a half-dial because
+     the two cards beside it are rings and a dial here would read as a different
+     kind of measurement.
+
+     OVER 100% IS A REAL MONTH. A hostel collecting August's arrears in
+     September bills less than it takes, and the figure says so — the ARC is
+     clamped at a full ring because it cannot draw more than one, and the exact
+     percentage is stated in the centre where it is not clamped. */
+  if (_rptGaugeChart) { _rptGaugeChart.destroy(); _rptGaugeChart = null; }
+  const gc = document.getElementById('rpt-gauge');
+  if (gc && typeof _rptGaugePct === 'number') {
+    const done = Math.max(0, Math.min(100, _rptGaugePct));
+    const hue  = done >= 90 ? _rptCss('--green', '#16a34a')
+               : done >= 60 ? _rptCss('--amber', '#f0a030')
+                            : _rptCss('--red',   '#ef4444');
+    _rptGaugeChart = new Chart(gc.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: ['Collected', 'Outstanding'],
+              datasets: [{ data: [done, 100 - done],
+                           backgroundColor: [hue, _rptCss('--dash-track', 'rgba(140,140,140,.22)')],
+                           borderWidth: 0, hoverOffset: 0 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '76%',
+        plugins: {
+          datalabels: { display: false },
+          legend: { display: false },
+          tooltip: { enabled: false },   // the centre already states the figure
+        },
+      },
+    });
+    _chartFontFix(_rptGaugeChart);
   }
 }
 
@@ -1742,14 +2120,7 @@ function _rptBaseDef(type) {
 
 /* The period a reader understands, rather than the key a filename needs.
    '2026-09' is a database value; "September 2026" is a period. */
-function _rptPeriodWords() {
-  const ks = _rptKeys();
-  if (reportPeriod === 'year')   return thisYear();
-  if (reportPeriod === 'custom') {
-    return ks.length ? monthLabel(ks[0]) + ' to ' + monthLabel(ks[ks.length - 1]) : 'Custom range';
-  }
-  return monthLabel(ks[0]);
-}
+function _rptPeriodWords() { return monthLabel(_rptKeys()[0]); }
 
 /* THE PERIOD'S STUDENTS AND ROOMS, AS DOCUMENT SECTIONS (finance Phase 5).
    One definition each, read by the tab's own export AND by the whole-period
@@ -2134,15 +2505,186 @@ function _rptCancels() {
   return (DB.cancellations || []).filter(c =>
     keys.some(k => String(c.vacateDate || c.requestDate || '').indexOf(k) === 0));
 }
+/* THE ISSUES SECTION TAKES _issAll() VIEWS, NOT RAW RECORDS — and handing it
+   raw records is what broke Export Excel and Print / PDF on this whole page.
+
+   `_issExportDef()` was written for the register's own normalised shape: every
+   column reads `i.roomNo`, `i.by`, `i.desc`, `i.title`, and the Ref column
+   reads `_issSeq(i)`, which dereferences `i.raw.seq`. A raw DB.issues record
+   has no `.raw`, so the first issue row in the period threw
+   "Cannot read properties of undefined (reading 'seq')" — inside the export
+   engine's try/catch, which logged it to a console nobody had open and showed
+   "Export could not be generated. Please try again."
+
+   So BOTH buttons died, silently, for any hostel with a single complaint or
+   maintenance ticket in the reported month — and only then, which is why it
+   looked intermittent. It arrived with the 2026-09-21 merge that made the two
+   registers one and moved them onto the view shape; this call site was the one
+   left reading the collection directly. The two DETAIL views on this page
+   (lines ~466 and ~1985) already go through _issAll(), which is what this now
+   matches.
+
+   The date still comes off the view (`i.date`), with the raw record's
+   createdAt as the fallback for a record written without one. */
 function _rptIssues() {
   const keys = _rptKeys();
-  const all = DB.issues || [];   // one register since 2026-09-21
+  const all  = (typeof _issAll === 'function' ? _issAll() : []);
   return all.filter(i =>
-    keys.some(k => String((i && (i.date || i.createdAt)) || '').indexOf(k) === 0));
+    keys.some(k => String(i.date || (i.raw && i.raw.createdAt) || '').indexOf(k) === 0));
 }
 
 function printReport()       { EXPORT.pdf(_rptOverviewDef()); }
 function exportReportExcel() { EXPORT.excel(_rptOverviewDef()); }
+
+/* ── THE EXPORT MENU ─────────────────────────────────────────────────────────
+   Four export buttons on a bar that also carries the month picker wrapped onto
+   a second line at the 1366 floor. The three that write a FILE live under one
+   verb now; Print / PDF stays out as the primary. */
+function rptExportToggle(force) {
+  const m = document.getElementById('rpt-xp-menu');
+  if (!m) return;
+  const open = force != null ? force : m.hasAttribute('hidden');
+  if (open) {
+    m.removeAttribute('hidden');
+    document.addEventListener('mousedown', _rptExportAway, true);
+    document.addEventListener('keydown', _rptExportEsc, true);
+  } else {
+    m.setAttribute('hidden', '');
+    document.removeEventListener('mousedown', _rptExportAway, true);
+    document.removeEventListener('keydown', _rptExportEsc, true);
+  }
+  const b = document.getElementById('rpt-xp-btn');
+  if (b) b.setAttribute('aria-expanded', String(open));
+}
+function _rptExportAway(e) {
+  if (!e.target.closest || !e.target.closest('.rpt-xp')) rptExportToggle(false);
+}
+/* Capture phase — app.js binds a bubble-phase Escape of its own. */
+function _rptExportEsc(e) {
+  if (e.key !== 'Escape') return;
+  e.stopPropagation();
+  rptExportToggle(false);
+  const b = document.getElementById('rpt-xp-btn');
+  if (b) b.focus();
+}
+
+/* ── THE TAB STRIP'S EDGE ────────────────────────────────────────────────────
+   The strip has scrolled sideways since it was built, with `scrollbar-width:
+   none` and a hidden webkit scrollbar — so at the 1366 floor the tenth tab,
+   Complaints, was simply not there and nothing on screen said otherwise
+   (owner, 2026-09-22: "make the complaints in the nav bar a little visible
+   because it is hidden").
+
+   Two things fix it and neither adds a control. A class on the strip when it
+   overflows draws a fade at whichever edge has more tabs behind it, so the row
+   reads as cut off rather than as finished. And the SELECTED tab is scrolled
+   into view after every render, so arriving on Complaints from anywhere —
+   a KPI card, the command palette, a deep link — puts it under the cursor
+   instead of off the end. */
+/* ── DRAG TO SCROLL A LIST THAT OUTGREW ITS CARD ─────────────────────────────
+   Owner, 2026-09-22: "if the categories move out from card then make it
+   draggable showing the large percentage categories first".
+
+   The bars are already sorted by amount descending, so what is on screen
+   before any scrolling is what matters — the list can be cut off at the bottom
+   without cutting off the answer. This adds the panning: press anywhere on the
+   list and drag, the way the payments register's wide table is panned.
+
+   IT ONLY BINDS WHEN THE LIST ACTUALLY OVERFLOWS, so a hostel with four
+   categories gets an ordinary card with an ordinary cursor. A click that moved
+   less than 4px is left alone rather than swallowed — the rows hold no
+   controls today, but a drag handler that eats clicks is a trap for whoever
+   adds one. */
+function rptDragScroll(el) {
+  if (!el || el.dataset.drag) return;
+  if (el.scrollHeight - el.clientHeight < 4) return;
+  el.dataset.drag = '1';
+  el.classList.add('is-draggable');
+  let down = false, startY = 0, startTop = 0, moved = 0;
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    down = true; moved = 0;
+    startY = e.clientY; startTop = el.scrollTop;
+    el.classList.add('is-dragging');
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', e => {
+    if (!down) return;
+    const dy = e.clientY - startY;
+    moved = Math.max(moved, Math.abs(dy));
+    el.scrollTop = startTop - dy;
+  });
+  const end = e => {
+    if (!down) return;
+    down = false;
+    el.classList.remove('is-dragging');
+    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (moved > 4) { const kill = ev => ev.stopPropagation();
+      el.addEventListener('click', kill, { capture: true, once: true }); }
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+function rptTabsFade() {
+  const el = document.querySelector('.rpt-tabs');
+  if (!el) return;
+  const over = el.scrollWidth - el.clientWidth;
+  el.classList.toggle('has-more', over > 2 && el.scrollLeft < over - 2);
+  el.classList.toggle('has-prev', over > 2 && el.scrollLeft > 2);
+}
+function rptTabsInit() {
+  rptDragScroll(document.getElementById('rpt-expbars'));
+  const el = document.querySelector('.rpt-tabs');
+  if (!el) return;
+  if (!el.dataset.bound) { el.dataset.bound = '1'; el.addEventListener('scroll', rptTabsFade); }
+  const on = el.querySelector('.rpt-tab.is-on');
+  // `nearest` so Overview does not scroll the row when it is already at rest.
+  if (on && typeof on.scrollIntoView === 'function') {
+    on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  rptTabsFade();
+}
+
+/* ── THE TWO REGISTERS, FOR THE MONTH ON SCREEN ──────────────────────────────
+   Owner, 2026-09-22: "make the all student pdf and payment a month, year
+   dropdowns and make it default to current month".
+
+   They were exportAllStudentsPDF() and exportAllPaymentsPDF() — the WHOLE
+   register, every student since the hostel opened and every payment ever,
+   under a scope line reading "Complete record". On a hostel three years old
+   that is a document nobody can use to answer a question about September.
+
+   THE DROPDOWN IS THE ONE ALREADY ON THE BAR. A third and fourth month control
+   beside the report's own picker would be three answers to "which month" on
+   one screen, and two of them would be wrong the moment the picker moved. The
+   picker opens on the current month, so these default to the current month by
+   construction, and the export menu states the month above the two items.
+
+   The roster is the period's RESIDENTS, not today's — the same
+   _buildRoomStudentIndex() the page's own figures are built from, so this
+   document and the Students tab beside it cannot name two rosters. The
+   payments are _rptTotals()' own list, which is what every money figure on the
+   page is summed from. */
+function rptStudentsMonthPDF() {
+  const keys = _rptKeys();
+  const list = studentsByRoom(_buildRoomStudentIndex(keys).residents.map(x => x.s));
+  if (!list.length) { toast('Nobody lived here in ' + monthLabel(keys[0]), 'error'); return; }
+  EXPORT.pdf(_stuExportDef(list, {
+    title: 'Student Register',
+    scope: _rptPeriodWords(),
+  }));
+}
+function rptPaymentsMonthPDF() {
+  const keys = _rptKeys();
+  const list = _rptTotals(keys).pays.slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  if (!list.length) { toast('No payments in ' + monthLabel(keys[0]), 'error'); return; }
+  EXPORT.pdf(_payExportDef(list, {
+    title: 'Payment Register',
+    scope: _rptPeriodWords(),
+  }));
+}
 
 
 // ════════════════════════════════════════════════════════════════════════════

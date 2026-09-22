@@ -1074,13 +1074,18 @@ async function deleteExpense(id) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
-let reportPeriod='month';
-/* WHICH month "This Month" means (owner ref: `reports2.png`, which draws a
-   month dropdown in the report bar). It was hard-wired to thisMonth(), so the
-   only way to see August from September was Custom Range with the same month
-   at both ends — three controls for the commonest question this page is asked.
-   Evaluated at load and reset by rptSetPeriod(), so a session left open past
-   the turn of a month still opens on the month it now is. */
+/* WHICH MONTH THE REPORTS PAGE IS SHOWING, and since 2026-09-22 that is the
+   ONLY thing it shows.
+
+   `reportPeriod` lived here too and took 'month' | 'year' | 'custom', drawn as
+   a three-way segment beside this. The owner removed all three (2026-09-22:
+   "remove the month, this year and custom range and make a professional month
+   dropdown in which different month and years can be selected") — one control
+   that answers where the window sits, instead of two that answered where AND
+   how wide and had to agree with each other.
+
+   Evaluated at load, so a session left open past the turn of a month still
+   opens on the month it now is. */
 let reportMonth = thisMonth();
 let reportDetail=null;
 let studentReportFilter='All';

@@ -1223,15 +1223,13 @@ function payBulkExport() {
 /* THE WHOLE REGISTER, FROM THE REPORTS BAR (owner, 2026-09-10) — every payment
    the app holds, newest first, not the month the payments page happens to be
    showing. The page's own Export is the scoped one. */
-function exportAllPaymentsPDF() {
-  const list = (DB.payments || []).slice()
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  if (!list.length) { toast('No payment records to export', 'error'); return; }
-  EXPORT.pdf(_payExportDef(list, {
-    title: 'Hostel Payment Register',
-    scope: 'Complete record — all payments',
-  }));
-}
+/* `exportAllPaymentsPDF()` stood here: every payment ever recorded, under a
+   scope line reading "Complete record — all payments". Its only caller was the
+   Reports bar, and the owner asked on 2026-09-22 for that document to follow a
+   month instead. It is rptPaymentsMonthPDF() in reports.js now, built from the
+   same _rptTotals() list every money figure on that page is summed from.
+
+   `_payExportDef(list, opts)` is unchanged and still takes any list. */
 
 function exportPaymentsPDF() {
   const list = payFiltered();

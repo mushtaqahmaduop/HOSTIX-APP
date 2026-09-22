@@ -2569,14 +2569,15 @@ function stuBulkExport() {
    roster, so it is every student the app holds, in room order, headed the way
    the owner's sheet heads it. The register page's own Export is the filtered
    one, and says so on the file. */
-function exportAllStudentsPDF() {
-  const list = studentsByRoom((DB.students || []).slice());
-  if (!list.length) { toast('No students to export', 'error'); return; }
-  EXPORT.pdf(_stuExportDef(list, {
-    title: 'Student Record Register',
-    scope: 'Complete record — all students',
-  }));
-}
+/* `exportAllStudentsPDF()` stood here: every student the hostel has ever had,
+   under a scope line reading "Complete record — all students". Its only caller
+   was the Reports bar, and the owner asked on 2026-09-22 for that document to
+   follow a month instead. It is rptStudentsMonthPDF() in reports.js now, where
+   the reported period lives; the roster it prints is the period's residents
+   from _buildRoomStudentIndex(), which is what the rest of that page counts.
+
+   `_stuExportDef(list, opts)` is unchanged and still takes any list, so a
+   whole-register document is one call away if it is ever asked for again. */
 
 function exportStudentsPDF() {
   const list = studentsFiltered();

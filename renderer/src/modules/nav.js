@@ -553,7 +553,12 @@ function renderPage(p, resetScroll=false) {
     if (!resetScroll) _restoreFocus(savedFocus);
     // Same deferred pattern as the dashboard: the canvases must exist and be
     // laid out before Chart.js measures them.
-    if(basePage==='reports') setTimeout(function(){ drawReportCharts(); }, 50);
+    if(basePage==='reports') setTimeout(function(){
+      drawReportCharts();
+      // The tab strip scrolls; this is what says so and what brings the
+      // selected tab into view. See rptTabsInit() in reports.js.
+      if (typeof rptTabsInit === 'function') rptTabsInit();
+    }, 50);
     if(basePage==='settings') bindSettingsEvents();
     if(basePage==='addstudent') asfInit();
     if(basePage==='dashboard') setTimeout(function(){ drawTrendChart(); drawRoomDonut(); }, 50);

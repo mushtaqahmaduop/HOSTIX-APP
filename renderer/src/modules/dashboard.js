@@ -3555,7 +3555,9 @@ function navigateToMonth(monthKey) {
   const resetBtn = document.getElementById('sb-cal-reset-btn');
   if(resetBtn) resetBtn.style.display = _dashboardMonth ? 'inline-block' : 'none';
   if(currentPage === 'reports') {
-    reportPeriod = 'month'; reportDetail = null; renderPage('reports');
+    /* `reportPeriod = 'month'` stood here until 2026-09-22. A month is the
+       only window Reports has now, so there is nothing to set. */
+    reportDetail = null; renderPage('reports');
   } else if(currentPage === 'dashboard') {
     renderPage('dashboard');
   } else {
