@@ -62,24 +62,29 @@
      otherwise paint straight over the column to its right. */
   max-width: 100%;
 }
-/* THE BOX FITS THREE DIGITS (owner, 2026-09-23: "resize the room number label
-   in students page so it cover up to 3 digits room number").
+/* THE BOX HUGS ITS DIGITS, WHATEVER THERE ARE (owner, 2026-09-23, second
+   pass: "the room number label is not auto adjusting to 2 or 3 digit room
+   number just like the cancellations page room number label do").
 
-   It was sized by its content, so a hostel numbering rooms 1-22 got a narrow
-   box and one numbering them 214 got a wider one — and the column, which is
-   fixed, clipped the difference. A min-width in `ch` measures the box in the
-   DIGITS it has to hold and follows the tabular figures it is set in: three
-   fit without the box growing, a fourth widens it rather than clipping, and a
-   single digit still centres in a box that no longer collapses around it.
+   The first attempt gave it `min-width:3ch`, which made a one-digit room sit
+   in a three-digit box — a fixed label, not an adjusting one. `.canc-room__n`
+   simply wraps its content, and that is the behaviour asked for.
 
-   `overflow:visible` on the number: the room is an identifier, and a clipped
-   identifier is a different room. If it cannot fit it widens the box; the
-   meta lines beside it are what give way (they carry the ellipsis). */
+   `flex:0 0 auto` IS THE WHOLE FIX, and it is what the cancellations pill
+   never needed. That one sits in a cell of its own; this one is a flex item
+   beside the floor and room-type lines, so at the default `flex-shrink:1` the
+   NUMBER was the thing that gave way when the cell ran short — a room reading
+   "21" when it is 214. It cannot shrink now, and the meta lines beside it give
+   way instead, which is right: they already carry the ellipsis and a clipped
+   floor name is a nuisance where a clipped room number is a different room.
+
+   `overflow:visible` for the same reason — an identifier either fits or widens
+   the box; it never renders as a shorter identifier. */
 .ui-room--wide .ui-room__n {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-2);
-  min-width: 3ch; text-align: center;
+  flex: 0 0 auto; white-space: nowrap;
   overflow: visible; text-overflow: clip;
 }
 /* The meta column: floor over type, tight, and never wider than its share of

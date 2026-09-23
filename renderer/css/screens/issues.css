@@ -71,6 +71,18 @@
 .iss-table thead th:nth-child(2)  { min-width: 140px; }
 .iss-table thead th:nth-child(4),
 .iss-table tbody td:nth-child(4)  { width: 84px; }
+/* ASSIGNED TO (column 9) HAS ROOM FOR A NAME (owner, 2026-09-23: "adjust the
+   column a little in complaints page so that to in the assigned look easily").
+
+   It took whatever the other nine left, which on a full row was enough for a
+   first name and an ellipsis — and the one thing this column is read for is
+   WHO is dealing with it. 128px holds "Azat Ullah" with its person glyph at
+   the table's own 12px; a longer name still ellipsises and carries the hover
+   card, which is the right failure for a name and the wrong one for a room
+   number. The width comes out of Issue, which is the only elastic column on
+   the row and is a sentence that wraps rather than a value that clips. */
+.iss-table thead th:nth-child(9),
+.iss-table tbody td:nth-child(9)  { width: 128px; }
 /* Actions. The action bar wrapped by default, and at 132px the four icon
    buttons wrapped into THREE rows — a 102px cell that then set the height of
    every row in the register: 127px against a 77px content maximum. The column

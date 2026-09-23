@@ -571,25 +571,29 @@ function renderExpenses() {
       <td>${e._transfer || !e.addedByName
         ? '<span class="exp-dash">—</span>'
         : `<span class="exp-by" data-tip="Entered by ${escHtml(e.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(e.addedByName))}</span>`}</td>
-      ${''/* THE RECEIPT IS A GLANCE, NOT A COLUMN OF WORDS (owner, 2026-09-23:
-             "an eye icon or svg for view receipt if attached").
-
-             Whether a receipt exists was only in the workbook, as the word
-             "Attached" — so on the page there was no way to tell a documented
-             expense from an undocumented one without opening it. The eye OPENS
-             the file; a record with none shows a dash rather than a dead
-             control, because a disabled button that never enables is a promise
-             the row cannot keep. */}
-      <td class="exp-rcptc">${e._transfer || !e.receipt
-        ? '<span class="exp-dash">—</span>'
-        : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
-             onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
-             title="View the attached receipt"
-             aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
-             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-           </button>`}</td>
       <td>
         <div class="exp-acts">
+          ${''/* THE RECEIPT EYE SITS WITH THE ACTIONS (owner, 2026-09-23,
+                 second pass: "the receipt icon should be adjacent to the
+                 actions button if the expense has a receipt").
+
+                 It had a column of its own, which spent a tenth of the table's
+                 width on one icon and, on the rows with no receipt, on a dash.
+                 It is an ACTION — it opens something — so it belongs with the
+                 other two, and it appears only when there is a receipt to
+                 open. A row without one simply has two buttons instead of
+                 three, which is exactly what it means.
+
+                 FIRST in the group, because it is the only non-destructive
+                 one and because a control that appears and disappears must not
+                 shift Edit and Delete under a cursor that is already moving
+                 towards them. */}
+          ${!e._transfer && e.receipt ? `<button class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
+             onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
+             title="View receipt"
+             aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
+             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+           </button>` : ''}
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
@@ -624,12 +628,16 @@ function renderExpenses() {
                  student. */}
           ${th('handedTo','Vendor')}
           ${th('addedByName','Added by')}
-          <th>Receipt</th>
+          ${''/* NO RECEIPT COLUMN. The eye moved into the Actions group on
+                 2026-09-23 — it opens something, so it is an action, and a
+                 column of one icon spent a tenth of the table on a dash for
+                 every record without one. The workbook still carries a Receipt
+                 column, where "Attached" is a value you filter on. */}
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="9"><div class="ui-empty">
+            ? `<tr><td colspan="8"><div class="ui-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
                  <div class="ui-empty__t">No expenses match these filters.</div></div></td></tr>`
             : rows}
@@ -900,9 +908,23 @@ function expReceiptRemove() { _expReceipt = null; _expRepaintReceipt(); }
 /* Images open in a viewer; a PDF is written back to disk, because the window's
    CSP has no frame-src and a data: URL cannot be framed. Both are the stored
    bytes — nothing is re-fetched. */
-function expReceiptView() {
-  const r = _expReceipt;
-  if (!r) return;
+/* ── ONE VIEWER, TWO CALLERS ─────────────────────────────────────────────────
+   The form's View button and the register's eye show the same thing, so they
+   run the same function (owner, 2026-09-23: "the action button doesn't show
+   the receipt, just the view icon button do in the edit expense form").
+
+   The row's eye used to SAVE the file straight to disk, which is not viewing
+   it — a warden checking whether an expense is documented had to write a copy
+   somewhere first. It opens the image now, exactly as the form does, with Save
+   a copy still one press away inside the modal.
+
+   A PDF still goes to the desktop: this app has no PDF viewer, and handing the
+   file to whatever the reader already uses is better than an empty frame. */
+let _expViewing = null;
+
+function _expReceiptShow(r) {
+  if (!r || !r.data) { toast('No receipt is attached to this expense', 'error'); return; }
+  _expViewing = r;
   if (String(r.type || '').indexOf('image/') === 0) {
     showModal('modal-md',
       `<div class="hf-mh"><div class="hf-mh__ico">${icon('clipboard','sm')}</div>
@@ -911,36 +933,17 @@ function expReceiptView() {
       `<div class="exf-rcpt__view"><img src="${escHtml(r.data)}" alt="${escHtml(r.name || 'Receipt')}"></div>`,
       `<div class="hf-actions">
          <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-         <button class="btn btn-primary" onclick="expReceiptSaveCopy()">${icon('download','xs')} Save a copy</button>
+         <button class="btn btn-primary" onclick="expReceiptSaveViewed()">${icon('download','xs')} Save a copy</button>
        </div>`);
     return;
   }
-  expReceiptSaveCopy();
+  expReceiptSaveViewed();
 }
 
-/* ── OPEN THE RECEIPT ON A ROW (owner, 2026-09-23) ───────────────────────────
-   The eye in the register. `expReceiptSaveCopy()` below saves the copy held by
-   the OPEN FORM (`_expReceipt`); this one reaches a stored record by id, which
-   is what a row can offer without opening anything.
-
-   It saves rather than previewing. This app has no image viewer, the receipt
-   can be a PDF as easily as a photo, and handing the file to the desktop lets
-   the reader open it in whatever they already use — which is also the one path
-   that works for a receipt somebody needs to forward. */
-async function expOpenReceipt(id) {
-  const e = (DB.expenses || []).find(x => x && x.id === id);
-  const r = e && e.receipt;
-  if (!r || !r.data) { toast('No receipt is attached to this expense', 'error'); return; }
-  if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') {
-    toast('This build cannot save files', 'error'); return;
-  }
-  const res = await window.electronAPI.saveDataUrl(r.data, r.name || 'receipt');
-  if (res && res.success) toast('Receipt saved', 'success');
-  else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
-}
-
-async function expReceiptSaveCopy() {
-  const r = _expReceipt;
+/* Saves whichever receipt is on screen — the one the viewer was opened with,
+   or the form's own when the form is what opened it. */
+async function expReceiptSaveViewed() {
+  const r = _expViewing || _expReceipt;
   if (!r) return;
   if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') {
     toast('This build cannot save files', 'error'); return;
@@ -949,6 +952,21 @@ async function expReceiptSaveCopy() {
   if (res && res.success) toast('Receipt saved', 'success');
   else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
 }
+
+function expReceiptView() { _expReceiptShow(_expReceipt); }
+
+/* The eye in the register: reaches a STORED record by id, which is what a row
+   can offer without opening a form, and hands it to the shared viewer. */
+function expOpenReceipt(id) {
+  const e = (DB.expenses || []).find(x => x && x.id === id);
+  _expReceiptShow(e && e.receipt);
+}
+
+/* `expReceiptSaveCopy()` stood here: the same save, reading the form's
+   `_expReceipt` directly. It had one caller — the viewer's "Save a copy" — and
+   that viewer now opens for a ROW as well as for the form, where `_expReceipt`
+   is null. `expReceiptSaveViewed()` above saves whichever receipt is on screen
+   and falls back to the form's, so there is one save path for both. */
 
 /**
  * The expense form.

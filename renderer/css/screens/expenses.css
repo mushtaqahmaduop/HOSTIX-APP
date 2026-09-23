@@ -106,15 +106,20 @@
    A max-width in `ch` rather than px or a percent: the cell is measured in the
    CHARACTERS it shows, which is what "specified space" means for text, and it
    holds the same number of them whatever the table's width. */
-.exp-desc { white-space: nowrap; line-height: var(--leading-normal); max-width: 38ch; }
+/* 38ch -> 30ch (owner, 2026-09-23, second pass: "reduce the description area so
+   the action buttons look [right]"). The row carries a third action now — the
+   receipt eye joined Edit and Delete — and the description was the only cell
+   wide enough to give the width back without clipping a figure or a name. */
+.exp-desc { white-space: nowrap; line-height: var(--leading-normal); max-width: 30ch; }
 .exp-desc__t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Who entered the record, beside who it was paid to. Quiet: it is an
    attribution, not a figure. */
 .exp-by { color: var(--text-secondary); white-space: nowrap; }
 
-/* The receipt eye. A column of one icon, centred on its heading. */
-.exp-rcptc { text-align: center; }
+/* The receipt eye, now first in the Actions group rather than a column of its
+   own. Quieter than Edit at rest — it is the one action that changes nothing —
+   and it takes the accent on hover. */
 .exp-rcpt-btn { color: var(--text-tertiary); }
 .exp-rcpt-btn:hover { color: var(--accent); }
 
