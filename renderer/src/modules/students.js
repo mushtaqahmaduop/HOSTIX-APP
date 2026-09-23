@@ -314,12 +314,35 @@ function renderStudents() {
     + '<path d="M9.36 7.2c-.19-.42-.38-.43-.56-.44h-.47c-.16 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.89 2.38 1.01 2.54c.12.17 1.71 2.74 4.22 3.73 2.09.82 2.51.66 2.97.62.46-.04 1.48-.6 1.69-1.19.21-.58.21-1.08.15-1.19-.06-.1-.23-.16-.47-.29-.25-.12-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.34-.75-1.83Z"/></svg>';
   /* A pin, not a coloured map marker (owner: "use neutral location svg"). */
   const pinIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
-  const phIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  /* THE GUARDIAN'S MARK: A HANDSET IN A RING (owner, 2026-09-23, who sent a
+     red glossy "EMERGENCY" badge and added "make it neutral if feels good").
+
+     The badge itself could not be used. It is a raster JPEG, not an SVG; it
+     carries a gradient and a drop shadow, and this design system has neither;
+     and it is brand red, where the owner's own 2026-09-16 ruling is that no
+     brand colour appears anywhere and hue is reserved for STATE, not for
+     categories. Forty saturated red marks down a register would read as forty
+     alarms.
+
+     So the IDEA is drawn instead, in this app's line style: the handset the
+     badge shows, inside the ring it shows it in. It reads as the emergency
+     line at 13px where a bare handset read as "a phone number", which is the
+     one thing it had to distinguish itself from — the student's WhatsApp mark
+     sits directly above it. Neutral, like every other mark on the row. */
+  const phIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'
+    + '<circle cx="12" cy="12" r="9.2"/>'
+    + '<path d="M15.6 15.9a1.2 1.2 0 0 1-1.25.35 9.4 9.4 0 0 1-2.95-1.62 9.4 9.4 0 0 1-2.2-2.66 1.2 1.2 0 0 1 .2-1.4l.72-.72a.85.85 0 0 0 .12-1.05l-.83-1.3a.85.85 0 0 0-1.28-.2l-.7.6a1.9 1.9 0 0 0-.56 1.86 11.4 11.4 0 0 0 2.9 4.9 11.4 11.4 0 0 0 4.55 2.75 1.9 1.9 0 0 0 1.9-.5l.6-.63a.85.85 0 0 0-.15-1.3l-1.24-.86a.85.85 0 0 0-1.05.08z"/>'
+    + '</svg>';
 
   return `
   <!-- ══ STAT STRIP ══ -->
   <div class="stu-stats">
     <button type="button" class="ui-card stu-stat" onclick="stuSetStatus('All')" title="Show every student">
+      ${''/* THE KPI HEADINGS ARE SET IN CAPS (owner, 2026-09-23: "use capital
+             and bold letter in kpi headings if possible"). One rule for all
+             five, in the stylesheet rather than in five strings — see
+             `.stu-stat__label`, which does it with text-transform so the label
+             a filter reads and the label a reader sees stay the same text. */}
       <div class="stu-stat__label">${studentFilter.month?'Students in '+escHtml(/^\d{4}$/.test(studentFilter.month)?studentFilter.month:_stuMonthLabel(studentFilter.month).split(' ')[0]):'Total students'}</div>
       <div class="stu-stat__val">${nTotal}</div>
       <div class="stu-stat__sub">${studentFilter.month?'On the roster that month':'Registered, all time'}</div>

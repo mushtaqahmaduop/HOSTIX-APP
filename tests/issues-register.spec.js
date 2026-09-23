@@ -180,10 +180,11 @@ test('category chips are neutral; priority and status keep their hue', async () 
       .map(c => getComputedStyle(c).backgroundColor + '|' + getComputedStyle(c).color);
     return {
       cat: grab(5), prio: grab(6), status: grab(7),
-      // The Kind mark in column 1 is the OTHER category on this row — which
-      // register the record belongs to. The first version of this test only
-      // looked at column 5, so a violet Maintenance / blue Complaint badge
-      // passed it while breaking the same rule.
+      /* The Kind mark in column 1 marked which register a row belonged to. It
+         was REMOVED on 2026-09-23, when Maintenance became a category — the
+         Category chip already shows it, and the page no longer makes the
+         distinction. Asserted at zero so it cannot come back as a second
+         classification of the row. */
       kind: [...document.querySelectorAll('#content .iss-table .iss-kind')]
         .map(e => getComputedStyle(e).color),
     };
@@ -193,9 +194,8 @@ test('category chips are neutral; priority and status keep their hue', async () 
   expect(new Set(paint.cat).size).toBe(1);
   expect(paint.cat.length).toBeGreaterThan(1);
 
-  // And so does the kind mark, across both kinds.
-  expect(new Set(paint.kind).size).toBe(1);
-  expect(paint.kind.length).toBeGreaterThan(1);
+  // The kind mark is gone — Maintenance is a category now, not a second class.
+  expect(paint.kind, 'the kind glyph came back beside the category chip').toEqual([]);
 
   // Priority and status do not: they are state, and state is what hue is for.
   expect(new Set(paint.prio).size).toBeGreaterThan(1);
@@ -267,7 +267,20 @@ test('ONE form: the category decides the kind, and an edit never renumbers', asy
     asg: 'Azat Ullah', stu: 'stu-a', raisedById: '', status: 'Open',
     seq: 3, ref: 'CO-0003', count: 6 });
 
-  // -- Category Maintenance -> a JOB, numbered MA-, raised by STAFF ----------
+  /* ── CATEGORY MAINTENANCE IS NOW AN ORDINARY COMPLAINT ────────────────────
+     Owner, 2026-09-23: "the maintenance be treated as a category just like
+     plumbing or electrical and should be labelled as a complaint, because we
+     are building a separate maintenance page later".
+
+     `_issKindFor()` returned 'maintenance' for this one category name, which
+     gave those records their own MA- series and a different room rule. Every
+     NEW record is a complaint now; the category is just a category.
+
+     WHAT MUST NOT CHANGE, and is asserted below: records already filed as
+     maintenance keep `kind:'maintenance'`, keep their MA- references and keep
+     counting in their own series. A reference is identity — it has been
+     printed and quoted — and renumbering one to tidy a label would break every
+     record that names it. */
   await win.evaluate(() => showIssueModal());
   await win.waitForSelector('#mt-title', { timeout: 15000 });
   await win.evaluate(() => _issMtRaiser('staff'));
@@ -294,9 +307,24 @@ test('ONE form: the category decides the kind, and an edit never renumbers', asy
              idPrefix: m.id.slice(0, 3) };
   });
   /* THE RECORD NOBODY COULD HAVE LOGGED without the Raised by switch: a job
-     reported by the cook, with no student behind it at all. */
-  expect(job).toMatchObject({ kind: 'maintenance', seq: 4, ref: 'MA-0004',
-    raisedBy: 'Gul Nawaz', studentId: '', loc: 'Kitchen', idPrefix: 'mt_' });
+     reported by the cook, with no student behind it at all. It is a COMPLAINT
+     now, in the complaint series — CO-0004, after the CO-0003 above. */
+  expect(job).toMatchObject({ kind: 'complaint', seq: 4, ref: 'CO-0004',
+    raisedBy: 'Gul Nawaz', studentId: '', loc: 'Kitchen', idPrefix: 'cp_' });
+
+  /* THE ROOM SURVIVES THE CHANGE, and this is the regression the change could
+     have caused. `_issAll()` used to read a complaint's room from its STUDENT
+     and a maintenance ticket's from its stored `roomId`; a staff-raised job
+     has no student, so as a complaint its room would have resolved to '' and
+     vanished from the register. The stored roomId is the fallback now. */
+  const jobRoom = await win.evaluate(() => {
+    const m = (DB.issues || []).find(x => x.title === 'Burst pipe in the kitchen');
+    m.roomId = (DB.rooms[0] || {}).id;
+    const shown = _issAll().find(i => i.id === m.id);
+    return { stored: String((DB.rooms[0] || {}).number), shown: shown.roomNo };
+  });
+  expect(jobRoom.shown, 'a staff-raised job lost the room it was filed against')
+    .toBe(jobRoom.stored);
 
   // -- Editing keeps the record, its number AND its kind --------------------
   await win.evaluate(() => showIssueModal('mt_1'));

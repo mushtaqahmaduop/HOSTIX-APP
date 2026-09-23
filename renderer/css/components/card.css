@@ -62,10 +62,25 @@
      otherwise paint straight over the column to its right. */
   max-width: 100%;
 }
+/* THE BOX FITS THREE DIGITS (owner, 2026-09-23: "resize the room number label
+   in students page so it cover up to 3 digits room number").
+
+   It was sized by its content, so a hostel numbering rooms 1-22 got a narrow
+   box and one numbering them 214 got a wider one — and the column, which is
+   fixed, clipped the difference. A min-width in `ch` measures the box in the
+   DIGITS it has to hold and follows the tabular figures it is set in: three
+   fit without the box growing, a fourth widens it rather than clipping, and a
+   single digit still centres in a box that no longer collapses around it.
+
+   `overflow:visible` on the number: the room is an identifier, and a clipped
+   identifier is a different room. If it cannot fit it widens the box; the
+   meta lines beside it are what give way (they carry the ellipsis). */
 .ui-room--wide .ui-room__n {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-2);
+  min-width: 3ch; text-align: center;
+  overflow: visible; text-overflow: clip;
 }
 /* The meta column: floor over type, tight, and never wider than its share of
    the cell — `min-width:0` is what lets the two lines ellipsis instead of

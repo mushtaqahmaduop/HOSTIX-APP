@@ -98,7 +98,25 @@
    today alignment across the registers. */
 .exp-table thead th:nth-child(3),
 .exp-table tbody td.exp-desc { width: 100%; }
-.exp-desc { white-space: normal; line-height: var(--leading-normal); }
+/* THE DESCRIPTION TAKES A SHARE AND NO MORE (owner, 2026-09-23). It wrapped
+   freely, so one long line widened its column and squeezed Vendor and Amount
+   for every other row on the page — and set the height of its own row while
+   doing it. One line, capped, the rest on the hover card.
+
+   A max-width in `ch` rather than px or a percent: the cell is measured in the
+   CHARACTERS it shows, which is what "specified space" means for text, and it
+   holds the same number of them whatever the table's width. */
+.exp-desc { white-space: nowrap; line-height: var(--leading-normal); max-width: 38ch; }
+.exp-desc__t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Who entered the record, beside who it was paid to. Quiet: it is an
+   attribution, not a figure. */
+.exp-by { color: var(--text-secondary); white-space: nowrap; }
+
+/* The receipt eye. A column of one icon, centred on its heading. */
+.exp-rcptc { text-align: center; }
+.exp-rcpt-btn { color: var(--text-tertiary); }
+.exp-rcpt-btn:hover { color: var(--accent); }
 
 .exp-date { color: var(--text-secondary); white-space: nowrap; }
 .exp-amt  { font-weight: var(--weight-strong); white-space: nowrap; }

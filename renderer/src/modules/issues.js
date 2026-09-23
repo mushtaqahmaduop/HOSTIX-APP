@@ -97,7 +97,31 @@ function _issCatIcon(k) {
    Read on save only; after that the record carries its own `kind`, so
    re-categorising an old ticket cannot renumber it. */
 function _issKindFor(category) {
-  return String(category) === 'Maintenance' ? 'maintenance' : 'complaint';
+  /* EVERY NEW RECORD IS A COMPLAINT (owner, 2026-09-23: "the maintenance be
+     treated as a category just like plumbing or electrical and should be
+     labelled as a complaint, because we are building a separate maintenance
+     page later").
+
+     This returned 'maintenance' for one category name, which gave those
+     records an MA- reference series of their own and a different room rule.
+     That was right while this register was both things; it is wrong now that
+     Maintenance is one category among Plumbing, Electrical and the rest, and
+     it would be wrong twice over once the real Maintenance page exists and
+     these records are not the ones it manages.
+
+     WHAT IS NOT CHANGED: records already filed as maintenance keep `kind:
+     'maintenance'`, keep their MA- references and keep counting in their own
+     series. A reference is identity — it has been printed, quoted and chased —
+     and renumbering one to tidy a label would break every record that names
+     it. So the two series coexist, one of them closed, exactly as the
+     2026-09-21 merge left the two collections.
+
+     The ROOM rule that used to hang off this is gone as a difference: see
+     _issAll(), where a record with no student now falls back to its own stored
+     roomId whatever its kind. That was the only behaviour the flag still
+     changed, and keeping it would have meant a new Maintenance-category
+     record losing the room it was raised against. */
+  return 'complaint';
 }
 
 /* Display reference. Maintenance is MA-####, complaints CO-####. Both series
@@ -146,21 +170,29 @@ function _issAll() {
       status: x.status || 'Open', priority: x.priority || '',
       category: x.category || '', assigned: x.assignedTo || '',
       expected: x.expectedDate || '', location: x.location || '',
-      /* THE TWO KINDS DERIVE THEIR ROOM DIFFERENTLY, AND IT IS NOT AN OVERSIGHT.
+      /* FOLLOW THE PERSON WHEN THERE IS ONE, THE BUILDING WHEN THERE IS NOT.
 
-         A COMPLAINT's room is wherever its student lives NOW — derived on
-         read, never a second stored copy that drifts the first time somebody
-         is moved. Follow the person.
+         This used to branch on KIND: a complaint's room came from its student,
+         a maintenance ticket's from its stored `roomId`. The note here warned
+         that merging them "quietly gives every student-raised ticket the wrong
+         room the day that student moves" — and that half is still true, which
+         is why the student still wins whenever there is one.
 
-         A MAINTENANCE ticket's room is where the FAULT IS, and it is stored.
-         A leaking tap in room 12 is still in room 12 after the student who
-         reported it moves to room 15. Follow the building.
-
-         Merging these into one expression (`s ? student's room : stored room`)
-         looks tidier and quietly gives every student-raised ticket the wrong
-         room the day that student moves. */
-      roomNo: _issKindOf(x) === 'maintenance' ? roomNo(x.roomId) : (s ? roomNo(s.roomId) : ''),
+         What changed on 2026-09-23 is the OTHER half. Maintenance stopped
+         being a kind and became a category, so a record raised against a room
+         with nobody attached is now an ordinary complaint — and under the old
+         expression its room resolved to '' and vanished from the register.
+         The stored roomId is the fallback, not the override: a leaking tap
+         filed against room 12 with no student still reads room 12, and a
+         student-raised issue still follows its student. `roomId` has always
+         been written for every record (see saveIssue), so this reads something
+         that was already there. */
+      roomNo: s ? roomNo(s.roomId) : roomNo(x.roomId),
       by: s ? s.name : (x.raisedBy || ''), student: s, response: x.response || '',
+      /* The ACCOUNT that entered the record — not `by`, which is the student or
+         staff member the complaint is about. Absent on anything written before
+         2026-09-23, and the row prints the date alone rather than guessing. */
+      addedBy: x.addedBy || null, addedByName: x.addedByName || '',
     };
   });
 }
@@ -356,6 +388,10 @@ function renderIssues() {
      that categories are neutral. The first pass gave Maintenance violet and
      Complaint blue anyway, which is the rule broken in the one file that
      states it. The glyph and the MA-/CO- prefix carry the distinction. */
+  /* `KIND` is still read by the EXPORT's Kind column, which names the series a
+     record was filed in — a fact about its reference number, not a second
+     classification of the row. The register itself stopped drawing a kind
+     glyph on 2026-09-23, when Maintenance became a category. */
   const KIND = {
     maintenance: { label:'Maintenance', ico:'tool' },
     complaint:   { label:'Complaint',   ico:'helpCircle' },
@@ -378,7 +414,7 @@ function renderIssues() {
   /* One row of the register. Every cell is either a field the record holds or
      a dash — nothing here is computed to fill a column. */
   const mkRow = (i) => {
-    const k  = KIND[i.kind];
+
     const bk = _issBucket(i.status);
     const rm = i.roomNo ? rooms.find(r => String(r.number) === i.roomNo) : null;
     const held = _issDays(i.date, today());
@@ -397,13 +433,18 @@ function renderIssues() {
       : (held === null ? '' : held === 0 ? 'Today' : 'Open ' + held + 'd');
 
     return `<tr>
+      ${''/* THE KIND GLYPH IS GONE (owner, 2026-09-23). It marked each row as
+             Maintenance or Complaint — a distinction this page no longer makes,
+             since Maintenance is a category and the Category column already
+             shows it. What the reference prefix still says is which SERIES a
+             record was filed in, which is a fact about its number, not a second
+             classification of the row. */}
       <td class="iss-c-ref">
         <div class="iss-ref">${_issSeq(i)}</div>
-        <div class="iss-kind" title="${escHtml(k.label)}">${icon(k.ico,'xs')}</div>
       </td>
       <td class="iss-c-title">
         <div class="iss-t">${escHtml(i.title||'Untitled')}</div>
-        ${i.desc?`<div class="iss-d" title="${escHtml(i.desc)}">${escHtml(i.desc)}</div>`:''}
+        ${i.desc?`<div class="iss-d" data-tip="${escHtml(i.desc)}" data-tip-label="Description">${escHtml(i.desc)}</div>`:''}
         ${i.location?`<div class="iss-d">${icon('pin','xs')} ${escHtml(i.location)}</div>`:''}
       </td>
       <td class="iss-c-by">
@@ -443,8 +484,18 @@ function renderIssues() {
             ? `<span class="ui-chip ${PH[i.priority]||'ui-chip--warning'}">${escHtml(i.priority)}</span>`
             : '<span class="iss-dash">—</span>'}</td>
       <td><span class="ui-chip ${SH[bk]}">${icon(bk==='resolved'?'check':bk==='progress'?'clock':'warning','xs')}${escHtml(_issStatusLabel(i.status))}</span></td>
+      ${''/* WHO RAISED IT, UNDER THE DATE (owner, 2026-09-23: "below the
+             reported date show the user name in italics who added it").
+
+             Italic because it is an attribution, not a value — the one line in
+             this row that names a person rather than stating a fact about the
+             issue. It reads the account that ENTERED the record, which is not
+             the same as `raisedBy` (the student or staff member the complaint
+             is about); a record written before the field was captured shows
+             the date alone rather than guessing. */}
       <td>
         <div class="iss-when">${icon('calendar','xs')}${fmtDate(i.date)}</div>
+        ${i.addedByName?`<div class="iss-by" data-tip="Entered by ${escHtml(i.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(i.addedByName))}</div>`:''}
         ${age?`<div class="iss-sub${overdue?' iss-late':''}">${escHtml(age)}</div>`:''}
       </td>
       <td>${i.assigned
@@ -459,10 +510,20 @@ function renderIssues() {
              row is forty red marks on a full page. It fills on hover. Each has an aria-label:
              a title alone is not an accessible name for an icon button. */}
         <div class="iss-acts">
-          ${i.status!=='Resolved'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="resolveIssue('${i.id}')" title="Mark resolved" aria-label="Mark resolved">${icon('check','xs')}</button>`:''}
-          ${i.status==='Open'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="progressIssue('${i.id}')" title="Mark in progress" aria-label="Mark in progress">${icon('clock','xs')}</button>`:''}
-          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="showIssueModal('${i.id}')" title="Edit this issue" aria-label="Edit this issue">${icon('edit','xs')}</button>
-          <button class="ui-btn ui-btn--ghost-danger ui-btn--icon ui-btn--sm" onclick="delIssue('${i.id}')" title="Delete" aria-label="Delete this issue">${icon('trash','xs')}</button>
+          ${''/* ONE LABELLING RULE FOR ALL FOUR (owner, 2026-09-23: "label the
+                 other actions button just like the delete button there on
+                 hover").
+
+                 They were "Mark resolved", "Mark in progress", "Edit this
+                 issue" and "Delete" — three sentences and a verb, so the row
+                 read as if only Delete had a proper label. The hover is a
+                 VERB on each; the aria-label stays the full sentence, because
+                 a screen reader arriving at an icon button out of context
+                 needs to know what it acts on. */}
+          ${i.status!=='Resolved'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="resolveIssue('${i.id}')" title="Resolve" aria-label="Mark this complaint resolved">${icon('check','xs')}</button>`:''}
+          ${i.status==='Open'?`<button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="progressIssue('${i.id}')" title="In progress" aria-label="Mark this complaint in progress">${icon('clock','xs')}</button>`:''}
+          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" onclick="showIssueModal('${i.id}')" title="Edit" aria-label="Edit this complaint">${icon('edit','xs')}</button>
+          <button class="ui-btn ui-btn--ghost-danger ui-btn--icon ui-btn--sm" onclick="delIssue('${i.id}')" title="Delete" aria-label="Delete this complaint">${icon('trash','xs')}</button>
         </div>
       </td>
     </tr>`;
@@ -1083,6 +1144,12 @@ async function saveIssue(id) {
       seq: _issNextSeq(kind),
       resolvedDate: status === 'Resolved' ? today() : '',
       response: '',
+      /* WHO ENTERED IT (owner, 2026-09-23). Stamped on create only: an edit
+         six weeks later by somebody else does not change who raised the
+         record. Both halves, the pair ledger.js writes — the account id
+         survives a rename, the name survives the account being deleted. */
+      addedBy:     (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null,
+      addedByName: (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '',
     }, fields));
     logActivity(label + ' Added', title, label);
   }

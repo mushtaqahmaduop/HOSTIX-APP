@@ -156,6 +156,7 @@ function expensesScoped() {
     amount:      e => Number(e.amount) || 0,
     method:      e => String(e.method || '').toLowerCase(),
     handedTo:    e => String(e.handedTo || '').toLowerCase(),
+    addedByName: e => String(e.addedByName || '').toLowerCase(),
   });
   if (!expFilter.sortKey) exps = exps.sort((a, b) => String(b.date||'').localeCompare(String(a.date||'')));
   return { scope, scoped, legacyTransfers: _legacyTransfers, rows: exps };
@@ -187,6 +188,57 @@ function expensesFiltered() { return expensesScoped().rows; }
    records none of them — an expense is {date, category, description, amount} —
    and inventing the columns would put empty headings on an owner's document.
    They belong to the expense FORM before they belong to its export.        */
+/* ── THE EXPENSE COLUMNS, IN ONE PLACE (owner, 2026-09-23) ───────────────────
+   "in the expense pdf align date, description column, Vendor, added and amount
+   columns to the above categories in pdfs ... and there is also a difference
+   between the expense page pdf and reports page expense pdf".
+
+   There were two definitions. This page printed nine columns; the Reports
+   page's expense section printed three — Date, Description, Amount — written
+   separately in reports.js. So the same category, exported from two screens on
+   the same day, produced two different documents, and the one a warden reached
+   from Reports was missing the vendor, the method and who entered it.
+
+   One definition, both callers, which is the rule the Payments, Students,
+   Cancellations and Issues sections of the whole-report export already follow:
+   each reads its register's own columns rather than restating them.
+
+   `opts.grouped` drops the Category column. On this page the PDF groups by
+   category and prints the name as the table's own heading, so a Category
+   column would repeat that name on every row — which is the same noise the
+   owner is removing from the subtotals. The workbook keeps it (`excel:false`
+   on the column would have hidden it from a spreadsheet that needs it to
+   filter), so the grouped/ungrouped split is about the PRINTED page only. */
+function expExportColumns(opts) {
+  opts = opts || {};
+  return [
+    { label: 'Date', type: 'date', width: 12, value: e => e.date || '' },
+    { label: 'Category', type: 'text', width: 16, excel: false, pdf: !opts.grouped,
+      value: e => e.category || 'Uncategorised' },
+    { label: 'Description', type: 'wrap', width: 28,
+      value: e => e.description || '',
+      get:   e => escHtml(e.description || '—') +
+                  (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
+    { label: 'Method', type: 'text', width: 12,
+      value: e => e._transfer ? '' : (e.method || '') },
+    /* THE RECEIVER. It was headed "Paid To"; "Vendor" is the word a ledger
+       uses and it is unambiguous beside the Added By column that follows —
+       which is the entering account, and is a different person. */
+    { label: 'Vendor', type: 'text', width: 16,
+      value: e => e._transfer ? '' : (e.handedTo || '') },
+    { label: 'Added By', type: 'text', width: 14,
+      value: e => e._transfer ? '' : (e.addedByName || '') },
+    { label: 'Type', type: 'text', width: 14, pdf: false,
+      value: e => e._transfer ? 'Funds transfer' : 'Expense' },
+    { label: 'Amount', type: 'money', width: 16, total: 'sum',
+      value: e => Number(e.amount || 0),
+      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+    { label: 'Receipt', type: 'text', width: 10, pdf: false,
+      value: e => e.receipt ? 'Attached' : '' },
+    { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
+  ];
+}
+
 function _expExportDef(rows) {
   const one   = expFilter.cat !== 'All';
   const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -206,43 +258,32 @@ function _expExportDef(rows) {
   const ordered  = [...byCat.entries()].sort((a, b) => catTotal(b[1]) - catTotal(a[1]));
   const largest  = rows.reduce((m, e) => Math.max(m, Number(e.amount || 0)), 0);
 
-  /* Description gave up 12 of its 40 so Method and Added By could be on the
-     printed page as well as in the workbook. They are blank on a funds
-     transfer, which is not an expense record and has no form behind it, and
-     blank on any record written before the two fields were captured — §21's
-     dash, not a guess at who was on shift. */
-  const columns = [
-    { label: 'Date', type: 'date', width: 12, value: e => e.date || '' },
-    { label: 'Category', type: 'text', width: 16, excel: false,
-      value: e => e.category || 'Uncategorised' },
-    { label: 'Description', type: 'wrap', width: 28,
-      value: e => e.description || '',
-      get:   e => escHtml(e.description || '—') +
-                  (e._transfer ? '<span class="sub">funds transfer</span>' : '') },
-    { label: 'Method', type: 'text', width: 12,
-      value: e => e._transfer ? '' : (e.method || '') },
-    // The receiver, and the export heading has to say so too - a workbook
-    // column headed "Added By" is unreadable by anyone who did not enter it.
-    { label: 'Paid To', type: 'text', width: 16,
-      value: e => e._transfer ? '' : (e.handedTo || '') },
-    { label: 'Type', type: 'text', width: 14, pdf: false,
-      value: e => e._transfer ? 'Funds transfer' : 'Expense' },
-    { label: 'Amount', type: 'money', width: 16, total: 'sum',
-      value: e => Number(e.amount || 0),
-      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
-    { label: 'Receipt', type: 'text', width: 10, pdf: false,
-      value: e => e.receipt ? 'Attached' : '' },
-    { label: 'Reference', type: 'id', width: 16, pdf: false, value: e => String(e.id || '') },
-  ];
+  // Grouped by category on the printed page, so the Category column would
+  // repeat each table's own heading on every row.
+  const columns = expExportColumns({ grouped: true });
 
+  /* SUB-TOTAL, NOT THE CATEGORY NAME A THIRD TIME (owner, 2026-09-23: "remove
+     Total-category because [it] just repeats the category name again and again
+     which gives the report a messy look, only the Sub-Total for that category
+     should be used").
+
+     The name was already the table's heading and already on its meta line; a
+     footer reading "Electricity total" said it once more, directly under a
+     block of Electricity rows. On a register with ten categories that is ten
+     redundant restatements down one page.
+
+     The grouped table prints each category's name as its own heading, so
+     "Sub-Total" is unambiguous — it can only be the sub-total of the table it
+     sits in. The single-category export keeps the name, because there is no
+     grouping heading above it to be unambiguous against. */
   const groups = one
-    ? [{ rows, total: { label: expFilter.cat + ' total', value: fmtPKR(total) } }]
+    ? [{ rows, total: { label: expFilter.cat + ' — Sub-Total', value: fmtPKR(total) } }]
     : ordered.map(([cat, list]) => ({
         label: cat,
         meta: list.length + ' record' + (list.length === 1 ? '' : 's') +
               (total > 0 ? ' · ' + Math.round(catTotal(list) / total * 100) + '% of spend' : ''),
         rows: list,
-        total: { label: cat + ' total', value: fmtPKR(catTotal(list)) },
+        total: { label: 'Sub-Total', value: fmtPKR(catTotal(list)) },
       }));
 
   return {
@@ -508,12 +549,45 @@ function renderExpenses() {
           ${escHtml(e.category || 'Other')}
         </span>
       </td>
-      <td class="exp-desc">${e.description ? escHtml(e.description) : '<span class="exp-dash">—</span>'}</td>
+      ${''/* THE DESCRIPTION TAKES ITS SHARE AND NO MORE (owner, 2026-09-23:
+             "the description should take specified space and if large then
+             hidden it with view on pop hover").
+
+             It was an unconstrained cell, so one long line — "Generator fuel
+             and filter change, plus the mechanic's call-out" — widened its
+             column and squeezed Vendor and Amount for every other row on the
+             page. Fixed width, one line, the rest on the app's own hover
+             card. */}
+      <td class="exp-desc">${e.description
+        ? `<span class="exp-desc__t" data-tip="${escHtml(e.description)}" data-tip-label="Description">${escHtml(e.description)}</span>`
+        : '<span class="exp-dash">—</span>'}</td>
       <td class="exp-amt">${expMoney(e.amount)}</td>
       ${/* A funds transfer is not an expense record and has no form behind it,
             so it carries neither field and says so rather than borrowing one. */''}
       <td>${e._transfer ? '<span class="exp-dash">—</span>' : expMethodChip(e.method)}</td>
       <td>${e._transfer ? '<span class="exp-dash">—</span>' : expWhoChip(e.handedTo)}</td>
+      ${''/* WHO ENTERED IT, beside who it was paid to. A funds transfer has no
+             form behind it and carries neither. */}
+      <td>${e._transfer || !e.addedByName
+        ? '<span class="exp-dash">—</span>'
+        : `<span class="exp-by" data-tip="Entered by ${escHtml(e.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(e.addedByName))}</span>`}</td>
+      ${''/* THE RECEIPT IS A GLANCE, NOT A COLUMN OF WORDS (owner, 2026-09-23:
+             "an eye icon or svg for view receipt if attached").
+
+             Whether a receipt exists was only in the workbook, as the word
+             "Attached" — so on the page there was no way to tell a documented
+             expense from an undocumented one without opening it. The eye OPENS
+             the file; a record with none shows a dash rather than a dead
+             control, because a disabled button that never enables is a promise
+             the row cannot keep. */}
+      <td class="exp-rcptc">${e._transfer || !e.receipt
+        ? '<span class="exp-dash">—</span>'
+        : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
+             onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
+             title="View the attached receipt"
+             aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
+             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+           </button>`}</td>
       <td>
         <div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -533,20 +607,29 @@ function renderExpenses() {
           ${th('description','Description')}
           ${th('amount','Amount','class="exp-amt"')}
           ${th('method','Payment method')}
-          ${''/* "Paid to", not "Added by" (owner, 2026-09-16: the field
-                   "should say who took the amount for expenses or to whom the
-                   amount is given — only the receiver name"). The field has
-                   always been `handedTo` and has always held the receiver; the
-                   heading named the wrong person entirely, and a warden
-                   reading "Added by" would reasonably have typed their own
-                   name into it. Who ENTERED a record is on the activity log,
-                   which is where that question belongs. */}
-          ${th('handedTo','Paid to')}
+          ${''/* VENDOR, AND ADDED BY — two columns, because they are two
+                 people (owner, 2026-09-23).
+
+                 `handedTo` has always held the RECEIVER. It was headed "Added
+                 by" until 2026-09-16, which named the wrong person entirely
+                 and invited a warden to type their own name into it; it became
+                 "Paid to" then, and "Vendor" now — the word a ledger uses for
+                 the party money went to, and unambiguous beside a column that
+                 really is the entering account.
+
+                 That note also said who ENTERED a record "is on the activity
+                 log, which is where that question belongs". The log trims at
+                 200 entries, so the answer for an older expense is gone; it is
+                 stamped on the record now, the same as `admittedBy` on a
+                 student. */}
+          ${th('handedTo','Vendor')}
+          ${th('addedByName','Added by')}
+          <th>Receipt</th>
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="7"><div class="ui-empty">
+            ? `<tr><td colspan="9"><div class="ui-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
                  <div class="ui-empty__t">No expenses match these filters.</div></div></td></tr>`
             : rows}
@@ -835,6 +918,27 @@ function expReceiptView() {
   expReceiptSaveCopy();
 }
 
+/* ── OPEN THE RECEIPT ON A ROW (owner, 2026-09-23) ───────────────────────────
+   The eye in the register. `expReceiptSaveCopy()` below saves the copy held by
+   the OPEN FORM (`_expReceipt`); this one reaches a stored record by id, which
+   is what a row can offer without opening anything.
+
+   It saves rather than previewing. This app has no image viewer, the receipt
+   can be a PDF as easily as a photo, and handing the file to the desktop lets
+   the reader open it in whatever they already use — which is also the one path
+   that works for a receipt somebody needs to forward. */
+async function expOpenReceipt(id) {
+  const e = (DB.expenses || []).find(x => x && x.id === id);
+  const r = e && e.receipt;
+  if (!r || !r.data) { toast('No receipt is attached to this expense', 'error'); return; }
+  if (!window.electronAPI || typeof window.electronAPI.saveDataUrl !== 'function') {
+    toast('This build cannot save files', 'error'); return;
+  }
+  const res = await window.electronAPI.saveDataUrl(r.data, r.name || 'receipt');
+  if (res && res.success) toast('Receipt saved', 'success');
+  else if (res && res.reason && res.reason !== 'cancelled') toast(res.reason, 'error');
+}
+
 async function expReceiptSaveCopy() {
   const r = _expReceipt;
   if (!r) return;
@@ -930,7 +1034,7 @@ function showExpenseModal(id) {
 
              Who entered the record is not lost — it is stamped on the activity
              log, which is the place that question belongs. */}
-      ${_expField('Paid to', 'person',
+      ${_expField('Vendor', 'person',
         `<input class="form-control" id="f-ewho" list="exp-people" autocomplete="off"
                 placeholder="Name of the shop, person or office paid" value="${e ? escHtml(e.handedTo || '') : ''}">`,
         { req: reqWho, full: true, for: 'f-ewho',
@@ -1026,6 +1130,26 @@ async function submitExpense(id) {
   if (method) rec.method = method; else delete rec.method;
   if (who)    rec.handedTo = who;  else delete rec.handedTo;
   if (_expReceipt) rec.receipt = _expReceipt; else delete rec.receipt;
+
+  /* WHO ENTERED IT (owner, 2026-09-23: "change paid to into Vendor and added
+     by, the current user").
+
+     These are two different people and the register now shows both: the VENDOR
+     is who the money went to (`handedTo`, unchanged), and this is who typed the
+     record. The 2026-09-16 note on the old heading said the entering account
+     "is on the activity log, which is where that question belongs" — the log
+     trims at 200 entries, so on a hostel of any age the answer for an older
+     expense is simply gone, which is the same finding that put `admittedBy` on
+     a student.
+
+     STAMPED ON CREATE ONLY. An edit does not rewrite it: the question is who
+     RAISED this expense, and a correction six weeks later by somebody else does
+     not change that. Records written before today carry neither key and print
+     a dash rather than guessing at whoever is logged in now. */
+  if (!e) {
+    rec.addedBy     = (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null;
+    rec.addedByName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '';
+  }
 
   if (!e) { if (!DB.expenses) DB.expenses = []; DB.expenses.push(rec); }
 

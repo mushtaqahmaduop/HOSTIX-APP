@@ -2229,14 +2229,29 @@ function _rptPayColumns(opts) {
   ];
 }
 
+/* THE REGISTER'S OWN COLUMNS, NOT A SECOND SET (owner, 2026-09-23: "there is
+   also a difference between the expense page pdf and reports page expense
+   pdf").
+
+   This listed three — Date, Description, Amount — while the Expenses page
+   printed nine, so the same category exported from two screens on the same day
+   gave two different documents, and the one reached from Reports was missing
+   the vendor, the method and who entered it.
+
+   `expExportColumns({grouped:true})` is that register's own definition, the
+   rule every other section of the whole-report export already follows: read
+   the register's columns rather than restating them. Grouped, because this
+   section prints one table per category with the name as its heading. */
 function _rptExpenseColumns() {
-  return [
-    { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
-    { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
-    { label: 'Amount', type: 'money', width: 15, total: 'sum',
-      value: e => Number(e.amount || 0),
-      get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
-  ];
+  return typeof expExportColumns === 'function'
+    ? expExportColumns({ grouped: true })
+    : [
+        { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
+        { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },
+        { label: 'Amount', type: 'money', width: 15, total: 'sum',
+          value: e => Number(e.amount || 0),
+          get:   e => '<b>' + fmtPKR(e.amount) + '</b>' },
+      ];
 }
 
 /* Expenses as engine groups: one table per category, biggest spend first,
@@ -2250,7 +2265,11 @@ function _rptExpenseGroups(exps) {
     meta: g.items.length + ' record' + (g.items.length === 1 ? '' : 's') +
           (grand > 0 ? ' · ' + Math.round(g.total / grand * 100) + '% of spend' : ''),
     rows: g.items,
-    total: { label: 'Total — ' + g.cat, value: fmtPKR(g.total) },
+    /* "Sub-Total", not "Total — <category>" (owner, 2026-09-23). The name is
+       already the table's heading and already on the meta line above these
+       rows; a footer repeating it a third time is what made a ten-category
+       report read as noise. Matches the Expenses page's own wording. */
+    total: { label: 'Sub-Total', value: fmtPKR(g.total) },
   }));
 }
 

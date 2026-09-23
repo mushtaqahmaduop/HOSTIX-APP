@@ -173,6 +173,20 @@
 .iss-when { display:flex; align-items:center; gap:var(--space-2); white-space:nowrap; }
 .iss-when svg { flex-shrink:0; color:var(--text-tertiary); }
 .iss-sub  { margin-top:var(--space-1); font-size:var(--text-sm); color:var(--text-tertiary); }
+
+/* WHO ENTERED IT, UNDER THE DATE (owner, 2026-09-23: "below the reported date
+   show the user name in italics who added it").
+
+   Italic because it is an ATTRIBUTION — the one line in this row that names a
+   person rather than stating a fact about the complaint — and italic is how
+   this app has always marked a byline apart from a value. It sits between the
+   date and the age line, both of which are facts about the issue, so the
+   slant is what stops the three reading as one block. */
+.iss-by {
+    margin-top:2px; font-size:var(--text-xs); font-style:italic;
+    color:var(--text-tertiary); line-height:var(--leading-tight);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .iss-dash { color: var(--text-tertiary); }
 
 .iss-asg {

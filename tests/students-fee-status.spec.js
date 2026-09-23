@@ -322,8 +322,12 @@ test('the register cells follow the 2026-09-23 rules', async () => {
 
     const rows = [...document.querySelectorAll('.stu-table tbody tr')];
     const at = (i, s) => { const e = rows[i].querySelector(s); return e ? e.textContent.trim() : null; };
+    /* CASE-INSENSITIVE, because the KPI labels are set in caps via
+       `text-transform` (owner, 2026-09-23) — innerText reports the RENDERED
+       text, so a case-sensitive match here breaks on a styling change that did
+       not touch the markup. The same trap `.dash-kpi__label` documents. */
     const active = [...document.querySelectorAll('.stu-stat')]
-      .find(c => /^Active/.test(c.innerText.trim()));
+      .find(c => /^active/i.test(c.innerText.trim()));
     return {
       roomLabel: at(0, '.ui-room__n'),
       roomTip:   rows[0].querySelector('.ui-room__n').getAttribute('data-tip'),
