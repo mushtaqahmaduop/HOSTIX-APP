@@ -68,7 +68,11 @@ function expMethodChip(m) {
 function expWhoChip(who) {
   const v = String(who || '').trim();
   if (!v) return '<span class="exp-dash">—</span>';
-  return `<span class="exp-who"><i class="ui-avatar">${escHtml(expInitials(v))}</i>${escHtml(v)}</span>`;
+  /* A vendor name is the one value in this column that can genuinely be long
+     — "WAPDA Office Peshawar" wants 224px in a 150px column — and unlike a
+     date or an amount it reads correctly shortened. It ellipsises and carries
+     the hover card; the columns that must NOT shorten got the width instead. */
+  return `<span class="exp-who" data-tip="${escHtml(v)}" data-tip-label="Vendor"><i class="ui-avatar">${escHtml(expInitials(v))}</i><span class="exp-who__t">${escHtml(v)}</span></span>`;
 }
 
 /* Everyone this hostel has ever handed money to, offered as suggestions. Built
@@ -543,8 +547,12 @@ function renderExpenses() {
   const rows = _pg.slice.map(e => {
     return `<tr>
       <td class="exp-date">${escHtml(fmtDate(e.date))}</td>
+      ${''/* THE CATEGORY CARRIES ITS OWN COLOUR (owner, 2026-09-23). The hue
+             comes from expenseCatHue(), which keys by NAME — see the note on
+             `.ui-chip--cat` for why the chip is outlined where a status chip
+             is not. */}
       <td>
-        <span class="ui-chip ui-chip--neutral">
+        <span class="ui-chip ui-chip--cat" style="--cat:${expenseCatHue(e.category)}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">${expCatIcon(e.category)}</svg>
           ${escHtml(e.category || 'Other')}
         </span>
@@ -571,29 +579,32 @@ function renderExpenses() {
       <td>${e._transfer || !e.addedByName
         ? '<span class="exp-dash">—</span>'
         : `<span class="exp-by" data-tip="Entered by ${escHtml(e.addedByName)}" data-tip-label="Added by">${escHtml(ledgerFirstName(e.addedByName))}</span>`}</td>
-      <td>
-        <div class="exp-acts">
-          ${''/* THE RECEIPT EYE SITS WITH THE ACTIONS (owner, 2026-09-23,
-                 second pass: "the receipt icon should be adjacent to the
-                 actions button if the expense has a receipt").
+      ${''/* THE RECEIPT KEEPS A COLUMN OF ITS OWN (owner, 2026-09-23, third
+             pass: "add column for receipt again because it squeezes the other
+             buttons out of the page").
 
-                 It had a column of its own, which spent a tenth of the table's
-                 width on one icon and, on the rows with no receipt, on a dash.
-                 It is an ACTION — it opens something — so it belongs with the
-                 other two, and it appears only when there is a receipt to
-                 open. A row without one simply has two buttons instead of
-                 three, which is exactly what it means.
+             It was moved into the Actions group on the second pass, on the
+             reasoning that it opens something and is therefore an action. The
+             measurement says otherwise: three icon buttons made Actions 136px
+             wide in a table that already wanted 1262px inside a 1104px
+             wrapper, so the group pushed Edit and Delete off the visible page.
 
-                 FIRST in the group, because it is the only non-destructive
-                 one and because a control that appears and disappears must not
-                 shift Edit and Delete under a cursor that is already moving
-                 towards them. */}
-          ${!e._transfer && e.receipt ? `<button class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
+             A column is also honest about what it is. Whether a receipt EXISTS
+             is a property of the record — the same kind of fact as its vendor
+             or its method — and a dash in that column says "no receipt on
+             file", which is a thing a warden needs to see at a glance while
+             doing a month's reconciliation. As a button that simply was not
+             there, absence said nothing. */}
+      <td class="exp-rcptc">${e._transfer || !e.receipt
+        ? '<span class="exp-dash">—</span>'
+        : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon exp-rcpt-btn"
              onclick="event.stopPropagation();expOpenReceipt('${e.id}')"
              title="View receipt"
              aria-label="View the receipt attached to this ${escHtml(e.category || 'expense')} record">
              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-           </button>` : ''}
+           </button>`}</td>
+      <td>
+        <div class="exp-acts">
           <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="${e._transfer?`showEditTransferModal('${e.id}')`:`showEditExpenseModal('${e.id}')`}" title="Edit" aria-label="Edit this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ui-btn ui-btn--danger ui-btn--sm ui-btn--icon" onclick="${e._transfer?`deleteTransfer('${e.id}')`:`deleteExpense('${e.id}')`}" title="Delete" aria-label="Delete this ${escHtml(e.category || 'expense')} record"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
@@ -628,16 +639,12 @@ function renderExpenses() {
                  student. */}
           ${th('handedTo','Vendor')}
           ${th('addedByName','Added by')}
-          ${''/* NO RECEIPT COLUMN. The eye moved into the Actions group on
-                 2026-09-23 — it opens something, so it is an action, and a
-                 column of one icon spent a tenth of the table on a dash for
-                 every record without one. The workbook still carries a Receipt
-                 column, where "Attached" is a value you filter on. */}
+          <th>Receipt</th>
           <th>Actions</th>
         </tr></thead>
         <tbody>
           ${_pg.total===0
-            ? `<tr><td colspan="8"><div class="ui-empty">
+            ? `<tr><td colspan="9"><div class="ui-empty">
                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
                  <div class="ui-empty__t">No expenses match these filters.</div></div></td></tr>`
             : rows}

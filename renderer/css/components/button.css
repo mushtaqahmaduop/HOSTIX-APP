@@ -54,9 +54,19 @@
    The border is a COLOUR change only — `.ui-btn` is already `1px solid
    transparent`, so nothing moves and no row grows. */
 .ui-btn--ghost { color: var(--text-secondary); }
+/* THE HOVER IS NOT NEUTRAL (owner, 2026-09-23, third pass). The first attempt
+   gave it `--border-strong` and `--surface-hover` — a grey rule on a grey
+   ground, which is what a DISABLED control looks like, so the button that was
+   supposed to have woken up read as one that had gone to sleep.
+
+   It takes the accent, which is the same shape `--ghost-danger` takes in the
+   danger role: a tint, the role's ink, and a border of the role's own colour.
+   Hue on hover is not decoration — it is the interaction STATE, which is
+   exactly what the design system reserves colour for, and it is why Delete has
+   always been allowed its red here. */
 .ui-btn--ghost:hover:not(:disabled) {
-  background: var(--surface-hover); color: var(--text-primary);
-  border-color: var(--border-strong);
+  background: var(--accent-soft); color: var(--accent-strong);
+  border-color: var(--accent);
 }
 
 .ui-btn--danger { background: var(--danger-bg); color: var(--danger-fg); }

@@ -335,19 +335,59 @@ function methodHue(name) {
 const EXPENSE_CAT_HUES = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6',
                           '#3b82f6','#8b5cf6','#ec4899','#84cc16','#06b6d4'];
 
+/* ONE STABLE LIST, INDEXED EVENLY.
+
+   The colour a category takes must be (a) the same on every screen and every
+   call, (b) unchanged when the owner DRAGS the categories into a new order in
+   Settings, and (c) as far from its neighbours' as a ten-hue ramp allows.
+
+   The version before this built its list per call, from Settings plus
+   whichever single name was being asked about. So the list — and therefore
+   every index in it — changed depending on the question: asking about
+   "Plumbing" produced an 11-name list and asking about "Owner Transfer"
+   produced a 12-name one, and the two landed on the SAME hue from different
+   positions. Two categories, one colour, on a page that had just started using
+   colour to tell them apart.
+
+   A hash of the name was the obvious repair and is the wrong one: djb2 over a
+   ten-entry ramp put sixteen real categories onto seven hues with three-way
+   collisions while three hues went unused. A hash spreads well over a large
+   space and badly over a tiny one.
+
+   So: ONE universe of names, built the same way whoever is asking — every
+   category Settings knows plus every category actually written on a record —
+   sorted, and indexed. Even spread by construction, identical from any call
+   site, and a drag in Settings cannot move it because the list is sorted
+   rather than taken in the owner's order.
+
+   ADDING a category can still shift the hues after it alphabetically. That is
+   the one cost, it is cosmetic, and it is the trade the even spread is worth:
+   a reader notices two categories sharing a colour today far more than they
+   notice a category changing colour the day a new one is created.
+
+   Past ten categories the ramp repeats, which no arithmetic can avoid. The
+   chip carries an icon and the word as well, which is why a repeat is a
+   repeat and not a collision of meaning. */
+function _expCatNames() {
+  const out = new Set();
+  const add = v => { const s = String(v || '').trim().toLowerCase(); if (s) out.add(s); };
+  if (typeof DB !== 'undefined' && DB) {
+    ((DB.settings && DB.settings.expenseCategories) || []).forEach(add);
+    (DB.expenses || []).forEach(e => add(e && e.category));
+    (DB.issues   || []).forEach(i => add(i && i.category));
+  }
+  return [...out].sort();
+}
+
 function expenseCatHue(name) {
   const k = String(name || '').trim().toLowerCase();
   if (!k) return '#94A3B8';
-  const known = ((typeof DB !== 'undefined' && DB.settings && DB.settings.expenseCategories) || [])
-    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean);
-  /* A category can sit on a record while being absent from Settings — one the
-     owner deleted, or Fund Transfer on an install that removed it. It still
-     needs a colour and still must not take one already spoken for, so it joins
-     the same ordering rather than falling to a grey two of them would share. */
-  if (known.indexOf(k) < 0) known.push(k);
-  const names = [...new Set(known)].sort();
-  const i = names.indexOf(k);
-  return i < 0 ? '#94A3B8' : EXPENSE_CAT_HUES[i % EXPENSE_CAT_HUES.length];
+  const names = _expCatNames();
+  let i = names.indexOf(k);
+  // A name nothing has heard of yet — a category being typed into the form —
+  // sorts into the same list rather than falling to a grey.
+  if (i < 0) { const all = [...names, k].sort(); i = all.indexOf(k); }
+  return EXPENSE_CAT_HUES[i % EXPENSE_CAT_HUES.length];
 }
 
 /* ── CHARGES RESOLVER — the ONLY place that answers "what is owed per month" ──

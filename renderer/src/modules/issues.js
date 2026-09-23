@@ -478,7 +478,7 @@ function renderIssues() {
              this file's own comment states and the first pass broke. Priority
              and status are states and keep their roles. */}
       <td>${i.category
-            ? `<span class="ui-chip ui-chip--neutral">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
+            ? `<span class="ui-chip ui-chip--cat" style="--cat:${expenseCatHue(i.category)}">${_issCatIcon(i.category)}${escHtml(i.category)}</span>`
             : '<span class="iss-dash">—</span>'}</td>
       <td>${i.priority
             ? `<span class="ui-chip ${PH[i.priority]||'ui-chip--warning'}">${escHtml(i.priority)}</span>`

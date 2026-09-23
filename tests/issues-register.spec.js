@@ -169,7 +169,7 @@ test('the register is a ten-column table, and a legacy record still renders in i
   await app.close();
 });
 
-test('category chips are neutral; priority and status keep their hue', async () => {
+test('a category is coloured but outlined; priority and status stay solid', async () => {
   test.setTimeout(240000);
   const { app, win } = await launch();
   await seed(win);
@@ -178,8 +178,12 @@ test('category chips are neutral; priority and status keep their hue', async () 
     const grab = (n) => [...document.querySelectorAll(
       `#content .iss-table tbody tr td:nth-child(${n}) .ui-chip`)]
       .map(c => getComputedStyle(c).backgroundColor + '|' + getComputedStyle(c).color);
+    const border = (n) => [...document.querySelectorAll(
+      `#content .iss-table tbody tr td:nth-child(${n}) .ui-chip`)]
+      .map(c => getComputedStyle(c).borderTopWidth);
     return {
       cat: grab(5), prio: grab(6), status: grab(7),
+      catBorder: border(5), prioBorder: border(6), statusBorder: border(7),
       /* The Kind mark in column 1 marked which register a row belonged to. It
          was REMOVED on 2026-09-23, when Maintenance became a category — the
          Category chip already shows it, and the page no longer makes the
@@ -190,9 +194,27 @@ test('category chips are neutral; priority and status keep their hue', async () 
     };
   });
 
-  // Every category chip paints identically, whatever the category is.
-  expect(new Set(paint.cat).size).toBe(1);
+  /* ── A CATEGORY CARRIES ITS OWN COLOUR NOW (owner, 2026-09-23) ────────────
+     This asserted that every category chip painted identically — the
+     2026-09-16 ruling that hue is reserved for state. The owner reversed it
+     after their own expense reference drew categories coloured, and the
+     scanning it buys on an eleven-category register is real.
+
+     WHAT REPLACES THE OLD GUARANTEE IS THE SHAPE. Hue alone no longer
+     separates "Groceries" from "High priority", so the chip does: a CATEGORY
+     is a light tint inside a ruled edge, a ROLE chip is a solid tint with no
+     border. That is the property worth pinning, because it is the one that
+     keeps a red category from reading as a red state. */
+  expect(new Set(paint.cat).size, 'categories no longer carry their own colour')
+    .toBeGreaterThan(1);
   expect(paint.cat.length).toBeGreaterThan(1);
+
+  // The category is outlined; priority and status are not.
+  expect(new Set(paint.catBorder), 'a category chip lost its outline')
+    .toEqual(new Set(['1px']));
+  expect(new Set([...paint.prioBorder, ...paint.statusBorder]),
+    'a role chip grew an outline and now looks like a category')
+    .toEqual(new Set(['0px']));
 
   // The kind mark is gone — Maintenance is a category now, not a second class.
   expect(paint.kind, 'the kind glyph came back beside the category chip').toEqual([]);
