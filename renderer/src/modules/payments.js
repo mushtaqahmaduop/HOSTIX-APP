@@ -3775,6 +3775,12 @@ function showEditPaymentModal(id) {
      student's current price. */
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
+  /* A record another account collected on is not editable here, but its
+     PENDING balance is still collectable by anyone who may take payments
+     (ownership.js, owner 2026-09-23). The form is built for both.
+     `canRcvOnly` is the case that did not exist before today. */
+  const canRcv = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false, reason: '' };
+  const canRcvOnly = !canEd.ok && canRcv.ok;
   const _bundled = serviceModel() === 'rent_mess_bundled';
   /* A month charged by days (step 9) shows its own figures too: the student's
      current price is a whole month, and saving that unchanged would un-prorate it. */
@@ -3842,7 +3848,9 @@ function showEditPaymentModal(id) {
     </div>`, `
     ${!held ? '' : `<div class="pef-lock${canEd.ok ? '' : ' is-view'}" id="pef-lock">${icon('lock','sm')}<span>${canEd.ok
         ? `<b>${fmtPKR(money(p.amount))} has been collected on this record.</b> You can change the charges, add extras or receive the pending amount below. What was collected and the month stay as recorded; to take money back use Reverse a collection. Changing a charge needs a reason.`
-        : `<b>${escHtml(canEd.reason)}</b> This record is view-only for you.`}</span></div>`}
+        : canRcvOnly
+          ? `<b>${escHtml(canEd.reason)}</b> You can still receive the ${fmtPKR(calculateOutstanding(p))} pending below — it is recorded as collected by you. Their collection and this month's charges stay as they are.`
+          : `<b>${escHtml(canEd.reason)}</b> This record is view-only for you.`}</span></div>`}
     <div class="pef-layout">
       <div class="pef-main">
 
@@ -4059,7 +4067,10 @@ function showEditPaymentModal(id) {
       </aside>
     </div>`,
   !canEd.ok
-    ? `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`
+    ? (canRcvOnly
+        ? `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+           <button class="btn btn-primary" onclick="submitEditPayment('${id}')">${icon('save','sm')} Receive payment</button>`
+        : `<button class="btn btn-secondary" onclick="closeModal()">Close</button>`)
     : `${held
          ? `<button class="btn btn-danger btn-sm pef-foot-del" disabled title="${escHtml(ownCanDelete(p).reason)}">${icon('trash','sm')} Delete Payment</button>`
          : `<button class="btn btn-danger btn-sm pef-foot-del" onclick="deletePayment('${id}')">${icon('trash','sm')} Delete Payment</button>`}
@@ -4082,8 +4093,16 @@ function showEditPaymentModal(id) {
     pefNoteCount();
     // View-only for an account that may not change this record's money.
     if (!canEd.ok) {
+      /* THE CHARGES LOCK; THE COLLECTION DOES NOT. On a record this account
+         may not edit but may still collect against, the four fields that
+         describe the NEW money — how much, how, when, and its reference —
+         stay live, and everything that describes the month or somebody
+         else's collection is locked. Notes are locked with them: the field
+         is one shared line on the record, and saving it would overwrite
+         what its collector wrote. */
+      const _live = canRcvOnly ? ['f-precv','f-pmethod','f-pdate','f-pref'] : [];
       ['f-pcombo','f-ptype','f-precv','pef-full','f-padmfee','f-pconcession','f-pconcession-desc',
-       'f-pmethod','f-pmonth','f-pdate','f-pref','f-pnotes'].forEach(fid => {
+       'f-pmethod','f-pmonth','f-pdate','f-pref','f-pnotes'].filter(fid => _live.indexOf(fid) === -1).forEach(fid => {
         const el = document.getElementById(fid);
         if (el) { el.setAttribute('disabled', ''); el.removeAttribute('onclick'); }
       });
@@ -4225,7 +4244,58 @@ async function submitEditPayment(id) {
   /* Step 6, refused here as well as on the form (ownership.js). */
   const held  = ownHeld(p);
   const canEd = ownCanEdit(p);
-  if (!canEd.ok) { toast(canEd.reason, 'error'); return; }
+  /* ══ RECEIVE-ONLY (owner, 2026-09-23) ════════════════════════════
+     An account that may not edit this record may still collect what is
+     pending on it. That path takes NONE of the form's charge fields — they
+     were disabled on screen, and a disabled field is a UI fact, not a
+     guarantee. Reading them here and writing them back would let a crafted
+     DOM rewrite a month somebody else is answerable for, so this branch
+     never touches the bill at all: it reads the four collection fields,
+     applies the money, and returns.
+
+     It is deliberately a separate exit rather than a flag threaded through
+     the long path below. The rule is 'this account writes no charge', and a
+     branch that cannot reach the charge-writing code proves it. */
+  if (!canEd.ok) {
+    const rcv = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false, reason: '' };
+    if (!rcv.ok) { toast(canEd.reason, 'error'); return; }
+
+    const dueNow = calculateOutstanding(p);
+    const el     = document.getElementById('f-precv');
+    const raw    = String(el ? el.value : '').trim();
+    if (!raw) { toast('Enter what you are receiving.', 'error'); if (el) el.focus(); return; }
+    if (!/^[0-9]+$/.test(raw)) {
+      toast('Receive pending takes a whole number of rupees.', 'error'); if (el) el.focus(); return;
+    }
+    const amt = money(Number(raw));
+    if (amt <= 0) { toast('Enter what you are receiving.', 'error'); if (el) el.focus(); return; }
+    if (amt > dueNow) {
+      toast('You can receive up to ' + fmtPKR(dueNow) + ' — what is pending on this month.', 'error');
+      if (el) el.focus(); return;
+    }
+    const mth = document.getElementById('f-pmethod')?.value || p.method || 'Cash';
+    const dte = document.getElementById('f-pdate')?.value   || today();
+    const ref = (document.getElementById('f-pref')?.value || '').trim();
+    // Step 10, the same confirmation any other collection needs.
+    if (pinNeeded() && !(await pinConfirm({ what: 'receiving ' + fmtPKR(amt) }))) return;
+
+    const got = applyPayment(p, { amount: amt, method: mth, date: dte,
+                                  note: 'Pending received', reference: ref,
+                                  receiptId: newReceiptId() });
+    if (!got || !got.ok) { toast('That payment could not be recorded.', 'error'); return; }
+    if (!p.date) p.date = dte;
+    ledgerTrack(p, { why: 'Pending received' });
+    logActivity('Payment Collected',
+      `${p.studentName || ''} — ${p.month || ''} · ${fmtPKR(amt)} received`, 'Finance');
+    await saveDB();
+    closeModal();
+    renderPage(currentPage === 'payments' ? 'payments' : currentPage);
+    const left = calculateOutstanding(p);
+    toast(fmtPKR(amt) + ' received — '
+        + (left > 0 ? fmtPKR(left) + ' still owed on this month' : 'this month is settled'),
+        'success', 'Payment received');
+    return;
+  }
   // pfRentAmount(): the hidden rent half of the combined Amount box.
   const monthlyRent  = pfRentAmount();
   const messIncluded = document.getElementById('f-pmess-on')?.checked !== false;
@@ -4638,8 +4708,13 @@ function payRowMenu(id, btn) {
   /* Step 6 (ownership.js): everyone sees every action; the ones this account
      may not use are disabled with the reason under them. */
   const ed = ownCanEdit(p), dl = ownCanDelete(p);
+  /* The verb has to be the truth, or a warden reads 'View payment' and
+     walks away from a student who is standing there with the rent
+     (owner, 2026-09-23). */
+  const rc = typeof ownCanReceive === 'function' ? ownCanReceive(p) : { ok: false };
   const items = [
-    { label: ed.ok ? 'Edit payment' : 'View payment', svg: S.edit, on: "showEditPaymentModal('" + id + "')" },
+    { label: ed.ok ? 'Edit payment' : (rc.ok ? 'Receive payment' : 'View payment'),
+      svg: S.edit, on: "showEditPaymentModal('" + id + "')" },
     { label: 'Print receipt', svg: S.receipt, on: "printReceipt('" + id + "')" },
   ];
   if (money(p.amount) > 0) {

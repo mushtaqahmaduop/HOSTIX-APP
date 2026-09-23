@@ -2069,7 +2069,7 @@ function stuLedgerMenu(payId, studentId, btn) {
     + '<button role="menuitem" onclick="closeStuRowMenu();printReceiptFromStudentView(\'' + a + '\',\'' + b + '\')">'
       + icon('receipt', 'sm') + 'Print receipt</button>'
     + '<button role="menuitem" onclick="closeStuRowMenu();editPaymentFromStudentView(\'' + a + '\',\'' + b + '\')">'
-      + icon('edit', 'sm') + (typeof ownCanEdit === 'function' && !ownCanEdit(p).ok ? 'View payment' : 'Edit payment') + '</button>'
+      + icon('edit', 'sm') + (typeof ownCanEdit === 'function' && !ownCanEdit(p).ok? (typeof ownCanReceive === 'function' && ownCanReceive(p).ok ? 'Receive payment' : 'View payment'): 'Edit payment') + '</button>'
     + '<div class="stu-rmenu__sep"></div>'
     /* Delete only a record holding no money (warden ledger step 6). */
     + (typeof ownCanDelete === 'function' && !ownCanDelete(p).ok

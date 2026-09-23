@@ -50,6 +50,7 @@ const H = vm.runInContext(`({
   ledgerTrack, ledgerLoaded, ledgerImportIfEmpty,
   handoverSync, hoPendingLines, hoSum, hoByMethod, hoOpenFor, hoItems, hoLabel, hoHue,
   hoEvaluate, hoSend, hoTakeBack, hoApprove, hoFlag, hoAlerts, hoMarkSeen,
+  hoRecordReceived, hoNeedsHandover,
   as: id => { CUR_ROLE = id; CUR_USER = WARDENS[id]; },
   log: () => LOG,
 })`, sandbox);
@@ -241,6 +242,84 @@ ok('the bell tells an approver what waits, and a warden what happened until seen
   assert.ok(H.hoMarkSeen('w_sara') >= 1);
   assert.ok(!H.hoAlerts().some(a => /part approved/.test(a.msg)));
   assert.ok(H.log().some(l => /Handover Part Approved/.test(l)));
+});
+
+
+// ── the admin records one they received ──────────────────────────────
+/* Owner, 2026-09-23: a warden hands the admin cash, or sends a transfer, while
+   the admin is the one signed in. Until this there was no way to write that
+   down — a handover could only ever start with the warden pressing Send, which
+   is also why the admin had nothing to confirm.
+
+   LAST IN THE FILE ON PURPOSE. Every test above shares one fixture, passed
+   hand to hand: the alert test reads the part-approved handover the review
+   tests left behind. These call start(), which wipes DB.handovers, so put them
+   anywhere earlier and they break a test that is not about them. */
+
+ok('an admin records a handover received, and it settles at once', () => {
+  start();
+  const holding = H.hoSum(H.hoPendingLines('w_sara'));
+  assert.ok(holding > 0, 'the fixture should be holding money');
+  H.as('owner');
+  const r = H.hoRecordReceived('w_sara', { note: 'JazzCash transfer' });
+  assert.strictEqual(r.ok, true, r.reason);
+  const h = r.handover;
+  assert.strictEqual(h.status, 'approved');
+  assert.strictEqual(h.totalAmount, holding);
+  assert.strictEqual(h.approvedAmount, holding);
+  assert.strictEqual(h.wardenId, 'w_sara');
+  assert.strictEqual(h.adminName, 'Owner');
+  // What tells it apart from one the warden sent.
+  assert.strictEqual(h.recordedBy, 'owner');
+  assert.strictEqual(h.recordedByName, 'Owner');
+  assert.strictEqual(H.hoSum(H.hoPendingLines('w_sara')), 0, 'the warden still holds it');
+  assert.ok(H.hoItems(h.id).every(x => x.item.outcome === 'approved'));
+  // It reads like a reviewed one: the count is stored per method.
+  sameMap(h.counted, h.expected, 'what was recorded must equal what was owed');
+  assert.ok(Object.keys(h.countedHow).every(m => h.countedHow[m] === 'recorded'));
+});
+
+ok('it is recorded against the warden, so their own account shows it', () => {
+  const mine = (DB.handovers || []).filter(x => x.wardenId === 'w_sara');
+  assert.strictEqual(mine.length, 1);
+  assert.strictEqual(mine[0].status, 'approved');
+  /* Not seen: the warden was not there when it was written down. The bell is
+     what tells them, and hoAlerts() reads wardenSeenAt to decide. */
+  assert.strictEqual(mine[0].wardenSeenAt, null);
+  H.as('w_sara');
+  assert.ok(H.hoAlerts().some(a => /was approved/.test(a.msg)),
+    'the warden is never told the money was taken');
+});
+
+ok('an admin cannot record a handover from themselves', () => {
+  H.as('owner');
+  const r = H.hoRecordReceived('owner', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/from yourself/i.test(r.reason), r.reason);
+});
+
+ok('only an account that manages users may record one', () => {
+  start();
+  H.as('w_ali');
+  const r = H.hoRecordReceived('w_sara', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/manages users/i.test(r.reason), r.reason);
+});
+
+ok('it refuses when the warden already sent one — that is a review, not a record', () => {
+  start();
+  H.as('w_sara');
+  assert.strictEqual(H.hoSend('w_sara').ok, true);
+  H.as('owner');
+  const r = H.hoRecordReceived('w_sara', {});
+  assert.strictEqual(r.ok, false);
+  assert.ok(/waiting for review/i.test(r.reason), r.reason);
+});
+
+ok('it refuses when the account is holding nothing', () => {
+  start();
+  H.as('owner');
+  assert.strictEqual(H.hoRecordReceived('w_ali', {}).ok, false);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
