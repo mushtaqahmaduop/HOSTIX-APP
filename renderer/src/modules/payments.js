@@ -497,7 +497,113 @@ function payFiltered() {
    lives in the column heading. */
 
 /** "17,000.00" — the reference's money shape. */
+/* ── WHAT THE PAYMENT WAS MADE OF ────────────────────────────────────────────
+   The hover card on Amount Paid, replacing the Adm. Fee / Extra / Concession
+   columns (owner, 2026-09-23). Refunds join them: they never had a column at
+   all, and "why is this row's paid figure lower than it was" is exactly the
+   question the card exists to answer.
+
+   ONLY WHAT HAPPENED IS NAMED. A row with no fee, no extra, no concession and
+   no refund — which is most rows in most months — says so in one line instead
+   of printing three zeroes across three columns. That asymmetry is the whole
+   reason these stopped being columns.
+
+   EVERY FIGURE IS READ THE SAME WAY THE COLUMNS READ IT, off the record's own
+   fields through the same fallbacks calculateReportTotals() uses, so the card
+   and the exports cannot disagree about one record.
+
+   Plain text, not markup: `data-tip` is an attribute, and the tooltip escapes
+   what it is given. Newlines survive — `.ui-tip` is `white-space:pre-wrap`.
+
+   AND IT IS WRITTEN THE WAY THE CELL IT HANGS OFF IS WRITTEN. These lines used
+   fmtPKR(), the app's canonical formatter, which carries no decimals — so the
+   card read "Rs. 14,500" beside a cell reading "Rs. 14,500.00": the same figure
+   in two shapes, a hover apart. That was invisible while the register's
+   two-decimal money sat under a "(Rs.)" heading with nothing beside it to
+   compare against; moving the currency word into the cell put the two together.
+
+   payCash() is that shape, and a card explaining the register's figure follows
+   the register. */
+function payPaidParts(p, chg) {
+  const num = v => Number(v || 0);
+  const out = [];
+  const fee = num(p.admissionFee != null ? p.admissionFee : p.fee);
+  if (fee > 0) out.push('Admission fee   ' + payCash(fee));
+
+  const extras = Array.isArray(p.extraCharges) ? p.extraCharges.filter(c => c && num(c.amount) > 0) : [];
+  if (extras.length) {
+    extras.forEach(c => out.push((c.label ? String(c.label) : 'Extra charge') + '   ' + payCash(c.amount)));
+  } else if (num(p.extraTotal) > 0) {
+    out.push('Extra charges   ' + payCash(p.extraTotal));
+  }
+
+  const conc = num(p.concession != null ? p.concession : p.discount);
+  if (conc > 0) {
+    const why = String(p.concessionDesc || '').trim();
+    out.push('Concession   \u2212' + payCash(conc) + (why ? '  (' + why + ')' : ''));
+  }
+
+  /* `p.reversals` — money that went back OUT, which REDUCES what the row
+     shows as paid. Each carries its own reason where one was given.
+
+     */
+  const revs = Array.isArray(p.reversals) ? p.reversals.filter(r => r && num(r.amount) > 0) : [];
+  revs.forEach(r => {
+    const why = String(r.reason || r.note || '').trim();
+    out.push('Refunded   \u2212' + payCash(r.amount) + (why ? '  (' + why + ')' : ''));
+  });
+
+  return out;
+}
+
+/** The `data-tip` attribute for the Amount Paid cell, or '' when there is
+    nothing to explain beyond the figure itself. */
+function payPaidTip(p, chg, paid) {
+  const parts = payPaidParts(p, chg);
+  const head  = 'Collected   ' + payCash(paid);
+  const body  = parts.length
+    ? head + '\n' + parts.join('\n')
+    : head + '\nNo admission fee, extra charge, concession or refund on this record.';
+  return ' data-tip="' + escHtml(body) + '" data-tip-label="Payment breakdown" data-tip-always';
+}
+
+/* ── WHO PUT THE FIGURE THERE ────────────────────────────────────────────────
+   "Added by X" until somebody edits the record, then "Edited by X" (owner,
+   2026-09-23). The editor wins when both are known: the question a byline
+   answers is who to ask about this figure, and after an edit that is whoever
+   changed it. Both are kept on the record.
+
+   `collectedBy` has been written since long before this — it is the account
+   that recorded the collection — so "Added by" is answerable for every
+   existing record. `editedByName` starts today, which is why a record edited
+   last week still reads "Added by": that is the honest answer, not a guess. */
+function payByline(p) {
+  const ed = String((p && p.editedByName) || '').trim();
+  const by = String((p && p.collectedBy) || '').trim();
+  const who = ed || by;
+  if (!who) return '';
+  const verb = ed ? 'Edited by' : 'Added by';
+  return '<div class="pay-by" data-tip="' + escHtml(verb + ' ' + who) + '" data-tip-always>'
+       + escHtml(verb + ' ' + ledgerFirstName(who)) + '</div>';
+}
+
+/* THE FIGURE CARRIES ITS CURRENCY (owner, 2026-09-23: "we will use the Rs.
+   with the amounts and remove from heading because we have no space").
+
+   "Rs." lived in the column HEADING — "Charge / Month (Rs.)" — on two lines,
+   which cost the row's three money columns a line of header height each and
+   said the word three times for something every figure on the page shares.
+   With three columns folding into a hover card on the same day, the heading is
+   the one place it was no longer paying for itself.
+
+   Two decimals stay: they are the owner's own example ("1400.0 or 1400.00")
+   and the shape fmtPKR uses everywhere else. `payCashBare()` keeps the
+   figure alone for the places a currency word would be a second one — inside
+   the hover card, whose own heading names it once. */
 function payCash(n) {
+  return 'Rs. ' + payCashBare(n);
+}
+function payCashBare(n) {
   return Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -777,22 +883,41 @@ function renderPayments() {
           ${th('student', 'Student')}
           ${th('room', 'Room', 'pay-col-room')}
           ${th('month', 'Month', 'pay-col-mo')}
-          ${th('rent', 'Charge / Month<br>(Rs.)', 'pay-col-num')}
-          ${th('paid', 'Amt. Paid<br>(Rs.)', 'pay-col-num')}
-          ${th('unpaid', 'Unpaid<br>(Rs.)', 'pay-col-num')}
-          ${''/* The three secondary money columns keep .pay-col-x — they are
-                 always visible (payments spec §23, §46) — and now sit with the
-                 other figures, where the reference draws them. */}
-          ${th('adm', 'Adm. Fee<br>(Rs.)', 'pay-col-num pay-col-x')}
-          ${th('extra', 'Extra<br>(Rs.)', 'pay-col-num pay-col-x')}
-          ${th('conc', 'Concession<br>(Rs.)', 'pay-col-num pay-col-x')}
+          ${''/* NO "(Rs.)" ON A HEADING. Every figure in these three columns
+                 now carries its own currency; the heading said the word three
+                 times and spent a second line of header height doing it. */}
+          ${th('rent', 'Charge / Month', 'pay-col-num')}
+          ${th('paid', 'Amount Paid', 'pay-col-num')}
+          ${th('unpaid', 'Unpaid', 'pay-col-num')}
+          ${''/* ══ ADMISSION FEE, EXTRA CHARGES, CONCESSION AND REFUNDS ARE A
+                 HOVER CARD NOW (owner, 2026-09-23: "these columns are taking
+                 much of our page viewport and almost empty most of the time").
+
+                 They were three fixed columns — four facts, counting refunds,
+                 which had no column at all — and on a normal month every one
+                 of them reads 0.00 for nearly every row. That is roughly a
+                 quarter of the table's width spent on the exception.
+
+                 They are not dropped: they hang off AMOUNT PAID, which is the
+                 figure they explain. Hovering a payment says what the money
+                 was made of — the fee, each extra with its own label, the
+                 concession with its reason, and anything refunded — and a row
+                 with none of them says so in one line rather than in three
+                 zeroes.
+
+                 The EXPORTS keep their columns. A spreadsheet is where a
+                 warden totals a month's admission fees, and a hover card
+                 cannot be summed. */}
           ${th('method', 'Method')}
-          ${th('paidon', 'Paid on', 'pay-col-date')}
           ${th('status', 'Status')}
+          ${''/* Status before Date, as `pay.png` draws it: the state is what a
+                 reader scans for and the date is what they check once they
+                 have found it. */}
+          ${th('paidon', 'Date', 'pay-col-date')}
           <th class="pay-col-act">Actions</th>
         </tr></thead>
         <tbody>
-        ${_pg.slice.length === 0 ? `<tr><td colspan="15"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
+        ${_pg.slice.length === 0 ? `<tr><td colspan="12"><div class="ui-empty"><div class="ui-empty__t">No payment records match these filters.</div></div></td></tr>` :
         _pg.slice.map((p, i) => {
           const st     = DB.students.find(s => s.id === p.studentId);
           const room   = DB.rooms.find(r => String(r.number) === String(p.roomNumber));
@@ -832,40 +957,70 @@ function renderPayments() {
             ${''/* No room type under the box here (owner, 2026-09-15: "remove the
                    seater from under the room number in payment page") — it moved
                    inside the room label on the Students register instead. */}
-            <td class="pay-col-room">${roomLabel(p.roomNumber, room && room.floor)}</td>
+            ${''/* THE STUDENTS REGISTER'S ROOM LABEL (owner, 2026-09-23:
+                   "redesign the room label just like the students page room
+                   label"). `roomLabel()` draws listkit's stacked pill; this is
+                   `.ui-room--wide` — the number in its own box with the floor
+                   beside it, the shape the cancellations register drew first
+                   and the students register took on 2026-09-22. The number
+                   hugs its digits and never shrinks; the floor gives way. */}
+            <td class="pay-col-room">
+              <div class="ui-room ui-room--wide">
+                <span class="ui-room__n" data-tip="${p.roomNumber?'Room '+escHtml(String(p.roomNumber)):'No room recorded'}" data-tip-label="Room">${p.roomNumber?escHtml(String(p.roomNumber)):'—'}</span>
+                ${room && room.floor ? `<span class="ui-room__m"><span class="ui-room__t" data-tip="${escHtml(String(room.floor))} Floor" data-tip-label="Floor">${escHtml(floorShort(room.floor))}</span></span>` : ''}
+              </div>
+            </td>
             <td class="pay-col-mo">
-              <span title="${escHtml(monthLabel(p.month) || '')}">${escHtml(payMonthTick(p))}</span>
+              <span data-tip="${escHtml(monthLabel(p.month) || '')}" data-tip-label="Month" data-tip-always>${escHtml(payMonthTick(p))}</span>
               ${arrear ? '<div><span class="ui-chip ui-chip--warning" title="Unpaid balance carried over from an earlier month — collect it here">Arrears</span></div>' : ''}
             </td>
-            <td class="pay-col-num"><span class="pay-num pay-num--strong" title="${escHtml(payChargeTitle(chg))}">${payCash(chg.monthly || p.amount)}</span></td>
-            <td class="pay-col-num"><span class="pay-num${paid > 0 ? ' pay-num--in' : ''}">${payCash(paid)}</span></td>
-            <td class="pay-col-num"><span class="pay-num ${unpaid > 0 ? 'pay-num--due' : 'pay-num--strong'}">${payCash(unpaid)}</span></td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num">${payCash(admFee)}</span></td>
-            ${''/* WHAT THE MONEY WAS FOR, UNDER THE FIGURE (owner, 2026-09-16:
-                   "if a warden collects an extra charge it should show its
-                   reason"). Both reasons were already on the record and both
-                   were only reachable by hovering — which is no use on a
-                   printed page, on a touch screen, or to anyone scanning the
-                   column to find out why one student was charged 2,300 more
-                   than the rest. The full text stays on the title for the
-                   cases the column is too narrow to hold. */}
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${extras.length ? ` title="${escHtml(extras.map(c => (c.label ? c.label + ': ' : '') + fmtPKR(c.amount)).join(' · '))}"` : ''}>${payCash(extraT)}</span>${
-              extraT > 0 && extras.length
-                ? `<span class="pay-why">${escHtml(extras.map(c => c.label).filter(Boolean).join(', ') || 'Extra charge')}</span>`
-                : ''}</td>
-            <td class="pay-col-num pay-col-x"><span class="pay-num"${conc > 0 && concD ? ` title="${escHtml(concD)}"` : ''}>${payCash(conc)}</span>${
-              conc > 0 ? `<span class="pay-why">${escHtml(concD || 'No reason recorded')}</span>` : ''}</td>
+            ${''/* THE CHARGE IS THE REFERENCE, NOT THE EVENT. It used to be
+                   .pay-num--strong — 700, full-strength ink, the same weight
+                   the collected and outstanding figures carry. Three 700s in a
+                   row is no hierarchy at all: the eye has nowhere to land, and
+                   the one figure that changes month to month (what was
+                   actually collected) looked exactly like the one that does
+                   not. `--ref` steps it back to the secondary ink; it is still
+                   a figure, still tabular, still aligned with the two beside
+                   it — it has simply stopped shouting. */}
+            <td class="pay-col-num"><span class="pay-num pay-num--ref" data-tip="${escHtml(payChargeTitle(chg))}" data-tip-label="Monthly charge" data-tip-always>${payCash(chg.monthly || p.amount)}</span></td>
+            ${''/* WHAT THE MONEY WAS MADE OF, ON THE FIGURE IT EXPLAINS. The
+                   admission fee, each extra with its own label, the concession
+                   with its reason and anything refunded used to be three
+                   always-empty columns; they are this card now. */}
+            ${''/* A ZERO IS THE LEAST INTERESTING FACT ON THE ROW, so it takes
+                   the quietest ink in both of these columns. Nothing collected
+                   yet reads `--nil`; nothing outstanding reads `--nil` too —
+                   it used to be `--strong`, which drew the eye to a settled
+                   row and away from the one still owing. What is left is that
+                   exactly two inks appear in a payments row's figures: green
+                   for money in, red for money still out, and neither can
+                   appear without meaning it. */}
+            <td class="pay-col-num"><span class="pay-num ${paid > 0 ? 'pay-num--in' : 'pay-num--nil'}"${payPaidTip(p, chg, paid)}>${payCash(paid)}</span></td>
+            <td class="pay-col-num"><span class="pay-num ${unpaid > 0 ? 'pay-num--due' : 'pay-num--nil'}">${payCash(unpaid)}</span></td>
             <td>${paid > 0 ? pmBadge(p.method) : '<span class="pay-dash">—</span>'}</td>
+            <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
+            ${''/* THE DATE, AND WHO PUT IT THERE (owner, 2026-09-23: "below the
+                   payment date ... we should use the user name who added it or
+                   who edited it as Added by Hostyllo or Edited by Hostyllo in
+                   small italics").
+
+                   `Edited by` WINS WHEN BOTH ARE KNOWN, because the question a
+                   byline answers is "who do I ask about this figure", and after
+                   an edit that is the editor. The record keeps both.
+
+                   Italic, for the same reason the complaints register's is: it
+                   is an attribution, not a fact about the payment, and the
+                   slant is what stops three stacked lines reading as one
+                   block. */}
             ${(() => { const d = payLastCollectedOn(p);
+               const by = payByline(p);
                /* fmtDateShort, not fmtDate: it drops the year when it IS this
                   year, which is the same width decision the students register
-                  made for its status column. With the full date the column ran
-                  106px and pushed the table 39px past the 1366 floor, clipping
-                  Actions. The full date stays on the hover. */
+                  made for its status column. The full date stays on the hover. */
                return d
-                 ? `<td class="pay-col-date" title="${escHtml(fmtDate(d))}">${escHtml(fmtDateShort(d))}</td>`
-                 : '<td class="pay-col-date"><span class="pay-dash">—</span></td>'; })()}
-            <td><span class="ui-chip ${sCls}">${payStatusIcon(sLabel)}${escHtml(sLabel)}</span></td>
+                 ? `<td class="pay-col-date"><div class="pay-when" data-tip="${escHtml(fmtDate(d))}" data-tip-label="Paid on" data-tip-always>${escHtml(fmtDateShort(d))}</div>${by}</td>`
+                 : `<td class="pay-col-date"><span class="pay-dash">—</span>${by}</td>`; })()}
             <td class="pay-col-act">
               <button class="ui-btn ui-btn--secondary ui-btn--sm ui-btn--icon" onclick="event.stopPropagation();payRowMenu('${p.id}',this)"
                       aria-haspopup="menu" aria-label="Actions for ${escHtml(nm)}" title="Actions">
@@ -4167,6 +4322,14 @@ async function submitEditPayment(id) {
                             receiptId: newReceiptId() });
     if (!p.date) p.date = rcvDate;
   }
+  /* WHO EDITED IT (owner, 2026-09-23). `collectedBy` names the account that
+     RECORDED the collection and is never rewritten; this names whoever last
+     changed the record, which is who the date cell's byline then credits.
+     Both are kept, because "who took the money" and "who last touched the
+     figure" are different questions and a register is asked both. */
+  p.editedBy     = (typeof CUR_ROLE !== 'undefined' && CUR_ROLE) || null;
+  p.editedByName = (typeof CUR_USER !== 'undefined' && CUR_USER && CUR_USER.name) || '';
+  p.editedOn     = today();
   // Editing one month's record does NOT re-price the student.
   logActivity('Payment Updated', `${p.studentName||''} — ${p.month||''}`, 'Finance');
   if (got && got.ok) logActivity('Payment Collected',
@@ -4277,6 +4440,7 @@ function pfReverseHint() {
   const collected = money(parseFloat(inp.dataset.collected) || max);
   if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
   if (amt > max)  { el.textContent = 'More than you can reverse here (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
+
   el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected on this record.';
   el.className = 'pay-rev__hint';
 }

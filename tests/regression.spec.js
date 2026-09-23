@@ -395,10 +395,23 @@ test('payments: table pans by dragging, and CSV column order matches the table',
   });
   await win.waitForTimeout(700);
 
-  // The secondary columns exist in the DOM — a display:none column could never
-  // be scrolled into view, which is the whole point of panning.
+  /* THE ADMISSION FEE, EXTRAS AND CONCESSION ARE NO LONGER COLUMNS (owner,
+     2026-09-23: "these columns are taking much of our page viewport and almost
+     empty most of the time"). They hang off Amount Paid as a hover card, and
+     this test asserted the three `.pay-col-x` headings existed.
+
+     What it was really guarding is that those figures did not quietly vanish —
+     so that is what it guards now, in both places they have to survive: the
+     card on the figure they explain, and the workbook, whose sixteen columns
+     are still asserted in full further down. */
   expect(await win.locator('.pay-table th.pay-col-x').count(),
-    'secondary columns missing from the table').toBe(3);
+    'the secondary money columns are a hover card now, not columns').toBe(0);
+  const card = await win.locator('.pay-table tbody tr .pay-num--in, .pay-table tbody tr .pay-num--nil')
+    .first().getAttribute('data-tip');
+  expect(card, 'Amount Paid carries no breakdown card').toBeTruthy();
+  expect(card, 'the admission fee is not on the card').toMatch(/Admission fee/);
+  expect(card, 'the extra charge is not named on the card').toMatch(/Laundry/);
+  expect(card, 'the concession and its reason are not on the card').toMatch(/Concession[\s\S]*Sibling/);
 
   /* A width where the table genuinely overflows. The 2026-09-07 density pass
      brought the payments table down to ~1065px, which FITS the 1366 default —

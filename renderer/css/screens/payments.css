@@ -142,7 +142,6 @@
 .pay-who__meta svg { flex-shrink:0; }
 
 .pay-num        { white-space:nowrap; }
-.pay-num--strong{ font-weight:var(--weight-strong); color:var(--text-primary); }
 /* The two figures that are a state rather than a number: money in, money owed. */
 .pay-num--in    { color:var(--success-fg); font-weight:var(--weight-medium); }
 .pay-num--due   { color:var(--danger-fg); font-weight:var(--weight-strong); }
@@ -1255,21 +1254,6 @@ input.ws__amt {
     /* 28px -> 26px on four buttons and their gaps. The 40x40 pointer target is
        drawn by .pay-act::after and is unaffected by the visual size. */
     .pay-act { width: 26px; height: 26px; border-radius: 7px; }
-    /* AND THE LAST TWO PIXELS. "CONCESSION" is one ten-character word, so it
-       cannot wrap and cannot abbreviate, and the table is already exactly its
-       container's width — no column can grow. Its header was running a
-       character under the pinned Actions cell and reading "CONCESSIO".
-
-       The three columns it belongs to — ADM. FEE, EXTRA CHARGES, CONCESSION —
-       hold a dash in almost every row, so their padding is doing nothing for
-       legibility that the empty cell is not already doing. 6px -> 4px drops
-       each column's minimum by 4px, which is enough for the word and leaves
-       margin. Shrinking the header type was the alternative and was rejected:
-       the whole point of the 7 Sep small-type pass was that this app's labels
-       are already at the floor. */
-    .pay-table thead th.pay-col-x, .pay-table tbody td.pay-col-x {
-        padding-left: 4px; padding-right: 4px;
-    }
 }
 
 
@@ -1575,27 +1559,32 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
 }
 .pay-th { display:inline-flex; align-items:center; gap:4px; }
 .pay-th__l { display:inline-block; }
-/* EVERY FIGURE IN A ROW ON ONE LINE (owner review #11, 2026-09-18: "align
-   extra-charges and concession values with the row's values, reason below").
+/* ONE LINE ACROSS THE ROW (owner review #11, 2026-09-18; revisited 2026-09-23)
 
-   Measured at 1440: Paid, Unpaid and Adm. Fee all sat at y=314, while Extra
-   and Concession sat at y=305 — 9px high. Those two cells are the only ones
-   carrying a `.pay-why` reason under the figure, and `vertical-align: middle`
-   centres a two-line stack, which lifts its first line above the single-line
-   cells beside it. The money in a row did not read across.
+   The original rule top-aligned the numeric cells. It had to: Extra and
+   Concession each carried a `.pay-why` reason under the figure, and
+   `vertical-align: middle` centres a two-line stack, which lifted those two
+   figures 9px above the single-line cells beside them. The money in a row did
+   not read across.
 
-   Top-aligning the numeric cells puts every figure on the row's first line and
-   lets the reason hang beneath its own value, which is what was asked for. The
-   identity and status columns keep their centring. */
+   THOSE COLUMNS ARE A HOVER CARD NOW, so no cell in this table carries a
+   reason under a figure any more and the reason for top-aligning went with
+   them. Measured at 1366 it had started doing the opposite of its job: the
+   figures sat at 300 in a row whose centre is 310, with the room label at 310
+   and the method chip at 320 — three different heights across one row.
+
+   Everything is centred instead. The cells that now hold two lines — the
+   student's name over its coverage chip, the date over its byline — centre as
+   a pair, which is what puts them level with the single-line cells rather than
+   hanging above them. */
 .pay-table th.pay-col-num, .pay-table td.pay-col-num { text-align:center; }
-.pay-table td.pay-col-num { vertical-align:top; }
+.pay-table tbody td { vertical-align:middle; }
 .pay-table th.pay-col-num .pay-th { justify-content:center; text-align:center; }
 .pay-table th.pay-col-no, .pay-table td.pay-col-no { width:1%; text-align:center; color:var(--text3); font-variant-numeric:tabular-nums; }
 .pay-num {
     font-size:13px; font-weight:500; color:var(--text); white-space:nowrap;
     font-family:var(--ant-num-font); letter-spacing:var(--ant-num-track); font-variant-numeric:tabular-nums;
 }
-.pay-num--strong { font-weight:700; }
 .pay-num--in     { font-weight:700; color:var(--ant-success-fg); }
 .pay-num--due    { font-weight:700; color:var(--ant-danger-fg); }
 /* The coverage tag in the reference's colours: blue Rent + Mess, green Rent Only. */
@@ -1648,18 +1637,52 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
     .pay-num { font-size:12.5px; }
 }
 
-/* WHY A FIGURE IS THERE, under the figure (owner, 2026-09-16).
-   Italic and one step down, because it is an annotation on the number above it
-   and must never be mistaken for a second number. The column is right-aligned,
-   so this is too — a left-aligned caption under a right-aligned figure reads as
-   belonging to the cell beside it. */
-.pay-why {
-    display: block; margin-top: 2px;
-    font-size: var(--text-xs); font-style: italic; font-weight: var(--weight-normal);
-    color: var(--text-tertiary); text-align: right;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* ══ THREE RANKS IN A PAYMENTS ROW (owner, 2026-09-23: "enterprise and premium
+   redesign with typography and hierarchy") ══════════════════════════════════
+   The same ladder the expenses register was given the day before, read for
+   this table's subject. A payments row answers three questions, and they are
+   not equally interesting:
 
+     1  WHO, AND WHAT MOVED — the student's name, and the two figures that can
+        change: what was collected (green) and what is still owed (red). Full
+        weight, full-strength or signal ink.
+     2  THE FRAME — the room, the month, the monthly charge, the method, the
+        status, the date. Facts you check once you have found the row.
+        Secondary ink, medium weight.
+     3  THE MARGINALIA — the row number, a zero figure, and the byline under
+        the date. Present, never competing. Tertiary ink.
+
+   EVERY RULE IS STATED AT `.pay-table tbody td …`. The shared `.ui-table tbody
+   td` sets colour and weight at (0,1,2); a bare `.pay-num--ref` is (0,1,0) and
+   would lose to it silently — the declaration would sit in the stylesheet
+   looking applied and the cell would render in the table's default ink. This
+   is the same trap that cost the expenses amount its weight on 2026-09-22.
+
+   SIZE IS NOT PART OF THE LADDER. The columns were measured to exactly fill
+   the 1070px panel at the 1366 floor with nothing overflowing; raising the
+   collected figure a point would widen its column and take the space back off
+   Actions. Rank is carried by weight and ink, which cost no width — and the
+   owner asked for contrast, which is what those two are. */
+/* THE NAME IS WHAT A ROW IS. It sat at 500 among figures at 700 — carried
+   into first rank only by being a point larger and a shade darker, which is a
+   thin margin for the one cell a warden looks up by. 600 puts it level with
+   the money without out-shouting the two coloured figures, which keep 700 and
+   a signal ink to themselves. */
+.pay-table tbody .pay-who__name { font-weight:var(--weight-semibold); }
+.pay-table tbody td .pay-num--ref { font-weight:var(--weight-medium); color:var(--text2); }
+.pay-table tbody td .pay-num--nil { font-weight:var(--weight-medium); color:var(--text3); }
+.pay-table tbody td .pay-num--in  { font-weight:var(--weight-bold); color:var(--ant-success-fg); }
+.pay-table tbody td .pay-num--due { font-weight:var(--weight-bold); color:var(--ant-danger-fg); }
+
+/* The frame. The month tick and the date are checked, not scanned — and the
+   date has an italic byline under it now, so the two lines have to separate by
+   something. The date keeps the secondary ink; the byline is already tertiary
+   and italic, which is the gap. */
+.pay-table tbody td.pay-col-mo   { color:var(--text2); }
+.pay-table tbody td.pay-col-date .pay-when { font-weight:var(--weight-medium); }
+/* The marginalia: the row number and the dash that stands in for a figure that
+   was never recorded. A dash is not a value and must not read as one. */
+.pay-table tbody td .pay-dash { color:var(--text3); }
 
 /* ══ THE PAYMENT FORMS, READ AT A COUNTER (owner, 2026-09-19) ═══════════════
    Three complaints from `44.png` and the message that came with it, answered
@@ -1807,3 +1830,20 @@ td.pay-col-date { font-size: var(--text-xs); color: var(--text2); }
    only on a record whose bill has actually moved. */
 .pef-sum__was { color: var(--text3); }
 .pef-sum__was b { color: var(--text2); font-weight: 600; text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* ── THE DATE CELL'S BYLINE (owner, 2026-09-23) ──────────────────────────────
+   "Added by Hostyllo" / "Edited by Hostyllo" under the payment date, in small
+   italics. Italic because it is an ATTRIBUTION — the one line in this cell
+   that names a person rather than stating a fact about the payment — and the
+   slant is what stops the date and the byline reading as one block. The same
+   treatment the complaints register's `.iss-by` takes, for the same reason.
+
+   It clips rather than wrapping: this column is sized for a date, and a byline
+   that wraps would set the height of every row on the page. The full text is
+   on the hover card. */
+.pay-by {
+    margin-top: 2px; font-size: var(--text-xs); font-style: italic;
+    color: var(--text-tertiary); line-height: var(--leading-tight);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pay-when { white-space: nowrap; }
