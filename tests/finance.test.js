@@ -444,6 +444,105 @@ ok('CASE reversal — the instalment trail is not rewritten', () => {
     'trail minus reversals must equal what is held');
 });
 
+/* ══ A REFUND IS NOT A CORRECTION (owner, 2026-09-23) ════════════════════
+   Every case above reverses without a kind, which is a correction — money that
+   never really arrived, so the debt re-opens. These are the other event: money
+   the hostel handed BACK, where the obligation went with it.
+
+   The owner's report was that the two were indistinguishable: "the refunded
+   amount and reverse amount, that it still goes back to the unpaid amount". */
+
+ok('CASE refund — handing money back does not re-open the debt', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  const r = F.reversePayment(p, { amount: 1000, kind: 'refund',
+                                  reason: 'Overcharged mess', date: '2026-08-06' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.kind, 'refund');
+  assert.strictEqual(p.amount, 13500, 'the money did leave');
+  assert.strictEqual(p.unpaid, 0, 'but the student does not owe it again');
+  assert.strictEqual(p.status, 'Paid');
+  assert.strictEqual(F.calculateOutstanding(p), 0);
+});
+
+ok('CASE refund — the month still bills what the hostel charged', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  /* The owner's ruling: the bill does not move, so a report can say
+     "billed 14,500 · collected 14,500 · refunded 1,000" instead of quietly
+     pretending only 13,500 was ever charged. */
+  assert.strictEqual(F.calculateBill(p), 14500);
+});
+
+ok('CASE refund — a derived balance agrees with the stored one', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  /* Legacy records carry no `unpaid` and outstandingOf() derives one from the
+     fields. Without refundRelief() that path re-opens the debt the stored path
+     no longer does — two answers to what is owed, which is the one thing this
+     layer exists to prevent. */
+  const derived = Object.assign({}, p); delete derived.unpaid;
+  assert.strictEqual(F.calculateOutstanding(derived), 0);
+});
+
+ok('CASE refund — the split is recorded, so it cannot be guessed at later', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 15000, date: '2026-08-05' });   // 500 credit
+  const r = F.reversePayment(p, { amount: 800, kind: 'refund', date: '2026-08-06' });
+  assert.strictEqual(r.fromCredit, 500);
+  assert.strictEqual(r.fromApplied, 300);
+  assert.strictEqual(p.reversals[0].kind, 'refund');
+  assert.strictEqual(p.reversals[0].fromCredit, 500);
+  assert.strictEqual(p.reversals[0].fromApplied, 300);
+  /* Only the applied part can settle a debt. The credit half never re-opened
+     anything, so relieving it too would cancel 500 the student really owes. */
+  assert.strictEqual(p.unpaid, 0);
+  assert.strictEqual(p.overpaid, 0);
+});
+
+ok('CASE refund — an unmarked reversal is still a correction', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  // What every reversal already on disk looks like. Nothing may move.
+  F.reversePayment(p, { amount: 1000, date: '2026-08-06' });
+  assert.strictEqual(p.reversals[0].kind, 'correction');
+  assert.strictEqual(p.unpaid, 1000);
+  assert.strictEqual(p.status, 'Pending');
+});
+
+ok('CASE refund — a misspelt kind is a correction, not a silent refund', () => {
+  setup();
+  const p = bill();
+  F.applyPayment(p, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(p, { amount: 1000, kind: 'Refund ', date: '2026-08-06' });
+  /* Wrongly re-opening a settled month is visible on the next screen a warden
+     looks at; wrongly cancelling a real debt is not. The default fails safe. */
+  assert.strictEqual(p.reversals[0].kind, 'correction');
+  assert.strictEqual(p.unpaid, 1000);
+});
+
+ok('CASE refund — report totals name the refunds apart from the corrections', () => {
+  setup();
+  const a = bill(); F.applyPayment(a, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(a, { amount: 1000, kind: 'refund', date: '2026-08-06' });
+  const b = bill(); b.id = 'p2'; F.applyPayment(b, { amount: 14500, date: '2026-08-05' });
+  F.reversePayment(b, { amount: 1000, date: '2026-08-06' });
+  const t = F.calculateReportTotals([a, b]);
+  assert.strictEqual(t.billed, 29000, 'both months still bill what they charged');
+  assert.strictEqual(t.collected, 27000);
+  assert.strictEqual(t.reversed, 2000, 'both left the drawer');
+  assert.strictEqual(t.refunded, 1000, 'one of them was given back');
+  assert.strictEqual(t.outstanding, 1000, 'and only the correction re-opened a debt');
+  assert.strictEqual(t.safe, true);
+});
+
 ok('reverse then re-collect lands exactly where it started', () => {
   setup();
   const p = bill();

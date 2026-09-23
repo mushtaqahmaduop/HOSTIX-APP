@@ -365,6 +365,34 @@ function applyPayment(p, opts) {
 
    `amount` omitted reverses the whole collection.
 
+   ── TWO EVENTS, NOT ONE (owner, 2026-09-23) ─────────────────────────────────
+   `opts.kind` says which of them this is, and it is the only thing that
+   changes what the record owes afterwards:
+
+     correction  the money never really arrived — a mis-key, a double entry, a
+                 collection recorded against the wrong month. The debt RE-OPENS,
+                 because it was never actually settled. This is the default and
+                 the behaviour every reversal has had since this function was
+                 written, so nothing already on disk moves.
+     refund      the hostel handed the money back and the obligation went with
+                 it — an overcharged mess, a goodwill return, a duplicate
+                 payment given back. What is owed DOES NOT MOVE.
+
+   Until today there was only the first, and a warden recording the second got
+   a record that flipped to Pending and showed the student owing the very
+   amount they had just been given. That is the owner's report: "the refunded
+   amount and reverse amount still goes back to the unpaid amount".
+
+   WHY IT CANNOT BE FIXED WITHOUT ASKING WHICH. `owed = bill − collected`. A
+   reversal lowers `collected`, so `owed` rises unless something else gives.
+   Nothing on the record could tell the two apart — the reason field is free
+   text — so the modal asks, and the answer is stored.
+
+   THE SPLIT IS RECORDED, not re-derived later. `fromCredit` and `fromApplied`
+   go on the entry because the credit the record held at that moment is gone as
+   soon as the next collection lands, and refundRelief() in utils.js needs the
+   applied half to keep the derived balance honest.
+
    ORDER: credit first, then the applied balance. Reversing the 15,000 taken
    against a 14,500 bill has to take back the 500 credit before it starts
    re-opening the debt, or the record ends up simultaneously owing money and
@@ -392,6 +420,12 @@ function reversePayment(p, opts) {
   if (amount > collected)  return { ok: false, reason: 'exceeds-collected', reversed: 0,
                                     max: collected };
 
+  /* Anything but the explicit 'refund' is a correction, including a missing
+     or misspelt kind. The safe default is the one that keeps a debt alive:
+     wrongly re-opening a settled month is visible on the next screen a warden
+     looks at, wrongly cancelling a real debt is not. */
+  const kind = o.kind === 'refund' ? 'refund' : 'correction';
+
   const creditBefore = money(p.overpaid);
   const fromCredit   = Math.min(amount, creditBefore);
   const fromApplied  = amount - fromCredit;
@@ -400,13 +434,19 @@ function reversePayment(p, opts) {
 
   p.amount   = collected - amount;
   p.overpaid = creditBefore - fromCredit;
-  p.unpaid   = money(p.unpaid) + fromApplied;
+  /* A CORRECTION RE-OPENS THE DEBT; A REFUND DOES NOT. Money taken out of a
+     credit never re-opened anything under either kind — it was never set
+     against a bill — which is why the cancellation settlement path has always
+     behaved correctly here and the manual reversal never did. */
+  p.unpaid   = money(p.unpaid) + (kind === 'refund' ? 0 : fromApplied);
   p.status   = p.unpaid > 0 ? 'Pending' : 'Paid';
   p.paidDate = p.status === 'Paid' ? (p.paidDate || date) : '';
 
   if (!Array.isArray(p.reversals)) p.reversals = [];
   const entry = {
-    date, amount,
+    date, amount, kind,
+    // Where the money came from, kept because it cannot be reconstructed later.
+    fromCredit, fromApplied,
     method: o.method || p.method || 'Cash',
     reason: String(o.reason || '').trim(),
     // Money handed BACK across a counter is one act too, and belongs to a
@@ -421,7 +461,7 @@ function reversePayment(p, opts) {
   if (typeof ledgerTrack === 'function') ledgerTrack(p);
 
   return {
-    ok: true, reversed: amount, fromCredit, fromApplied, entry,
+    ok: true, reversed: amount, kind, fromCredit, fromApplied, entry,
     before: { paid: collected, credit: creditBefore },
     after:  { paid: p.amount, due: p.unpaid, status: p.status, credit: p.overpaid },
   };
@@ -609,6 +649,13 @@ function calculateReportTotals(payments, opts) {
     extras:        0,
     admissionFees: 0,
     reversed:      0,
+    /* `reversed` is every reversal, which is what left the drawer. `refunded`
+       is the part of it the hostel gave back rather than un-collected — the
+       figure a report needs to say "billed 14,500 · collected 14,500 ·
+       refunded 1,000" instead of losing the refund inside a correction total
+       (owner, 2026-09-23). `reversed` still includes it: one is a subset of
+       the other, not a sibling, because both are cash out of the drawer. */
+    refunded:      0,
   };
 
   for (const p of list) {
@@ -621,6 +668,7 @@ function calculateReportTotals(payments, opts) {
                                             : moneySum(p.extraCharges, c => c && c.amount);
     t.admissionFees += money(p.admissionFee != null ? p.admissionFee : p.fee);
     t.reversed      += moneySum(p.reversals, r => r && r.amount);
+    t.refunded      += moneySum(p.reversals, r => r && r.kind === 'refund' ? r.amount : 0);
   }
 
   t.safe = Object.keys(t).every(k => k === 'count' || moneyIsSafe(t[k]));

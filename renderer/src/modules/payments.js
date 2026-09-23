@@ -546,11 +546,16 @@ function payPaidParts(p, chg) {
   /* `p.reversals` — money that went back OUT, which REDUCES what the row
      shows as paid. Each carries its own reason where one was given.
 
-     */
+     THE TWO KINDS ARE NAMED APART (owner, 2026-09-23) because they leave the
+     student in opposite positions: a refund settles the month, a correction
+     re-opens the debt. A card that called both "Refunded" would explain a
+     figure while hiding the only thing about it that matters. Entries written
+     before the kind existed read as corrections, which is what they were. */
   const revs = Array.isArray(p.reversals) ? p.reversals.filter(r => r && num(r.amount) > 0) : [];
   revs.forEach(r => {
     const why = String(r.reason || r.note || '').trim();
-    out.push('Refunded   \u2212' + payCash(r.amount) + (why ? '  (' + why + ')' : ''));
+    out.push((r.kind === 'refund' ? 'Refunded' : 'Reversed') + '   \u2212'
+      + payCash(r.amount) + (why ? '  (' + why + ')' : ''));
   });
 
   return out;
@@ -4400,10 +4405,41 @@ function showReversePaymentModal(id) {
        </div>
        ${past.length ? `<div class="pay-rev__past">Already reversed: ${
           past.map(r => fmtPKR(money(r.amount)) + ' on ' + escHtml(r.date || '—')).join(' · ')}</div>` : ''}
+       ${''/* WHICH OF THE TWO EVENTS THIS IS (owner, 2026-09-23: "there is an
+              issue with the refunded amount and reverse amount, that it still
+              goes back to the unpaid amount").
+
+              Nothing on the record can tell a mis-key apart from money handed
+              back — the reason is free text — and the two leave opposite
+              balances behind. So it is asked, once, here.
+
+              CORRECTION IS PRESELECTED because it is what this button has
+              always done: a warden who does not read this box gets exactly the
+              behaviour they had yesterday, and the consequence line below
+              spells out either choice in words before they commit. */}
+       <div class="field">
+         <label>What is this?</label>
+         <div class="pay-rev__kind">
+           <label class="pay-rev__opt">
+             <input type="radio" name="prev-kind" value="correction" checked onchange="pfReverseHint()">
+             <span class="pay-rev__opt__b">
+               <span class="pay-rev__opt__t">Correction</span>
+               <span class="pay-rev__opt__s">The money never came in — a mis-key, a double entry, the wrong month.</span>
+             </span>
+           </label>
+           <label class="pay-rev__opt">
+             <input type="radio" name="prev-kind" value="refund" onchange="pfReverseHint()">
+             <span class="pay-rev__opt__b">
+               <span class="pay-rev__opt__t">Refund</span>
+               <span class="pay-rev__opt__s">Money handed back to the student — an overcharge, a duplicate payment.</span>
+             </span>
+           </label>
+         </div>
+       </div>
        <div class="field">
          <label>Amount to reverse</label>
          <input class="form-control" id="f-prev-amt" type="number" min="1" max="${rv.max}"
-                data-collected="${collected}" value="${rv.max}" oninput="pfReverseHint()">
+                data-collected="${collected}" data-due="${due}" value="${rv.max}" oninput="pfReverseHint()">
          <div class="pay-rev__hint" id="f-prev-hint"></div>
        </div>
        <div class="field">
@@ -4441,8 +4477,23 @@ function pfReverseHint() {
   if (amt <= 0)   { el.textContent = 'Enter an amount to reverse.'; el.className = 'pay-rev__hint is-red'; return; }
   if (amt > max)  { el.textContent = 'More than you can reverse here (' + fmtPKR(max) + ').'; el.className = 'pay-rev__hint is-red'; return; }
 
-  el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected on this record.';
+  /* AND WHAT IT LEAVES THE STUDENT OWING, which is the whole reason the choice
+     above exists. Saying it in the same breath as the amount is what stops a
+     warden discovering the difference on the register afterwards. */
+  const due  = money(parseFloat(inp.dataset.due) || 0);
+  const kind = pfReverseKind();
+  const owed = kind === 'refund' ? due : due + amt;
+  el.textContent = 'Leaves ' + fmtPKR(collected - amt) + ' collected, and '
+    + (owed > 0 ? fmtPKR(owed) + ' still owed on this month.'
+                : 'nothing owed on this month.');
   el.className = 'pay-rev__hint';
+}
+
+/** Which of the two events the form is set to. Correction unless told otherwise
+    — the same default reversePayment() applies, stated in one place. */
+function pfReverseKind() {
+  const on = document.querySelector('input[name="prev-kind"]:checked');
+  return on && on.value === 'refund' ? 'refund' : 'correction';
 }
 
 async function submitReversePayment(id) {
@@ -4466,8 +4517,10 @@ async function submitReversePayment(id) {
   if (!reason) { toast('Give a reason — it goes on the student ledger', 'error'); return; }
   if (pinNeeded() && !(await pinConfirm({ what: 'reversing ' + fmtPKR(amount) }))) return;   // step 10
 
+  const kind = pfReverseKind();
+
   // Money handed back is one act as well (audit G5).
-  const r = reversePayment(p, { amount, reason, date, receiptId: newReceiptId() });
+  const r = reversePayment(p, { amount, reason, date, kind, receiptId: newReceiptId() });
   if (!r.ok) {
     toast(r.reason === 'exceeds-collected'
         ? 'That is more than was collected on this record (' + fmtPKR(r.max) + ')'
@@ -4477,15 +4530,23 @@ async function submitReversePayment(id) {
 
   /* Logged like every other money action, and with the reason — a reversal with
      no stated cause is the one entry a later reader cannot make sense of. */
-  logActivity('Payment Reversed',
-    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} reversed`
+  /* The kind is in the activity line because it is the fact that decides
+     whether a debt exists, and "reversed" alone never said which happened. */
+  logActivity(kind === 'refund' ? 'Payment Refunded' : 'Payment Reversed',
+    `${p.studentName || '—'} — ${p.month || '—'} · ${fmtPKR(r.reversed)} `
+    + (kind === 'refund' ? 'refunded' : 'reversed')
     + (reason ? ' · ' + reason : ' · no reason given'), 'Finance');
 
   await saveDB();
   closeModal();
   renderPage(currentPage === 'payments' ? 'payments' : currentPage);
-  toast(fmtPKR(r.reversed) + ' reversed — ' + fmtPKR(money(p.amount)) + ' still collected on this record',
-        'success', 'Collection reversed');
+  /* The toast names the consequence, not just the act. A warden who picked
+     the wrong one finds out here rather than on the register. */
+  const owed = calculateOutstanding(p);
+  toast(fmtPKR(r.reversed) + (kind === 'refund' ? ' refunded — ' : ' reversed — ')
+      + (owed > 0 ? fmtPKR(owed) + ' now owed on this month'
+                  : 'nothing owed on this month'),
+        'success', kind === 'refund' ? 'Refund recorded' : 'Collection reversed');
 }
 
 // ════════════════════════════════════════════════════════════════════════════

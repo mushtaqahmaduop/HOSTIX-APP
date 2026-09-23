@@ -1684,6 +1684,42 @@ body.light-theme .pay-table-wrap::-webkit-scrollbar-track,
    was never recorded. A dash is not a value and must not read as one. */
 .pay-table tbody td .pay-dash { color:var(--text3); }
 
+/* ══ CORRECTION OR REFUND, ON THE REVERSAL MODAL (owner, 2026-09-23) ════════
+   Two answers that leave opposite balances behind, so they are drawn as
+   choices to read rather than a select to skim past.
+
+   THE PATTERN IS SETTINGS' SERVICE-MODEL PILLS, REBUILT HERE RATHER THAN
+   BORROWED. `.svc-opt` lives in renderer/settings.css and belongs to that
+   screen; a payments modal reaching into another screen's stylesheet is the
+   cross-screen coupling the governance rules exist to stop — the day someone
+   restyles Settings, this modal changes shape for no reason anybody can find.
+
+   The native radio is KEPT, not replaced with a styled span: the pair stays
+   one keyboard group, arrow keys still move between them, and a screen reader
+   still announces it as a choice. `:has(input:checked)` paints the chosen one,
+   the same way the cancellation form's own options do. */
+.pay-rev__kind { display: grid; gap: var(--space-2); }
+.pay-rev__opt {
+    display: flex; align-items: flex-start; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface-2); cursor: pointer;
+}
+.pay-rev__opt:hover { border-color: var(--border-strong); }
+.pay-rev__opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pay-rev__opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pay-rev__opt input { margin-top: 3px; flex: 0 0 auto; accent-color: var(--accent); }
+.pay-rev__opt__b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pay-rev__opt__t {
+    font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-primary);
+}
+.pay-rev__opt:has(input:checked) .pay-rev__opt__t { color: var(--accent-strong); }
+.pay-rev__opt__s {
+    font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-normal);
+}
+
+
+
 /* ══ THE PAYMENT FORMS, READ AT A COUNTER (owner, 2026-09-19) ═══════════════
    Three complaints from `44.png` and the message that came with it, answered
    here rather than in the rules above, because this file's convention is that

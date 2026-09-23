@@ -559,6 +559,54 @@ function resolveCharges(student, opts) {
 
    Everything derived is floored at 0 — a record whose collections already
    cover the charge is settled, not in credit. */
+/* ── MONEY HANDED BACK THAT ALSO SETTLED THE DEBT ─────────────────────────────
+   (owner, 2026-09-23: "there is an issue with the refunded amount and reverse
+   amount, that it still goes back to the unpaid amount")
+
+   A reversal undoes a collection, and until now there was only one kind of it.
+   That made one line of arithmetic tell a lie:
+
+       owed = bill − collected
+
+   A reversal lowers `collected` and leaves `bill` alone, so `owed` HAS to rise.
+   For the case reversePayment() was written for — a warden keys 15,000 where
+   they meant 1,500 — that is exactly right: the money never came in, so the
+   debt re-opens. But for money genuinely handed BACK to a student, it is
+   wrong twice over: the record flips to Pending and the student appears to owe
+   the very amount they were just given.
+
+   THE TWO ARE NOW DIFFERENT EVENTS, told apart by `kind` on the reversal:
+
+     correction — the money never really arrived. The debt re-opens. (Default,
+                  and what every reversal recorded before today is read as, so
+                  no figure already on disk moves.)
+     refund     — the hostel gave it back and the obligation went with it. What
+                  is owed does not move.
+
+   THIS SUMS ONLY THE PART THAT CAME OUT OF APPLIED MONEY. A refund drawn from
+   a CREDIT — the cancellation settlement path — never re-opened anything in
+   the first place, because that money was never set against a bill; it would
+   be relieved twice if counted here. reversePayment() records the split on
+   each entry as `fromApplied`, so this is read, not re-derived.
+
+   The BILL ITSELF DOES NOT MOVE (owner's ruling, 2026-09-23): the month still
+   reads what the hostel charged, and the refund stands beside it as its own
+   figure, so a report says "billed 14,500 · collected 14,500 · refunded 1,000"
+   rather than quietly pretending only 13,500 was ever charged. */
+function refundRelief(p) {
+  const list = p && Array.isArray(p.reversals) ? p.reversals : [];
+  let s = 0;
+  for (const r of list) {
+    if (!r || r.kind !== 'refund') continue;
+    /* `fromApplied` is written by reversePayment(). A refund-kind entry that
+       predates it cannot have its split reconstructed — the credit the record
+       held at that moment is gone — so the whole amount is taken as applied,
+       which is what a refund recorded through the UI will almost always be. */
+    s += Number(r.fromApplied != null ? r.fromApplied : r.amount) || 0;
+  }
+  return s;
+}
+
 function outstandingOf(p) {
   if (!p) return 0;
   if (p.unpaid != null) return Number(p.unpaid) || 0;
@@ -598,10 +646,16 @@ function outstandingOf(p) {
         ? p.extraCharges.reduce((s, c) => s + (Number(c && c.amount) || 0), 0)
         : 0);
 
+  /* Refunds are subtracted alongside what was collected. A record with no
+     stored balance derives one from its own fields, and `p.amount` has already
+     had the refund taken out of it — so without this the refund would re-open
+     the debt here exactly as it used to in the stored path. See
+     refundRelief() above for why this is only the applied part. */
   return Math.max(0, rent + mess + extras
                    + Number(p.admissionFee || p.fee || 0)
                    - Number(p.concession   || p.discount || 0)
-                   - Number(p.amount       || 0));
+                   - Number(p.amount       || 0)
+                   - refundRelief(p));
 }
 
 /* ── THE DEFAULT STUDENT AVATAR ───────────────────────────────────────────────

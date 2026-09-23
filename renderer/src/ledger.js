@@ -24,6 +24,7 @@
      instalment      each new partialPayments entry      payment
      collected       amount not explained by the trail   payment / adjustment
      reversal        each new reversals entry            adjustment (+)
+     refund          a reversal whose kind is 'refund'    adjustment (−)
      deleted         the record was deleted              adjustment (− its net)
 
    A figure's FIRST posting is a charge or concession with its own reason. A
@@ -135,7 +136,14 @@ function _ledgerConcession(p) {
 function _ledgerBill(p) {
   const due    = calculateOutstanding(p);
   const credit = due > 0 ? 0 : calculateRefund(p).refundable;
-  return Math.max(0, due + money(p.amount) - credit);
+  /* A refund lowers what was collected WITHOUT raising what is owed, so this
+     derivation would read the month as billing less than the hostel charged —
+     and the diff would then post a charge reduction on top of the refund
+     allowance, taking the balance below zero for a student who owes nothing.
+     Adding the relief back keeps this equal to calculateBill(), which is the
+     whole point of deriving it: one answer to what the month billed. */
+  const relief = typeof refundRelief === 'function' ? refundRelief(p) : 0;
+  return Math.max(0, due + money(p.amount) + relief - credit);
 }
 
 /* The month's charges as separately named parts, and its concession. The
@@ -207,6 +215,13 @@ function _ledgerPosted(recordId) {
         else s.collected -= a;
         break;
       case 'reversal': s.reversals++; break;
+      /* The allowance that pairs with a refund. It is posted in the same pass
+         as its reversal and counted by the same cursor, so it needs no counter
+         of its own — but it MUST have a case here, or the default branch files
+         it under `parts`, where _ledgerDiff() reads every key as a charge part
+         and would post an adjustment to "remove" a charge that never existed.
+         Its effect on the balance is already in s.net. */
+      case 'refund':   break;
       case 'deleted':  s.deleted = true; break;
       default:
         if (e.part) s.parts[e.part] = (s.parts[e.part] || 0) + a;
@@ -286,13 +301,39 @@ function _ledgerDiff(p, posted, why) {
                reason: 'Amount collected changed ' + n(posted.collected) + ' → ' + n(collected) + tail + also });
   }
 
-  // Reversals — money handed back raises what is owed.
+  /* Reversals — money handed back raises what is owed.
+
+     A REFUND IS POSTED AS A PAIR (owner, 2026-09-23). The balance here is
+     charges − payments ± adjustments, and `collected` above deliberately adds
+     every reversal back, so the payment side still stands at what was ever
+     collected. Under that definition a single entry cannot tell the truth
+     about a refund: the money left the drawer, AND the obligation left with
+     it. One entry would have to be either +amount, which re-opens a debt the
+     student does not owe, or −amount, which says the hostel now owes THEM.
+
+     So both halves are posted, and they net to zero on the balance:
+
+       adjustment +amount  part 'reversal'  the collection is no longer held
+       adjustment −amount  part 'refund'    and the charge it settled is released
+
+     A correction posts only the first, which is why its debt re-opens. Both
+     entries carry the same date, reason and receipt, so a statement reads them
+     as the one event they are — and the warden attribution at
+     _ledgerCollectedKind() still matches only the 'reversal' half, so money out
+     of a drawer is counted against that warden exactly once. */
   for (const r of reversals.slice(posted.reversals)) {
     const said = String(r.reason || '').trim();
-    out.push({ type: 'adjustment', amount: money(r.amount), part: 'reversal',
-               date: r.date || recDate, method: r.method || '', byName: r.by || '',
-               receiptId: r.receiptId || '',
-               reason: 'Collection reversed' + (said ? ': ' + said : '') + tail });
+    const ref  = r.kind === 'refund';
+    const base = { date: r.date || recDate, method: r.method || '', byName: r.by || '',
+                   receiptId: r.receiptId || '' };
+    out.push(Object.assign({}, base, {
+      type: 'adjustment', amount: money(r.amount), part: 'reversal',
+      reason: (ref ? 'Refunded' : 'Collection reversed') + (said ? ': ' + said : '') + tail }));
+    if (ref) {
+      out.push(Object.assign({}, base, {
+        type: 'adjustment', amount: -money(r.amount), part: 'refund',
+        reason: 'Charge released by the refund' + tail }));
+    }
   }
   return out;
 }
@@ -557,8 +598,16 @@ function ledgerDrift() {
   const want = new Map();
   _ledgerHistory().forEach(p => {
     if (_ledgerPosted(p.id).deleted) return;
-    // What the Payments page says: still owed, less any credit held.
-    want.set(p.studentId, (want.get(p.studentId) || 0) + _ledgerBill(p) - money(p.amount));
+    /* What the Payments page says: still owed, less any credit held.
+
+       `_ledgerBill − collected` was that figure until refunds existed. A
+       refund lowers `collected` and adds the same amount back into
+       _ledgerBill(), so the subtraction leaves the refund behind and this
+       reports a drift against a record that is settled. Taking the relief off
+       reduces the expression to `owed − credit` again, which is what the line
+       above it says it computes. */
+    want.set(p.studentId,
+      (want.get(p.studentId) || 0) + _ledgerBill(p) - money(p.amount) - refundRelief(p));
   });
   const have = new Map();
   _ledgerList().forEach(e => {

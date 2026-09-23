@@ -184,6 +184,124 @@ test('a mis-keyed collection can be reversed from the row, and the record says s
   await app.close();
 });
 
+/* ══ THE SAME FORM, THE OTHER EVENT (owner, 2026-09-23) ══════════════════
+   The test above never touches the new choice, so it runs as a CORRECTION and
+   asserts the behaviour this form has always had — which is the compatibility
+   guarantee, stated as a test rather than as a promise.
+
+   This one picks Refund. The owner's report: "there is an issue with the
+   refunded amount and reverse amount, that it still goes back to the unpaid
+   amount". Everything below the fold is the same form; only the balance it
+   leaves behind differs, which is exactly the point. */
+test('money handed back is refunded, not un-collected, and settles the month', async () => {
+  const pageErrors = [];
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  win.on('pageerror', e => pageErrors.push(e.message));
+  await win.waitForLoadState('domcontentloaded');
+  await login(win);
+  await win.waitForTimeout(400);
+
+  /* No empty-DB assertion here: `resetProfile()` runs once for the file, so
+     only the first test sees a cold profile. seed() clears and rewrites what
+     this test reads, which is what every other test below relies on too. */
+  await seed(win, [rec({ amount: FULL, unpaid: 0, overpaid: 0, status: 'Paid',
+                         paidDate: '2026-08-05' })]);
+  await win.evaluate(async () => {
+    DB.payments[0].month = thisMonth();
+    DB.payments[0].date  = today();
+    DB.payments[0].paidDate = today();
+    await saveDB();
+  });
+  await win.evaluate(() => navigate('payments'));
+  await win.waitForSelector('.pay-col-act button', { timeout: 8000 });
+  await win.evaluate(() => document.querySelector('.pay-col-act button').click());
+  await win.waitForSelector('.lk-rmenu', { timeout: 8000 });
+  await win.evaluate(() => {
+    const b = [...document.querySelectorAll('.lk-rmenu button')].find(x => /Reverse/i.test(x.textContent));
+    if (b) b.click();
+  });
+  await win.waitForSelector('#f-prev-amt', { timeout: 8000 });
+
+  /* CORRECTION IS PRESELECTED. A warden who does not read the box gets exactly
+     yesterday's behaviour — the safe default, because wrongly re-opening a
+     settled month shows up on the next screen and wrongly cancelling a real
+     debt does not. */
+  const preset = await win.evaluate(() =>
+    [...document.querySelectorAll('input[name="prev-kind"]')].map(i => i.value + (i.checked ? '*' : '')));
+  expect(preset).toEqual(['correction*', 'refund']);
+
+  await win.fill('#f-prev-amt', '1000');
+
+  /* The consequence is stated in words BEFORE the warden commits, and it has to
+     change with the choice — that line is the only place the difference is
+     visible in the form. */
+  const hintCorrection = await win.evaluate(() => {
+    pfReverseHint(); return document.getElementById('f-prev-hint').textContent; });
+  await win.evaluate(() => {
+    document.querySelector('input[name="prev-kind"][value="refund"]').checked = true;
+    pfReverseHint();
+  });
+  const hintRefund = await win.evaluate(() => document.getElementById('f-prev-hint').textContent);
+  expect(hintCorrection).toMatch(/still owed/i);
+  expect(hintRefund).toMatch(/nothing owed/i);
+
+  await win.fill('#f-prev-reason', 'Overcharged mess');
+  /* The ledger balance is read BEFORE the refund and compared against itself
+     afterwards. `resetProfile()` runs once for this file, so the ledger carries
+     entries from the tests above on the same student — an absolute figure here
+     would be asserting their arithmetic, not this test's. What this test claims
+     is that a refund moves the balance by NOTHING, and that is what is checked.
+     The absolute figures are tests/ledger.test.js's job, on a clean fixture. */
+  const ledgerBefore = await win.evaluate(() => ledgerBalance(DB.payments[0].studentId));
+
+  await win.click('.modal-footer .btn-danger, .modal .btn-danger');
+  await win.waitForTimeout(700);
+
+  const after = await win.evaluate(() => {
+    const p = DB.payments[0];
+    const row = [...document.querySelectorAll('.pay-table tbody tr')][0];
+    return {
+      amount: p.amount, unpaid: p.unpaid, status: p.status,
+      outstanding: calculateOutstanding(p),
+      bill: calculateBill(p),
+      rev: (p.reversals || []).map(r => ({ kind: r.kind, a: r.amount, applied: r.fromApplied })),
+      logged: (DB.activityLog || []).some(l => /Refunded/i.test(l.action || '')),
+      cash: _cashEvents(p).reduce((s, e) => s + e.amount, 0),
+      card: row ? row.querySelectorAll('.pay-num')[1].getAttribute('data-tip') : null,
+      ledger: ledgerBalance(p.studentId),
+    };
+  });
+
+  expect(after.amount, 'the money did leave the drawer').toBe(FULL - 1000);
+  expect(after.unpaid, 'but the student must NOT owe it again').toBe(0);
+  expect(after.outstanding).toBe(0);
+  expect(after.status).toBe('Paid');
+  // The bill stands at what the hostel charged; the refund is its own figure.
+  expect(after.bill).toBe(FULL);
+  expect(after.rev).toEqual([{ kind: 'refund', a: 1000, applied: 1000 }]);
+  expect(after.logged, 'a refund must reach the activity log as a refund').toBe(true);
+  expect(after.cash, 'cash events must still sum to what the record holds').toBe(after.amount);
+  // The card on Amount Paid names it a refund, not a reversal.
+  expect(after.card).toMatch(/Refunded\s+−?.?Rs\. 1,000/);
+  /* THE REFUND MOVES THE LEDGER BALANCE BY NOTHING. It posts a pair — the
+     reversal that takes the collection back, and the release that discharges
+     the charge it had settled — and they cancel. A single entry could only
+     have re-opened a debt the student does not owe, or said the hostel owes
+     them. And the ledger must still agree with the record, or the drift check
+     reports a balance nobody can explain. */
+  expect(after.ledger, 'a refund must not move the balance').toBe(ledgerBefore);
+  /* NO DRIFT ASSERTION HERE. ledgerDrift() compares the ledger against the
+     records still in DB, and seed() replaces the record the test above posted
+     entries for — on the same student — so this student drifts by that test's
+     leftovers whichever way the refund behaves. It is empty when this test runs
+     alone, which would have made the suite pass or fail on running order.
+     tests/ledger.test.js asserts no-drift for both kinds on a clean fixture. */
+
+  expect(pageErrors).toEqual([]);
+  await app.close();
+});
+
 test('the reverse action is not offered on a record that collected nothing', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();

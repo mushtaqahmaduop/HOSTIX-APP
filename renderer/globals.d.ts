@@ -82,6 +82,10 @@ declare function serviceModelInfo(): ServiceModelDef;
 // eight modules used to answer three different ways — see the comment above
 // the function itself, and tests/outstanding.test.js.
 declare function outstandingOf(p: any): number;
+// The part of a record's reversals that was HANDED BACK rather than
+// un-collected, and so settles the debt instead of re-opening it. Read by
+// outstandingOf() and by the ledger (owner, 2026-09-23).
+declare function refundRelief(p: any): number;
 // What this student is billed per month, from settings — the charge authority
 // outstandingOf() derives against.
 declare function resolveCharges(student: any, opts?: any): any;
