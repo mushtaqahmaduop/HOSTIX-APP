@@ -158,7 +158,11 @@ body.light-theme #sidebar {
        and can afford the indent without the brand block growing. */
     padding: 18px 16px 16px 44px;
     background: none;
-    border-bottom: 1px solid var(--sb-divider);
+    /* NO RULE UNDER THE BRAND (owner, 2026-09-23: "remove ... the grid upper
+       and below line from month selector"). This border was the upper of the
+       two the selector sat between; style.css has the whole note. It is
+       stated here as well because this file loads after it and was putting
+       the line straight back. */
 }
 /* Collapsed, the rail is ~72px wide and there is no room for a button beside
    the mark - the button becomes the only thing in the row. */
@@ -208,6 +212,14 @@ body.sidebar-collapsed #sidebar .sb-logo { padding-left: 16px; }
 
 /* Nav */
 #sidebar .sb-nav { padding: 14px 12px; }
+/* THE PINNED DASHBOARD TRACKS THE NAV IT SITS ABOVE (owner, 2026-09-23).
+   The horizontal padding has to be stated here, not in style.css: this file
+   loads after it and re-pads .sb-nav to 12px, so a pinned row aligned to
+   style.css’s 10px would sit two pixels proud of every item below it — the
+   kind of misalignment that reads as a different kind of control.
+   The rail keeps its top padding; the scroller below starts tight. */
+#sidebar .sb-pinned { padding: 14px 12px 0; }
+#sidebar .sb-pinned + .sb-nav { padding-top: 6px; }
 /* TIGHTENED to pay for the fifth and fourth section headers (Phase 4).
 
    Going from three groups to five is better information architecture and costs

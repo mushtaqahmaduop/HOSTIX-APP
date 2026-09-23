@@ -368,9 +368,7 @@ body.light-theme .nav-item.active::before {
 body.light-theme .sb-logo {
     background: linear-gradient(160deg, rgba(0, 0, 0, 0.04) 0%, transparent 60%);
 }
-body.light-theme .sb-logo::after {
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.04), transparent);
-}
+
 body.light-theme .sb-logo-icon {
     background: linear-gradient(145deg, #e8eaff, #d0d4f8);
     border-color: rgba(0, 0, 0, 0.2);
@@ -594,19 +592,17 @@ input, select, textarea { font-family: var(--font); }
 /* ══════════════════════════════════════════════════════════════════════════
    SIDEBAR — Indigo Pulse premium
    ══════════════════════════════════════════════════════════════════════════ */
+/* NO RULES AROUND THE MONTH SELECTOR (owner, 2026-09-23: "remove ... the grid
+   upper and below line from month selector"). The selector was boxed in by two
+   of them — this border-bottom and its gradient ::after above it, the picker's
+   own border-bottom below — which drew a lane across the rail for a control
+   that is already set apart by sitting still while everything under it scrolls.
+   Both are gone; the rail separates by space now, which is what the rest of
+   this app does. */
 .sb-logo {
     padding: 20px 18px 16px;
-    border-bottom: 1px solid var(--border);
     position: relative;
     background: linear-gradient(160deg, rgba(0, 0, 0, 0.06) 0%, transparent 60%);
-}
-
-.sb-logo::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 18px; right: 18px;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.08), transparent);
 }
 
 .sb-logo-mark {
@@ -797,9 +793,19 @@ input, select, textarea { font-family: var(--font); }
 /* ── Premium Month Picker ─────────────────────────────────────────────────── */
 .sb-month-picker {
     flex-shrink: 0;
-    border-bottom: 1px solid var(--sb-border);
     padding: 0;
 }
+
+/* THE PINNED HEAD OF THE RAIL (owner, 2026-09-23). Dashboard lives here rather
+   than in the scrolling list, so it is reachable from the bottom of any page
+   without dragging the rail back up. Same padding as .sb-nav so the pinned
+   item and the scrolling ones line up on the same left edge — a 2px step
+   between them would read as a different kind of thing, which it is not. */
+.sb-pinned {
+    flex-shrink: 0;
+    padding: 12px 10px 0;
+}
+.sb-pinned + .sb-nav.sidebar__middle { padding-top: 6px; }
 .sb-month-picker__header {
     display: flex;
     align-items: center;
@@ -5000,6 +5006,7 @@ body.sidebar-collapsed .sb-logo       { padding: 16px 8px; }
 body.sidebar-collapsed .nav-item      { justify-content: center; padding: 11px; }
 body.sidebar-collapsed .nav-icon      { margin: 0; }
 body.sidebar-collapsed .sb-nav        { padding: 12px 8px; }
+body.sidebar-collapsed .sb-pinned     { padding: 12px 8px 0; }
 
 .sidebar-collapse-btn {
     position: absolute;

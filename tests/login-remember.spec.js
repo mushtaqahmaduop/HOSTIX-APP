@@ -80,6 +80,9 @@ const loginView = win => win.evaluate(() => ({
   ticked: document.getElementById('login-remember').checked,
   swap:   !document.getElementById('login-swap').hidden,
   forget: !document.getElementById('login-forget').hidden,
+  // The saved-account list the circular sign opens (owner, 2026-09-23).
+  listOpen: !document.getElementById('login-swaplist').hasAttribute('hidden'),
+  listNames: [...document.querySelectorAll('#login-swaplist .lg-swapopt')].map(b => b.dataset.u),
 }));
 
 test('remember me keeps the username, never the session: the next launch asks for the password', async () => {
@@ -142,13 +145,31 @@ test('switch account steps through remembered usernames and never fills a passwo
   expect(v.user).toBe('sara');
   expect(v.swap, 'Switch account is missing with two remembered names').toBe(true);
 
+  /* THE SIGN OPENS THE LIST; THE LIST SWITCHES (owner, 2026-09-23: "a change or
+     swap or a circular restore like sign through which the saved account can be
+     swapped without entering usernames again and again").
+
+     It used to step to the next name on each click, so reaching the third of
+     three meant pressing twice and reading the box to see where you were. The
+     guarantees it was protecting are all still asserted below — a password is
+     never filled, whatever was typed is cleared, and focus lands on the
+     password box — they are just checked after a pick rather than a step. */
   await win.fill('#login-input', 'typed-before-switching');
   await win.click('#login-swap');
   v = await loginView(win);
+  expect(v.listOpen, 'the swap sign did not open the saved accounts').toBe(true);
+  expect(v.listNames.slice().sort()).toEqual(['sara', 'warden1']);
+  expect(v.user, 'opening the list changed the username on its own').toBe('sara');
+
+  await win.click('#login-swaplist .lg-swapopt[data-u="warden1"]');
+  v = await loginView(win);
   expect(v.user).toBe('warden1');
   expect(v.pass, 'switching kept the password that was typed').toBe('');
+  expect(v.listOpen, 'the list stayed open after a pick').toBe(false);
   expect(await win.evaluate(() => document.activeElement && document.activeElement.id)).toBe('login-input');
+
   await win.click('#login-swap');
+  await win.click('#login-swaplist .lg-swapopt[data-u="sara"]');
   expect((await loginView(win)).user).toBe('sara');
 
   // Switch account belongs to Remember me.

@@ -107,6 +107,15 @@
 
   document.body.insertAdjacentElement('afterbegin', bar);
   document.body.classList.add('has-titlebar');
+
+  /* The bar mounts asynchronously (it awaits api.isDev()), so it can arrive
+     AFTER a restored session has already applied this account's permissions.
+     Re-applying them here is what keeps License Settings and Import Backup out
+     of a warden's menu on that path (owner, 2026-09-23); applyPermissionsToChrome()
+     is idempotent and no-ops before anyone has signed in. */
+  if (typeof applyPermissionsToChrome === 'function') {
+    try { applyPermissionsToChrome(); } catch (e) { console.error('[titlebar perms]', e); }
+  }
   if (typeof window.setTitlebarHostel === 'function') window.setTitlebarHostel();
 
   // ── Menu open/close, and the keyboard access frame:false took away ───────

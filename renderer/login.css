@@ -103,7 +103,47 @@ body.light-theme #login-screen { background:
 .lg-lblrow { display: flex; align-items: flex-end; gap: 10px; margin-top: 18px; margin-bottom: 7px; }
 .lg-lblrow > .lg-lbl { margin: 0; }
 .lg-p + .lg-lblrow, .lg-addr + .lg-lblrow { margin-top: 28px; }
-#login-screen .lg-swap { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+/* ══ THE CIRCULAR SWAP SIGN AND ITS LIST (owner, 2026-09-23) ══════════════
+   A 26px round button on the label row, where the text link used to be: it
+   sits at the end of the row so the field below it keeps its full width, and
+   it is round because the glyph is, and a square frame around a circular arrow
+   reads as two shapes fighting.
+
+   The list is absolutely positioned under it and the wrapper is the only
+   positioned ancestor, so it hangs off the button rather than the card and
+   cannot push the password field down when it opens. */
+.lg-swapwrap { position: relative; margin-left: auto; display: flex; }
+#login-screen .lg-swap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0;
+    border: 1px solid var(--border, #2a2d31); border-radius: 50%;
+    background: transparent; color: var(--text2, #9aa0a6);
+    cursor: pointer; transition: var(--transition, .15s ease);
+}
+#login-screen .lg-swap:hover {
+    color: var(--accent-strong, #6b8afd); border-color: var(--accent, #4f6ef7);
+    background: var(--accent-soft, rgba(79,110,247,.12));
+}
+#login-screen .lg-swap:focus-visible { outline: 2px solid var(--accent, #4f6ef7); outline-offset: 2px; }
+.lg-swaplist {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+    min-width: 190px; max-height: 210px; overflow-y: auto;
+    padding: 4px; border-radius: 10px;
+    border: 1px solid var(--border, #2a2d31);
+    background: var(--bg2, #16181b);
+    box-shadow: 0 10px 28px rgba(0,0,0,.34);
+}
+.lg-swaplist[hidden] { display: none; }
+.lg-swapopt {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    padding: 7px 10px; border: 0; border-radius: 7px;
+    background: transparent; color: var(--text, #e6e7e9);
+    font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.lg-swapopt:hover { background: var(--bg3, #1e2125); }
+.lg-swapopt.is-on { color: var(--accent-strong, #6b8afd); }
+.lg-swapopt__n { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-swapopt__t { flex: 0 0 auto; font-size: 10.5px; color: var(--text3, #6b7075); }
 #login-screen .lg-swap[hidden], #login-screen .lg-forget[hidden] { display: none; }
 .lg-field { position: relative; display: flex; align-items: center; }
 .lg-field > svg.lg-lead { position: absolute; left: 15px; color: var(--lg-ink3); pointer-events: none; }

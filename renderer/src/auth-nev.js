@@ -724,6 +724,35 @@ function applyPermissionsToChrome() {
   if (typeof applyFeaturesToChrome === 'function') {
     try { applyFeaturesToChrome(); } catch (e) { console.error('[features]', e); }
   }
+
+  /* ══ THE WINDOW MENU IS CHROME TOO (owner, 2026-09-23) ═════════════════
+     "the help option in the windows header opens the license setting which is
+     not to be opened and the import, export options".
+
+     Three items in the title bar bypassed every permission in this file. Help
+     offered License Settings — activation, deactivation, the machine binding —
+     to any account that could reach a keyboard, and File offered Import
+     Backup, which replaces the whole database. A warden had no business with
+     either, and neither has a gate anywhere else because until now nothing
+     could reach them except an admin sitting at the app.
+
+     THEY ARE HIDDEN, NOT REMOVED. Deleting License Settings would take away
+     the only way to re-activate a licence that has lapsed or moved machine,
+     which turns a support call into a reinstall. An admin still has all three
+     exactly where they were.
+
+     Backup EXPORT is gated on 'backup' rather than 'users': taking a copy out
+     is what that permission is for, and a hostel that trusts a warden to make
+     backups should not have to make them an administrator. Import is the
+     destructive half and stays with the admins. */
+  const menuItem = (action, ok) => {
+    document.querySelectorAll('#hz-titlebar [data-action="' + action + '"]').forEach(el => {
+      el.style.display = ok ? '' : 'none';
+    });
+  };
+  menuItem('licenseSettings', canDo('users'));
+  menuItem('importBackup',    canDo('users'));
+  menuItem('exportBackup',    canDo('backup') || canDo('users'));
 }
  
 // ─────────────────────────────────────────────────────────────────────────────
@@ -782,6 +811,82 @@ function loginSwitchAccount() {
   _setLoginState('reset');
   loginPaintRemembered();
 }
+
+/* ══ THE SAVED-ACCOUNT LIST (owner, 2026-09-23) ═══════════════════════
+   loginSwitchAccount() below still cycles — it is what Enter on the button
+   does, and one press is the right answer when exactly two names are saved.
+   This is the other half: the circular sign opens the names, and a hostel with
+   three wardens on one machine picks the third without pressing twice.
+
+   ONLY THE USERNAME IS EVER FILLED. Nothing here knows a password, and the
+   password box is cleared and focused on every pick, which is the whole reason
+   'Remember me' was reduced to usernames on 2026-09-15.
+
+   The names come from this PC's own list and are escaped on the way in: they
+   are typed by whoever signs in, and this builds HTML. */
+function loginSwapPaint() {
+  const el = _ui('login-swaplist');
+  if (!el) return;
+  const uinp = _ui('login-user');
+  const now  = uinp ? uinp.value.trim().toLowerCase() : '';
+  const esc  = s => (typeof escHtml === 'function' ? escHtml(String(s))
+    : String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])));
+  el.innerHTML = _rememberedUsers().map(u => {
+    const on = u.toLowerCase() === now;
+    return '<button type="button" role="option" class="lg-swapopt' + (on ? ' is-on' : '') + '"'
+      + ' aria-selected="' + (on ? 'true' : 'false') + '"'
+      + ' onclick="loginSwapPick(this.dataset.u)" data-u="' + esc(u) + '">'
+      + '<span class="lg-swapopt__n">' + esc(u) + '</span>'
+      + (on ? '<span class="lg-swapopt__t">signed in here</span>' : '') + '</button>';
+  }).join('');
+}
+
+function loginSwapToggle(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  const el  = _ui('login-swaplist');
+  const btn = _ui('login-swap');
+  if (!el) return;
+  const open = el.hasAttribute('hidden');
+  if (open) loginSwapPaint();
+  if (open) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function loginSwapClose() {
+  const el  = _ui('login-swaplist');
+  const btn = _ui('login-swap');
+  if (el) el.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function loginSwapPick(name) {
+  const uinp = _ui('login-user');
+  const pinp = _ui('login-input');
+  if (uinp && name) uinp.value = name;
+  if (pinp) { pinp.value = ''; pinp.type = 'password'; }
+  _setLoginState('reset');
+  loginSwapClose();
+  loginPaintRemembered();
+  if (pinp) pinp.focus();
+}
+
+/* Clicking anywhere else, or Escape, puts the list away. Bound once, in the
+   capture phase for the same reason every other overlay in this app is: a
+   handler that waits for the bubble never runs when something below it stops
+   propagation. */
+(function _loginSwapBind() {
+  if (typeof document === 'undefined' || !document || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('click', function (e) {
+    const el = _ui('login-swaplist');
+    if (!el || el.hasAttribute('hidden')) return;
+    const n = e.target;
+    if (n && n.nodeType === 1 && n.closest && n.closest('.lg-swapwrap')) return;
+    loginSwapClose();
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') loginSwapClose();
+  }, true);
+})();
 
 function loginForgetUser() {
   const uinp = _ui('login-user');

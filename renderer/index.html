@@ -255,9 +255,25 @@
            auth-nev.js. -->
       <div class="lg-lblrow">
         <label class="lg-lbl" for="login-user">Username</label>
-        <button type="button" id="login-swap" class="lg-link lg-swap" hidden onclick="loginSwitchAccount()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
-          Switch account</button>
+        <!-- A CIRCULAR SWAP SIGN THAT PICKS, NOT A LINK THAT CYCLES (owner,
+             2026-09-23: "add a change or swap or a circular restore like sign
+             through which the saved account can be swapped without entering
+             usernames again and again").
+
+             It was a text link that stepped to the next remembered name, so
+             reaching the third of three meant pressing it twice and reading the
+             box each time. The glyph is the circular arrow they asked for and
+             it opens the list: every name saved on this PC, pick one. Only the
+             USERNAME is ever filled — the password is always typed. -->
+        <div class="lg-swapwrap">
+          <button type="button" id="login-swap" class="lg-swap" hidden
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="login-swaplist"
+                  title="Switch to another saved account" aria-label="Switch account"
+                  onclick="loginSwapToggle(event)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 6.36-2.64L21 16"/><path d="M21 21v-5h-5"/></svg>
+          </button>
+          <div id="login-swaplist" class="lg-swaplist" role="listbox" aria-label="Saved accounts" hidden></div>
+        </div>
       </div>
       <div class="lg-field">
         <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
@@ -511,6 +527,29 @@
 
 
   <!-- SCROLLABLE MIDDLE — Main + Finance + System nav groups -->
+  <!-- DASHBOARD IS PINNED (owner, 2026-09-23: "the sidebar have much pages and
+       whenever you are on a lower page you have to drag up to go to dashboard,
+       so i want the dashboard should be pinned like the month selector").
+
+       It sits OUTSIDE .sb-nav, which is the element that scrolls, next to the
+       month picker that is pinned the same way and for the same reason: both
+       are properties of the whole app rather than one page among many. The
+       "Main" heading went with it — it labelled a section of one item, and a
+       heading over a pinned control is a heading over nothing.
+
+       It costs the scrolling list nothing: one item leaves the scroll and the
+       same height leaves the viewport with it. -->
+  <div class="sb-pinned">
+    <div class="nav-item active" onclick="navRail('dashboard')" data-page="dashboard" title="Dashboard">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </svg>
+      <span class="nav-label">Dashboard</span>
+    </div>
+  </div>
   <nav class="sb-nav sidebar__middle">
     <!-- SECTION ORDER IS BY FREQUENCY. Owner's call, 2026-09-04, taken against
          a measurement rather than a preference: this list SCROLLS on every
@@ -540,16 +579,6 @@
          Adding an item: put it in the section it belongs to, keep this order,
          and re-measure with tests/rail-reach.spec.js instead of assuming it
          still fits. -->
-    <div class="sb-section">Main</div>
-    <div class="nav-item active" onclick="navRail('dashboard')" data-page="dashboard" title="Dashboard">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect width="7" height="9" x="3" y="3" rx="1" />
-        <rect width="7" height="5" x="14" y="3" rx="1" />
-        <rect width="7" height="9" x="14" y="12" rx="1" />
-        <rect width="7" height="5" x="3" y="16" rx="1" />
-      </svg>
-      <span class="nav-label">Dashboard</span>
-    </div>
     <div class="sb-section">People</div>
     <div class="nav-item" onclick="navRail('students')" data-page="students" title="Students">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
