@@ -55,6 +55,7 @@
       "renderer/**/*",
       "main.js",
       "preload.js",
+      "pdf-window-preload.js",
       "services/**/*",
       "migrations/001-relational-schema.js",
       "migrations/002-student-ledger.js",

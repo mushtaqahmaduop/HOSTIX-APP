@@ -1302,6 +1302,34 @@ function createWindow() {
     show: false
   });
 
+  /* ══ A DOWNLOAD ALWAYS ASKS WHERE TO PUT IT (owner, 2026-09-23) ═══════════
+     The Excel export is written in the renderer and handed over as an <a
+     download> — the one path in this app that produces a file without going
+     through dialog.showSaveDialog() first. What Chromium then does with it is a
+     default, not a decision: depending on the build it either asks or drops the
+     workbook into the user's Downloads folder with no dialog at all, which is
+     the half of "not the pre filled save option" that is about Excel.
+
+     This makes it explicit. Every download this app starts shows a Save dialog
+     with the filename the exporter already chose, and lands where the user
+     says. Cancelling is a cancel: nothing is written and nothing is reported.
+
+     It hangs off the SESSION rather than the window so it covers the report
+     window too, and the filter is built from the extension the exporter chose —
+     an .xlsx offers Excel files, a .pdf offers PDFs. */
+  mainWindow.webContents.session.on('will-download', (_evt, item) => {
+    const name = item.getFilename() || 'download';
+    const ext  = (name.split('.').pop() || '').toLowerCase();
+    const NAMED = { xlsx: 'Excel Workbook', pdf: 'PDF File', csv: 'CSV File', json: 'JSON Backup' };
+    item.setSaveDialogOptions({
+      title: 'Save ' + (NAMED[ext] || 'file'),
+      defaultPath: name,
+      filters: NAMED[ext]
+        ? [{ name: NAMED[ext], extensions: [ext] }, { name: 'All Files', extensions: ['*'] }]
+        : [{ name: 'All Files', extensions: ['*'] }],
+    });
+  });
+
   // Tell the custom title bar when to swap its maximize/restore glyph.
   const _sendMaxState = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {

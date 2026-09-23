@@ -130,7 +130,7 @@ function _pdfInject(html, opts) {
     + '<div id="__hxmsg" class="pdf-bar__m"></div>'
     + '<script>function __hxSavePdf(btn){'
     + 'var m=document.getElementById("__hxmsg");'
-    + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){window.print();return;}'
+    + 'if(!(window.hostylloPdf&&window.hostylloPdf.save)){'+ 'if(/Electron/.test(navigator.userAgent)){m.textContent="Save is unavailable in this build — falling back to the print dialog.";}'+ 'window.print();return;}'
     + 'btn.disabled=true;m.textContent="Generating PDF\\u2026";'
     + 'window.hostylloPdf.save().then(function(r){btn.disabled=false;'
     + 'm.textContent=r&&r.success?"Saved: "+r.filePath:(r&&r.reason==="cancelled"?"":(r&&r.reason)||"Export could not be generated. Please try again.");'
