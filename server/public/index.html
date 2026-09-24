@@ -1,154 +1,115 @@
 <!DOCTYPE html>
 <!--
-  Control plane — admin portal.
+  Hostyllo Control Plane — the owner's console for every Hostyllo Offline
+  install: licences, access levels, devices, features and the audit trail.
 
   Plain HTML/CSS/JS with no build step, matching the desktop app this service
-  exists for. It is an internal tool for one or two people; a bundler, a
-  framework and a dependency tree to audit would all be cost without a payer.
+  exists for. Views are drawn by app.js; this file is the shell.
 -->
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Control Plane</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Hostyllo Control Plane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232451D6'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='800' font-style='italic' font-size='20' fill='white' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="app.css">
+<script>
+  // Theme before first paint, so a light-theme owner never sees a dark flash.
+  try { var t = localStorage.getItem('cp_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
 </head>
 <body>
 
 <!-- ── Sign in ─────────────────────────────────────────────────────────── -->
 <div id="login" class="login" hidden>
-  <form class="login__card" id="login-form" autocomplete="on">
-    <div class="login__brand">Control Plane</div>
-    <div class="login__sub">Hostyllo — offline edition</div>
-    <label class="field">
-      <span>Email</span>
-      <input type="email" id="login-email" required autocomplete="username">
-    </label>
-    <label class="field">
-      <span>Password</span>
-      <input type="password" id="login-password" required autocomplete="current-password">
-    </label>
-    <div class="msg msg--error" id="login-error" hidden></div>
-    <button class="btn btn--primary btn--block" type="submit" id="login-btn">Sign in</button>
-  </form>
+  <div class="login__card">
+    <div class="login__brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="login__title">Control Plane</div>
+        <div class="login__sub">Hostyllo Offline — owner's console</div>
+      </div>
+    </div>
+    <form id="login-form" autocomplete="on">
+      <label class="field"><span>Email</span>
+        <input class="input" type="email" id="login-email" required autocomplete="username"></label>
+      <label class="field"><span>Password</span>
+        <input class="input" type="password" id="login-password" required autocomplete="current-password"></label>
+      <label class="field hidden" id="login-code-field"><span>Authenticator code</span>
+        <input class="input mono" id="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+        <small>Open your authenticator app and enter the 6-digit code for Hostyllo Control.</small></label>
+      <div class="alert alert--danger hidden" id="login-error"></div>
+      <button class="btn btn--primary" type="submit" id="login-btn">Sign in</button>
+    </form>
+  </div>
 </div>
 
 <!-- ── App ─────────────────────────────────────────────────────────────── -->
-<div id="app" hidden>
-  <header class="top">
-    <div class="top__brand">Control Plane</div>
-    <nav class="top__nav">
-      <button class="tab is-active" data-view="licenses">Licences</button>
-      <button class="tab" data-view="issue">Issue key</button>
-      <button class="tab" data-view="audit">Audit</button>
+<div id="app" class="shell" hidden>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__brand">
+      <div class="brand-row">
+        <div class="brand-mark">H</div>
+        <div>
+          <div class="brand-name">HOSTYLLO</div>
+          <div class="brand-sub">Control Plane</div>
+        </div>
+      </div>
+      <div class="role-badge" id="role-badge"></div>
+      <button class="twofa" id="twofa-pill" data-go="security"></button>
+    </div>
+
+    <nav id="nav" aria-label="Sections">
+      <div class="nav-section">Platform</div>
+      <button class="nav-item" data-go="overview"></button>
+      <button class="nav-item" data-go="hostels"></button>
+      <button class="nav-item" data-go="register"></button>
+      <div class="nav-section">Control</div>
+      <button class="nav-item" data-go="fleet"></button>
+      <div class="nav-section">Operations</div>
+      <button class="nav-item" data-go="audit"></button>
+      <button class="nav-item" data-go="system"></button>
+      <div class="nav-section">Settings</div>
+      <button class="nav-item" data-go="admins"></button>
+      <button class="nav-item" data-go="security"></button>
     </nav>
-    <div class="top__right">
-      <span class="who" id="who"></span>
-      <button class="btn btn--ghost" id="logout">Sign out</button>
-    </div>
-  </header>
 
-  <div class="warnbar" id="warnbar" hidden></div>
-
-  <!-- Licences -->
-  <main class="view" id="view-licenses">
-    <section class="stats" id="stats"></section>
-
-    <div class="toolbar">
-      <input class="input input--search" id="search" placeholder="Search hostel, city, contact…">
-      <select class="input" id="filter-status">
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="suspended">Suspended</option>
-        <option value="revoked">Revoked</option>
-      </select>
-      <select class="input" id="filter-verification">
-        <option value="">All</option>
-        <option value="unverified">Unverified</option>
-        <option value="verified">Verified</option>
-        <option value="rejected">Rejected</option>
-      </select>
-      <label class="check">
-        <input type="checkbox" id="filter-expiring"> Expiring in 30 days
-      </label>
-    </div>
-
-    <div class="tablewrap">
-      <table class="table" id="licenses-table">
-        <thead>
-          <tr>
-            <th>Hostel</th><th>Key</th><th>Status</th><th>Expires</th>
-            <th>Devices</th><th>Last seen</th><th>Version</th>
-          </tr>
-        </thead>
-        <tbody id="licenses-body"></tbody>
-      </table>
-      <div class="empty" id="licenses-empty" hidden>No licences match.</div>
-    </div>
-  </main>
-
-  <!-- Issue key -->
-  <main class="view" id="view-issue" hidden>
-    <div class="panel panel--narrow">
-      <h2 class="panel__title">Issue a licence key</h2>
-      <p class="panel__note">
-        The key is shown <strong>once</strong> — only its fingerprint is stored. Send it to the
-        customer before leaving this page.
-      </p>
-      <form id="issue-form">
-        <label class="field"><span>Expires on</span><input type="date" id="issue-expires" required></label>
-        <div class="presets" id="issue-presets"></div>
-        <label class="field"><span>Hostel name</span><input type="text" id="issue-hostel"></label>
-        <div class="row">
-          <label class="field"><span>Contact</span><input type="text" id="issue-contact" placeholder="Contact person"></label>
-          <label class="field"><span>Phone</span><input type="text" id="issue-phone" placeholder="03xx…"></label>
+    <div class="sidebar__bottom">
+      <div class="user-card">
+        <div class="avatar" id="me-avatar"></div>
+        <div style="min-width:0">
+          <div class="user-card__name" id="me-name"></div>
+          <div class="user-card__role" id="me-email"></div>
         </div>
-        <div class="row">
-          <label class="field"><span>City</span><input type="text" id="issue-city"></label>
-          <label class="field"><span>Computers allowed</span><input type="number" id="issue-devices" min="1" max="1000" value="1"></label>
-        </div>
-        <label class="field"><span>Notes</span><input type="text" id="issue-notes"></label>
-        <div class="msg msg--error" id="issue-error" hidden></div>
-        <button class="btn btn--primary" type="submit">Generate key</button>
-      </form>
-
-      <div class="keyout" id="issue-result" hidden>
-        <div class="keyout__label">New licence key — copy it now</div>
-        <div class="keyout__key" id="issue-key"></div>
-        <button class="btn" id="issue-copy">Copy</button>
-        <div class="keyout__meta" id="issue-meta"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn--ghost btn--sm" id="theme-btn"></button>
+        <button class="btn btn--ghost btn--sm" id="logout-btn"></button>
       </div>
     </div>
-  </main>
-
-  <!-- Audit -->
-  <main class="view" id="view-audit" hidden>
-    <div class="tablewrap">
-      <table class="table">
-        <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
-        <tbody id="audit-body"></tbody>
-      </table>
-    </div>
-  </main>
-</div>
-
-<!-- ── Licence detail ──────────────────────────────────────────────────── -->
-<div class="drawer" id="drawer" hidden>
-  <div class="drawer__scrim" id="drawer-scrim"></div>
-  <aside class="drawer__panel">
-    <header class="drawer__head">
-      <div>
-        <h2 class="drawer__title" id="d-title">—</h2>
-        <div class="drawer__sub" id="d-sub"></div>
-      </div>
-      <button class="btn btn--ghost" id="drawer-close">Close</button>
-    </header>
-    <div class="drawer__body" id="drawer-body"></div>
   </aside>
+
+  <div class="main">
+    <header class="header">
+      <button class="btn btn--ghost btn--icon menu-btn" id="menu-btn" aria-label="Menu"></button>
+      <div class="header__title" id="title"></div>
+      <div class="header__spacer"></div>
+      <span class="live hide-sm" id="live" title="Refreshes on its own"><span class="dot"></span><span id="live-text">Live</span></span>
+      <div class="search hide-sm" style="width:260px">
+        <span id="search-ico"></span>
+        <input class="input" id="global-search" placeholder="Find a hostel…" autocomplete="off">
+      </div>
+      <button class="btn btn--primary" id="hdr-register"></button>
+    </header>
+    <div class="content"><div class="content__inner" id="view"></div></div>
+  </div>
 </div>
 
-<div class="toast" id="toast" hidden></div>
-
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
 </html>
