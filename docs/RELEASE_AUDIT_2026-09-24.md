@@ -82,6 +82,7 @@ through the updater.
 | F5 | **The 32-bit installer cannot open its database** (open since the 2026-09-10 audit). v5.0.0 on GitHub ships one. | Release builds are x64 only; `build:ia32` compiles SQLite for i386 first. | `test:update` 9/9 |
 | F6 | **42 invented rooms** on every fresh install, restored backup and data reset. | Removed. A new hostel starts empty. | typecheck; `test:services` 166/166 |
 | F8 | **Title-bar menus were dead to the keyboard after sign-in** (File: ArrowDown/End/Home did nothing) and focused invisible items on the login screen. Introduced when admin-only items started being hidden (2026-09-23). | Arrow keys walk the items that are shown, read at the keypress. | `titlebar-keyboard` 2/2 in Electron (it failed on the owner's branch) |
+| F9 | After a support request opened WhatsApp, the list still said **"not sent yet"** (stamped, not redrawn). | Redraws after stamping. | `support-page` in Electron |
 | F7 | Because of F6, **the first-run setup wizard never ran** for anyone (it only opens on an install with no rooms and no students). | Nothing to change — it now runs on a fresh install, as designed. | 26 older specs relied on the fake rooms; they now use a test fixture (`tests/_fresh-install.js`) |
 
 ## Open — not blocking, owner's call
@@ -115,7 +116,35 @@ through the updater.
 
 ## Test results
 
-_A final full run of all 83 spec files is in progress; its numbers replace this line._
+Real Electron app (headless, this container), all 83 spec files:
+
+| Run | Passed | Failed | Skipped |
+|---|---|---|---|
+| Start of audit | 194 | 69 | 2 |
+| Final full run (after every fix below) | 254 | 10 | 2 |
+| + the 4 spec files fixed after that run, re-run on their own | 11 of 11 | 0 | — |
+
+The six that still fail, each explained — **none is a known app defect except O7**:
+
+| Spec | Why |
+|---|---|
+| `license-activation` ×2, `licence-enforcement` ×1 | This container has no hardware fingerprint, and the app correctly refuses to activate ("Could not read the hardware details … NOT activated"). Environment; passes on a real PC. |
+| `write-failure` ×1 | Makes the database read-only with `chmod`; the container runs as root, which ignores it. Environment. |
+| `students-panel` ×1 | **Real defect O7** — the "Blacklisted" pill overflows its cell by 5px. |
+| `_trendbug-tmp` ×1 | Stale temporary spec (O6). |
+
+Honest limit: the last line is a targeted re-run of four files, not a second
+full run. Everything else in the table is one full, unedited run.
+
+Also run: `test:services` 166/166 · `test:license` · `test:activation` 6/6 ·
+`test:retention` 13/13 · `test:export` 67 · `test:theme` 4 · `test:update` 9/9 ·
+`test:whatsapp` 13/13 · `test:security` 6/6 · `typecheck` 0 errors · server
+`npm test` 29 + 29 · server `test:pg` 27/27 on real Postgres 16 · the admin
+portal, every view, in Chromium.
+
+Along the way the specs turned up two real bugs that are now fixed:
+**F8** (title-bar keyboard) and **F9** (a sent support request still said "not
+sent yet" until the page was left and reopened).
 
 ## What only a Windows PC can check (before release)
 
