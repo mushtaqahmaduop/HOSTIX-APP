@@ -508,3 +508,24 @@ test('a visit to Reports starts on this month', async () => {
 
   await app.close();
 });
+
+/* Owner, 2026-09-24: "print pending payments report in the quick reports
+   should also print student contact number". The number comes from the
+   student's record — a payment carries none — and sits beside the name. */
+test('the Pending Payments report prints each student\'s contact number', async () => {
+  const { app, win } = await openApp();
+  await seed(win);
+
+  const out = await win.evaluate(() => {
+    const def = _rptDetailDef('pending');
+    const doc = EXPORT.document(def);
+    const labels = def.columns.filter(c => c.pdf !== false).map(c => c.label);
+    return { labels, html: doc.html, value: def.columns.find(c => c.label === 'Contact').value(def.rows[0]) };
+  });
+  expect(out.labels.indexOf('Contact'), 'no Contact column on the printed report')
+    .toBe(out.labels.indexOf('Student') + 1);
+  expect(out.value).toBe('0300-0000000');
+  expect(out.html, 'the number is not on the printed page, or can wrap').toContain('<span style="white-space:nowrap">0300-0000000</span>');
+
+  await app.close();
+});

@@ -2394,6 +2394,18 @@ function _rptDetailDef(type) {
   if (type === 'pending') {
     const pend = pays.filter(p => p.status === 'Pending')
       .sort((a, b) => new Date(a.dueDate || a.date) - new Date(b.dueDate || b.date));
+    /* THE NUMBER TO RING (owner, 2026-09-24: "print pending payments report in
+       the quick reports should also print student contact number"). This is
+       the list a warden works down with a phone in hand, so the student's own
+       number sits beside their name. Read from the student record — a payment
+       does not carry one — and one line, as on the roster: a hyphenated
+       0326-0408880 would otherwise break in two. */
+    const byId  = new Map((DB.students || []).map(s => [s.id, s]));
+    const phone = p => String((byId.get(p.studentId) || {}).phone || '');
+    const cols  = _rptPayColumns({ paidLabel: 'Part paid' });
+    cols.splice(cols.findIndex(c => c.label === 'Student') + 1, 0,
+      { label: 'Contact', type: 'text', width: 16, value: phone,
+        get: p => phone(p) ? '<span style="white-space:nowrap">' + escHtml(phone(p)) + '</span>' : '—' });
     return Object.assign(def, {
       sheet: 'Pending',
       summary: [
@@ -2401,7 +2413,7 @@ function _rptDetailDef(type) {
         { label: 'Total outstanding', value: EXPORT.fmt.money(T.pending), tone: 'neg' },
         { label: 'Part paid', value: EXPORT.fmt.money(T.pendingTotals.collected), tone: 'pos' },
       ],
-      columns: _rptPayColumns({ paidLabel: 'Part paid' }).concat([
+      columns: cols.concat([
         { label: 'Due', type: 'date', width: 13, pdf: false, value: p => p.dueDate || '' },
       ]),
       rows: pend,
