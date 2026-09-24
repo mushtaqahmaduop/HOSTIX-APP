@@ -17,6 +17,43 @@
 const crypto = typeof require !== 'undefined' ? require('crypto') : null;
 
 // ── Electron external link helper ─────────────────────────────────────────────
+/* A WhatsApp chat link that works on every PC (owner, 2026-09-24: "the whatsapp
+   support is broken").
+
+   `whatsapp://send` opens ONLY when WhatsApp Desktop is installed. On a PC
+   without it Windows has no handler, shell.openExternal rejects into a console
+   line, and the button does nothing at all. `https://wa.me/` is WhatsApp's own
+   universal link: it hands over to the desktop app when there is one and to
+   WhatsApp Web when there is not.
+
+   Pakistani numbers are normalised to the international form wa.me needs:
+   0342… and 0092342… both become 92342…. The encoded message is trimmed so
+   the whole link stays under the 2048 characters preload.js and main.js
+   accept — they drop a longer one silently. Returns '' without a number. */
+function waLink(phone, text) {
+  var num = String(phone || '').replace(/[^0-9]/g, '').replace(/^0092/, '92').replace(/^0/, '92');
+  if (!num) return '';
+  var pre = 'https://wa.me/' + num + '?text=';
+  return pre + waFitText(text, 1900 - pre.length);      // headroom under 2048
+}
+
+/* The longest head of `text` whose encoding fits `budget`, encoded. Trimmed in
+   whole CHARACTERS before encoding, never in the encoded string: an Urdu letter
+   is two or three %XX escapes, and cutting between them left a link WhatsApp
+   could not decode. Array.from keeps a surrogate pair (an emoji) whole too. */
+function waFitText(text, budget) {
+  var s = String(text || '');
+  var full = encodeURIComponent(s);
+  if (full.length <= budget) return full;
+  var chars = Array.from(s), lo = 0, hi = chars.length;
+  while (lo < hi) {                                      // largest n that fits
+    var mid = (lo + hi + 1) >> 1;
+    if (encodeURIComponent(chars.slice(0, mid).join('')).length <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  return encodeURIComponent(chars.slice(0, lo).join(''));
+}
+
 function openExternalLink(url) {
   try {
     if (window.electronAPI && window.electronAPI.openExternal) {
@@ -1508,7 +1545,7 @@ if (typeof module !== 'undefined' && module.exports) {
     validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
     buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
-    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────

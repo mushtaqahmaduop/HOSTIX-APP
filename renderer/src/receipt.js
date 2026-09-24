@@ -521,5 +521,5 @@ function sendWA(payId) {
       + 'Month: ' + p.month + '\nRoom ' + roomText(p.roomNumber,
           ((DB.rooms||[]).find(function(r){ return String(r.number)===String(p.roomNumber); })||{}).floor);
   }
-  openExternalLink('whatsapp://send?phone=' + phone + '&text=' + encodeURIComponent(msg));
+  openExternalLink(waLink(phone, msg));   // works without WhatsApp Desktop too
 }

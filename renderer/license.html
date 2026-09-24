@@ -467,7 +467,7 @@
        the only place these appear. */
     const SUPPORT = {
       email: 'hostyllo.info@gmail.com',
-      phone: '+92 342 8524842',       // empty hides the row entirely
+      whatsapp: '+92 342 8521842',    // owner, 2026-09-24 — empty hides the row
     };
 
     (function fillSupport() {
@@ -480,9 +480,21 @@
       const p = document.getElementById('help-phone');
       // A row with a dash in it is worse than no row: it looks like the number
       // failed to load rather than like there is no phone line.
-      if (SUPPORT.phone) {
-        document.getElementById('help-phone-text').textContent = SUPPORT.phone;
-        p.href = 'tel:' + SUPPORT.phone.replace(/[^0-9+]/g, '');
+      //
+      // It is a WhatsApp number, so it opens a chat — a `tel:` link does nothing
+      // useful on a PC. wa.me rather than whatsapp:// so it works without
+      // WhatsApp Desktop, and through openExternal: a plain href would load
+      // wa.me INSIDE this window, replacing the licence screen.
+      if (SUPPORT.whatsapp) {
+        document.getElementById('help-phone-text').textContent = 'WhatsApp ' + SUPPORT.whatsapp;
+        const num = SUPPORT.whatsapp.replace(/[^0-9]/g, '').replace(/^0/, '92');
+        p.href = '#';
+        p.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          if (window.electronAPI && window.electronAPI.openExternal) {
+            window.electronAPI.openExternal('https://wa.me/' + num);
+          }
+        });
       } else { p.remove(); }
     })();
 

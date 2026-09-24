@@ -43,7 +43,7 @@
 /* ══ HOSTYLLO'S OWN SUPPORT DETAILS, NOT THE HOSTEL'S (owner, 2026-09-23) ═══
    "use this: hostyllo.info@gmail.com ... and whatsapp number: +923428524842
    and in the support page you added these details editable which is a wrong
-   idea".
+   idea". The WhatsApp number changed to 03428521842 on 2026-09-24 (owner).
 
    They were kept in DB.settings behind the `settings` permission, with an
    editor on this page. That was the wrong model twice over: it let a hostel
@@ -60,7 +60,7 @@
    landline, so `phone` resolves to nothing and every route that offered it is
    simply not drawn — rather than a tel: link to a number that does not exist. */
 const SUPPORT = {
-  whatsapp: '+92 342 8524842',
+  whatsapp: '+92 342 8521842',   // owner, 2026-09-24
   email:    'hostyllo.info@gmail.com',
   phone:    '',
   hours:    'Mon – Sat, 9am – 7pm',
@@ -256,8 +256,8 @@ async function supReach(kind, ticketId) {
   if (kind === 'whatsapp') {
     const raw = supGet('supportWhatsApp');
     if (!raw) { supNoContact(); return false; }
-    const num = raw.replace(/[^0-9]/g, '').replace(/^0/, '92');
-    openExternalLink('whatsapp://send?phone=' + num + '&text=' + encodeURIComponent(body));
+    // wa.me, not whatsapp://send — see waLink() in utils.js for why.
+    openExternalLink(waLink(raw, body));
     return true;
   }
   if (kind === 'email') {
