@@ -16,6 +16,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const fs = require('fs');
 
@@ -48,6 +49,7 @@ async function login(win, password = 'admin123', username = 'warden1') {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
 }
 
 // Seed a room + student through the app's REAL submit functions (same path the

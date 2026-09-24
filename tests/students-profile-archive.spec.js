@@ -17,6 +17,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -51,6 +52,7 @@ async function openApp() {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForTimeout(700);
   return { app, win };
 }
@@ -119,7 +121,9 @@ test('the students table states the whole agreement, not the rent half', async (
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
     title:  (tr.querySelector('.stu-charge') || {}).getAttribute('title') || '',
-    cover:  (tr.querySelector('.ui-chip') || {}).textContent || '',
+    // The plan label is .stu-charge__plan since the register redesign; the
+    // row's first .ui-chip is now the student's status.
+    cover:  (tr.querySelector('.stu-charge__plan') || {}).textContent || '',
   })));
 
   const by = n => rows.find(r => r.name.trim() === n);

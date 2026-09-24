@@ -18,6 +18,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -59,6 +60,7 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
 
   // ── 1. Add Room modal ──────────────────────────────────────────────────────
   await win.evaluate(() => showAddRoomModal());
@@ -354,10 +356,15 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
   expect(savedRoom, 'amenities did not persist through submitAddRoom').toContain('Wi-Fi');
   expect(editRoom.on, 'edit modal did not pre-check stored amenities').toBeGreaterThan(0);
   expect(reports.renderError, 'reports render error').toBe(false);
-  expect(reports.mov, 'monthly overview missing').toBe(true);
-  expect(reports.cells, 'peaks strip missing').toBe(4);
-  expect(reports.series, 'profit series missing').toEqual(['Collection', 'Expenses', 'Profit']);
-  expect(reports.tension, 'trend line must be straight, not curved').toEqual([0, 0, 0]);
+  /* THE REPORTS PAGE WAS REBUILT TO THE OWNER'S DESIGN (a908e56, 2026-09-22).
+     Updated 2026-09-24 for that deliberate change, not to quiet a failure. The
+     Monthly Overview block and its peaks strip (.mov) are gone; Financial
+     Performance draws Revenue and Expenses as bars with Net Result as a line.
+     What this defended is unchanged: the chart exists, carries the net figure,
+     and the one line on it is straight — bars have no tension (null). */
+  expect(reports.canvas, 'financial performance chart missing').toBe(true);
+  expect(reports.series, 'net result series missing').toEqual(['Revenue', 'Expenses', 'Net Result']);
+  expect(reports.tension, 'the net line must be straight, not curved').toEqual([null, null, 0]);
   expect(dash.renderError, 'dashboard render error').toBe(false);
   // Series COUNT is not the assertion — the properties are. The Transfers line
   // is drawn only while FEATURES.fundsTransferCard is on (it plots money that

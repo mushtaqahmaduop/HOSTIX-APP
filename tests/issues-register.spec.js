@@ -32,6 +32,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -61,6 +62,7 @@ async function launch() {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 60000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   return { app, win };
 }
 
@@ -133,7 +135,8 @@ test('the register is a ten-column table, and a legacy record still renders in i
      sentence-case headers, and "Reported On" / "Assigned To" were the last two
      Title Case ones on the register. The COLUMNS are what this asserts, and
      they are unchanged. */
-  expect(heads).toEqual(['#', 'Issue', 'Raised by', 'Room', 'Category', 'Priority',
+  // '#' became 'ID' in the owner's WIP of 2026-09-24 (f0a6408).
+  expect(heads).toEqual(['ID', 'Issue', 'Raised by', 'Room', 'Category', 'Priority',
                          'Status', 'Reported on', 'Assigned to', 'Actions']);
 
   const rows = await win.evaluate(() =>

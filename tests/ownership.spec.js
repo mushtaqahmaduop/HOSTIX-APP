@@ -13,6 +13,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -38,6 +39,7 @@ async function login(win) {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.waitForFunction(
     () => typeof _ledgerReady !== 'undefined' && _ledgerReady === true, null, { timeout: 30000 });
 }
@@ -98,7 +100,10 @@ test('collected money is locked, and only its collector or an admin may change i
     expect(saraView.text).toContain('Collected by Ali Warden');
     expect(saraView.save, 'Save is offered on a view-only form').toBe(false);
     expect(saraView.rent).toBe(true);
-    expect(saraView.receive, 'a view-only form offers to receive money').toBe(true);
+    // Receiving NEW money stays open to any account with the payments permission
+    // (owner, 2026-09-23, 9453e9e): it adds a collection in Sara's own name and
+    // changes nothing Ali collected. What stays locked is the bill — next check.
+    expect(saraView.receive, 'a warden cannot take the pending balance at the desk').toBe(false);
     const saraForced = await win.evaluate(async pid => {
       document.getElementById('f-prent').value = '1';
       await submitEditPayment(pid);

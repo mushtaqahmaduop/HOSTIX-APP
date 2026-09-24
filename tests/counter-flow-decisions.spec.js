@@ -17,6 +17,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const fs = require('fs');
 const { resetProfile } = require('./_profile');
@@ -43,6 +44,7 @@ async function login(win) {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 30000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
 }
 
 test.beforeAll(() => { resetProfile(); });
@@ -110,7 +112,8 @@ test('a student on notice keeps their bed, the room says when it frees, and the 
   expect(room.state).toBe('Occupied');
 
   // …and the sheet says which one is leaving, and when.
-  expect(room.vacBadge).toBe('1 vacating');
+  // The owner's vocabulary (c8a847a, 2026-09-22): a bed on notice is 'cancelling'.
+  expect(room.vacBadge).toBe('1 cancelling');
   const leaver = room.chips.find(c => /Gives Notice/.test(c.text));
   const stayer = room.chips.find(c => /Stays Put/.test(c.text));
   expect(leaver, 'the student on notice must still appear in their room').toBeTruthy();
@@ -149,11 +152,14 @@ test('a student on notice keeps their bed, the room says when it frees, and the 
   // Either way it is the roster total the other three have to add up to.
   const total = cards.find(c => /^(total students|students in )/i.test(c.label || ''));
 
-  expect(by('On Notice'), 'the On Notice card must appear once somebody is on notice').toBeTruthy();
-  expect(by('On Notice').val).toBe(1);
+  /* The owner's vocabulary (c8a847a, 2026-09-22): the notice card is
+     'Cancelling', and the strip no longer carries a 'Left' card. Nobody has
+     left in this fixture, so the cards must still add up to the roster. */
+  expect(by('Cancelling'), 'the Cancelling card must appear once somebody is on notice').toBeTruthy();
+  expect(by('Cancelling').val).toBe(1);
   expect(total, 'no roster-total card on the strip').toBeTruthy();
   expect(total.val).toBe(2);
-  expect(by('Active').val + by('On Notice').val + by('Left').val + by('Blacklisted').val)
+  expect(by('Active').val + by('Cancelling').val + ((by('Left') || {}).val || 0) + by('Blacklisted').val)
     .toBe(total.val);
 
   // Clicking it filters to exactly that student.

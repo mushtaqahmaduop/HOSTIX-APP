@@ -21,6 +21,7 @@
 'use strict';
 
 const { test, expect, _electron: electron } = require('@playwright/test');
+const { settleFreshInstall } = require('./_fresh-install');
 const path = require('path');
 const { resetProfile } = require('./_profile');
 
@@ -51,6 +52,7 @@ async function launch() {
   await win.waitForFunction(
     () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
     null, { timeout: 60000 });
+  await settleFreshInstall(win);   // setup done + the 42 rooms these specs expect
   await win.evaluate(async () => {
     // Start every test from no tickets and no contacts.
     delete DB.settings.supportTickets;
@@ -114,11 +116,16 @@ test('every block the reference draws is on the page, and each one leads somewhe
   expect(pageErrors).toEqual([]);
 });
 
-test('a request is stored before it is sent, and is not marked sent when it could not be', async () => {
+/* The support contacts are Hostyllo's own and fixed (owner, 2026-09-23), so a
+   request always has somewhere to go: it is stored, then opened on WhatsApp.
+   This used to be the "no contact configured" case, which no longer exists.
+   openExternalLink is stubbed so a test run never opens a real chat. */
+test('a request is stored before it is sent, and is stamped sent once WhatsApp opens', async () => {
   const { app, win } = await launch();
 
-  // No contacts are configured — this is the case the promise is about.
   const out = await win.evaluate(async () => {
+    window.__opened = [];
+    window.openExternalLink = (u) => { window.__opened.push(u); };
     document.getElementById('sup-t-subject').value = 'Unable to generate fee receipt';
     document.getElementById('sup-t-desc').value = 'The Print button on a payment does nothing.';
     document.getElementById('sup-t-cat').value = 'Fees & Payments';
@@ -127,7 +134,8 @@ test('a request is stored before it is sent, and is not marked sent when it coul
     await new Promise(r => setTimeout(r, 400));
     const t = (DB.settings.supportTickets || [])[0];
     return t ? { ref: t.ref, subject: t.subject, cat: t.category, prio: t.priority,
-                 status: t.status, sentAt: t.sentAt, diag: t.diagnostics } : null;
+                 status: t.status, sentAt: t.sentAt, sentVia: t.sentVia, diag: t.diagnostics,
+                 opened: window.__opened } : null;
   });
 
   expect(out, 'the request was not stored at all').toBeTruthy();
@@ -136,7 +144,15 @@ test('a request is stored before it is sent, and is not marked sent when it coul
   expect(out.cat).toBe('Fees & Payments');
   expect(out.prio).toBe('High');
   expect(out.status).toBe('open');
-  expect(out.sentAt, 'a request was marked sent with nothing to send it with').toBeNull();
+  expect(out.sentVia).toBe('whatsapp');
+  expect(out.sentAt, 'a request that opened WhatsApp was not stamped sent').toBeTruthy();
+  expect(out.opened.length, 'nothing was opened').toBe(1);
+  expect(out.opened[0], 'not a wa.me link to Hostyllo support')
+    .toMatch(/^https:\/\/wa\.me\/923428521842\?text=/);
+  const msg = decodeURIComponent(out.opened[0].split('?text=')[1]);
+  expect(msg, 'the message does not carry the request').toContain(out.ref);
+  expect(msg).toContain('Unable to generate fee receipt');
+  expect(msg, 'the message does not carry the diagnostics').toContain('Machine ID:');
 
   /* THE DIAGNOSTICS ARE CAPTURED WITH THE TICKET, and they are what support
      asks for — but never a credential. */
@@ -156,8 +172,8 @@ test('a request is stored before it is sent, and is not marked sent when it coul
   expect(shown.rows).toBe(1);
   expect(shown.text).toContain(out.ref);
   expect(shown.text).toContain('Unable to generate fee receipt');
-  expect(shown.text, 'the list does not say the request has not gone anywhere')
-    .toContain('not sent yet');
+  expect(shown.text, 'the list still says the request has not gone anywhere')
+    .not.toContain('not sent yet');
 
   // And it survives a restart, because it is in the database and not in a variable.
   await app.close();
@@ -230,43 +246,42 @@ test('the knowledge base is real, searchable and works offline', async () => {
   await app.close();
 });
 
-test('setting a contact turns the routes on, and every one carries the details', async () => {
+/* Owner, 2026-09-23: the support details are Hostyllo's, not the hostel's —
+   constants, the same on every install, with no editor. The WhatsApp number
+   changed to 03428521842 on 2026-09-24. */
+test('the support contacts are Hostyllo\'s own, fixed, and every route carries them', async () => {
   const { app, win } = await launch();
 
-  // Empty: the rail says so rather than offering a button that refuses.
-  const before = await win.evaluate(() => ({
+  const out = await win.evaluate(() => ({
     empty: !!document.querySelector('.sup-rail .sup-empty'),
     routes: document.querySelectorAll('.sup-touch').length,
     best: supBestRoute(),
+    wa: supGet('supportWhatsApp'),
+    email: supGet('supportEmail'),
+    phone: supGet('supportPhone'),
+    editor: typeof supEditContacts === 'function' || !!document.getElementById('sup-supportWhatsApp'),
+    text: (document.querySelector('.sup-rail') || {}).innerText || '',
   }));
-  expect(before.empty, 'an unconfigured install does not say so').toBe(true);
-  expect(before.routes).toBe(0);
-  expect(before.best).toBeNull();
+  expect(out.empty, 'a fresh install says no contact is set').toBe(false);
+  expect(out.wa).toBe('+92 342 8521842');
+  expect(out.email).toBe('hostyllo.info@gmail.com');
+  expect(out.phone, 'a telephone line is offered that the owner never named').toBe('');
+  expect(out.editor, 'the contacts can be edited from the hostel').toBe(false);
+  expect(out.routes, 'WhatsApp and email should both be offered').toBe(2);
+  expect(out.best).toBe('whatsapp');
+  expect(out.text).toContain('hostyllo.info@gmail.com');
 
-  const after = await win.evaluate(async () => {
-    supEditContacts();
-    await new Promise(r => setTimeout(r, 300));
-    document.getElementById('sup-supportWhatsApp').value = '0300-1234567';
-    document.getElementById('sup-supportEmail').value = 'support@example.com';
-    document.getElementById('sup-supportHours').value = 'Mon – Sat, 9am – 7pm';
-    await supSaveContacts();
-    await new Promise(r => setTimeout(r, 500));
-    return {
-      stored: { wa: DB.settings.supportWhatsApp, em: DB.settings.supportEmail,
-                hrs: DB.settings.supportHours, ph: DB.settings.supportPhone },
-      routes: document.querySelectorAll('.sup-touch').length,
-      best: supBestRoute(),
-      text: (document.querySelector('.sup-rail') || {}).innerText || '',
-    };
+  // Each route carries the diagnostics, through the link the app really opens.
+  const links = await win.evaluate(async () => {
+    const opened = [];
+    window.openExternalLink = (u) => { opened.push(u); };
+    await supReach('whatsapp'); await supReach('email');
+    return opened;
   });
-  expect(after.stored.wa).toBe('0300-1234567');
-  expect(after.stored.em).toBe('support@example.com');
-  expect(after.stored.hrs).toBe('Mon – Sat, 9am – 7pm');
-  // A field left blank stores nothing rather than an empty string.
-  expect(after.stored.ph).toBeUndefined();
-  expect(after.routes, 'two contacts were set and fewer than two routes appeared').toBe(2);
-  expect(after.best).toBe('whatsapp');
-  expect(after.text).toContain('0300-1234567');
+  expect(links[0]).toMatch(/^https:\/\/wa\.me\/923428521842\?text=/);
+  expect(decodeURIComponent(links[0].split('?text=')[1])).toContain('Machine ID:');
+  expect(links[1]).toMatch(/^mailto:hostyllo\.info%40gmail\.com\?subject=/);
+  expect(decodeURIComponent(links[1])).toContain('Machine ID:');
 
   await app.close();
 });
