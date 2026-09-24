@@ -8,7 +8,7 @@ the hostel **immediately**. A key, once bound to a PC, must not work on another.
 The panel should feel like the Cloud SaaS super-admin prototype: professional,
 "god mode".
 
-Nothing below is built yet. Decisions agreed are in §8.
+Built 2026-09-24 on `claude/new-session-fd63wc` — see `docs/SESSION_HANDOFF_2026-09-24-admin-panel.md`. Decisions agreed are in §8.
 
 ---
 
