@@ -11,6 +11,11 @@
     background:var(--bg); padding:24px;
 }
 body.onb-open { overflow:hidden; }
+/* A dialog the wizard opens must sit ABOVE it. Every dialog is a .modal-overlay
+   at z-index 350 (style.css), so "Skip for now" opened its confirm underneath
+   the wizard and the button looked dead; the logo's Remove / Choose another did
+   the same (owner, 2026-09-24). Toasts (9999) and the title bar stay on top. */
+body.onb-open .modal-overlay { z-index:9100; }
 
 .onb-box {
     display:grid; grid-template-columns:232px 1fr;
