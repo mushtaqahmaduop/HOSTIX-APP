@@ -33,12 +33,28 @@ const migration001 = require('./migrations/001-relational-schema');
 let db = null;
 let _schemaMigrated = false;
 
+/* [Phase 1 §19.2] Set when the database could not be opened or failed its
+   integrity check. While it holds a value the app is in RECOVERY: no write may
+   be attempted, and the window shows the recovery screen instead of the app.
+
+   It is deliberately a value rather than a thrown error. At baseline a corrupt
+   database threw out of initDatabase() into an unguarded app.whenReady, so the
+   app died with no message and the .pre-v1.bak sitting beside it was never
+   offered — the customer's data was often perfectly recoverable and there was
+   no way to tell. */
+let _recovery = null;   // { state, detail, dbPath, candidate } | null
+
 // ── Online services (Phase 1) ─────────────────────────────────────────────────
 // Connectivity, API client, durable queue, structured logging. Inert until a
 // control plane URL is configured — see services/config.js.
 const onlineServices = require('./services');
 const appLogger = require('./services/logger');
 const enforcement = require('./services/enforcement');
+// [Phase 1 — data safety] Health classification and verified local backups.
+// Both are pure modules with no Electron dependency, so they are unit-testable
+// under plain Node and are exercised against the fixture set.
+const dbHealth = require('./services/db-health');
+const backup   = require('./services/backup');
 /* Shown to a customer who cannot use the app, so it must be somewhere they can
    actually reach. Matches the SUPPORT constant on the activation screen. */
 const SUPPORT_CONTACT = 'mushtaqahmadicp@gmail.com';
@@ -63,7 +79,45 @@ function _dbInsert(table, id, record) {
 function initDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'hostix.db');
   const dbExisted = fs.existsSync(dbPath);
-  db = new Database(dbPath);
+
+  /* [Phase 1 §19.2] CHECK BEFORE TRUSTING.
+
+     quick_check rather than integrity_check: this runs on every boot in front
+     of a warden waiting for a login screen, and measured on the scale fixture
+     (500 students, 8,179 payments, ~6 MB) quick_check costs 28ms against 66ms
+     for the full check. A quick_check pass does not prove every index is
+     consistent; it does prove the pages are readable, which is what stands
+     between the customer and an app that will not start.
+
+     MISSING is not a fault — it is a first run. */
+  if (dbExisted) {
+    const h = dbHealth.check(dbPath);
+    if (!h.ok && h.state !== dbHealth.STATE.MISSING) {
+      _recovery = {
+        state: h.state, detail: h.detail, dbPath,
+        // Found now, while the app still has a chance to offer it. Looking for
+        // a backup only once the user has clicked something is how a recovery
+        // screen ends up with nothing to suggest.
+        candidate: (() => {
+          try { return backup.newestVerified(app.getPath('userData')); } catch (_) { return null; }
+        })(),
+      };
+      console.error('[HOSTYLLO] Database health check failed:', h.state, h.detail);
+      return null;
+    }
+  }
+
+  try {
+    db = new Database(dbPath);
+  } catch (e) {
+    _recovery = { state: dbHealth._looksCorrupt(e) ? dbHealth.STATE.CORRUPT : dbHealth.STATE.UNREADABLE,
+      detail: e.message, dbPath,
+      candidate: (() => {
+        try { return backup.newestVerified(app.getPath('userData')); } catch (_) { return null; }
+      })() };
+    console.error('[HOSTYLLO] Could not open the database:', e.message);
+    return null;
+  }
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
@@ -107,23 +161,63 @@ function initDatabase() {
   // record in the `data` blob (lossless). Idempotent + transactional. Existing
   // client DBs are snapshotted to hostix.db.pre-v1.bak once, before the first
   // migration, as an extra safety net beyond the transaction rollback.
+  /* [Phase 1 §1.2.8, §14.1] A migration may not touch customer data until a
+     RECOVERABLE snapshot exists.
+
+     Before this, the snapshot was written and then trusted. Two ways that goes
+     wrong: a snapshot written to a nearly-full disk is truncated and unopenable,
+     and a snapshot left behind by an earlier interrupted run was reused without
+     anyone checking it. Either produces a migration whose safety net is a file
+     that cannot be restored from — which is worse than no net, because it stops
+     anybody looking for a real backup.
+
+     So it is verified, and if it cannot be made or cannot be verified the
+     migration DOES NOT RUN. Failing closed here is cheap: the app keeps working
+     on the old schema, which is what ~50 installs ran for months. Failing open
+     risks the one thing that cannot be undone. */
   try {
-    if (dbExisted && migration001.currentVersion(db) < migration001.SCHEMA_VERSION) {
+    const needsMigration = dbExisted &&
+      migration001.currentVersion(db) < migration001.SCHEMA_VERSION;
+
+    if (needsMigration) {
       const bak = dbPath + '.pre-v1.bak';
       if (!fs.existsSync(bak)) {
         db.exec(`VACUUM INTO '${bak.replace(/'/g, "''")}'`);
         console.log('[HOSTYLLO] Pre-migration backup written:', bak);
       }
+      const v = backup.verify(bak, backup._counts(db));
+      if (!v.ok) {
+        throw new Error('the pre-migration snapshot could not be verified (' + v.reason +
+          '), so the migration was not run');
+      }
+      console.log('[HOSTYLLO] Pre-migration snapshot verified.');
     }
+
     const migRes = migration001.migrateDatabase(db);
     if (migRes.migrated) console.log('[HOSTYLLO] Schema migrated to v' + migRes.version);
   } catch (e) {
-    console.error('[HOSTYLLO] Schema migration failed (continuing on existing schema):', e.message);
+    console.error('[HOSTYLLO] Schema migration skipped (continuing on existing schema):', e.message);
   }
   _schemaMigrated = migration001.currentVersion(db) >= migration001.SCHEMA_VERSION;
 
   console.log('[HOSTYLLO] SQLite DB initialized at:', dbPath, '| schema v' +
     migration001.currentVersion(db));
+
+  /* [Phase 1 §14.1] The automatic backup the product did not have.
+     Once a day, rotating, verified, and outside the active database file. It is
+     deliberately taken at boot rather than on a timer alone: a hostel PC that is
+     switched on in the morning and off at night may never reach a mid-session
+     tick, and the boot is the moment the database is quietest. runScheduled()
+     is a no-op when a current one already exists, so this is safe to call every
+     launch. A backup failure must never stop the app, so it only logs. */
+  try {
+    const r = backup.runScheduled({ db, userDataDir: app.getPath('userData') });
+    if (r.ran && r.ok)  console.log('[HOSTYLLO] Scheduled backup:', path.basename(r.path));
+    if (r.ran && !r.ok) console.error('[HOSTYLLO] Scheduled backup FAILED:', r.phase, r.reason);
+  } catch (e) {
+    console.error('[HOSTYLLO] Scheduled backup threw:', e.message);
+  }
+
   return db;
 }
 
@@ -1438,6 +1532,37 @@ ipcMain.handle('db:all', (_e, table, where) => {
  * searchable, printable and exportable; that is decision D-3 and the difference
  * between a customer who pays late and an ex-customer.
  */
+/* [Phase 1 §11.1] ONE SHAPE FOR EVERY WRITE RESULT.
+
+   `{ ok: true }` or `{ ok: false, code, message, retryable }`. Never a thrown
+   string, never a bare boolean, and never an absent field that reads as
+   success. `code` comes from dbHealth.classifyWriteError(), so DISK_FULL is
+   distinguishable from a read-only folder and from a licence restriction —
+   §19.3 requires that, because the remedy differs and telling a warden the
+   wrong one wastes their day. */
+function _writeOk(extra) { return Object.assign({ ok: true }, extra || {}); }
+function _writeFail(e) {
+  const c = dbHealth.classifyWriteError(e);
+  return { ok: false, code: c.code, message: c.message, retryable: c.retryable };
+}
+
+/* [Phase 1 §19.2] No write may be attempted while the database is in recovery.
+   Without this the handlers would call through to a null `db`, throw a
+   TypeError, and be reported as an ordinary save failure — which is true but
+   useless, and would let the retry button hammer a database that is not there. */
+function _assertDb() {
+  if (_recovery) {
+    const err = new Error('The database is being recovered, so nothing can be saved yet.');
+    err.code = 'DB_RECOVERY';
+    throw err;
+  }
+  if (!db) {
+    const err = new Error('The database is not open.');
+    err.code = 'DB_UNAVAILABLE';
+    throw err;
+  }
+}
+
 function _assertWritable(table) {
   const decision = currentEnforcement();
   if (enforcement.writeBlocked(decision, table)) {
@@ -1449,6 +1574,62 @@ function _assertWritable(table) {
     throw err;
   }
 }
+
+/* ══ THE ATOMIC SAVE (Phase 1 §11.1, §1.2.1) ═══════════════════════════════
+
+   saveDB() diffs the in-memory DB against a snapshot and then wrote each
+   changed row with its own `db:upsert` / `db:delete` call — one IPC round trip
+   and one implicit transaction per row. A save touching 50 rows was therefore
+   50 independent commits, and a failure at row 30 left rows 1-29 durably
+   written while the renderer treated the whole flush as failed. The database
+   and the in-memory model disagreed, and the snapshot that decides what gets
+   written next time was never updated, so the disagreement persisted.
+
+   This applies the WHOLE change set in ONE transaction. It commits completely
+   or not at all, which is what makes "the save failed" a statement the
+   renderer can act on rather than a guess about how far it got.
+
+   It is one new generic channel, which §12 will eventually fold into domain
+   handlers. It is added here rather than deferred because atomicity is a
+   Phase 1 data-safety requirement and the domain rewrite is the last phase. */
+ipcMain.handle('db:applyChanges', (_e, changes) => {
+  try {
+    _assertDb();
+    if (!changes || typeof changes !== 'object') throw new Error('Invalid change set');
+
+    // Validate EVERYTHING before opening the transaction, so a rejected table
+    // name cannot abort a partially-built transaction.
+    const plan = [];
+    for (const [table, ops] of Object.entries(changes)) {
+      _assertRendererTable(table);
+      _assertWritable(table);
+      const upserts = (ops && Array.isArray(ops.upserts)) ? ops.upserts : [];
+      const deletes = (ops && Array.isArray(ops.deletes)) ? ops.deletes : [];
+      for (const r of upserts) {
+        if (!r || r.id === undefined || r.id === null || r.id === '') {
+          throw new Error('A record in "' + table + '" has no id, so it cannot be saved.');
+        }
+      }
+      plan.push({ table, upserts, deletes });
+    }
+
+    let written = 0, removed = 0;
+    const apply = db.transaction(() => {
+      for (const { table, upserts, deletes } of plan) {
+        for (const r of upserts) { _dbInsert(table, r.id, r); written++; }
+        if (deletes.length) {
+          const del = db.prepare(`DELETE FROM ${table} WHERE id = ?`);
+          for (const id of deletes) { del.run(id); removed++; }
+        }
+      }
+    });
+    apply();
+
+    return _writeOk({ written, removed });
+  } catch (e) {
+    return _writeFail(e);
+  }
+});
 
 ipcMain.handle('db:upsert', (_e, table, id, record) => {
   try {
