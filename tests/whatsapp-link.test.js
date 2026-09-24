@@ -18,7 +18,9 @@ function ok(name, fn) {
   try { fn(); passed++; console.log('  ok   ' + name); }
   catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + e.message); }
 }
-const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+// LF only: a Windows checkout (core.autocrlf) hands us CRLF, and the slicing
+// below looks for '\n}\n'.
+const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/\r\n/g, '\n');
 // Code only: comments may quote the old scheme or number as history.
 const code = (f) => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 

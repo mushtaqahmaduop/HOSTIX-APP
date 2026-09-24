@@ -21,7 +21,9 @@ function ok(name, fn) {
   try { fn(); passed++; console.log('  ok   ' + name); }
   catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + e.message); }
 }
-const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+// LF only: a Windows checkout (core.autocrlf) hands us CRLF, and every pattern
+// below is written against \n.
+const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8').replace(/\r\n/g, '\n');
 const guard = (main.match(/app\.on\('web-contents-created'[\s\S]*?\n  \}\);\n/) || [''])[0];
 
 console.log('\nMain-process hardening');
