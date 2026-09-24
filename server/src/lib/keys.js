@@ -34,6 +34,7 @@ const shared = require('./vendor/app-utils.js');
 const {
   parseLicenseKey,
   validateKeyChecksum,
+  resolveKeyVersion,
   licenseKeyExpiry,
   buildLicenseKey,
   buildLegacyLicenseKey
@@ -60,7 +61,20 @@ function keyFingerprint(parsed) {
  * for a customer with two offices.
  */
 function defaultMaxDevices(parsed) {
-  return parsed.version === 4 ? 1 : null;
+  return parsed.version >= 4 ? 1 : null;
+}
+
+/**
+ * The parsed key with its TRUE version. parseLicenseKey() reads the layout,
+ * which cannot tell v4 from v5 — only the checksum tag can, and that needs the
+ * secret. Returns null when the checksum holds under no version.
+ */
+function parseVerified(key, secret) {
+  const parsed = parseLicenseKey(key);
+  if (!parsed) return null;
+  const version = resolveKeyVersion(parsed.key, secret);
+  if (!version) return null;
+  return Object.assign({}, parsed, { version });
 }
 
 /** The app's hardware fingerprint: SHA-256 hex, lower case. */
@@ -109,7 +123,7 @@ function secretMatches(presentedHash, storedHash) {
 }
 
 module.exports = {
-  parseLicenseKey, validateKeyChecksum, licenseKeyExpiry,
+  parseLicenseKey, parseVerified, validateKeyChecksum, resolveKeyVersion, licenseKeyExpiry,
   buildLicenseKey, buildLegacyLicenseKey,
   keyFingerprint, defaultMaxDevices,
   isValidMachineId, isFingerprintFailure, MACHINE_ID_FALLBACK_PREFIX,

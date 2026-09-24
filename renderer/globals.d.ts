@@ -200,6 +200,9 @@ declare function setPaperSize(v: string): Promise<{ ok: boolean; unchanged?: boo
 declare const HOSTEL_NAME_PLACEHOLDER: string;
 declare function hostelNameMissing(): boolean;
 declare function hostelNameGate(retry?: () => void): boolean;
+/** enforcement-ui.js — the owner's per-licence print / export switches. */
+declare function requireOutput(kind: 'printing' | 'exporting'): boolean;
+declare function canOutput(kind: 'printing' | 'exporting'): boolean;
 declare function hostelNameSave(name: string): Promise<{ ok: boolean; name?: string; reason?: string }>;
 declare function ensureHostelName(): Promise<boolean>;
 // -- undertaking.js: rules & undertaking (warden ledger spec §2.7, §3.8, step 11) --

@@ -154,7 +154,34 @@ function _validateClaims(c) {
   if (!p || typeof p !== 'object') return 'missing policy';
   if (!Number.isFinite(p.graceDays) || p.graceDays < 0) return 'bad policy.graceDays';
   if (typeof p.readOnlyOnExpiry !== 'boolean') return 'bad policy.readOnlyOnExpiry';
+
+  // ── Optional, added 2026-09-24 inside ver 1 ─────────────────────────────
+  // A control plane that predates them omits them, and that is fine. One that
+  // sends them malformed is not: a `restrictions` that is not an object of
+  // booleans would otherwise read as "nothing restricted".
+  if (c.restrictions !== undefined && c.restrictions !== null) {
+    if (typeof c.restrictions !== 'object' || Array.isArray(c.restrictions)) return 'bad restrictions';
+    for (const k of RESTRICTION_KEYS) {
+      if (c.restrictions[k] !== undefined && typeof c.restrictions[k] !== 'boolean') return 'bad restrictions.' + k;
+    }
+  }
+  if (c.level !== undefined && c.level !== null && !LEVELS.has(c.level)) return 'bad level';
+  if (c.reason !== undefined && c.reason !== null && typeof c.reason !== 'string') return 'bad reason';
+  if (c.until !== undefined && c.until !== null && !_isIso(c.until)) return 'bad until';
+  if (c.revision !== undefined && c.revision !== null && !Number.isFinite(c.revision)) return 'bad revision';
   return null;
+}
+
+/** What a level can switch off. `true` = allowed. Wire contract with server/src/lib/access.js. */
+const RESTRICTION_KEYS = ['dataEntry', 'printing', 'exporting'];
+const LEVELS = new Set(['active', 'readonly', 'restricted', 'suspended', 'revoked']);
+
+/** The complete restriction set from a claim — every key present, missing means allowed. */
+function _restrictionsFrom(c) {
+  const out = { dataEntry: true, printing: true, exporting: true };
+  const r = c && c.restrictions;
+  if (r && typeof r === 'object') for (const k of RESTRICTION_KEYS) if (r[k] === false) out[k] = false;
+  return out;
 }
 
 /**
@@ -431,6 +458,15 @@ class EntitlementService {
       // entitlement means no opinion, and the app treats no opinion as "yes"
       // rather than stripping features from the machines in the field.
       features:     c ? c.features  : null,
+
+      // The owner's controls (2026-09-24). `restrictions` is null with no
+      // claims — no opinion — and the enforcement decision reads null as
+      // "nothing restricted", like features.
+      level:        c && c.level ? c.level : null,
+      restrictions: c ? _restrictionsFrom(c) : null,
+      reason:       c && typeof c.reason === 'string' ? c.reason : null,
+      until:        c && c.until ? c.until : null,
+      revision:     c && Number.isFinite(c.revision) ? c.revision : null,
 
       storedAt:     this._storedAt,
       serverTimeSeen: this._serverTimeSeen,

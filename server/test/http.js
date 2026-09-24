@@ -96,7 +96,8 @@ function baseWorld() {
   stub.on(/INSERT INTO admin_sessions/, () => ({ rows: [] }));
   stub.on(/UPDATE admin_users SET last_login_at/, () => ({ rows: [] }));
   stub.on(/INSERT INTO audit_log/, () => ({ rows: [] }));
-  stub.on(/FROM licenses WHERE id/, () => ({ rows: [LICENSE] }));
+  stub.on(/FROM licenses WHERE id|WHERE l\.id = \$1/, () => ({ rows: [LICENSE] }));
+  stub.on(/FROM fleet_settings/, () => ({ rows: [{ features: {}, restrictions: {}, revision: 1 }] }));
   stub.on(/FROM devices WHERE license_id/, () => ({ rows: [] }));
   stub.on(/FROM audit_log/, () => ({ rows: [] }));
 }
@@ -435,8 +436,7 @@ test('a state change with a WRONG CSRF token is refused', async (app) => {
 test('a state change WITH the CSRF header goes through and is audited', async (app) => {
   baseWorld();
   const jar = await signIn(app);
-  stub.on(/UPDATE licenses SET status/, () => ({ rows: [Object.assign({}, LICENSE, { status: 'suspended' })] }));
-  stub.on(/SELECT status, verification FROM licenses/, () => ({ rows: [{ status: 'active', verification: 'unverified' }] }));
+  stub.on(/UPDATE licenses SET status/, () => ({ rows: [], rowCount: 1 }));
 
   const before = stub.calls.filter((c) => /INSERT INTO audit_log/.test(c.text)).length;
   const res = await app.inject({
@@ -491,7 +491,7 @@ test('issue-key refuses an impossible date', async (app) => {
   assert.strictEqual(res.json().code, 'INVALID_DATE');
 });
 
-test('issue-key mints a v4 key, records it, and shows it once', async (app) => {
+test('issue-key mints a key, records it, and shows it once', async (app) => {
   baseWorld();
   const jar = await signIn(app);
   stub.on(/INSERT INTO licenses/, () => ({ rows: [LICENSE] }));
@@ -531,8 +531,8 @@ test('sign-out clears both cookies', async (app) => {
 test('a 500 never leaks an internal message', async (app) => {
   baseWorld();
   const jar = await signIn(app);
-  stub.handlers = stub.handlers.filter(([p]) => !/FROM licenses WHERE id/.test(String(p)));
-  stub.on(/FROM licenses WHERE id/, () => { throw new Error('column "secret_column" does not exist'); });
+  stub.handlers = stub.handlers.filter(([p]) => !/licenses WHERE id/.test(String(p)));
+  stub.on(/WHERE l\.id = \$1/, () => { throw new Error('column "secret_column" does not exist'); });
 
   const res = await app.inject({
     method: 'GET', url: '/admin/api/licenses/' + LICENSE.id,

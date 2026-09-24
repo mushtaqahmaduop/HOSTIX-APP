@@ -1238,6 +1238,15 @@ function courseKeyNav(e) {
 //       CCCC-CCCC = HMAC-SHA256('V4:EEEE:SSSS', SECRET) hex, first 8.
 //
 // A v4 licence runs to the END of its expiry day (23:59:59.999 local).
+//
+//   v5  HOSTEL-EEEE-SSSS-CCCC-CCCC     (same layout as v4)
+//       CCCC-CCCC = HMAC-SHA256('V5:EEEE:SSSS', SECRET) hex, first 8.
+//       Issued only by the control plane, and it must be ACTIVATED ONLINE ONCE
+//       (owner, 2026-09-24): that first activation is what binds the key to one
+//       PC. A v5 key cannot be told from a v4 key by eye — only by which tag its
+//       checksum was taken under — so parseLicenseKey() reports the layout and
+//       resolveKeyVersion() the version. A build that predates v5 fails its
+//       checksum and refuses the key outright, which is the safe direction.
 const LICENSE_KEY_RE_V3 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 const LICENSE_KEY_RE_V4 = /^HOSTEL-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
@@ -1257,6 +1266,7 @@ function parseLicenseKey(key) {
 // What the checksum is taken over. The 'V4:' tag stops a v4 key from ever
 // colliding with the v3 key that happens to share its first group.
 function licenseChecksumPayload(parsed) {
+  if (parsed.version === 5) return 'V5:' + parsed.expPart + ':' + parsed.serial;
   return parsed.version === 4
     ? 'V4:' + parsed.expPart + ':' + parsed.serial
     : parsed.expPart;
@@ -1284,15 +1294,26 @@ function validateKeyFormat(key) {
   return parseLicenseKey(key) !== null;
 }
 
-function validateKeyChecksum(key, secret) {
+// 3, 4 or 5 for a key whose checksum holds, 0 for anything else. A v4-layout
+// key is tried as v4 first, then v5.
+function resolveKeyVersion(key, secret) {
   try {
     const parsed = parseLicenseKey(key);
-    if (!parsed) return false;
-    return parsed.checksum === licenseChecksum(parsed, secret);
+    if (!parsed) return 0;
+    if (parsed.checksum === licenseChecksum(parsed, secret)) return parsed.version;
+    if (parsed.version === 4
+        && parsed.checksum === licenseChecksum(Object.assign({}, parsed, { version: 5 }), secret)) {
+      return 5;
+    }
+    return 0;
   } catch (e) {
     console.error('[HOSTYLLO] Key checksum validation failed:', e.message);
-    return false;
+    return 0;
   }
+}
+
+function validateKeyChecksum(key, secret) {
+  return resolveKeyVersion(key, secret) !== 0;
 }
 
 // The expiry instant a key encodes. v3 keys keep their original meaning to the
@@ -1322,10 +1343,12 @@ function licenseSerial() {
 
 // Issue a key. `serial` is injectable for the tests only; every production
 // caller omits it and gets a fresh random one.
-function buildLicenseKey(year, month, day, secret, serial) {
+// `version` 5 cuts a key that must be activated online once (see v5 above).
+function buildLicenseKey(year, month, day, secret, serial, version) {
   const expPart = licenseDayNumber(year, month, day).toString(36).toUpperCase().padStart(4, '0');
   const ser     = String(serial || licenseSerial()).toUpperCase();
-  const chk     = licenseChecksum({ version: 4, expPart: expPart, serial: ser }, secret);
+  const ver     = version === 5 ? 5 : 4;
+  const chk     = licenseChecksum({ version: ver, expPart: expPart, serial: ser }, secret);
   return 'HOSTEL-' + expPart + '-' + ser + '-' + chk.slice(0, 4) + '-' + chk.slice(4, 8);
 }
 
@@ -1473,7 +1496,7 @@ function issuesFoldLegacy(d) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    validateKeyFormat, validateKeyChecksum, parseLicenseKey, licenseKeyExpiry,
+    validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
     buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
     ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy

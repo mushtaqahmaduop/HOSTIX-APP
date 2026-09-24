@@ -2712,7 +2712,7 @@ async function licRefresh() {
          ${icon(d.readOnly || d.blocked ? 'lock' : 'check', 'xs')}${d.readOnly || d.blocked ? 'Read-only' : 'Enabled'}</span>
      </div>`
     + (d.banner && (d.readOnly || d.blocked || d.state === 'GRACE')
-        ? `<div class="lic-enforce__msg">${escHtml(typeof d.banner === 'string' ? d.banner : (d.banner.body || d.banner.title || ''))}</div>`
+        ? `<div class="lic-enforce__msg">${escHtml(typeof d.banner === 'string' ? d.banner : (d.banner.text || d.banner.body || d.banner.title || ''))}</div>`
         : '');
 
   const chip = document.getElementById('lic-state');

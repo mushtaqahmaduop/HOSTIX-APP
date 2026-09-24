@@ -5318,3 +5318,11 @@ body.is-readonly [data-requires-licence] {
   opacity: .45;
   cursor: not-allowed;
 }
+
+/* The owner's per-licence switches (2026-09-24). Dimmed, never hidden: the
+   click still lands and says why, which a vanished button cannot. */
+body.lic-no-printing [data-output="printing"],
+body.lic-no-exporting [data-output="exporting"] {
+  opacity: .45;
+  cursor: not-allowed;
+}
