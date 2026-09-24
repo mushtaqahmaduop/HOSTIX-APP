@@ -20,7 +20,7 @@ left is not code:
    keys are sold.
 2. **Where updates come from** (C2). The address is baked into the build, so it
    must be decided *before* `npm run build`.
-3. **A Windows pass** (R1–R3): build the installer, install it over a copy of a
+3. **A Windows pass** (R1–R5): build the installer, install it over a copy of a
    real v1 client, click WhatsApp support on a real PC.
 
 ## Decided by the owner (2026-09-24) — and done on the branch
@@ -39,9 +39,12 @@ left is not code:
    `https://raw.githubusercontent.com/mushtaqahmaduop/hostyllo-releases/main/control-plane.json`
    opens in a browser.
 2. `railway up` from `server/` (v5-only issuing and the portal headers).
-3. Build 6.0.0 and publish it as release `v6.0.0` **in hostyllo-releases**
+3. Build 6.0.0 (`npm run build`) — do not publish yet.
    (`docs/releases-repo/README.md`).
-4. Run R1–R5 below.
+4. Run R1–R5 below. **Publish only after all five pass:** release `v6.0.0`
+   **in hostyllo-releases** (`docs/releases-repo/README.md`). A published
+   release reaches every 6.x updater at once, so it is the last step, not a
+   test step.
 5. Only then make `HOSTIX-APP` private. Doing it earlier cuts off discovery for
    anything built before 6.0.0 (the owner's own test installs, and 5.x).
 
@@ -177,6 +180,7 @@ sent yet" until the page was left and reopened).
   data present, licence still valid, no activation screen.
 - **R3** Support → Chat on WhatsApp, on a PC *without* WhatsApp Desktop (opens
   WhatsApp Web) and one *with* it (opens the app), message pre-filled.
-- **R4** `railway up` from `server/`, then `/healthz` and the portal headers.
+- **R4** Activate a v5 key issued from the portal on the installed app, with
+  internet. (The server deploy is ordered step 2 above, not a check here.)
 - **R5** The first-run wizard end to end on a fresh install, including setting
   a password.
