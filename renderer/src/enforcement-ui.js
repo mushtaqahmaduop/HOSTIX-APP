@@ -12,6 +12,11 @@
    Read-only means new entries and edits are paused. Every list, every search,
    every report and every print stays exactly as it was, and export keeps
    working. A hostel that pays late must lose nothing (D-3).
+
+   ── Except where the owner says so (2026-09-24) ─────────────────────────────
+   The owner can switch printing and exporting off per licence from the
+   portal. Then this file greys out Print and Export and says why; the main
+   process refuses them regardless.
    ─────────────────────────────────────────────────────────────────────────── */
 
 'use strict';
@@ -35,14 +40,49 @@ function isReadOnly() { return !!(_enforcement && _enforcement.readOnly); }
 function requireWritable(what) {
   if (!isReadOnly()) return true;
   var noun = what || 'This change';
-  var why = _enforcement.state === 'SUSPENDED'
-    ? 'this licence is suspended'
-    : 'this licence has expired';
+  var why = _enforcement.state === 'EXPIRED'
+    ? 'this licence has expired'
+    : 'data entry is switched off for this licence';
+  var reason = _enforcement.ownerReason ? ' Reason: ' + _enforcement.ownerReason + '.' : '';
   if (typeof toast === 'function') {
-    toast(noun + ' cannot be saved because ' + why + '. Your existing records are safe and can still be viewed and printed.', 'error');
+    toast(noun + ' cannot be saved because ' + why + '.' + reason + ' Your existing records are safe.', 'error');
   }
   return false;
 }
+
+// ── Printing and exporting (owner, 2026-09-24) ──────────────────────────────
+
+/** 'printing' or 'exporting' — allowed unless the decision explicitly says no. */
+function canOutput(kind) {
+  if (!_enforcement) return true;
+  if (_enforcement.blocked) return false;
+  var r = _enforcement.restrictions;
+  return !(r && r[kind] === false);
+}
+
+/**
+ * Guard for Print / PDF / Export entry points:
+ *   if (!requireOutput('printing')) return;
+ */
+function requireOutput(kind) {
+  if (canOutput(kind)) return true;
+  var what = kind === 'printing' ? 'Printing and PDFs are' : 'Exporting is';
+  var reason = _enforcement && _enforcement.ownerReason ? ' Reason: ' + _enforcement.ownerReason + '.' : '';
+  if (typeof toast === 'function') {
+    toast(what + ' switched off for this licence.' + reason + ' Contact support.', 'error', 'Not available');
+  }
+  return false;
+}
+
+/* window.print() is called from a dozen places (receipts, the visit sheet,
+   student cards). One wrapper here covers every one of them and any added
+   later; the main process gates the PDF paths itself. */
+(function wrapPrint() {
+  if (typeof window === 'undefined' || typeof window.print !== 'function' || window.__hxPrintWrapped) return;
+  var original = window.print.bind(window);
+  window.print = function () { if (requireOutput('printing')) return original(); };
+  window.__hxPrintWrapped = true;
+})();
 
 // ── Feature flags ───────────────────────────────────────────────────────────
 //
@@ -212,6 +252,10 @@ function _fmt(iso) {
  */
 function _applyReadOnly(readOnly) {
   document.body.classList.toggle('is-readonly', !!readOnly);
+  // Separate hooks so a stylesheet can grey out Print and Export buttons
+  // without touching data entry, and the other way round.
+  document.body.classList.toggle('lic-no-printing', !canOutput('printing'));
+  document.body.classList.toggle('lic-no-exporting', !canOutput('exporting'));
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────

@@ -80,11 +80,11 @@ function tbExport(o) {
       ${icon('download','xs')} ${escHtml(o.label || 'Export')} ${icon('chevronDown','xs')}
     </button>
     <div class="tb-menu" id="${mid}" role="menu">
-      <button class="tb-menu__i" role="menuitem" onclick="tbCloseMenus();${o.excel}">
+      <button class="tb-menu__i" role="menuitem" data-output="exporting" onclick="tbCloseMenus();${o.excel}">
         ${icon('fileSpreadsheet','xs')}
         <span><b>Excel workbook</b><i>.xlsx — figures stay numbers</i></span>
       </button>
-      <button class="tb-menu__i" role="menuitem" onclick="tbCloseMenus();${o.pdf}">
+      <button class="tb-menu__i" role="menuitem" data-output="printing" onclick="tbCloseMenus();${o.pdf}">
         ${icon('print','xs')}
         <span><b>PDF document</b><i>A4, ready to print</i></span>
       </button>

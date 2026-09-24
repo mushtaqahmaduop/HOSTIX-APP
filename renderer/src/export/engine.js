@@ -980,6 +980,9 @@ const EXPORT = {
     /* No placeholder name on paper (hostel-name.js): every register export
        comes through here, so one question covers all of them. */
     if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.pdf(def))) return null;
+    // The owner can switch PDFs off per licence; the main process refuses the
+    // save regardless — this says why before any work is done.
+    if (typeof requireOutput === 'function' && !requireOutput('printing')) return null;
     try {
       const doc = exDocument(def);
       _exBusy(def, doc.rows, 'PDF');
@@ -996,6 +999,7 @@ const EXPORT = {
      the browser; the caller does not need to await it. */
   async excel(def) {
     if (typeof hostelNameGate === 'function' && hostelNameGate(() => EXPORT.excel(def))) return null;
+    if (typeof requireOutput === 'function' && !requireOutput('exporting')) return null;
     try {
       const spec = exWorkbook(def);
       const rows = exRowCount(exSections(def));

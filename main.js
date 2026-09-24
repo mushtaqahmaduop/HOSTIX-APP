@@ -673,7 +673,7 @@ function decryptLicense(encStr, machineId) {
 }
 
 // ── Key Validation ────────────────────────────────────────────────────────────
-const { validateKeyFormat, validateKeyChecksum, licenseKeyExpiry } = require('./renderer/src/utils');
+const { validateKeyFormat, validateKeyChecksum, resolveKeyVersion, licenseKeyExpiry } = require('./renderer/src/utils');
 
 function _validateKeyFormat(key) {
   return validateKeyFormat(key);
@@ -855,11 +855,62 @@ function refreshEnforcement() {
       if (!win.isDestroyed()) win.webContents.send('license:enforcementChanged', decision);
     }
   } catch (_) {}
+  try { _applyLockToWindow(decision); } catch (e) { console.error('[HOSTYLLO] lock apply failed:', e.message); }
   return decision;
 }
 
+/* A LOCK APPLIED FROM THE PORTAL TAKES THE SCREEN NOW, AND LIFTS NOW.
+ *
+ * Owner, 2026-09-24: "if the admin locks, it should lock instantly — and
+ * unlock again". The write gate already refused saves the moment a decision
+ * changed, but the warden kept looking at a working-looking app until they
+ * restarted it. So a blocking decision swaps the main window to the licence
+ * screen immediately, and a decision that lifts it brings the app straight
+ * back — but ONLY for a lock this function put there (`locked=1`), never for a
+ * licence screen the customer is on because they have not activated yet. */
+function _applyLockToWindow(decision) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  let url = '';
+  try { url = mainWindow.webContents.getURL() || ''; } catch (_) { return; }
+  const onApp = /\/renderer\/index\.html/.test(url);
+  const onLicence = /\/renderer\/license\.html/.test(url);
+  const byLock = /[?&]locked=1\b/.test(url);
+  const lockable = decision.state === enforcement.STATE.SUSPENDED || decision.state === enforcement.STATE.REVOKED;
+
+  if (decision.blocked && lockable && onApp) {
+    if (_settingsWin && !_settingsWin.isDestroyed()) _settingsWin.close();
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
+      query: _lockQuery(decision)
+    });
+  } else if (!decision.blocked && onLicence && byLock) {
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  }
+}
+
+/** The licence-screen query for a lock: what happened, in the owner's words. */
+function _lockQuery(decision) {
+  const revoked = decision.state === enforcement.STATE.REVOKED;
+  return {
+    reason: revoked ? 'revoked' : 'suspended',
+    message: (decision.banner && decision.banner.text) || (revoked
+      ? 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.'
+      : 'This licence has been suspended. Contact ' + SUPPORT_CONTACT + '.'),
+    locked: '1'
+  };
+}
+
+/* THE OUTPUT GATE — printing and exporting, the way _assertWritable gates saves.
+ * In the main process because the renderer is the untrusted side. Returns the
+ * refusal text, or null when the output is allowed. */
+function _outputRefused(kind) {
+  const decision = currentEnforcement();
+  if (!enforcement.outputBlocked(decision, kind)) return null;
+  if (decision.blocked) return 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.';
+  return enforcement.outputRefusal(decision, kind);
+}
+
 // ── Activate License ──────────────────────────────────────────────────────────
-function activateLicense(key) {
+async function activateLicense(key) {
   const k = key.toUpperCase().trim();
   if (!_validateKeyFormat(k))
     return { success: false, reason: 'Invalid key format. Expected: HOSTEL-XXXX-XXXX-XXXX-XXXX' };
@@ -879,11 +930,11 @@ function activateLicense(key) {
      machine, so loadApp keeps it locked until the next sync brings a verdict
      for the new licence. */
   const _before = currentEnforcement(true);
-  if (_before.state === enforcement.STATE.REVOKED) {
+  if (_before.state === enforcement.STATE.REVOKED || _before.state === enforcement.STATE.SUSPENDED) {
     const cur = safe(() => _licenceSnapshot(), null);
     if (cur && cur.key && cur.key.toUpperCase() === k) {
       return { success: false, reason: (_before.banner && _before.banner.text)
-        || 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.' };
+        || 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.' };
     }
   }
 
@@ -922,6 +973,19 @@ function activateLicense(key) {
     + 'license was NOT activated - activating now would stop the app '
     + 'opening later. Please close the app, wait a few seconds, open it '
     + 'again and enter the key. If it keeps failing, contact support.' };
+  }
+
+  /* A v5 KEY IS ACTIVATED ONLINE, ONCE — AND THAT IS WHAT BINDS IT TO ONE PC.
+   *
+   * Owner's decision D3 (2026-09-24). A v4 key's checksum secret ships inside
+   * the app, so any PC that never goes online accepts it. A v5 key is checked
+   * with the control plane BEFORE the licence file is written: the server
+   * holds it to one PC, refuses a key it never issued, and says whether the
+   * licence is locked. Only the FIRST activation needs internet; afterwards
+   * the app runs offline exactly as before. v3 and v4 keys are untouched. */
+  if (resolveKeyVersion(k, _SECRET) === 5) {
+    const refused = await _registerOnline(k);
+    if (refused) return { success: false, reason: refused };
   }
 
   try {
@@ -968,6 +1032,34 @@ function activateLicense(key) {
     console.error('[HOSTYLLO] License write error:', e.message);
     return { success: false, reason: 'Could not save license file. Please check app permissions or contact support.' };
   }
+}
+
+/**
+ * Register a v5 key with the control plane before activating it. Returns the
+ * refusal to show the customer, or null when the key may be activated.
+ */
+async function _registerOnline(k) {
+  const needNet = 'This licence key must be activated online the first time. '
+    + 'Connect this PC to the internet and try again — after that, Hostyllo works offline.';
+  const device = online && online.device;
+  const configured = !!(online && online.config && online.config.isConfigured());
+  if (!device || !configured) return needNet;
+
+  const res = await device.registerKey(k);
+  if (res.ok) {
+    if (res.effectiveStatus === 'REVOKED') return 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.';
+    if (res.effectiveStatus === 'SUSPENDED') return 'This licence is suspended. Contact ' + SUPPORT_CONTACT + '.';
+    return null;
+  }
+  if (res.status === 409 || res.code === 'DEVICE_LIMIT_REACHED') {
+    return 'This licence key is already activated on another computer. '
+      + 'Contact ' + SUPPORT_CONTACT + ' to move it to this one.';
+  }
+  if (res.code === 'KEY_NOT_ISSUED') return 'This licence key was not issued by Hostyllo. Check it and try again.';
+  if (res.code === 'INVALID_KEY' || res.code === 'INVALID_KEY_FORMAT') return 'Invalid license key. Check the key and try again.';
+  if (res.code === 'MACHINE_ID_UNAVAILABLE') return res.message || 'This computer could not be identified. Contact support.';
+  if (res.status === 429) return 'Too many activation attempts. Wait a few minutes and try again.';
+  return needNet;
 }
 
 function deactivateLicense() {
@@ -1026,6 +1118,8 @@ function openLicenseSettings() {
 // bar (IPC → titlebar:menu) run one implementation, never two that can drift.
 async function doExportBackup() {
   if (!mainWindow) return;
+  const refused = _outputRefused('exporting');
+  if (refused) { dialog.showErrorBox('Export not available', refused); return; }
   const { filePath } = await dialog.showSaveDialog(mainWindow, {
     title: 'Export Backup',
     defaultPath: `Hostyllo_Backup_${_ymdLocal()}.json`,
@@ -1036,6 +1130,15 @@ async function doExportBackup() {
 
 async function doImportBackup() {
   if (!mainWindow) return;
+  // Import is a write. The DB gate refuses it anyway; saying so here spares a
+  // locked or read-only hostel a file picker that can only end in an error.
+  const dec = currentEnforcement();
+  if (dec.blocked || dec.readOnly) {
+    dialog.showErrorBox('Import not available', dec.blocked
+      ? 'This licence is locked. Contact ' + SUPPORT_CONTACT + '.'
+      : 'Data entry is switched off for this licence, so a backup cannot be restored.');
+    return;
+  }
   const { filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Import Backup',
     filters: [{ name: 'JSON Backup', extensions: ['json'] }],
@@ -1263,6 +1366,11 @@ function createWindow() {
   // this only decides which page loads.
   if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  } else if (lic.valid && (decision.state === enforcement.STATE.SUSPENDED
+                           || decision.state === enforcement.STATE.REVOKED)) {
+    // Locked from the portal: the owner's reason, and locked=1 so an unlock
+    // returns the hostel to the app without a restart.
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), { query: _lockQuery(decision) });
   } else {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
       query: { reason: lic.reason || decision.reason, message: lic.message }
@@ -1395,7 +1503,7 @@ ipcMain.handle('license:activate', (_e, key) => {
   if (typeof key !== 'string' || key.length > 50) {
     return { success: false, reason: 'Invalid key format.' };
   }
-  return activateLicense(key);
+  return activateLicense(key);   // a promise now — v5 keys go online first
 });
 
 ipcMain.handle('license:deactivate', () => deactivateLicense());
@@ -1513,13 +1621,12 @@ ipcMain.handle('license:loadApp', () => {
   const decision = refreshEnforcement();
   if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  } else if (decision.state === enforcement.STATE.SUSPENDED || decision.state === enforcement.STATE.REVOKED) {
+    // locked=1 so lifting the lock from the portal brings the app straight back.
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), { query: _lockQuery(decision) });
   } else {
-    const revoked = decision.state === enforcement.STATE.REVOKED;
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: {
-        reason:  revoked ? 'revoked' : (lic.reason || decision.reason),
-        message: revoked && decision.banner ? decision.banner.text : lic.message
-      }
+      query: { reason: lic.reason || decision.reason, message: lic.message }
     });
   }
 });
@@ -1527,6 +1634,7 @@ ipcMain.handle('license:loadApp', () => {
 // [FIX-09] Receipt PDF — validate htmlContent before processing; supports landscape option
 ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) => {
   if (!mainWindow) return { success: false, reason: 'No main window' };
+  { const refused = _outputRefused('printing'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
 
   if (typeof htmlContent !== 'string' || htmlContent.length > 2 * 1024 * 1024) {
     return { success: false, reason: 'Invalid receipt content.' };
@@ -1591,6 +1699,12 @@ ipcMain.handle('receipt:savePDF', async (_e, htmlContent, suggestedName, opts) =
 
 // Open PDF report in a separate BrowserWindow
 ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
+  // The report window exists to print and save PDFs, so printing gates it.
+  const refused = _outputRefused('printing');
+  if (refused) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pdf-window:failed', refused);
+    return;
+  }
   /* 32MB, AND IT NO LONGER RETURNS IN SILENCE (owner brief, 2026-09-10). At
      2MB a complete register was refused here with no window and no message,
      which is the "no response" the brief describes: the click did nothing at
@@ -1643,6 +1757,7 @@ ipcMain.on('open-pdf-window', (_e, htmlContent, title) => {
    URL cannot be opened in a frame — an attached PDF would be write-only. This
    decodes it and writes it wherever the warden says.                          */
 ipcMain.handle('file:saveDataUrl', async (event, dataUrl, suggestedName) => {
+  { const refused = _outputRefused('exporting'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   const win = BrowserWindow.fromWebContents(event.sender);
   if (typeof dataUrl !== 'string' || !/^data:[^;,]*;base64,/.test(dataUrl)) {
     return { success: false, reason: 'Not a stored file.' };
@@ -1805,6 +1920,7 @@ function _hxOpenPdf(filePath, title) {
 
 
 ipcMain.handle('pdf-window:save', async (event, opts) => {
+  { const refused = _outputRefused('printing'); if (refused) return { success: false, reason: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) return { success: false, reason: 'No window' };
 
@@ -1885,6 +2001,8 @@ ipcMain.on('open-external', (_e, url) => {
 
 // [FIX-01] write-file — only allow writing to user-approved directories
 ipcMain.on('write-file', (_e, filePath, data) => {
+  { const refused = _outputRefused('exporting');
+    if (refused) { if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: refused }); return; } }
   // Validate input types
   if (typeof filePath !== 'string' || typeof data !== 'string') {
     if (mainWindow) mainWindow.webContents.send('pdf-saved', { success: false, error: 'Invalid parameters.' });
@@ -2124,9 +2242,12 @@ ipcMain.handle('db:all', (_e, table, where) => {
 function _assertWritable(table) {
   const decision = currentEnforcement();
   if (enforcement.writeBlocked(decision, table)) {
-    const err = new Error(decision.state === 'SUSPENDED'
-      ? 'This licence is suspended — new entries are paused.'
-      : 'This licence has expired — new entries are paused until it is renewed.');
+    const err = new Error(decision.blocked
+      ? 'This licence is locked — nothing can be saved.'
+      : decision.state === 'EXPIRED'
+        ? 'This licence has expired — new entries are paused until it is renewed.'
+        : 'Data entry is switched off for this licence.'
+          + (decision.ownerReason ? ' Reason: ' + decision.ownerReason + '.' : ''));
     err.code = 'LICENCE_READ_ONLY';
     err.licenceState = decision.state;
     throw err;
@@ -2381,6 +2502,7 @@ ipcMain.handle('recovery:restart', () => {
 });
 
 ipcMain.handle('db:exportFull', () => {
+  { const refused = _outputRefused('exporting'); if (refused) return { ok: false, error: refused, code: 'LICENCE_OUTPUT_BLOCKED' }; }
   try {
     const tables = BACKUP_TABLES.concat(HANDOVER_TABLES);
     const result = {};
@@ -2459,6 +2581,17 @@ ipcMain.handle('db:importFull', (_e, data) => {
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   const { session } = require('electron');
+
+  /* EVERY BROWSER-STYLE DOWNLOAD PASSES HERE — the Excel exports, CSVs and the
+   * JSON backup are all `<a download>` clicks on a blob URL, so this is the one
+   * main-process point where "exporting is switched off" can hold for all of
+   * them at once, including any the renderer has not been taught about. */
+  session.defaultSession.on('will-download', (event, _item, wc) => {
+    const refused = _outputRefused('exporting');
+    if (!refused) return;
+    event.preventDefault();
+    try { (wc || (mainWindow && mainWindow.webContents)).send('pdf-window:failed', refused); } catch (_) {}
+  });
 session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   callback({
     responseHeaders: {

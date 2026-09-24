@@ -33,6 +33,7 @@ const { ConnectivityService, MODE } = require('./connectivity');
 const { OnlineQueue, STATUS } = require('./online-queue');
 const { EntitlementService } = require('./entitlement');
 const { DeviceService } = require('./device');
+const { LicenceStream } = require('./stream');
 
 // Tables owned by the online services. The legacy `db:*` bridge is generic by
 // design (audit M1 — freeze, don't rewrite), but it must not be a way for
@@ -119,6 +120,13 @@ function start(opts) {
   });
 
   device.start();
+
+  // ── The live channel (owner, 2026-09-24) ──────────────────────────────────
+  // What makes a portal change bite in seconds instead of at the next poll.
+  // Inert with no apiBase, like everything else here.
+  const stream = new LicenceStream({ cfg, device, entitlement });
+  stream.start();
+
   connectivity.start();
   // Drain on every transition into a reachable control plane, not just on the
   // timer — a ticket queued offline should go out seconds after reconnect,
@@ -126,6 +134,9 @@ function start(opts) {
   connectivity.onStatusChanged((s) => {
     if (s.apiReachable) {
       queue.drain().catch(() => {});
+      // Internet back: open the live channel now rather than at its next
+      // back-off step, which may be a minute away.
+      stream.start();
       // A hostel that has been offline for a week should learn about a
       // suspension seconds after their internet returns, not at the next
       // six-hourly tick.
@@ -164,11 +175,12 @@ function start(opts) {
       queue.start();
       connectivity.start();
       device.start();
+      stream.start();
     })
     .catch(() => {});
 
   _services = {
-    config, logger, api, connectivity, queue, entitlement, device, MODE, STATUS,
+    config, logger, api, connectivity, queue, entitlement, device, stream, MODE, STATUS,
 
     /** Called by main.js's existing license:check handler. No extra I/O. */
     noteLicenseResult(result) {
@@ -182,6 +194,7 @@ function start(opts) {
     isInternalTable: (t) => INTERNAL_TABLES.has(String(t)),
 
     stop() {
+      try { stream.stop(); } catch (_) {}
       try { device.stop(); } catch (_) {}
       try { connectivity.stop(); } catch (_) {}
       try { queue.stop(); } catch (_) {}
@@ -253,7 +266,7 @@ function registerIpc(services, electron) {
   ipcMain.handle('online:entitlement', () => {
     try {
       return Object.assign({}, services.entitlement.getStatus(),
-        { device: services.device.getStatus() });
+        { device: services.device.getStatus(), stream: services.stream.getStatus() });
     } catch (_) { return null; }
   });
 

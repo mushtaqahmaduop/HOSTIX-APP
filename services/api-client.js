@@ -343,6 +343,9 @@ function newIdempotencyKey() {
 module.exports = {
   request,
   probe,
+  // The raw transport, for the one caller that needs a STREAMING body — the
+  // live licence channel (services/stream.js). Everything else uses request().
+  transport: () => _fetch(),
   newIdempotencyKey,
   ERRORS: E,
   // exported for the test suite
