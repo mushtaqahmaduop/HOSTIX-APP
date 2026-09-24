@@ -12,12 +12,12 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:ia32": "node scripts/rebuild-ia32.js",
-    "build": "electron-builder --win --x64 --ia32 && node scripts/pin-latest-yml.js",
+    "build": "electron-builder --win --x64 && node scripts/pin-latest-yml.js",
     "build:x64": "electron-builder --win nsis portable --x64",
-    "build:ia32": "electron-builder --win nsis portable --ia32",
-    "build:portable": "electron-builder --win portable --x64 --ia32",
-    "build:installer": "electron-builder --win nsis --x64 --ia32 && node scripts/pin-latest-yml.js",
-    "build:all": "electron-builder --win --x64 --ia32 && node scripts/pin-latest-yml.js",
+    "build:ia32": "node scripts/rebuild-ia32.js && electron-builder --win nsis portable --ia32",
+    "build:portable": "electron-builder --win portable --x64",
+    "build:installer": "electron-builder --win nsis --x64 && node scripts/pin-latest-yml.js",
+    "build:all": "electron-builder --win --x64 && node scripts/pin-latest-yml.js",
     "test:license": "node test-license.js",
     "test:activation": "node tests/activation-guard.test.js",
     "test:e2e": "playwright test",
@@ -96,15 +96,13 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         },
         {
           "target": "portable",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         }
       ],
