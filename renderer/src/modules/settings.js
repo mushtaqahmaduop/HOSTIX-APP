@@ -3822,7 +3822,7 @@ async function resetAllData() {
     DB.handovers=[];
     DB.handoverItems=[];
     DB.concessions=[];
-    DB.rooms=generateRooms();
+    DB.rooms=[];   // empty, like a new install — no demo rooms (owner, 2026-09-24)
     await saveDB();
     // Reset is a restore to empty — the one other action allowed to replace
     // the student ledger (owner, 2026-09-14).

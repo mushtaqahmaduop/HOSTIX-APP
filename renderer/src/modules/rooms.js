@@ -366,7 +366,7 @@ function renderRooms() {
     ${_pg.slice.length===0
       ? `<div class="rms-empty">
            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-           <div>No rooms match these filters.</div>
+           <div>${(DB.rooms || []).length ? 'No rooms match these filters.' : 'No rooms yet. Use Add Room to create your first.'}</div>
          </div>`
       : roomFilter.view === 'list'
         ? `<div class="rms-list"><table>

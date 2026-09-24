@@ -1,5 +1,5 @@
 ﻿/* ─── HOSTYLLO — DASHBOARD MODULE ────────────────────────────────────────────
-   Contains: generateRooms, renderDashboard,
+   Contains: renderDashboard,
              all room detail modals, month detail modals, trend chart,
              global search, navigation helpers
    ─────────────────────────────────────────────────────────────────────────── */
@@ -11,33 +11,6 @@
 // cashBreakdown, calcExpenses, calcAvailableFund / calcEarned, _payMatchesMonth,
 // _studentInPeriod — lives in src/periods.js (finance Phase 4). Nothing here
 // redefines it.
-
-function generateRooms(roomTypes) {
-  // roomTypes can be passed explicitly (from _initDBFields) to avoid reading stale DB.settings
-  const rtypes = roomTypes || (DB.settings && DB.settings.roomTypes) || [];
-  const rooms = [];
-  // 42 rooms numbered 1–42, distributed across 4 floors
-  const floors = [
-    {name:'Ground', rooms:[1,2,3,4,5,6,7,8,9,10]},
-    {name:'1st',    rooms:[11,12,13,14,15,16,17,18,19,20,21]},
-    {name:'2nd',    rooms:[22,23,24,25,26,27,28,29,30,31]},
-    {name:'3rd',    rooms:[32,33,34,35,36,37,38,39,40,41,42]}
-  ];
-  const typeIds = ['1s','2s','3s','4s','5s'];
-  let idx=0;
-  floors.forEach(f=>{
-    f.rooms.forEach(num=>{
-      const typeId = typeIds[idx%5];
-      const type = rtypes.find(t=>t.id===typeId);
-      rooms.push({
-        id:'room_'+uid(), number:num, floor:f.name, typeId,
-        rent:Number(type?.defaultRent)||0, studentIds:[], amenities:['Fan','Bed','Wardrobe'], notes:''
-      });
-      idx++;
-    });
-  });
-  return rooms;
-}
 
 // ── DASHBOARD v5 HELPERS ─────────────────────────────────────────────────────
 // Small pure helpers backing the KPI cards. Everything here derives from DB —

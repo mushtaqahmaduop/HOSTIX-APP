@@ -226,9 +226,11 @@ then dies on `waitForSelector('#login-input')` after 30s looking exactly like a
 boot regression.** The licence is machine-bound, so the real one validates in
 any profile on this PC. `tests/_profile.js` fails fast with that message.
 
-Two traps that cost hours before: the app **seeds 42 demo rooms on first boot**,
-so a spec that reads `document.querySelector('.rms-card')` gets a demo room
-rather than its own fixture — clear `DB.rooms` first. And `.dash-kpi__label` is
+Two traps that cost hours before: the app **used to seed 42 demo rooms on first
+boot** (removed 2026-09-24 — a new install now starts with none), but a profile
+created before that still carries them, so a spec that reads
+`document.querySelector('.rms-card')` can get a demo room rather than its own
+fixture — clear `DB.rooms` first. And `.dash-kpi__label` is
 `text-transform:uppercase`, so `innerText` returns "CASH RECEIVED": match
 case-insensitively or you will assert against text that is never produced.
 

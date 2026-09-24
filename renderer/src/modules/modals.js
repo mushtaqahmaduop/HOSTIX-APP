@@ -271,9 +271,12 @@ function _initDBFields(d) {
      in settings and happens once — see issuesFoldLegacy() for why running it
      twice would resurrect deleted records. */
   issuesFoldLegacy(d);
-  // Init roomTypes BEFORE generateRooms so rooms get correct default rents
-  // roomTypes already initialized above (before generateRooms)
-  if (!d.rooms || d.rooms.length === 0) d.rooms = generateRooms(d.settings.roomTypes);
+  /* NO DEMO ROOMS (owner, 2026-09-24). An empty room set used to be filled with
+     42 invented rooms across 4 floors — on first boot, on every load that found
+     none, and on restoreBackup(). A new hostel's first sight of the product was
+     42 rooms it does not have (ENTERPRISE_LIVE_STATUS §10). A hostel starts with
+     none and creates its own, on the setup rooms step or with Add Room. */
+  if (!Array.isArray(d.rooms)) d.rooms = [];
   // Core identity — previously missing from restoreBackup path
   if (!d.settings.appName) d.settings.appName = 'HOSTYLLO'; // ← Customisable system name
   if (!d.settings.hostelName) d.settings.hostelName = 'Hostel Name';
