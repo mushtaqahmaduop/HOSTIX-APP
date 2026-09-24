@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "apiBase": "https://control-plane-production-924b.up.railway.app/v1",
+  "updatedAt": "2026-09-24",
+  "_readme": [
+    "This file tells every installed copy of Hostyllo Offline 6.0.0 and later where",
+    "the control plane is. It is fetched from raw.githubusercontent.com on the MAIN",
+    "branch of mushtaqahmaduop/hostyllo-releases, at most once a day per machine,",
+    "by services/discovery.js. Editing it re-points every 6.x install without a release.",
+    "",
+    "It must stay at the ROOT of the main branch of this repository. The URL is pinned",
+    "in services/discovery.js (DISCOVERY_URL), and tests/services.test.js checks it",
+    "against package.json build.publish in the source repository.",
+    "",
+    "apiBase must be https and must include the /v1 prefix. /admin is for people and",
+    "must never appear here. Anything that is not valid https is REFUSED and installs",
+    "keep the address they already had.",
+    "",
+    "SETTING apiBase TO null IS THE KILL SWITCH: it clears every install cache and",
+    "returns them to offline-only operation, a fully supported state.",
+    "",
+    "BEFORE deleting or re-provisioning the Railway service, change this file FIRST",
+    "and give it a day: generated *.up.railway.app names are recycled."
+  ]
+}

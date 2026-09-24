@@ -940,9 +940,9 @@ VIEW_RENDER.register = async () => {
     + '<div class="row" style="margin-top:4px">' + [['1 mo', 1], ['3 mo', 3], ['6 mo', 6], ['1 yr', 12], ['2 yr', 24]].map((x) => '<button type="button" class="btn btn--sm" data-months="' + x[1] + '">' + x[0] + '</button>').join('') + '</div></label>'
     + '<label class="field"><span>PCs allowed</span><input class="input" type="number" min="1" name="maxDevices" value="1"><small>One PC is right for almost every hostel.</small></label>'
     + '</div>'
-    + '<div class="field" style="margin-top:14px"><span>Key type</span><div class="seg" id="kv">'
-    + '<button type="button" data-kv="5" aria-pressed="true">Bound to one PC (v5) — recommended</button><button type="button" data-kv="4" aria-pressed="false">Classic (v4)</button></div>'
-    + '<small id="kv-hint">Needs internet for the first activation only. Once activated on a PC, the key will not work on any other. Needs the 2026-09-24 app release or later.</small></div></div>'
+    + '<div class="field" style="margin-top:14px"><span>Key type</span>'
+    + '<div><b>Bound to one PC (v5)</b></div>'
+    + '<small id="kv-hint">Needs internet for the first activation only. Once activated on a PC, the key will not work on any other. Needs Hostyllo Offline 6.0.0 or later. v4 keys are no longer issued.</small></div></div>'
     + '<div class="card"><div class="card__title">Features from day one</div>'
     + Object.keys(cat).map((k) => '<div class="flag"><div><div class="flag__n">' + esc(cat[k].label) + '</div><div class="flag__d">' + esc(cat[k].description) + '</div></div>'
       + '<button type="button" class="switch" role="switch" aria-checked="' + (cat[k].default !== false) + '" data-rfeat="' + esc(k) + '" aria-label="' + esc(cat[k].label) + '"></button></div>').join('')
@@ -951,19 +951,11 @@ VIEW_RENDER.register = async () => {
     + '</form>';
 };
 AFTER.register = () => {
-  let kv = 5;
+  // v5 only (owner, 2026-09-24) — the server refuses a request for 4.
+  const kv = 5;
   const form = $('reg-form');
   if (!form) return;
   form.querySelectorAll('[data-months]').forEach((b) => { b.onclick = () => { form.expiresOn.value = addMonths(parseInt(b.dataset.months, 10)); }; });
-  form.querySelectorAll('[data-kv]').forEach((b) => {
-    b.onclick = () => {
-      kv = parseInt(b.dataset.kv, 10);
-      form.querySelectorAll('[data-kv]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      $('kv-hint').textContent = kv === 5
-        ? 'Needs internet for the first activation only. Once activated on a PC, the key will not work on any other. Needs the 2026-09-24 app release or later.'
-        : 'Activates offline on any build. Cannot be held to one PC until that PC connects — use only for a hostel with no internet or an old build.';
-    };
-  });
   form.querySelectorAll('[data-rfeat]').forEach((b) => { b.onclick = () => b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true')); });
   form.onsubmit = async (e) => {
     e.preventDefault();

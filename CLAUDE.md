@@ -19,7 +19,7 @@ customer must never see two vendor names for one purchase. Write the wordmark as
 | `package.json` `"name": "hostix-app"` | `app.getName()` resolves it, so it *is* `%APPDATA%\hostix-app` — the folder holding every client's `hostix.db`, `license.enc` and `last_run.dat`. Renaming points 50+ installs at an empty folder. Needs a userData migration, not a rename. |
 | `hostix.db` | Same, plus the `hostix.db.pre-v1.bak` migration snapshot and ~20 specs. |
 | `appId: com.zeerak.hostix` | NSIS upgrade identity. A new appId installs *alongside* the old app instead of replacing it. |
-| `publish.repo: "HOSTIX-APP"` | Must match the GitHub repository name or auto-update breaks. |
+| `publish.repo: "hostyllo-releases"` | Must match the public releases repository or auto-update breaks. It was `HOSTIX-APP` until 6.0.0 (owner, 2026-09-24): releases moved out so the source can be private. `main.js` `RELEASES_URL` and `services/discovery.js` `DISCOVERY_URL` name the same repository. |
 
 `build.productName` **was** safe to change (now `Hostyllo Offline`): it sits under
 `build`, so Electron never sees it as a top-level `productName` and `app.getName()`
@@ -52,8 +52,10 @@ talks to it only when `apiBase` is set, so the desktop app still runs start to
 finish with no network. Treat any change that makes the app *require* the
 control plane as a breaking change.
 
-**`control-plane.json` on `master` is the rollout lever, and it is live
-infrastructure — not a config file.** `services/discovery.js` fetches it from
+**`control-plane.json` in `mushtaqahmaduop/hostyllo-releases` (root of `main`)
+is the rollout lever for 6.0.0 and later, and it is live infrastructure — not a
+config file.** The copy on this repository's `master` serves only builds before
+6.0.0; `docs/releases-repo/` holds what the releases repository carries. `services/discovery.js` fetches it from
 raw.githubusercontent.com once a day; it is how a shipped build learns the
 address at all, because `DEFAULT_API_BASE` is baked empty and cannot be changed
 without a release. Editing that one file re-points every install.

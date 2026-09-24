@@ -412,9 +412,13 @@ test('expiry can be shortened as well as extended', async () => {
 });
 
 test('bulk: many hostels, one transaction, password required', async () => {
-  const two = await S.owner.call('POST', '/issue-key', { expiresOn: '2030-01-01', hostelName: 'Test Hostel Two', keyVersion: 4 });
+  // v4 keys are no longer issued (owner, 2026-09-24): asking for one is refused.
+  const v4 = await S.owner.call('POST', '/issue-key', { expiresOn: '2030-01-01', hostelName: 'Old Style', keyVersion: 4 });
+  assert.strictEqual(v4.status, 400, 'a v4 key was issued');
+  assert.strictEqual(v4.json.code, 'V4_RETIRED');
+  const two = await S.owner.call('POST', '/issue-key', { expiresOn: '2030-01-01', hostelName: 'Test Hostel Two' });
   assert.strictEqual(two.status, 201);
-  assert.strictEqual(keys.resolveKeyVersion(two.json.data.key, SECRET), 4, 'a classic key was asked for');
+  assert.strictEqual(keys.resolveKeyVersion(two.json.data.key, SECRET), 5, 'every issued key is v5');
   const ids = [S.licId, two.json.data.license.id];
   const noPw = await S.owner.call('POST', '/bulk', { ids, action: 'status', status: 'readonly' });
   assert.strictEqual(noPw.status, 403);

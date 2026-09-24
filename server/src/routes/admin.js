@@ -998,9 +998,12 @@ async function adminRoutes(app) {
    * with the customer's details, plan, device limit, features and restrictions,
    * so the hostel exists in the portal before anyone types the key.
    *
-   * `keyVersion` 5 (the default) must be activated online once, which binds it
-   * to one PC (owner's decision D3). 4 is the classic offline-capable key, for
-   * a hostel still on a build that predates v5 or with no internet at all.
+   * Every key is v5 (owner, 2026-09-24): activated online once, which binds it
+   * to one PC (decision D3). v4 keys are NO LONGER ISSUED — their checksum
+   * secret ships inside the app and the source was public, so a v4 key can be
+   * forged; a v5 key cannot activate unless this server issued it. Keys already
+   * sold keep working. A request for 4 is refused with V4_RETIRED rather than
+   * quietly upgraded, so a caller that asked for 4 learns why it did not get one.
    *
    * The key is shown ONCE. Only its fingerprint is stored.
    */
@@ -1051,7 +1054,13 @@ async function adminRoutes(app) {
     const rc = access.validateRestrictions(b.restrictions || {});
     if (!rc.ok) return reply.code(400).send({ success: false, code: 'INVALID_RESTRICTIONS', message: rc.error });
 
-    const version = b.keyVersion === 4 ? 4 : 5;
+    if (b.keyVersion === 4) {
+      return reply.code(400).send({
+        success: false, code: 'V4_RETIRED',
+        message: 'v4 keys are no longer issued. Issue a v5 key: it needs internet for the first activation and Hostyllo Offline 6.0.0 or later.'
+      });
+    }
+    const version = 5;
     const key = keys.buildLicenseKey(year, month, day, cfg.legacyKeySecret, undefined, version);
     const parsed = keys.parseVerified(key, cfg.legacyKeySecret);
     const expiry = keys.licenseKeyExpiry(key);

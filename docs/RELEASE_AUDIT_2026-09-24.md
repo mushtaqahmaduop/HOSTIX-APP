@@ -10,8 +10,8 @@ from this environment it says so, and says who has to check it.
 
 ## Verdict
 
-**Not ready to build yet — two owner decisions and one Windows test pass stand
-between this branch and a release.** The code itself is in good shape: every
+**Not ready to ship yet — the owner's decisions are made and implemented (below);
+what is left is the ordered setup steps and one Windows test pass.** The code itself is in good shape: every
 automated suite passes except for failures traced to this container (listed
 below), and the defects found in this audit are fixed on the branch. What is
 left is not code:
@@ -22,6 +22,28 @@ left is not code:
    must be decided *before* `npm run build`.
 3. **A Windows pass** (R1–R3): build the installer, install it over a copy of a
    real v1 client, click WhatsApp support on a real PC.
+
+## Decided by the owner (2026-09-24) — and done on the branch
+
+| Decision | What changed | Verified |
+|---|---|---|
+| **Version 6.0.0** | `package.json` and `package-lock.json` | — |
+| **Updates come from a new public repository, `mushtaqahmaduop/hostyllo-releases`** | `build.publish.repo`, `RELEASES_URL`, `DISCOVERY_URL` (now `…/hostyllo-releases/main/control-plane.json`). What that repository must hold is in `docs/releases-repo/`. | `test:update` 9/9, `test:services` 166/166 (discovery must match publish) |
+| **v5 keys only** | The server refuses `keyVersion: 4` with `V4_RETIRED`; the portal no longer offers v4. Keys already sold keep working. | server `test:pg` 27/27 (a v4 request is refused, every issued key is v5); the portal in Chromium issued a key that verifies as v5 |
+
+**Order matters — do these in this order:**
+
+1. Create the **public** repository `hostyllo-releases` and put
+   `docs/releases-repo/control-plane.json` at the root of its `main` branch
+   (and the README). Check
+   `https://raw.githubusercontent.com/mushtaqahmaduop/hostyllo-releases/main/control-plane.json`
+   opens in a browser.
+2. `railway up` from `server/` (v5-only issuing and the portal headers).
+3. Build 6.0.0 and publish it as release `v6.0.0` **in hostyllo-releases**
+   (`docs/releases-repo/README.md`).
+4. Run R1–R5 below.
+5. Only then make `HOSTIX-APP` private. Doing it earlier cuts off discovery for
+   anything built before 6.0.0 (the owner's own test installs, and 5.x).
 
 ## Critical — owner decisions
 

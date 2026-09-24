@@ -2118,7 +2118,10 @@ ipcMain.on('write-file', (_e, filePath, data) => {
 // ════════════════════════════════════════════════════════════════════════════
 // AUTO UPDATER
 // ════════════════════════════════════════════════════════════════════════════
-const RELEASES_URL = 'https://github.com/mushtaqahmaduop/HOSTIX-APP/releases';
+// The public releases repository (owner, 2026-09-24): installers, latest.yml and
+// control-plane.json only, so the source repository can be private. Must match
+// package.json build.publish.
+const RELEASES_URL = 'https://github.com/mushtaqahmaduop/hostyllo-releases/releases';
 
 /* Which file "Download" should hand the browser.
 
