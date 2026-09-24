@@ -2191,6 +2191,83 @@ console.log('\nowner controls (2026-09-24) — levels, restrictions, the live ch
     assert.ok(dev._loadCredentials(), 'the credentials from activation were not kept');
   });
 
+  // ── The loops cannot become the load (owner, 2026-09-24) ─────────────────
+  config.load({ userDataDir: TMP, overrides: { apiBase: 'https://example.invalid/v1' } });
+
+  await okAsync('a fleet-wide nudge waits the delay the server hands out', async () => {
+    let syncs = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => { syncs++; } },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse(['event: hello\ndata: {"revision":1}\n\n',
+        'event: changed\ndata: {"scope":"fleet","delayMs":600}\n\n'])
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 400));
+    assert.strictEqual(syncs, 0, 'synced before its spread delay');
+    await new Promise(r => setTimeout(r, 450));
+    s.stop();
+    assert.strictEqual(syncs, 1);
+  });
+
+  await okAsync('a chatty stream still gives at most one sync per 5 seconds', async () => {
+    let syncs = 0;
+    const burst = [];
+    for (let i = 0; i < 30; i++) burst.push('event: changed\ndata: {"scope":"licence","delayMs":0}\n\n');
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => { syncs++; } },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 5000 }),
+      transport: async () => sseResponse(['event: hello\ndata: {"revision":1}\n\n'].concat(burst))
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 900));
+    s.stop();
+    assert.strictEqual(syncs, 1, syncs + ' syncs from one burst');
+  });
+
+  await okAsync('a 429 is obeyed to the second, not retried at 2s', async () => {
+    let calls = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => {} },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => { calls++; return { status: 429, headers: { get: (k) => k === 'retry-after' ? '120' : null }, body: null }; }
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 300));
+    s.stop();
+    assert.strictEqual(calls, 1, 'retried a 429 after ' + calls + ' calls in 300ms');
+  });
+
+  await okAsync('no token means backing off by the half-minute, not the second', async () => {
+    let tries = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => { tries++; return null; }, sync: async () => {} },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => sseResponse([])
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 300));
+    s.stop();
+    assert.strictEqual(tries, 1);
+    assert.strictEqual(s._noTokenMs, 60000, 'the no-token back-off did not grow');
+  });
+
+  await okAsync('a server-initiated reconnect waits the jitter it names', async () => {
+    let calls = 0;
+    const s = new LicenceStream({
+      device: { _ensureToken: async () => 'tok', sync: async () => {} },
+      entitlement: { getStatus: () => ({ revision: 1 }) },
+      cfg: Object.assign({}, config.get(), { streamRetryMinMs: 10 }),
+      transport: async () => { calls++; return sseResponse(['event: hello\ndata: {"revision":1}\n\n', 'event: reconnect\ndata: {"retryMs":5000}\n\n']); }
+    });
+    s.start();
+    await new Promise(r => setTimeout(r, 400));
+    s.stop();
+    assert.strictEqual(calls, 1, 'reconnected before the server-named delay');
+  });
+
   config.load({ userDataDir: TMP, overrides: { apiBase: '' } });
 }
 

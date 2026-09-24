@@ -35,7 +35,7 @@ const HOUR_SECONDS = 3600;
 const DAY_MS = 86400000;
 
 /** A device holding a stream within this window is "online now". */
-const ONLINE_WINDOW_SECONDS = 90;
+const ONLINE_WINDOW_SECONDS = 120;   // presence is written every ~50s (devices.js)
 
 const ROLE_RANK = { support: 1, admin: 2, owner: 3 };
 

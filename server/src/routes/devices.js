@@ -12,9 +12,49 @@ const crypto = require('crypto');
 const db = require('../db');
 const keys = require('../lib/keys');
 const ent = require('../lib/entitlement');
+const { WindowLimiter, tooMany } = require('../lib/ratelimit');
+
+function intEnv(name, fallback) {
+  const n = parseInt(process.env[name] || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// ── Load budget ─────────────────────────────────────────────────────────────
+// What one install legitimately sends, so the ceilings below are measured
+// rather than guessed:
+//   /v1/healthz       1 per minute (connectivity probe)
+//   /v1/entitlement   1 per 10 minutes (poll) + 1 per portal change + 1 per boot
+//   /v1/devices/token 1 per 15 minutes
+//   stream opens      ~4 per hour (the server recycles each after 14 minutes)
+// Every ceiling is 10x or more above that, so only a loop ever meets one.
+
+/** Every /v1 request, per IP, before any database work. */
+const ipLimiter = new WindowLimiter({ limit: intEnv('V1_IP_PER_MIN', 300), windowMs: 60000 });
+/** Entitlement fetches per device token (a token lives 15 minutes). */
+const entLimiter = new WindowLimiter({ limit: intEnv('ENT_PER_TOKEN', 40), windowMs: 15 * 60000 });
+/** Stream opens per IP. */
+const streamOpenLimiter = new WindowLimiter({ limit: intEnv('STREAM_OPENS_PER_10MIN', 40), windowMs: 10 * 60000 });
+/** Hard ceiling on streams one process holds. Past it, new ones are told to come back. */
+const MAX_STREAMS = intEnv('MAX_STREAMS', 5000);
+/** Streams one device may hold at once. A second tab of the same install is the most there ever is. */
+const MAX_STREAMS_PER_DEVICE = 2;
 
 /** How often an idle stream says something, so proxies do not reap it. */
 const STREAM_HEARTBEAT_MS = 25000;
+/**
+ * Presence is written on every SECOND heartbeat. At 5,000 open streams that is
+ * 100 small UPDATEs a second instead of 200; "online" in the portal allows for
+ * it (ONLINE_WINDOW_SECONDS in admin.js is 120).
+ */
+const PRESENCE_EVERY_BEATS = 2;
+/**
+ * A change that reaches EVERY install (fleet switch, listener reconnect) is
+ * spread out: each stream is told to wait a random delay before fetching, so
+ * 5,000 apps do not hit /v1/entitlement in the same second. 20ms per open
+ * stream, capped at a minute.
+ */
+const FANOUT_MS_PER_STREAM = 20;
+const FANOUT_MAX_MS = 60000;
 /**
  * A stream is re-opened at least this often. The token that opened it lasts
  * 15 minutes; closing on this cadence makes the app re-authenticate, so a
@@ -77,6 +117,12 @@ async function deviceForToken(request) {
 
 async function deviceRoutes(app) {
   const realtime = app.realtime || null;
+
+  // The first line of defence: a Map lookup per request, before any query.
+  app.addHook('onRequest', async (request, reply) => {
+    const r = ipLimiter.hit(request.ip);
+    if (!r.ok) return tooMany(reply, r.retryAfterMs);
+  });
 
   // ── Reachability ──────────────────────────────────────────────────────────
   /**
@@ -148,10 +194,7 @@ async function deviceRoutes(app) {
     // generous ceiling still leaves no room for grinding keys at a public
     // endpoint. Not applied to /healthz, which does no work — but this writes.
     if (await bump('register', request.ip, HOUR_SECONDS) > 20) {
-      return reply.code(429).send({
-        success: false, code: 'RATE_LIMIT',
-        message: 'Too many registration attempts. Try again later.'
-      });
+      return tooMany(reply, 3600000, 'Too many registration attempts. Try again later.');
     }
 
     if (!keys.parseLicenseKey(licenseKey)) {
@@ -354,10 +397,7 @@ async function deviceRoutes(app) {
     const { deviceId, deviceSecret } = request.body;
 
     if (await bump('token', request.ip, HOUR_SECONDS) > 60) {
-      return reply.code(429).send({
-        success: false, code: 'RATE_LIMIT',
-        message: 'Too many token requests. Try again later.'
-      });
+      return tooMany(reply, 600000, 'Too many token requests. Try again later.');
     }
 
     const { rows } = await db.query(
@@ -393,9 +433,9 @@ async function deviceRoutes(app) {
     );
     await db.query('UPDATE devices SET last_seen_at = NOW() WHERE id = $1', [device.id]);
 
-    // Opportunistic sweep. A dedicated job for a table this small would be more
-    // moving parts than the problem deserves.
-    await db.query('DELETE FROM device_tokens WHERE expires_at < NOW()').catch(() => {});
+    // Expired tokens are swept by the housekeeping job (lib/sweeper.js), not
+    // here: a DELETE on every token request is a table scan per install per
+    // 15 minutes, paid by the request path.
 
     return reply.code(200).send({
       success: true,
@@ -420,6 +460,11 @@ async function deviceRoutes(app) {
         success: false, code: 'DEVICE_UNAUTHORIZED', message: 'Missing device token.'
       });
     }
+
+    // Per token, before the lookup: a client re-fetching in a loop is stopped
+    // for the price of a hash, not a join.
+    const lim = entLimiter.hit(tokenHash(request.headers.authorization.slice(7)));
+    if (!lim.ok) return tooMany(reply, lim.retryAfterMs, 'Too many licence checks. The app will try again shortly.');
 
     const row = await deviceForToken(request);
     if (!row) {
@@ -495,6 +540,12 @@ async function deviceRoutes(app) {
    * last minute and a half" — not a guess from the last sync.
    */
   app.get('/devices/stream', async (request, reply) => {
+    const opens = streamOpenLimiter.hit(request.ip);
+    if (!opens.ok) return tooMany(reply, opens.retryAfterMs, 'Too many reconnects. The app will try again shortly.');
+    if (realtime && realtime.streams.size >= MAX_STREAMS) {
+      // Spread the retries so a full server is not re-hit by everyone at once.
+      return tooMany(reply, 30000 + Math.floor(Math.random() * 60000), 'The live channel is busy. The app will try again shortly.');
+    }
     const row = await deviceForToken(request);
     if (!row) {
       return reply.code(401).send({
@@ -531,10 +582,15 @@ async function deviceRoutes(app) {
       [row.device_id]).catch(() => {});
     touch();
 
-    const onLicence = (id, rev) => { if (id === row.license_id) send('changed', { scope: 'licence', revision: rev }); };
-    const onDevice = (id) => { if (id === row.device_id) send('changed', { scope: 'device' }); };
-    const onFleet = (rev) => send('changed', { scope: 'fleet', revision: rev });
-    const onResync = () => send('changed', { scope: 'resync' });
+    // Fleet-wide nudges carry a random delay so every install does not fetch
+    // in the same second. A licence or device change reaches a handful of
+    // PCs and goes out at once.
+    const spread = () => Math.floor(Math.random() * Math.min(FANOUT_MAX_MS,
+      (realtime ? realtime.streams.size : 1) * FANOUT_MS_PER_STREAM));
+    const onLicence = (id, rev) => { if (id === row.license_id) send('changed', { scope: 'licence', revision: rev, delayMs: 0 }); };
+    const onDevice = (id) => { if (id === row.device_id) send('changed', { scope: 'device', delayMs: 0 }); };
+    const onFleet = (rev) => send('changed', { scope: 'fleet', revision: rev, delayMs: spread() });
+    const onResync = () => send('changed', { scope: 'resync', delayMs: spread() });
 
     if (realtime) {
       realtime.on('licence', onLicence);
@@ -542,12 +598,34 @@ async function deviceRoutes(app) {
       realtime.on('fleet', onFleet);
       realtime.on('resync', onResync);
     }
-    const entry = { deviceId: row.device_id, licenseId: row.license_id, openedAt: Date.now() };
-    if (realtime) realtime.streams.add(entry);
+    // `close` lets the server end this stream on shutdown or when the same
+    // device opens too many — with a jittered reconnect so a deploy does not
+    // bring every install back in the same second.
+    const entry = {
+      deviceId: row.device_id, licenseId: row.license_id, openedAt: Date.now(),
+      close(retryMs) {
+        send('reconnect', { retryMs: retryMs == null ? 0 : retryMs });
+        cleanup();
+        try { res.end(); } catch (_) {}
+      }
+    };
+    if (realtime) {
+      const mine = [];
+      for (const e of realtime.streams) if (e.deviceId === row.device_id) mine.push(e);
+      mine.sort((a, b) => a.openedAt - b.openedAt);
+      while (mine.length >= MAX_STREAMS_PER_DEVICE) mine.shift().close(5000);
+      realtime.streams.add(entry);
+    }
 
-    const beat = setInterval(() => { write(': ping\n\n'); touch(); }, STREAM_HEARTBEAT_MS);
-    const maxAge = setTimeout(() => { send('reconnect', {}); cleanup(); try { res.end(); } catch (_) {} },
-      STREAM_MAX_AGE_MS);
+    let beats = 0;
+    const beat = setInterval(() => {
+      write(': ping\n\n');
+      if (++beats % PRESENCE_EVERY_BEATS === 0) touch();
+    }, STREAM_HEARTBEAT_MS);
+    // Recycled a little before the 15-minute token lapses, at a jittered age so
+    // the whole fleet does not reconnect on the same tick.
+    const maxAge = setTimeout(() => entry.close(Math.floor(Math.random() * 10000)),
+      STREAM_MAX_AGE_MS - Math.floor(Math.random() * 60000));
 
     function cleanup() {
       if (closed) return;
@@ -569,4 +647,4 @@ async function deviceRoutes(app) {
   });
 }
 
-module.exports = { deviceRoutes, STREAM_HEARTBEAT_MS };
+module.exports = { deviceRoutes, STREAM_HEARTBEAT_MS, _limiters: { ipLimiter, entLimiter, streamOpenLimiter } };

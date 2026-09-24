@@ -35,6 +35,12 @@ async function buildApp(opts) {
     // The app posts nothing large. A cap means a malformed or hostile request
     // is refused before it is parsed rather than after.
     bodyLimit: 64 * 1024,
+    // A request that has not finished ARRIVING in 30s is a slow-loris, not a
+    // customer. (This bounds receiving the request, so held-open streams are
+    // unaffected.) Keep-alive outlives the platform proxy's idle timeout so the
+    // proxy, not this process, is the one that closes an idle connection.
+    requestTimeout: 30000,
+    keepAliveTimeout: 65000,
     // Fastify defaults to removeAdditional:true, which STRIPS unknown body
     // fields rather than rejecting them — so `additionalProperties: false` on a
     // route schema silently does nothing. A client sending hostelId, or a typo,
@@ -46,6 +52,9 @@ async function buildApp(opts) {
   // Created here, STARTED by server.js. Tests build the app without a live
   // listener; a Realtime that is never started simply never emits.
   app.decorate('realtime', options.realtime || new Realtime({ databaseUrl: config.databaseUrl }));
+  // Streams are hijacked sockets Fastify does not own; close them itself or a
+  // deploy waits on them.
+  app.addHook('preClose', async () => { app.realtime.closeAll(); });
 
   // Cookies carry the admin session, signed with SESSION_SECRET so a tampered
   // one is rejected before anything is looked up.

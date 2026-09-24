@@ -24,8 +24,8 @@ entitlement. The client re-registers before discarding its identity.
 | Check | Result |
 |---|---|
 | `server` `npm test` (stubbed HTTP + unit) | 29 + 21 passed |
-| `server` `npm run test:pg` — **real Postgres**, real server, real SSE, every entitlement verified with the app's verifier | 23 / 23 |
-| `npm run test:services` | 158 / 158 (13 new) |
+| `server` `npm run test:pg` — **real Postgres**, real server, real SSE, every entitlement verified with the app's verifier | 27 / 27 (incl. stream caps, shutdown, per-token and per-IP limits) |
+| `npm run test:services` | 163 / 163 (18 new) |
 | `test:license`, `test:activation`, `test:theme`, `test:export`, `test:update`, `typecheck` | all pass |
 | **Real Electron app against a local control plane** (scratch harness, not committed) | 22 / 22 — v5 activation, read-only banner, save refused, export refused, feature lock, suspend → lock screen in 408 ms, lift → back in 410 ms, revoke, release PC, "change received" |
 | Playwright specs (smoke, admit-to-payment, exports-pdf, toolbar-shared, backup-main-guard, licence-enforcement, students-export, backup-page, connection-panel, online-services, settings-license-connection, titlebar-keyboard, write-failure) | 39 / 41. Both failures are the container, not the code: `licence-enforcement:201` activates in a fresh profile and the container has no hardware fingerprint (reproduced on the unmodified repo); `write-failure:76` relies on `chmod 0444`, which root ignores |
@@ -33,6 +33,34 @@ entitlement. The client re-registers before discarding its identity.
 
 `test:pg` needs a disposable database and refuses a hosted one:
 `TEST_DATABASE_URL=postgres://…/scratch npm run test:pg` (from `server/`).
+
+## Load and loop protection (production hardening, same day)
+
+The owner's requirement: no loop may overload the server. Every loop between
+the apps and the control plane is now bounded at BOTH ends.
+
+| Risk | Server | App |
+|---|---|---|
+| A flood from one address | in-memory per-IP ceiling on every `/v1` request (300/min), answered **before any database work**, with `Retry-After` | obeys `Retry-After` to the second |
+| A client re-fetching its entitlement in a loop | 40 per token per 15 min | stream nudges become at most one sync per 5 s |
+| Reconnect storms | 40 stream opens per IP per 10 min; 2 streams per device (oldest closed with a delay); 5,000 streams per process, then 429 with a random 30–90 s `Retry-After` | exponential back-off with jitter 2 s → 60 s; **30 s → 15 min** when it cannot even get a token |
+| Thundering herd on a fleet-wide change | each stream is told a random delay, 20 ms per open stream, capped at 60 s | waits the delay before fetching |
+| Every app reconnecting on a deploy | shutdown ends every stream with a random 1–20 s reconnect, so deploys no longer hang on open sockets; streams are recycled at a jittered age | waits the delay it is given |
+| Presence writes | written every 2nd heartbeat (~50 s) instead of every 25 s | — |
+| A slow database | 10 s statement timeout, 30 s idle-in-transaction timeout; streams hold no pooled connection | — |
+| Tables growing without end | housekeeping every ~15 min: rate-limit rows, expired tokens and sessions, stale presence; removed the per-request `DELETE` on the token route | — |
+| Slow-loris | 30 s request timeout; keep-alive outlives the proxy | — |
+
+Measured with `npm run test:load` (real server, real Postgres, a fleet-wide change):
+
+| Installs on the stream | Open all | Server RSS | DB connections | Fetches spread over | Busiest second | p95 / p99 | Errors |
+|---|---|---|---|---|---|---|---|
+| 1,000 | 0.9 s | 129 MB | 12 | 20 s | 66 | 6 / 27 ms | 0 |
+| 2,500 | 1.9 s | 124 MB | 12 | 50 s | 66 | 6 / 54 ms | 0 |
+
+The busiest second stays flat as the fleet grows, because the spread grows with it.
+Tunables (environment, all optional): `V1_IP_PER_MIN`, `ENT_PER_TOKEN`,
+`STREAM_OPENS_PER_10MIN`, `MAX_STREAMS`, `PG_STATEMENT_TIMEOUT_MS`.
 
 ## Deploying — in this order
 

@@ -101,6 +101,18 @@ class Realtime extends EventEmitter {
     }
   }
 
+  /**
+   * End every stream this process holds, each told to come back after a
+   * random 1-20s — so a deploy re-spreads the fleet instead of every install
+   * reconnecting to the new process in the same second. Without this, open
+   * streams keep the old process alive and the deploy hangs until they time out.
+   */
+  closeAll() {
+    for (const e of Array.from(this.streams)) {
+      try { e.close(1000 + Math.floor(Math.random() * 19000)); } catch (_) {}
+    }
+  }
+
   /** 'L:<id>:<rev>' | 'D:<id>' | 'F:<rev>' → typed events. Public for tests. */
   _dispatch(payload) {
     const p = String(payload || '').split(':');

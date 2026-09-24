@@ -509,6 +509,54 @@ test('the audit log records who did what, and cannot be edited', async () => {
   await assert.rejects(db.query('DELETE FROM audit_log'), /insert-only/);
 });
 
+// ── Overload protection — LAST, because the per-IP limiter is shared ─────────
+
+test('one device holding a third stream closes its oldest, with a reconnect delay', async () => {
+  const tok = S.tokB;
+  const a = openStream(tok); await a.ready; await a.waitFor((e) => e.event === 'hello');
+  const b = openStream(tok); await b.ready; await b.waitFor((e) => e.event === 'hello');
+  const c = openStream(tok); await c.ready; await c.waitFor((e) => e.event === 'hello');
+  const rec = await a.waitFor((e) => e.event === 'reconnect', 2000);
+  assert.ok(rec, 'the oldest stream was not closed');
+  assert.ok(rec.data.retryMs >= 1000, 'a replaced stream must not reconnect at once');
+  assert.ok(app.realtime.streams.size <= 2 + 1, 'streams per device are not capped');
+  [a, b, c].forEach((x) => x.close());
+});
+
+test('shutdown ends every stream with a jittered reconnect, so a deploy does not hang', async () => {
+  const s1 = openStream(S.tokB); await s1.ready; await s1.waitFor((e) => e.event === 'hello');
+  app.realtime.closeAll();
+  const rec = await s1.waitFor((e) => e.event === 'reconnect', 2000);
+  assert.ok(rec && rec.data.retryMs >= 1000 && rec.data.retryMs <= 20000, JSON.stringify(rec));
+  s1.close();
+});
+
+test('a client re-fetching its entitlement in a loop is stopped with Retry-After', async () => {
+  const tok = await tokenFor(S.devB);
+  let limited = null;
+  for (let i = 0; i < 60 && !limited; i++) {
+    const res = await fetch(base + '/v1/entitlement', { headers: { authorization: 'Bearer ' + tok } });
+    if (res.status === 429) limited = res;
+    else await res.arrayBuffer();
+  }
+  assert.ok(limited, 'sixty fetches in a row were all served');
+  assert.ok(Number(limited.headers.get('retry-after')) > 0, 'a 429 without Retry-After');
+});
+
+test('a flood from one address is refused before it reaches the database', async () => {
+  const before = await db.query("SELECT sum(xact_commit + xact_rollback)::bigint AS n FROM pg_stat_database WHERE datname = current_database()");
+  let first429 = -1;
+  for (let i = 0; i < 400; i++) {
+    const res = await fetch(base + '/v1/entitlement', { headers: { authorization: 'Bearer nope' } });
+    await res.arrayBuffer();
+    if (res.status === 429 && first429 < 0) first429 = i;
+  }
+  assert.ok(first429 > 0 && first429 <= 300, 'no per-IP ceiling (first 429 at ' + first429 + ')');
+  const after = await db.query("SELECT sum(xact_commit + xact_rollback)::bigint AS n FROM pg_stat_database WHERE datname = current_database()");
+  // Everything past the ceiling must have cost no transaction at all.
+  assert.ok(after.rows[0].n - before.rows[0].n < 400, 'refused requests still hit the database');
+});
+
 // ── Runner ──────────────────────────────────────────────────────────────────
 (async () => {
   console.log('\ncontrol plane — real Postgres, real server, real streams\n');
