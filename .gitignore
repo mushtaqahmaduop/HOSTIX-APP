@@ -23,6 +23,7 @@ archive_recovery.js
 
 # Playwright (Phase 0 e2e safety net)
 test-results/
+.shots/
 playwright-report/
 blob-report/
 .last-run.json
