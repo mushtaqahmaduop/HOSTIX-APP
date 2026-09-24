@@ -19,6 +19,7 @@
 const { test, expect, _electron: electron } = require('@playwright/test');
 const path = require('path');
 const { resetProfile } = require('./_profile');
+const { settleFreshInstall } = require('./_fresh-install');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const ELECTRON = require('electron');
@@ -90,11 +91,30 @@ async function stateWithFocus(win, want) {
   return win.evaluate(STATE);
 }
 
+/* Since 2026-09-23 the File menu's backup items and Help's License Settings are
+   admin-only (d916243), hidden until an admin signs in. The full walk below is
+   therefore made as the admin, who sees every item; the login screen gets its
+   own test after this one. */
+async function loginAsAdmin(win) {
+  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
+  await win.waitForFunction(() => typeof WARDENS !== 'undefined' && WARDENS.warden1 && WARDENS.warden1.pw,
+    null, { timeout: 30000 });
+  await win.selectOption('#login-user', 'warden1');
+  await win.fill('#login-input', 'admin123');
+  await win.click('#login-btn');
+  await win.waitForFunction(
+    () => { const s = document.getElementById('login-screen'); return s && s.style.display === 'none'; },
+    null, { timeout: 30000 });
+  await settleFreshInstall(win);
+  await win.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+}
+
 test('the title-bar menus open, walk and close from the keyboard alone', async () => {
   const app = await electron.launch(launchOpts());
   const win = await app.firstWindow();
   await win.waitForLoadState('domcontentloaded');
   await win.waitForSelector('#hz-titlebar', { state: 'attached', timeout: 30000 });
+  await loginAsAdmin(win);
 
   // ── Mounted, and announced to a screen reader ─────────────────────────────
   const mounted = await win.evaluate(() => {
@@ -180,5 +200,30 @@ test('the title-bar menus open, walk and close from the keyboard alone', async (
   expect(await win.evaluate(() => window.__escSeen),
     'Escape closed the menu AND fell through to the app').toBe(1);
 
+  await app.close();
+});
+
+/* Audit, 2026-09-24. On the login screen File holds only Quit — the backup
+   items are hidden for anyone but an admin. itemsOf() used to return the hidden
+   buttons too, so Alt+F focused an invisible item (focus went nowhere) and the
+   arrow keys walked through items nobody could see. */
+test('before sign-in, the keyboard reaches only the items that are shown', async () => {
+  const app = await electron.launch(launchOpts());
+  const win = await app.firstWindow();
+  await win.waitForLoadState('domcontentloaded');
+  await win.waitForSelector('#hz-titlebar', { state: 'attached', timeout: 30000 });
+  await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
+
+  await win.keyboard.press('Alt+f');
+  let s = await stateWithFocus(win, 'Quit');
+  expect(s.open, 'Alt+F did not open the File menu').toEqual(['File']);
+  expect(s.focusRole, 'nothing is focused in the open menu').toBe('menuitem');
+  expect(s.focusText, 'the first SHOWN item is not the one focused').toContain('Quit');
+
+  await win.keyboard.press('ArrowDown');     // the only item: the walk stays on it
+  s = await stateWithFocus(win, 'Quit');
+  expect(s.focusText, 'ArrowDown moved onto a hidden item').toContain('Quit');
+
+  await win.keyboard.press('Escape');
   await app.close();
 });
