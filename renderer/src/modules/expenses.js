@@ -299,6 +299,10 @@ function _expExportDef(rows) {
     scope:  one ? expFilter.cat + ' ' + scope : scope,
     sheet:  'Expenses',
     groupLabel: 'Category',
+    /* One heading row for the whole register, not one per category (owner,
+       2026-09-24) — a category is its own row and its Sub-Total. See
+       exGroupedTable() in export/engine.js. */
+    oneTable: true,
 
     filters: [
       ['Month',    scope],

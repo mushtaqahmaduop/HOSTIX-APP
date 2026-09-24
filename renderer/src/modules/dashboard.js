@@ -3095,6 +3095,7 @@ function _dashMonthExportDef(monthKey, label) {
         meta: groups.length + ' categor' + (groups.length === 1 ? 'y' : 'ies'),
         empty: 'Nothing was spent in this month.',
         groupLabel: 'Category',
+        oneTable: true,        // one heading row, not one per category (owner, 2026-09-24)
         columns: [
           { label: 'Date', type: 'date', width: 13, value: e => e.date || '' },
           { label: 'Description', type: 'wrap', width: 44, value: e => e.description || '' },

@@ -2415,6 +2415,7 @@ function _rptDetailDef(type) {
     return Object.assign(def, {
       sheet: 'Expenses',
       groupLabel: 'Category',
+      oneTable: true,          // one heading row, not one per category (owner, 2026-09-24)
       summary: [
         { label: 'Transactions', value: String(exps.length) },
         { label: 'Categories',   value: String(groups.length) },
@@ -2613,6 +2614,7 @@ function _rptOverviewDef() {
         meta: _rptByCategory(T.exps).length + ' categor' +
               (_rptByCategory(T.exps).length === 1 ? 'y' : 'ies'),
         groupLabel: 'Category',
+        oneTable: true,        // one heading row, not one per category (owner, 2026-09-24)
         columns: _rptExpenseColumns(),
         groups: _rptExpenseGroups(T.exps),
         grand: { label: 'Total outgoing', value: fmtPKR(T.totalExp) },
