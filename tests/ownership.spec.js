@@ -123,7 +123,9 @@ test('collected money is locked, and only its collector or an admin may change i
       return items;
     }, pid);
     expect(menu).toEqual([
-      { t: 'View payment', off: false }, { t: 'Print receipt', off: false },
+      // 'Receive payment', not 'View payment': Sara can take the pending money
+      // (9453e9e); changing Ali's collection stays locked.
+      { t: 'Receive payment', off: false }, { t: 'Print receipt', off: false },
       { t: 'Reverse a collection', off: false }, { t: 'Delete payment', off: true },
     ]);
 

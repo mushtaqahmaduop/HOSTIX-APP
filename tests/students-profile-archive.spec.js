@@ -120,7 +120,9 @@ test('the students table states the whole agreement, not the rent half', async (
   const rows = await win.$$eval('.stu-table tbody tr', trs => trs.map(tr => ({
     name:   (tr.querySelector('.stu-who__name') || {}).textContent || '',
     charge: (tr.querySelector('.stu-charge') || {}).textContent || '',
-    title:  (tr.querySelector('.stu-charge') || {}).getAttribute('title') || '',
+    // The hover text moved from `title` to the app's own tooltip (data-tip):
+    // '<plan> — <total> a month'. Still the plan and the total, never the split.
+    title:  (tr.querySelector('.stu-charge') || {}).getAttribute('data-tip') || '',
     // The plan label is .stu-charge__plan since the register redesign; the
     // row's first .ui-chip is now the student's status.
     cover:  (tr.querySelector('.stu-charge__plan') || {}).textContent || '',
@@ -133,7 +135,7 @@ test('the students table states the whole agreement, not the rent half', async (
   expect(by('Both Charges').cover.trim()).toBe('Rent + Mess');
   // The title names the plan and does NOT restate the two figures — that
   // string was removed everywhere it appeared, on the owner's instruction.
-  expect(by('Both Charges').title).toBe('Rent + Mess');
+  expect(by('Both Charges').title).toMatch(/^Rent \+ Mess — /);
   expect(by('Both Charges').title).not.toContain('6,500');
   expect(by('Both Charges').title).not.toContain('8,000');
 

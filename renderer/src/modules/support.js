@@ -457,6 +457,12 @@ async function supSendTicket(id, kind) {
   t.sentAt = new Date().toISOString();
   t.sentVia = route;
   await saveDB();
+  /* Redraw, or the list keeps the "not sent yet" it was drawn with before the
+     send — a warden who has just watched WhatsApp open would be told the
+     request went nowhere (audit, 2026-09-24). */
+  if (typeof currentPage !== 'undefined' && currentPage === 'support' && typeof renderPage === 'function') {
+    renderPage('support');
+  }
   return true;
 }
 

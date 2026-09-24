@@ -364,7 +364,9 @@ test('v6 redesign: add-room, student view, backup, reports overview all render',
      and the one line on it is straight — bars have no tension (null). */
   expect(reports.canvas, 'financial performance chart missing').toBe(true);
   expect(reports.series, 'net result series missing').toEqual(['Revenue', 'Expenses', 'Net Result']);
-  expect(reports.tension, 'the net line must be straight, not curved').toEqual([null, null, 0]);
+  // Bars carry no tension (the property is absent); the net line's is 0.
+  expect(reports.tension[0] == null && reports.tension[1] == null, 'the bars became lines').toBe(true);
+  expect(reports.tension[2], 'the net line must be straight, not curved').toBe(0);
   expect(dash.renderError, 'dashboard render error').toBe(false);
   // Series COUNT is not the assertion — the properties are. The Transfers line
   // is drawn only while FEATURES.fundsTransferCard is on (it plots money that
