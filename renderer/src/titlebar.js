@@ -46,9 +46,12 @@
     { label: 'Full Screen', acc: 'F11',   action: 'fullScreen' }
   );
 
+  /* No License Settings here (owner, 2026-09-24). Help is the one menu the
+     licence screen also shows (data-titlebar="minimal"), and that window prints
+     the licence key with a Copy button — a revoked hostel could copy its own
+     key and re-activate with it. Admins reach it from Settings → License. */
   var helpMenu = { label: 'Help', items: [
     { label: 'About Hostyllo',    action: 'about' },
-    { label: 'License Settings',  action: 'licenseSettings' },
     { label: 'Check for Updates', action: 'checkUpdates' },
     { label: 'License Info',      action: 'licenseInfo' }
   ]};

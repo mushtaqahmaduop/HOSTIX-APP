@@ -870,6 +870,23 @@ function activateLicense(key) {
     const expStr = expiry.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
     return { success: false, reason: `This key expired on ${expStr}. Contact support for a new key.` };
   }
+  /* A REVOKED LICENCE CANNOT BE RE-ACTIVATED WITH ITS OWN KEY.
+
+     license:loadApp would keep the app locked anyway, but only after telling
+     the customer "License activated successfully!" and bouncing them back.
+     Say the true thing instead. A DIFFERENT key is still accepted — that is
+     how a hostel is legitimately re-issued; the entitlement stays bound to the
+     machine, so loadApp keeps it locked until the next sync brings a verdict
+     for the new licence. */
+  const _before = currentEnforcement(true);
+  if (_before.state === enforcement.STATE.REVOKED) {
+    const cur = safe(() => _licenceSnapshot(), null);
+    if (cur && cur.key && cur.key.toUpperCase() === k) {
+      return { success: false, reason: (_before.banner && _before.banner.text)
+        || 'This licence has been revoked. Contact ' + SUPPORT_CONTACT + '.' };
+    }
+  }
+
   /* NEVER SEAL A LICENCE AGAINST A FINGERPRINT THIS MACHINE CANNOT REPRODUCE.
 
      The licence is AES-encrypted with a key derived from the machine id, and
@@ -970,6 +987,10 @@ function deactivateLicense() {
 let _settingsWin = null;
 function openLicenseSettings() {
   if (!mainWindow) return;
+  // Never while the app is locked. The window shows the licence key with a
+  // Copy button, and a revoked hostel pasting its own key back into
+  // activation is exactly the bypass license:loadApp now refuses.
+  if (currentEnforcement(true).blocked) return;
   // Reuse existing window if already open
   if (_settingsWin && !_settingsWin.isDestroyed()) {
     _settingsWin.focus();
@@ -1149,7 +1170,9 @@ const TITLEBAR_ACTIONS = {
   importBackup:  doImportBackup,
   quit:          () => app.quit(),
   about:         doAbout,
-  licenseSettings: () => openLicenseSettings(),
+  // No licenseSettings: Help no longer offers it (see titlebar.js), and an
+  // action left in this table could still be sent over IPC from the licence
+  // screen. Settings → License reaches it through license:openSettings.
   checkUpdates:  doCheckUpdates,
   licenseInfo:   doLicenseInfo,
   resetZoom:     () => doZoom(0),
@@ -1297,7 +1320,6 @@ function createWindow() {
       label: 'Help',
       submenu: [
         { label: 'About Hostyllo', click: doAbout },
-        { label: 'License Settings', click: () => openLicenseSettings() },
         { label: 'Check for Updates', click: doCheckUpdates },
         { label: 'License Info', click: doLicenseInfo }
       ]
@@ -1477,14 +1499,27 @@ ipcMain.handle('license:openSettings', () => openLicenseSettings());
 ipcMain.handle('license:machineId', () => getMachineId());
 ipcMain.handle('app:version', () => app.getVersion());
 
+/* THE SECOND DOOR ASKS THE SAME QUESTION AS THE FIRST.
+
+   license.html calls this after a successful activation. It used to check the
+   licence FILE alone — and a revoked hostel's file is perfectly valid; the
+   revocation lives in the signed entitlement, which the file check never reads.
+   So re-activating with the same key walked straight back into the app.
+   createWindow() has always decided with the enforcement decision; so does
+   this now. */
 ipcMain.handle('license:loadApp', () => {
   if (!mainWindow) return;
   const lic = checkLicenseValidity();
-  if (lic.valid) {
+  const decision = refreshEnforcement();
+  if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
+    const revoked = decision.state === enforcement.STATE.REVOKED;
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: lic.message }
+      query: {
+        reason:  revoked ? 'revoked' : (lic.reason || decision.reason),
+        message: revoked && decision.banner ? decision.banner.text : lic.message
+      }
     });
   }
 });

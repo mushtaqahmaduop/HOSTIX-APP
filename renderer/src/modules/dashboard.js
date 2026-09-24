@@ -1880,8 +1880,8 @@ function _dashLedgerRow(mo, pending, pendingCount) {
               const open = (DB.complaints || []).filter(c => c.status === 'Open').length
                          + (DB.maintenance || []).filter(m => m.status === 'Open').length;
               return open
-                ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' to clear today'
-                : 'Keep things running smoothly';
+                ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' today'
+                : 'All running smoothly';
             })() + '</span></div>'
       + '</div>',
 

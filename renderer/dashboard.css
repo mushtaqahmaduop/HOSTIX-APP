@@ -2901,9 +2901,10 @@ body:not(.light-theme) .trend-range__b.is-on { box-shadow: none; background: var
 .seat-inline__k span   { font-size: 9px; letter-spacing: .2px; }
 .seat-inline__k b      { font-size: 15px; }
 
-/* The glance's closing line is a sentence, so it wraps rather than truncating —
-   "1 open job to clear tod…" is worse than two short lines. */
-.dl-foot--tint span    { white-space: normal; }
+/* The glance's closing line is held to ONE line (owner, 2026-09-24): the
+   wording was shortened so it fits at 1366, and the base .dl-foot span rule
+   ellipsises it on a narrower card rather than breaking it onto two. */
+.dl-foot--tint span    { white-space: nowrap; }
 
 /* ── ROW B IS LOCKED AT THE HEIGHT IT HAS NOW (owner, 2026-09-09) ──────────
    311px, measured at 1366x768 with the glance carrying its six rows and the
