@@ -238,15 +238,21 @@ test('a REVOKED licence still gets a device token — the revocation travels sig
   assert.ok(res.json().data.token, 'no token issued');
 });
 
-test('a DEACTIVATED device is still refused — that one IS an authentication answer', async (app) => {
+// A deactivated device is a RELEASED PC (the console's "Release PC"). It still
+// gets a token, for the same reason a revoked licence does: the released PC is
+// locked by the signed entitlement it fetches next, and a 401 here would leave
+// it running on its cache. Owner's decision, 2026-09-24. The secret is still
+// checked — see the next test.
+test('a DEACTIVATED (released) device still gets a token — its lock travels signed', async (app) => {
   const secret = 's'.repeat(40);
   deviceWorld(secret, 'active', 'deactivated');
   const res = await app.inject({
     method: 'POST', url: '/v1/devices/token',
     payload: { deviceId: DEVICE.id, deviceSecret: secret }
   });
-  assert.strictEqual(res.statusCode, 401);
-  assert.strictEqual(res.json().code, 'DEVICE_UNAUTHORIZED');
+  assert.strictEqual(res.statusCode, 200,
+    'a released PC was refused a token, so it can never hear it was released: ' + res.body);
+  assert.ok(res.json().data.token, 'no token issued');
 });
 
 test('a wrong secret is still refused, revoked or not', async (app) => {
