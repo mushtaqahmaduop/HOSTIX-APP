@@ -8,7 +8,7 @@ the hostel **immediately**. A key, once bound to a PC, must not work on another.
 The panel should feel like the Cloud SaaS super-admin prototype: professional,
 "god mode".
 
-Nothing below is built yet. This is the plan to agree before any code.
+Nothing below is built yet. Decisions agreed are in §8.
 
 ---
 
@@ -255,13 +255,20 @@ can start in parallel against the phase-1 API.
 
 ---
 
-## 8. Decisions for the owner
+## 8. Decisions (owner, 2026-09-24)
 
-- **D1** Banned hostel can still download its own data? *Recommended: yes.*
-- **D2** Check-in deadline for installs that stop connecting: 7 days, and then
-  read-only (not locked)? *Recommended: 7 days → read-only.*
-- **D3** New keys need internet for the first activation only, and existing
-  keys are untouched? *Recommended: yes — the only way to bind a key to one PC.*
-- **D4** Any usage telemetry (counts only) to the panel? *Recommended: not now.*
-- **D5** Should the SaaS prototype be committed to this repo (for example
-  `docs/reference/`) so the panel can be modelled on it?
+- **D1 — Banned means fully locked.** Suspended and Revoked hostels get the
+  licence screen and nothing else: **no data download**. This reverses the
+  current lock screen, which offers one — phase 3 removes it (and the File-menu
+  Export/Import accelerators while locked). Recorded consequence: a hostel
+  in a dispute cannot take out its own records until the ban is lifted.
+- **D2 — No check-in deadline.** An install that never reconnects keeps running
+  until its key's own expiry. So a ban, a shortened expiry or a feature lock
+  reaches **only installs that come online**; the panel must show "last seen"
+  and "change not yet received" plainly so this is never a surprise.
+- **D3 — New keys need internet for their first activation only.** Existing
+  v3/v4 keys are untouched. This is the one approved exception to "the app never
+  requires the control plane".
+- **D4 — No usage telemetry** (not asked; stays at the recommendation).
+- **D5 — The prototype will be uploaded to the session** and the panel will be
+  modelled on it (with no real hostel names seeded).
