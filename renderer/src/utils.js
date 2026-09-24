@@ -45,6 +45,23 @@ function waFitText(text, budget) {
   return encodeURIComponent(chars.slice(0, lo).join(''));
 }
 
+/* An email that opens WRITTEN, in Gmail (owner, 2026-09-24: "the gmail in the
+   support page only opens browser and not opens the gmail with the specified
+   id and message").
+
+   `mailto:` goes to whatever mail program Windows has as its default, and on
+   most hostel PCs that is nothing — so the click landed on a bare browser or a
+   "choose an app" prompt, with no address and no message. Gmail's compose URL
+   opens in the browser with the address, subject and body filled in; a warden
+   signed in to Gmail only has to press Send. Same 2048-character ceiling as
+   waLink(), and the body is trimmed the same way — in whole characters. */
+function gmailLink(to, subject, body) {
+  if (!to) return '';
+  var pre = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(to) +
+            '&su=' + encodeURIComponent(subject || '') + '&body=';
+  return pre + waFitText(body, 1900 - pre.length);      // headroom under 2048
+}
+
 function openExternalLink(url) {
   try {
     if (window.electronAPI && window.electronAPI.openExternal) {
@@ -1536,7 +1553,7 @@ if (typeof module !== 'undefined' && module.exports) {
     validateKeyFormat, validateKeyChecksum, resolveKeyVersion, parseLicenseKey, licenseKeyExpiry,
     licenseDayNumber, licenseDayToDate, licenseSerial,
     buildLicenseKey, buildLegacyLicenseKey, cmpRoomNo,
-    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText
+    ISSUE_MIDDLE_STATUS, issueMergeRecord, issuesFoldLegacy, waLink, waFitText, gmailLink
   };
 }
 /* ─── BACKUP VALIDATION ──────────────────────────────────────────────────────

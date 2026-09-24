@@ -265,8 +265,8 @@ async function supReach(kind, ticketId) {
     if (!to) { supNoContact(); return false; }
     const subj = t ? ('Hostyllo ' + t.ref + ' — ' + t.subject)
                    : ('Hostyllo support — ' + (DB.settings.hostelName || 'hostel'));
-    openExternalLink('mailto:' + encodeURIComponent(to)
-      + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body));
+    // Gmail's compose page, not mailto: — see gmailLink() in utils.js for why.
+    openExternalLink(gmailLink(to, subj, body));
     return true;
   }
   if (kind === 'phone') {

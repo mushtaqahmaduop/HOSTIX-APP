@@ -280,8 +280,11 @@ test('the support contacts are Hostyllo\'s own, fixed, and every route carries t
   });
   expect(links[0]).toMatch(/^https:\/\/wa\.me\/923428521842\?text=/);
   expect(decodeURIComponent(links[0].split('?text=')[1])).toContain('Machine ID:');
-  expect(links[1]).toMatch(/^mailto:hostyllo\.info%40gmail\.com\?subject=/);
-  expect(decodeURIComponent(links[1])).toContain('Machine ID:');
+  // Gmail's compose page, written — not mailto:, which most hostel PCs cannot
+  // open (owner, 2026-09-24).
+  expect(links[1]).toMatch(/^https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=hostyllo\.info%40gmail\.com&su=Hostyllo%20support/);
+  expect(decodeURIComponent(links[1].split('&body=')[1])).toContain('Machine ID:');
+  expect(links[1].length).toBeLessThanOrEqual(2048);
 
   await app.close();
 });

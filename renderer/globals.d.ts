@@ -55,6 +55,7 @@ declare function moneyValue(amount: any, opts?: any): string;
 declare function openExternalLink(url: string): void;
 declare function waLink(phone: any, text?: any): string;
 declare function waFitText(text: any, budget: number): string;
+declare function gmailLink(to: any, subject?: any, body?: any): string;
 // The room, named. roomLabel() is the boxed two-line CELL; roomText() is the
 // same fact as one line of plain text for a sentence, a badge or a modal title.
 declare function floorShort(floor: any): string;

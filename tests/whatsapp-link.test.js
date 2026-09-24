@@ -11,7 +11,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { waLink } = require('../renderer/src/utils.js');
+const { waLink, gmailLink } = require('../renderer/src/utils.js');
 
 let passed = 0, failed = 0;
 function ok(name, fn) {
@@ -64,6 +64,33 @@ ok('Support uses the owner\'s number and opens it through waLink, not whatsapp:/
   assert.ok(/whatsapp:\s*'\+92 342 8521842'/.test(src), 'support.js does not carry +92 342 8521842');
   assert.ok(/openExternalLink\(waLink\(raw, body\)\)/.test(src), 'supReach does not open waLink()');
   assert.ok(!/whatsapp:\/\/send/.test(code('renderer/src/modules/support.js')), 'support.js still builds a whatsapp:// link');
+});
+
+console.log('\nEmail links (owner, 2026-09-24: open Gmail written, not a bare browser)');
+
+ok('the email opens Gmail\'s compose page with address, subject and message', () => {
+  const url = gmailLink('hostyllo.info@gmail.com', 'Hostyllo support — Test', 'Line 1\nالسلام علیکم');
+  assert.ok(url.startsWith('https://mail.google.com/mail/?view=cm&fs=1&to=hostyllo.info%40gmail.com&su='), url);
+  const q = new URL(url).searchParams;
+  assert.strictEqual(q.get('to'), 'hostyllo.info@gmail.com');
+  assert.strictEqual(q.get('su'), 'Hostyllo support — Test');
+  assert.strictEqual(q.get('body'), 'Line 1\nالسلام علیکم');
+});
+
+ok('a long support email still fits the 2048 the app will open, in whole characters', () => {
+  const url = gmailLink('hostyllo.info@gmail.com', 'Subject', 'x'.repeat(5000) + ' é'.repeat(800));
+  assert.ok(url.length <= 2048, 'link is ' + url.length + ' characters');
+  decodeURIComponent(url.split('&body=')[1]);   // throws if an escape was cut in half
+});
+
+ok('no address gives no link', () => { assert.strictEqual(gmailLink('', 's', 'b'), ''); });
+
+ok('Support and the licence screen open Gmail, not mailto:', () => {
+  assert.ok(/openExternalLink\(gmailLink\(to, subj, body\)\)/.test(read('renderer/src/modules/support.js')),
+            'supReach does not open gmailLink()');
+  assert.ok(!/'mailto:'/.test(code('renderer/src/modules/support.js')), 'support.js still builds a mailto: link');
+  assert.ok(!/'mailto:'/.test(read('renderer/license.html')), 'the licence screen still builds a mailto: link');
+  assert.ok(/mail\.google\.com\/mail\/\?view=cm/.test(read('renderer/license.html')));
 });
 
 ok('Support email is hostyllo.info@gmail.com', () => {
