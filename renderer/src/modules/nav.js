@@ -442,6 +442,13 @@ const _dPayments = debounce(()=>searchRenderPage('payments','search-payments'));
 const _dExpenses = debounce(()=>searchRenderPage('expenses','search-expenses'));
 
 function renderPage(p, resetScroll=false) {
+  /* THE CAMERA IS NOT PART OF THE DOM IT WAS OPENED IN. Add Student is a
+     PAGE, so leaving it replaces #content wholesale — the <video> goes and
+     the MediaStream behind it does not, holding the device until the app is
+     restarted. That is the "camera is in use by another app" production
+     reported on 2026-09-23; the other app was this one. See
+     stopStudentCamera() in students.js. */
+  if (typeof stopStudentCamera === 'function') stopStudentCamera();
   const el = document.getElementById('content');
   // Save scroll position before re-render so it can be restored
   const savedScroll = el.scrollTop || document.getElementById('main')?.scrollTop || 0;

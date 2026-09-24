@@ -619,7 +619,12 @@ function renderIssues() {
                    reported the record, and since 2026-09-10 a maintenance
                    ticket has one too — often a warden or a contractor rather
                    than a resident. */}
-            <th>#</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
+            ${''/* "ID", not "#" (owner, 2026-09-23: "add ID to the # in the
+                   heading to the complaints id column: CO001"). The cell holds
+                   a reference — CO001, MT014 — not a row number, and "#" is what
+                   the registers that DO count rows use. Two characters that
+                   say which of the two this is. */}
+            <th>ID</th><th>Issue</th><th>Raised by</th><th>Room</th><th>Category</th>
             <th>Priority</th><th>Status</th><th>Reported on</th><th>Assigned to</th><th>Actions</th>
           </tr></thead>
           <tbody>${_pg.slice.map(mkRow).join('')}</tbody>

@@ -52,7 +52,7 @@ function launchOpts() {
 async function login(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 30000 });
   await win.waitForTimeout(1500);
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.press('#login-input', 'Enter');
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER, null,

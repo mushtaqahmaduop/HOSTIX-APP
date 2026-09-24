@@ -46,9 +46,13 @@
     { label: 'Full Screen', acc: 'F11',   action: 'fullScreen' }
   );
 
+  /* No License Settings here (owner, 2026-09-24). This menu is also the one
+     on the licence screen, so a hostel locked by the control plane could open
+     License Settings from it, copy its own key, paste it back into activation
+     and walk straight into the app. Admins reach it from Settings, which only
+     exists inside an unlocked app. */
   var helpMenu = { label: 'Help', items: [
     { label: 'About Hostyllo',    action: 'about' },
-    { label: 'License Settings',  action: 'licenseSettings' },
     { label: 'Check for Updates', action: 'checkUpdates' },
     { label: 'License Info',      action: 'licenseInfo' }
   ]};

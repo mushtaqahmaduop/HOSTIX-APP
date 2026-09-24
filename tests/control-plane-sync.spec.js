@@ -108,6 +108,8 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
   await admin.login();
 
   const app = await electron.launch(launchOpts(profile));
+  // The relaunch in step 8. Declared out here so `finally` can close it.
+  let app2 = null;
   const win = await app.firstWindow();
   let licenceId = null;
 
@@ -314,8 +316,48 @@ test('suspending in the portal makes the app read-only, and lifting it restores 
     await expect.poll(() => win.url(), { timeout: 20000 }).toMatch(/license\.html/i);
     await expect(win.locator('body')).toContainText(/revok/i);
     await expect(win.locator('text=Download my data')).toBeVisible();
-  } finally {
+
+    /* ── 8. AND IT STILL BITES ON A COLD START — THE ONLY PATH THE FIELD TAKES ──
+
+       Everything above revokes while this app still holds a device token it
+       fetched moments earlier, so it goes straight to /v1/entitlement and is
+       told. NO INSTALL IN THE FIELD IS EVER ON THAT PATH: a device token lasts
+       15 minutes and the app syncs every 6 hours, so every real sync begins by
+       exchanging the device secret at /v1/devices/token.
+
+       That is where revocation used to die. The endpoint answered 401 to a
+       revoked licence, the app read that as "my secret was rejected", wiped its
+       credentials and re-registered — and registration answered 403. The sync
+       failed, the cached ACTIVE entitlement kept answering for its full 14 days,
+       and then the local licence file took over. The customer was revoked in the
+       portal and working normally on the desk, indefinitely.
+
+       A restart is exactly that path and needs no test seam: a fresh process
+       holds no token. So close the app with the licence still revoked, open it
+       again, and require that it comes up locked. */
     await app.close();
+
+    app2 = await electron.launch(launchOpts(profile));
+    const win2 = await app2.firstWindow();
+    await expect.poll(() => win2.url(), { timeout: 120000 }).toMatch(/license\.html/i);
+    await expect.poll(async () => (await win2.evaluate(
+      () => window.electronAPI.licenseEnforcement())).state, { timeout: 60000 }).toBe('REVOKED');
+
+    const coldStart = await win2.evaluate(() => window.electronAPI.licenseEnforcement());
+    expect(coldStart.source,
+      'it fell back to the local licence file, which is revocation doing nothing')
+      .toBe('entitlement');
+    expect(coldStart.blocked).toBe(true);
+
+    const afterRestart = await win2.evaluate(() =>
+      window.electronAPI.dbUpsert('students', 'cp-5', { id: 'cp-5', name: 'Must not land either' }));
+    expect(afterRestart.ok, 'a revoked licence accepted a write after a restart').toBe(false);
+
+    // Their records are still theirs, on this screen, after a restart too.
+    await expect(win2.locator('text=Download my data')).toBeVisible();
+  } finally {
+    await app.close().catch(() => {});
+    if (app2) await app2.close().catch(() => {});
     // The portal has no delete — deliberately, since a licence is a customer
     // record. Revoke it and leave it labelled, so it cannot be reused and is
     // obviously not a real hostel.

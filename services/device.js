@@ -183,8 +183,10 @@ class DeviceService {
     return { ok: true, deviceId: data.deviceId };
   }
 
-  /** A live token, registering and exchanging as needed. */
-  async _ensureToken() {
+  /** A live token, registering and exchanging as needed.
+      `retried` guards the one re-registration below: a device the server keeps
+      refusing must fail the sync, not bounce between the two endpoints. */
+  async _ensureToken(retried) {
     if (this._token && this._token.expiresAt - TOKEN_SKEW_MS > Date.now()) {
       return this._token.value;
     }
@@ -207,12 +209,29 @@ class DeviceService {
       // deactivated, or an admin rotated it. Registering again is the
       // documented way back, and it is what the customer would otherwise have
       // to call support for.
-      if (res.errorCode === 'E_UNAUTHORIZED') {
+      if (res.errorCode === 'E_UNAUTHORIZED' && !retried) {
+        /* REGISTER FIRST, THROW THE OLD CREDENTIALS AWAY ONLY ON SUCCESS.
+
+           `clearCredentials()` used to run here, before the attempt. register()
+           does not need the old credentials — it presents the licence key and
+           the machine fingerprint — so clearing first bought nothing, and when
+           the re-registration was then refused the machine was left with no
+           credentials at all and no way to earn new ones. That is not a
+           hypothetical: the control plane refused registration outright for a
+           revoked licence, so one failed sync unregistered the machine for good
+           and it never heard from the control plane again.
+
+           register() overwrites the file on success (_saveCredentials), so the
+           stale secret is replaced either way — just not before its replacement
+           exists. */
         log.info('device_secret_rejected_reregistering');
-        this.clearCredentials();
         const reg = await this.register();
-        if (!reg.ok) return null;
-        return this._ensureToken();
+        if (!reg.ok) {
+          this._lastError = reg.errorCode || 'E_REREGISTER_FAILED';
+          return null;
+        }
+        this._token = null;
+        return this._ensureToken(true);
       }
       this._lastError = res.errorCode;
       return null;

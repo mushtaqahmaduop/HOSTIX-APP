@@ -40,17 +40,42 @@
 
 /* ── CONTACTS ─────────────────────────────────────────────────────────────── */
 
-const SUP_FIELDS = [
-  { key: 'supportWhatsApp', label: 'WhatsApp',  ico: 'phone', ph: '03XX-XXXXXXX' },
-  { key: 'supportEmail',    label: 'Email',     ico: 'mail',  ph: 'support@example.com' },
-  { key: 'supportPhone',    label: 'Telephone', ico: 'phone', ph: '0XX-XXXXXXX' },
-  { key: 'supportHours',    label: 'Hours',     ico: 'clock', ph: 'Mon – Sat, 9am – 7pm' },
-];
+/* ══ HOSTYLLO'S OWN SUPPORT DETAILS, NOT THE HOSTEL'S (owner, 2026-09-23) ═══
+   "use this: hostyllo.info@gmail.com ... and whatsapp number: +923428524842
+   and in the support page you added these details editable which is a wrong
+   idea".
 
-function supGet(key) { return String((DB.settings && DB.settings[key]) || '').trim(); }
-function supAnyContact() {
-  return ['supportWhatsApp', 'supportEmail', 'supportPhone'].some(k => supGet(k));
+   They were kept in DB.settings behind the `settings` permission, with an
+   editor on this page. That was the wrong model twice over: it let a hostel
+   change the number they are told to ring for help — including to a wrong one,
+   silently, with no way back — and it meant a fresh installation opened this
+   page with "No support contact is set yet" and no way for the client to know
+   what it should have been.
+
+   They are CONSTANTS now. Every installation reaches the same place, nobody
+   can break it, and there is no empty state to explain. The hostel's own
+   telephone numbers are a different thing entirely and still live in Settings.
+
+   NO TELEPHONE LINE. The owner named an email and a WhatsApp number and no
+   landline, so `phone` resolves to nothing and every route that offered it is
+   simply not drawn — rather than a tel: link to a number that does not exist. */
+const SUPPORT = {
+  whatsapp: '+92 342 8524842',
+  email:    'hostyllo.info@gmail.com',
+  phone:    '',
+  hours:    'Mon – Sat, 9am – 7pm',
+};
+
+/* Kept as the one reader so every call site below is unchanged. `supportHours`
+   stays overridable from DB.settings because when a hostel is told support is
+   open is a local fact; the ADDRESSES are not. */
+function supGet(key) {
+  if (key === 'supportWhatsApp') return SUPPORT.whatsapp;
+  if (key === 'supportEmail')    return SUPPORT.email;
+  if (key === 'supportPhone')    return SUPPORT.phone;
+  return String((DB.settings && DB.settings[key]) || SUPPORT.hours || '').trim();
 }
+function supAnyContact() { return !!(SUPPORT.whatsapp || SUPPORT.email || SUPPORT.phone); }
 
 /* ── THE KNOWLEDGE BASE ──────────────────────────────────────────────────────
    Shipped, not fetched. Every article is about something this build actually
@@ -273,46 +298,11 @@ function supBestRoute() {
   return null;
 }
 
-/* ── THE CONTACT EDITOR ──────────────────────────────────────────────────────
-   On this page rather than buried in Settings, because the person who needs to
-   fill it in is the one who just found the card empty. Behind the `settings`
-   permission — it changes who a whole hostel is told to telephone. */
-function supEditContacts() {
-  if (typeof requirePerm === 'function' && !requirePerm('settings')) return;
-  showModal('modal-sm',
-    `<div class="hf-mh">
-       <div class="hf-mh__ico">${icon('helpCircle', 'sm')}</div>
-       <div><div class="hf-mh__t">Support contacts</div>
-       <div class="hf-mh__s">Who this hostel reaches when something is wrong. Set once, per installation.</div></div>
-     </div>`,
-    `<div class="hf-form">
-      ${SUP_FIELDS.map(f => `
-        <div class="field">
-          <label for="sup-${f.key}">${escHtml(f.label)}</label>
-          <div class="hf-in"><span class="hf-in__i">${icon(f.ico, 'sm')}</span>
-            <input class="form-control" id="sup-${f.key}" maxlength="80"
-                   value="${escHtml(supGet(f.key))}" placeholder="${escHtml(f.ph)}"></div>
-        </div>`).join('')}
-      <div class="hi-note">Leave any of them blank and the page simply does not offer that route.</div>
-    </div>`,
-    `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="supSaveContacts()">Save</button>`);
-}
-
-async function supSaveContacts() {
-  if (typeof requirePerm === 'function' && !requirePerm('settings')) return;
-  SUP_FIELDS.forEach(f => {
-    const el = document.getElementById('sup-' + f.key);
-    if (!el) return;
-    const v = String(el.value || '').trim();
-    if (v) DB.settings[f.key] = v; else delete DB.settings[f.key];
-  });
-  await saveDB();
-  logActivity('Support Contacts Updated', DB.settings.hostelName || '', 'Settings');
-  closeModal();
-  renderPage('support');
-  toast('Support contacts saved', 'success');
-}
+/* THE CONTACT EDITOR IS GONE (owner, 2026-09-23: "in the support page you
+   added these details editable which is a wrong idea"). supEditContacts() and
+   supSaveContacts() lived here and wrote DB.settings.support*; the addresses
+   are constants at the top of this file now, so there is nothing to edit, no
+   permission to check and no empty state to explain. See the note on SUPPORT. */
 
 /* ── ARTICLES ────────────────────────────────────────────────────────────── */
 
@@ -756,18 +746,12 @@ function renderSupport() {
         <div class="set-card">
           <div class="hi-id__head">
             <div class="hi-id__ttl">${icon('phone', 'sm')}Get in touch</div>
-            <button class="set-btn set-btn--sm" onclick="supEditContacts()">${icon('edit', 'xs')}${supAnyContact() ? 'Edit' : 'Set'}</button>
           </div>
           ${supAnyContact() ? `
             ${supGet('supportWhatsApp') ? contact('whatsapp', 'WhatsApp support', supGet('supportWhatsApp'), hours) : ''}
             ${supGet('supportEmail')    ? contact('email',    'Email support',    supGet('supportEmail'), 'Your details are written into the message') : ''}
             ${supGet('supportPhone')    ? contact('phone',    'Telephone',        supGet('supportPhone'), hours) : ''}
-          ` : `
-            <div class="sup-empty">
-              <div class="sup-empty__t">No support contact is set yet</div>
-              <div class="sup-empty__s">Whoever installed Hostyllo here can add the number and email this hostel should reach. Requests you raise are still kept until then.</div>
-              <button class="set-btn hi-wide" onclick="supEditContacts()">${icon('settings', 'xs')}Set them now</button>
-            </div>`}
+          ` : ''}
         </div>
 
         <div class="set-card">

@@ -42,7 +42,7 @@ async function waitForLoginScreen(win) {
 
 async function login(win, password = 'admin123', username = 'warden1') {
   await waitForLoginScreen(win);
-  await win.fill('#login-user', username);
+  await win.selectOption('#login-user', username);
   await win.fill('#login-input', password);
   await win.click('#login-btn');
   await win.waitForFunction(

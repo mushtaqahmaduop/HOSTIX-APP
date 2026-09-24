@@ -273,3 +273,51 @@
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .exf-rcpt__view img { max-width: 100%; border-radius: var(--radius-sm); }
+
+/* ══ WIDTH BACK TO THE ONE COLUMN THAT READS (owner, 2026-09-23) ══════════
+   "compact the receipt column because it only shows eye icon and takes much
+   space ... compact a little added by and vendor so that the description have
+   some space and wrap to 2nd line if the description is too much large".
+
+   Four columns were sized for their HEADINGS rather than their contents:
+
+     Receipt   70 → 64   the cell holds one 32px icon button and a dash.
+     Paid via 128 → 128   renamed from "Payment method" — the heading shrank,
+                          the column could not: Bank Transfer is the widest
+                          chip and it needs every pixel of the original 128.
+     Vendor   150 → 118   a name that gives way — .exp-who__t ellipsises and
+                          the hover card carries the whole of it.
+     Added by  92 →  86   an avatar plus a first name; the name ellipsises,
+                          the avatar does not, and 86 is the two together.
+
+   EVERY ONE OF THOSE WAS MEASURED AGAINST ITS OWN LONGEST REAL VALUE, not
+   guessed. The first pass took them to 108 / 78 / 56 and clipped all three:
+   the Bank Transfer chip lost 20px, the Added by avatar 8 and the receipt
+   button 8. A clipped method chip says the wrong method, so these are floors,
+   not preferences.
+
+   That is 44px, and every pixel goes to Description, which is the only free
+   text on the row and the only cell that was losing real information.
+
+   AND IT WRAPS NOW, to two lines. Truncating at one line was right while the
+   column was 152px and there was nothing to give it; with the width it reads
+   a whole sentence, and the second line costs nothing on the rows that do not
+   need it. Past two lines it still ellipsises — a register is a list of rows,
+   not a list of paragraphs — and the hover card still has the rest. */
+.exp-table thead th:nth-child(5), .exp-table tbody td:nth-child(5) { width: 128px; }
+.exp-table thead th:nth-child(6), .exp-table tbody td:nth-child(6) { width: 118px; }
+.exp-table thead th:nth-child(7), .exp-table tbody td:nth-child(7) { width: 86px; }
+.exp-table thead th:nth-child(8), .exp-table tbody td:nth-child(8) { width: 64px; }
+/* The eye centres in its own column now that the column is the button's size. */
+.exp-table th.exp-col-rcpt, .exp-table tbody td.exp-rcptc { text-align: center; }
+
+/* TWO LINES, THEN AN ELLIPSIS. -webkit-line-clamp is the only thing that gives
+   an ellipsis at the end of the SECOND line; `overflow:hidden` alone would cut
+   mid-word with no mark that anything is missing. The row grows to fit, which
+   is why .exp-table tbody td keeps its own vertical padding rather than a
+   fixed height. */
+.exp-table tbody td.exp-desc { white-space: normal; }
+.exp-table tbody .exp-desc__t {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    white-space: normal; overflow: hidden; text-overflow: ellipsis;
+}

@@ -552,7 +552,7 @@ async function checkLogin() {
   const plain    = inp.value.trim();
   const typedUsr = uinp ? uinp.value.trim() : '';
 
-  if (!typedUsr) { if (uinp) uinp.focus(); _setLoginState('error', 'Enter your username.'); return; }
+  if (!typedUsr) { if (uinp) uinp.focus(); _setLoginState('error', 'Choose an account.'); return; }
   if (!plain)    { inp.focus(); return; }
 
   const id = findUserByUsername(typedUsr);
@@ -736,10 +736,11 @@ function applyPermissionsToChrome() {
      either, and neither has a gate anywhere else because until now nothing
      could reach them except an admin sitting at the app.
 
-     THEY ARE HIDDEN, NOT REMOVED. Deleting License Settings would take away
-     the only way to re-activate a licence that has lapsed or moved machine,
-     which turns a support call into a reinstall. An admin still has all three
-     exactly where they were.
+     Import and Export are HIDDEN, NOT REMOVED — an admin still has both
+     exactly where they were. License Settings was later removed from Help
+     altogether (2026-09-24): Help is also on the licence screen, where it let a
+     suspended hostel copy its key and re-activate its way back in. Admins open
+     it from Settings.
 
      Backup EXPORT is gated on 'backup' rather than 'users': taking a copy out
      is what that permission is for, and a hostel that trusts a warden to make
@@ -750,7 +751,7 @@ function applyPermissionsToChrome() {
       el.style.display = ok ? '' : 'none';
     });
   };
-  menuItem('licenseSettings', canDo('users'));
+  // License Settings has since left the Help menu entirely (2026-09-24).
   menuItem('importBackup',    canDo('users'));
   menuItem('exportBackup',    canDo('backup') || canDo('users'));
 }
@@ -782,127 +783,78 @@ function logout() {
   location.reload();
 }
 
-/* ── SWITCH ACCOUNT (owner, 2026-09-15) ─────────────────────────────────────
-   Steps through the usernames remembered on this PC. It only ever fills the
-   username: the password box is emptied and focused, so whoever is switching
-   still types their own password. Shown while Remember me is ticked and more
-   than one name is remembered. × in the username box forgets the name shown,
-   on this PC only — the account itself is not touched. */
-function loginPaintRemembered() {
-  const list   = _rememberedUsers();
-  const uinp   = _ui('login-user');
-  const box    = _ui('login-remember');
-  const swap   = _ui('login-swap');
-  const forget = _ui('login-forget');
-  const typed  = uinp ? uinp.value.trim().toLowerCase() : '';
-  const known  = !!typed && list.some(u => u.toLowerCase() === typed);
-  if (swap)   swap.hidden   = !(box && box.checked && list.length > 1);
-  if (forget) forget.hidden = !known;
+/* THE SWAP SIGN AND THE FORGET × ARE GONE (owner, 2026-09-23). Both existed to
+   fill a username BOX without retyping — loginSwitchAccount() stepped through
+   the remembered names, loginSwapToggle()/Pick() opened them as a list, and
+   loginForgetUser() dropped one. #login-user is a <select> of every account on
+   this PC now, so picking one IS the list, and there is nothing to forget: the
+   remembered name only decides where the list opens.
+
+   loginPaintRemembered() survives as a no-op-safe stub because the boot path
+   and the session restore still call it. */
+function loginPaintRemembered() { loginPaintAccounts(); }
+
+/* ══ THE ACCOUNT LIST (owner, 2026-09-23) ══════════════════════════
+   #login-user is a <select> now, so it still carries a .value and checkLogin()
+   reads it exactly as it read the text box. What changed is where the value
+   comes from: the accounts on this machine, each labelled with the role its
+   ticks actually add up to — usrRole() derives that from the permissions, so a
+   user whose ticks were edited by hand shows Custom rather than a stale label.
+
+   INACTIVE ACCOUNTS ARE LEFT OUT. checkLogin() refuses them anyway; offering
+   one is offering a door that cannot open.
+
+   REMEMBER ME NOW MEANS 'START HERE'. It no longer fills a box — there is no
+   box — it decides which account the list opens on. The name is still all that
+   is kept, and the password is still typed every launch.
+
+   ADMINS FIRST, then by name. On a hostel PC the admin is the account that
+   signs in when something is wrong, and a list that opens on it saves the one
+   interaction this control exists to remove. */
+function loginPaintAccounts() {
+  const sel = _ui('login-user');
+  if (!sel || typeof WARDENS === 'undefined' || !WARDENS) return;
+
+  const roleOf = u => (typeof usrRole === 'function' ? usrRole(u) : (u && u.role) || 'User');
+  const rows = Object.keys(WARDENS)
+    .map(id => ({ id: id, u: WARDENS[id] }))
+    .filter(x => x.u && x.u.active !== false)
+    .map(x => ({
+      user: String(x.u.username || x.id),
+      name: String(x.u.name || x.u.username || x.id),
+      role: roleOf(x.u),
+      admin: !!(x.u.perms && x.u.perms.users === true),
+    }))
+    .sort((a, b) => (b.admin - a.admin) || a.name.localeCompare(b.name));
+
+  if (!rows.length) {
+    sel.innerHTML = '<option value="">No accounts on this PC</option>';
+    return;
+  }
+
+  /* The remembered account decides where the list opens; whatever is already
+     chosen wins over it, so re-painting mid-session does not move the cursor
+     out from under someone. */
+  const keep = String(sel.value || '').toLowerCase();
+  const want = keep || String(_rememberedUser() || '').toLowerCase();
+  const esc = s => (typeof escHtml === 'function' ? escHtml(String(s)) : String(s));
+  sel.innerHTML = rows.map(r =>
+    '<option value="' + esc(r.user) + '">' + esc(r.name) + ' — ' + esc(r.role) + '</option>'
+  ).join('');
+  const hit = rows.find(r => r.user.toLowerCase() === want);
+  sel.value = hit ? hit.user : rows[0].user;
 }
 
-function loginSwitchAccount() {
-  const list = _rememberedUsers();
-  const uinp = _ui('login-user');
+/* Changing account clears whatever password was typed for the previous one and
+   drops the cursor into the box — the same contract the swap sign had, for the
+   same reason: a password belongs to one account and must never be carried
+   across to another. */
+function loginPickAccount() {
   const pinp = _ui('login-input');
-  if (!uinp || list.length < 2) return;
-  const at = list.findIndex(u => u.toLowerCase() === uinp.value.trim().toLowerCase());
-  uinp.value = list[(at + 1) % list.length];
-  if (pinp) { pinp.value = ''; pinp.type = 'password'; pinp.focus(); }
-  _setLoginState('reset');
-  loginPaintRemembered();
-}
-
-/* ══ THE SAVED-ACCOUNT LIST (owner, 2026-09-23) ═══════════════════════
-   loginSwitchAccount() below still cycles — it is what Enter on the button
-   does, and one press is the right answer when exactly two names are saved.
-   This is the other half: the circular sign opens the names, and a hostel with
-   three wardens on one machine picks the third without pressing twice.
-
-   ONLY THE USERNAME IS EVER FILLED. Nothing here knows a password, and the
-   password box is cleared and focused on every pick, which is the whole reason
-   'Remember me' was reduced to usernames on 2026-09-15.
-
-   The names come from this PC's own list and are escaped on the way in: they
-   are typed by whoever signs in, and this builds HTML. */
-function loginSwapPaint() {
-  const el = _ui('login-swaplist');
-  if (!el) return;
-  const uinp = _ui('login-user');
-  const now  = uinp ? uinp.value.trim().toLowerCase() : '';
-  const esc  = s => (typeof escHtml === 'function' ? escHtml(String(s))
-    : String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])));
-  el.innerHTML = _rememberedUsers().map(u => {
-    const on = u.toLowerCase() === now;
-    return '<button type="button" role="option" class="lg-swapopt' + (on ? ' is-on' : '') + '"'
-      + ' aria-selected="' + (on ? 'true' : 'false') + '"'
-      + ' onclick="loginSwapPick(this.dataset.u)" data-u="' + esc(u) + '">'
-      + '<span class="lg-swapopt__n">' + esc(u) + '</span>'
-      + (on ? '<span class="lg-swapopt__t">signed in here</span>' : '') + '</button>';
-  }).join('');
-}
-
-function loginSwapToggle(e) {
-  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-  const el  = _ui('login-swaplist');
-  const btn = _ui('login-swap');
-  if (!el) return;
-  const open = el.hasAttribute('hidden');
-  if (open) loginSwapPaint();
-  if (open) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
-  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-function loginSwapClose() {
-  const el  = _ui('login-swaplist');
-  const btn = _ui('login-swap');
-  if (el) el.setAttribute('hidden', '');
-  if (btn) btn.setAttribute('aria-expanded', 'false');
-}
-
-function loginSwapPick(name) {
-  const uinp = _ui('login-user');
-  const pinp = _ui('login-input');
-  if (uinp && name) uinp.value = name;
   if (pinp) { pinp.value = ''; pinp.type = 'password'; }
   _setLoginState('reset');
-  loginSwapClose();
-  loginPaintRemembered();
   if (pinp) pinp.focus();
 }
-
-/* Clicking anywhere else, or Escape, puts the list away. Bound once, in the
-   capture phase for the same reason every other overlay in this app is: a
-   handler that waits for the bubble never runs when something below it stops
-   propagation. */
-(function _loginSwapBind() {
-  if (typeof document === 'undefined' || !document || typeof document.addEventListener !== 'function') return;
-  document.addEventListener('click', function (e) {
-    const el = _ui('login-swaplist');
-    if (!el || el.hasAttribute('hidden')) return;
-    const n = e.target;
-    if (n && n.nodeType === 1 && n.closest && n.closest('.lg-swapwrap')) return;
-    loginSwapClose();
-  }, true);
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') loginSwapClose();
-  }, true);
-})();
-
-function loginForgetUser() {
-  const uinp = _ui('login-user');
-  const pinp = _ui('login-input');
-  if (!uinp) return;
-  const name = uinp.value.trim().toLowerCase();
-  const rest = _rememberedUsers().filter(u => u.toLowerCase() !== name);
-  _saveRememberedUsers(rest);
-  uinp.value = rest[0] || '';
-  if (pinp) pinp.value = '';
-  const box = _ui('login-remember');
-  if (box && !rest.length) box.checked = false;
-  loginPaintRemembered();
-  ((rest.length && pinp) ? pinp : uinp).focus();
-}
- 
 // ─────────────────────────────────────────────────────────────────────────────
 // 15. LOGIN SCREEN — BRANDING SYNC  (runs before first paint)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -976,16 +928,20 @@ var CUR_USER = null;
   } else {
     // ── No valid session — show login ─────────────────────────────────────
     _killSession(); // clear any stale/invalid session data
-    // A remembered warden gets their name back, and the cursor goes to the one
-    // box they still have to fill.
+    /* The list is built first, THEN the remembered account is selected on it —
+       setting .value on an empty <select> selects nothing, which is how a
+       remembered name silently stopped being remembered. */
     const uinp = _ui('login-user');
     const pinp = _ui('login-input');
     const remembered = _rememberedUser();
     const rememberEl = _ui('login-remember');
     if (rememberEl) rememberEl.checked = !!remembered;
-    if (uinp && remembered) uinp.value = remembered;
-    loginPaintRemembered();
-    const focusTarget = (remembered && pinp) ? pinp : uinp;
+    loginPaintAccounts();
+    if (uinp && remembered) {
+      const hit = [...uinp.options].find(o => o.value.toLowerCase() === remembered.toLowerCase());
+      if (hit) uinp.value = hit.value;
+    }
+    const focusTarget = pinp || uinp;
     if (focusTarget) setTimeout(() => focusTarget.focus(), 120);
   }
  

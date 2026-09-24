@@ -246,45 +246,29 @@
         <b id="login-hostel-name">your hostel</b>.</p>
       <div class="lg-addr" id="login-address" style="display:none"></div>
 
-      <!-- Username. The two-card warden picker was removed earlier: the app has
-           an open user list, and a picker printed every staff name to anyone
-           who opened the app. -->
-      <!-- Switch account (owner, 2026-09-15) steps through the usernames
-           remembered on this PC. It fills the username only — the password is
-           always typed. × forgets the name shown. See loginSwitchAccount() in
-           auth-nev.js. -->
-      <div class="lg-lblrow">
-        <label class="lg-lbl" for="login-user">Username</label>
-        <!-- A CIRCULAR SWAP SIGN THAT PICKS, NOT A LINK THAT CYCLES (owner,
-             2026-09-23: "add a change or swap or a circular restore like sign
-             through which the saved account can be swapped without entering
-             usernames again and again").
+      <!-- ══ THE ACCOUNT IS CHOSEN, NOT TYPED (owner, 2026-09-23) ════════════
+           "for the login page issue we should use the dropdown option instead
+           of username field to select between Admin and Warden".
 
-             It was a text link that stepped to the next remembered name, so
-             reaching the third of three meant pressing it twice and reading the
-             box each time. The glyph is the circular arrow they asked for and
-             it opens the list: every name saved on this PC, pick one. Only the
-             USERNAME is ever filled — the password is always typed. -->
-        <div class="lg-swapwrap">
-          <button type="button" id="login-swap" class="lg-swap" hidden
-                  aria-haspopup="listbox" aria-expanded="false" aria-controls="login-swaplist"
-                  title="Switch to another saved account" aria-label="Switch account"
-                  onclick="loginSwapToggle(event)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 6.36-2.64L21 16"/><path d="M21 21v-5h-5"/></svg>
-          </button>
-          <div id="login-swaplist" class="lg-swaplist" role="listbox" aria-label="Saved accounts" hidden></div>
-        </div>
-      </div>
-      <div class="lg-field">
+           A role dropdown alone cannot sign anybody in — two wardens share a
+           role — so this lists the ACCOUNTS, each with the role it holds. It
+           replaces both the username box and the circular swap sign added
+           earlier the same day: the sign existed to fill that box without
+           retyping, and a list you pick from does that by being a list.
+
+           This reverses the 2026-09-15 decision that the screen must not
+           advertise the staff list. That was the owner's call to make and they
+           made it: on a single hostel PC the names are on the rota by the door
+           anyway, and the password is still the whole of the lock.
+
+           It is still #login-user with a .value, so checkLogin(),
+           findUserByUsername() and the lockout path are untouched. -->
+      <label class="lg-lbl" for="login-user">Account</label>
+      <div class="lg-field lg-field--sel">
         <svg class="lg-lead" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
-        <input id="login-user" class="lg-in" type="text" placeholder="Enter your username"
-               autocomplete="username" autocapitalize="none" spellcheck="false" aria-label="Username"
-               oninput="loginPaintRemembered()">
-        <button id="login-forget" class="lg-eye lg-forget" type="button" hidden
-                aria-label="Forget this username on this PC" title="Forget this username on this PC"
-                onclick="loginForgetUser()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
+        <select id="login-user" class="lg-in lg-sel" aria-label="Account"
+                onchange="loginPickAccount()"></select>
+        <svg class="lg-selarrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
       </div>
 
       <label class="lg-lbl" for="login-input">Password</label>

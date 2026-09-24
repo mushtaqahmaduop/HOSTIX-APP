@@ -1961,6 +1961,86 @@ await okAsync('lastSyncAt still means the last SUCCESSFUL read', async () => {
   assert.ok(after, 'a successful sync recorded no time at all');
 });
 
+/* ── A REFUSED TOKEN MUST NOT COST THE MACHINE ITS IDENTITY ──────────────────
+
+   `_ensureToken()` cleared the credentials file BEFORE trying to re-register.
+   register() never needed them — it presents the licence key and the machine
+   fingerprint — so clearing first bought nothing, and when the re-registration
+   was refused the machine was left with no credentials and no way to earn new
+   ones. It then failed at register on every subsequent sync, forever, and ran
+   on from the local licence file with nothing the control plane said ever
+   reaching it again.
+
+   The control plane used to refuse registration for a revoked licence, so this
+   is precisely how revoking a hostel came to do nothing. The server no longer
+   does that (see server/src/routes/devices.js), and this holds the app's half
+   closed whatever any server answers. */
+
+/** A device service with a credentials file already on disk. */
+function registeredDevice(userDataDir, entitlementStub) {
+  const dev = new DeviceService({
+    userDataDir,
+    machineIdProvider: () => 'MID-TEST',
+    licenceProvider: () => ({ key: 'HOSTEL-0FYR-RS3M-ABCD', valid: true }),
+    entitlement: entitlementStub || {
+      getStatus: () => ({ state: 'NONE', features: null, expiresAt: null, policy: null }),
+      refresh: async () => ({ ok: true, status: { state: 'ACTIVE', features: {}, expiresAt: null, policy: null } })
+    },
+    cfg: { minSyncGapMs: 0 }
+  });
+  dev._saveCredentials({ deviceId: 'dev-1', deviceSecret: 'x'.repeat(40) });
+  return dev;
+}
+
+await okAsync('a refused re-registration leaves the credentials file intact', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-creds-'));
+  config.load({ userDataDir: dir, overrides: { apiBase: 'https://example.invalid' } });
+  const dev = registeredDevice(dir);
+  const file = dev.credentialsFile;
+  assert.ok(fs.existsSync(file), 'the fixture did not write credentials');
+
+  // The old control plane's answers: 401 to the token, 403 to the re-register.
+  api._setFetch(async (url) => String(url).indexOf('/devices/register') !== -1
+    ? fakeResponse(403, { success: false, code: 'LICENSE_REVOKED' })
+    : fakeResponse(401, { success: false, code: 'DEVICE_UNAUTHORIZED' }));
+
+  const out = await dev.sync({ force: true });
+  api._setFetch(null);
+
+  assert.strictEqual(out.ok, false);
+  assert.ok(fs.existsSync(file),
+    'the machine threw away its credentials and could not replace them — it is now '
+    + 'permanently unable to hear anything the control plane says');
+  assert.deepStrictEqual(dev._loadCredentials(), { deviceId: 'dev-1', deviceSecret: 'x'.repeat(40) });
+});
+
+await okAsync('a 401 re-registers ONCE and then reports, rather than bouncing', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hostyllo-creds2-'));
+  config.load({ userDataDir: dir, overrides: { apiBase: 'https://example.invalid' } });
+  const dev = registeredDevice(dir);
+
+  // A server that hands out credentials and then refuses them — the shape a
+  // retry loop would spin on.
+  let tokenCalls = 0, registerCalls = 0;
+  api._setFetch(async (url) => {
+    if (String(url).indexOf('/devices/register') !== -1) {
+      registerCalls++;
+      return fakeResponse(201, { success: true, data: { deviceId: 'dev-2', deviceSecret: 'y'.repeat(40) } });
+    }
+    tokenCalls++;
+    return fakeResponse(401, { success: false, code: 'DEVICE_UNAUTHORIZED' });
+  });
+
+  const out = await dev.sync({ force: true });
+  api._setFetch(null);
+
+  assert.strictEqual(out.ok, false);
+  assert.strictEqual(registerCalls, 1, 're-registered ' + registerCalls + ' times');
+  assert.strictEqual(tokenCalls, 2, 'asked for a token ' + tokenCalls + ' times');
+  // The new credentials are kept: they are the freshest thing this machine has.
+  assert.strictEqual(dev._loadCredentials().deviceId, 'dev-2');
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\nconnectivity.js — start() is safe while a probe is in flight');
 // ══════════════════════════════════════════════════════════════════════════

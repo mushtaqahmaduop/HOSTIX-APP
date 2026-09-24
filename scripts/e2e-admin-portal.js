@@ -159,7 +159,7 @@ async function appSees(deviceId, deviceSecret) {
     JSON.stringify({ readOnly: seen.decision && seen.decision.readOnly, blocked: seen.decision && seen.decision.blocked }));
 
   // ── 4. suspend ────────────────────────────────────────────────────────────
-  console.log('\n4. Suspend in the portal (D-3: read-only, never destructive)');
+  console.log('\n4. Suspend in the portal (locks the app; the data stays theirs)');
   const susp = await adminReq('POST', '/licenses/' + licenseId + '/status',
     { status: 'suspended', reason: 'e2e check' });
   check('POST /admin/licenses/:id/status 200', susp.status === 200,
@@ -167,10 +167,14 @@ async function appSees(deviceId, deviceSecret) {
 
   seen = await appSees(deviceId, deviceSecret);
   check('the app now reads SUSPENDED', seen.entState === 'SUSPENDED', seen.entState);
-  check('the app goes READ-ONLY', seen.decision && seen.decision.readOnly === true,
+  // SUSPENSION LOCKS THE APP (owner, 2026-09-20). This asserted the older rule,
+  // read-only and not blocked, which D-3 still applies to EXPIRY and no longer to
+  // a suspension. The half of D-3 that is untouched is the export, below.
+  check('the app is BLOCKED', seen.decision && seen.decision.blocked === true,
+    'blocked=' + (seen.decision && seen.decision.blocked));
+  check('and NOT merely read-only — that is expiry',
+    seen.decision && seen.decision.readOnly === false,
     'readOnly=' + (seen.decision && seen.decision.readOnly));
-  check('but is NOT blocked — everything is still viewable (D-3)',
-    seen.decision && seen.decision.blocked === false, 'blocked=' + (seen.decision && seen.decision.blocked));
   check('and the warden is told why', !!(seen.decision && enforcement.message(seen.decision)),
     seen.decision && JSON.stringify(enforcement.message(seen.decision)).slice(0, 120));
 
@@ -188,13 +192,35 @@ async function appSees(deviceId, deviceSecret) {
   const rev = await adminReq('POST', '/licenses/' + licenseId + '/status',
     { status: 'revoked', reason: 'e2e check' });
   check('status to revoked 200', rev.status === 200, String(rev.status));
+  /* THE QUESTION IS WHETHER THE APP ENDS UP REVOKED, NOT WHETHER THE SERVER
+     SAID NO.
+
+     This used to check that the token endpoint answered 401 and that
+     registration answered 403 — and it passed, and those two answers were the
+     whole reason revoking a hostel did nothing. An HTTP refusal is UNSIGNED: the
+     app cannot tell it from whoever else might answer on our hostname, so it may
+     not act on it, so it kept running from the licence file. A revocation travels
+     the way a suspension does — signed, in the entitlement — and appSees() walks
+     exactly the path a machine in the field walks: a fresh device token, then the
+     entitlement, then the real enforcement decision. */
   const afterRevoke = await appSees(deviceId, deviceSecret);
-  check('a revoked licence can no longer get a token', afterRevoke.httpStatus === 401,
-    afterRevoke.httpStatus + ' ' + (afterRevoke.code || ''));
+  check('a revoked licence can still authenticate — it has to, to be told',
+    afterRevoke.httpStatus === 200, afterRevoke.httpStatus + ' ' + (afterRevoke.code || ''));
+  check('the app reads REVOKED', afterRevoke.entState === 'REVOKED', afterRevoke.entState);
+  check('and it BLOCKS, from the entitlement rather than the licence file',
+    !!afterRevoke.decision && afterRevoke.decision.blocked === true
+      && afterRevoke.decision.source === 'entitlement',
+    JSON.stringify({ blocked: afterRevoke.decision && afterRevoke.decision.blocked,
+                     source: afterRevoke.decision && afterRevoke.decision.source }));
+
+  // A machine that was wiped and reinstalled must still be able to hear it.
   const reReg = await v1Req('POST', '/devices/register', { licenseKey: key, machineId });
-  check('and re-registering is refused 403 LICENSE_REVOKED',
-    reReg.status === 403 && reReg.json.code === 'LICENSE_REVOKED',
-    reReg.status + ' ' + (reReg.json && reReg.json.code));
+  check('re-registering still works, so a fresh install learns it is revoked',
+    reReg.status === 201 && reReg.json.data.licenseStatus === 'revoked',
+    reReg.status + ' ' + (reReg.json && (reReg.json.code || reReg.json.data.licenseStatus)));
+  const afterReReg = await appSees(reReg.json.data.deviceId, reReg.json.data.deviceSecret);
+  check('and that fresh install reads REVOKED too', afterReReg.entState === 'REVOKED',
+    afterReReg.entState + ' ' + (afterReReg.code || ''));
 
   // ── 7. the audit trail ────────────────────────────────────────────────────
   console.log('\n7. Audit trail');

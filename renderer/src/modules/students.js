@@ -3799,22 +3799,117 @@ function clearAddStudentPhoto() {
   const data = document.getElementById('add-student-photo-data'); if(data) data.value='';
   const clr = document.getElementById('add-student-clear-btn'); if(clr) clr.style.display='none';
 }
+/* ══ THE APP WAS HOLDING ITS OWN CAMERA (owner, 2026-09-23, production) ════
+   "the camera does not opens — Camera is in use by another app. Close other
+   apps using the camera and retry."
+
+   No other app had it. This one did.
+
+   The live MediaStream was kept on the <video> element, as `vid.srcObject`, and
+   every stop path started by looking that element up. But ADD STUDENT IS A
+   PAGE, not a modal: nav.js renders it with `el.innerHTML = renderAddStudent()`
+   and any navigation replaces that HTML wholesale. The <video> is destroyed,
+   the lookup finds nothing, and the tracks — which are not owned by the DOM —
+   keep running and keep the device open.
+
+   closeModal() has stopped these two streams since it was written, which is
+   why this never showed in a dialog and always showed here: the form the
+   camera actually lives in never goes through it.
+
+   After that, every later attempt fails with NotReadableError — Chromium
+   reporting, accurately, that the device is busy — and the message sent the
+   warden hunting for another app to close. It does not recover on its own
+   either: only a restart frees it, which is exactly what production reported.
+
+   SO THE STREAM IS HELD HERE, where no re-render can reach it, and every exit
+   goes through stopStudentCamera(): capture, Close, closeModal(), a page
+   render (nav.js), and the window unloading. Stopping a stream that is already
+   stopped is harmless, so it is safe to call from anywhere and twice.          */
+let _camStream = null;
+
+/** Release the camera, whatever opened it. Safe to call at any time. */
+function stopStudentCamera() {
+  if (_camStream) {
+    try { _camStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    _camStream = null;
+  }
+  /* The elements may or may not still exist; both are cleared when they do, so
+     a <video> that survives is not left pointing at a dead stream. */
+  ['add-student-cam-video', 'edit-student-cam-video'].forEach(id => {
+    const v = document.getElementById(id);
+    if (v && v.srcObject) {
+      try { v.srcObject.getTracks().forEach(t => t.stop()); } catch (e) {}
+      v.srcObject = null;
+    }
+  });
+  ['add-student-cam-box', 'edit-student-cam-box'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.style.display = 'none';
+  });
+}
+
+/* The last line of defence: closing or reloading the window frees the device
+   even if some path above was missed. */
+if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
+  window.addEventListener('beforeunload', stopStudentCamera);
+  window.addEventListener('pagehide', stopStudentCamera);
+}
+
+/* A COLD WEBCAM OFTEN REFUSES THE FIRST OPEN (2026-09-24). On Windows, Media
+   Foundation can answer the first request with NotReadableError — "Could not
+   start video source" — while the driver is still bringing the device up, and
+   the very next request succeeds. Measured on this machine's own camera:
+   attempt one failed, attempt two 800ms later streamed 640x480. The app showed
+   "in use by another app" on that first refusal, which was never true.
+
+   So a busy answer is retried twice before it is believed. Anything else — no
+   permission, no camera — is final at once; retrying those only delays the
+   message the warden needs. */
+function _openCamStream() {
+  const want = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } };
+  const busy = e => e && (e.name === 'NotReadableError' || e.name === 'TrackStartError' || e.name === 'AbortError');
+  /* A camera that failed to start briefly vanishes from the device list while
+     Windows resets it, so the retry can come back NotFoundError. That is the
+     same fault, not a missing camera — report the first answer, or the warden
+     is told to "connect a camera" that is built into the laptop. */
+  let first = null;
+  const attempt = left => navigator.mediaDevices.getUserMedia(want).catch(e => {
+    if (!first) first = e;
+    if (first !== e && e && e.name === 'NotFoundError') throw first;
+    if (!busy(e) || left <= 0) throw e;
+    return new Promise(r => setTimeout(r, 800)).then(() => attempt(left - 1));
+  });
+  return attempt(2).then(stream => {
+    /* THE STREAM CAN DIE AFTER IT OPENS. A camera that starts but sends no
+       picture has its track ended by Chromium a few seconds later, which left
+       a black box on screen with nothing saying why. */
+    stream.getVideoTracks().forEach(t => t.addEventListener('ended', () => {
+      if (_camStream !== stream) return;              // closed on purpose
+      stopStudentCamera();
+      toast('The camera stopped sending a picture. Check the camera privacy switch or the Fn camera key, then try again — if it keeps happening, restart the PC.', 'error');
+    }));
+    return stream;
+  });
+}
 function openAddStudentCamera() {
   const box = document.getElementById('add-student-cam-box'); if(!box) return;
   if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported on this device','error'); return; }
   // Stop any existing stream first
-  const existVid = document.getElementById('add-student-cam-video');
-  if(existVid?.srcObject){ existVid.srcObject.getTracks().forEach(t=>t.stop()); existVid.srcObject=null; }
+  // Whatever is open goes first — including a stream whose <video> a page
+  // render has already destroyed, which the old element lookup could not see.
+  stopStudentCamera();
   box.style.display = 'block';
 
   // FIX BUG-3: Check permission state first for a clear error message
   const _startCam = () => {
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
+    _openCamStream()
       .then(stream=>{
         const vid = document.getElementById('add-student-cam-video');
-        if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
+        // Closed while the device was still opening: release it, do not attach it.
+        if(!vid || box.style.display==='none'){ stream.getTracks().forEach(t=>t.stop()); return; }
         vid.srcObject = stream;
-        vid._stream = stream;
+        // Held off the DOM, so a re-render cannot orphan it (see stopStudentCamera).
+        _camStream = stream;
         vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
         if(vid.readyState >= 3) vid.play().catch(()=>{});
       })
@@ -3826,7 +3921,7 @@ function openAddStudentCamera() {
         else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
           msg='📷 No camera found. Please connect a camera and try again.';
         else if(e.name==='NotReadableError'||e.name==='TrackStartError')
-          msg='📷 Camera is in use by another app. Close other apps using the camera and retry.';
+          msg='The camera would not start. Close any other app using it; if none is, check the camera privacy switch or the Fn camera key, or restart the PC.';
         else
           msg='📷 Camera error: '+(e.message||'Unknown error. Check camera connection.');
         toast(msg,'error');
@@ -3864,11 +3959,7 @@ function captureAddStudentPhoto() {
   closeAddStudentCamera();
   toast('Photo captured!','success');
 }
-function closeAddStudentCamera() {
-  const vid = document.getElementById('add-student-cam-video');
-  if(vid?.srcObject) vid.srcObject.getTracks().forEach(t=>t.stop());
-  const box = document.getElementById('add-student-cam-box'); if(box) box.style.display='none';
-}
+function closeAddStudentCamera() { stopStudentCamera(); }
 
 // EDIT STUDENT PHOTO HELPERS
 function loadEditStudentPhoto(input) {
@@ -3894,18 +3985,21 @@ function clearEditStudentPhoto() {
 function openEditStudentCamera() {
   const box = document.getElementById('edit-student-cam-box'); if(!box) return;
   if(!navigator.mediaDevices?.getUserMedia){ toast('Camera not supported on this device','error'); return; }
-  const existVid = document.getElementById('edit-student-cam-video');
-  if(existVid?.srcObject){ existVid.srcObject.getTracks().forEach(t=>t.stop()); existVid.srcObject=null; }
+  // Whatever is open goes first — including a stream whose <video> a page
+  // render has already destroyed, which the old element lookup could not see.
+  stopStudentCamera();
   box.style.display = 'block';
 
   // FIX BUG-3: Check permission state first
   const _startCam = () => {
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}})
+    _openCamStream()
       .then(stream=>{
         const vid = document.getElementById('edit-student-cam-video');
-        if(!vid){ stream.getTracks().forEach(t=>t.stop()); return; }
+        // Closed while the device was still opening: release it, do not attach it.
+        if(!vid || box.style.display==='none'){ stream.getTracks().forEach(t=>t.stop()); return; }
         vid.srcObject = stream;
-        vid._stream = stream;
+        // Held off the DOM, so a re-render cannot orphan it (see stopStudentCamera).
+        _camStream = stream;
         vid.oncanplay = () => { if(vid.paused) vid.play().catch(()=>{}); };
         if(vid.readyState >= 3) vid.play().catch(()=>{});
       })
@@ -3917,7 +4011,7 @@ function openEditStudentCamera() {
         else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError')
           msg='📷 No camera found. Please connect a camera and try again.';
         else if(e.name==='NotReadableError'||e.name==='TrackStartError')
-          msg='📷 Camera is in use by another app. Close other apps using the camera and retry.';
+          msg='The camera would not start. Close any other app using it; if none is, check the camera privacy switch or the Fn camera key, or restart the PC.';
         else
           msg='📷 Camera error: '+(e.message||'Unknown error. Check camera connection.');
         toast(msg,'error');
@@ -3955,11 +4049,7 @@ function captureEditStudentPhoto() {
   closeEditStudentCamera();
   toast('Photo captured!','success');
 }
-function closeEditStudentCamera() {
-  const vid = document.getElementById('edit-student-cam-video');
-  if(vid?.srcObject) vid.srcObject.getTracks().forEach(t=>t.stop());
-  const box = document.getElementById('edit-student-cam-box'); if(box) box.style.display='none';
-}
+function closeEditStudentCamera() { stopStudentCamera(); }
 
 /* quickCancelStudent() was here. It wrote a Pending cancellation the moment
    the button was pressed — hardcoded reason, invented vacate date, no form and

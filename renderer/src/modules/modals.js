@@ -54,11 +54,11 @@ function showModal(size, title, body, footer='') {
   document.getElementById('modal-container').innerHTML=html;
 }
 function closeModal() {
-  // Stop any active camera streams before destroying modal
-  ['add-student-cam-video','edit-student-cam-video'].forEach(id=>{
-    const vid = document.getElementById(id);
-    if(vid?.srcObject){ vid.srcObject.getTracks().forEach(t=>t.stop()); vid.srcObject=null; }
-  });
+  /* Release the camera before the markup holding it is destroyed. This used
+     to walk the two <video> elements itself, which only works while they
+     still exist — stopStudentCamera() also holds the stream off the DOM, so
+     it frees one whose element has already gone (students.js). */
+  if (typeof stopStudentCamera === 'function') stopStudentCamera();
   document.getElementById('modal-container').innerHTML='';
   /* The student slide-over sits UNDER modals and stays open while one is up,
      so whatever the form just changed has to be re-read on the way out —

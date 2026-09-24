@@ -1875,9 +1875,28 @@ body.light-theme .dash-sec ::-webkit-scrollbar-track,
 }
 .dl-foot--tint svg { color: var(--accent-strong); }
 
-/* The glance's closing line is a sentence, so it wraps rather than truncating —
-   "1 open job to clear tod…" is worse than two short lines. */
-.dl-foot--tint span    { white-space: normal; }
+/* ONE LINE (owner, 2026-09-24: "reduce this line ... manage it in a single
+   line"). It used to wrap to two. The wording was shortened so it fits the
+   card at the 1366 floor, and it no longer wraps — the base .dl-foot span rule
+   ellipsises in the unlikely case a narrower card still cuts it. */
+.dl-foot--tint span    { white-space: nowrap; }
+
+/* ══ AND IT SITS AT THE FOOT, WITH AIR ABOVE IT (owner, 2026-09-23) ═════════
+   "move this line today at a glance a little down at the edge of the card ...
+   so that the above content feel relax".
+
+   `margin-top:auto` already pushed it down whenever the card had spare height
+   — but .dl-glance is `flex: 0 1 auto` and scrolls, so on a full card there IS
+   no spare and the line sat hard against the last row, reading as a seventh
+   item rather than the card's conclusion.
+
+   The gap goes on the ROWS, not as a margin on the line: a margin here would
+   replace `auto` and stop it dropping to the foot on a short card. This way
+   both hold — it drops when there is room, and there is always 14px of quiet
+   above it when there is not. The 4px inset off each side and the bottom lifts
+   the tinted block off the card's own edge so its rounded corners read. */
+.dl-glance { padding-bottom: 14px; }
+.dl-panel .dl-foot--tint { margin-left: 4px; margin-right: 4px; margin-bottom: 4px; }
 /* The closing line's own box gives up 4px for the seventh glance row (owner,
    2026-09-10). At 1366x738 with a 40-student hostel the row above it pushed the
    tint 2px under the card's floor — and because row B is `overflow:hidden`,

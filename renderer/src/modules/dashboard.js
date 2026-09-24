@@ -1673,9 +1673,10 @@ function _dashLedgerRow(mo, pending, pendingCount) {
       +   '<div class="dl-foot dl-foot--tint">' + _dlIco('pulse')
       +     '<span>' + (() => {
               const open = (DB.issues || []).filter(i => i.status === 'Open').length;
+              // Short enough for one line (owner, 2026-09-24).
               return open
-                ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' to clear today'
-                : 'Keep things running smoothly';
+                ? open + ' open ' + (open === 1 ? 'job' : 'jobs') + ' today'
+                : 'All running smoothly';
             })() + '</span></div>'
       + '</div>',
 

@@ -173,7 +173,12 @@
    column greedy in an overflowing auto-layout table (241px against its own
    floor). */
 .iss-c-title { max-width: none; width: auto; min-width: 140px; }
-.iss-t { font-weight: var(--weight-medium); color: var(--text-primary); }
+/* THE ISSUE IS WHAT THE ROW IS ABOUT (owner, 2026-09-23: "the issue content
+   should in bold typography"). It sat at 500 among a row of chips and names
+   also at 500, so the one cell a warden reads to know what happened had no
+   more weight than the room number beside it. 600 is the same rank the
+   student's name carries on the payments register, for the same reason. */
+.iss-t { font-weight: var(--weight-semibold); color: var(--text-primary); }
 .iss-d {
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     margin-top: var(--space-1); font-size: var(--text-sm);

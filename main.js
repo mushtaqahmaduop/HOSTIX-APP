@@ -217,7 +217,7 @@ const appLogger = require('./services/logger');
 const enforcement = require('./services/enforcement');
 /* Shown to a customer who cannot use the app, so it must be somewhere they can
    actually reach. Matches the SUPPORT constant on the activation screen. */
-const SUPPORT_CONTACT = 'mushtaqahmadicp@gmail.com';
+const SUPPORT_CONTACT = 'hostyllo.info@gmail.com';
 let online = null;
 
 // Insert/replace a row, populating the promoted typed columns for the tables that
@@ -957,6 +957,21 @@ function activateLicense(key) {
     const expStr = expiry.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
     return { success: false, reason: `This key expired on ${expStr}. Contact support for a new key.` };
   }
+  /* RE-ENTERING THE SAME KEY DOES NOT LIFT A LOCK (owner, 2026-09-24).
+     A suspension or revocation lives in the signed entitlement, not in the
+     key, so activating the key this machine already holds changes nothing —
+     and used to be the way a locked hostel walked back in. Say so plainly
+     instead of reporting "activated" and bouncing back to this screen. A
+     DIFFERENT key is still accepted: that is how a hostel is legitimately
+     re-issued, and the control plane decides at the next sync. */
+  const _lock = currentEnforcement(true);
+  if (_lock.blocked && (_lock.state === 'SUSPENDED' || _lock.state === 'REVOKED')) {
+    const _held = safe(() => _licenceSnapshot(), null);
+    if (_held && _held.key && _held.key === k) {
+      return { success: false, reason: (_lock.banner && _lock.banner.text)
+        || ('This licence has been ' + _lock.state.toLowerCase() + '. Contact ' + SUPPORT_CONTACT + '.') };
+    }
+  }
   /* NEVER SEAL A LICENCE AGAINST A FINGERPRINT THIS MACHINE CANNOT REPRODUCE.
 
      The licence is AES-encrypted with a key derived from the machine id, and
@@ -1057,6 +1072,9 @@ function deactivateLicense() {
 let _settingsWin = null;
 function openLicenseSettings() {
   if (!mainWindow) return;
+  // Never while locked. The window shows the licence key with a Copy button,
+  // and a locked hostel could paste it back into activation (2026-09-24).
+  if (currentEnforcement(true).blocked) return;
   // Reuse existing window if already open
   if (_settingsWin && !_settingsWin.isDestroyed()) {
     _settingsWin.focus();
@@ -1236,7 +1254,8 @@ const TITLEBAR_ACTIONS = {
   importBackup:  doImportBackup,
   quit:          () => app.quit(),
   about:         doAbout,
-  licenseSettings: () => openLicenseSettings(),
+  // licenseSettings is gone: the Help menu no longer offers it, and leaving
+  // the id here would keep a route to it open from the licence screen.
   checkUpdates:  doCheckUpdates,
   licenseInfo:   doLicenseInfo,
   resetZoom:     () => doZoom(0),
@@ -1424,7 +1443,7 @@ function createWindow() {
       label: 'Help',
       submenu: [
         { label: 'About Hostyllo', click: doAbout },
-        { label: 'License Settings', click: () => openLicenseSettings() },
+        // No License Settings — see titlebar.js. Settings → License is the way in.
         { label: 'Check for Updates', click: doCheckUpdates },
         { label: 'License Info', click: doLicenseInfo }
       ]
@@ -1604,14 +1623,26 @@ ipcMain.handle('license:openSettings', () => openLicenseSettings());
 ipcMain.handle('license:machineId', () => getMachineId());
 ipcMain.handle('app:version', () => app.getVersion());
 
+/* THE LICENCE SCREEN'S WAY BACK INTO THE APP ASKS THE SAME QUESTION BOOT DOES
+   (owner, 2026-09-24).
+
+   This used to check the licence FILE only. A hostel suspended or revoked by
+   the control plane has a perfectly valid file — that is the whole point of a
+   suspension — so re-entering its own key on the licence screen succeeded and
+   this handler opened the app. Both doors now go through the enforcement
+   decision, which is the only thing that knows about the control plane. */
 ipcMain.handle('license:loadApp', () => {
   if (!mainWindow) return;
   const lic = checkLicenseValidity();
-  if (lic.valid) {
+  const decision = refreshEnforcement();
+  if (!decision.blocked) {
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   } else {
+    const _byOwner = decision.state === 'SUSPENDED' || decision.state === 'REVOKED';
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'license.html'), {
-      query: { reason: lic.reason, message: lic.message }
+      query: { reason: lic.reason || decision.reason || decision.state || 'blocked',
+               message: lic.message || (decision.banner && decision.banner.text) || '',
+               ...(_byOwner ? { locked: '1' } : {}) }
     });
   }
 });

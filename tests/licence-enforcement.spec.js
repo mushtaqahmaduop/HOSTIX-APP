@@ -91,7 +91,7 @@ async function seedExpiredLicence(profile, daysAgo) {
 async function login(win) {
   await win.waitForSelector('#login-input', { state: 'visible', timeout: 60000 });
   await win.waitForTimeout(600);
-  await win.fill('#login-user', 'warden1');
+  await win.selectOption('#login-user', 'warden1');
   await win.fill('#login-input', 'admin123');
   await win.click('#login-btn');
   await win.waitForFunction(() => typeof CUR_USER !== 'undefined' && !!CUR_USER,

@@ -621,7 +621,12 @@ function renderExpenses() {
           ${th('category','Category')}
           ${th('description','Description')}
           ${th('amount','Amount','class="exp-amt"')}
-          ${th('method','Payment method')}
+          ${''/* "Paid Via", not "Payment method" (owner, 2026-09-23: "change
+                 payment method to Paid Via that should reduce the taken
+                 space"). Two short words instead of two long ones, and the
+                 column can then be as narrow as its widest CHIP rather than
+                 as wide as its heading. */}
+          ${th('method','Paid via')}
           ${''/* VENDOR, AND ADDED BY — two columns, because they are two
                  people (owner, 2026-09-23).
 
@@ -639,7 +644,11 @@ function renderExpenses() {
                  student. */}
           ${th('handedTo','Vendor')}
           ${th('addedByName','Added by')}
-          <th>Receipt</th>
+          ${''/* The cell holds one 32px eye and nothing else, so the column is
+                 sized for the button rather than for the word above it
+                 (owner, 2026-09-23). The heading keeps the word — an icon
+                 heading over an icon cell says nothing twice. */}
+          <th class="exp-col-rcpt">Receipt</th>
           <th>Actions</th>
         </tr></thead>
         <tbody>
