@@ -2485,6 +2485,12 @@ function _stuExportDef(list, opts) {
     title:  opts.title || 'Student Roster',
     scope:  opts.scope || scope,
     sheet:  'Students',
+    /* DENSE, like the Payment Register. Holding each contact number on one
+       line (owner, 2026-09-24 — see Contacts below) made the Contacts column
+       ~35px wider, and the fourteen columns then ran 27px past a Letter
+       landscape page, where Chromium clips rather than shrinks. Dense takes
+       the room out of cell padding; the cells keep their 10pt. */
+    dense:  true,
 
     filters: [
       ['Month',     scope],
@@ -2571,14 +2577,21 @@ function _stuExportDef(list, opts) {
          newline renders as a second line in Excel rather than as one run-on
          string; the PDF builds the same two lines from `get`, with the
          guardian's number in the engine's `.sub` style. ONE value feeds both
-         (§60) — they differ in presentation, not in data. */
+         (§60) — they differ in presentation, not in data.
+
+         EACH NUMBER IS ONE UNBROKEN LINE (owner, 2026-09-24: "the first
+         contact wraps to 2nd line and below it the guardian contact is in one
+         straight line"). A number typed with a hyphen — 0326-0408880 — gave
+         the browser a break point, so it split in two while the guardian's
+         unhyphenated number did not. nowrap on both; the table is
+         table-layout:auto, so the column widens to fit them instead. */
       { label: 'Contacts', type: 'wrap', width: 18,
         value: t => [String(t.phone || ''), String(t.emergencyPhone || '')]
                       .filter(Boolean).join('\n'),
         get:   t => { const a = String(t.phone || ''), b = String(t.emergencyPhone || '');
           if (!a && !b) return '—';
-          return (a ? escHtml(a) : '—') +
-                 (b ? '<span class="sub">' + escHtml(b) + '</span>' : ''); } },
+          return (a ? '<span style="white-space:nowrap">' + escHtml(a) + '</span>' : '—') +
+                 (b ? '<span class="sub" style="white-space:nowrap">' + escHtml(b) + '</span>' : ''); } },
 
       /* CNIC IS A WORKBOOK COLUMN ONLY, AND IT IS NOT MASKED (owner,
          2026-09-22: "remove cnic column from export pdfs as [it] is already
