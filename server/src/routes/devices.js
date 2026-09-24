@@ -185,11 +185,18 @@ async function deviceRoutes(app) {
       // below cannot be raced past by two machines counting at the same time.
       await client.query('SELECT id FROM licenses WHERE id = $1 FOR UPDATE', [license.id]);
 
-      if (license.status === 'revoked') return { kind: 'revoked' };
-
       // A SUSPENDED licence still registers. The customer needs to be told why
-      // their app is read-only, and that answer arrives in the entitlement —
+      // their app is locked, and that answer arrives in the entitlement —
       // refusing here would leave the app saying nothing at all.
+      //
+      // AND SO DOES A REVOKED ONE, for exactly the same reason. `if
+      // (license.status === 'revoked') return { kind: 'revoked' };` stood here
+      // and the paragraph above argued against it one line later. A 403 at
+      // registration is an UNSIGNED refusal: the app cannot verify it came from
+      // this server, so it cannot act on it, so it does the only safe thing and
+      // carries on from the licence file. Registering costs nothing — the
+      // entitlement this device can now fetch says REVOKED, signed, and that is
+      // what stops it. See the note in /devices/token.
 
       if (license.max_devices !== null) {
         const count = await client.query(
@@ -234,12 +241,6 @@ async function deviceRoutes(app) {
       };
     });
 
-    if (outcome.kind === 'revoked') {
-      return reply.code(403).send({
-        success: false, code: 'LICENSE_REVOKED',
-        message: 'This licence has been revoked. Contact support.'
-      });
-    }
     if (outcome.kind === 'device_limit') {
       return reply.code(409).send({
         success: false, code: 'DEVICE_LIMIT_REACHED',
@@ -300,9 +301,8 @@ async function deviceRoutes(app) {
     );
 
     // One code and one message for every failure below — unknown device, wrong
-    // secret, deactivated device, revoked licence. Telling them apart would let
-    // anyone holding a device id learn whether it exists and whether its
-    // licence is live.
+    // secret, deactivated device. Telling them apart would let anyone holding a
+    // device id learn whether it exists.
     const deny = () => reply.code(401).send({
       success: false, code: 'DEVICE_UNAUTHORIZED',
       message: 'This device could not be authenticated. Re-activate it from the app.'
@@ -315,7 +315,34 @@ async function deviceRoutes(app) {
     const device = rows[0];
     if (!keys.secretMatches(keys.hashDeviceSecret(deviceSecret), device.secret_hash)) return deny();
     if (device.device_status !== 'active') return deny();
-    if (device.license_status === 'revoked') return deny();
+
+    /* THIS ENDPOINT AUTHENTICATES. IT DOES NOT DECIDE LICENCE POLICY.
+
+       `if (device.license_status === 'revoked') return deny();` stood here, and
+       it is why revoking a hostel did nothing at all in the field.
+
+       A device token lives 15 minutes and the app syncs every 6 hours, so every
+       real sync begins by exchanging the secret here. Answering 401 to a revoked
+       licence means the app never gets a token, never reaches /entitlement, and
+       never receives the SIGNED REVOKED statement that is the only thing that can
+       lock it. It falls back to its cached ACTIVE entitlement, then to the local
+       licence file, and runs on unchanged. Worse, the app reads that 401 as "my
+       secret was rejected", wipes its credentials and re-registers — which this
+       endpoint's sibling then refused too, leaving the machine unregistered and
+       permanently unable to hear anything the control plane says.
+
+       tests/control-plane-sync.spec.js missed it because it revokes while the app
+       still holds a live token from moments earlier — the one path no install in
+       the field ever takes.
+
+       Revocation is a statement about a LICENCE and it travels signed, in the
+       entitlement, where the app can verify it came from this server and not from
+       whoever happens to answer on our hostname. An unsigned 401 is not a thing
+       this app may act on, and it must not be asked to.
+
+       Nothing is granted by letting this through: the caller has already proved
+       it holds the device secret, and the entitlement it can now fetch says
+       REVOKED. */
 
     const token = ent.generateDeviceToken();
     const expiresAt = new Date(Date.now() + ent.DEVICE_TOKEN_TTL_SECONDS * 1000);
