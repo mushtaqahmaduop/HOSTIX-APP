@@ -13,6 +13,15 @@ const db = require('../db');
 const keys = require('../lib/keys');
 const ent = require('../lib/entitlement');
 
+/** How often an idle stream says something, so proxies do not reap it. */
+const STREAM_HEARTBEAT_MS = 25000;
+/**
+ * A stream is re-opened at least this often. The token that opened it lasts
+ * 15 minutes; closing on this cadence makes the app re-authenticate, so a
+ * stream can never outlive the credential that opened it by much.
+ */
+const STREAM_MAX_AGE_MS = 14 * 60 * 1000;
+
 const HOUR_SECONDS = 3600;
 
 /** Rate limit in Postgres — see the note in devices/register. */
@@ -39,7 +48,35 @@ function tokenHash(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
+/** The fleet row. Never fails a request — an empty fleet is the default. */
+async function loadFleet() {
+  try {
+    const { rows } = await db.query('SELECT features, restrictions, revision FROM fleet_settings WHERE id');
+    return rows[0] || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+/** Resolve a Bearer device token to its device and licence, or null. */
+async function deviceForToken(request) {
+  const auth = request.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const { rows } = await db.query(
+    `SELECT d.id AS device_id, d.machine_id, d.status AS device_status, d.status_reason AS device_reason,
+            l.id AS license_id, l.status, l.status_until, l.status_before, l.status_reason,
+            l.verification, l.expires_at, l.features, l.restrictions, l.revision
+       FROM device_tokens t
+       JOIN devices d  ON d.id = t.device_id
+       JOIN licenses l ON l.id = d.license_id
+      WHERE t.token_hash = $1 AND t.expires_at > NOW()`,
+    [tokenHash(auth.slice(7))]
+  );
+  return rows[0] || null;
+}
+
 async function deviceRoutes(app) {
+  const realtime = app.realtime || null;
 
   // ── Reachability ──────────────────────────────────────────────────────────
   /**
@@ -117,14 +154,15 @@ async function deviceRoutes(app) {
       });
     }
 
-    const parsed = keys.parseLicenseKey(licenseKey);
-    if (!parsed) {
+    if (!keys.parseLicenseKey(licenseKey)) {
       return reply.code(400).send({
         success: false, code: 'INVALID_KEY_FORMAT',
         message: 'That licence key is not in a recognised format.'
       });
     }
-    if (!keys.validateKeyChecksum(parsed.key, secret)) {
+    // The TRUE version, from the checksum tag — the layout cannot tell v4 from v5.
+    const parsed = keys.parseVerified(licenseKey, secret);
+    if (!parsed) {
       return reply.code(400).send({
         success: false, code: 'INVALID_KEY',
         message: 'That licence key is not valid. Check it and try again.'
@@ -160,6 +198,15 @@ async function deviceRoutes(app) {
     const deviceSecret = keys.generateDeviceSecret();
 
     const outcome = await db.withTransaction(async (client) => {
+      // A v5 key is only ever cut by the portal, which records it first. One
+      // this database has never seen was not issued here — refuse it rather than
+      // admit it as 'unverified' the way the ~50 legacy keys are admitted.
+      if (parsed.version === 5) {
+        const known = await client.query(
+          'SELECT 1 FROM licenses WHERE key_fingerprint = $1', [keys.keyFingerprint(parsed)]);
+        if (known.rows.length === 0) return { kind: 'not_issued' };
+      }
+
       // Upsert rather than select-then-insert: two machines registering the
       // same v3 key in the same second would otherwise race to INSERT and one
       // would take a unique violation.
@@ -173,7 +220,7 @@ async function deviceRoutes(app) {
             key_expires_at, expires_at, max_devices)
          VALUES ($1, $2, $3, $4, $5, $5, $6)
          ON CONFLICT (key_fingerprint) DO UPDATE SET updated_at = NOW()
-         RETURNING id, status, verification, max_devices, expires_at`,
+         RETURNING id, status, status_until, status_before, verification, max_devices, expires_at`,
         [
           keys.keyFingerprint(parsed), parsed.version, parsed.expPart,
           parsed.serial || null, expiresAt.toISOString(), keys.defaultMaxDevices(parsed)
@@ -185,11 +232,12 @@ async function deviceRoutes(app) {
       // below cannot be raced past by two machines counting at the same time.
       await client.query('SELECT id FROM licenses WHERE id = $1 FOR UPDATE', [license.id]);
 
-      if (license.status === 'revoked') return { kind: 'revoked' };
-
-      // A SUSPENDED licence still registers. The customer needs to be told why
-      // their app is read-only, and that answer arrives in the entitlement —
-      // refusing here would leave the app saying nothing at all.
+      // A REVOKED or SUSPENDED licence still registers. Registration
+      // authenticates a machine; it decides nothing about the licence. Refusing
+      // here is what made revocation unreachable (f79b114, 2026-09-21): a
+      // device whose token lapsed re-registered into a 403, lost its
+      // credentials, and ran on its cached ACTIVE entitlement for good. The
+      // verdict travels in the signed entitlement, where the app acts on it.
 
       if (license.max_devices !== null) {
         const count = await client.query(
@@ -202,6 +250,10 @@ async function deviceRoutes(app) {
         }
       }
 
+      // A released machine re-registering must not count against the seat it
+      // gave up, and must not take one: it registers (so it can be told it is
+      // locked) but the cap above only counts active devices.
+      //
       // Re-registering the same machine rotates its secret rather than adding a
       // row. A reinstall or a wiped profile is the common case and must not
       // need a support ticket.
@@ -212,9 +264,12 @@ async function deviceRoutes(app) {
            SET secret_hash = EXCLUDED.secret_hash,
                app_version = EXCLUDED.app_version,
                os          = EXCLUDED.os,
-               status      = 'active',
+               -- A machine the owner RELEASED stays released. Reinstalling the
+               -- app must not be a way to put it back on the licence; only the
+               -- portal re-activates it.
+               status      = devices.status,
                last_seen_at = NOW()
-         RETURNING id`,
+         RETURNING id, status`,
         [license.id, machineId, keys.hashDeviceSecret(deviceSecret), appVersion || null, os || null]
       );
 
@@ -226,7 +281,17 @@ async function deviceRoutes(app) {
       return {
         kind: 'ok',
         deviceId: dev.rows[0].id,
+        deviceStatus: dev.rows[0].status,
         licenseId: license.id,
+        // What the entitlement will say, so an activating app can refuse to
+        // activate onto a locked licence instead of activating and bouncing.
+        effectiveStatus: dev.rows[0].status === 'deactivated'
+          ? ent.STATUS.REVOKED
+          : ent.resolveStatus({
+            status: license.status, status_until: license.status_until,
+            status_before: license.status_before, verification: license.verification,
+            expiresAt: new Date(license.expires_at)
+          }, new Date()),
         status: license.status,
         verification: license.verification,
         expiresAt: license.expires_at,
@@ -234,10 +299,10 @@ async function deviceRoutes(app) {
       };
     });
 
-    if (outcome.kind === 'revoked') {
+    if (outcome.kind === 'not_issued') {
       return reply.code(403).send({
-        success: false, code: 'LICENSE_REVOKED',
-        message: 'This licence has been revoked. Contact support.'
+        success: false, code: 'KEY_NOT_ISSUED',
+        message: 'This licence key was not issued by Hostyllo. Check it and try again.'
       });
     }
     if (outcome.kind === 'device_limit') {
@@ -256,6 +321,9 @@ async function deviceRoutes(app) {
         licenseId: outcome.licenseId,
         deviceSecret,                       // shown once; only its hash is stored
         licenseStatus: outcome.status,
+        effectiveStatus: outcome.effectiveStatus,
+        deviceStatus: outcome.deviceStatus,
+        keyVersion: parsed.version,
         verification: outcome.verification,
         expiresAt: new Date(outcome.expiresAt).toISOString(),
         maxDevices: outcome.maxDevices
@@ -293,16 +361,17 @@ async function deviceRoutes(app) {
     }
 
     const { rows } = await db.query(
-      `SELECT d.id, d.secret_hash, d.status AS device_status, l.status AS license_status
-         FROM devices d JOIN licenses l ON l.id = d.license_id
-        WHERE d.id = $1`,
+      'SELECT d.id, d.secret_hash FROM devices d WHERE d.id = $1',
       [deviceId]
     );
 
-    // One code and one message for every failure below — unknown device, wrong
-    // secret, deactivated device, revoked licence. Telling them apart would let
-    // anyone holding a device id learn whether it exists and whether its
-    // licence is live.
+    // AUTHENTICATION ONLY. A deactivated device or a revoked licence still gets
+    // a token: refusing it here meant the app could never fetch the entitlement
+    // that tells it it is locked, so it carried on from its cache (f79b114).
+    // What a device may DO is decided in /entitlement.
+    //
+    // One code and one message for both failures — unknown device, wrong
+    // secret — so a device id reveals nothing.
     const deny = () => reply.code(401).send({
       success: false, code: 'DEVICE_UNAUTHORIZED',
       message: 'This device could not be authenticated. Re-activate it from the app.'
@@ -314,8 +383,6 @@ async function deviceRoutes(app) {
     }
     const device = rows[0];
     if (!keys.secretMatches(keys.hashDeviceSecret(deviceSecret), device.secret_hash)) return deny();
-    if (device.device_status !== 'active') return deny();
-    if (device.license_status === 'revoked') return deny();
 
     const token = ent.generateDeviceToken();
     const expiresAt = new Date(Date.now() + ent.DEVICE_TOKEN_TTL_SECONDS * 1000);
@@ -348,47 +415,39 @@ async function deviceRoutes(app) {
    * routinely.
    */
   app.get('/entitlement', async (request, reply) => {
-    const auth = request.headers.authorization;
-    if (!auth || !auth.startsWith('Bearer ')) {
+    if (!request.headers.authorization || !request.headers.authorization.startsWith('Bearer ')) {
       return reply.code(401).send({
         success: false, code: 'DEVICE_UNAUTHORIZED', message: 'Missing device token.'
       });
     }
 
-    const { rows } = await db.query(
-      `SELECT d.id AS device_id, d.machine_id, d.status AS device_status,
-              l.id AS license_id, l.status, l.verification, l.expires_at, l.features
-         FROM device_tokens t
-         JOIN devices d  ON d.id = t.device_id
-         JOIN licenses l ON l.id = d.license_id
-        WHERE t.token_hash = $1 AND t.expires_at > NOW()`,
-      [tokenHash(auth.slice(7))]
-    );
-
-    if (rows.length === 0) {
+    const row = await deviceForToken(request);
+    if (!row) {
       return reply.code(401).send({
         success: false, code: 'DEVICE_TOKEN_EXPIRED',
         message: 'This session has expired. The app will reconnect automatically.'
       });
     }
-    const row = rows[0];
-    if (row.device_status !== 'active') {
-      return reply.code(401).send({
-        success: false, code: 'DEVICE_UNAUTHORIZED',
-        message: 'This device could not be authenticated. Re-activate it from the app.'
-      });
-    }
 
+    const fleet = await loadFleet();
     const issued = ent.issue({
       deviceId: row.device_id,
       licenseId: row.license_id,
       machineId: row.machine_id,
       licence: {
         status: row.status,
+        status_until: row.status_until,
+        status_before: row.status_before,
+        status_reason: row.status_reason,
         verification: row.verification,
         expiresAt: new Date(row.expires_at),
-        features: row.features
-      }
+        features: row.features,
+        restrictions: row.restrictions,
+        revision: row.revision
+      },
+      fleet,
+      // A released device is locked, not refused — see buildClaims.
+      device: { status: row.device_status, reason: row.device_reason }
     });
 
     if (!issued) {
@@ -400,7 +459,12 @@ async function deviceRoutes(app) {
       });
     }
 
-    await db.query('UPDATE devices SET last_seen_at = NOW() WHERE id = $1', [row.device_id]);
+    // Recording the revision served is how the portal says "change received":
+    // the app fetches this only to apply it.
+    await db.query(
+      'UPDATE devices SET last_seen_at = NOW(), last_revision_applied = $2 WHERE id = $1',
+      [row.device_id, issued.claims.revision]
+    );
 
     return reply.code(200).send({
       success: true,
@@ -409,11 +473,100 @@ async function deviceRoutes(app) {
         // Unsigned, for logs and support only. The app must read the signed
         // blob and never these.
         status: issued.claims.status,
+        level: issued.claims.level,
+        revision: issued.claims.revision,
         expiresAt: issued.claims.expiresAt,
         notAfter: issued.claims.notAfter
       }
     });
   });
+
+  // ── Live stream ───────────────────────────────────────────────────────────
+  /**
+   * GET /v1/devices/stream — Server-Sent Events: "your licence changed".
+   *
+   * The app holds this open and, on `changed`, fetches /v1/entitlement. It
+   * carries no policy, so there is nothing in it worth forging. Plain HTTP
+   * rather than a WebSocket: it is one-way, it passes proxies and hostel
+   * routers, and it needs no extra dependency.
+   *
+   * Presence rides on it: `stream_connected_at` is refreshed on every
+   * heartbeat, so "online now" in the portal means "holding a stream within the
+   * last minute and a half" — not a guess from the last sync.
+   */
+  app.get('/devices/stream', async (request, reply) => {
+    const row = await deviceForToken(request);
+    if (!row) {
+      return reply.code(401).send({
+        success: false, code: 'DEVICE_TOKEN_EXPIRED',
+        message: 'This session has expired. The app will reconnect automatically.'
+      });
+    }
+    const fleet = await loadFleet();
+
+    reply.hijack();
+    const res = reply.raw;
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      // nginx-style proxies buffer event streams without this.
+      'X-Accel-Buffering': 'no'
+    });
+
+    let closed = false;
+    const write = (text) => { if (!closed) { try { res.write(text); } catch (_) {} } };
+    const send = (event, data) => write('event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n');
+
+    // The revision this stream opened at. The app compares it with the one it
+    // holds and syncs at once if they differ — that covers anything that
+    // changed while it was disconnected.
+    send('hello', {
+      revision: Number(row.revision || 0) + Number(fleet.revision || 0),
+      heartbeatMs: STREAM_HEARTBEAT_MS
+    });
+
+    const touch = () => db.query(
+      'UPDATE devices SET stream_connected_at = NOW(), last_seen_at = NOW() WHERE id = $1',
+      [row.device_id]).catch(() => {});
+    touch();
+
+    const onLicence = (id, rev) => { if (id === row.license_id) send('changed', { scope: 'licence', revision: rev }); };
+    const onDevice = (id) => { if (id === row.device_id) send('changed', { scope: 'device' }); };
+    const onFleet = (rev) => send('changed', { scope: 'fleet', revision: rev });
+    const onResync = () => send('changed', { scope: 'resync' });
+
+    if (realtime) {
+      realtime.on('licence', onLicence);
+      realtime.on('device', onDevice);
+      realtime.on('fleet', onFleet);
+      realtime.on('resync', onResync);
+    }
+    const entry = { deviceId: row.device_id, licenseId: row.license_id, openedAt: Date.now() };
+    if (realtime) realtime.streams.add(entry);
+
+    const beat = setInterval(() => { write(': ping\n\n'); touch(); }, STREAM_HEARTBEAT_MS);
+    const maxAge = setTimeout(() => { send('reconnect', {}); cleanup(); try { res.end(); } catch (_) {} },
+      STREAM_MAX_AGE_MS);
+
+    function cleanup() {
+      if (closed) return;
+      closed = true;
+      clearInterval(beat);
+      clearTimeout(maxAge);
+      if (realtime) {
+        realtime.off('licence', onLicence);
+        realtime.off('device', onDevice);
+        realtime.off('fleet', onFleet);
+        realtime.off('resync', onResync);
+        realtime.streams.delete(entry);
+      }
+      db.query('UPDATE devices SET stream_connected_at = NULL WHERE id = $1', [row.device_id]).catch(() => {});
+    }
+    request.raw.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+  });
 }
 
-module.exports = { deviceRoutes };
+module.exports = { deviceRoutes, STREAM_HEARTBEAT_MS };

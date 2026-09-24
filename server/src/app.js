@@ -21,6 +21,7 @@ const configModule = require('./config');
 const db = require('./db');
 const { deviceRoutes } = require('./routes/devices');
 const { adminRoutes } = require('./routes/admin');
+const { Realtime } = require('./lib/realtime');
 
 async function buildApp(opts) {
   const options = opts || {};
@@ -42,6 +43,9 @@ async function buildApp(opts) {
   });
 
   app.decorate('config', config);
+  // Created here, STARTED by server.js. Tests build the app without a live
+  // listener; a Realtime that is never started simply never emits.
+  app.decorate('realtime', options.realtime || new Realtime({ databaseUrl: config.databaseUrl }));
 
   // Cookies carry the admin session, signed with SESSION_SECRET so a tampered
   // one is rejected before anything is looked up.
