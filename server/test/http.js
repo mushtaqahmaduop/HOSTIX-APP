@@ -184,6 +184,30 @@ test('register refuses unknown body fields rather than ignoring them', async (ap
   assert.strictEqual(res.json().code, 'VALIDATION_ERROR');
 });
 
+test('the portal is served with security headers (audit, 2026-09-24)', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/admin/' });
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.headers['x-frame-options'], 'DENY');
+  assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+  assert.strictEqual(res.headers['referrer-policy'], 'no-referrer');
+  const csp = res.headers['content-security-policy'] || '';
+  assert.ok(/frame-ancestors 'none'/.test(csp), 'CSP does not forbid framing: ' + csp);
+  assert.ok(/object-src 'none'/.test(csp), 'CSP allows plugins: ' + csp);
+  assert.ok(!/script-src[^;]*https?:/.test(csp), 'CSP allows a remote script host: ' + csp);
+});
+
+test('an API answer carries the same headers', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/v1/healthz' });
+  assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+  assert.strictEqual(res.headers['x-frame-options'], 'DENY');
+});
+
+test('/admin without the slash redirects to the portal', async (app) => {
+  const res = await app.inject({ method: 'GET', url: '/admin' });
+  assert.strictEqual(res.statusCode, 301);
+  assert.strictEqual(res.headers.location, '/admin/');
+});
+
 test('/v1/entitlement without a token is refused', async (app) => {
   baseWorld();
   const res = await app.inject({ method: 'GET', url: '/v1/entitlement' });

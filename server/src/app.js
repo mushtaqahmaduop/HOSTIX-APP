@@ -56,6 +56,41 @@ async function buildApp(opts) {
   // deploy waits on them.
   app.addHook('preClose', async () => { app.realtime.closeAll(); });
 
+  // ── Security headers (audit, 2026-09-24) ─────────────────────────────────
+  // The portal went out with none. SameSite=strict cookies already mean a
+  // framed portal loads signed out, but a production admin surface states the
+  // rest too: no framing, no MIME sniffing, no referrer, HTTPS only.
+  //
+  // The CSP keeps 'unsafe-inline' for scripts because the portal is built from
+  // inline onclick handlers, like the desktop app. What it still does is the
+  // useful half: no script, frame, plugin or form target from anywhere else,
+  // and Google Fonts are the only outside host allowed.
+  const CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'"
+  ].join('; ');
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Content-Security-Policy', CSP);
+    if (config.env === 'production') {
+      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    return payload;
+  });
+
+  // `/admin` without the slash answered 404, and it is the address people type.
+  app.get('/admin', async (_request, reply) => reply.redirect('/admin/', 301));
+
   // Cookies carry the admin session, signed with SESSION_SECRET so a tampered
   // one is rejected before anything is looked up.
   await app.register(require('@fastify/cookie'), { secret: config.sessionSecret });

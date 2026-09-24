@@ -2800,6 +2800,29 @@ session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
     return _permitted(permission, details);
   });
+
+  /* NAVIGATION GUARD (audit, 2026-09-24). Every window runs preload.js, so a
+     page loaded into one gets the whole electronAPI: the database, licence
+     activation, file writes. Nothing stopped a window navigating to a remote
+     page — a stray link, or markup that slipped past escHtml(), would have
+     handed that API to whatever site it loaded. Now a window may only show the
+     app's own files. A web link opens in the browser instead; the print and
+     report windows (window.open('') -> about:blank) are still allowed. */
+  app.on('web-contents-created', (_e, contents) => {
+    const external = (url) => {
+      if (/^(https?|mailto):/i.test(url)) shell.openExternal(url).catch(() => {});
+    };
+    contents.on('will-navigate', (ev, url) => {
+      if (/^file:/i.test(url)) return;
+      ev.preventDefault();
+      external(url);
+    });
+    contents.setWindowOpenHandler(({ url }) => {
+      if (!url || url === 'about:blank' || /^file:/i.test(url)) return { action: 'allow' };
+      external(url);
+      return { action: 'deny' };
+    });
+  });
   initDatabase();
 
   /* A damaged database stops the boot here, deliberately.
