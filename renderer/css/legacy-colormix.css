@@ -1,0 +1,60 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   WINDOWS 7 / 8 EDITION — FALLBACKS FOR color-mix()   (2026-09-25)
+
+   That edition runs on Electron 22, whose Chromium 108 predates color-mix()
+   (Chromium 111). A normal declaration using it is simply dropped there, and a
+   CUSTOM PROPERTY holding one (--rt-2, --seat-tile-br) is worse: it is kept,
+   then fails where it is used, so the tile or border reading it lost its
+   colour altogether.
+
+   Everything here sits inside @supports NOT color-mix, so the Windows 10/11
+   edition never reads a line of it. The values are what color-mix() resolves
+   to in the modern app, measured in both themes (Electron 43, 2026-09-25), so
+   the older edition looks the same. Two cannot be precomputed because their
+   colour is set per element — a category chip's --cat and a toast's
+   --toast-tone — and fall back to the neutral chip / plain surface. The four
+   dashboard hovers read --x-* colours that exist only inside the dashboard;
+   they use the matching token background instead.
+
+   Loaded LAST in index.html, so an equal selector here wins. The originals are
+   untouched, which keeps this branch easy to bring up to date from the main
+   edition. Raw rgb() here is deliberate and confined to this one file: there
+   is no way to express "the accent at 30%" in Chromium 108 without it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+
+  /* ── dark (the :root theme) ─────────────────────────────────────────── */
+  .ui-btn:active:not(:disabled)            { box-shadow: inset 0 0 0 999px rgba(250, 249, 245, 0.1); }
+  .ui-chip--cat                            { background: rgba(162, 170, 182, 0.14);
+                                             border: 1px solid rgba(162, 170, 182, 0.38);
+                                             color: rgb(206, 210, 214); }
+  .pay-table tbody tr.is-arrear td         { background: rgba(232, 184, 75, 0.07); }
+  .pay-table tbody tr.is-arrear:hover td   { background: rgba(232, 184, 75, 0.12); }
+  .stu-kebab, .lk-kebab                    { border: 1px solid rgba(250, 249, 245, 0.38); }
+  .stu-search:focus-within                 { box-shadow: 0 0 0 3px rgba(123, 160, 255, 0.16); }
+  .dash-row-b                              { --seat-tile-br: rgba(123, 160, 255, 0.3); }
+  .dash-row-c .rt-card                     { --rt-2: rgb(105, 134, 209); --rt-3: rgb(88, 111, 168);
+                                             --rt-4: rgb(73, 90, 132);   --rt-5: rgb(60, 72, 100);
+                                             --rt-6: rgb(51, 59, 77); }
+  .dl-coll .dl-monthchip:hover             { background: var(--accent-bg); }
+  .dl-pending .dash-icon-btn--wa:hover     { background: var(--success-bg); }
+  .dl-pending .dash-icon-btn.dh-slate:hover{ background: var(--neutral-bg); }
+  .dl-remind:hover                         { background: var(--accent-bg); }
+  .toast-icon                              { background: var(--surface-2); }
+
+  /* ── light ──────────────────────────────────────────────────────────── */
+  body.light-theme .ui-btn:active:not(:disabled)          { box-shadow: inset 0 0 0 999px rgba(20, 20, 19, 0.1); }
+  body.light-theme .ui-chip--cat                          { background: rgba(61, 61, 58, 0.14);
+                                                            border: 1px solid rgba(61, 61, 58, 0.38);
+                                                            color: rgb(41, 41, 38); }
+  body.light-theme .pay-table tbody tr.is-arrear td       { background: rgba(122, 83, 9, 0.07); }
+  body.light-theme .pay-table tbody tr.is-arrear:hover td { background: rgba(122, 83, 9, 0.12); }
+  body.light-theme .stu-kebab,
+  body.light-theme .lk-kebab                              { border: 1px solid rgba(20, 20, 19, 0.38); }
+  body.light-theme .stu-search:focus-within               { box-shadow: 0 0 0 3px rgba(36, 81, 214, 0.16); }
+  body.light-theme .dash-row-b                            { --seat-tile-br: rgba(36, 81, 214, 0.3); }
+  body.light-theme .dash-row-c .rt-card                   { --rt-2: rgb(79, 115, 220);  --rt-3: rgb(117, 145, 226);
+                                                            --rt-4: rgb(152, 172, 231); --rt-5: rgb(182, 195, 235);
+                                                            --rt-6: rgb(203, 212, 238); }
+}
