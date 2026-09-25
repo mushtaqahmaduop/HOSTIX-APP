@@ -23,7 +23,10 @@
 const { test, expect, _electron: electron } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
+// The legacy edition's better-sqlite3 9 loads only in Electron 22; _legacy-db
+// hands back the real module when it can, and a stand-in that runs through
+// Electron when it cannot. See that file.
+const Database = require('./_legacy-db');
 const { resetProfile, profileDir } = require('./_profile');
 
 const REPO_ROOT = path.join(__dirname, '..');
