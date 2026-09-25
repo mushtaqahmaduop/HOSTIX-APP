@@ -12,7 +12,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:ia32": "node scripts/rebuild-ia32.js",
-    "build": "electron-builder --win",
+    "build": "electron-builder --win && electron-rebuild -f -w better-sqlite3 -a x64",
     "build:x64": "electron-builder --win nsis portable --x64",
     "build:ia32": "node scripts/rebuild-ia32.js && electron-builder --win nsis portable --ia32",
     "build:portable": "electron-builder --win portable --x64",
