@@ -12,7 +12,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:ia32": "node scripts/rebuild-ia32.js",
-    "build": "electron-builder --win --x64 && node scripts/pin-latest-yml.js",
+    "build": "electron-builder --win",
     "build:x64": "electron-builder --win nsis portable --x64",
     "build:ia32": "node scripts/rebuild-ia32.js && electron-builder --win nsis portable --ia32",
     "build:portable": "electron-builder --win portable --x64",
@@ -64,6 +64,7 @@
       "migrations/003-issues-merge.js",
       "assets/**/*",
       "!assets/installer.nsh",
+      "!assets/installer-legacy.nsh",
       "package.json",
       "!keygen.js",
       "!keygen.html",
@@ -97,13 +98,8 @@
         {
           "target": "nsis",
           "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
+            "x64",
+            "ia32"
           ]
         }
       ],
@@ -125,9 +121,9 @@
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false,
       "displayLanguageSelector": false,
-      "include": "assets/installer.nsh",
+      "include": "assets/installer-legacy.nsh",
       "license": null,
-      "artifactName": "Hostyllo-Offline-Setup-${version}-${arch}.exe",
+      "artifactName": "Hostyllo-Offline-Win7-8-Setup-${version}.exe",
       "warningsAsErrors": false,
       "differentialPackage": false
     },
@@ -139,7 +135,8 @@
       "provider": "github",
       "owner": "mushtaqahmaduop",
       "repo": "hostyllo-releases",
-      "releaseType": "release"
+      "releaseType": "release",
+      "channel": "legacy"
     }
   },
   "devDependencies": {
