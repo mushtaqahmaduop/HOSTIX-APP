@@ -154,7 +154,10 @@ function _writeCache(userDataDir, apiBase, now) {
 // ── The fetch ───────────────────────────────────────────────────────────────
 
 async function _get(url, fetchImpl) {
-  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  // Electron 22 (the Windows 7/8 edition) has no global fetch; without the
+  // net.request fallback a fresh install there never learns the address.
+  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null) ||
+            require('./net-request-fetch').netRequestFetch();
   if (!f) return { ok: false, reason: 'no_fetch' };
 
   const ac = typeof AbortController === 'function' ? new AbortController() : null;

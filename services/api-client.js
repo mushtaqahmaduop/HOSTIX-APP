@@ -74,6 +74,12 @@ function _fetch() {
     _fetchImpl = (url, opts) => globalThis.fetch(url, opts);
     return _fetchImpl;
   }
+  // Electron 22 (the Windows 7/8 edition) has neither — see net-request-fetch.js.
+  const viaNetRequest = require('./net-request-fetch').netRequestFetch();
+  if (viaNetRequest) {
+    _fetchImpl = viaNetRequest;
+    return _fetchImpl;
+  }
   return null;
 }
 
